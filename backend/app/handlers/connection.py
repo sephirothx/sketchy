@@ -4,7 +4,6 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
-from functools import partial
 
 import socketio
 from socketio.exceptions import ConnectionRefusedError
@@ -310,27 +309,28 @@ async def _begin_reconnect_grace(
             await asyncio.sleep(timing.reconnect_grace_seconds)
         except asyncio.CancelledError:
             return
-        still_present = room.players.get(token)
-        if not still_present or still_present.connected:
-            return
-        # The grace window ran out: this is the disconnect that became a
-        # departure, which is the number worth separating from the rest.
-        metrics.record(
-            RuntimeEventType.PLAYER_EVICTED,
-            room_id=room.id,
-            user_id=metrics_user_id(still_present.user_id),
-            value=int(timing.reconnect_grace_seconds),
-        )
-        ctx.room_manager.remove_player(room, token)
-        await ctx.sio.emit("player_left", {"playerId": token}, room=room.id)
-        if not room.connected_players():
-            ctx.timers.cancel_phase_timer(room.id)
-            ctx.timers.cancel_hint_timers(room.id)
-            ctx.timers.cancel_restart_timer(room.id)
-            await ctx.remove_room_if_empty(room.id)
-            return
-        await ctx.game_flow._remove_player_from_game(room, token)
-        await ctx.game_flow._emit_room_state(room)
+        async with ctx.game_flow.room_state_batch():
+            still_present = room.players.get(token)
+            if not still_present or still_present.connected:
+                return
+            # The grace window ran out: this is the disconnect that became a
+            # departure, which is the number worth separating from the rest.
+            metrics.record(
+                RuntimeEventType.PLAYER_EVICTED,
+                room_id=room.id,
+                user_id=metrics_user_id(still_present.user_id),
+                value=int(timing.reconnect_grace_seconds),
+            )
+            ctx.room_manager.remove_player(room, token)
+            await ctx.sio.emit("player_left", {"playerId": token}, room=room.id)
+            if not room.connected_players():
+                ctx.timers.cancel_phase_timer(room.id)
+                ctx.timers.cancel_hint_timers(room.id)
+                ctx.timers.cancel_restart_timer(room.id)
+                await ctx.remove_room_if_empty(room.id)
+                return
+            await ctx.game_flow._remove_player_from_game(room, token)
+            await ctx.game_flow._emit_room_state(room)
 
     ctx.timers.replace_disconnect_timer(
         token, asyncio.create_task(_evict_after_grace())
@@ -338,14 +338,19 @@ async def _begin_reconnect_grace(
 
 
 def register(ctx: HandlerContext) -> None:
-    ctx.sio.on("connect", handler=partial(connect, ctx))
+    async def on_connect(sid, environ, auth):
+        async with ctx.game_flow.room_state_batch():
+            return await connect(ctx, sid, environ, auth)
+
+    ctx.sio.on("connect", handler=on_connect)
     async def on_disconnect(sid, reason=None):
         # python-socketio passes the reason by calling with it and, on a
         # TypeError, calling again without it (its support for one-argument
         # handlers). A TypeError raised *inside* this handler would therefore
         # run the whole disconnect twice; it is logged here instead.
         try:
-            await disconnect(ctx, sid, reason)
+            async with ctx.game_flow.room_state_batch():
+                await disconnect(ctx, sid, reason)
         except TypeError:
             logger.exception("disconnect handler failed for %s", sid)
 

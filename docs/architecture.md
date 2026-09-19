@@ -1400,8 +1400,10 @@ wrong.
 host: start_game
   └─ handlers/game.py  →  GameFlowService._start_turn
        ├─ Room.allocate_canvas_generation()          new CanvasSession generation
-       ├─ emit canvas_reset      [revision, generation, sequence, hash]   → room
-       ├─ emit turn_starting     {drawerId, roundNumber, seconds, …}      → room
+       ├─ emit turn_starting     {drawerId, roundNumber, seconds, canvas,
+       │                          gameStarted?, …}                         → room
+       │    (the new canvas identity and, on a game's first turn, its start:
+       │     one message where canvas_reset and game_started used to go, #880)
        ├─ emit your_prompt_choices {choices, seconds}                     → drawer only
        └─ schedule the choose-prompt (15s default) phase timer
 

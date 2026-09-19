@@ -1,0 +1,200 @@
+"""How many messages a room change costs (#880).
+
+Every message pays a deflate flush and WebSocket, TLS and TCP framing that no
+payload change removes, so these count messages, not bytes: one `room_state`
+per room per action however many times the action changed it, one message for
+a turn's start, and the host's colorblind suggestion only when it changes.
+"""
+from __future__ import annotations
+
+import asyncio
+from collections import Counter
+from contextlib import suppress
+from unittest.mock import AsyncMock
+
+import socketio
+
+from app.game import Game
+from app.handlers import register_all_handlers as register_handlers
+from app.handlers.connection import disconnect
+from app.rooms import RoomManager
+
+
+def emitted(sio) -> Counter:
+    return Counter(call.args[0] for call in sio.emit.await_args_list)
+
+
+def server(room_manager, session):
+    sio = socketio.AsyncServer(async_mode="asgi")
+    context = register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value=session)
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    sio.leave_room = AsyncMock()
+    sio.emit = AsyncMock()
+    return sio, context
+
+
+async def stop_phase_timer(context, room) -> None:
+    timer = context.timers.phase_timers.pop(room.id, None)
+    if timer is not None:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+async def test_a_game_start_is_one_room_state_and_one_turn_starting():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host")
+    guest = room_manager.add_player(room, "Guest")
+    host.sid, guest.sid = "host-sid", "guest-sid"
+    sio, context = server(room_manager, {"room_id": room.id, "player_id": host.id})
+
+    assert (await sio.handlers["/"]["start_game"](host.sid)) == {"ok": True}
+
+    counts = emitted(sio)
+    assert counts["room_state"] == 1
+    assert counts["turn_starting"] == 1
+    # The room turning to play mounts the game view, canvas included, so it
+    # goes before the turn whose canvas identity the canvas has to catch.
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert events.index("room_state") < events.index("turn_starting")
+    assert counts["game_started"] == 0 and counts["canvas_reset"] == 0
+    starting = next(c.args[1] for c in sio.emit.await_args_list if c.args[0] == "turn_starting")
+    assert starting["gameStarted"] is True
+    game = room.game
+    assert starting["canvas"] == [game.canvas.revision, game.canvas.generation, game.canvas.sequence, game.canvas.hash]
+    await stop_phase_timer(context, room)
+
+
+async def test_a_join_is_one_room_state_however_many_times_the_join_changed_the_room():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host", user_id="host-user")
+    host.sid = "host-sid"
+    sio, context = server(room_manager, {"user_id": "new-user"})
+
+    assert (await sio.handlers["/"]["join_room"]("new-sid", {"code": room.code, "nickname": "New"}))["ok"]
+
+    assert emitted(sio)["room_state"] == 1
+    await context.timers.close()
+
+
+async def test_a_flap_is_one_room_state_each_way():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host", user_id="host-user")
+    guest = room_manager.add_player(room, "Guest", user_id="guest-user")
+    host.sid, guest.sid = "host-sid", "guest-sid"
+    sio, context = server(room_manager, {"user_id": "guest-user"})
+
+    await sio._trigger_event("disconnect", "/", "guest-sid", sio.reason.TRANSPORT_CLOSE)
+    assert emitted(sio)["room_state"] == 1
+    sio.emit.reset_mock()
+    assert (await sio.handlers["/"]["join_room"]("guest-new", {"code": room.code, "nickname": "Guest"}))["ok"]
+    assert emitted(sio)["room_state"] == 1
+    await context.timers.close()
+
+
+async def test_a_drawer_evicted_on_the_last_turn_is_one_room_state(monkeypatch):
+    """The case the issue names: the game ends because the drawer left, which
+    used to send game_ended, room_state, player_left, room_state."""
+    from app.flow_timing import timing
+
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, rounds=1)
+    players = [room_manager.add_player(room, name, user_id=f"{name}-user") for name in ("Ann", "Bob", "Cy")]
+    for player in players:
+        player.sid = f"{player.nickname}-sid"
+    sio, context = server(room_manager, {})
+    room.state = "playing"
+    room.game = Game(turn_order=[p.id for p in players], rounds_total=1)
+    for _ in players:  # to the last turn
+        room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    drawer = room.players[room.game.current_drawer]
+    monkeypatch.setattr(timing, "reconnect_grace_seconds", 0.01)
+
+    await disconnect(context, drawer.sid, sio.reason.TRANSPORT_CLOSE)
+    sio.emit.reset_mock()
+    await asyncio.sleep(0.05)
+
+    assert emitted(sio)["room_state"] == 1
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    # The snapshot lands after the action's other events, as the room ended up.
+    assert events[-1] == "room_state"
+    await stop_phase_timer(context, room)
+    await context.timers.close()
+
+
+async def test_the_host_hears_the_colorblind_suggestion_only_when_it_changes():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    host = room_manager.add_player(room, "Host")
+    host.sid = "host-sid"
+    sio, context = server(room_manager, {})
+    flow = context.game_flow
+
+    for _ in range(3):
+        await flow._emit_room_state(room)
+    assert emitted(sio)["colorblind_safe_suggestion"] == 1
+    assert emitted(sio)["room_state"] == 3  # no batch open here: each goes at once
+
+    guest = room_manager.add_player(room, "Guest")
+    guest.colorblind_safe_colors = True
+    await flow._emit_room_state(room)
+    await flow._emit_room_state(room)
+    suggestions = [c.args[1] for c in sio.emit.await_args_list if c.args[0] == "colorblind_safe_suggestion"]
+    assert suggestions == [{"active": False}, {"active": True}]
+
+    host.sid = "host-reloaded"  # a new socket is told again
+    await flow._emit_room_state(room)
+    assert emitted(sio)["colorblind_safe_suggestion"] == 3
+    await context.timers.close()
+
+
+async def test_a_task_that_outlives_its_action_still_sends_its_snapshot():
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    room_manager.add_player(room, "Host").sid = "host-sid"
+    sio, context = server(room_manager, {})
+    flow = context.game_flow
+    later = asyncio.Event()
+
+    async def after_the_action():
+        await later.wait()
+        await flow._emit_room_state(room)
+
+    async with flow.room_state_batch():
+        task = asyncio.create_task(after_the_action())
+        await flow._emit_room_state(room)
+        await flow._emit_room_state(room)
+    assert emitted(sio)["room_state"] == 1
+    later.set()
+    await task
+    assert emitted(sio)["room_state"] == 2
+    await context.timers.close()
+
+
+async def test_a_joining_socket_gets_the_room_before_its_own_catch_up():
+    """A client meets a new room through its first room_state, which clears
+    what belonged to the room before; a sync_game held back behind it was
+    wiped as soon as it was applied (a reload lost its correct guess)."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer", user_id="drawer-user")
+    room_manager.add_player(room, "Guesser", user_id="guesser-user").sid = "guesser-sid"
+    drawer.sid = "drawer-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=list(room.players))
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.force_prompt_choice()
+    sio, context = server(room_manager, {"user_id": "late-user"})
+
+    assert (await sio.handlers["/"]["join_room"]("late-sid", {"code": room.code, "nickname": "Late"}))["ok"]
+
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert events.index("room_state") < events.index("sync_game")
+    assert events.count("room_state") == 1
+    await context.timers.close()

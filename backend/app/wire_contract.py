@@ -119,7 +119,6 @@ HAND_PARSED_LAYOUTS: dict[str, Any] = {
 TUPLE_EVENTS: dict[str, list[str]] = {
     "draw": ["frame", "commit?[generation, sequence, revision, historyHash]"],
     "canvas_commit": ["generation", "sequence", "revision", "historyHash"],
-    "canvas_reset": ["revision", "generation", "sequence", "historyHash"],
     "canvas_undo": ["generation", "sequence", "revisionBefore", "revisionAfter", "historyHash"],
     "sync_strokes": ["binaryHistory", "revision", "generation", "sequence", "historyHash", "requestId"],
     "sync_strokes_tail": ["binaryTail", "baseActionCount", "revision", "generation", "sequence", "historyHash", "requestId"],

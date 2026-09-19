@@ -120,11 +120,11 @@ async def main() -> int:
             if not chosen.done():
                 chosen.set_result(sio)
 
-        async def on_reset(payload):
-            identity["reset"] = payload
+        async def on_turn_starting(payload):
+            identity["reset"] = payload["canvas"]
 
         sio.on("your_prompt_choices", on_choices)
-        sio.on("canvas_reset", on_reset)
+        sio.on("turn_starting", on_turn_starting)
 
     wire(host)
     wire(guest)

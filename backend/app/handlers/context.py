@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 import logging
@@ -224,7 +225,10 @@ class HandlerContext:
                 # counted before it propagates rather than instead.
                 started = perf_counter()
                 try:
-                    result = await handler(sid, *args)
+                    # One snapshot per room this command changed, sent when
+                    # it is done (#880).
+                    async with self._room_state_batch():
+                        result = await handler(sid, *args)
                 except asyncio.CancelledError:
                     raise
                 except Exception:
@@ -298,6 +302,12 @@ class HandlerContext:
             await self.sio.disconnect(sid)
 
         self._stale_sockets[sid] = (received, asyncio.create_task(close_later()))
+
+    def _room_state_batch(self):
+        """The command's room_state batch (#880), or no batch at all for a
+        context built without a game flow - a bare one in a test."""
+        game_flow = getattr(self, "game_flow", None)
+        return game_flow.room_state_batch() if game_flow is not None else contextlib.nullcontext()
 
     def is_stale(self, sid: str) -> bool:
         """Whether this socket was told to upgrade and has not gone yet."""

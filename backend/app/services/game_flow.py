@@ -6,6 +6,8 @@ import random
 import time
 import logging
 from collections import Counter
+from contextlib import asynccontextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from typing import Mapping, Protocol
@@ -65,6 +67,22 @@ PROMPT_DRAW_TIMEOUT_SECONDS = 10
 # still hold once its prompts have been drawn.
 MIN_PLAYERS_TO_START = 2
 
+
+class _RoomStateBatch:
+    """The rooms whose `room_state` an action changed, sent once it is done."""
+
+    def __init__(self) -> None:
+        self.rooms: dict[str, Room] = {}
+        self.open = True
+
+
+# One action - a command, a connect or disconnect, a timer firing - is one
+# snapshot per room it touched (#880): a drawer leaving on the last turn used
+# to send `game_ended`, `room_state`, `player_left`, `room_state`. The batch
+# lives in a context variable so every await inside the action shares it; a
+# task the action spawns inherits it too, and finds it closed if it outlives
+# the action, which makes it emit directly - so no snapshot is ever dropped.
+_room_state_batch: ContextVar[_RoomStateBatch | None] = ContextVar("room_state_batch", default=None)
 
 @dataclass(frozen=True)
 class _PromptDraw:
@@ -311,7 +329,8 @@ class GameFlowService:
             assert task is not None
             self._timers.remove_phase_timer(room.id, task)
             try:
-                await self._on_phase_timeout(room)
+                async with self.room_state_batch():
+                    await self._on_phase_timeout(room)
             except asyncio.CancelledError:
                 pass
             except Exception:
@@ -359,8 +378,56 @@ class GameFlowService:
             self._timers.add_hint_timer(room.id, asyncio.create_task(_runner()))
 
     async def _emit_room_state(self, room: Room) -> None:
+        """Send the room its snapshot - at the end of the current action.
+
+        Inside `room_state_batch` the room is only marked, and one snapshot
+        goes out when the action finishes, after the action's other events:
+        every listener reads the room as it ended up, and an action that
+        changed it three times is one message, not three. Outside one - a
+        path nothing has wrapped yet - it goes at once, as it always did.
+        """
+        batch = _room_state_batch.get()
+        if batch is not None and batch.open:
+            batch.rooms[room.id] = room
+            return
+        await self._send_room_state(room)
+
+    async def _flush_room_state(self, room: Room) -> None:
+        """Send a room's pending snapshot now, if the current action has one.
+
+        For a socket that has just taken a seat: its private catch-up -
+        `sync_game`, `last_game` - must land on top of the room it describes,
+        and a client meets a room it did not know through its first
+        `room_state`, which resets what belonged to the room before it.
+        Anything the action changes after this still goes out at its end.
+        """
+        batch = _room_state_batch.get()
+        if batch is not None and batch.open and batch.rooms.pop(room.id, None) is not None:
+            await self._send_room_state(room)
+
+    async def _send_room_state(self, room: Room) -> None:
         await self._emit_colorblind_suggestion(room)
         await self._sio.emit("room_state", room_state_payload(room), room=room.id)
+
+    @asynccontextmanager
+    async def room_state_batch(self):
+        """Hold every `room_state` the enclosed action emits to its end, then
+        send one per room. Nested scopes join the outer one."""
+        current = _room_state_batch.get()
+        if current is not None and current.open:
+            yield
+            return
+        batch = _RoomStateBatch()
+        token = _room_state_batch.set(batch)
+        try:
+            yield
+        finally:
+            _room_state_batch.reset(token)
+            batch.open = False
+            for room in batch.rooms.values():
+                # A room the action closed has nobody left to tell.
+                if self._ctx.room_manager.get_room(room.id) is room:
+                    await self._send_room_state(room)
 
     async def _emit_colorblind_suggestion(self, room: Room) -> None:
         """Send only the host an unattributed accessibility suggestion.
@@ -392,6 +459,9 @@ class GameFlowService:
                 for player in room.players.values()
             )
         )
+        if room.colorblind_suggestion_sent == (host.sid, active):
+            return
+        room.colorblind_suggestion_sent = (host.sid, active)
         await self._sio.emit(
             "colorblind_safe_suggestion",
             {"active": active},
@@ -622,11 +692,14 @@ class GameFlowService:
             custom_prompt_keys=room.custom_prompt_match_keys(),
         )
         await self._emit_room_state(room)
+        # The room turning to play is what mounts every client's game view,
+        # canvas included, so it goes before the first turn does: a
+        # `turn_starting` that arrived first found no canvas to reset.
+        await self._flush_room_state(room)
         if restarted:
             await self.announce(room, Announcement.GAME_RESTARTED_BY_VOTE)
-        game_started_payload = {"restarted": True} if restarted else {}
-        await self._sio.emit("game_started", game_started_payload, room=room.id)
-        await self._start_turn(room)
+        # No `game_started` of its own (#880): the first `turn_starting` says so.
+        await self._start_turn(room, game_started=True)
 
     async def _emit_canvas_sync(
         self,
@@ -908,6 +981,7 @@ class GameFlowService:
                 await self._sio.disconnect(superseded_sid)
         self._timers.cancel_disconnect_timer(player.id)
         await self._emit_room_state(room)
+        await self._flush_room_state(room)
         event_name = "player_reconnected" if is_reconnect else "player_joined"
         await self._sio.emit(
             event_name,
@@ -939,7 +1013,7 @@ class GameFlowService:
     ) -> dict:
         return turn_payload(game, player, spectators_see_prompt, reactions)
 
-    async def _start_turn(self, room: Room) -> None:
+    async def _start_turn(self, room: Room, *, game_started: bool = False) -> None:
         game = room.game
         assert game is not None
         afk_tokens = {p.id for p in room.player_list() if p.is_afk}
@@ -949,28 +1023,26 @@ class GameFlowService:
         )
         game.set_phase_deadline(timing.choose_prompt_seconds)
         drawer = room.players.get(game.current_drawer)
-        await self._sio.emit(
-            "canvas_reset",
-            [
+        # One message for the turn's start (#880): the new canvas identity
+        # `canvas_reset` used to carry just before it, and on a game's first
+        # turn the fact `game_started` used to announce.
+        starting = {
+            "drawerId": game.current_drawer,
+            "drawerNickname": drawer.nickname if drawer else "",
+            "drawerNameColor": drawer.name_color if drawer else "",
+            "roundNumber": game.round_number,
+            "totalRounds": game.rounds_total,
+            "seconds": timing.choose_prompt_seconds,
+            "canvas": [
                 game.canvas.revision,
                 game.canvas.generation,
                 game.canvas.sequence,
                 game.canvas.hash,
             ],
-            room=room.id,
-        )
-        await self._sio.emit(
-            "turn_starting",
-            {
-                "drawerId": game.current_drawer,
-                "drawerNickname": drawer.nickname if drawer else "",
-                "drawerNameColor": drawer.name_color if drawer else "",
-                "roundNumber": game.round_number,
-                "totalRounds": game.rounds_total,
-                "seconds": timing.choose_prompt_seconds,
-            },
-            room=room.id,
-        )
+        }
+        if game_started:
+            starting["gameStarted"] = True
+        await self._sio.emit("turn_starting", starting, room=room.id)
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",

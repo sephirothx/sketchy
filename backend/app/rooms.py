@@ -470,6 +470,10 @@ class Room:
     # A dismissal belongs to this in-memory room instance. It is neither an
     # account setting nor public room configuration and is never serialized.
     colorblind_suggestion_dismissed: bool = False
+    # The host socket and value the colorblind suggestion was last sent as
+    # (#880): it is re-sent only when either changes, not with every
+    # room_state - during a game it is always false.
+    colorblind_suggestion_sent: Optional[tuple[str, bool]] = None
     # Held by the handlers that must not interleave on this room. Socket.IO
     # dispatches each event in its own task, so arriving first buys a handler
     # nothing once it awaits: without this, starting a game can overtake the

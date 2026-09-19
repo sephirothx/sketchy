@@ -319,8 +319,11 @@ class AfkWatch:
         # AFK themselves is present and can toggle back, and one voted AFK had
         # a majority who could have kicked them instead.
         self._room_manager.release_host_if_held(room, player)
-        await self._game_flow._emit_room_state(room)
-        await self._game_flow.apply_afk_consequences(room, player)
+        # One action, one snapshot (#880): marking the seat and what follows
+        # from it - a drawer's turn skipped, say - are sent as one.
+        async with self._game_flow.room_state_batch():
+            await self._game_flow._emit_room_state(room)
+            await self._game_flow.apply_afk_consequences(room, player)
         logger.info(
             "marked seat AFK after inactivity",
             extra={"room_id": room.id, "player_id": player.id},

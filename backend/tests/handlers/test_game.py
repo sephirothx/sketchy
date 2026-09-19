@@ -74,10 +74,12 @@ async def test_starting_new_game_clears_previous_drawing_recap():
 
     assert response == {"ok": True}
     assert room.last_game_drawings == []
+    # The game's start is said by its first turn_starting (#880).
     assert any(
-        call.args[0] == "game_started" and call.args[1] == {}
+        call.args[0] == "turn_starting" and call.args[1].get("gameStarted") is True
         for call in sio.emit.await_args_list
     )
+    assert not any(call.args[0] in {"game_started", "canvas_reset"} for call in sio.emit.await_args_list)
 
     timer = timers.phase_timers.pop(room.id)
     timer.cancel()

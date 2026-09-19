@@ -677,7 +677,9 @@ export function useCanvasProtocol(
       }, action.delayMs);
     };
     socket.on("request_canvas_actions", onRequestCanvasActions);
-    socket.on("canvas_reset", onCanvasReset);
+    // A turn's new canvas identity rides its `turn_starting` (#880).
+    const onTurnStarting = (payload: { canvas?: unknown }) => onCanvasReset(payload.canvas);
+    socket.on("turn_starting", onTurnStarting);
     socket.on("canvas_stale", onCanvasStale);
     socket.on("disconnect", onDisconnect);
     // Through the requester rather than a bare emit: this one is the most
@@ -692,7 +694,7 @@ export function useCanvasProtocol(
       socket.off("canvas_commit", onCanvasCommit);
       socket.off("canvas_undo", onUndoStroke);
       socket.off("request_canvas_actions", onRequestCanvasActions);
-      socket.off("canvas_reset", onCanvasReset);
+      socket.off("turn_starting", onTurnStarting);
       socket.off("canvas_stale", onCanvasStale);
       socket.off("disconnect", onDisconnect);
       if (staleTimer !== null) window.clearTimeout(staleTimer);

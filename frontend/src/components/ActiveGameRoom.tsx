@@ -321,8 +321,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
   // Both post-game panels are about the *last* game, so a game starting
   // underneath one has to close it - otherwise the player reads last game's
   // screen over live gameplay and misses the start. Keyed on the room going
-  // back to playing rather than on `game_started`, so it also covers a player
-  // who was disconnected while the rematch began and is synced into it.
+  // back to playing rather than on the game's first `turn_starting`, so it
+  // also covers a player who was disconnected while the rematch began and is
+  // synced into it.
   // Nothing can legitimately open either panel while playing: the buttons live
   // on the game over screen and the waiting room, and both leave the room in
   // "waiting". Highlights matter most - the store drops the recap once the
