@@ -23,6 +23,7 @@ import type {
   TurnEndedPayload,
 } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { providePrivateResultHandler } from "../lib/privateResults.ts";
 
 let messageSeq = 0;
 const nextMessageId = () => `${Date.now()}-${messageSeq++}`;
@@ -180,6 +181,23 @@ export function useGameSocketListeners() {
       );
     };
 
+    // A command's private result, off its acknowledgement (#884): what
+    // `you_guessed_correctly`, `hint_revealed` and the player's own lines
+    // used to say, applied in the order they used to arrive.
+    const unprovide = providePrivateResultHandler((result) => {
+      if (result.correct) onYouGuessedCorrectly(result.correct);
+      if (result.maskedPrompt !== undefined) {
+        onHintRevealed({
+          maskedPrompt: result.maskedPrompt,
+          hintCost: result.hintCost,
+          letterPrices: result.letterPrices,
+          hintSpend: result.hintSpend,
+        });
+      }
+      if (result.line) onChatMessage(result.line);
+      if (result.verdict) onChatMessage(result.verdict);
+    });
+
     const onHintRevealed = (payload: {
       maskedPrompt: string;
       hintCost?: number | null;
@@ -265,7 +283,6 @@ export function useGameSocketListeners() {
     socket.on("turn_started", onTurnStarted);
     socket.on("chat_message", onChatMessage);
     socket.on("correct_guess", onCorrectGuess);
-    socket.on("you_guessed_correctly", onYouGuessedCorrectly);
     socket.on("hint_revealed", onHintRevealed);
     socket.on("turn_ended", onTurnEnded);
     socket.on("game_ended", onGameEnded);
@@ -282,7 +299,7 @@ export function useGameSocketListeners() {
       socket.off("turn_started", onTurnStarted);
       socket.off("chat_message", onChatMessage);
       socket.off("correct_guess", onCorrectGuess);
-      socket.off("you_guessed_correctly", onYouGuessedCorrectly);
+      unprovide();
       socket.off("hint_revealed", onHintRevealed);
       socket.off("turn_ended", onTurnEnded);
       socket.off("game_ended", onGameEnded);

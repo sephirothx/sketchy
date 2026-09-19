@@ -178,3 +178,22 @@ test("each result settles exactly once, whatever arrives late", () => {
   lost.acknowledge(0);
   assert.deepEqual(late, ["lost"]);
 });
+
+test("the private result on the acknowledgement is handed on once, from the retry when that is what answered (#884)", () => {
+  const socket = fakeSocket();
+  const answers = [];
+  const sendGuess = createGuessSender(socket, { onAnswer: (answer) => answers.push(answer) });
+  const receipt = { correct: { prompt: "panda", points: 300, basePoints: 300, hintSpend: 0 } };
+
+  sendGuess("panda");
+  socket.timeOut();
+  socket.sent[1].ack(undefined, receipt);
+  // A late answer to the first attempt settles nothing twice.
+  socket.sent[0].ack(undefined, receipt);
+  assert.deepEqual(answers, [receipt]);
+
+  // A plain wrong guess answers with nothing to show.
+  sendGuess("otter");
+  socket.acknowledge();
+  assert.equal(answers.length, 1);
+});

@@ -273,6 +273,10 @@ class Player:
     _guess_ids_seen: deque[int] = field(
         default_factory=lambda: deque(maxlen=GUESS_DEDUP_WINDOW)
     )
+    # What each of those guesses was answered with, where the answer said
+    # something (#884): a retry of a guess that did arrive gets the same
+    # private result, since the first answer may be the one that was lost.
+    _guess_answers: dict[int, dict] = field(default_factory=dict)
 
     def accept_guess_id(self, sid: str, guess_id: Optional[int]) -> bool:
         """Whether this guess is new to `sid`, remembering it if so.
@@ -288,10 +292,22 @@ class Player:
         if self._guess_window_sid != sid:
             self._guess_window_sid = sid
             self._guess_ids_seen.clear()
+            self._guess_answers.clear()
         if guess_id in self._guess_ids_seen:
             return False
         self._guess_ids_seen.append(guess_id)
+        # Only answers the window still remembers the guess for.
+        for stale in [known for known in self._guess_answers if known not in self._guess_ids_seen]:
+            del self._guess_answers[stale]
         return True
+
+    def remember_guess_answer(self, guess_id: Optional[int], answer: dict) -> None:
+        if guess_id is not None and guess_id in self._guess_ids_seen:
+            self._guess_answers[guess_id] = answer
+
+    def guess_answer(self, guess_id: Optional[int]) -> Optional[dict]:
+        """What a guess already handled was answered with, for its retry."""
+        return self._guess_answers.get(guess_id) if guess_id is not None else None
 
 
 @dataclass(slots=True)

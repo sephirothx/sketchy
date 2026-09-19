@@ -255,10 +255,11 @@ async def test_buy_hint_purchase_mode():
     assert room.game.hint_spend[guesser.id] == 12
     assert 0 in room.game.purchased_hints[guesser.id]
 
-    # Buying does not touch any public state, so nothing is broadcast.
-    emitted_events = [call.args[0] for call in sio.emit.await_args_list]
-    assert "hint_revealed" in emitted_events
-    assert "room_state" not in emitted_events
+    # What the hint revealed rides the answer (#884), and buying touches no
+    # public state: nothing is emitted at all.
+    assert res["maskedPrompt"] == room.game.masked_prompt(guesser.id)
+    assert res["hintCost"] == room.game.hint_cost(guesser.id)
+    assert sio.emit.await_args_list == []
 
     # Guesser who has already committed the whole turn budget
     room.game.hint_spend[guesser.id] = MAX_HINT_SPEND
@@ -299,18 +300,16 @@ async def test_a_correct_guess_is_credited_net_of_hints():
     sio.emit = AsyncMock()
 
     buy_hint = sio.handlers["/"]["buy_hint"]
-    assert (await buy_hint("guesser-sid", {"slot": 0}))["ok"] is True
-    assert (await buy_hint("guesser-sid", {"slot": 1}))["ok"] is True
+    first = await buy_hint("guesser-sid", {"slot": 0})
+    second = await buy_hint("guesser-sid", {"slot": 1})
+    assert first["ok"] is True and second["ok"] is True
     spend = room.game.hint_spend[guesser.id]
 
-    # The running total is reported on every purchase, privately.
-    hint_revealed = [
-        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "hint_revealed"
-    ]
-    assert [payload["hintSpend"] for payload in hint_revealed] == [12, 12 + 24]
+    # The running total is reported on every purchase, privately, in its answer.
+    assert [first["hintSpend"], second["hintSpend"]] == [12, 12 + 24]
     assert guesser.score == 0
 
-    await sio.handlers["/"]["guess"]("guesser-sid", {"text": "apple"})
+    answer = await sio.handlers["/"]["guess"]("guesser-sid", {"text": "apple"})
 
     net = room.game.guess_points[guesser.id]
     assert net == MAX_GUESS_POINTS - spend
@@ -321,11 +320,8 @@ async def test_a_correct_guess_is_credited_net_of_hints():
     )
     assert broadcast["points"] == net
 
-    private = next(
-        call.args[1]
-        for call in sio.emit.await_args_list
-        if call.args[0] == "you_guessed_correctly"
-    )
+    # The guesser's receipt rides the answer to their guess (#884).
+    private = answer["correct"]
     assert private == {
         "prompt": "apple",
         "points": net,
@@ -378,15 +374,12 @@ async def test_buy_wheel_letter():
     dup_res = await buy_wheel_letter("guesser-sid", {"letter": "a"})
     assert dup_res == {"ok": False, "errorCode": "hint_unavailable", "error": "Letter unavailable"}
 
-    # Verify system message emission
-    emitted = [call.args for call in sio.emit.await_args_list]
-    chat_emits = [args for args in emitted if args[0] == "chat_message"]
-    assert any(
-        args[1].get("code") in {"hint_letter_found", "hint_letter_missing"}
-        and args[1]["params"]["letter"] == "A"
-        for args in chat_emits
-    )
-    assert "room_state" not in [args[0] for args in emitted]
+    # The line rides the answer with what was revealed (#884): nothing is emitted.
+    assert res["line"]["code"] == "hint_letter_found"
+    assert res["line"]["params"] == {"letter": "A", "cost": res["cost"], "count": 3}
+    assert res["maskedPrompt"] == room.game.masked_prompt(guesser.id)
+    assert res["letterPrices"] == room.game.wheel_letter_prices(guesser.id)
+    assert sio.emit.await_args_list == []
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:
@@ -424,20 +417,18 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     guess = sio.handlers["/"]["guess"]
 
     # Guesser1 makes a close guess "pandas" (distance 1 from "panda")
-    await guess("guesser1-sid", {"text": "pandas"})
+    answer = await guess("guesser1-sid", {"text": "pandas"})
 
     # Check emits for the close guess
     emitted_calls = sio.emit.await_args_list
-    # Guesser1 should receive a close hint message to their specific sid
-    close_hints = [
-        call for call in emitted_calls
-        if call.args[0] == "chat_message" and call.kwargs.get("to") == "guesser1-sid" and call.args[1].get("close")
-    ]
-    assert len(close_hints) == 1
+    # Guesser1's verdict and own line ride the answer (#884), not an emit.
+    assert not any(call.kwargs.get("to") == "guesser1-sid" for call in emitted_calls)
+    assert answer["verdict"]["close"] is True
     # The code, not the sentence: the client writes that, and in a room whose
     # players read different languages there is no one sentence to assert on.
-    assert close_hints[0].args[1]["code"] == "guess_very_close"
-    assert close_hints[0].args[1]["params"] == {"text": "pandas"}
+    assert answer["verdict"]["code"] == "guess_very_close"
+    assert answer["verdict"]["params"] == {"text": "pandas"}
+    assert answer["line"]["text"] == "pandas"
 
     forwarded_near_misses = [
         call
@@ -456,15 +447,18 @@ async def test_near_miss_guess_privacy_and_restricted_chat():
     sio.emit.reset_mock()
 
     # Guesser1 guesses correctly ("panda")
-    await guess("guesser1-sid", {"text": "panda"})
+    answer = await guess("guesser1-sid", {"text": "panda"})
     assert guesser1.id in room.game.correct_guessers
     correct_chat_emits = [
         call
         for call in sio.emit.await_args_list
         if call.args[0] == "chat_message" and call.args[1].get("correct") is True
     ]
+    # The prompt-aware room gets the line; the guesser's own copy rides the
+    # answer to their guess (#884).
     assert len(correct_chat_emits) == 1
-    assert correct_chat_emits[0].kwargs["to"] == ["drawer-sid", "guesser1-sid"]
+    assert correct_chat_emits[0].kwargs["to"] == ["drawer-sid"]
+    assert answer["line"]["correct"] is True and answer["line"]["text"] == "panda"
 
     sio.emit.reset_mock()
 
@@ -555,14 +549,11 @@ async def test_empty_privileged_recipient_list_does_not_broadcast_close_guess():
     sio.emit = AsyncMock()
 
     guess = sio.handlers["/"]["guess"]
-    await guess("guesser-sid", {"text": "pandas"})
+    answer = await guess("guesser-sid", {"text": "pandas"})
 
-    chat_emits = [
-        call for call in sio.emit.await_args_list if call.args[0] == "chat_message"
-    ]
-    assert len(chat_emits) == 2
-    assert all(call.kwargs.get("to") == "guesser-sid" for call in chat_emits)
-    assert all(call.kwargs.get("room") is None for call in chat_emits)
+    # Nobody else may see it, and the guesser's two lines ride the answer.
+    assert [call for call in sio.emit.await_args_list if call.args[0] == "chat_message"] == []
+    assert answer["line"]["text"] == "pandas" and answer["verdict"]["code"] == "guess_very_close"
 
     timer = timers.phase_timers.pop(room.id, None)
     if timer:
@@ -715,23 +706,19 @@ async def test_a_guess_without_an_id_is_never_deduped():
     assert room.game.wrong_guesses[guesser.id] == 2
 
 
-async def test_a_near_miss_retry_repeats_neither_the_echo_nor_the_hint():
-    """The near-miss path answers one guess with two messages to the guesser -
-    their own line and the hint. A replayed guess would duplicate both."""
+async def test_a_near_miss_retry_is_answered_with_the_first_answer_and_counted_once():
+    """The near-miss answer carries the guesser's own line and the verdict
+    (#884). The retry exists because that answer may have been lost, so it
+    gets the same one - without the guess being processed a second time."""
     room, guesser, sio = _guessing_room()
     guess = sio.handlers["/"]["guess"]
 
-    await guess("guesser-sid", {"text": "pandas", "id": 4})
-    await guess("guesser-sid", {"text": "pandas", "id": 4})
+    first = await guess("guesser-sid", {"text": "pandas", "id": 4})
+    retry = await guess("guesser-sid", {"text": "pandas", "id": 4})
 
-    to_guesser = [
-        call
-        for call in sio.emit.await_args_list
-        if call.args[0] == "chat_message" and call.kwargs.get("to") == "guesser-sid"
-    ]
-    assert [
-        call.args[1].get("text") or call.args[1].get("code") for call in to_guesser
-    ] == ["pandas", "guess_very_close"]
+    assert first["line"]["text"] == "pandas" and first["verdict"]["code"] == "guess_very_close"
+    assert retry == first
+    assert not any(call.kwargs.get("to") == "guesser-sid" for call in sio.emit.await_args_list)
     assert room.game.near_misses[guesser.id] == 1
 
 
@@ -1023,15 +1010,18 @@ async def test_a_guess_naming_another_room_or_turn_is_acknowledged_and_ignored(m
     assert store.guesses_out_of_scope.get(("turn",)) == 1
 
     ctx.clear_command_budget("guesser-sid")
-    assert await guess("guesser-sid", {"text": "stone", "id": 4, "code": room.code, "turnId": turn}) is None
+    answer = await guess("guesser-sid", {"text": "stone", "id": 4, "code": room.code, "turnId": turn})
+    assert answer["correct"]["prompt"] == "stone"
     assert guesser.id in room.game.correct_guessers
     assert guesser.is_afk is False
     assert any(call.args[0] == "correct_guess" for call in sio.emit.await_args_list)
 
-    # The same id inside the same scope is the client's one retry: deduplicated.
+    # The same id inside the same scope is the client's one retry: not
+    # processed again, and answered with the first answer (#884) - the retry
+    # exists because that answer, and the receipt on it, may have been lost.
     ctx.clear_command_budget("guesser-sid")
     before = sio.emit.await_count
-    assert await guess("guesser-sid", {"text": "stone", "id": 4, "code": room.code, "turnId": turn}) is None
+    assert await guess("guesser-sid", {"text": "stone", "id": 4, "code": room.code, "turnId": turn}) == answer
     assert sio.emit.await_count == before
 
 

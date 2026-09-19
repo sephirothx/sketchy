@@ -1201,9 +1201,6 @@
   "you_are_drawing": {
    "shape": "object"
   },
-  "you_guessed_correctly": {
-   "shape": "object"
-  },
   "your_prompt_choices": {
    "shape": "object"
   }
@@ -2601,7 +2598,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 29,
+ "protocolVersion": 30,
  "refusal": {
   "codes": [
    "invalid_payload",

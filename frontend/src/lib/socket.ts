@@ -6,6 +6,7 @@ import { isUpdateRequired, markUpdateRequired } from "./updateRequired.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { applyPrivateResult } from "./privateResults.ts";
 
 // No URL: connect to the origin that served the page. The backend serves the
 // frontend in production and E2E, and the Vite dev server proxies /socket.io,
@@ -459,7 +460,7 @@ real socket will not hold still in. */
 export interface TransientAckTarget {
   readonly connected: boolean;
   /** Emit volatile, calling back with an error if no ack arrives in `timeoutMs`. */
-  emitTransient(event: string, data: unknown, timeoutMs: number, ack: (error: unknown) => void): void;
+  emitTransient(event: string, data: unknown, timeoutMs: number, ack: (error: unknown, answer?: unknown) => void): void;
   /** Where a guess made right now belongs, or null when there is no such
   place (not connected, no room, no turn). Read at the first attempt and
   again before a retry (#599). */
@@ -482,8 +483,9 @@ function sameScope(a: GuessScope, b: GuessScope | null): boolean {
 }
 
 export interface GuessDeliveryResult {
-  /** The guess reached the server. It may still have been ignored there. */
-  onDelivered?: () => void;
+  /** The guess reached the server - with its private result, if it had one
+  (#884). It may still have been ignored there. */
+  onDelivered?: (answer?: unknown) => void;
   /** Both attempts went unacknowledged: the guess is lost, and the player should be told. */
   onUndelivered?: () => void;
 }
@@ -508,7 +510,7 @@ ignores a packet whose scope is gone even when the client's check was not
 enough. Each result callback settles exactly once. */
 export function createGuessSender(
   target: TransientAckTarget,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; onAnswer?: (answer: unknown) => void } = {},
 ): (text: string, result?: GuessDeliveryResult) => void {
   const timeoutMs = options.timeoutMs ?? GUESS_ACK_TIMEOUT_MS;
   // Per page load, not per connection: a counter that restarted on reconnect
@@ -520,11 +522,15 @@ export function createGuessSender(
     const id = nextGuessId++;
     let retriesLeft = 1;
     let settled = false;
-    const settle = (delivered: boolean) => {
+    const settle = (delivered: boolean, answer?: unknown) => {
       if (settled) return;
       settled = true;
-      if (delivered) result.onDelivered?.();
-      else result.onUndelivered?.();
+      if (delivered) {
+        // The private result rides the ack (#884); a retry of a guess that
+        // did arrive is answered with the same one.
+        if (answer !== undefined && answer !== null) options.onAnswer?.(answer);
+        result.onDelivered?.(answer);
+      } else result.onUndelivered?.();
     };
 
     const scope = target.scope();
@@ -538,10 +544,10 @@ export function createGuessSender(
         "guess",
         { text, id, code: scope!.code, turnId: scope!.turnId },
         timeoutMs,
-        (error) => {
+        (error, answer) => {
           if (settled) return; // a late callback from an attempt already judged
           if (!error) {
-            settle(true);
+            settle(true, answer);
             return;
           }
           if (retriesLeft > 0 && target.connected && sameScope(scope!, target.scope())) {
@@ -582,4 +588,4 @@ export const sharedGuessTarget: TransientAckTarget = {
 };
 
 /** Send a guess on the shared socket, retrying once inside the scope it was made in. */
-export const sendGuess = createGuessSender(sharedGuessTarget);
+export const sendGuess = createGuessSender(sharedGuessTarget, { onAnswer: applyPrivateResult });

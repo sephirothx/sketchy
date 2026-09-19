@@ -4,6 +4,7 @@ import { useToast } from "../lib/toast";
 import { maskedWords, splitMaskedPrompt } from "../lib/maskedPrompt";
 import type { AckResponse, HintMode } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { applyPrivateResult } from "../lib/privateResults.ts";
 import { ui } from "../content/ui/index.ts";
 
 interface PromptDisplayProps {
@@ -118,6 +119,8 @@ export function PromptDisplay({
     try {
       const response = await emitWithAck<AckResponse>(event, data);
       if (!response.ok) notify(refusalText(response, ui.promptDisplay.couldNotDoAction({ action })), "error");
+      // A hint bought answers with what it revealed (#884).
+      else applyPrivateResult(response);
     } catch (requestError) {
       notify(socketRequestErrorMessage(requestError, action), "error");
     } finally {
