@@ -437,6 +437,25 @@ these paths that means a second room, or a game started twice. Instead:
 
 - **Acknowledged actions** (create a room, join, start, vote to restart) wait for the
   connection and are sent exactly once, or they time out having never been sent.
+- **Entries answer inside the wait, or create nothing (#879).** The client gives an
+  acknowledgement 8 s; `create_room` used to make four database calls in a row, each
+  bounded at 10 s on its own. Under a slow database the player was told it failed while
+  the room was made anyway - a spent creation allowance, one of the account's three
+  rooms, and after Quick play's fallback a public room nobody would start. Now
+  `create_room`, `join_room` and `join_friend_room` have **6 s from arrival**, the wait
+  for the seating gate included: each call gets what is left, and past the deadline the
+  entry refuses with `database_busy` and nothing is made, checked at the last instant
+  before the room or seat exists. The 2 s left over are for the answer to travel.
+- **A creation is idempotent.** `create_room` carries a `requestId`, one per press and
+  kept by the client across that press's retries. The server remembers each account's
+  last one for 60 s and answers a repeat - an answer lost with the connection, the retry
+  made from a new socket - by seating the socket back in that room, spending nothing,
+  as long as the account's seat is still there.
+- **A late answer is given back.** Should an entry's success arrive after the client
+  gave up (`emitEntry`), the client sends `leave_room {roomId}`: the player was told it
+  failed and may be somewhere else, so the seat is returned by name and the room they
+  are in now is never the one left. Not for a room's own rebind, whose seat is the one
+  the player is sitting in.
 - **Momentary actions** (`guess`, `vote_player`, `toggle_afk`, `leave_room`) go through
   `emitTransient` ([`frontend/src/lib/socket.ts:220`](../frontend/src/lib/socket.ts)),
   which uses `socket.volatile.emit` so the packet is **dropped** rather than replayed
@@ -594,9 +613,9 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 
 | Event | Payload model | Ack | Handler |
 | --- | --- | --- | --- |
-| `create_room` | `CreateRoomPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
+| `create_room` | `CreateRoomPayload`, with an optional `requestId` a repeat is answered from (§2, #879) | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `join_room` | `JoinRoomPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
-| `leave_room` | `EmptyPayload` | — | [`rooms.py`](../backend/app/handlers/rooms.py) |
+| `leave_room` | `LeaveRoomPayload` `{roomId?}` — with it, leaves only that room, and does nothing if the socket sits somewhere else (#879) | — | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_room_preview` | `RoomPreviewPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_room_settings` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `update_room_settings` | `UpdateRoomSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
@@ -2170,7 +2189,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (34) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (35) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

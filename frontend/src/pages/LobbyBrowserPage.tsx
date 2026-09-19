@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
-import { emitTransient, emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/socket";
+import { createRequestIds, mintRequestId } from "../lib/createRequests";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
@@ -154,6 +155,9 @@ function identityMessage(error: unknown): string {
   if (error instanceof IdentityRequiredError) return error.message;
   return refusalText(error, ui.lobbyBrowserPage.couldNotSaveThatName);
 }
+
+// One request id per Quick play press, kept across its retries (#879).
+const quickPlayRequests = createRequestIds(mintRequestId);
 
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
@@ -319,7 +323,7 @@ export function LobbyBrowserPage() {
       const current = useRoomsStore.getState().rooms;
       const answer = await runQuickPlay(
         quickPlayCandidates(current.rooms, playerLanguage),
-        (room) => emitWithAck<AckResponse>("join_room", {
+        (room) => emitEntry<AckResponse>("join_room", {
           nickname: playerName,
           nameColor,
           colorblindSafeColors,
@@ -327,14 +331,21 @@ export function LobbyBrowserPage() {
           roomId: room.id,
           quickPlay: true,
         }),
-        () => emitWithAck<AckResponse>("create_room", {
-          nickname: playerName,
-          nameColor,
-          colorblindSafeColors,
-          ...quickPlayRoom(playerLanguage, colorblindSafeColors),
-        }),
+        () => {
+          const settings = {
+            nickname: playerName,
+            nameColor,
+            colorblindSafeColors,
+            ...quickPlayRoom(playerLanguage, colorblindSafeColors),
+          };
+          // Kept across Quick play presses: a fallback room whose answer was
+          // lost is handed back, not opened a second time (#879).
+          const requestId = quickPlayRequests.idFor(JSON.stringify(settings), Date.now());
+          return emitEntry<AckResponse>("create_room", { ...settings, requestId });
+        },
       );
       const session = sessionFrom(answer);
+      if (session) quickPlayRequests.succeeded();
       if (!mountedRef.current) {
         if (session) letGoOfAStraySeat();
         return;
@@ -384,7 +395,7 @@ export function LobbyBrowserPage() {
           return;
         }
       }
-      const res = await emitWithAck<AckResponse>("join_room", {
+      const res = await emitEntry<AckResponse>("join_room", {
         nickname: playerName,
         nameColor,
         colorblindSafeColors,

@@ -151,6 +151,12 @@ class HandlerContext:
     # in (#559), so that nothing is ever resolved against a point the server
     # never recorded.
     dropped_draw_frames: set[str] = field(default_factory=set, init=False, repr=False)
+    # The last `create_room` each account made, by its request id (#879):
+    # account -> (request id, room id, monotonic expiry). One entry per
+    # account, pruned on every write, so it is bounded by active creators.
+    recent_room_creations: dict[str, tuple[str, str, float]] = field(
+        default_factory=dict, init=False, repr=False
+    )
     # Guesses being handled, by (sid, guess id), until they are answered: a
     # retry of one still in flight waits for its answer (#884).
     guesses_in_flight: dict[tuple[str, int], asyncio.Future] = field(

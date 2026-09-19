@@ -200,6 +200,20 @@
       "title": "Promptlistslugs",
       "type": "array"
      },
+     "requestId": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Requestid"
+     },
      "rounds": {
       "default": 3,
       "maximum": 10,
@@ -554,7 +568,23 @@
    "commandClass": "action",
    "payload": {
     "additionalProperties": false,
-    "properties": {},
+    "description": "`roomId`, when given, is the only room this leaves (#879): a client\ngiving back a seat it learned of late must not take the player out of a\nroom they have entered since.",
+    "properties": {
+     "roomId": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Roomid"
+     }
+    },
     "type": "object"
    },
    "silent": false
@@ -2641,7 +2671,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 34,
+ "protocolVersion": 35,
  "refusal": {
   "codes": [
    "invalid_payload",
