@@ -40,7 +40,9 @@ def pytest_configure_node(node):
     # grant fails here rather than in production.
     owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
     if _DATABASES not in node.config.stash:
-        node.config.stash[_DATABASES] = WorkerDatabases(owner_url or template_url)
+        node.config.stash[_DATABASES] = WorkerDatabases(
+            owner_url or template_url, role_url=template_url if owner_url else None
+        )
     clone_url = asyncio.run(node.config.stash[_DATABASES].create())
     if owner_url:
         node.workerinput["test_owner_database_url"] = clone_url

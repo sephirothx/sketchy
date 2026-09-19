@@ -16,9 +16,12 @@ from tests.dbfixtures import assert_disposable
 
 
 class WorkerDatabases:
-    def __init__(self, template_url: str):
+    def __init__(self, template_url: str, role_url: str | None = None):
         # Validate the source before adding a test-looking name to anything.
         assert_disposable(template_url)
+        # The role the tests connect as, when it is not the one that owns the
+        # clones (#896): its sessions are the ones the owner cannot end.
+        self.role_url = role_url
         self.template = make_url(template_url)
         if self.template.get_backend_name() != "postgresql":
             raise ValueError("parallel TEST_DATABASE_URL must use PostgreSQL")
@@ -58,9 +61,28 @@ class WorkerDatabases:
         )
         try:
             # Workers have exited by now. FORCE also clears a connection left
-            # by a crashed worker, but only in databases this controller owns.
+            # by a crashed worker, but only one the dropping role may end: a
+            # session of the application role that is still closing when this
+            # runs made the owner's DROP fail with "permission denied to
+            # terminate process" after a green run. So that role ends its own
+            # sessions first - any role may end its own.
             for name in self.names[:]:
+                await self._end_role_sessions(name)
                 await connection.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
                 self.names.remove(name)
         finally:
             await connection.close()
+
+    async def _end_role_sessions(self, name: str) -> None:
+        if self.role_url is None:
+            return
+        url = make_url(self.as_role(self.template.set(database=name).render_as_string(hide_password=False), self.role_url))
+        role = await asyncpg.connect(url.set(drivername="postgresql").render_as_string(hide_password=False))
+        try:
+            await role.execute(
+                "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+                " WHERE datname = current_database() AND usename = current_user"
+                " AND pid <> pg_backend_pid()"
+            )
+        finally:
+            await role.close()
