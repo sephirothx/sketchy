@@ -597,6 +597,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `friends_in_room` | `EmptyPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+| `friends_online` | `EmptyPayload` | ✓ — from anywhere, seated or not | [`friends.py`](../backend/app/handlers/friends.py) |
 | `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 
@@ -794,6 +795,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
 | `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it. The client still says **which** of those happened, by comparing the lists across the refetch this triggers (R-FRIEND-12) — so naming it costs no wire surface, and the event does not have to grow a second shape | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `email_state_changed` | `{}` — this account's recovery address state moved: an address was offered, one was confirmed, or the weekly reminder was closed. Contentless for the reason `friends_changed` is: `GET /api/auth/email` is the truth, and the address itself is not something to put on a broadcast. The client re-reads it, and re-reads again on reconnecting, which is how a tab hears a change it was offline for | every socket of the account. The confirmation link is presented without a session, usually in a tab of its own, so this is the only way the tabs that were already showing the reminder hear that it is done |
+| `friend_presence` | `[userId, "lobby" \| "playing" \| null]` — one friend's status moved: came online, sat down in or left a game, or went offline (`null`). On the presence tick, and only when the status moved. Everything after the `friends_online` answer; no backlog, so a reconnect asks again | every socket of each **online friend** of the account that moved, on `user:{id}` |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
 | `client_config` | `ClientConfig` — cadences the client runs at, and since version 3 the drawing allowance its frames spend (`drawingFramesPerWindow`, `drawingWindowSeconds`), so a replay can pace itself under it (§7). Version 4 adds `afkInputWindowMs`: how recently the client must have seen a pointer or a key to answer an `afk_check` for the player | one socket at handshake; every socket when a cadence or the drawing budget changes |
 
@@ -811,6 +813,17 @@ R-BLOCK-03 forbids a **block** creating a different game per player; this
 changes no gameplay fact, exactly as the viewer's own avatar ring does not. A
 caller with no account, or one in a room with no friends in it, gets an empty
 list rather than a refusal, so the two cannot be told apart (R-FRIEND-04).
+
+`friends_online` answers `{friends: [[userId, status], …]}` — this account's
+accepted friends who are online, and `lobby` or `playing` for each (#873,
+#878). Uncapped, and apart from the lobby's list for two reasons. The public
+list is cut at a hundred and ordered by name for everyone, so a friend past the
+cut was neither shown online nor invitable; and a waiting room had to join the
+whole `lobby` channel — every row and every chat line — to read the few rows
+its invite list needed. `friend_presence` keeps the answer current. The status
+is exactly what `LobbyPlayer.status` tells any stranger, and never the room
+(R-ROOM-07). A guest, or an account with no friends online, gets an empty list;
+the client does not ask for an account with no friends at all.
 
 **Friend payloads** never carry a room. `friend_invite_received` holds a token
 the server resolves against the sender's live seat, so an invitation is a
@@ -838,11 +851,11 @@ presence news, and somebody signing in must not re-send the rooms.
 
 ```jsonc
 { "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
-  "isAnonymous": false, "status": "lobby" | "playing" }
+  "avatarUrl": "…" | null, "isAnonymous": false, "status": "lobby" | "playing" }
 ```
 
-This is the one payload that carries an account id, and deliberately so: a
-friend request (#529) needs a stable target, and unlike a room payload
+This and the friend payloads above are the ones that carry an account id,
+and deliberately so: a friend request (#529) needs a stable target, and unlike a room payload
 (R-ROOM-07) there is no seat to resolve for somebody idling in the lobby. What
 it must never carry is the *room*: no id, no code, no name, and no state richer
 than in-the-lobby or in-a-game. `Room.to_public_roster` refuses to make the
@@ -2098,7 +2111,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (30) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (31) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

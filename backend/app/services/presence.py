@@ -158,9 +158,12 @@ def sort_key(entry: PresenceEntry) -> tuple[bool, str, str]:
     Explicitly not recency: a list sorted by when people arrived reorders
     under the reader's cursor on every tick.
 
-    #529 puts friends above everyone else, which is a term in front of this
-    one rather than a change to it - the rest of the order still decides
-    among friends, and among everybody else.
+    Friends are not ordered here. The client puts them first over the rows it
+    holds (`withFriendsFirst`), a term in front of this order rather than a
+    change to it - but it can only reorder rows it was sent, and this order is
+    the same for everyone and cut at the cap, so a friend past the cut was
+    never among them (#878). Friends reach their account apart from this list,
+    through `friend_presence.py`, and the client adds any the cut left out.
 
     The client re-sorts by the same rule after applying a delta
     (`frontend/src/lib/lobbyPresence.ts`), and `fixtures/lobby_presence_v1.json`
@@ -687,6 +690,9 @@ class LobbyBroadcaster:
         self._last = EMPTY_SNAPSHOT
         self._rooms_revision = 0
         self._last_rooms = EMPTY_ROOMS
+        # Friends told apart from the public list, on the same tick (#873,
+        # #878); set once the friend service is wired.
+        self.friend_presence = None
 
     @property
     def revision(self) -> int:
@@ -792,6 +798,8 @@ class LobbyBroadcaster:
         """Broadcast what changed since the last tick, on either feed."""
         await self._flush_rooms()
         await self._repair_identities()
+        if self.friend_presence is not None:
+            await self.friend_presence.flush()
         candidate = self._build(self._revision + 1)
         delta = diff_snapshots(self._last, candidate)
         # The count moves on its own: an account beyond the cap connecting

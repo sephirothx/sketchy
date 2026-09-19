@@ -40,6 +40,7 @@ import { WarningNotice } from "./components/WarningNotice";
 import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
 import { useFriendsStore } from "./store/friendsStore";
+import { useFriendPresence } from "./hooks/useFriendPresence";
 import { friendListOwner } from "./lib/friends";
 import { useSettingsStore } from "./store/settingsStore";
 import { socket } from "./lib/socket";
@@ -139,6 +140,7 @@ function App() {
     // account's waiting requests as if they had just arrived.
     void refreshFriends(myAccountId);
   }, [refreshFriends, myAccountId]);
+  useFriendPresence();
   useEmailStateSync();
   useServerNotices();
 

@@ -262,6 +262,15 @@
    },
    "silent": false
   },
+  "friends_online": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
   "get_custom_prompts": {
    "commandClass": "action",
    "payload": {
@@ -1106,6 +1115,12 @@
   },
   "friend_invite_received": {
    "shape": "object"
+  },
+  "friend_presence": {
+   "layout": [
+    "userId",
+    "status"
+   ]
   },
   "friends_changed": {
    "shape": "object"
@@ -2598,7 +2613,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 30,
+ "protocolVersion": 31,
  "refusal": {
   "codes": [
    "invalid_payload",

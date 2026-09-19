@@ -104,7 +104,10 @@ keyboard that takes half the screen, and one thumb.
   because a row there comes and goes as people open and close tabs and a request
   reported on one could be answered only while its sender happened to still be
   standing there; a row's menu does offer the ask, alongside opening the profile,
-  since an action taken once and finished is not state to be read. A request that arrives offers **Accept** on the notice itself, and
+  since an action taken once and finished is not state to be read. Online friends are
+  always among its rows, and in the waiting room's invite list, even when the list is
+  capped and they sort past the cut: each account is told its own friends' status
+  apart from the public list. A request that arrives offers **Accept** on the notice itself, and
   lingers long enough to reach mid-turn. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent

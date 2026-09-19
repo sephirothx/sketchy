@@ -68,6 +68,7 @@ COMMAND_PAYLOADS: dict[str, type[payloads.RequestModel] | str] = {
     "dismiss_colorblind_suggestion": payloads.EmptyPayload,
     "draw": "parse_draw_payload",
     "friends_in_room": payloads.EmptyPayload,
+    "friends_online": payloads.EmptyPayload,
     "get_custom_prompts": payloads.EmptyPayload,
     "get_recap_drawing": payloads.RecapDrawingPayload,
     "get_room_preview": payloads.RoomPreviewPayload,
@@ -124,6 +125,7 @@ TUPLE_EVENTS: dict[str, list[str]] = {
     "sync_strokes_tail": ["binaryTail", "baseActionCount", "revision", "generation", "sequence", "historyHash", "requestId"],
     "request_canvas_actions": ["generation", "expectedSequence", "receivedSequence"],
     "canvas_stale": ["generation", "sequence", "reason", "retryAfterMs"],
+    "friend_presence": ["userId", "status"],
 }
 
 #: Events no scan can see: `main.py` hands `("account_suspended", payload)` to a

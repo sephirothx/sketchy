@@ -387,7 +387,35 @@ async def friends_in_room(ctx: HandlerContext, sid, data):
     return {"ok": True, "playerIds": seats}
 
 
+async def friends_online(ctx: HandlerContext, sid, data):
+    """This account's friends who are online, and whether each is in a game.
+
+    `[[userId, status], …]`, uncapped and for this account alone: the public
+    list is cut at a hundred and sorted by name for everyone, and a friend past
+    the cut could not be invited (#878). A waiting room reads this instead of
+    joining the lobby channel (#873). Kept current afterwards by
+    `friend_presence` on `user:{id}`. A guest, or an account with no friends,
+    gets an empty list - the same "nobody" `friends_in_room` answers.
+    """
+    try:
+        parse_payload(EmptyPayload, data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    session = await ctx.sio.get_session(sid) if sid else None
+    account = _account_of(session)
+    if not account:
+        return {"ok": True, "friends": []}
+    try:
+        friends = await _bounded(
+            ctx.friend_presence.online_friends(account), "reading friendships"
+        )
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+    return {"ok": True, "friends": friends}
+
+
 def register(ctx: HandlerContext) -> None:
+    ctx.on("friends_online", handler=partial(friends_online, ctx))
     ctx.on("add_friend", handler=partial(add_friend, ctx))
     ctx.on("friends_in_room", handler=partial(friends_in_room, ctx))
     ctx.on("invite_friend", handler=partial(invite_friend, ctx))

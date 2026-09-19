@@ -11,6 +11,8 @@ import { useAuthStore } from "../store/authStore";
 import { useFriendsStore } from "../store/friendsStore";
 import { useGameStore } from "../store/gameStore";
 import { usePresenceStore } from "../store/presenceStore";
+import { useFriendPresenceStore } from "../store/friendPresenceStore";
+import { withOnlineFriends } from "../lib/friendPresence";
 import { useToast } from "../lib/toast";
 import { Avatar } from "./ui/Avatar";
 import { LobbyPlayerMenu } from "./LobbyPlayerMenu";
@@ -44,6 +46,7 @@ export function OnlinePlayersPanel() {
   const myUserId = useAuthStore((state) => state.user?.id ?? null);
   const iAmAGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);
   const lists = useFriendsStore((state) => state.lists);
+  const onlineFriends = useFriendPresenceStore((state) => state.online);
   const addFriend = useFriendsStore((state) => state.add);
   const { notify } = useToast();
   const navigate = useNavigate();
@@ -59,9 +62,11 @@ export function OnlinePlayersPanel() {
   const me = myUserId ? { userId: myUserId, isAnonymous: iAmAGuest } : null;
 
   // Friends first, then the order the server sent — see `withFriendsFirst`.
+  // A friend the capped list left out is still here: they are told to this
+  // account apart from it (#878).
   const players = useMemo(
-    () => withFriendsFirst(presence.players, lists),
-    [presence.players, lists],
+    () => withFriendsFirst(withOnlineFriends(presence.players, lists, onlineFriends), lists),
+    [presence.players, lists, onlineFriends],
   );
 
   async function joinFriend(player: OnlinePlayer) {
