@@ -451,11 +451,15 @@ these paths that means a second room, or a game started twice. Instead:
   last one for 60 s and answers a repeat - an answer lost with the connection, the retry
   made from a new socket - by seating the socket back in that room, spending nothing,
   as long as the account's seat is still there. A copy that arrives while the first is
-  still being made waits for it and takes the same room; sockets have separate seating
-  gates, so without that both would make one. An entry also releases whatever seat its
-  socket held **before** its last checks rather than after: the old room's teardown can
-  wait on the database, and after the new room existed it held the answer past the
-  deadline with the room already made.
+  still being made waits for it and takes the room its leader made - read from the
+  leader, not from the account's memo, which another tab may have moved on. Sockets have
+  separate seating gates, so without that both would make one. An entry also releases
+  whatever seat its socket held **before** its last checks, and when that empties the
+  old room, only the in-memory half of the teardown is waited on: the abandoned game and
+  the code retirement run as a task of their own (drained at shutdown), because either
+  could hold the entry past its deadline with the seating gate pinned, and neither is
+  safe to cut short - a cancelled staging loses the game, a cancelled retirement leaves
+  the code claimed until the next start.
 - **A late answer is given back.** Should an entry's success arrive after the client
   gave up (`emitEntry`), the client sends `leave_room {roomId}`: the player was told it
   failed and may be somewhere else, so the seat is returned by name and the room they

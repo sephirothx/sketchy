@@ -62,6 +62,10 @@ def _note_door_refusal(command: str, code: ErrorCode, frame_result: str, args: t
 
 logger = logging.getLogger("sketchy.handlers.context")
 
+# How long retiring a torn-down room's invite code may take (#879). The same ten
+# seconds every other write on these paths is allowed.
+ROOM_CODE_RETIRE_TIMEOUT_SECONDS = 10
+
 
 @dataclass
 class SeatingGate:
@@ -162,6 +166,9 @@ class HandlerContext:
     room_creations_in_flight: dict[tuple[str, str], asyncio.Future] = field(
         default_factory=dict, init=False, repr=False
     )
+    # The durable half of teardowns an entry started (#879), running on their
+    # own so the entry does not wait on them; drained at shutdown.
+    room_cleanups: set[asyncio.Task] = field(default_factory=set, init=False, repr=False)
     # Guesses being handled, by (sid, guess id), until they are answered: a
     # retry of one still in flight waits for its answer (#884).
     guesses_in_flight: dict[tuple[str, int], asyncio.Future] = field(
@@ -487,12 +494,29 @@ class HandlerContext:
             await self.remove_room_if_empty(room.id)
         return True
 
-    async def remove_room_if_empty(self, room_id: str) -> bool:
-        """Remove an empty live room and retire its published invite code."""
+    async def remove_room_if_empty(self, room_id: str, *, defer_durable: bool = False) -> bool:
+        """Remove an empty live room and retire its published invite code.
+
+        `defer_durable` is for a teardown an entry causes by leaving its old
+        room (#879): the room leaves memory now, and the writes that follow -
+        the abandoned game, the code retirement - run as a task of their own,
+        so neither can hold the entry past its deadline with the seating gate
+        pinned. Neither is safe to cut short instead: a staging cancelled
+        halfway loses the game, a retirement cancelled leaves the code claimed.
+        """
 
         removed = self.room_manager.remove_room_if_empty(room_id)
         if removed is None:
             return False
+        if defer_durable:
+            task = asyncio.create_task(self._retire_removed_room(removed))
+            self.room_cleanups.add(task)
+            task.add_done_callback(self.room_cleanups.discard)
+            return True
+        await self._retire_removed_room(removed)
+        return True
+
+    async def _retire_removed_room(self, removed) -> None:
         # A room can be torn down while it still holds a game: the last player
         # to be evicted takes the room with them, and that path never reaches
         # `_remove_player_from_game`. This is the one place every teardown
@@ -500,9 +524,19 @@ class HandlerContext:
         await self.game_flow.record_abandoned_game(removed)
         if self.room_codes is not None:
             try:
-                await self.room_codes.retire_ephemeral(removed.code)
+                # Bounded like the history staging above it: a retirement
+                # that never answers must not hold a teardown for ever.
+                await asyncio.wait_for(
+                    self.room_codes.retire_ephemeral(removed.code),
+                    timeout=ROOM_CODE_RETIRE_TIMEOUT_SECONDS,
+                )
             except Exception:
                 # The active reservation remains claimed on failure, which is
-                # safer than making a stale invite join an unrelated room.
+                # safer than making a stale invite join an unrelated room;
+                # `retire_orphaned_ephemeral` reclaims it at the next start.
                 logger.exception("Failed to retire an ephemeral room code")
-        return True
+
+    async def drain_room_cleanups(self, within_seconds: float) -> None:
+        """Let deferred teardowns finish before the process stops."""
+        if self.room_cleanups:
+            await asyncio.wait(set(self.room_cleanups), timeout=within_seconds)

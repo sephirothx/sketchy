@@ -957,7 +957,9 @@ class GameFlowService:
         elif game.phase == Phase.TURN_RESULTS:
             await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
 
-    async def release_seat(self, sid: str, room: Room, player: Player) -> None:
+    async def release_seat(
+        self, sid: str, room: Room, player: Player, *, defer_durable: bool = False
+    ) -> None:
         """Give up one live seat and let the room fall away behind it.
 
         The one way out of a room for a socket that is still connected, so
@@ -981,7 +983,7 @@ class GameFlowService:
             self._timers.cancel_phase_timer(room.id)
             self._timers.cancel_hint_timers(room.id)
             self._timers.cancel_restart_timer(room.id)
-            await self._ctx.remove_room_if_empty(room.id)
+            await self._ctx.remove_room_if_empty(room.id, defer_durable=defer_durable)
             return
         await self._remove_player_from_game(room, player.id)
         await self.note_presence(room, "left", player)
@@ -1007,7 +1009,9 @@ class GameFlowService:
                 room.id,
                 f"room {keep[0]}" if keep is not None else "another room",
             )
-            await self.release_seat(sid, room, player)
+            # Only ever inside an entry, so the old room's durable teardown
+            # is deferred rather than waited on (#879).
+            await self.release_seat(sid, room, player, defer_durable=True)
 
     async def _join_socket_room(self, sid: str, room: Room, player, is_reconnect: bool) -> None:
         # One socket, one seat: whatever this connection was sitting in before

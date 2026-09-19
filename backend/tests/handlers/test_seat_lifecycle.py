@@ -59,6 +59,8 @@ async def test_creating_a_second_room_releases_the_seat_in_the_first():
     assert room_manager.get_room(first["roomId"]) is None, "the first room leaked"
     assert list(room_manager.rooms) == [second["roomId"]]
     # The abandoned room's code has to go back, or the reservation outlives it.
+    # Off the entry's path since #879, so it is waited for here.
+    await ctx.drain_room_cleanups(5)
     ctx.room_codes.retire_ephemeral.assert_awaited_once_with("FIRST1")
 
 

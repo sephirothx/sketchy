@@ -195,10 +195,39 @@ async def test_two_copies_of_one_press_at_once_make_one_room():
     assert ctx.room_creations_in_flight == {}
 
 
-async def test_a_slow_teardown_of_the_room_left_behind_refuses_rather_than_outrunning_the_deadline(scaled):
-    """Moving from one room to a new one tears the old one down, and that can
-    wait on the database. Spent before the new room exists, a stall refuses;
-    it used to come after, with the new room already made."""
+async def test_a_copy_takes_its_own_leaders_room_whatever_the_memo_says(monkeypatch):
+    """Another tab's creation can move the account's memo on before a waiting
+    copy resumes; the copy reads its leader's room from the leader itself."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_codes = codes(stalls(0.1, "ABCDEF"))
+    await sessions.save("old-socket", {"user_id": "user-1"})
+    await sessions.save("new-socket", {"user_id": "user-1"})
+    # Every creation is remembered as some other press - as if another tab's
+    # had landed in between.
+    real_remember = __import__("app.handlers.rooms", fromlist=["x"])._remember_creation
+    monkeypatch.setattr(
+        "app.handlers.rooms._remember_creation",
+        lambda ctx, user_id, request_id, room_id: real_remember(ctx, user_id, "other-tab", room_id),
+    )
+    create = sio.handlers["/"]["create_room"]
+    request = {"nickname": "Host", "requestId": "press-1"}
+
+    first, second = await asyncio.gather(
+        create("old-socket", request), create("new-socket", request)
+    )
+
+    assert first["ok"] is True and second["ok"] is True
+    assert len(room_manager.rooms) == 1 and first["roomId"] == second["roomId"]
+
+
+async def test_a_hung_teardown_of_the_room_left_behind_neither_blocks_nor_refuses_the_entry(
+    scaled, monkeypatch
+):
+    """Moving to a new room tears the old one down, and its durable half - the
+    abandoned game, the code retirement - can wait on the database. It runs on
+    its own now: the entry answers inside its deadline, and the gate is free."""
+    monkeypatch.setattr("app.handlers.context.ROOM_CODE_RETIRE_TIMEOUT_SECONDS", 0.5)
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
     await sessions.save("host", {"user_id": "user-1"})
@@ -206,9 +235,17 @@ async def test_a_slow_teardown_of_the_room_left_behind_refuses_rather_than_outru
     old = await create("host", {"nickname": "Host", "requestId": "first"})
     assert old["ok"] is True
     ctx.room_codes = codes(AsyncMock(return_value="NEWONE"))
-    ctx.room_codes.retire_ephemeral = stalls(0.9)
+    ctx.room_codes.retire_ephemeral = stalls(3600)
 
+    started = asyncio.get_running_loop().time()
     answer = await create("host", {"nickname": "Host", "requestId": "second"})
 
-    assert answer["ok"] is False and answer["errorCode"] == "database_busy"
-    assert [room.code for room in room_manager.rooms.values()] in ([], [old["code"]])
+    assert answer["ok"] is True
+    assert asyncio.get_running_loop().time() - started < 0.3
+    assert [room.code for room in room_manager.rooms.values()] == ["NEWONE"]
+    assert len(ctx.room_cleanups) == 1, "the old room's retirement runs on its own"
+    # And it is bounded: it gives up, leaving the code claimed for the
+    # startup sweep, rather than living for ever.
+    await ctx.drain_room_cleanups(2)
+    assert ctx.room_cleanups == set()
+    ctx.room_codes.retire_ephemeral.assert_awaited_once_with(old["code"])
