@@ -450,7 +450,12 @@ these paths that means a second room, or a game started twice. Instead:
   kept by the client across that press's retries. The server remembers each account's
   last one for 60 s and answers a repeat - an answer lost with the connection, the retry
   made from a new socket - by seating the socket back in that room, spending nothing,
-  as long as the account's seat is still there.
+  as long as the account's seat is still there. A copy that arrives while the first is
+  still being made waits for it and takes the same room; sockets have separate seating
+  gates, so without that both would make one. An entry also releases whatever seat its
+  socket held **before** its last checks rather than after: the old room's teardown can
+  wait on the database, and after the new room existed it held the answer past the
+  deadline with the room already made.
 - **A late answer is given back.** Should an entry's success arrive after the client
   gave up (`emitEntry`), the client sends `leave_room {roomId}`: the player was told it
   failed and may be somewhere else, so the seat is returned by name and the room they

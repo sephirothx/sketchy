@@ -157,6 +157,11 @@ class HandlerContext:
     recent_room_creations: dict[str, tuple[str, str, float]] = field(
         default_factory=dict, init=False, repr=False
     )
+    # And those still being made, by (account, request id), so a copy of the
+    # same press on another socket waits for the first rather than racing it.
+    room_creations_in_flight: dict[tuple[str, str], asyncio.Future] = field(
+        default_factory=dict, init=False, repr=False
+    )
     # Guesses being handled, by (sid, guess id), until they are answered: a
     # retry of one still in flight waits for its answer (#884).
     guesses_in_flight: dict[tuple[str, int], asyncio.Future] = field(

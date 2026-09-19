@@ -172,3 +172,43 @@ async def test_leaving_a_named_room_never_leaves_another():
     assert room_manager.get_room(now["roomId"]) is None or room_manager.get_player_by_user_id(
         room_manager.get_room(now["roomId"]), "user-1"
     ) is None
+
+
+async def test_two_copies_of_one_press_at_once_make_one_room():
+    """A retry from the replacement socket while the first is still being
+    made: different sockets, different seating gates, one room."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_codes = codes(stalls(0.1, "ABCDEF"))
+    await sessions.save("old-socket", {"user_id": "user-1"})
+    await sessions.save("new-socket", {"user_id": "user-1"})
+    create = sio.handlers["/"]["create_room"]
+    request = {"nickname": "Host", "requestId": "press-1"}
+
+    first, second = await asyncio.gather(
+        create("old-socket", request), create("new-socket", request)
+    )
+
+    assert first["ok"] is True and second["ok"] is True
+    assert len(room_manager.rooms) == 1
+    assert first["roomId"] == second["roomId"]
+    assert ctx.room_creations_in_flight == {}
+
+
+async def test_a_slow_teardown_of_the_room_left_behind_refuses_rather_than_outrunning_the_deadline(scaled):
+    """Moving from one room to a new one tears the old one down, and that can
+    wait on the database. Spent before the new room exists, a stall refuses;
+    it used to come after, with the new room already made."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    await sessions.save("host", {"user_id": "user-1"})
+    create = sio.handlers["/"]["create_room"]
+    old = await create("host", {"nickname": "Host", "requestId": "first"})
+    assert old["ok"] is True
+    ctx.room_codes = codes(AsyncMock(return_value="NEWONE"))
+    ctx.room_codes.retire_ephemeral = stalls(0.9)
+
+    answer = await create("host", {"nickname": "Host", "requestId": "second"})
+
+    assert answer["ok"] is False and answer["errorCode"] == "database_busy"
+    assert [room.code for room in room_manager.rooms.values()] in ([], [old["code"]])

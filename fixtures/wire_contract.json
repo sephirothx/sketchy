@@ -2329,6 +2329,9 @@
    "restartVote",
    "retryAfterMs"
   ],
+  "handlers.rooms:_create_new_room": [
+   "errorCode"
+  ],
   "handlers.rooms:_create_room": [
    "errorCode"
   ],

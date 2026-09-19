@@ -320,6 +320,36 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         return await _seat_in_room(
             ctx, sid, repeat, _EnteringAs(payload), seated
         )
+    key = (identity.user_id, payload.request_id) if payload.request_id else None
+    if key is not None:
+        leader = ctx.room_creations_in_flight.get(key)
+        if leader is not None:
+            # The same press arriving again on another socket while the first
+            # is still being made - a retry from the replacement socket of a
+            # connection that dropped mid-creation. Sockets have separate
+            # seating gates, so without this both would make a room. Wait for
+            # the first, then take its room; if it failed, try again here.
+            try:
+                await _bounded(asyncio.shield(leader), "waiting for the same creation")
+            except EntryTimedOut:
+                return BUSY_ACKNOWLEDGEMENT
+            repeat = _room_already_created(ctx, identity.user_id, payload.request_id)
+            if repeat is not None:
+                return await _seat_in_room(ctx, sid, repeat, _EnteringAs(payload), seated)
+            if key in ctx.room_creations_in_flight:
+                return BUSY_ACKNOWLEDGEMENT
+        leader = asyncio.get_running_loop().create_future()
+        ctx.room_creations_in_flight[key] = leader
+    try:
+        return await _create_new_room(ctx, sid, payload, identity, seated)
+    finally:
+        if key is not None:
+            del ctx.room_creations_in_flight[key]
+            leader.set_result(None)
+
+
+async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: list):
+    """Everything a creation does once it is known not to be a repeat."""
     try:
         ctx.room_quotas.check_capacity(identity.user_id)
     except RoomQuotaExceeded as error:
@@ -383,6 +413,12 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             await _give_back_code(ctx, code)
             return ctx.shutdown.rejection_acknowledgement()
+        # Whatever this socket sat in goes first (R-ROOM-08), and before the
+        # checks below rather than inside the seating that follows them: the
+        # old room's teardown can wait on the database, and waited on after
+        # the room exists it would hold the answer past the deadline with the
+        # room already made (#879). Spent here, a stall only refuses.
+        await ctx.game_flow.release_other_seats(sid)
         try:
             # Everything above this line awaited, and a second create_room from
             # this account may have arrived in one of those gaps. This is the last
@@ -841,6 +877,9 @@ async def _seat_in_room(
             "error": "You are joining rooms too quickly. Try again in a minute.",
         }
 
+    # Released before the last checks, as creating does, so a teardown that
+    # waits on the database can only make this entry refuse (#879).
+    await ctx.game_flow.release_other_seats(sid)
     if ctx.is_ending(sid):
         return ENDED_ACCOUNT_ACKNOWLEDGEMENT
     # The last word on Quick play, with nothing awaited between it and the
