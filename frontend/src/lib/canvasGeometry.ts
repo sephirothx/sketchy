@@ -106,7 +106,16 @@ export function capsuleCovers(
   const dx = bx - ax;
   const dy = by - ay;
   const lengthSquared = dx * dx + dy * dy;
-  let t = lengthSquared === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / lengthSquared;
+  // Only offsets from the segment's start, never an absolute position: the
+  // drawer paints into a crop of the canvas with its points moved to the
+  // crop's corner, a replay onto the whole canvas, and `px - (ax + t * dx)`
+  // rounded differently at the two magnitudes - a pixel exactly the radius
+  // away was ink on one and not the other (#949's probe). Moving by whole
+  // pixels leaves every offset below bit for bit.
+  const ux = px - ax;
+  const uy = py - ay;
+  const along = ux * dx + uy * dy;
+  let t = lengthSquared === 0 ? 0 : along / lengthSquared;
   t = Math.max(0, Math.min(1, t));
   // Painting a stretch t0..t1 of the segment - what live playback does, a
   // frame at a time - keeps the pixels whose nearest point on the *whole*
@@ -115,10 +124,19 @@ export function capsuleCovers(
   // others, at any angle; a stretch painted as its own segment, between
   // interpolated points a float's width off the line, did not (R-DRAW-01).
   if (t < t0 || t > t1) return false;
-  const ex = px - (ax + t * dx);
-  const ey = py - (ay + t * dy);
-  const squared = ex * ex + ey * ey;
-  if (squared !== radiusSquared) return squared < radiusSquared;
+  const cross = dx * uy - dy * ux;
+  // Beside the segment the squared distance is cross² / length², compared
+  // with both sides scaled by length² - no division, so on the wire's
+  // quarter-pixel grid every product is exact and a pixel exactly on the
+  // edge is a tie, for the half-open rule below, and not float dust.
+  // Beyond an end it is the distance to that end.
+  const pastEnd = lengthSquared !== 0 && along >= lengthSquared;
+  const beyond = pastEnd || lengthSquared === 0 || along <= 0;
+  const ex = pastEnd ? px - bx : ux;
+  const ey = pastEnd ? py - by : uy;
+  const squared = beyond ? ex * ex + ey * ey : cross * cross;
+  const limit = beyond ? radiusSquared : radiusSquared * lengthSquared;
+  if (squared !== limit) return squared < limit;
   // A dot - a tap, a single-point stroke - has no direction to take a side
   // from: its edge is ink below the centre, or right of it on the centre's
   // row, the same half as a line's, so a dot of width w spans w pixels
@@ -128,10 +146,10 @@ export function capsuleCovers(
   // One orientation for the direction, so a segment and its reverse agree:
   // pointing left, or straight down where it is vertical.
   const flip = dx > 0 || (dx === 0 && dy < 0) ? -1 : 1;
-  const side = flip * (dx * (py - ay) - dy * (px - ax));
+  const side = flip * cross;
   if (side !== 0) return side < 0;
   // On the segment's own line, beyond an end: the tip of a round cap.
-  return flip * (dx * (px - ax) + dy * (py - ay)) < 0;
+  return flip * along < 0;
 }
 
 const ELLIPSE_OUTLINE_SEGMENTS = 96;
