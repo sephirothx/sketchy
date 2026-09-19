@@ -23,8 +23,9 @@ report (R-I18N-01).
 
 Three acknowledgements are deliberately *not* refusals in this shape, and are
 documented as exceptions in docs/wire-protocol.md 2: `guess` answers with a
-bare receipt, `session_ping` with a compact tuple, and a throttled `draw`
-answers nothing at all.
+receipt that carries a private result only when there is one (#884),
+`session_ping` with a compact tuple, and a throttled `draw` answers nothing at
+all.
 """
 from __future__ import annotations
 

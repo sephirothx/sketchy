@@ -1,6 +1,7 @@
 """Socket.IO handlers for the chat domain."""
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 
 from app.announcements import Announcement
@@ -13,7 +14,7 @@ from app.handlers.payloads import (
     WheelLetterPayload,
     parse_payload,
 )
-from app.presenters import guessed_receipt
+from app.presenters import guessed_receipt, system_chat_message
 from app.prompts import MAX_PROMPT_LENGTH
 from app.handlers.refusals import ErrorCode
 from app.services.telemetry import telemetry
@@ -161,9 +162,36 @@ async def guess(ctx: HandlerContext, sid, data):
         # The client's one retry of a guess that did arrive. Acknowledged like
         # any other so it stops retrying, but not replayed: this is the only
         # thing standing between a retry and a second chat line, a second entry
-        # in the turn's wrong-guess counts, and a second near-miss hint.
-        return
+        # in the turn's wrong-guess counts, and a second near-miss hint. It is
+        # answered with what the first attempt was (#884): the retry exists
+        # because that answer did not arrive, and it carried the result.
+        pending = ctx.guesses_in_flight.get((sid, payload.id))
+        if pending is not None:
+            return await asyncio.shield(pending)
+        return player.guess_answer(payload.id)
 
+    if payload.id is None:
+        return await _accepted_guess(ctx, sid, room, player, text)
+    # In flight until answered (#884): the client's retry can arrive while
+    # this attempt is still awaiting an emit, and must be given this answer,
+    # not an empty one it would take for "nothing to say".
+    key = (sid, payload.id)
+    pending = asyncio.get_running_loop().create_future()
+    ctx.guesses_in_flight[key] = pending
+    answer = None
+    try:
+        answer = await _accepted_guess(ctx, sid, room, player, text)
+        return answer
+    finally:
+        if answer is not None:
+            player.remember_guess_answer(payload.id, answer)
+        ctx.guesses_in_flight.pop(key, None)
+        if not pending.done():
+            pending.set_result(answer)
+
+
+async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> dict | None:
+    """Act on a guess the seat has not made before; say what only it sees."""
     if player.is_afk:
         player.is_afk = False
         await ctx.game_flow._emit_room_state(room)
@@ -227,20 +255,21 @@ async def guess(ctx: HandlerContext, sid, data):
                 near_miss_kind=hint,
                 additional_audience_sids=[sid],
             )
-            await ctx.sio.emit(
-                "chat_message",
-                line,
-                to=sid,
-            )
-            await ctx.game_flow.announce(
-                room,
-                Announcement.GUESS_VERY_CLOSE
-                if hint == "close"
-                else Announcement.GUESS_SOME_WORDS_CORRECT,
-                {"text": text} if hint == "close" else None,
-                to=sid,
-                close=True,
-            )
+            # The guesser's own line and the verdict ride the acknowledgement
+            # (#884): both are theirs alone, and the ack was going to them
+            # anyway - one message where there were three. The verdict is the
+            # announcement a chat_message used to carry, written the same way.
+            answer = {
+                "line": line,
+                "verdict": system_chat_message(
+                    Announcement.GUESS_VERY_CLOSE
+                    if hint == "close"
+                    else Announcement.GUESS_SOME_WORDS_CORRECT,
+                    {"text": text} if hint == "close" else None,
+                    close=True,
+                ),
+            }
+            return answer
         else:
             await _emit_player_chat(
                 ctx,
@@ -257,24 +286,26 @@ async def guess(ctx: HandlerContext, sid, data):
         {"playerId": player.id, "nickname": player.nickname, "points": points},
         room=room.id,
     )
-    await ctx.sio.emit(
-        "you_guessed_correctly",
-        guessed_receipt(game, player.id),
-        to=player.sid,
+    # The receipt and the guesser's own line ride the acknowledgement (#884),
+    # where `you_guessed_correctly` and a chat_message used to follow it. The
+    # line still reaches the prompt-aware room, and is still retained with
+    # the guesser in its audience.
+    line = _chat_line(player, text, correct=True)
+    recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
+    await _emit_player_chat(
+        ctx,
+        room,
+        player,
+        line,
+        recipients=recipients,
+        message_kind="correct_guess",
+        audience="prompt_aware",
+        additional_audience_sids=[sid],
     )
-    recipients = ctx.game_flow._privileged_sids(room, game)
-    if recipients:
-        await _emit_player_chat(
-            ctx,
-            room,
-            player,
-            _chat_line(player, text, correct=True),
-            recipients=recipients,
-            message_kind="correct_guess",
-            audience="prompt_aware",
-        )
+    answer = {"correct": guessed_receipt(game, player.id), "line": line}
 
     await ctx.game_flow._end_turn_if_all_guessed(room)
+    return answer
 
 
 async def buy_hint(ctx: HandlerContext, sid, data):
@@ -299,16 +330,15 @@ async def buy_hint(ctx: HandlerContext, sid, data):
         return {"ok": False, "errorCode": ErrorCode.HINT_UNAVAILABLE, "error": "Hint unavailable"}
 
     hint_spend = game.hint_spend.get(player.id, 0)
-    await ctx.sio.emit(
-        "hint_revealed",
-        {
-            "maskedPrompt": game.masked_prompt(player.id),
-            "hintCost": game.hint_cost(player.id),
-            "hintSpend": hint_spend,
-        },
-        to=sid,
-    )
-    return {"ok": True, "cost": cost, "hintSpend": hint_spend}
+    # The revealed prompt rides the acknowledgement (#884): `hint_revealed`
+    # is left to the timed hints, which answer no command.
+    return {
+        "ok": True,
+        "cost": cost,
+        "hintSpend": hint_spend,
+        "maskedPrompt": game.masked_prompt(player.id),
+        "hintCost": game.hint_cost(player.id),
+    }
 
 
 async def buy_wheel_letter(ctx: HandlerContext, sid, data):
@@ -332,26 +362,22 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
 
     hint_spend = game.hint_spend.get(player.id, 0)
     found_count = sum(1 for i in game.letter_positions if game.prompt[i].lower() == letter)
-    await ctx.sio.emit(
-        "hint_revealed",
-        {
-            "maskedPrompt": game.masked_prompt(player.id),
-            "letterPrices": game.wheel_letter_prices(player.id),
-            "hintSpend": hint_spend,
-        },
-        to=sid,
-    )
-    # The letter, its price and how often it landed - three values, so the
-    # client can say it in the reader's language and get the plural right
-    # (R-I18N-03). The server used to build the sentence, and "found 2 times"
-    # pluralises differently in five of the seven languages.
-    await ctx.game_flow.announce(
-        room,
-        Announcement.HINT_LETTER_FOUND if found_count else Announcement.HINT_LETTER_MISSING,
-        {"letter": letter.upper(), "cost": cost, **({"count": found_count} if found_count else {})},
-        to=sid,
-    )
-    return {"ok": True, "cost": cost, "found": found_count, "hintSpend": hint_spend}
+    # All of it rides the acknowledgement (#884) - the revealed prompt and
+    # prices `hint_revealed` carried, and the line: the letter, its price and
+    # how often it landed, three values the client says in the reader's
+    # language with the plural right (R-I18N-03). One message where three were.
+    return {
+        "ok": True,
+        "cost": cost,
+        "found": found_count,
+        "hintSpend": hint_spend,
+        "maskedPrompt": game.masked_prompt(player.id),
+        "letterPrices": game.wheel_letter_prices(player.id),
+        "line": system_chat_message(
+            Announcement.HINT_LETTER_FOUND if found_count else Announcement.HINT_LETTER_MISSING,
+            {"letter": letter.upper(), "cost": cost, **({"count": found_count} if found_count else {})},
+        ),
+    }
 
 
 def register(ctx: HandlerContext) -> None:

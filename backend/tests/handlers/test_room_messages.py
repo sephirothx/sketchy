@@ -292,3 +292,90 @@ async def test_a_rejoin_inside_an_eviction_is_not_answered_by_the_departure(monk
     assert sequence[0] == ("joined", "connected")
     assert ("left", "absent") not in sequence[1:], sequence
     await context.timers.close()
+
+
+def messages_to(sio, room, sid: str) -> list[str]:
+    """Every message the socket receives: its own emits, and room broadcasts
+    it is not skipped from. The acknowledgement is not an emit; callers add it."""
+    received = []
+    for call in sio.emit.await_args_list:
+        to = call.kwargs.get("to")
+        targets = to if isinstance(to, list) else [to] if to else []
+        broadcast = call.kwargs.get("room") == room.id and call.kwargs.get("skip_sid") != sid
+        if sid in targets or broadcast:
+            received.append(call.args[0])
+    return received
+
+
+def guessing_room(hint_mode="purchase"):
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True, hint_mode=hint_mode)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    other = room_manager.add_player(room, "Other")
+    drawer.sid, guesser.sid, other.sid = "drawer-sid", "guesser-sid", "other-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id, other.id], prompt_pool=["banana"], hint_mode=hint_mode)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "banana")
+    room.game.set_phase_deadline(room.game.drawing_seconds)
+    sio, context = server(room_manager, {"room_id": room.id, "player_id": guesser.id})
+    return room, sio, context
+
+
+async def test_a_private_result_is_one_message_with_its_acknowledgement():
+    """#884: what only the acting seat sees rides the answer to its command.
+    Counted as the seat receives it, the acknowledgement included."""
+    room, sio, context = guessing_room()
+    answer = await sio.handlers["/"]["buy_hint"]("guesser-sid", {"slot": 0})
+    assert answer["ok"] and messages_to(sio, room, "guesser-sid") == []  # + the ack: 1, was 2
+
+    sio.emit.reset_mock()
+    answer = await sio.handlers["/"]["guess"]("guesser-sid", {"text": "bananas", "id": 1})
+    assert answer["verdict"]["code"] == "guess_very_close"
+    assert messages_to(sio, room, "guesser-sid") == []  # + the ack: 1, was 3
+
+    sio.emit.reset_mock()
+    answer = await sio.handlers["/"]["guess"]("guesser-sid", {"text": "banana", "id": 2})
+    assert answer["correct"]["prompt"] == "banana"
+    assert messages_to(sio, room, "guesser-sid") == ["correct_guess"]  # + the ack: 2, was 4
+    await stop_phase_timer(context, room)
+    await context.timers.close()
+
+
+async def test_a_wheel_letter_is_one_message_with_its_acknowledgement():
+    room, sio, context = guessing_room(hint_mode="wheel")
+    answer = await sio.handlers["/"]["buy_wheel_letter"]("guesser-sid", {"letter": "a"})
+    assert answer["ok"] and answer["line"]["code"] == "hint_letter_found"
+    assert messages_to(sio, room, "guesser-sid") == []  # + the ack: 1, was 3
+    await context.timers.close()
+
+
+async def test_a_retry_that_arrives_while_its_guess_is_in_flight_gets_that_guess_answer():
+    """Review of #884: the retry used to find the id seen but no answer yet,
+    and was acknowledged empty - which the client takes for 'nothing to say',
+    losing the receipt the first attempt was still about to return."""
+    room, sio, context = guessing_room()
+    release = asyncio.Event()
+    emit = sio.emit
+
+    async def slow_correct_guess(event, *args, **kwargs):
+        if event == "correct_guess":
+            await release.wait()
+        return await emit(event, *args, **kwargs)
+
+    sio.emit = AsyncMock(side_effect=slow_correct_guess)
+    guess = sio.handlers["/"]["guess"]
+    first = asyncio.create_task(guess("guesser-sid", {"text": "banana", "id": 7}))
+    await asyncio.sleep(0)
+    retry = asyncio.create_task(guess("guesser-sid", {"text": "banana", "id": 7}))
+    await asyncio.sleep(0.01)
+    assert not retry.done(), "the retry answered before the guess it repeats"
+
+    release.set()
+    original, repeated = await first, await retry
+    assert original["correct"]["prompt"] == "banana"
+    assert repeated == original
+    assert context.guesses_in_flight == {}
+    await stop_phase_timer(context, room)
+    await context.timers.close()

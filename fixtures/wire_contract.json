@@ -1201,9 +1201,6 @@
   "you_are_drawing": {
    "shape": "object"
   },
-  "you_guessed_correctly": {
-   "shape": "object"
-  },
   "your_prompt_choices": {
    "shape": "object"
   }
@@ -2171,6 +2168,9 @@
    "sourceRevisionIds",
    "vowelBaseCost"
   ],
+  "handlers.chat:_accepted_guess": [
+   "playerId"
+  ],
   "handlers.chat:_chat_line": [
    "playerId"
   ],
@@ -2185,9 +2185,6 @@
    "hintSpend",
    "letterPrices",
    "maskedPrompt"
-  ],
-  "handlers.chat:guess": [
-   "playerId"
   ],
   "handlers.chat:send_chat": [
    "errorCode"
@@ -2601,7 +2598,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 29,
+ "protocolVersion": 30,
  "refusal": {
   "codes": [
    "invalid_payload",

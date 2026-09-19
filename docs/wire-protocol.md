@@ -336,8 +336,16 @@ as `{"ok": false, "errorCode": "invalid_payload", "error": …, "field": …}` �
 authorization or mutation runs. A parser may name a more specific code.
 
 **Deliberate exceptions to the shape**, each for a reason the shape would spoil:
-- `guess` answers with a bare receipt (no body): it is momentary *and* confirmed, and the
-  acknowledgement's only job is "it arrived" (§ Client-side delivery guarantees).
+- `guess` answers with a receipt that is empty when there is nothing private to say: it is
+  momentary *and* confirmed, and the acknowledgement's first job is "it arrived"
+  (§ Client-side delivery guarantees). When the guess has a result only the guesser
+  sees, it rides the receipt (#884): a correct guess `{correct: {prompt, points,
+  basePoints, hintSpend}, line}` — what `you_guessed_correctly` and the guesser's own
+  chat line used to say — and a near miss `{line, verdict}`, the guesser's own line and
+  the room's announcement on it. A deduplicated retry is answered with the first
+  attempt's body: the retry exists because that answer may be the one that was lost. A
+  lost answer loses the result, which a correct guess recovers through `sync_game`
+  (#870) and a near miss does not need to.
 - `session_ping` answers with a compact tuple `[1, phaseCode, round, remaining, gen, seq]`
   or `[0]`: it runs on a timer on every seat and its size is the point. The timer is
   5 s, and a tick is **skipped** when an authoritative event — `turn_starting`,
@@ -576,9 +584,9 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `request_sync_strokes` | `[requestId]`, or `[requestId, generation, actionCount, historyHash]` | `{ok: true}` once the reply is on its way; `not_in_game` with `retryAfterMs` when there is no canvas; `too_fast` from the resync budget | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
-| `guess` | `GuessPayload` — `{text, id?, code?, turnId?}`: the id for the one retry, the room code and turn id for the scope it was made in (§2) | ✓ (a bare receipt) | [`chat.py`](../backend/app/handlers/chat.py) |
-| `buy_hint` | `HintPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
-| `buy_wheel_letter` | `WheelLetterPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
+| `guess` | `GuessPayload` — `{text, id?, code?, turnId?}`: the id for the one retry, the room code and turn id for the scope it was made in (§2) | ✓ (a receipt; the private result when there is one, §2) | [`chat.py`](../backend/app/handlers/chat.py) |
+| `buy_hint` | `HintPayload` | ✓ `{cost, hintSpend, maskedPrompt, hintCost}` — what it revealed (#884) | [`chat.py`](../backend/app/handlers/chat.py) |
+| `buy_wheel_letter` | `WheelLetterPayload` | ✓ `{cost, found, hintSpend, maskedPrompt, letterPrices, line}` — what it revealed and the `hint_letter_found` / `hint_letter_missing` line (#884) | [`chat.py`](../backend/app/handlers/chat.py) |
 | `toggle_afk` | `ToggleAfkPayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `vote_player` | `VotePayload` | — | [`moderation.py`](../backend/app/handlers/moderation.py) |
 | `report_player` | `ReportPlayerPayload` | ✓ | [`moderation.py`](../backend/app/handlers/moderation.py) |
@@ -754,15 +762,14 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
 | `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend}` | **per socket** |
-| `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `correctGuessers: [[playerId, seconds]]` in guessing order, and `guessed` — this seat's `you_guessed_correctly` payload, or `null` (R-CONN-13) | one socket |
+| `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `correctGuessers: [[playerId, seconds]]` in guessing order, and `guessed` — this seat's correct-guess receipt (what a correct `guess` is answered with, §2), or `null` (R-CONN-13) | one socket |
 | `turn_ended` | `TurnEndedPayload` | room |
 | `game_ended` | `{scores, highlights, drawings}` — each drawing carrying `turnId` and its `reactions[]` | room |
 | `last_game` | the same `{scores, highlights, drawings}`, for a socket that joined or rejoined the waiting room after `game_ended` (#871) — the recap without the end-of-game moment | one socket |
 | `drawing_reaction` | `DrawingReaction` — one seat reacted to, or took its reaction back from, one drawing; on a finished game's recap also `highlight`, the refreshed most-reacted card or `null` (#871). No `room_state` follows it | room, the drawer included |
 | `chat_message` | `ChatMessage` | room or a filtered recipient list |
 | `correct_guess` | `{playerId, nickname, points}` | room |
-| `you_guessed_correctly` | `{prompt, points, basePoints, hintSpend}` | guesser only |
-| `hint_revealed` | `buy_hint`: `{maskedPrompt, hintCost, hintSpend}`. `buy_wheel_letter`: `{maskedPrompt, letterPrices, hintSpend}` | buyer only |
+| `hint_revealed` | `{maskedPrompt}` — a **timed** checkpoint hint, which answers no command; a bought hint answers in its own acknowledgement (#884) | **per socket**, each seat its own masked prompt |
 | `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
@@ -2091,7 +2098,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (29) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (30) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
