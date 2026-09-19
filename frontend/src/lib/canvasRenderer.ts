@@ -2,6 +2,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
 import type { DecodedCanvasAction } from "./canvasHistory.ts";
 import { boundsFromPath, shapeOutlinePoints, toPixels } from "./canvasGeometry.ts";
 import type { Point, SegmentSpan } from "./canvasGeometry.ts";
+import { commitAll, type CanvasSurface } from "./canvasSurface.ts";
 import { replayStroke } from "./replay.ts";
 import type { ReplayStroke } from "./replay.ts";
 import { rampedRuns, widthRuns } from "./pathWidths.ts";
@@ -18,15 +19,10 @@ import type {
   StrokePoint,
 } from "../types.ts";
 
-export function fillWhite(
-  context: CanvasRenderingContext2D,
-  width: number,
-  height: number,
-): void {
-  context.save();
-  context.fillStyle = "#ffffff";
-  context.fillRect(0, 0, width, height);
-  context.restore();
+/** The whole drawing white, and shown. */
+export function fillWhite(surface: CanvasSurface): void {
+  fillWhitePixels(surface.pixels);
+  commitAll(surface);
 }
 
 export function drawShapeOutline(
@@ -70,82 +66,56 @@ export function drawShapeOutline(
   context.stroke();
 }
 
+/** The pixels a painter may have touched, rounded out to whole pixels. */
+function paintedBox(points: readonly Point[], radius: number): [number, number, number, number] {
+  const bounds = boundsFromPath(points as Point[], radius);
+  return [bounds.minX, bounds.minY, bounds.maxX - bounds.minX, bounds.maxY - bounds.minY];
+}
+
+/** Paint a path onto the drawing and show what it touched. The pixels are
+decided on the whole canvas's coordinates, as every replay decides them. */
 export function rasterizePath(
-  context: CanvasRenderingContext2D,
+  surface: CanvasSurface,
   points: Point[],
   radius: number,
   color: [number, number, number, number],
   closed: boolean,
 ): void {
   if (points.length === 0) return;
-  const bounds = boundsFromPath(points, radius);
-  const x = Math.max(0, Math.floor(bounds.minX));
-  const y = Math.max(0, Math.floor(bounds.minY));
-  const right = Math.min(CANVAS_WIDTH, Math.ceil(bounds.maxX));
-  const bottom = Math.min(CANVAS_HEIGHT, Math.ceil(bounds.maxY));
-  const width = right - x;
-  const height = bottom - y;
-  if (width <= 0 || height <= 0) return;
-
-  const imageData = context.getImageData(x, y, width, height);
-  const localPoints = points.map((point) => ({ x: point.x - x, y: point.y - y }));
-  rasterizePixelPath(
-    imageData.data,
-    width,
-    height,
-    localPoints,
-    radius,
-    color,
-    closed,
-  );
-  context.putImageData(imageData, x, y);
+  rasterizePixelPath(surface.pixels, CANVAS_WIDTH, CANVAS_HEIGHT, points, radius, color, closed);
+  surface.commit(...paintedBox(points, radius));
 }
 
-/** Paint stretches of segments onto the canvas, as live playback hands them
+/** Paint stretches of segments onto the drawing, as live playback hands them
 over (`rasterizeSpans`): the pixels the whole segments would have, a frame at
 a time. */
 export function rasterizeSegmentSpans(
-  context: CanvasRenderingContext2D,
+  surface: CanvasSurface,
   spans: readonly SegmentSpan[],
   radius: number,
   color: [number, number, number, number],
 ): void {
   if (spans.length === 0) return;
+  rasterizeSpans(surface.pixels, CANVAS_WIDTH, CANVAS_HEIGHT, spans, radius, color);
   const ends = spans.flatMap(({ a, b, t0, t1 }) => [
     { x: a.x + (b.x - a.x) * t0, y: a.y + (b.y - a.y) * t0 },
     { x: a.x + (b.x - a.x) * t1, y: a.y + (b.y - a.y) * t1 },
   ]);
-  const bounds = boundsFromPath(ends, radius + 1);
-  const x = Math.max(0, Math.floor(bounds.minX));
-  const y = Math.max(0, Math.floor(bounds.minY));
-  const right = Math.min(CANVAS_WIDTH, Math.ceil(bounds.maxX));
-  const bottom = Math.min(CANVAS_HEIGHT, Math.ceil(bounds.maxY));
-  if (right - x <= 0 || bottom - y <= 0) return;
-  const imageData = context.getImageData(x, y, right - x, bottom - y);
-  // Moved by whole pixels, which is exact for quarter-pixel coordinates, so
-  // each decision is the one the whole canvas would make.
-  const local = spans.map(({ a, b, t0, t1 }) => ({
-    a: { x: a.x - x, y: a.y - y },
-    b: { x: b.x - x, y: b.y - y },
-    t0,
-    t1,
-  }));
-  rasterizeSpans(imageData.data, right - x, bottom - y, local, radius, color);
-  context.putImageData(imageData, x, y);
+  surface.commit(...paintedBox(ends, radius + 1));
 }
 
 export function rasterizePolyline(
-  context: CanvasRenderingContext2D,
+  surface: CanvasSurface,
   points: Point[],
   radius: number,
   color: [number, number, number, number],
 ): void {
   if (points.length === 0) return;
-  rasterizePath(context, points, radius, color, false);
+  rasterizePath(surface, points, radius, color, false);
 }
 
 export function drawShapeOutlinePixels(
-  context: CanvasRenderingContext2D,
+  surface: CanvasSurface,
   from: StrokePoint,
   to: StrokePoint,
   shape: ShapeType,
@@ -153,7 +123,7 @@ export function drawShapeOutlinePixels(
   strokeWidth: number,
 ): void {
   rasterizePath(
-    context,
+    surface,
     shapeOutlinePoints(from, to, shape),
     strokeWidth / 2,
     hexToRgba(strokeColor),
@@ -161,34 +131,26 @@ export function drawShapeOutlinePixels(
   );
 }
 
+/** Flood from a pixel through the drawing as it stands: a live fill spreads
+through the strokes already on it. */
 export function applyFillAtPixel(
-  context: CanvasRenderingContext2D,
+  surface: CanvasSurface,
   x: number,
   y: number,
   color: string,
 ): boolean {
   if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return false;
-  // Reads the canvas: a live fill spreads through the strokes already on it.
-  // Only a full replay, which starts from white, can skip the readback.
-  const imageData = context.getImageData(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  if (!floodFillPixels(
-    imageData.data,
-    imageData.width,
-    imageData.height,
-    x,
-    y,
-    hexToRgba(color),
-  )) return false;
-  context.putImageData(imageData, 0, 0);
+  if (!floodFillPixels(surface.pixels, CANVAS_WIDTH, CANVAS_HEIGHT, x, y, hexToRgba(color))) return false;
+  commitAll(surface);
   return true;
 }
 
 export function applyFillAction(
-  context: CanvasRenderingContext2D,
+  surface: CanvasSurface,
   payload: StrokeFillPayload,
 ): boolean {
   return applyFillAtPixel(
-    context,
+    surface,
     Math.floor(payload.x * CANVAS_WIDTH),
     Math.floor(payload.y * CANVAS_HEIGHT),
     payload.color,
@@ -302,21 +264,14 @@ export function applyCanvasStrokeSpan(
   rasterizeSpans(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, spans, stroke.width / 2, hexToRgba(stroke.color));
 }
 
-/** Replay a whole history onto a blank canvas.
- *
- * Every action is applied to one scratch buffer, written back once at the end.
- * A fill-heavy turn used to round-trip the full 800x600 buffer through the GPU
- * once per fill; a replay starts from white, so it need not read back at all.
- */
+/** Replay a whole history onto a blank drawing, and show it once at the end. */
 export function renderCanvasActions(
-  context: CanvasRenderingContext2D,
+  surface: CanvasSurface,
   actions: DecodedCanvasAction[],
 ): void {
-  const imageData = context.createImageData(CANVAS_WIDTH, CANVAS_HEIGHT);
-  const pixels = imageData.data;
-  fillWhitePixels(pixels);
-  for (const action of actions) applyCanvasAction(pixels, action);
-  context.putImageData(imageData, 0, 0);
+  fillWhitePixels(surface.pixels);
+  for (const action of actions) applyCanvasAction(surface.pixels, action);
+  commitAll(surface);
 }
 
 /**

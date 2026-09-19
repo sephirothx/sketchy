@@ -1,3 +1,6 @@
+import { CANVAS_HEIGHT, CANVAS_WIDTH } from "./canvasHistory.ts";
+import { encodePng } from "./pngEncode.ts";
+
 export function getCanvasDownloadName(downloadPrompt: string | null): string {
   const date = new Date();
   const datePart = [
@@ -13,15 +16,21 @@ export function getCanvasDownloadName(downloadPrompt: string | null): string {
   return `sketchy-${datePart}${prompt ? `-${prompt}` : ""}.png`;
 }
 
-export function saveCanvasImage(
-  canvas: HTMLCanvasElement | null,
+/** Save the drawing as a PNG made from its own pixels (`pngEncode.ts`), never
+from a canvas read, which a privacy protection may answer with noise. */
+export async function saveCanvasImage(
+  pixels: Uint8ClampedArray | null,
   downloadPrompt: string | null,
-): void {
-  if (!canvas) return;
+): Promise<void> {
+  if (!pixels) return;
+  const png = await encodePng(pixels, CANVAS_WIDTH, CANVAS_HEIGHT);
+  const url = URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" }));
   const link = document.createElement("a");
   link.download = getCanvasDownloadName(downloadPrompt);
-  link.href = canvas.toDataURL("image/png");
+  link.href = url;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
+  // Not at once: a browser may still be reading the URL when click() returns.
+  setTimeout(() => URL.revokeObjectURL(url), 30_000);
 }
