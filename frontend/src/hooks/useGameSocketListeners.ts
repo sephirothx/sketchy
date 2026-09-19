@@ -12,6 +12,7 @@ import {
 } from "../lib/sound";
 import type {
   ChatMessage,
+  PresenceCause,
   ColorblindSafeSuggestion,
   DrawingReaction,
   DrawingReactionEvent,
@@ -31,48 +32,39 @@ export function useGameSocketListeners() {
   useEffect(() => {
     const store = useGameStore;
 
-    const onRoomState = (payload: RoomStatePayload) => store.getState().setRoomState(payload);
+    // Why the room changed rides its snapshot (#880): a seat coming or going,
+    // or a line the room says about itself. Applied after the snapshot, so a
+    // line about a seat reads the room it describes.
+    const onRoomState = (payload: RoomStatePayload) => {
+      store.getState().setRoomState(payload);
+      for (const cause of payload.causes ?? []) {
+        if ("presence" in cause) onPresence(cause);
+        else onChatMessage(cause);
+      }
+    };
 
     const onColorblindSafeSuggestion = (payload: ColorblindSafeSuggestion) => {
       store.getState().setColorblindSafeSuggestion(payload);
     };
 
-    const onPlayerJoined = (payload: { playerId: string; nickname: string }) => {
-      playPlayerJoinSound();
+    const presenceLine = {
+      joined: ui.useGameSocketListeners.nicknameJoinedTheRoom,
+      reconnected: ui.useGameSocketListeners.playerReconnected,
+      disconnected: ui.useGameSocketListeners.playerDisconnected,
+    } as const;
+
+    const onPresence = (cause: PresenceCause) => {
+      if (cause.presence === "joined" || cause.presence === "reconnected") playPlayerJoinSound();
+      else playPlayerLeaveSound();
+      // A seat leaving is a sound only, as it always was.
+      if (cause.presence === "left") return;
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
-        text: ui.useGameSocketListeners.nicknameJoinedTheRoom({ nickname: payload.nickname }),
+        text: presenceLine[cause.presence]({ nickname: cause.nickname }),
         correct: false,
         system: true,
       });
-    };
-
-    const onPlayerReconnected = (payload: { playerId: string; nickname: string }) => {
-      playPlayerJoinSound();
-      store.getState().addMessage({
-        id: nextMessageId(),
-        nickname: "",
-        text: ui.useGameSocketListeners.playerReconnected({ nickname: payload.nickname }),
-        correct: false,
-        system: true,
-      });
-    };
-
-    const onPlayerDisconnected = (payload: { playerId: string; nickname: string }) => {
-      playPlayerLeaveSound();
-      store.getState().addMessage({
-        id: nextMessageId(),
-        nickname: "",
-        text: ui.useGameSocketListeners.playerDisconnected({ nickname: payload.nickname }),
-        correct: false,
-        system: true,
-      });
-    };
-
-    const onPlayerLeft = () => {
-      playPlayerLeaveSound();
-      // room_state is re-emitted by the server right after, so no local patch needed here.
     };
 
     // Said by the game's first `turn_starting` (#880), before its own line.
@@ -267,10 +259,6 @@ export function useGameSocketListeners() {
 
     socket.on("room_state", onRoomState);
     socket.on("colorblind_safe_suggestion", onColorblindSafeSuggestion);
-    socket.on("player_joined", onPlayerJoined);
-    socket.on("player_reconnected", onPlayerReconnected);
-    socket.on("player_disconnected", onPlayerDisconnected);
-    socket.on("player_left", onPlayerLeft);
     socket.on("turn_starting", onTurnStarting);
     socket.on("your_prompt_choices", onYourPromptChoices);
     socket.on("you_are_drawing", onYouAreDrawing);
@@ -288,10 +276,6 @@ export function useGameSocketListeners() {
     return () => {
       socket.off("room_state", onRoomState);
       socket.off("colorblind_safe_suggestion", onColorblindSafeSuggestion);
-      socket.off("player_joined", onPlayerJoined);
-      socket.off("player_reconnected", onPlayerReconnected);
-      socket.off("player_disconnected", onPlayerDisconnected);
-      socket.off("player_left", onPlayerLeft);
       socket.off("turn_starting", onTurnStarting);
       socket.off("your_prompt_choices", onYourPromptChoices);
       socket.off("you_are_drawing", onYouAreDrawing);

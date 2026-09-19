@@ -33,6 +33,7 @@ from app.services.game_flow import (
 )
 
 
+from tests.handlers.helpers import room_lines
 def pin(room, repo, *, revision_ids=("revision-1",)):
     """Put the room in the state `authorize_selection` would have left it in."""
     room.prompt_list_slugs = ["curated"]
@@ -389,11 +390,7 @@ async def test_a_restart_whose_draw_fails_is_cancelled_rather_than_crashing():
     assert room.state == "waiting"
     assert room.game is None
     assert room.restart_vote is None
-    announced = [
-        call.args[1]
-        for call in ctx.sio.emit.await_args_list
-        if call.args[0] == "chat_message"
-    ]
+    announced = room_lines(ctx.sio.emit)
     assert any(
         line.get("code") == "restart_cancelled"
         and line["params"]["reason"] == "prompt_lists_unavailable"

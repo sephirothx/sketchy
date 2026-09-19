@@ -298,10 +298,12 @@ async def _begin_reconnect_grace(
     for p in room.players.values():
         p.kick_votes.discard(token)
         p.afk_votes.discard(token)
-    await ctx.sio.emit(
-        "player_disconnected", {"playerId": token, "nickname": player.nickname}, room=room.id
-    )
+    await ctx.game_flow.note_presence(room, "disconnected", player)
     await ctx.game_flow._emit_room_state(room)
+    # Sent now, before anything below can yield: ending the turn awaits, and
+    # a reconnect landing in that gap would otherwise be followed by this
+    # disconnect, on a snapshot showing the seat back (#880).
+    await ctx.game_flow._flush_room_state(room)
     await ctx.game_flow._end_turn_if_all_guessed(room)
 
     async def _evict_after_grace() -> None:
@@ -322,7 +324,7 @@ async def _begin_reconnect_grace(
                 value=int(timing.reconnect_grace_seconds),
             )
             ctx.room_manager.remove_player(room, token)
-            await ctx.sio.emit("player_left", {"playerId": token}, room=room.id)
+            await ctx.game_flow.note_presence(room, "left", still_present)
             if not room.connected_players():
                 ctx.timers.cancel_phase_timer(room.id)
                 ctx.timers.cancel_hint_timers(room.id)

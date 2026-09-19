@@ -1134,18 +1134,6 @@
   "moderator_warning": {
    "shape": "object"
   },
-  "player_disconnected": {
-   "shape": "object"
-  },
-  "player_joined": {
-   "shape": "object"
-  },
-  "player_left": {
-   "shape": "object"
-  },
-  "player_reconnected": {
-   "shape": "object"
-  },
   "request_canvas_actions": {
    "layout": [
     "generation",
@@ -2204,12 +2192,6 @@
   "handlers.chat:send_chat": [
    "errorCode"
   ],
-  "handlers.connection:_begin_reconnect_grace": [
-   "playerId"
-  ],
-  "handlers.connection:_evict_after_grace": [
-   "playerId"
-  ],
   "handlers.context:guarded": [
    "errorCode",
    "retryAfterMs"
@@ -2475,9 +2457,6 @@
    "nameColor",
    "playerId"
   ],
-  "services.game_flow:_join_socket_room": [
-   "playerId"
-  ],
   "services.game_flow:_runner": [
    "maskedPrompt"
   ],
@@ -2488,7 +2467,7 @@
    "roundNumber",
    "totalRounds"
   ],
-  "services.game_flow:release_seat": [
+  "services.game_flow:note_presence": [
    "playerId"
   ],
   "services.game_flow:schedule_hint_checkpoints": [
@@ -2622,7 +2601,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 28,
+ "protocolVersion": 29,
  "refusal": {
   "codes": [
    "invalid_payload",

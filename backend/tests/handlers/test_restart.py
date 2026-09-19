@@ -13,6 +13,7 @@ from app.live_drawing import encode_live_drawing
 from app.rooms import DrawingRecapEntry, RestartVote, RoomManager
 
 
+from tests.handlers.helpers import room_lines
 def active_room(player_count: int = 3):
     room_manager = RoomManager()
     room = room_manager.create_room(name="Restart room", rounds=2)
@@ -166,9 +167,8 @@ async def test_restart_vote_expiry_enforces_cooldown():
     assert retry["ok"] is False
     assert "Another restart vote can be proposed" in retry["error"]
     assert any(
-        call.args[0] == "chat_message"
-        and call.args[1].get("code") == "restart_vote_expired"
-        for call in sio.emit.await_args_list
+        line.get("code") == "restart_vote_expired"
+        for line in room_lines(sio.emit)
     )
 
     await context.timers.close()
@@ -190,9 +190,8 @@ async def test_restart_vote_rejection_closes_immediately_and_enforces_cooldown()
     assert retry["ok"] is False
     assert "Another restart vote can be proposed" in retry["error"]
     assert any(
-        call.args[0] == "chat_message"
-        and call.args[1].get("code") == "restart_vote_rejected"
-        for call in sio.emit.await_args_list
+        line.get("code") == "restart_vote_rejected"
+        for line in room_lines(sio.emit)
     )
 
     await context.timers.close()
@@ -353,10 +352,9 @@ async def test_approved_restart_is_cancelled_if_too_few_players_remain():
     assert room.restart_vote is None
     assert room.restart_vote_cooldown_until > 0
     assert any(
-        call.args[0] == "chat_message"
-        and call.args[1].get("code") == "restart_cancelled"
-        and call.args[1]["params"]["reason"] == "too_few_players"
-        for call in sio.emit.await_args_list
+        line.get("code") == "restart_cancelled"
+        and line["params"]["reason"] == "too_few_players"
+        for line in room_lines(sio.emit)
     )
     restarted_events = [
         call

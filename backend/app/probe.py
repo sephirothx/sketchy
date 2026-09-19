@@ -409,8 +409,11 @@ class PollingSocket:
             return [f"45{len(attachments)}-{suffix}{data}", *attachments]
         return [f"42{suffix}{data}"]
 
-    async def expect(self, name: str, *, wait_seconds: float = STEP_TIMEOUT_SECONDS) -> Event:
-        """The next event of that name, skipping the rest."""
+    async def expect(
+        self, name: str, *, wait_seconds: float = STEP_TIMEOUT_SECONDS, where=None
+    ) -> Event:
+        """The next event of that name, skipping the rest - and, with `where`,
+        the next one whose arguments it accepts."""
         deadline = time.monotonic() + wait_seconds
         while True:
             remaining = deadline - time.monotonic()
@@ -419,7 +422,7 @@ class PollingSocket:
             event = await asyncio.wait_for(self._events.get(), remaining)
             if event.name == "__failed__":
                 raise ProbeError(self.label, f"the connection failed: {self.failure}")
-            if event.name == name:
+            if event.name == name and (where is None or where(event.args)):
                 return event
 
     async def close(self) -> None:
@@ -631,7 +634,13 @@ async def run_probe(
         joined = await guest.call("join_room", {"code": code, "nickname": "probeguest"})
         if not joined or joined[0].get("ok") is not True:
             raise ProbeError("join", f"refused: {joined}")
-        await host.expect("player_joined")
+        # A seat arriving is said by the room's snapshot (#880).
+        await host.expect(
+            "room_state",
+            where=lambda args: any(
+                cause.get("presence") == "joined" for cause in (args[0].get("causes") or [])
+            ),
+        )
         done("join")
 
         host.label = guest.label = "start"

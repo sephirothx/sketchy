@@ -679,7 +679,7 @@ join allowance. `quickPlay` requires `roomId` and a player seat (`invalid_payloa
 `code` or `asSpectator`). An ordinary join still admits a game in progress.
 
 Both `create_room` and `join_room` **release any seat the socket already holds**: the
-room it came from sees an ordinary `player_left` for it and, if that was its last
+room it came from sees an ordinary departure for it (a `left` cause on its `room_state`) and, if that was its last
 player, ends. A client does not have to send `leave_room` first, and one that does
 sees no difference.
 
@@ -749,10 +749,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 
 | Event | Payload | Scope |
 | --- | --- | --- |
-| `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5–2.6% on the wire (§1, *Measured, combined*; N-14). **At most one per room per action** (#880): a command, a connect or disconnect, or a timer firing marks the room and one snapshot goes out when the action is done, after the action's other events, as the room ended up. Two exceptions go at once, because the events after them depend on it: a socket taking a seat gets the room before its own `sync_game` / `last_game` (a client's first snapshot of a room resets what belonged to the one before), and a room turning to play is sent before its first `turn_starting` (that snapshot mounts the canvas the turn resets) | room |
-| `player_joined` / `player_reconnected` | `{playerId, nickname}` | room |
-| `player_left` | `{playerId}` | room |
-| `player_disconnected` | `{playerId, nickname}` | room |
+| `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5–2.6% on the wire (§1, *Measured, combined*; N-14). **At most one per room per action** (#880): a command, a connect or disconnect, or a timer firing marks the room and one snapshot goes out when the action is done, after the action's other events, as the room ended up. Two exceptions go at once, because the events after them depend on it: a socket taking a seat gets the room before its own `sync_game` / `last_game` (a client's first snapshot of a room resets what belonged to the one before), and a room turning to play is sent before its first `turn_starting` (that snapshot mounts the canvas the turn resets). **`causes`**, present when something needs saying, is why, in order: `{presence: "joined" \| "reconnected" \| "disconnected" \| "left", playerId, nickname}` for a seat that came or went — what `player_joined`, `player_reconnected`, `player_disconnected` and `player_left` used to be — and room-authored announcements (below) said to the whole room inside the action, which used to be `chat_message`s beside the snapshot. The client applies the snapshot first and then each cause, as a sound and a line (#880) | room |
 | `turn_starting` | `{drawerId, drawerNickname, drawerNameColor, roundNumber, totalRounds, seconds, canvas: [revision, generation, sequence, historyHash], gameStarted?: true}` — the turn's new canvas identity, and on a game's first turn the fact that it started: one message where `canvas_reset` and `game_started` used to precede it (#880). A restart says so in its own announcement | room |
 | `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
@@ -952,7 +949,10 @@ retained: nothing in a room cites a line (`report_player` selects its own eviden
 the UUIDv7's random half, which deflate cannot remove, was 39% of a viewer's whole
 stream on the wire (#869). A lobby line keeps its id because a lobby report cites it.
 
-**A room-authored announcement carries no text.** It is `{system: true, code, params?}`
+**A room-authored announcement carries no text.** Said to the whole room as part of an
+action that changes it — a rename, a vote, a restart — it rides that action's
+`room_state` in `causes`; said to one socket, or outside an action, it is a
+`chat_message`. Either way it is `{system: true, code, params?}`
 - built by `system_chat_message()`
 ([`backend/app/presenters.py`](../backend/app/presenters.py)) from the `Announcement`
 vocabulary in [`app/announcements.py`](../backend/app/announcements.py), mirrored by
@@ -2091,7 +2091,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (28) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (29) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

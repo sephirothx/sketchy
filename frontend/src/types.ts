@@ -224,6 +224,13 @@ export interface RoomSummary {
   state: "waiting" | "playing";
 }
 
+/** A seat that came or went, said by the room's snapshot (#880). */
+export interface PresenceCause {
+  presence: "joined" | "reconnected" | "disconnected" | "left";
+  playerId: string;
+  nickname: string;
+}
+
 export interface RoomStatePayload {
   id: string;
   code: string;
@@ -247,6 +254,10 @@ export interface RoomStatePayload {
   restartVote?: RestartVoteState | null;
   restartVoteCooldownUntil?: number;
   players: PlayerInfo[];
+  /** Why this snapshot was sent, in order: seats that came or went, and the
+      lines the room says about itself (announcements, as a chat_message
+      carries them). Absent when nothing needs saying (#880). */
+  causes?: (PresenceCause | ChatMessage)[];
 }
 
 export interface EditableRoomSettings {
