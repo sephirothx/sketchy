@@ -44,13 +44,18 @@ fi
 
 log "Starting benchmark server on $BASE_URL"
 # The production runner, so the benchmark measures the transport it names.
-(cd "$BACKEND_DIR" && HOST=127.0.0.1 PORT="$PORT" LOG_LEVEL=warning \
+# No drain on the way out, as in scripts/test-e2e.sh: a throwaway server has
+# nobody to warn, and the default 30 s drain kept the port after the script
+# returned, so a second run straight after refused to start.
+(cd "$BACKEND_DIR" && HOST=127.0.0.1 PORT="$PORT" LOG_LEVEL=warning SHUTDOWN_DRAIN_SECONDS=0 \
   exec .venv/bin/python -m app.server) &
 SERVER_PID=$!
 
 cleanup() {
   log "Stopping benchmark server (PID: $SERVER_PID)"
   kill "$SERVER_PID" 2>/dev/null || true
+  # Gone before returning, and before its database is deleted under it.
+  wait "$SERVER_PID" 2>/dev/null || true
   if [ -n "$SCRATCH_DB" ]; then rm -f "$SCRATCH_DB" "$SCRATCH_DB-wal" "$SCRATCH_DB-shm"; fi
 }
 trap cleanup EXIT
