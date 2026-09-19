@@ -202,6 +202,13 @@ export function applyCanvasAction(
 ): void {
   if (action.kind === "path" && action.points.length > 0) {
     const color = hexToRgba(action.color);
+    // The dot every live screen painted at `draw_start`, before the path had
+    // a segment. Its edge is a dot's, not a line's cap: exactly the radius
+    // from the start, a dot inks the pixels below and to the right, where the
+    // segment leaving it may not - and a late joiner who replayed the path
+    // without it had a pixel fewer than the room.
+    const [start] = action.points;
+    rasterizePixelPath(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, [start, start], action.width / 2, color, false);
     // One run for a path at one width, which is every path not drawn with a
     // pressure-sensitive pen (#828); for one that was, its changes ramped.
     for (const run of rampedRuns(action.points, action.width, action.widths)) {
@@ -251,6 +258,12 @@ export function applyCanvasStrokeSpan(
   from: number,
   to: number,
 ): void {
+  if (stroke.opensWithDot && from <= 0) {
+    // The dot the path opened with, as `applyCanvasAction` paints it.
+    const [start] = stroke.points;
+    rasterizePixelPath(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, [start, start], stroke.width / 2, hexToRgba(stroke.color), false);
+    stroke = { ...stroke, opensWithDot: false };
+  }
   if (stroke.widths?.length) {
     // The stretch, cut where the width changes (#828): each piece is a
     // stretch of a stroke at one width, which is what the rest of this paints.

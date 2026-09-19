@@ -167,6 +167,8 @@ test("the drawer's ink, painted into a crop of the canvas, is the replay's raste
   // distance to opposite sides of it - a late joiner had one pixel more.
   const segment = [{ x: 504.75, y: 342.5 }, { x: 518.5, y: 354.5 }];
   const drawer = fakeContext();
+  // The dot at `draw_start`, then the segment, as the pointer hook paints them.
+  rasterizePath(drawer, [segment[0], segment[0]], 3, BLACK, false);
   rasterizePath(drawer, segment, 3, BLACK, false);
   const joiner = fakeContext();
   renderCanvasActions(joiner, [{ kind: "path", color: "#000000", width: 6, points: segment }]);
@@ -182,6 +184,7 @@ test("the drawer's ink, painted into a crop of the canvas, is the replay's raste
     const b = { x: a.x + Math.floor((next() - 0.5) * 120) / 4, y: a.y + Math.floor((next() - 0.5) * 120) / 4 };
     const width = 1 + Math.floor(next() * 24);
     const live = fakeContext();
+    rasterizePath(live, [a, a], width / 2, BLACK, false);
     rasterizePath(live, [a, b], width / 2, BLACK, false);
     const replay = fakeContext();
     renderCanvasActions(replay, [{ kind: "path", color: "#000000", width, points: [a, b] }]);
