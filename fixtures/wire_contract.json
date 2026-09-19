@@ -2168,6 +2168,9 @@
    "sourceRevisionIds",
    "vowelBaseCost"
   ],
+  "handlers.chat:_accepted_guess": [
+   "playerId"
+  ],
   "handlers.chat:_chat_line": [
    "playerId"
   ],
@@ -2182,9 +2185,6 @@
    "hintSpend",
    "letterPrices",
    "maskedPrompt"
-  ],
-  "handlers.chat:guess": [
-   "playerId"
   ],
   "handlers.chat:send_chat": [
    "errorCode"

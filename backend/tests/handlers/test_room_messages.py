@@ -349,3 +349,33 @@ async def test_a_wheel_letter_is_one_message_with_its_acknowledgement():
     assert answer["ok"] and answer["line"]["code"] == "hint_letter_found"
     assert messages_to(sio, room, "guesser-sid") == []  # + the ack: 1, was 3
     await context.timers.close()
+
+
+async def test_a_retry_that_arrives_while_its_guess_is_in_flight_gets_that_guess_answer():
+    """Review of #884: the retry used to find the id seen but no answer yet,
+    and was acknowledged empty - which the client takes for 'nothing to say',
+    losing the receipt the first attempt was still about to return."""
+    room, sio, context = guessing_room()
+    release = asyncio.Event()
+    emit = sio.emit
+
+    async def slow_correct_guess(event, *args, **kwargs):
+        if event == "correct_guess":
+            await release.wait()
+        return await emit(event, *args, **kwargs)
+
+    sio.emit = AsyncMock(side_effect=slow_correct_guess)
+    guess = sio.handlers["/"]["guess"]
+    first = asyncio.create_task(guess("guesser-sid", {"text": "banana", "id": 7}))
+    await asyncio.sleep(0)
+    retry = asyncio.create_task(guess("guesser-sid", {"text": "banana", "id": 7}))
+    await asyncio.sleep(0.01)
+    assert not retry.done(), "the retry answered before the guess it repeats"
+
+    release.set()
+    original, repeated = await first, await retry
+    assert original["correct"]["prompt"] == "banana"
+    assert repeated == original
+    assert context.guesses_in_flight == {}
+    await stop_phase_timer(context, room)
+    await context.timers.close()

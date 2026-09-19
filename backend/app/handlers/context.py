@@ -149,6 +149,11 @@ class HandlerContext:
     # in (#559), so that nothing is ever resolved against a point the server
     # never recorded.
     dropped_draw_frames: set[str] = field(default_factory=set, init=False, repr=False)
+    # Guesses being handled, by (sid, guess id), until they are answered: a
+    # retry of one still in flight waits for its answer (#884).
+    guesses_in_flight: dict[tuple[str, int], asyncio.Future] = field(
+        default_factory=dict, init=False, repr=False
+    )
     # When each socket last did something a person did, and the sweep that
     # asks the quiet ones whether anybody is there (#677). The ledger is
     # written below, at the one door every command passes through; the watch

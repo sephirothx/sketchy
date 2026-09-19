@@ -197,3 +197,15 @@ test("the private result on the acknowledgement is handed on once, from the retr
   socket.acknowledge();
   assert.equal(answers.length, 1);
 });
+
+test("a late answer is not shown once the guess's room or turn has moved on (#884 review)", () => {
+  const socket = fakeSocket();
+  const answers = [];
+  const sendGuess = createGuessSender(socket, { onAnswer: (answer) => answers.push(answer) });
+
+  sendGuess("panda");
+  socket.current = { connection: "c1", code: "ROOM01", turnId: "turn-2" };
+  socket.sent[0].ack(undefined, { correct: { prompt: "panda", points: 300, basePoints: 300, hintSpend: 0 } });
+
+  assert.deepEqual(answers, [], "last turn's receipt was written into this one");
+});

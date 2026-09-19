@@ -1,6 +1,7 @@
 """Socket.IO handlers for the chat domain."""
 from __future__ import annotations
 
+import asyncio
 from functools import partial
 
 from app.announcements import Announcement
@@ -164,8 +165,33 @@ async def guess(ctx: HandlerContext, sid, data):
         # in the turn's wrong-guess counts, and a second near-miss hint. It is
         # answered with what the first attempt was (#884): the retry exists
         # because that answer did not arrive, and it carried the result.
+        pending = ctx.guesses_in_flight.get((sid, payload.id))
+        if pending is not None:
+            return await asyncio.shield(pending)
         return player.guess_answer(payload.id)
 
+    if payload.id is None:
+        return await _accepted_guess(ctx, sid, room, player, text)
+    # In flight until answered (#884): the client's retry can arrive while
+    # this attempt is still awaiting an emit, and must be given this answer,
+    # not an empty one it would take for "nothing to say".
+    key = (sid, payload.id)
+    pending = asyncio.get_running_loop().create_future()
+    ctx.guesses_in_flight[key] = pending
+    answer = None
+    try:
+        answer = await _accepted_guess(ctx, sid, room, player, text)
+        return answer
+    finally:
+        if answer is not None:
+            player.remember_guess_answer(payload.id, answer)
+        ctx.guesses_in_flight.pop(key, None)
+        if not pending.done():
+            pending.set_result(answer)
+
+
+async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> dict | None:
+    """Act on a guess the seat has not made before; say what only it sees."""
     if player.is_afk:
         player.is_afk = False
         await ctx.game_flow._emit_room_state(room)
@@ -243,7 +269,6 @@ async def guess(ctx: HandlerContext, sid, data):
                     close=True,
                 ),
             }
-            player.remember_guess_answer(payload.id, answer)
             return answer
         else:
             await _emit_player_chat(
@@ -278,7 +303,6 @@ async def guess(ctx: HandlerContext, sid, data):
         additional_audience_sids=[sid],
     )
     answer = {"correct": guessed_receipt(game, player.id), "line": line}
-    player.remember_guess_answer(payload.id, answer)
 
     await ctx.game_flow._end_turn_if_all_guessed(room)
     return answer

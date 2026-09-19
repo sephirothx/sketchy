@@ -527,8 +527,16 @@ export function createGuessSender(
       settled = true;
       if (delivered) {
         // The private result rides the ack (#884); a retry of a guess that
-        // did arrive is answered with the same one.
-        if (answer !== undefined && answer !== null) options.onAnswer?.(answer);
+        // did arrive is answered with the same one. Shown only while the
+        // guess's own connection, room and turn are current: a late answer
+        // from a room left or a turn over would write last turn's receipt
+        // into this one - and close its guess input.
+        if (
+          answer !== undefined
+          && answer !== null
+          && scope !== null
+          && sameScope(scope, target.scope())
+        ) options.onAnswer?.(answer);
         result.onDelivered?.(answer);
       } else result.onUndelivered?.();
     };
