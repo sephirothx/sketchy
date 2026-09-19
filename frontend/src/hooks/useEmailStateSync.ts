@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { socket } from "../lib/socket";
+import { onConnectSpread, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { useEmailStateStore } from "../store/emailStateStore";
 
@@ -28,10 +28,12 @@ export function useEmailStateSync() {
   useEffect(() => {
     const again = () => void refresh();
     socket.on("email_state_changed", again);
-    socket.on("connect", again);
+    // Spread behind a reconnect, so it queues behind the seat rebind rather
+    // than landing beside it from every client at once (#872).
+    const stopOnConnect = onConnectSpread(again);
     return () => {
       socket.off("email_state_changed", again);
-      socket.off("connect", again);
+      stopOnConnect();
     };
   }, [refresh]);
 }

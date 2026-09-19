@@ -54,6 +54,7 @@ from app.db.seed import seed_prompt_lists
 from app.deployment import (
     is_production,
     public_base_url,
+    reconnect_spread_seconds,
     shutdown_drain_seconds,
     validate_database_configuration,
     validate_mail_configuration,
@@ -533,7 +534,8 @@ async def adopt_stored_settings() -> None:
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     shutdown_coordinator.begin_startup(
-        drain_seconds=shutdown_drain_seconds()
+        drain_seconds=shutdown_drain_seconds(),
+        reconnect_spread_seconds=reconnect_spread_seconds(),
     )
     # Every handle the `finally` stops, named before anything can fail. A
     # startup that raises before the loops start - a database at a revision

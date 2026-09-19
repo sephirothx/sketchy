@@ -9,7 +9,7 @@ import socket
 
 import uvicorn
 
-from app.deployment import shutdown_drain_seconds
+from app.deployment import reconnect_spread_seconds, shutdown_drain_seconds
 from app.logging_config import JSON_FORMAT, configure_logging, log_format
 from app.main import shutdown_coordinator, sio
 from app.ws_transport import WS_PROTOCOL
@@ -86,6 +86,7 @@ def _boolean_environment(name: str, default: bool) -> bool:
 
 def run() -> None:
     shutdown_drain_seconds()
+    reconnect_spread_seconds()
     # Before uvicorn says anything. In JSON mode uvicorn's own logging config
     # is switched off so its lines take the application's shape, and its
     # access log gives way to the one line per request the timing middleware

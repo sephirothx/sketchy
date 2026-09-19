@@ -47,7 +47,7 @@ async def test_zero_deadline_records_privacy_safe_abandonment_not_partial_histor
     factory, rooms, coordinator = env
     room, game = live_game(rooms)
     sio = AsyncMock()
-    coordinator.begin_startup(drain_seconds=0)
+    coordinator.begin_startup(drain_seconds=0, reconnect_spread_seconds=12.5)
     coordinator.mark_ready()
 
     result = await coordinator.begin_shutdown(sio)
@@ -64,6 +64,7 @@ async def test_zero_deadline_records_privacy_safe_abandonment_not_partial_histor
         "reason": "deployment",
         "drainSeconds": 0,
         "startedAt": payload["startedAt"],
+        "reconnectSpreadMs": 12500,
     }
 
     async with factory() as session:

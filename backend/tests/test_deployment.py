@@ -7,6 +7,7 @@ from app.deployment import (
     current_environment,
     is_production,
     public_base_url,
+    reconnect_spread_seconds,
     shutdown_drain_seconds,
     validate_database_configuration,
     validate_mail_configuration,
@@ -60,6 +61,25 @@ def test_shutdown_drain_window_is_bounded_and_configurable(environ, expected):
 def test_invalid_shutdown_drain_window_fails_startup(value):
     with pytest.raises(RuntimeError, match="SHUTDOWN_DRAIN_SECONDS"):
         shutdown_drain_seconds({"SHUTDOWN_DRAIN_SECONDS": value})
+
+
+@pytest.mark.parametrize(
+    ("environ", "expected"),
+    [
+        ({}, 10.0),
+        ({"SHUTDOWN_RECONNECT_SPREAD_SECONDS": "0"}, 0.0),
+        ({"SHUTDOWN_RECONNECT_SPREAD_SECONDS": " 30 "}, 30.0),
+        ({"SHUTDOWN_RECONNECT_SPREAD_SECONDS": "120"}, 120.0),
+    ],
+)
+def test_the_reconnect_spread_is_bounded_and_configurable(environ, expected):
+    assert reconnect_spread_seconds(environ) == expected
+
+
+@pytest.mark.parametrize("value", ["-1", "121", "soon", "nan", "inf"])
+def test_an_invalid_reconnect_spread_fails_startup(value):
+    with pytest.raises(RuntimeError, match="SHUTDOWN_RECONNECT_SPREAD_SECONDS"):
+        reconnect_spread_seconds({"SHUTDOWN_RECONNECT_SPREAD_SECONDS": value})
 
 
 def test_the_running_interpreter_meets_the_supported_minimum():

@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { parseFriendInvite, type FriendInvite } from "../lib/friends";
 import { sessionFrom } from "../lib/roomEntryState";
-import { emitWithAck, socket } from "../lib/socket";
+import { emitWithAck, onConnectSpread, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { useFriendsStore } from "../store/friendsStore";
 import { useFriendArrivalNotices } from "../hooks/useFriendArrivalNotices";
@@ -56,11 +56,12 @@ export function FriendInviteNotice() {
     // notice for it fires late rather than never.
     socket.on("friend_invite_received", onInvite);
     socket.on("friends_changed", onRequest);
-    socket.on("connect", onRequest);
+    // Spread behind a reconnect for the reason `useEmailStateSync` gives (#872).
+    const stopOnConnect = onConnectSpread(onRequest);
     return () => {
       socket.off("friend_invite_received", onInvite);
       socket.off("friends_changed", onRequest);
-      socket.off("connect", onRequest);
+      stopOnConnect();
     };
   }, [refreshFriends]);
 
