@@ -1743,6 +1743,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |
 | [`app/services/friend_invites.py`](../backend/app/services/friend_invites.py) | Outstanding invitations — a capability to ask, not to enter. |
+| [`app/services/friend_presence.py`](../backend/app/services/friend_presence.py) | Which of an account's friends are online, answered to that account alone — uncapped, and without the lobby channel. |
 | [`app/services/afk.py`](../backend/app/services/afk.py) | When a person stopped answering, and what the room does about it. |
 | [`app/services/avatars.py`](../backend/app/services/avatars.py) | Uploading, serving and removing a player's picture (#573), and wearing a doodle (#579). |
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |

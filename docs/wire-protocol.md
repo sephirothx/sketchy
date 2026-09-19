@@ -597,6 +597,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `friends_in_room` | `EmptyPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+| `friends_online` | `EmptyPayload` | ✓ — from anywhere, seated or not | [`friends.py`](../backend/app/handlers/friends.py) |
 | `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 
@@ -812,6 +813,24 @@ changes no gameplay fact, exactly as the viewer's own avatar ring does not. A
 caller with no account, or one in a room with no friends in it, gets an empty
 list rather than a refusal, so the two cannot be told apart (R-FRIEND-04).
 
+`friends_online` answers `{friends: [[userId, status], …]}` — this account's
+accepted friends who are online, and `lobby` or `playing` for each (#873,
+#878). Uncapped, and apart from the lobby's list for two reasons. The public
+list is cut at a hundred and ordered by name for everyone, so a friend past the
+cut was neither shown online nor invitable; and a waiting room had to join the
+whole `lobby` channel — every row and every chat line — to read the few rows
+its invite list needed. **Polled, not pushed**: a client asks on showing a
+friends surface, on reconnecting, when its friend lists change, and every 15 s
+while the tab is visible, and replaces its map with each answer. A push stream
+was built first and dropped — merging pushes with answers needed ordering rules
+to buy freshness that nothing here needs, since `invite_friend` is checked when
+it is sent. After a connection's first ask the friend set is answered from
+memory. A friend list that cannot be read is refused with `database_busy`
+rather than answered empty, so the client keeps what it had. The status
+is exactly what `LobbyPlayer.status` tells any stranger, and never the room
+(R-ROOM-07). A guest, or an account with no friends online, gets an empty list;
+the client does not ask for an account with no friends at all.
+
 **Friend payloads** never carry a room. `friend_invite_received` holds a token
 the server resolves against the sender's live seat, so an invitation is a
 capability to *ask* rather than to enter: it cannot be forwarded to somebody it
@@ -838,11 +857,11 @@ presence news, and somebody signing in must not re-send the rooms.
 
 ```jsonc
 { "userId": "…", "displayName": "Ada", "nameColor": "#4f9",
-  "isAnonymous": false, "status": "lobby" | "playing" }
+  "avatarUrl": "…" | null, "isAnonymous": false, "status": "lobby" | "playing" }
 ```
 
-This is the one payload that carries an account id, and deliberately so: a
-friend request (#529) needs a stable target, and unlike a room payload
+This and the friend payloads above are the ones that carry an account id,
+and deliberately so: a friend request (#529) needs a stable target, and unlike a room payload
 (R-ROOM-07) there is no seat to resolve for somebody idling in the lobby. What
 it must never carry is the *room*: no id, no code, no name, and no state richer
 than in-the-lobby or in-a-game. `Room.to_public_roster` refuses to make the
@@ -2098,7 +2117,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (30) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (31) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

@@ -592,3 +592,19 @@ async def test_a_change_during_the_subscription_s_lookups_is_in_the_baseline_not
     assert all(answer["roomsRevision"] >= delta["revision"] for delta in deltas), (
         "a delta this socket may have received is not newer than its baseline"
     )
+
+
+async def test_an_account_going_offline_drops_its_cached_friends(monkeypatch):
+    """`friends_online` caches a friend list while its account is online; the
+    last socket closing is what lets it go, or the cache grows for good."""
+    room_manager = RoomManager()
+    ctx, sio, _ = build_stack(room_manager)
+    account_cookies(monkeypatch, {"tok-ada": "user-ada"})
+    await connect_as(ctx, sio, "sid-a", "tok-ada")
+    await connect_as(ctx, sio, "sid-b", "tok-ada")
+    ctx.friend_presence._friends["user-ada"] = frozenset()
+
+    await sio.handlers["/"]["disconnect"]("sid-a")
+    assert "user-ada" in ctx.friend_presence._friends
+    await sio.handlers["/"]["disconnect"]("sid-b")
+    assert "user-ada" not in ctx.friend_presence._friends

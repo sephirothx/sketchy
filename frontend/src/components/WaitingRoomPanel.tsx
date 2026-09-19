@@ -9,7 +9,6 @@ import { RoomFacts } from "./RoomFacts";
 import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
-import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
@@ -57,10 +56,6 @@ interface WaitingRoomPanelProps {
 
 
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
-  // The waiting room is the one place inside a room that needs to know
-  // who is around: it is where you are trying to get people in, and it is
-  // not mid-game. Dropped again the moment the game starts.
-  useLobbyChannel();
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
   // The same seat set the sidebar roster marks from, so a friendship reads

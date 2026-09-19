@@ -32,6 +32,7 @@ from app.services.friend_invites import FriendInviteBook
 from app.services.friends import FriendService
 from app.services.lobby_chat import LobbyChatLog
 from app.services.message_retention import MessageRetentionService
+from app.services.friend_presence import FriendPresence
 from app.services.presence import (
     DEFAULT_MAX_CACHED_IDENTITIES,
     LobbyBroadcaster,
@@ -112,6 +113,11 @@ def register_all_handlers(
     )
     ctx.presence_broadcaster = LobbyBroadcaster(
         sio, ctx.presence, ctx.presence_identities, room_manager
+    )
+    ctx.friend_presence = FriendPresence(
+        ctx.presence,
+        room_manager,
+        ctx.friend_service.accepted_ids if ctx.friend_service is not None else None,
     )
     # Reads the ledger the command door writes, and drives the room through
     # `game_flow` when a check goes unanswered. Built here rather than in the

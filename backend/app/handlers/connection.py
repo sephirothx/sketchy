@@ -217,6 +217,8 @@ async def disconnect(ctx: HandlerContext, sid, reason: str | None = None):
     went_offline_user_id = ctx.presence.user_for_sid(sid)
     if ctx.presence.note_socket_closed(sid):
         _record_last_seen(ctx, went_offline_user_id)
+        # Its friends are read again when it next asks, not kept for good.
+        ctx.friend_presence.forget(went_offline_user_id)
     ctx.clear_command_budget(sid)
     # The activity stamp and any open AFK check belong to this connection and
     # nothing else: a seat that reconnects holds a new sid and starts a fresh

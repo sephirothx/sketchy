@@ -194,6 +194,8 @@ async def push_friends_changed(user_id: str) -> None:
     The same per-account room a suspension and a moderator warning use, so a
     player idling in the lobby hears it as immediately as one in a game.
     """
+    # Its friends are read again the next time its presence moves or it asks.
+    handler_context.friend_presence.forget(user_id)
     await sio.emit("friends_changed", {}, room=f"user:{user_id}")
 
 
