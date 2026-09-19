@@ -1,7 +1,22 @@
 """Shared lobby interactions for E2E tests."""
 from __future__ import annotations
 
+from urllib.parse import urlsplit
+
 BASE_URL = "http://localhost:8000"
+
+
+def server_origin(page) -> str:
+    """The server this page talks to: its own origin once it has loaded one.
+
+    The suite's server is `BASE_URL`, but the browser benchmarks borrow these
+    helpers against a server of their own on another port, and a request sent
+    to 8000 from there named a guest on the wrong server, or on none.
+    """
+    parts = urlsplit(page.url)
+    if parts.scheme in ("http", "https") and parts.netloc:
+        return f"{parts.scheme}://{parts.netloc}"
+    return BASE_URL
 
 
 async def use_guest_name(page, name: str) -> None:
@@ -26,7 +41,7 @@ async def use_guest_name(page, name: str) -> None:
     # jar, and it needs no document - which is what lets a test name its
     # player *before* the first load and skip the reload below entirely.
     response = await page.request.post(
-        f"{BASE_URL}/api/auth/display-name", data={"displayName": name}
+        f"{server_origin(page)}/api/auth/display-name", data={"displayName": name}
     )
     assert response.status == 200, (
         f"could not set guest name {name!r}: HTTP {response.status}"
