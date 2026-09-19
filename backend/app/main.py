@@ -401,6 +401,10 @@ def forget_merged_identities(source_user_id: str, target_user_id: str) -> None:
     # a ban or a deletion does, and closing here would drop a player out of a
     # game they are in on another tab because they signed in on this one.
     handler_context.presence.rekey(source_user_id, target_user_id)
+    # The guest's id never closes a socket again - they moved to the target -
+    # so nothing else would drop a friend set cached under it.
+    handler_context.friend_presence.forget(source_user_id)
+    handler_context.friend_presence.forget(target_user_id)
     forget_presence_identity(source_user_id)
     forget_presence_identity(target_user_id)
 

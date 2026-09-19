@@ -55,12 +55,18 @@ class FriendPresence:
         self._room_manager = room_manager
         self._friends_of = friends_of
         self._friends: dict[str, frozenset[str]] = {}
+        # The read each account's cache may be filled from: the latest one
+        # started since the last `forget`. Only reads in flight are here.
+        self._reading: dict[str, object] = {}
 
     def forget(self, user_id: str | None) -> None:
         """Read this account's friends again next time it asks: its lists
         moved, or its last socket closed."""
         if user_id:
             self._friends.pop(user_id, None)
+            # A read already in flight started before whatever this forgets,
+            # so its answer may be the old one: it must not refill the cache.
+            self._reading.pop(user_id, None)
 
     async def _friends_of_account(self, user_id: str) -> frozenset[str]:
         cached = self._friends.get(user_id)
@@ -72,12 +78,21 @@ class FriendPresence:
             account = UUID(user_id)
         except ValueError:
             return frozenset()
-        # A failed read raises to the caller rather than reading as nobody:
-        # answered empty, a client would erase friends it had right.
-        friends = frozenset(str(friend) for friend in await self._friends_of(account))
-        # Not if its last socket closed during the read: `forget` has already
-        # run for it, and nothing would drop the entry again.
-        if self._registry.is_online(user_id):
+        token = object()
+        self._reading[user_id] = token
+        try:
+            # A failed read raises to the caller rather than reading as nobody:
+            # answered empty, a client would erase friends it had right.
+            friends = frozenset(str(friend) for friend in await self._friends_of(account))
+        finally:
+            owns_cache = self._reading.get(user_id) is token
+            if owns_cache:
+                del self._reading[user_id]
+        # Cached only by the latest read begun since the last `forget` - one
+        # that began before a friendship changed would restore the old set -
+        # and only while the account is still online, since its last socket
+        # closing is what would otherwise drop the entry.
+        if owns_cache and self._registry.is_online(user_id):
             self._friends[user_id] = friends
         return friends
 

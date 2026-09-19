@@ -129,3 +129,36 @@ async def test_the_answer_names_a_status_and_never_a_room():
     room_manager.add_player(room, "Bob", user_id=BOB, is_anonymous=False)
     answer = repr(await service.online_friends(ADA))
     assert room.id not in answer and room.code not in answer
+
+
+async def test_a_read_begun_before_a_friendship_changed_never_refills_the_cache():
+    """The old read finishing last must not overwrite the new read's answer."""
+    import asyncio
+
+    service, registry, _, friendships = stack((ADA, BOB))
+    registry.note_socket_opened("sid-ada", ADA)
+    registry.note_socket_opened("sid-bob", BOB)
+    registry.note_socket_opened("sid-cat", CAT)
+    release_old = asyncio.Event()
+    old_answer = await friendships(UUID(ADA))  # {BOB}, from before the change
+    calls = 0
+
+    async def reads(user_id):
+        nonlocal calls
+        calls += 1
+        if calls == 1:
+            await release_old.wait()
+            return old_answer
+        return await friendships(user_id)
+
+    service._friends_of = reads
+    old = asyncio.create_task(service.online_friends(ADA))
+    await asyncio.sleep(0)
+
+    friendships.pairs = {frozenset((ADA, CAT))}  # Bob removed, Cat accepted
+    service.forget(ADA)  # friends_changed
+    assert await service.online_friends(ADA) == [[CAT, "lobby"]]
+
+    release_old.set()
+    await old
+    assert await service.online_friends(ADA) == [[CAT, "lobby"]]
