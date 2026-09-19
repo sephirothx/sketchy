@@ -199,9 +199,9 @@ used to be all of that from every client inside a second, against a pool of ten.
   rebinding) waits on that pending attempt instead of opening its own. A room
   then waits up to 60 s for the server rather than 8 s twice, because a deploy
   is its drain plus a boot. Measured at 400 registered clients on PostgreSQL
-  (`benchmarks/reconnect_herd.py`): summed pool wait over the herd 600–650 s →
-  under 0.1 s, REST p95 1.6 s → 17 ms, and every client back in 9.9 s instead
-  of 2.6 s — the spread, as intended.
+  (`benchmarks/reconnect_herd.py`): summed pool wait over the herd 694–738 s →
+  0.01–0.11 s, REST refetch p95 1.9–2.0 s → 17–19 ms, and every client back in
+  9.9 s instead of 2.7–2.9 s — the spread, as intended.
 - **The REST refetches** a reconnect triggers (friends, recovery address) run
   a random 0–3 s behind it, so they queue behind the seat rebind rather than
   beside it. A first connection does not wait.

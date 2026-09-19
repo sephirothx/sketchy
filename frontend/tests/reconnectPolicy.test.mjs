@@ -9,6 +9,8 @@ import {
   escalateHeartbeat,
   postReconnectDelayMs,
   DEFAULT_PING_WINDOW_MS,
+  afterFailedRebind,
+  createRestartLatch,
   pingWindowMs,
   shutdownHoldMs,
   transportAlive,
@@ -82,4 +84,36 @@ test("each escalation pushes the next one out, doubling to a minute, with jitter
   // ±50%: the same step on two clients lands anywhere in [0.5, 1.5] of it.
   assert.equal(escalateHeartbeat(failing({ random: 0 })).notBefore - 100_000, 2500);
   assert.equal(escalateHeartbeat(failing({ random: 1 })).notBefore - 100_000, 7500);
+});
+
+test("a heartbeat's failed soft rebind keeps a live transport; nothing else does", () => {
+  assert.equal(afterFailedRebind({ keepTransport: true, transportAlive: true }), "keep");
+  assert.equal(afterFailedRebind({ keepTransport: true, transportAlive: false }), "restart");
+  assert.equal(afterFailedRebind({ keepTransport: false, transportAlive: true }), "restart");
+});
+
+test("a planned restart holds every way back, whichever side closed the socket", () => {
+  const latch = createRestartLatch();
+  assert.equal(latch.noteClose(0, 0.5), 0, "no notice, no hold");
+  latch.noteConnect();
+
+  latch.noteNotice(10_000);
+  assert.equal(latch.restartExpected(), false, "announced, still connected");
+  // The client closes first during the drain (a phase stall, say).
+  assert.equal(latch.noteClose(1000, 0.5), 5000);
+  assert.equal(latch.restartExpected(), true);
+  assert.equal(latch.holdRemainingMs(3000), 3000);
+  // A second close in the same outage keeps the one draw.
+  assert.equal(latch.noteClose(4000, 0.99), 2000);
+  assert.equal(latch.holdRemainingMs(6000), 0);
+  latch.noteConnect();
+  assert.equal(latch.restartExpected(), false);
+  assert.equal(latch.noteClose(7000, 0.5), 0, "cleared by the replacement connection");
+});
+
+test("a notice at a handshake mid-drain survives that connection landing", () => {
+  const latch = createRestartLatch();
+  latch.noteNotice(8000);
+  latch.noteConnect();
+  assert.equal(latch.noteClose(0, 0.25), 2000);
 });

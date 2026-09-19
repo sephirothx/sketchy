@@ -12,8 +12,8 @@ import {
   RECONNECTION_DELAY_MS,
   RECONNECTION_RANDOMIZATION,
   pingWindowMs,
+  createRestartLatch,
   postReconnectDelayMs,
-  shutdownHoldMs,
   transportAlive,
 } from "./reconnectPolicy.ts";
 
@@ -111,25 +111,18 @@ export function hasEverConnected(): boolean {
 
 // --- after a planned restart (#872) ---------------------------------------
 //
-// The spread the last `server_shutdown` named, until the connection it came
-// on closes. A socket arriving mid-drain is told at its handshake, before
-// `connect`, so this is cleared on the way out rather than on the way in.
-let announcedSpreadMs: number | null = null;
-// Set from that close until the next connection lands: the server said it was
-// going, so a room waits longer for it to come back (`restartExpected`).
-let restartPending = false;
+// From `server_shutdown` until the replacement connection lands, every way
+// back waits behind one randomized hold (`createRestartLatch`) - whichever
+// side closes the socket. The server closing it is held through the manager's
+// own backoff below; a close this client made itself (a phase stall, an
+// exhausted canvas sync) is held by `socket.connect` further down.
+const restart = createRestartLatch();
 socket.on("server_shutdown", (payload: unknown) => {
-  const spread = (payload as { reconnectSpreadMs?: unknown } | null)?.reconnectSpreadMs;
-  announcedSpreadMs = typeof spread === "number" ? spread : 0;
+  restart.noteNotice((payload as { reconnectSpreadMs?: unknown } | null)?.reconnectSpreadMs);
 });
 socket.on("disconnect", (reason) => {
-  const spread = announcedSpreadMs;
-  announcedSpreadMs = null;
-  // Our own disconnect is not the server going away.
-  if (spread === null || reason === "io client disconnect") return;
-  restartPending = true;
-  const hold = shutdownHoldMs(spread, Math.random());
-  if (hold <= 0) return;
+  const hold = restart.noteClose(Date.now(), Math.random());
+  if (hold <= 0 || reason === "io client disconnect") return;
   // The manager schedules its first retry right after this event, from its
   // backoff - so for that one attempt the backoff *is* the hold: a random
   // point in the window the server named, exactly. A `connect()` called
@@ -146,13 +139,13 @@ socket.io.on("reconnect_attempt", () => {
   socket.io.randomizationFactor(RECONNECTION_RANDOMIZATION);
 });
 socket.on("connect", () => {
-  restartPending = false;
+  restart.noteConnect();
 });
 
-/** Whether the connection closed after the server said it was restarting,
-and has not come back yet. A room then waits out a deploy before giving up. */
+/** Whether the server said it was restarting and has not come back yet. A
+room then waits out a deploy before giving up. */
 export function restartExpected(): boolean {
-  return restartPending;
+  return restart.restartExpected();
 }
 
 /** Run *handler* on every connection, spread behind a reconnect (#872).
@@ -343,8 +336,25 @@ function noteUpdateStuck(): void {
 // account read, after a sign-in, and when the stall watchdog fires, and
 // each of those would otherwise open one more handshake for the server to
 // refuse and close. So the method itself refuses once the tab is stuck.
+// And a planned restart's hold is kept against every caller too (#872): a
+// connection closed by this client during a drain, then reopened by hand,
+// would otherwise skip the spread the server asked for. One deferred attempt
+// however many callers ask; it lands on the manager's pending retry if the
+// server closed the socket, which makes it a no-op there.
 const rawConnect = socket.connect.bind(socket);
-socket.connect = (() => (isUpdateRequired() ? socket : rawConnect())) as typeof socket.connect;
+let heldConnect: number | null = null;
+socket.connect = (() => {
+  if (isUpdateRequired()) return socket;
+  const wait = restart.holdRemainingMs(Date.now());
+  if (wait <= 0) return rawConnect();
+  if (heldConnect === null) {
+    heldConnect = window.setTimeout(() => {
+      heldConnect = null;
+      socket.connect();
+    }, wait);
+  }
+  return socket;
+}) as typeof socket.connect;
 
 /** Where the REST layer reports the same stuck state. */
 export function noteUpdateStuckFromRest(): void {

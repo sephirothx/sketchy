@@ -124,3 +124,71 @@ export function escalateHeartbeat(options: {
     notBefore: now + Math.floor(base * jitter),
   };
 }
+
+/** What a failed rebind leads to (#872): a heartbeat's soft rebind on a
+transport the server is still keeping alive leaves the transport alone, and
+anything else falls back to a restart and a full rejoin. */
+export function afterFailedRebind(options: {
+  keepTransport: boolean;
+  transportAlive: boolean;
+}): "keep" | "restart" {
+  return options.keepTransport && options.transportAlive ? "keep" : "restart";
+}
+
+/** What this client knows about a planned restart, from the notice to the
+replacement connection (#872).
+
+A latch rather than a reading of the disconnect: once `server_shutdown` has
+arrived, *every* way back - the server closing the socket, or one of the
+client's own recoveries (a phase stall, an exhausted canvas sync) closing it
+first during the drain - waits behind the same randomized hold, and a room
+waits out the deploy before calling its seat failed. It clears only on a
+connection that follows a close, so a socket told at its handshake, mid-drain,
+keeps it. */
+export interface RestartLatch {
+  /** `server_shutdown` arrived, naming this spread. */
+  noteNotice(spreadMs: unknown): void;
+  /** The connection closed. Returns the hold to apply to the next attempt,
+  from now: drawn once per restart, so a second close in the same outage
+  does not draw a fresh wait. Zero when no restart is announced. */
+  noteClose(now: number, random: number): number;
+  /** A connection landed. */
+  noteConnect(): void;
+  /** How long a connection attempt must still wait. */
+  holdRemainingMs(now: number): number;
+  /** Whether the server said it was restarting and has not come back yet. */
+  restartExpected(): boolean;
+}
+
+export function createRestartLatch(): RestartLatch {
+  let spread: number | null = null;
+  let closed = false;
+  let holdUntil = 0;
+  return {
+    noteNotice(spreadMs) {
+      spread = typeof spreadMs === "number" ? spreadMs : 0;
+      closed = false;
+      holdUntil = 0;
+    },
+    noteClose(now, random) {
+      if (spread === null) return 0;
+      if (!closed) {
+        closed = true;
+        holdUntil = now + shutdownHoldMs(spread, random);
+      }
+      return Math.max(0, holdUntil - now);
+    },
+    noteConnect() {
+      if (spread === null || !closed) return;
+      spread = null;
+      closed = false;
+      holdUntil = 0;
+    },
+    holdRemainingMs(now) {
+      return spread === null || !closed ? 0 : Math.max(0, holdUntil - now);
+    },
+    restartExpected() {
+      return spread !== null && closed;
+    },
+  };
+}

@@ -2,7 +2,7 @@ import { useEffect } from "react";
 import { observeServerCanvasSequence, onSessionRebindRequested } from "../lib/canvasRecovery";
 import { createHeartbeatSchedule, HEARTBEAT_MS, replyIsCurrent } from "../lib/heartbeatSchedule";
 import { emitWithAck, restartExpected, socket, transportIsAlive } from "../lib/socket";
-import { RESTART_PATIENCE_MS, escalateHeartbeat } from "../lib/reconnectPolicy";
+import { RESTART_PATIENCE_MS, afterFailedRebind, escalateHeartbeat } from "../lib/reconnectPolicy";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
@@ -115,9 +115,9 @@ export function useRoomSessionReconnect() {
     }
 
     async function rebindSession(
-      options: { forceTransportRestart?: boolean; soft?: boolean } = {},
+      options: { forceTransportRestart?: boolean; soft?: boolean; keepTransport?: boolean } = {},
     ) {
-      const { forceTransportRestart = false, soft = false } = options;
+      const { forceTransportRestart = false, soft = false, keepTransport = false } = options;
       const { code } = useGameStore.getState();
       if (!code) {
         setRoomBindingStatus("ready");
@@ -135,6 +135,16 @@ export function useRoomSessionReconnect() {
         await joinWithSession(soft);
       } catch {
         if (cancelled) return;
+        // A heartbeat's soft rebind on a transport the server is still
+        // keeping alive does not fall back to a restart: the server is slow,
+        // not gone, and a teardown plus a full canvas is the most expensive
+        // thing to ask of it (#872). The seat stays as it was and the next
+        // backed-off escalation asks again - a restart only once the
+        // transport has gone silent.
+        if (afterFailedRebind({ keepTransport, transportAlive: transportIsAlive() }) === "keep") {
+          setRoomBindingStatus("ready");
+          return;
+        }
         try {
           if (socket.connected) socket.disconnect();
           await waitForConnect();
@@ -147,7 +157,7 @@ export function useRoomSessionReconnect() {
     }
 
     function queueRebind(
-      options: { forceTransportRestart?: boolean; soft?: boolean } = {},
+      options: { forceTransportRestart?: boolean; soft?: boolean; keepTransport?: boolean } = {},
     ) {
       if (inFlight) return;
       // A room the server already said is gone is not asked again: the answer
@@ -284,7 +294,7 @@ export function useRoomSessionReconnect() {
           nextEscalationAt = next.notBefore;
           consecutiveHeartbeatFailures = 0;
           if (next.action === "restart") queueRebind({ forceTransportRestart: true });
-          else queueRebind({ soft: true });
+          else queueRebind({ soft: true, keepTransport: true });
         }
       } finally {
         heartbeatInFlight = false;

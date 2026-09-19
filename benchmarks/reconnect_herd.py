@@ -11,7 +11,7 @@ does when its connection returns, under two schedules:
 
 Each client's return is the handshake, a ``watch_lobby`` (a lobby is the only
 place a restarted process can put anyone: rooms died with the old one), and
-``GET /api/friends`` + ``GET /api/auth/email``. Reports, per schedule, how long
+``GET /api/users/me/friends`` + ``GET /api/auth/email``. Reports, per schedule, how long
 until every client had its lobby back (p50/p95/max), how long a lobby baseline
 took to answer, and the database pool's wait and timeouts over the herd, read
 from ``/metrics``.
@@ -33,7 +33,6 @@ import json
 import os
 import random
 import secrets
-import statistics
 import sys
 import time
 
@@ -43,7 +42,7 @@ import socketio
 BACKEND = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend")
 sys.path.insert(0, BACKEND)
 
-from app.protocol import PROTOCOL_VERSION  # noqa: E402
+from app.protocol import PROTOCOL_VERSION
 
 COOKIE = "sketchy_session"
 POST_RECONNECT_JITTER_S = 3.0
@@ -130,6 +129,7 @@ async def come_back(
     started = time.monotonic()
     await asyncio.sleep(hold)
     sio = socketio.AsyncClient(reconnection=False, websocket_extra_options={"compress": 15})
+    rest: asyncio.Task | None = None
     try:
         await sio.connect(
             base, headers={"Cookie": cookie}, auth={"protocol": PROTOCOL_VERSION},
@@ -140,27 +140,36 @@ async def come_back(
             if schedule == "after":
                 await asyncio.sleep(rng.uniform(0.0, POST_RECONNECT_JITTER_S))
             began = time.monotonic()
-            for path in ("/api/friends", "/api/auth/email"):
+            for path in ("/api/users/me/friends", "/api/auth/email"):
                 async with http.get(f"{base}{path}", headers={"Cookie": cookie}) as response:
                     await response.read()
+                    # A refusal, a pool timeout or an error is a failed
+                    # return, never a fast one.
+                    if response.status != 200:
+                        raise RuntimeError(f"{path}: HTTP {response.status}")
             return time.monotonic() - began
 
         rest = asyncio.create_task(refetch())
         asked = time.monotonic()
         answer = await sio.call("watch_lobby", {}, timeout=30)
+        if not (answer and answer.get("ok")):
+            raise RuntimeError(f"watch_lobby refused: {answer}")
         baseline_s = time.monotonic() - asked
         back_s = time.monotonic() - started
         rest_s = await rest
         return {
-            "ok": bool(answer and answer.get("ok")),
+            # Back only when the lobby and both refetches were answered.
+            "ok": True,
             "back_s": back_s,
             "baseline_s": baseline_s,
             "rest_s": rest_s,
             "done_s": time.monotonic() - started,
         }
     except Exception as error:  # noqa: BLE001 - a failed return is a result
-        return {"ok": False, "error": type(error).__name__}
+        return {"ok": False, "error": f"{type(error).__name__}: {error}"}
     finally:
+        if rest is not None and not rest.done():
+            rest.cancel()
         await sio.disconnect()
 
 
@@ -189,6 +198,7 @@ async def herd(base: str, cookies: list[str], schedule: str, spread: float, toke
         "schedule": schedule,
         "clients": len(cookies),
         "failed": len(results) - len(ok),
+        "errors": sorted({r["error"] for r in results if "error" in r})[:5],
         "all_back_s": round(max(backs), 3) if backs else None,
         "back_p50_s": _q(backs, 0.5) if backs else None,
         "back_p95_s": _q(backs, 0.95) if backs else None,
