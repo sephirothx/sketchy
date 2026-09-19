@@ -4,6 +4,7 @@ import test from "node:test";
 import { CANVAS_HEIGHT, CANVAS_WIDTH } from "../src/lib/canvasHistory.ts";
 import {
   applyFillAtPixel,
+  rasterizePath,
   renderCanvasActions,
 } from "../src/lib/canvasRenderer.ts";
 
@@ -119,14 +120,17 @@ test("a saved drawing played out in stretches ends as its whole-history raster (
   const blank = () => new Uint8ClampedArray(800 * 600 * 4).fill(255);
   const paintedAlike = (a, b) => a.every((value, index) => value === b[index]);
   // The review's case: width 8, a diagonal, split at 0.51. Cut there and
-  // painted as two segments of their own, pixel (36, 23) went missing.
+  // painted as two segments of their own, pixel (36, 23) went missing. It is
+  // exactly the radius from the line, on the side the half-open rule leaves
+  // white - it was ink only by float dust until the distance was exact - so
+  // the stretches must leave it white too.
   const stroke = { points: [{ x: 25.5, y: 17.75 }, { x: 55.5, y: 49.25 }], width: 8, color: "#000000" };
   const whole = blank();
   applyCanvasAction(whole, { kind: "path", color: stroke.color, width: stroke.width, points: stroke.points });
   const played = blank();
   applyCanvasStrokeSpan(played, stroke, 0, 0.51);
   applyCanvasStrokeSpan(played, stroke, 0.51, 1);
-  assert.equal(whole[(23 * 800 + 36) * 4], 0);
+  assert.equal(whole[(23 * 800 + 36) * 4], 255);
   assert.ok(paintedAlike(played, whole));
 
   // And any polyline, played in random stretches, pen widths included.
@@ -152,5 +156,38 @@ test("a saved drawing played out in stretches ends as its whole-history raster (
       at = next_at;
     }
     assert.ok(paintedAlike(grown, reference), `trial ${trial}`);
+  }
+});
+
+test("the drawer's ink, painted into a crop of the canvas, is the replay's raster", () => {
+  // The drawer paints each kept segment into a `getImageData` crop, its points
+  // moved to the crop's corner; a replay paints the history on the whole
+  // canvas. Found by benchmarks/join_to_drawing.py: pixel (510, 351) is
+  // exactly the radius from this segment, and the two routes rounded that
+  // distance to opposite sides of it - a late joiner had one pixel more.
+  const segment = [{ x: 504.75, y: 342.5 }, { x: 518.5, y: 354.5 }];
+  const drawer = fakeContext();
+  rasterizePath(drawer, segment, 3, BLACK, false);
+  const joiner = fakeContext();
+  renderCanvasActions(joiner, [{ kind: "path", color: "#000000", width: 6, points: segment }]);
+  assert.deepEqual(pixelAt(drawer, 510, 351), pixelAt(joiner, 510, 351));
+  assert.ok(drawer.pixels.every((value, index) => value === joiner.pixels[index]));
+
+  // And any segment on the wire's grid, at any width.
+  let seed = 949;
+  const next = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648);
+  const quarter = (limit) => 20 + Math.floor(next() * limit * 4) / 4;
+  for (let trial = 0; trial < 300; trial += 1) {
+    const a = { x: quarter(760), y: quarter(560) };
+    const b = { x: a.x + Math.floor((next() - 0.5) * 120) / 4, y: a.y + Math.floor((next() - 0.5) * 120) / 4 };
+    const width = 1 + Math.floor(next() * 24);
+    const live = fakeContext();
+    rasterizePath(live, [a, b], width / 2, BLACK, false);
+    const replay = fakeContext();
+    renderCanvasActions(replay, [{ kind: "path", color: "#000000", width, points: [a, b] }]);
+    assert.ok(
+      live.pixels.every((value, index) => value === replay.pixels[index]),
+      `${JSON.stringify([a, b])} at width ${width}`,
+    );
   }
 });
