@@ -81,7 +81,13 @@ from app.repositories.sqlalchemy import (
 
 
 PASSWORD = "a-good-password"
-STARTED = datetime(2026, 8, 20, 12, 0, tzinfo=timezone.utc)
+# Anchored to the wall clock, not a calendar date: the export builds at the
+# real "now" and keeps only messages whose expires_at is still ahead of it, so
+# a fixed date turns the retained-message fixtures (STARTED + 30 days) into a
+# time bomb that went off on 2026-09-19.
+STARTED = datetime.now(timezone.utc).replace(second=0, microsecond=0) - timedelta(
+    days=1
+)
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
