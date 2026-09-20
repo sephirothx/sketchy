@@ -21,8 +21,7 @@ import {
   renderCanvasActions,
 } from "./canvasRenderer.ts";
 import type { LiveDrawingPacket } from "./liveDrawing.ts";
-import { flushIntervalFor } from "./clientConfig.ts";
-import { currentTransport } from "./socket.ts";
+import { currentClientConfig } from "./clientConfig.ts";
 import { finalWidth, rampedBatch } from "./pathWidths.ts";
 import { createStrokePlayback } from "./strokePlayback.ts";
 import type { CanvasSurface } from "./canvasSurface.ts";
@@ -53,7 +52,15 @@ export function createProtocolRenderer(
   // called. Everything that is not a run of points is a barrier in the same
   // queue, so nothing is painted out of order.
   const playback = createStrokePlayback({
-    intervalMs: () => flushIntervalFor(currentTransport()),
+    // The cadence the *sender* batched at, which is the baseline one - never
+    // this client's transport (#887). A batch is played out over the interval
+    // that produced it, and a viewer on long-polling receiving an 80 ms batch
+    // would otherwise schedule it over 240 ms, past `MAX_LAG_MS` on the next
+    // frame, and compress every batch into a crawl and a snap. Nothing on the
+    // wire says what the drawer flushed at, so the baseline is the
+    // assumption; a drawer on polling is the rarer case and plays fast rather
+    // than stuttering.
+    intervalMs: () => currentClientConfig().flushIntervalMs,
     // Spans of the received segments rather than the interpolated polyline,
     // so a stroke played out a frame at a time ends as the pixels the drawer
     // and every replay have (#940).
