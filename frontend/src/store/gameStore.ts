@@ -146,6 +146,8 @@ interface GameStore {
     hintCost?: number | null;
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
+    /** Which turn the hint belongs to, when the server named one (#883). */
+    turnId?: string;
   }) => void;
   endTurn: (payload: TurnEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
@@ -382,13 +384,26 @@ export const useGameStore = create<GameStore>((set) => ({
       lastGuessBreakdown: breakdown !== undefined ? breakdown : s.lastGuessBreakdown,
     })),
   setMaskedPrompt: (prompt) => set({ maskedPrompt: prompt }),
-  setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend }) =>
-    set((s) => ({
-      maskedPrompt,
-      nextHintCost: hintCost ?? s.nextHintCost,
-      letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
-      hintSpend: hintSpend ?? s.hintSpend,
-    })),
+  setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend, turnId }) =>
+    set((s) => {
+      // A timed hint is emitted per seat, and the turn can end between two of
+      // those emits: a hint for a turn this client is no longer drawing would
+      // re-mask a prompt that has been revealed, or put the last turn's blanks
+      // on screen while the next drawer is still choosing (#883). So a named
+      // hint is taken only while this client is drawing that very turn - an
+      // abandoned turn goes straight to `turn_starting` or `game_ended`, never
+      // through `turn_results`. A bought hint names no turn and always lands:
+      // it answers something the player just did.
+      if (turnId !== undefined && (s.phase !== "drawing" || s.currentTurnId !== turnId)) {
+        return s;
+      }
+      return {
+        maskedPrompt,
+        nextHintCost: hintCost ?? s.nextHintCost,
+        letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
+        hintSpend: hintSpend ?? s.hintSpend,
+      };
+    }),
   endTurn: (payload) =>
     set((s) => ({
       phase: "turn_results",

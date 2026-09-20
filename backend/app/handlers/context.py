@@ -475,13 +475,24 @@ class HandlerContext:
         player_sid = player.sid
         self.timers.cancel_disconnect_timer(player_id)
         self.room_manager.remove_player(room, player_id)
+        if player_sid:
+            # Out of the room before anything about the removal is broadcast
+            # (#883): the seat's own socket used to sit in the room while the
+            # game moved on without it, so a kicked player was told they were
+            # out and then handed the next turn.
+            await self.sio.leave_room(player_sid, room.id)
         if room.game and room.state == "playing":
+            # The roster without this seat goes first, as it does when a seat
+            # is given up (#883): evicting the drawer starts the next turn,
+            # and its preamble must not reach a client whose player list still
+            # holds the player it just lost.
+            await self.game_flow._emit_room_state(room)
+            await self.game_flow._flush_room_state(room)
             await self.game_flow._remove_player_from_game(room, player_id)
         if player_sid:
             if notice is not None:
                 event, payload = notice
                 await self.sio.emit(event, payload, to=player_sid)
-            await self.sio.leave_room(player_sid, room.id)
             # Marked as ours, because it is: this server is ending the socket,
             # not the client. Socket.IO runs the disconnect handler inline from
             # here, and unmarked it would queue at that socket's seating gate -

@@ -203,6 +203,7 @@ export function useGameSocketListeners() {
       hintCost?: number | null;
       letterPrices?: Record<string, number> | null;
       hintSpend?: number;
+      turnId?: string;
     }) => {
       store.getState().setHintRevealed(payload);
     };

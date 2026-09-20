@@ -364,10 +364,23 @@ class GameFlowService:
                     return
                 if room.game is not game or game.phase != Phase.DRAWING:
                     return
+                turn_id = game.current_turn_id
                 if game.reveal_hint_letter():
                     for p in room.player_list():
                         if not p.sid:
                             continue
+                        # Checked again per seat, not once before the loop
+                        # (#883): every emit awaits, and a turn that ends in
+                        # one of those gaps used to re-mask the prompt the
+                        # `turn_ended` had just revealed. The turn is named
+                        # too, so a client can drop a hint for a turn it has
+                        # already ended.
+                        if (
+                            room.game is not game
+                            or game.phase != Phase.DRAWING
+                            or game.current_turn_id != turn_id
+                        ):
+                            return
                         masked = game.masked_prompt(
                             p.id,
                             is_spectator=p.is_spectator,
@@ -375,7 +388,7 @@ class GameFlowService:
                         )
                         await self._sio.emit(
                             "hint_revealed",
-                            {"maskedPrompt": masked},
+                            {"maskedPrompt": masked, "turnId": turn_id},
                             to=p.sid,
                         )
 
@@ -985,8 +998,14 @@ class GameFlowService:
             self._timers.cancel_restart_timer(room.id)
             await self._ctx.remove_room_if_empty(room.id, defer_durable=defer_durable)
             return
-        await self._remove_player_from_game(room, player.id, defer_durable=defer_durable)
+        # The roster first, and sent before the game is told (#883): losing
+        # the drawer starts the next turn, and a `turn_starting` that arrives
+        # before the seat is gone leaves the client holding a turn whose
+        # player list still has the player who left it.
         await self.note_presence(room, "left", player)
+        await self._emit_room_state(room)
+        await self._flush_room_state(room)
+        await self._remove_player_from_game(room, player.id, defer_durable=defer_durable)
         await self._emit_room_state(room)
 
     async def release_other_seats(self, sid: str, *, keep: tuple[str, str] | None = None) -> None:
