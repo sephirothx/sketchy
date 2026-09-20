@@ -20,7 +20,7 @@ HOLD_ROOM_ENTRIES = """
 (() => {
   const send = WebSocket.prototype.send;
   WebSocket.prototype.send = function (data) {
-    if (typeof data === "string" && /\\["(join_room|create_room|join_friend_room)"/.test(data)) {
+    if (typeof data === "string" && /\\["(join_room|create_room|join_friend_room|quick_play)"/.test(data)) {
       setTimeout(() => send.call(this, data), 1500);
       return;
     }
