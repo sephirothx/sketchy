@@ -29,8 +29,8 @@ import type { CanvasSurface } from "./canvasSurface.ts";
 export function createProtocolRenderer(
   surfaceRef: RefObject<CanvasSurface | null>,
   // Where the hidden-tab listener goes. Passed in so a test can count what a
-  // mount adds and a `dispose` takes back (#886); the component passes none
-  // and it goes on the document, as it always has.
+  // mount adds and its unsubscribe takes back (#886); the component passes
+  // none and it goes on the document, as it always has.
   listeners: Pick<Document, "addEventListener" | "removeEventListener"> | null =
     typeof document === "undefined" ? null : document,
 ): CanvasProtocolRenderer {
@@ -75,12 +75,15 @@ export function createProtocolRenderer(
   };
   // A hidden tab gets no animation frames; drain rather than hold ink
   // for as long as it is away, so what it shows on return is current.
-  const onVisibilityChange = () => {
-    if (typeof document !== "undefined" && document.visibilityState === "hidden") {
-      playback.drain();
-    }
+  const watchHidden = (target = listeners) => {
+    const onVisibilityChange = () => {
+      if (typeof document !== "undefined" && document.visibilityState === "hidden") {
+        playback.drain();
+      }
+    };
+    target?.addEventListener("visibilitychange", onVisibilityChange);
+    return () => target?.removeEventListener("visibilitychange", onVisibilityChange);
   };
-  listeners?.addEventListener("visibilitychange", onVisibilityChange);
 
   const clear = () => {
     playback.cancel();
@@ -176,10 +179,9 @@ export function createProtocolRenderer(
   };
 
   const dispose = () => {
-    listeners?.removeEventListener("visibilitychange", onVisibilityChange);
     playback.cancel();
     stopTicking();
   };
 
-  return { apply, clear, replay, dispose };
+  return { apply, clear, replay, watchHidden, dispose };
 }

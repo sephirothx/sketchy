@@ -14,6 +14,7 @@ import {
   pingWindowMs,
   createRestartLatch,
   postReconnectDelayMs,
+  shouldReconnectImmediately,
   transportAlive,
 } from "./reconnectPolicy.ts";
 
@@ -155,7 +156,12 @@ socket.on("connect", () => {
 // the module scope to give `apiRequest` a timer.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   const reconnectNow = () => {
-    if (socket.connected || isUpdateRequired()) return;
+    const now = {
+      connected: socket.connected,
+      updateRequired: isUpdateRequired(),
+      restartExpected: restart.restartExpected(),
+    };
+    if (!shouldReconnectImmediately(now)) return;
     restoreOrdinaryBackoff();
     socket.connect();
   };

@@ -75,10 +75,16 @@ export interface CanvasProtocolRenderer {
   apply(packet: LiveDrawingPacket): void;
   clear(): void;
   replay(actions: DecodedCanvasAction[]): void;
+  /** Watch for the tab being hidden, and drain the playback queue when it
+  is: a hidden tab gets no animation frames. Returns the unsubscribe, and is
+  called per mount rather than once per renderer (#886) - the renderer is
+  memoised, so a StrictMode mount/cleanup/remount would otherwise leave the
+  canvas with no listener at all. */
+  watchHidden(): () => void;
   /** Let go of what the renderer holds outside the component: its playback
-  queue, its timers and its `visibilitychange` listener (#886). Called when
-  the canvas unmounts - a room entry, a scratch pad, a double mount under
-  StrictMode - each of which used to leave one behind for the page's life. */
+  queue and its timers (#886). Called when the canvas unmounts - a room
+  entry, a scratch pad, a double mount under StrictMode - each of which used
+  to leave its queue behind for the page's life. */
   dispose(): void;
 }
 

@@ -68,6 +68,11 @@ export function useLobbyChannel(): void {
     const hidden = createHiddenWatch({
       leave: () => {
         if (cancelled) return;
+        // Anything already in flight belongs to the subscription being given
+        // up: its answer must not land on a tab that has left the channel.
+        generation += 1;
+        asking = false;
+        wanted = false;
         baseline = false;
         pending.clear();
         stopRetrying();
@@ -111,7 +116,7 @@ export function useLobbyChannel(): void {
       const chatHeld = chatResumeRequest(useLobbyChatStore.getState().chat, owner);
       try {
         const answer = await emitWithAck<Record<string, unknown>>("watch_lobby", chatHeld);
-        if (cancelled || mine !== generation) return;
+        if (cancelled || mine !== generation || !hidden.watching) return;
         if (!answer?.ok) {
           // The baseline has a budget of its own (#885); a refusal says when
           // to ask again, and asking sooner would only be refused again.
@@ -243,6 +248,10 @@ export function useLobbyChannel(): void {
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
     document.addEventListener("visibilitychange", onVisibility);
+    // A tab can be opened in the background, or restored there when the
+    // browser starts: `visibilitychange` only fires on a change, so the state
+    // it is already in has to be read (#886).
+    onVisibility();
     if (socket.connected) void subscribe();
 
     return () => {

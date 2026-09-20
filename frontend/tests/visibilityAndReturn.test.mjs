@@ -29,15 +29,38 @@ test("ten canvas mounts leave no listeners behind (#886)", () => {
 
   for (let mount = 0; mount < 10; mount += 1) {
     const renderer = createProtocolRenderer(surfaceRef, target);
+    const stop = renderer.watchHidden();
     assert.equal(target.total(), 1, "a mount watches for the tab being hidden");
+    stop();
     renderer.dispose();
     assert.equal(target.total(), 0, `mount ${mount} left its listener behind`);
   }
 });
 
-test("a renderer disposed twice is not a problem", () => {
+test("a StrictMode remount watches again with the renderer it kept", () => {
+  // React keeps the memoised renderer across mount/cleanup/remount, so a
+  // listener taken once per renderer would be gone for good after the first
+  // cleanup - the canvas would stop draining while hidden.
   const target = listenerCount();
   const renderer = createProtocolRenderer({ current: null }, target);
+
+  const first = renderer.watchHidden();
+  first();
+  renderer.dispose();
+  assert.equal(target.total(), 0);
+
+  const second = renderer.watchHidden();
+  assert.equal(target.total(), 1, "the remount is deaf to the tab being hidden");
+  second();
+  assert.equal(target.total(), 0);
+});
+
+test("a renderer disposed twice, or unsubscribed twice, is not a problem", () => {
+  const target = listenerCount();
+  const renderer = createProtocolRenderer({ current: null }, target);
+  const stop = renderer.watchHidden();
+  stop();
+  stop();
   renderer.dispose();
   renderer.dispose();
   assert.equal(target.total(), 0);
@@ -98,6 +121,16 @@ test("a tab shown again before the grace never left, and never rejoins", () => {
   assert.deepEqual(pending(), [], "the timer was cancelled");
   assert.deepEqual(log, []);
   assert.equal(watch.watching, true);
+});
+
+test("a tab that is already hidden when the lobby opens leaves too", () => {
+  // `visibilitychange` fires on a change, so a tab opened in the background
+  // has to be read rather than waited for.
+  const { watch, pending, fire, log } = watchWithClock();
+  watch.noteVisibility(true);
+  assert.deepEqual(pending(), [LOBBY_HIDDEN_GRACE_MS]);
+  fire();
+  assert.deepEqual(log, ["left"]);
 });
 
 test("hiding twice arms one timer, and stopping disarms it", () => {

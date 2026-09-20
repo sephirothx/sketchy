@@ -97,8 +97,16 @@ function createCanvas(
     );
     // What the renderer holds lives outside React, so React has to let it go
     // (#886): every entry into a room, every scratch pad and every StrictMode
-    // double mount used to leave a listener and a playback queue behind.
-    useEffect(() => renderer.dispose, [renderer]);
+    // double mount used to leave a listener and a playback queue behind. The
+    // listener is taken per mount, so a StrictMode remount - which keeps the
+    // memoised renderer - watches again rather than going deaf.
+    useEffect(() => {
+      const stopWatching = renderer.watchHidden();
+      return () => {
+        stopWatching();
+        renderer.dispose();
+      };
+    }, [renderer]);
     const protocol = useProtocol(renderer);
     const pointer = useCanvasPointerInput(
       protocol,

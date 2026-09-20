@@ -12,6 +12,7 @@ import {
   afterFailedRebind,
   createRestartLatch,
   pingWindowMs,
+  shouldReconnectImmediately,
   shutdownHoldMs,
   transportAlive,
 } from "../src/lib/reconnectPolicy.ts";
@@ -116,4 +117,16 @@ test("a notice at a handshake mid-drain survives that connection landing", () =>
   latch.noteNotice(8000);
   latch.noteConnect();
   assert.equal(latch.noteClose(0, 0.25), 2000);
+});
+
+test("a network coming back connects now - unless a restart's hold is still running (#886)", () => {
+  const state = { connected: false, updateRequired: false, restartExpected: false };
+  assert.equal(shouldReconnectImmediately(state), true);
+  assert.equal(shouldReconnectImmediately({ ...state, connected: true }), false);
+  assert.equal(shouldReconnectImmediately({ ...state, updateRequired: true }), false);
+  assert.equal(
+    shouldReconnectImmediately({ ...state, restartExpected: true }),
+    false,
+    "a device waking mid-deploy must not jump the spread",
+  );
 });
