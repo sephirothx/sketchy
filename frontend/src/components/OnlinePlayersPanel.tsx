@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { sessionFrom } from "../lib/roomEntryState";
-import { emitWithAck } from "../lib/socket";
+import { emitEntry } from "../lib/socket";
 import { useRoomEntryStore } from "../store/roomEntryStore";
 import { isFriend, lobbyRowMayOfferFriendship, withFriendsFirst } from "../lib/friends";
 import { presenceSummary } from "../lib/lobbyPresence";
@@ -76,7 +76,7 @@ export function OnlinePlayersPanel() {
     const token = useRoomEntryStore.getState().begin(`friend-${player.userId}`);
     if (token === null) return;
     try {
-      const answer = await emitWithAck<AckResponse>("join_friend_room", {
+      const answer = await emitEntry<AckResponse>("join_friend_room", {
         friendUserId: player.userId,
       });
       const session = sessionFrom(answer);

@@ -77,7 +77,7 @@ COMMAND_PAYLOADS: dict[str, type[payloads.RequestModel] | str] = {
     "invite_friend": payloads.FriendUserPayload,
     "join_friend_room": payloads.JoinFriendRoomPayload,
     "join_room": payloads.JoinRoomPayload,
-    "leave_room": payloads.EmptyPayload,
+    "leave_room": payloads.LeaveRoomPayload,
     "propose_restart_vote": payloads.EmptyPayload,
     "react_to_drawing": payloads.ReactToDrawingPayload,
     "rename_player": payloads.RenamePlayerPayload,

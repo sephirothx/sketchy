@@ -4,6 +4,8 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from contextlib import contextmanager
+from contextvars import ContextVar
 from functools import partial
 
 from app.announcements import Announcement
@@ -14,6 +16,7 @@ from app.services.telemetry import telemetry
 from app.handlers.payloads import (
     CreateRoomPayload,
     JoinRoomPayload,
+    LeaveRoomPayload,
     PayloadError,
     PlayerSettingsPayload,
     RecapDrawingPayload,
@@ -59,17 +62,72 @@ logger = logging.getLogger("sketchy.handlers.rooms")
 # pin the coroutine that seats a player.
 ENTRY_DB_TIMEOUT_SECONDS = 10
 
+# And one deadline for the whole entry (#879). The bound above is per call,
+# and creating a room makes four in a row - forty seconds against a client
+# that gives up after eight (`DEFAULT_ACK_TIMEOUT_MS`). Under a slow database
+# the player was told it failed, pressed again, and the first room existed
+# anyway with the socket seated in it: a spent creation allowance, one of the
+# three rooms an account may hold, and after Quick play's fallback a public
+# waiting room nobody would ever start. So every entry - create, join, join a
+# friend - is given six seconds from arrival, the wait for the seating gate
+# included; each call gets what is left, and past it the entry refuses with
+# nothing created. The two seconds left over are for the answer to travel, so
+# a refusal the client sees means there is no room.
+ENTRY_DEADLINE_SECONDS = 6.0
+
+# How long a `create_room` request id is remembered (#879): long enough for a
+# client's retry after its own timeout, a reconnect included; short enough that
+# a stale id cannot hand somebody back a room they have long since left.
+CREATE_REQUEST_MEMORY_SECONDS = 60.0
+
+_entry_deadline: ContextVar[float | None] = ContextVar("entry_deadline", default=None)
+
 
 class EntryTimedOut(RuntimeError):
     """A database call on the way into a room did not answer in time."""
 
 
-async def _bounded(awaitable, what: str):
-    """Await one entry-path call, or give up and let the entry refuse."""
+@contextmanager
+def entry_deadline():
+    """Start this entry's deadline; an enclosing one is kept, never extended."""
+    if _entry_deadline.get() is not None:
+        yield
+        return
+    token = _entry_deadline.set(asyncio.get_running_loop().time() + ENTRY_DEADLINE_SECONDS)
     try:
-        return await asyncio.wait_for(awaitable, timeout=ENTRY_DB_TIMEOUT_SECONDS)
+        yield
+    finally:
+        _entry_deadline.reset(token)
+
+
+def entry_expired() -> bool:
+    """Whether this entry has run out of time. Checked at the last instant
+    before a room or a seat is made, with nothing awaited between."""
+    deadline = _entry_deadline.get()
+    return deadline is not None and asyncio.get_running_loop().time() >= deadline
+
+
+async def _bounded(awaitable, what: str, *, within_entry: bool = True):
+    """Await one entry-path call, or give up and let the entry refuse.
+
+    Inside an entry the call gets whatever of the deadline is left, and none
+    at all once it has passed. `within_entry=False` is for a cleanup that
+    gives something back on the way out, which must not be skipped because
+    the entry it cleans up after ran late.
+    """
+    timeout = ENTRY_DB_TIMEOUT_SECONDS
+    deadline = _entry_deadline.get() if within_entry else None
+    if deadline is not None:
+        timeout = min(timeout, deadline - asyncio.get_running_loop().time())
+        if timeout <= 0:
+            if asyncio.iscoroutine(awaitable):
+                awaitable.close()
+            logger.error("Out of entry time before %s", what)
+            raise EntryTimedOut(what)
+    try:
+        return await asyncio.wait_for(awaitable, timeout=timeout)
     except asyncio.TimeoutError:
-        logger.error("Timed out on %s after %ss", what, ENTRY_DB_TIMEOUT_SECONDS)
+        logger.error("Timed out on %s after %.1fs", what, timeout)
         raise EntryTimedOut(what) from None
 
 
@@ -84,7 +142,9 @@ async def _give_back_code(ctx: HandlerContext, code: str | None) -> None:
     if code is None or ctx.room_codes is None:
         return
     try:
-        await _bounded(ctx.room_codes.release_unpublished(code), "releasing a room code")
+        await _bounded(
+            ctx.room_codes.release_unpublished(code), "releasing a room code", within_entry=False
+        )
     except EntryTimedOut:
         pass
     except Exception:
@@ -100,7 +160,9 @@ async def _give_back_allowance(ctx: HandlerContext, user_id) -> None:
         return
     try:
         await _bounded(
-            ctx.room_quotas.refund_creation(user_id), "returning a creation allowance"
+            ctx.room_quotas.refund_creation(user_id),
+            "returning a creation allowance",
+            within_entry=False,
         )
     except EntryTimedOut:
         pass
@@ -210,9 +272,10 @@ async def _warm_block_filter(ctx: HandlerContext, player) -> None:
 async def create_room(ctx: HandlerContext, sid, data):
     """Open a room and seat this socket in it, releasing any seat it held."""
     seated: list = []
-    async with ctx.seating(sid):
-        answer = await _create_room(ctx, sid, data, seated)
-    await _after_seating(ctx, seated)
+    with entry_deadline():
+        async with ctx.seating(sid):
+            answer = await _create_room(ctx, sid, data, seated)
+        await _after_seating(ctx, seated)
     return answer
 
 
@@ -249,6 +312,49 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
                 "a room. Allow cookies for this site and reload."
             ),
         }
+    repeat = _room_already_created(ctx, identity.user_id, payload.request_id)
+    if repeat is not None:
+        # A retry of a creation that happened: the answer was lost, or came
+        # after the client had given up. Seat this socket back in that room -
+        # the account's own seat - and spend nothing.
+        return await _seat_in_room(
+            ctx, sid, repeat, _EnteringAs(payload), seated
+        )
+    key = (identity.user_id, payload.request_id) if payload.request_id else None
+    if key is not None:
+        leader = ctx.room_creations_in_flight.get(key)
+        if leader is not None:
+            # The same press arriving again on another socket while the first
+            # is still being made - a retry from the replacement socket of a
+            # connection that dropped mid-creation. Sockets have separate
+            # seating gates, so without this both would make a room. Wait for
+            # the first, then take its room; if it failed, try again here.
+            try:
+                made = await _bounded(asyncio.shield(leader), "waiting for the same creation")
+            except EntryTimedOut:
+                return BUSY_ACKNOWLEDGEMENT
+            # The first copy's own room, from its own future - not the
+            # account's memo, which another tab's creation may have moved on.
+            repeat = ctx.room_manager.get_room(made) if made else None
+            if repeat is not None and ctx.room_manager.get_player_by_user_id(repeat, identity.user_id):
+                return await _seat_in_room(ctx, sid, repeat, _EnteringAs(payload), seated)
+            if key in ctx.room_creations_in_flight:
+                return BUSY_ACKNOWLEDGEMENT
+        leader = asyncio.get_running_loop().create_future()
+        ctx.room_creations_in_flight[key] = leader
+    answer: dict | None = None
+    try:
+        answer = await _create_new_room(ctx, sid, payload, identity, seated)
+        return answer
+    finally:
+        if key is not None:
+            del ctx.room_creations_in_flight[key]
+            made = answer.get("roomId") if answer and answer.get("ok") else None
+            leader.set_result(made)
+
+
+async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: list):
+    """Everything a creation does once it is known not to be a repeat."""
     try:
         ctx.room_quotas.check_capacity(identity.user_id)
     except RoomQuotaExceeded as error:
@@ -312,6 +418,12 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             await _give_back_code(ctx, code)
             return ctx.shutdown.rejection_acknowledgement()
+        # Whatever this socket sat in goes first (R-ROOM-08), before the
+        # checks below rather than inside the seating that follows them, and
+        # with the old room's durable teardown deferred: waited on, it could
+        # hold the answer past the deadline - with the new room already made,
+        # had it come after (#879).
+        await ctx.game_flow.release_other_seats(sid)
         try:
             # Everything above this line awaited, and a second create_room from
             # this account may have arrived in one of those gaps. This is the last
@@ -327,6 +439,12 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
             # already walked past.
             await _give_back_code(ctx, code)
             return ENDED_ACCOUNT_ACKNOWLEDGEMENT
+        if entry_expired():
+            # The last instant before the room exists, with nothing awaited
+            # after it: past the deadline the client may already have given
+            # up, and a room it was told failed must not exist (#879).
+            await _give_back_code(ctx, code)
+            return BUSY_ACKNOWLEDGEMENT
         try:
             room = ctx.room_manager.create_room(
                 **settings,
@@ -354,8 +472,46 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     if ctx.is_ending(sid):
         return await _unseat_an_ended_account(ctx, room, player)
+    _remember_creation(ctx, identity.user_id, payload.request_id, room.id)
     seated.append(player)
     return session_payload(room, player)
+
+
+class _EnteringAs:
+    """A creation's identity fields in the shape `_seat_in_room` reads."""
+
+    def __init__(self, payload) -> None:
+        self.nickname = payload.nickname
+        self.name_color = payload.name_color
+        self.colorblind_safe_colors = payload.colorblind_safe_colors
+        self.as_spectator = False
+
+
+def _remember_creation(ctx: HandlerContext, user_id: str, request_id: str | None, room_id: str) -> None:
+    now = time.monotonic()
+    memory = ctx.recent_room_creations
+    for account in [a for a, (_, _, until) in memory.items() if until <= now]:
+        del memory[account]
+    if request_id:
+        memory[user_id] = (request_id, room_id, now + CREATE_REQUEST_MEMORY_SECONDS)
+
+
+def _room_already_created(ctx: HandlerContext, user_id: str, request_id: str | None):
+    """The room a repeat of this request made, if it is still this account's.
+
+    Only while the account's seat is still in it: a room the creator has left
+    is not theirs to be handed back, and a new one is what they are asking
+    for.
+    """
+    if not request_id:
+        return None
+    remembered = ctx.recent_room_creations.get(user_id)
+    if remembered is None or remembered[0] != request_id or remembered[2] <= time.monotonic():
+        return None
+    room = ctx.room_manager.get_room(remembered[1])
+    if room is None or ctx.room_manager.get_player_by_user_id(room, user_id) is None:
+        return None
+    return room
 
 
 async def get_room_settings(ctx: HandlerContext, sid, data=None):
@@ -499,9 +655,10 @@ async def get_room_preview(ctx: HandlerContext, sid, data):
 async def join_room(ctx: HandlerContext, sid, data):
     """Seat this socket in the named room, releasing any seat it held."""
     seated: list = []
-    async with ctx.seating(sid):
-        answer = await _join_room(ctx, sid, data, seated)
-    await _after_seating(ctx, seated)
+    with entry_deadline():
+        async with ctx.seating(sid):
+            answer = await _join_room(ctx, sid, data, seated)
+        await _after_seating(ctx, seated)
     return answer
 
 
@@ -725,6 +882,9 @@ async def _seat_in_room(
             "error": "You are joining rooms too quickly. Try again in a minute.",
         }
 
+    # Released before the last checks, as creating does, with the old room's
+    # durable teardown deferred (#879).
+    await ctx.game_flow.release_other_seats(sid)
     if ctx.is_ending(sid):
         return ENDED_ACCOUNT_ACKNOWLEDGEMENT
     # The last word on Quick play, with nothing awaited between it and the
@@ -732,6 +892,11 @@ async def _seat_in_room(
     if quick_play and not _open_for_quick_play(room):
         ctx.room_capacity.refund_join(sid)
         return QUICK_PLAY_REFUSAL
+    if entry_expired():
+        # As for a room: a seat the client was told it did not get must not
+        # exist (#879).
+        ctx.room_capacity.refund_join(sid)
+        return BUSY_ACKNOWLEDGEMENT
     try:
         player = ctx.room_manager.add_player(
             room,
@@ -1039,7 +1204,7 @@ async def become_player(ctx: HandlerContext, sid, data=None):
 
 async def leave_room(ctx: HandlerContext, sid, data=None):
     try:
-        parse_empty_payload(data)
+        payload = parse_payload(LeaveRoomPayload, data, allow_none=True)
     except PayloadError as error:
         return error.acknowledgement()
     async with ctx.seating(sid):
@@ -1047,6 +1212,8 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
         if not current:
             return
         room, player = current
+        if payload is not None and payload.room_id is not None and payload.room_id != room.id:
+            return
         await ctx.game_flow.release_seat(sid, room, player)
 
 

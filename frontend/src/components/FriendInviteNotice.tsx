@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 import { parseFriendInvite, type FriendInvite } from "../lib/friends";
 import { sessionFrom } from "../lib/roomEntryState";
-import { emitWithAck, onConnectSpread, socket } from "../lib/socket";
+import { emitEntry, onConnectSpread, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { useFriendsStore } from "../store/friendsStore";
 import { useFriendArrivalNotices } from "../hooks/useFriendArrivalNotices";
@@ -93,7 +93,7 @@ export function FriendInviteNotice() {
     if (token === null) return;
     setInvite(null);
     try {
-      const answer = await emitWithAck<AckResponse>("join_friend_room", {
+      const answer = await emitEntry<AckResponse>("join_friend_room", {
         friendUserId: current.fromUserId,
         inviteToken: current.inviteToken,
       });

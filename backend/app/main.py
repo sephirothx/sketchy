@@ -662,6 +662,9 @@ async def lifespan(_app: FastAPI):
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
+        # Teardowns entries deferred (#879) stage abandoned games, so they
+        # finish before the handoff worker below is stopped.
+        await handler_context.drain_room_cleanups(HISTORY_WRITE_TIMEOUT_SECONDS)
         # After the drain, which ends games and stages them: one bounded
         # pass replays what it can, and whatever is left is a row the next
         # process picks up on its first sweep - that is the point of #541.

@@ -957,7 +957,9 @@ class GameFlowService:
         elif game.phase == Phase.TURN_RESULTS:
             await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
 
-    async def release_seat(self, sid: str, room: Room, player: Player) -> None:
+    async def release_seat(
+        self, sid: str, room: Room, player: Player, *, defer_durable: bool = False
+    ) -> None:
         """Give up one live seat and let the room fall away behind it.
 
         The one way out of a room for a socket that is still connected, so
@@ -981,29 +983,35 @@ class GameFlowService:
             self._timers.cancel_phase_timer(room.id)
             self._timers.cancel_hint_timers(room.id)
             self._timers.cancel_restart_timer(room.id)
-            await self._ctx.remove_room_if_empty(room.id)
+            await self._ctx.remove_room_if_empty(room.id, defer_durable=defer_durable)
             return
-        await self._remove_player_from_game(room, player.id)
+        await self._remove_player_from_game(room, player.id, defer_durable=defer_durable)
         await self.note_presence(room, "left", player)
         await self._emit_room_state(room)
 
-    async def release_other_seats(self, sid: str, *, keep: tuple[str, str]) -> None:
+    async def release_other_seats(self, sid: str, *, keep: tuple[str, str] | None = None) -> None:
         """Vacate every seat this socket holds apart from the one it is taking.
 
         Keyed on the socket, never on the account: two tabs of one account
         sitting in two different rooms is ordinary, and only the connection
-        that is moving may be moved.
+        that is moving may be moved. With no `keep`, every seat: an entry
+        releases what it held *before* it makes a new room or seat (#879), so
+        the old room's teardown - which can write an abandoned game and retire
+        a code - is spent inside the entry's deadline rather than after a room
+        already exists.
         """
         for room, player in self._ctx.room_manager.seats_for_sid(sid):
-            if (room.id, player.id) == keep:
+            if keep is not None and (room.id, player.id) == keep:
                 continue
             logger.info(
-                "socket %s gave up its seat in room %s to enter room %s",
+                "socket %s gave up its seat in room %s to enter %s",
                 sid,
                 room.id,
-                keep[0],
+                f"room {keep[0]}" if keep is not None else "another room",
             )
-            await self.release_seat(sid, room, player)
+            # Only ever inside an entry, so the old room's durable teardown
+            # is deferred rather than waited on (#879).
+            await self.release_seat(sid, room, player, defer_durable=True)
 
     async def _join_socket_room(self, sid: str, room: Room, player, is_reconnect: bool) -> None:
         # One socket, one seat: whatever this connection was sitting in before
@@ -1255,7 +1263,7 @@ class GameFlowService:
     def _turn_ended_payload(self, room: Room, drawer_bonus: int | None = None) -> dict:
         return turn_ended_payload(room, drawer_bonus)
 
-    async def record_abandoned_game(self, room: Room) -> bool:
+    async def record_abandoned_game(self, room: Room, *, defer_durable: bool = False) -> bool:
         """Write down a game that stopped without ending, and clear it.
 
         Every way a game can be lost funnels through here, which it has to:
@@ -1290,7 +1298,11 @@ class GameFlowService:
         )
         room.game = None
         self._note_history_write_started(room, game, history)
-        await self._hand_off_finished_game(room, FinishedGameEnvelope(history) if history else None)
+        envelope = FinishedGameEnvelope(history) if history else None
+        if defer_durable:
+            self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
+        else:
+            await self._hand_off_finished_game(room, envelope)
         return True
 
     def _note_history_write_started(self, room: Room, game: Game, history) -> None:
@@ -1407,7 +1419,7 @@ class GameFlowService:
             return None, ()
         return usage, tuple(revision_ids)
 
-    async def _finish_or_next(self, room: Room) -> None:
+    async def _finish_or_next(self, room: Room, *, defer_durable: bool = False) -> None:
         game = room.game
         assert game is not None
         if game.is_finished():
@@ -1463,14 +1475,15 @@ class GameFlowService:
             # Last, so that nothing a player is waiting to see is behind a
             # database round trip.
             usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
-            await self._hand_off_finished_game(
-                room,
-                FinishedGameEnvelope(history, usage, revision_ids) if history else None,
-            )
+            envelope = FinishedGameEnvelope(history, usage, revision_ids) if history else None
+            if defer_durable:
+                self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
+            else:
+                await self._hand_off_finished_game(room, envelope)
         else:
             await self._start_turn(room)
 
-    async def _abandon_current_turn(self, room: Room) -> None:
+    async def _abandon_current_turn(self, room: Room, *, defer_durable: bool = False) -> None:
         """Give up the turn in progress: move to the next one, or end the game.
 
         `_start_turn` on its own walks `turn_index` past the final turn,
@@ -1487,7 +1500,7 @@ class GameFlowService:
             return
         self._timers.cancel_phase_timer(room.id)
         self._timers.cancel_hint_timers(room.id)
-        await self._finish_or_next(room)
+        await self._finish_or_next(room, defer_durable=defer_durable)
 
     def _privileged_sids(
         self,
@@ -1565,7 +1578,11 @@ class GameFlowService:
     # Connection lifecycle
     # ------------------------------------------------------------------
 
-    async def _remove_player_from_game(self, room: Room, token: str) -> None:
+    async def _remove_player_from_game(
+        self, room: Room, token: str, *, defer_durable: bool = False
+    ) -> None:
+        """`defer_durable` is an entry taking this seat away (#879): the game
+        transition happens here, its history staging on its own."""
         game = room.game
         if not game:
             return
@@ -1576,11 +1593,11 @@ class GameFlowService:
             self._timers.cancel_restart_timer(room.id)
             room.restart_vote = None
             room.state = "waiting"
-            await self.record_abandoned_game(room)
+            await self.record_abandoned_game(room, defer_durable=defer_durable)
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
         elif was_drawer:
-            await self._abandon_current_turn(room)
+            await self._abandon_current_turn(room, defer_durable=defer_durable)
         else:
             await self._end_turn_if_all_guessed(room)
 

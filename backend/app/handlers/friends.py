@@ -43,6 +43,7 @@ from app.handlers.rooms import (
     EntryTimedOut,
     _after_seating,
     _bounded,
+    entry_deadline,
     _seat_in_room,
 )
 from app.services.friends import (
@@ -181,9 +182,10 @@ async def invite_friend(ctx: HandlerContext, sid, data):
 async def join_friend_room(ctx: HandlerContext, sid, data):
     """Take a seat wherever a friend is, without ever naming the room."""
     seated: list = []
-    async with ctx.seating(sid):
-        answer = await _join_friend_room(ctx, sid, data, seated)
-    await _after_seating(ctx, seated)
+    with entry_deadline():
+        async with ctx.seating(sid):
+            answer = await _join_friend_room(ctx, sid, data, seated)
+        await _after_seating(ctx, seated)
     return answer
 
 

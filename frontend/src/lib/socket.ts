@@ -492,7 +492,7 @@ export function emitWithAckOn<T = AckResponse>(
   target: AckTarget,
   event: string,
   data: unknown,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; onLate?: (response: T) => void } = {},
 ): Promise<T> {
   // `=== false` rather than a truthiness check: hosts other than a browser
   // define `navigator` without `onLine`, and a missing flag is not evidence of
@@ -539,7 +539,13 @@ export function emitWithAckOn<T = AckResponse>(
     // if the timeout wins the race instead, there is no packet to deliver.
     function send() {
       target.on("disconnect", onDisconnect);
-      target.emit(event, data, (response: unknown) => finish(() => resolve(response as T)));
+      target.emit(event, data, (response: unknown) => {
+        // An answer after this promise gave up is not dropped in silence when
+        // the caller says what to do with one: the server may have done what
+        // the player was told had failed (#879).
+        if (settled) options.onLate?.(response as T);
+        else finish(() => resolve(response as T));
+      });
     }
 
     function onConnect() {
@@ -555,9 +561,31 @@ export function emitWithAckOn<T = AckResponse>(
 export function emitWithAck<T = AckResponse>(
   event: string,
   data: unknown,
-  options: { timeoutMs?: number } = {},
+  options: { timeoutMs?: number; onLate?: (response: T) => void } = {},
 ): Promise<T> {
   return emitWithAckOn<T>(socket as unknown as AckTarget, event, data, options);
+}
+
+/** A command that seats this socket somewhere the player chose to go (#879):
+`create_room`, `join_room` from the lobby, `join_friend_room`.
+
+The server answers inside six seconds or creates nothing, so a late answer
+should never come - but if one does and it says the seat was taken, the player
+has already been told it failed and may be somewhere else by now. The seat is
+given back by name, so the room they are in now is not the one left. Not for
+the room's own rebind (`useRoomSessionReconnect`), whose seat is the one the
+player is sitting in. */
+export function emitEntry<T = AckResponse>(event: string, data: unknown): Promise<T> {
+  return emitWithAck<T>(event, data, {
+    onLate: (response) => {
+      const answer = response as { ok?: unknown; roomId?: unknown } | null;
+      // Transient (R-CONN-06): given back now or not at all, never replayed
+      // from a buffer after a reconnect.
+      if (answer?.ok === true && typeof answer.roomId === "string") {
+        emitTransient("leave_room", { roomId: answer.roomId });
+      }
+    },
+  });
 }
 
 /** Emit an action that only makes sense right now, dropping it if the socket

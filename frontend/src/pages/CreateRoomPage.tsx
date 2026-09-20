@@ -10,7 +10,8 @@ import type { PromptListSummary } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
-import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
+import { emitEntry, socketRequestErrorMessage } from "../lib/socket";
+import { createRequestIds, mintRequestId } from "../lib/createRequests";
 import { useRoomEntryStore } from "../store/roomEntryStore";
 import { readCommunityPromptList } from "../lib/promptLists";
 import { sessionFrom } from "../lib/roomEntryState";
@@ -33,6 +34,10 @@ import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 
 const EMPTY_LISTS: PromptListSummary[] = [];
+
+// Module-level: a press retried after leaving and reopening the page is still
+// the same press (#879).
+const createRequests = createRequestIds(mintRequestId);
 
 export function CreateRoomPage() {
   const navigate = useNavigate();
@@ -333,14 +338,19 @@ export function CreateRoomPage() {
     setBusy(true);
     setError(null);
     try {
-      const response = await emitWithAck<AckResponse>("create_room", {
+      const settings = {
         nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptLanguage,
         promptListSlugs,
-      });
+      };
+      // The same press retried keeps its id, so a creation whose answer was
+      // lost is handed back rather than made twice (#879).
+      const requestId = createRequests.idFor(JSON.stringify(settings), Date.now());
+      const response = await emitEntry<AckResponse>("create_room", { ...settings, requestId });
       const session = sessionFrom(response);
       if (session) {
+        createRequests.succeeded();
         setSession(session);
         navigate(`/room/${session.code}`);
         return;
