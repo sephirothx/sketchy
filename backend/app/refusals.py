@@ -62,7 +62,6 @@ class ErrorCode(StrEnum):
     NOT_IN_ROOM = "not_in_room"
     ROOM_NOT_FOUND = "room_not_found"
     ROOM_ENDED = "room_ended"  # the code was valid but its room has ended
-    ROOM_NOT_OPEN = "room_not_open"  # a Quick play join: no longer public and waiting
     COULD_NOT_CREATE_ROOM = "could_not_create_room"
     NO_SESSION_TO_RESUME = "no_session_to_resume"
     HOST_ONLY = "host_only"

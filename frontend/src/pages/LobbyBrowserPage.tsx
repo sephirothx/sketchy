@@ -1,7 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/socket";
-import { createRequestIds, mintRequestId } from "../lib/createRequests";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
@@ -30,14 +29,6 @@ import {
   LanguagePicker,
   type LanguageChoice,
 } from "../components/LanguagePicker";
-import {
-  QUICK_PLAY_LIST_WAIT_MS,
-  quickPlayCandidates,
-  quickPlayReady,
-  quickPlayRoom,
-  runQuickPlay,
-  waitForState,
-} from "../lib/quickPlay";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -155,9 +146,6 @@ function identityMessage(error: unknown): string {
   if (error instanceof IdentityRequiredError) return error.message;
   return refusalText(error, ui.lobbyBrowserPage.couldNotSaveThatName);
 }
-
-// One request id per Quick play press, kept across its retries (#879).
-const quickPlayRequests = createRequestIds(mintRequestId);
 
 export function LobbyBrowserPage() {
   const navigate = useNavigate();
@@ -290,62 +278,29 @@ export function LobbyBrowserPage() {
   }
 
   /**
-   * The one control that plays (#589): into a room that is waiting with a seat
-   * free, or into a new one on the standard rules when there is none.
+   * The one control that plays (#589, #931): into a room that is waiting with
+   * a seat free, or into a new one on the standard rules when there is none.
    *
-   * The candidates are walked in order because the list is a moment old: a
-   * room can fill between the push that sent it and this press, and the answer
-   * to that is the next room, then a room of your own - not an error.
+   * One command, decided by the server, which holds the rooms: the client's
+   * walk over the lobby's list took a round trip per candidate, could not run
+   * until a list had arrived - ten seconds after naming a first-time visitor,
+   * whose naming reconnects the socket - and gave every presser in one moment
+   * their own room, because each read the same list.
    */
   async function handleQuickPlay() {
-    if (!quickPlayReady(roomsState)) return;
     const token = beginEntry("quick-play");
     if (token === null) return;
     setError(null);
     try {
       let playerName = currentPlayerName();
       if (awaitingName) playerName = (await ensureIdentity()).displayName;
-      // Naming reconnects the socket, which leaves the list stale until the
-      // new connection's snapshot arrives. Wait for it and carry on: the press
-      // that named the player is the press that plays.
-      const listed = await waitForState(
-        () => useRoomsStore.getState().rooms,
-        (listener) => useRoomsStore.subscribe((state) => listener(state.rooms)),
-        quickPlayReady,
-        QUICK_PLAY_LIST_WAIT_MS,
-      );
-      if (!mountedRef.current) return;
-      if (!listed) {
-        setError(ui.lobbyBrowserPage.couldNotFindOrOpenARoom);
-        return;
-      }
-      // Read now, not from the render the press came from.
-      const current = useRoomsStore.getState().rooms;
-      const answer = await runQuickPlay(
-        quickPlayCandidates(current.rooms, playerLanguage),
-        (room) => emitEntry<AckResponse>("join_room", {
-          nickname: playerName,
-          nameColor,
-          colorblindSafeColors,
-          asSpectator: false,
-          roomId: room.id,
-          quickPlay: true,
-        }),
-        () => {
-          const settings = {
-            nickname: playerName,
-            nameColor,
-            colorblindSafeColors,
-            ...quickPlayRoom(playerLanguage, colorblindSafeColors),
-          };
-          // Kept across Quick play presses: a fallback room whose answer was
-          // lost is handed back, not opened a second time (#879).
-          const requestId = quickPlayRequests.idFor(JSON.stringify(settings), Date.now());
-          return emitEntry<AckResponse>("create_room", { ...settings, requestId });
-        },
-      );
+      const answer = await emitEntry<AckResponse>("quick_play", {
+        nickname: playerName,
+        nameColor,
+        colorblindSafeColors,
+        promptLanguage: playerLanguage,
+      });
       const session = sessionFrom(answer);
-      if (session) quickPlayRequests.succeeded();
       if (!mountedRef.current) {
         if (session) letGoOfAStraySeat();
         return;
@@ -467,7 +422,7 @@ export function LobbyBrowserPage() {
                 type="button"
                 className="btn btn-warm btn-compact lobby-quick-play"
                 data-testid="quick-play"
-                disabled={Boolean(pendingJoin) || !quickPlayReady(roomsState)}
+                disabled={Boolean(pendingJoin)}
                 onClick={() => void handleQuickPlay()}
               >
                 <BoltIcon size={15} />
@@ -666,7 +621,7 @@ export function LobbyBrowserPage() {
             type="button"
             className="btn btn-warm btn-big lobby-quick-play"
             data-testid="quick-play"
-            disabled={Boolean(pendingJoin) || !quickPlayReady(roomsState)}
+            disabled={Boolean(pendingJoin)}
             onClick={() => void handleQuickPlay()}
           >
             <BoltIcon size={16} />

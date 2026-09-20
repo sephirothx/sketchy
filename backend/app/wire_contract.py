@@ -79,6 +79,7 @@ COMMAND_PAYLOADS: dict[str, type[payloads.RequestModel] | str] = {
     "join_room": payloads.JoinRoomPayload,
     "leave_room": payloads.LeaveRoomPayload,
     "propose_restart_vote": payloads.EmptyPayload,
+    "quick_play": payloads.QuickPlayPayload,
     "react_to_drawing": payloads.ReactToDrawingPayload,
     "rename_player": payloads.RenamePlayerPayload,
     "report_player": payloads.ReportPlayerPayload,

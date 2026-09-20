@@ -340,7 +340,7 @@ moderation - are the rest of the same enum, and are listed at
 | Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `max_players_below_seated`, `empty_message` |
 | Rate and capacity | `too_fast`, `seat_changing_too_fast`, `joining_too_fast`, `room_quota`, `room_full`, `spectators_full`, `player_slots_full` |
 | Server and account state | `server_draining`, `server_paused`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
-| Rooms | `not_in_room`, `room_not_found`, `room_ended`, `room_not_open`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
+| Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
 | Games and turns | `not_in_game`, `game_in_progress`, `game_starting`, `need_two_players`, `room_not_startable`, `prompt_not_ready`, `prompt_unavailable`, `hints_disabled`, `hint_spend_limit`, `hint_unavailable` |
 | Canvas | `drawer_only`, `canvas_stale_generation`, `canvas_sequence_committed`, `canvas_out_of_sequence`, `canvas_out_of_sync`, `nothing_to_undo` |
 | Votes and restarts | `spectators_cannot_vote`, `spectators_cannot_be_targets`, `invalid_vote_target`, `not_eligible`, `restart_vote_active`, `restart_vote_cooldown`, `no_restart_vote`, `restart_vote_closed` |
@@ -625,6 +625,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | --- | --- | --- | --- |
 | `create_room` | `CreateRoomPayload`, with an optional `requestId` a repeat is answered from (§2, #879) | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `join_room` | `JoinRoomPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
+| `quick_play` | `QuickPlayPayload` — one press into a room; answers the join acknowledgement plus `created` (#931) | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `leave_room` | `LeaveRoomPayload` `{roomId?}` — with it, leaves only that room, and does nothing if the socket sits somewhere else (#879) | — | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_room_preview` | `RoomPreviewPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_room_settings` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
@@ -737,15 +738,24 @@ join, and each one would say more about a stranger than the question needs.
 `join_room` takes `roomId` **or** `code` (at least one required; `code` is upper-cased),
 plus `nickname`, `nameColor`, `colorblindSafeColors`, `asSpectator`, `soft`,
 `reconnectOnly` — used by the invite screen to ask *"do I already hold a seat
-here?"* without seating a visitor who is still deciding whether to play or spectate — and
-`quickPlay`. **Quick play** (R-UX-14) picks its room from the lobby's list, which is a
-moment old, so `quickPlay: true` asks the server to seat the player only if the room is
-still **public and waiting with no game running**, and refuses with `room_not_open`
-otherwise. It is checked when the room is resolved and again immediately before the seat
-is added, with nothing awaited in between, because the host can start the game or make
-the room private while the joiner's identity is being resolved; a refused seat refunds the
-join allowance. `quickPlay` requires `roomId` and a player seat (`invalid_payload` with a
-`code` or `asSpectator`). An ordinary join still admits a game in progress.
+here?"* without seating a visitor who is still deciding whether to play or spectate. A
+join admits a game in progress; Quick play, below, does not.
+
+**`quick_play`** (R-UX-14, #931) is one command and one answer: `{nickname, nameColor,
+colorblindSafeColors, promptLanguage}` in, a seat out — the ordinary join acknowledgement
+plus `created`, which says whether the room was opened for it. The server picks the
+fullest **public** room that is **waiting with no game running**, plays in that language
+and has a seat free; failing that it opens one on its own defaults, public and in that
+language. The choice used to be the client's, from the lobby's room list: a `join_room`
+per candidate until one took the seat, so a press cost up to N+1 round trips, could not
+run until a list had arrived (ten seconds after naming a first-time visitor, whose naming
+reconnects the socket), and gave every presser in one moment a room of their own, because
+each read the same list. Openness is re-checked at the instant the seat is added, with
+nothing awaited in between; a room that filled or started meanwhile is the next
+candidate's turn rather than a refusal, and the entry deadline (§2) is what ends the
+picking. Callers who find nothing and open a room share the first one opened for their
+language, so twenty presses on an empty server fill three rooms rather than opening
+twenty.
 
 Both `create_room` and `join_room` **release any seat the socket already holds**: the
 room it came from sees an ordinary departure for it (a `left` cause on its `room_state`) and, if that was its last
@@ -2199,7 +2209,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (35) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (36) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

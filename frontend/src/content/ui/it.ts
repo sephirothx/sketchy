@@ -147,7 +147,6 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   not_in_room: "Non sei in questa stanza.",
   room_not_found: "Stanza non trovata.",
   room_ended: "Questa stanza è finita.",
-  room_not_open: "Quella stanza non è più aperta.",
   could_not_create_room: "Non è stato possibile creare la stanza.",
   no_session_to_resume: "Non c’è nessuna tua sessione da riprendere in questa stanza.",
   host_only: "Può farlo solo l’host.",

@@ -531,11 +531,6 @@
       "title": "Nickname",
       "type": "string"
      },
-     "quickPlay": {
-      "default": false,
-      "title": "Quickplay",
-      "type": "boolean"
-     },
      "reconnectOnly": {
       "default": false,
       "title": "Reconnectonly",
@@ -594,6 +589,47 @@
    "payload": {
     "additionalProperties": false,
     "properties": {},
+    "type": "object"
+   },
+   "silent": false
+  },
+  "quick_play": {
+   "commandClass": "action",
+   "payload": {
+    "additionalProperties": false,
+    "description": "One press from the lobby into a room (#931, R-UX-14).\n\nWho is pressing and what language their words are in - nothing about the\nroom. The server picks a public room that is waiting in that language, or\nopens one on the defaults above, so the rule and the room are in one place\nrather than mirrored in a client that decides from a list a moment old.",
+    "properties": {
+     "colorblindSafeColors": {
+      "default": false,
+      "title": "Colorblindsafecolors",
+      "type": "boolean"
+     },
+     "nameColor": {
+      "anyOf": [
+       {
+        "pattern": "^#[0-9a-fA-F]{6}$",
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Namecolor"
+     },
+     "nickname": {
+      "default": "Player",
+      "maxLength": 16,
+      "title": "Nickname",
+      "type": "string"
+     },
+     "promptLanguage": {
+      "default": "en",
+      "maxLength": 32,
+      "title": "Promptlanguage",
+      "type": "string"
+     }
+    },
     "type": "object"
    },
    "silent": false
@@ -2338,6 +2374,9 @@
   "handlers.rooms:_join_room": [
    "errorCode"
   ],
+  "handlers.rooms:_quick_play": [
+   "errorCode"
+  ],
   "handlers.rooms:_seat_in_room": [
    "errorCode"
   ],
@@ -2674,7 +2713,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 35,
+ "protocolVersion": 36,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -2702,7 +2741,6 @@
    "not_in_room",
    "room_not_found",
    "room_ended",
-   "room_not_open",
    "could_not_create_room",
    "no_session_to_resume",
    "host_only",
