@@ -110,7 +110,7 @@ MAX_PACKET_BYTES = 1024 * 1024
 #: for a socket without a bound and its writer drains the queue as fast as the
 #: peer reads; a peer that stops reading holds the writer on the transport's
 #: 64 KiB of slack and everything after that piles up in the queue - a full
-#: canvas sync at a time, for as long as it takes the ping timeout (~45 s) to
+#: canvas sync at a time, for as long as it takes the ping timeout (25-45 s) to
 #: notice. These two are the budget: the oldest queued packet's age, which a
 #: healthy socket keeps at milliseconds and a stalled one grows at the rate of
 #: the stall, and the bytes queued, the hard cap a burst of syncs cannot pass.
@@ -187,11 +187,37 @@ class _Window:
         self._hits.pop(key, None)
 
 
+# Engine.IO's own settings, written down rather than inherited (#887). #561
+# pinned the WebSocket layer for this reason and left the layer under it to
+# the library, where a version bump could move it and nothing would say so.
+# These are the values the app was tuned against; each is here with its
+# reason, and the wire protocol states them.
+#
+# A dead connection is noticed between the interval and interval + timeout -
+# 25 to 45 s. Deliberately longer than the seat's 30 s reconnect grace
+# (R-CONN-01): a phone that switches network keeps its seat, and a client
+# that knows sooner has its own liveness check (`session_ping`, R-CONN-12).
+ENGINEIO_PING_INTERVAL_SECONDS = 25
+ENGINEIO_PING_TIMEOUT_SECONDS = 20
+# Polling responses are compressed; a WebSocket has its own compression
+# (permessage-deflate, #875), so this is the long-polling transport's.
+ENGINEIO_HTTP_COMPRESSION = True
+ENGINEIO_COMPRESSION_THRESHOLD = 1024
+# A polling session is upgraded to WebSocket the moment one works. Pinned
+# because turning it off would be a silent, permanent fallback for everyone.
+ENGINEIO_ALLOW_UPGRADES = True
+
+
 class BoundedSocketServer(socketio.AsyncServer):
     """`socketio.AsyncServer` that refuses impossible inbound envelopes first."""
 
     def __init__(self, *args: Any, clock=time.monotonic, **kwargs: Any) -> None:
         kwargs.setdefault("max_http_buffer_size", MAX_PACKET_BYTES)
+        kwargs.setdefault("ping_interval", ENGINEIO_PING_INTERVAL_SECONDS)
+        kwargs.setdefault("ping_timeout", ENGINEIO_PING_TIMEOUT_SECONDS)
+        kwargs.setdefault("http_compression", ENGINEIO_HTTP_COMPRESSION)
+        kwargs.setdefault("compression_threshold", ENGINEIO_COMPRESSION_THRESHOLD)
+        kwargs.setdefault("allow_upgrades", ENGINEIO_ALLOW_UPGRADES)
         super().__init__(*args, **kwargs)
         self._clock = clock
         self._assembly_started: dict[str, float] = {}

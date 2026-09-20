@@ -415,6 +415,30 @@ socket.on("server_full", () => {
   serverFullListeners.forEach((listener) => listener(serverFullReason!));
 });
 
+/** The transport this session is on, or null before one is open. Read by the
+drawing cadence (#887): a flush on long-polling is an HTTP POST. */
+export function currentTransport(): string | null {
+  return socket.io?.engine?.transport?.name ?? null;
+}
+
+/** Subscribe to the transport changing: a new connection, or a polling
+session upgrading to WebSocket under it (#887). */
+export function onTransportChange(listener: (transport: string | null) => void): () => void {
+  const tell = () => listener(currentTransport());
+  const watchEngine = () => {
+    tell();
+    socket.io.engine?.on("upgrade", tell);
+  };
+  socket.on("connect", tell);
+  socket.io.on("open", watchEngine);
+  if (socket.connected) watchEngine();
+  return () => {
+    socket.off("connect", tell);
+    socket.io.off("open", watchEngine);
+    socket.io.engine?.off("upgrade", tell);
+  };
+}
+
 /** The reason this client was turned away, if it was. */
 export function currentServerFullReason(): string | null {
   return serverFullReason;

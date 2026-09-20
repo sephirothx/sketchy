@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.handlers.budgets import Budget
 
-CLIENT_CONFIG_CONTRACT_VERSION = 4
+CLIENT_CONFIG_CONTRACT_VERSION = 5
 
 
 def _compiled_drawing_budget() -> Budget:
@@ -51,6 +51,15 @@ class ClientConfig:
     # can be moved back from the admin panel while somebody watches.
     flush_interval_ms: int = 80
 
+    # The same, for a client that is on long-polling (#887). Every flush is
+    # an HTTP POST there, with 0.6-0.8 KB of headers and cookie on top of a
+    # frame that is base64'd into the body: at 80 ms a drawer spends about
+    # 25 KB/s on headers alone. Three times the interval is three times fewer
+    # POSTs, and the transport that pays it is already the one where ink
+    # arrives late - a viewer on it sees the hand up to 240 ms behind rather
+    # than 80. WebSocket sessions are untouched.
+    polling_flush_interval_ms: int = 240
+
     # Where the drawing budget in force is read from. Version 3 (#597) tells
     # the client the allowance its `draw` frames spend, so a client replaying
     # a stroke after a stall can pace itself under it instead of bursting into
@@ -74,6 +83,7 @@ class ClientConfig:
         return {
             "contractVersion": CLIENT_CONFIG_CONTRACT_VERSION,
             "flushIntervalMs": self.flush_interval_ms,
+            "pollingFlushIntervalMs": self.polling_flush_interval_ms,
             "drawingFramesPerWindow": budget.limit,
             "drawingWindowSeconds": budget.window_seconds,
             "afkInputWindowMs": self.afk_input_window_ms,

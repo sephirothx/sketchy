@@ -1963,6 +1963,9 @@ DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench_her
   GUEST_PROVISION_LIMIT=100000 GUEST_PROVISION_DAILY_LIMIT=100000 AUTH_REGISTER_LIMIT=100000 \
   AUTH_LOOKUP_LIMIT=100000 ./benchmarks/with_server.sh benchmarks/reconnect_herd.py --clients 400 --metrics-token x
 
+# Would a lower HTTP compression threshold pay on long-polling? (#887)
+backend/.venv/bin/python benchmarks/polling_compression.py fixtures/viewer_streams/gate-viewer-180s-869.jsonl
+
 # The watch_lobby answer: first time, resumed with chatSince, and a herd of 400 between ticks (#885)
 backend/.venv/bin/python benchmarks/lobby_baseline.py --online 100 400
 

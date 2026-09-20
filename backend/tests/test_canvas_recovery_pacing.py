@@ -26,8 +26,9 @@ def test_the_client_config_carries_the_live_drawing_allowance():
     policy = CommandBudgetPolicy()
     config = ClientConfig(drawing_budget=lambda: policy.for_command("draw"))
     assert config.payload() == {
-        "contractVersion": 4,
+        "contractVersion": 5,
         "flushIntervalMs": 80,
+        "pollingFlushIntervalMs": ClientConfig.polling_flush_interval_ms,
         "drawingFramesPerWindow": DRAWING.default.limit,
         "drawingWindowSeconds": DRAWING.default.window_seconds,
         "afkInputWindowMs": ClientConfig.afk_input_window_ms,

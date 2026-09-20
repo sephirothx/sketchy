@@ -1,4 +1,5 @@
-"""A browser whose WebSocket upgrades are blocked still plays, over polling (#601).
+"""A browser whose WebSocket upgrades are blocked still plays, over polling (#601),
+and draws at the cadence that transport is given (#887).
 
 The client lists both transports, and until #601 that was all it did: without
 `tryAllTransports` a blocked WebSocket was retried for ever against a polling
@@ -8,6 +9,10 @@ must still be on WebSocket. The guest joins, receives the drawer's stroke (a
 canvas history over the binary sync path, then live frames), and guesses.
 """
 from __future__ import annotations
+
+import asyncio
+import json
+import re
 
 from playwright.async_api import async_playwright
 
@@ -55,6 +60,21 @@ async def test_a_browser_that_cannot_open_websockets_plays_over_polling():
             "request",
             lambda request: polling.append(request.url) if "transport=polling" in request.url else None,
         )
+        # What the server tells a polling session to draw at (#887). It
+        # arrives in the handshake's own response, over polling.
+        configs: list = []
+
+        async def note_config(response) -> None:
+            if "transport=polling" not in response.url:
+                return
+            try:
+                body = await response.text()
+            except Exception:
+                return
+            if "client_config" in body:
+                configs.append(body)
+
+        guest.on("response", lambda response: asyncio.ensure_future(note_config(response)))
         host_sockets = []
         host.on("websocket", lambda ws: host_sockets.append(ws.url))
 
@@ -76,6 +96,13 @@ async def test_a_browser_that_cannot_open_websockets_plays_over_polling():
             await guest.wait_for_selector('[data-testid="waiting-room"]', timeout=45_000)
             assert blocked, "the guest's WebSocket was never even attempted"
             assert polling, "the guest did not fall back to polling"
+            # The cadence a polling drawer flushes at: three times the
+            # WebSocket one, because every flush there is an HTTP POST with
+            # more header than frame (#887).
+            assert configs, "the polling session was never told its cadences"
+            told = json.loads(re.search(r'\["client_config",(\{.*?\})\]', configs[-1]).group(1))
+            assert told["pollingFlushIntervalMs"] == 240, told
+            assert told["flushIntervalMs"] == 80, told
 
             await host.wait_for_selector(".waiting-start-button:not([disabled])")
             await host.click(".waiting-start-button")

@@ -21,7 +21,8 @@ import {
   renderCanvasActions,
 } from "./canvasRenderer.ts";
 import type { LiveDrawingPacket } from "./liveDrawing.ts";
-import { currentClientConfig } from "./clientConfig.ts";
+import { flushIntervalFor } from "./clientConfig.ts";
+import { currentTransport } from "./socket.ts";
 import { finalWidth, rampedBatch } from "./pathWidths.ts";
 import { createStrokePlayback } from "./strokePlayback.ts";
 import type { CanvasSurface } from "./canvasSurface.ts";
@@ -52,7 +53,7 @@ export function createProtocolRenderer(
   // called. Everything that is not a run of points is a barrier in the same
   // queue, so nothing is painted out of order.
   const playback = createStrokePlayback({
-    intervalMs: () => currentClientConfig().flushIntervalMs,
+    intervalMs: () => flushIntervalFor(currentTransport()),
     // Spans of the received segments rather than the interpolated polyline,
     // so a stroke played out a frame at a time ends as the pixels the drawer
     // and every replay have (#940).

@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
+import { flushIntervalFor } from "../lib/clientConfig";
+import { useClientConfig, useTransport } from "./useClientConfig";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import {
@@ -34,7 +36,6 @@ import {
 import { PenStroke, type PaintRun } from "../lib/penStroke";
 import { createPointThinner, type PointThinner, type ThinnedPoint } from "../lib/pointThinning";
 import { QUIET_FRAME_SHARE, createWidthThinner, widthTolerance, type WidthThinner } from "../lib/widthKeyframes";
-import { useClientConfig } from "./useClientConfig";
 import type { CanvasProtocol } from "./useCanvasProtocol";
 import type { DrawTool, StrokeFillPayload, StrokePoint } from "../types";
 
@@ -87,7 +88,11 @@ export function useCanvasPointerInput(
   const strokeAvailable = useCanvasBudgetStore((state) => unbudgeted || state.strokeAvailable);
   // Server-decided, so a deployment can tune the trade between bandwidth and
   // how smooth a stroke looks to everyone who is not drawing it.
-  const { flushIntervalMs } = useClientConfig();
+  const config = useClientConfig();
+  // The transport decides which of the two cadences applies (#887); it can
+  // change under a session, when a polling one is upgraded.
+  const transport = useTransport();
+  const flushIntervalMs = flushIntervalFor(transport, config);
 
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);

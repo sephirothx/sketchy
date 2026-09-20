@@ -16,8 +16,8 @@ draw frames, chat, a client-config notice and an Engine.IO pong all prove
 the transport is alive and nothing about the seat - the phase, the round or
 the binding may be stale under a healthy stream of drawing - which is why a
 "silence only" rule was refused in the issue. And whatever the events say, a
-probe is forced at least every `MAX_GAP_MS`: the transport's own ping
-timeout is 20 s, and a silent one-way failure has to be noticed before it.
+probe is forced at least every `MAX_GAP_MS`: the transport itself
+notices nothing for 25-45 s (its ping interval plus timeout, #887), and a silent one-way failure has to be noticed before it.
 
 A reply is judged against the state the seat holds *when it lands*, not the
 one it held when the probe left: the two can differ across a turn change,

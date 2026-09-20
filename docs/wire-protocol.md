@@ -29,6 +29,8 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Scheme | Production is HTTPS only (#467): a handshake over plain `ws:` is closed before it is accepted (uvicorn answers 403), and a plain HTTP request is redirected with 308 to `PUBLIC_BASE_URL`; only `/api/health`, `/api/ready` and `/metrics` answer plain. A `Content-Security-Policy` on every response names `wss://` and `ws://` of the serving host beside `'self'` in `connect-src`, for browsers predating CSP 3 |
 | REST base | `/api`, relative to whatever origin served the page |
 | Default ack timeout | 8000 ms (`DEFAULT_ACK_TIMEOUT_MS`) |
+| Engine.IO | Pinned in [`socket_server.py`](../backend/app/socket_server.py) rather than inherited (#887), the way #561 pinned the layer above it: `ping_interval` **25 s**, `ping_timeout` **20 s**, `http_compression` **on** above a `compression_threshold` of **1024 B**, `allow_upgrades` **on**. So a connection that has gone silent is noticed between 25 and 45 s — the server sends a ping every 25 s and closes 20 s after one goes unanswered. That is deliberately *longer* than the seat's 30 s reconnect grace (R-CONN-01), because a phone that changes network should come back to its seat; a client that needs to know sooner has `session_ping` (R-CONN-12, every 5 s, forced every 15 s). The threshold is the polling transport's — a WebSocket has its own compression, above — and stays at 1024 B: measured over a captured gate stream, the responses are either tiny (median 97 B) or already past it, so lowering it to 256 B compresses nothing extra, and 128 B saves 149 B in three minutes while making one response bigger (`benchmarks/polling_compression.py`) |
+| Drawing cadence by transport | `flushIntervalMs` **80 ms** on a WebSocket, `pollingFlushIntervalMs` **240 ms** on long-polling (`client_config` version 5, #887). Every flush on polling is an HTTP POST carrying 0.6–0.8 KB of headers and cookie around a base64'd frame: at 80 ms that is ~25 KB/s of header alone, and a third as many POSTs costs a viewer on that transport ink up to 240 ms behind the hand instead of 80 ms. A polling session upgraded to WebSocket mid-session picks the faster cadence up with it |
 | WebSocket implementation | **wsproto**, named by [`backend/app/server.py`](../backend/app/server.py) through [`backend/app/ws_transport.py`](../backend/app/ws_transport.py) and pinned in `requirements.txt` — never uvicorn's `auto`, which picked by what happened to be installed (#561) |
 | Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket: zlib level 6, memLevel 8, a **15-bit (32 KB) server window** the server states in its response whether or not the browser asked (`SERVER_MAX_WINDOW_BITS`); each accepted connection is counted under what it actually negotiated (`sketchy_socket_transport_total{compression}`) |
 
@@ -404,7 +406,7 @@ authorization or mutation runs. A parser may name a more specific code.
   the last interval and agrees with the phase and round it holds; nothing else counts
   (a draw frame, a chat line, a config notice or an Engine.IO pong proves the transport,
   not the seat), and a probe is forced at least every 15 s so a silent one-way failure
-  is noticed before the transport's 20 s ping timeout (#564,
+  is noticed before the transport would notice it at all (25-45 s, §1) (#564,
   [`frontend/src/lib/heartbeatSchedule.ts`](../frontend/src/lib/heartbeatSchedule.ts)).
   A reply is judged against the seat as it is when the reply lands, and only from the
   socket, room and seat the probe was sent on: an answer older than a turn change that
@@ -613,7 +615,7 @@ Shared bounds:
 The other direction has a door too (#602). Engine.IO queues every packet for a socket
 without a bound and drains the queue as fast as the peer reads; a peer that cannot keep
 up holds the writer on the transport's slack and everything after that piles up — a
-full canvas sync at a time — for as long as it takes the ping timeout (~45 s) to notice.
+full canvas sync at a time — for as long as it takes the ping timeout (25–45 s, §1) to notice.
 [`backend/app/socket_server.py`](../backend/app/socket_server.py) accounts for every
 packet at `send_packet`, trimmed to what the socket's queue still holds, and closes the
 socket past either bound:
@@ -2252,7 +2254,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (37) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (38) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
