@@ -149,6 +149,13 @@ socket.on("connect", () => {
   restoreOrdinaryBackoff();
 });
 
+// Whether a handshake is under way right now, from the events both ends of one
+// emit. Only used to keep the network-return handler from interrupting it.
+let attemptInFlight = false;
+socket.io.on("reconnect_attempt", () => { attemptInFlight = true; });
+socket.on("connect", () => { attemptInFlight = false; });
+socket.on("connect_error", () => { attemptInFlight = false; });
+
 // The network came back, or the page came out of the back/forward cache
 // (#886). Either way the backoff this connection was waiting out describes a
 // network that no longer exists: try now rather than in up to ten seconds.
@@ -160,15 +167,19 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
       connected: socket.connected,
       updateRequired: isUpdateRequired(),
       restartExpected: restart.restartExpected(),
+      attemptInFlight,
     };
     if (!shouldReconnectImmediately(now)) return;
     restoreOrdinaryBackoff();
-    // Through a close, not a bare `connect()`: the manager is usually already
-    // waiting out a backoff by now, and opening a second attempt beside its
-    // pending one leaves two handshakes racing - measured, the seat that won
-    // was not the one the page was using, and the next command was never
-    // answered. `disconnect()` cancels the pending retry, and `connect()`
-    // starts one attempt.
+    // Through a close, because a bare `connect()` here does nothing at all:
+    // `Socket.connect()` skips `Manager.open()` while the manager is
+    // reconnecting, and `open()` returns early while an attempt is in flight -
+    // between them that is every state a waiting client is in, so the handler
+    // was a no-op and the whole point of it (#886: connect now rather than in
+    // up to ten seconds) never fired. `disconnect()` cancels the pending retry
+    // and its backoff; `connect()` then opens one attempt immediately. The
+    // guard above is what keeps that close from aborting a handshake that is
+    // already under way.
     socket.disconnect();
     socket.connect();
   };

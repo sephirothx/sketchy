@@ -202,11 +202,23 @@ network that is no longer the one in front of it. Except during a planned
 restart, where the hold this client drew is the whole point of the spread
 (R-CONN-14) - a device waking mid-deploy must not turn it into everybody at
 once - and except on a tab that has been told to reload, whose socket is
-down for good. */
+down for good.
+
+And except while an attempt is already in flight. Reopening means closing
+first (`socket.ts` says why), and closing aborts a handshake that is already
+under way - so on an interface that flaps, every `online` would restart the
+attempt and none would ever finish. Waiting out an attempt costs at most one
+connection timeout; interrupting them costs all of them. */
 export function shouldReconnectImmediately(state: {
   connected: boolean;
   updateRequired: boolean;
   restartExpected: boolean;
+  attemptInFlight?: boolean;
 }): boolean {
-  return !state.connected && !state.updateRequired && !state.restartExpected;
+  return (
+    !state.connected
+    && !state.updateRequired
+    && !state.restartExpected
+    && !state.attemptInFlight
+  );
 }

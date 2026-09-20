@@ -170,16 +170,15 @@ test("a server that names no polling cadence leaves the client on the default", 
   assert.equal(config.pollingFlushIntervalMs, DEFAULT_CLIENT_CONFIG.pollingFlushIntervalMs);
 });
 
-test("the polling cadence is the drawer's own, never a viewer's playback (#887)", async () => {
-  // A batch is played out over the interval that produced it. Nothing on the
-  // wire says what the drawer flushed at, so playback assumes the baseline:
-  // a viewer on polling that stretched an 80 ms batch over 240 ms would pass
-  // MAX_LAG_MS on the very next frame and compress every batch into a crawl
-  // and a snap. Only the hand that draws picks a cadence by its transport.
+test("a transport picks a cadence for the hand that draws, never for a viewer (#887)", async () => {
+  // Only the drawer's own flush is chosen by its own transport. A viewer
+  // paces playback by the interval that produced the batch, which the server
+  // states (`drawerFlushIntervalMs`) and the renderer takes as an argument -
+  // reaching for a local answer here is how the wrong party's transport got
+  // used. See `drawerCadence.test.mjs` for what each mismatch looks like.
   const { readFile } = await import("node:fs/promises");
   const renderer = await readFile(new URL("../src/lib/protocolRenderer.ts", import.meta.url), "utf8");
-  assert.match(renderer, /intervalMs: \(\) => currentClientConfig\(\)\.flushIntervalMs/);
-  assert.doesNotMatch(renderer, /flushIntervalFor|currentTransport/);
+  assert.doesNotMatch(renderer, /flushIntervalFor|currentTransport|currentClientConfig/);
 
   const pointer = await readFile(new URL("../src/hooks/useCanvasPointerInput.ts", import.meta.url), "utf8");
   assert.match(pointer, /flushIntervalFor\(transport, config\)/, "the drawer's own flush is by transport");

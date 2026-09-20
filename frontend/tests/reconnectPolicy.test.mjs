@@ -129,4 +129,31 @@ test("a network coming back connects now - unless a restart's hold is still runn
     false,
     "a device waking mid-deploy must not jump the spread",
   );
+  assert.equal(
+    shouldReconnectImmediately({ ...state, attemptInFlight: true }),
+    false,
+    "reopening closes first, and closing would abort the handshake under way",
+  );
+});
+
+test("a flapping interface does not interrupt the handshake it keeps asking for", () => {
+  // Wi-Fi that drops and returns fires `online` each time. Reopening means
+  // `disconnect()` then `connect()` - the close is what cancels the pending
+  // retry - so without the in-flight guard each event would abort the attempt
+  // the one before it started, and none would ever finish.
+  let inFlight = false;
+  let opened = 0;
+  const bounce = () => {
+    if (!shouldReconnectImmediately({
+      connected: false, updateRequired: false, restartExpected: false,
+      attemptInFlight: inFlight,
+    })) return;
+    opened += 1;
+    inFlight = true;
+  };
+
+  bounce();
+  bounce();
+  bounce();
+  assert.equal(opened, 1, "three `online` events, one attempt");
 });

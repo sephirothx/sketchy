@@ -21,13 +21,19 @@ import {
   renderCanvasActions,
 } from "./canvasRenderer.ts";
 import type { LiveDrawingPacket } from "./liveDrawing.ts";
-import { currentClientConfig } from "./clientConfig.ts";
 import { finalWidth, rampedBatch } from "./pathWidths.ts";
 import { createStrokePlayback } from "./strokePlayback.ts";
 import type { CanvasSurface } from "./canvasSurface.ts";
 
 export function createProtocolRenderer(
   surfaceRef: RefObject<CanvasSurface | null>,
+  // The cadence the *sender* of these frames is flushing at. Required, and
+  // injected rather than read here: which one applies is a fact about the
+  // drawing seat, not about this module, and reaching for a default is how
+  // the wrong party's transport got used in the first place. It keeps the
+  // module free of the socket and the store too, which is what lets
+  // `node:test` load it.
+  intervalMs: () => number,
   // Where the hidden-tab listener goes. Passed in so a test can count what a
   // mount adds and its unsubscribe takes back (#886); the component passes
   // none and it goes on the document, as it always has.
@@ -52,15 +58,15 @@ export function createProtocolRenderer(
   // called. Everything that is not a run of points is a barrier in the same
   // queue, so nothing is painted out of order.
   const playback = createStrokePlayback({
-    // The cadence the *sender* batched at, which is the baseline one - never
-    // this client's transport (#887). A batch is played out over the interval
-    // that produced it, and a viewer on long-polling receiving an 80 ms batch
-    // would otherwise schedule it over 240 ms, past `MAX_LAG_MS` on the next
-    // frame, and compress every batch into a crawl and a snap. Nothing on the
-    // wire says what the drawer flushed at, so the baseline is the
-    // assumption; a drawer on polling is the rarer case and plays fast rather
-    // than stuttering.
-    intervalMs: () => currentClientConfig().flushIntervalMs,
+    // The cadence the *sender* batched at, never this client's transport: a
+    // batch has to be played out over the interval that produced it, or the
+    // schedule is wrong in one direction or the other (#887). The server says
+    // which the drawing seat is using (`drawerFlushIntervalMs`), because
+    // nothing on the wire itself does; without it a viewer paced an 80 ms
+    // batch over 240 ms - past `MAX_LAG_MS` on the next frame, so every batch
+    // became a crawl and a snap - or a 240 ms batch over 80, which is the
+    // stepping #559 removed.
+    intervalMs,
     // Spans of the received segments rather than the interpolated polyline,
     // so a stroke played out a frame at a time ends as the pixels the drawer
     // and every replay have (#940).

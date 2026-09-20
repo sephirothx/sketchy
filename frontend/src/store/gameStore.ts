@@ -60,6 +60,10 @@ interface GameStore {
   phase: GamePhase;
   drawerId: string | null;
   maskedPrompt: string;
+  /** The cadence the drawing seat is flushing at, as the server stated it for
+  this turn, or null until one does. What playback schedules each received
+  batch over (R-DRAW-01). */
+  drawerFlushIntervalMs: number | null;
   myPrompt: string | null;
   guessedPrompt: string | null;
   promptChoices: string[];
@@ -133,6 +137,10 @@ interface GameStore {
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
     maxHintSpend?: number;
+    /** The cadence the drawing seat is flushing at, which decides how this
+        client paces playback of its batches (R-DRAW-01). Absent only from a
+        server older than the field. */
+    drawerFlushIntervalMs?: number | null;
     /** On a sync: who has already guessed, with the server's seconds into the
         drawing, and this seat's own receipt if it is one of them (#870). */
     correctGuessers?: [string, number][];
@@ -183,6 +191,7 @@ const initialGameFields = {
   phase: "idle" as GamePhase,
   drawerId: null as string | null,
   maskedPrompt: "",
+  drawerFlushIntervalMs: null as number | null,
   myPrompt: null as string | null,
   guessedPrompt: null as string | null,
   promptChoices: [] as string[],
@@ -336,9 +345,13 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: seconds,
     }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions, correctGuessers, guessed }) =>
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions, correctGuessers, guessed, drawerFlushIntervalMs }) =>
     set((s) => ({
       phase: "drawing",
+      // Null until a turn says otherwise, and back to null between turns: the
+      // renderer falls back to the baseline, which is what it assumed before
+      // the server started saying (#887).
+      drawerFlushIntervalMs: drawerFlushIntervalMs ?? null,
       currentTurnId: turnId ?? s.currentTurnId,
       drawingReactions:
         turnId && reactions
