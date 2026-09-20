@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from app.handlers.budgets import Budget
 
-CLIENT_CONFIG_CONTRACT_VERSION = 4
+CLIENT_CONFIG_CONTRACT_VERSION = 5
 
 
 def _compiled_drawing_budget() -> Budget:
@@ -51,6 +51,15 @@ class ClientConfig:
     # can be moved back from the admin panel while somebody watches.
     flush_interval_ms: int = 80
 
+    # The same, for a client that is on long-polling (#887). Every flush is
+    # an HTTP POST there, with 0.6-0.8 KB of headers and cookie on top of a
+    # frame that is base64'd into the body: at 80 ms a drawer spends about
+    # 25 KB/s on headers alone. Three times the interval is three times fewer
+    # POSTs, and the transport that pays it is already the one where ink
+    # arrives late - a viewer on it sees the hand up to 240 ms behind rather
+    # than 80. WebSocket sessions are untouched.
+    polling_flush_interval_ms: int = 240
+
     # Where the drawing budget in force is read from. Version 3 (#597) tells
     # the client the allowance its `draw` frames spend, so a client replaying
     # a stroke after a stall can pace itself under it instead of bursting into
@@ -68,12 +77,25 @@ class ClientConfig:
     # left a minute ago. Shipped, so it can be moved while somebody watches.
     afk_input_window_ms: int = 60_000
 
+    def flush_interval_for(self, transport: str | None) -> int:
+        """The cadence a drawer on *transport* flushes at.
+
+        Mirrored by `flushIntervalFor` in `clientConfig.ts`. A drawer picks its
+        own by its own transport; the room is told which one it picked, so a
+        viewer plays each batch out over the interval that actually produced
+        it (R-DRAW-01) rather than over its own transport's.
+        """
+        if transport == "polling":
+            return self.polling_flush_interval_ms
+        return self.flush_interval_ms
+
     def payload(self) -> dict:
         """The `client_config` notice, in the names the client reads."""
         budget = self.drawing_budget()
         return {
             "contractVersion": CLIENT_CONFIG_CONTRACT_VERSION,
             "flushIntervalMs": self.flush_interval_ms,
+            "pollingFlushIntervalMs": self.polling_flush_interval_ms,
             "drawingFramesPerWindow": budget.limit,
             "drawingWindowSeconds": budget.window_seconds,
             "afkInputWindowMs": self.afk_input_window_ms,

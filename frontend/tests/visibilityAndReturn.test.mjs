@@ -28,7 +28,7 @@ test("ten canvas mounts leave no listeners behind (#886)", () => {
   const surfaceRef = { current: null };
 
   for (let mount = 0; mount < 10; mount += 1) {
-    const renderer = createProtocolRenderer(surfaceRef, target);
+    const renderer = createProtocolRenderer(surfaceRef, () => 80, target);
     const stop = renderer.watchHidden();
     assert.equal(target.total(), 1, "a mount watches for the tab being hidden");
     stop();
@@ -42,7 +42,7 @@ test("a StrictMode remount watches again with the renderer it kept", () => {
   // listener taken once per renderer would be gone for good after the first
   // cleanup - the canvas would stop draining while hidden.
   const target = listenerCount();
-  const renderer = createProtocolRenderer({ current: null }, target);
+  const renderer = createProtocolRenderer({ current: null }, () => 80, target);
 
   const first = renderer.watchHidden();
   first();
@@ -57,7 +57,7 @@ test("a StrictMode remount watches again with the renderer it kept", () => {
 
 test("a renderer disposed twice, or unsubscribed twice, is not a problem", () => {
   const target = listenerCount();
-  const renderer = createProtocolRenderer({ current: null }, target);
+  const renderer = createProtocolRenderer({ current: null }, () => 80, target);
   const stop = renderer.watchHidden();
   stop();
   stop();

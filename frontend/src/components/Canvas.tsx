@@ -19,6 +19,8 @@ import {
   CANVAS_WIDTH,
 } from "../lib/canvasHistory";
 import { useSettingsStore } from "../store/settingsStore";
+import { useGameStore } from "../store/gameStore";
+import { currentClientConfig } from "../lib/clientConfig";
 import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { createCanvasSurface, createLayerSurface, type CanvasSurface, type LayerSurface } from "../lib/canvasSurface";
@@ -51,7 +53,11 @@ export interface CanvasRef {
 function createCanvas(
   useProtocol: (renderer: CanvasProtocolRenderer) => CanvasProtocol,
   region: RenderRegion,
-  unbudgeted: boolean,
+  // Nothing this canvas draws leaves the tab (`useCanvasPointerInput`).
+  local: boolean,
+  // The cadence whoever produced these frames is flushing at, which is what
+  // playback schedules a batch over (R-DRAW-01).
+  senderIntervalMs: () => number,
 ) {
   return forwardRef<CanvasRef, CanvasProps>(function Canvas(
     {
@@ -92,7 +98,7 @@ function createCanvas(
     }, []);
 
     const renderer = useMemo(
-      () => createProtocolRenderer(surfaceRef),
+      () => createProtocolRenderer(surfaceRef, senderIntervalMs),
       [],
     );
     // What the renderer holds lives outside React, so React has to let it go
@@ -114,7 +120,7 @@ function createCanvas(
       surfaceRef,
       previewSurfaceRef,
       previewContextRef,
-      { isDrawer, color, brushWidth, tool, brushCursor, penPressure, unbudgeted },
+      { isDrawer, color, brushWidth, tool, brushCursor, penPressure, local },
     );
 
     useImperativeHandle(ref, () => ({
@@ -151,7 +157,21 @@ function createCanvas(
   });
 }
 
-export const Canvas = memo(createCanvas(useCanvasProtocol, "canvas", false));
+/** The drawing seat's cadence, as the server most recently stated it, or the
+baseline until a turn does. A getter rather than a subscription: playback reads
+it when it schedules a batch, and a turn that changes it has already re-sent
+`turn_started` by then. */
+const drawerInterval = () =>
+  useGameStore.getState().drawerFlushIntervalMs ?? currentClientConfig().flushIntervalMs;
 
-/** The scratch pad's canvas: nothing it draws leaves the tab. */
-export const ScratchPadCanvas = memo(createCanvas(useScratchPadProtocol, "scratchPad", true));
+export const Canvas = memo(createCanvas(useCanvasProtocol, "canvas", false, drawerInterval));
+
+/** The scratch pad's canvas: nothing it draws leaves the tab, so its sender is
+this client and the baseline is what `useCanvasPointerInput` flushes it at. It
+never pays the polling cadence: that cadence buys bytes on a transport the pad
+does not use (#829). */
+const padInterval = () => currentClientConfig().flushIntervalMs;
+
+export const ScratchPadCanvas = memo(
+  createCanvas(useScratchPadProtocol, "scratchPad", true, padInterval),
+);

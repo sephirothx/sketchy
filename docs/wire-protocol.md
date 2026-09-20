@@ -29,6 +29,8 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Scheme | Production is HTTPS only (#467): a handshake over plain `ws:` is closed before it is accepted (uvicorn answers 403), and a plain HTTP request is redirected with 308 to `PUBLIC_BASE_URL`; only `/api/health`, `/api/ready` and `/metrics` answer plain. A `Content-Security-Policy` on every response names `wss://` and `ws://` of the serving host beside `'self'` in `connect-src`, for browsers predating CSP 3 |
 | REST base | `/api`, relative to whatever origin served the page |
 | Default ack timeout | 8000 ms (`DEFAULT_ACK_TIMEOUT_MS`) |
+| Engine.IO | Pinned in [`socket_server.py`](../backend/app/socket_server.py) rather than inherited (#887), the way #561 pinned the layer above it: `ping_interval` **25 s**, `ping_timeout` **20 s**, `http_compression` **on** above a `compression_threshold` of **1024 B**, `allow_upgrades` **on**. So a silent socket is closed **45 s after its last pong** — the ping is not a cycle of its own: Engine.IO schedules the next one when a pong arrives, sends it 25 s later, and closes 20 s after it goes unanswered, which is also what both read loops time out at. Measured from the moment the client actually went quiet that is **20–45 s**, floored by the *timeout*, since it may have died anywhere inside the interval it was waiting out. The 45 s is deliberately *longer* than the seat's 30 s reconnect grace (R-CONN-01): a phone that changes network is usually back in its seat before the server has noticed the old socket at all, so the seat is never released. A client that needs to know sooner has `session_ping` (R-CONN-12, every 5 s, forced every 15 s). The threshold is the polling transport's — a WebSocket has its own compression, above — and stays at 1024 B: measured over a captured gate stream, the responses are either tiny (median 97 B) or already past it, so lowering it to 256 B compresses nothing extra, and 128 B saves 149 B in three minutes while making one response bigger (`benchmarks/polling_compression.py`) |
+| Drawing cadence by transport | `flushIntervalMs` **80 ms** on a WebSocket, `pollingFlushIntervalMs` **240 ms** on long-polling (`client_config` version 5, #887). Every flush on polling is an HTTP POST carrying 0.6–0.8 KB of headers and cookie around a base64'd frame: at 80 ms that is ~25 KB/s of header alone, and a third as many POSTs costs a viewer on that transport ink up to 240 ms behind the hand instead of 80 ms. A polling session upgraded to WebSocket mid-session picks the faster cadence up with it. Both are administrator-settable (`client.flush_interval_ms` 10–200 ms, `client.polling_flush_interval_ms` 10–1000 ms, R-CONF-01), and the drawing budget is checked against whichever of the two is shorter, since the budget is per caller rather than per transport (§ Command budgets). It is the **drawer's** transport that picks the cadence, never the viewer's: a batch is played out over the interval that produced it (§6), and since nothing on the wire says what the sender flushed at, the server says it — `drawerFlushIntervalMs`, on `turn_started` and on `sync_game`, read from the drawing seat's own socket. Either mismatch is visible: an 80 ms batch stretched over 240 ms passes the lag budget on the next frame and becomes a crawl and a snap, and a 240 ms batch paced at 80 ms leaves the canvas still for the other 160 — the stepping #559 removed. A drawer that upgrades from polling mid-turn leaves the value stale until the next turn, which is the forgiving direction rather than a free one: measured at a 16 ms frame rate, 80% of frames advance the ink against 97% matched, and 33% the other way round |
 | WebSocket implementation | **wsproto**, named by [`backend/app/server.py`](../backend/app/server.py) through [`backend/app/ws_transport.py`](../backend/app/ws_transport.py) and pinned in `requirements.txt` — never uvicorn's `auto`, which picked by what happened to be installed (#561) |
 | Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket: zlib level 6, memLevel 8, a **15-bit (32 KB) server window** the server states in its response whether or not the browser asked (`SERVER_MAX_WINDOW_BITS`); each accepted connection is counted under what it actually negotiated (`sketchy_socket_transport_total{compression}`) |
 
@@ -201,9 +203,17 @@ returns ([`hooks/useLobbyChannel.ts`](../frontend/src/hooks/useLobbyChannel.ts),
   it used to cost a `join_room` and a `sync_game` per seat per return.
 - **`online`, and a `pageshow` from the back/forward cache, connect at once**,
   resetting the backoff: the delay it was waiting out describes a network that
-  is no longer the one in front of it. Not during a planned restart, where the
-  hold this client drew is the point (R-CONN-14) - a device waking mid-deploy
-  must not turn the spread back into everybody at once.
+  is no longer the one in front of it. Through a close and a fresh connect,
+  never a bare one: `Socket.connect()` skips the manager's `open()` while it is
+  reconnecting, and `open()` returns early while an attempt is in flight, which
+  between them is every state a waiting client is in — so a bare call opens
+  nothing and the handler never fires at all. Closing first cancels the pending
+  retry and its backoff, and the connect that follows opens one attempt now.
+  Not while an attempt is already under way, since that close would abort it
+  and an interface that flaps would restart the handshake it keeps
+  interrupting; and not during a planned restart, where the hold this client
+  drew is the point (R-CONN-14) - a device waking mid-deploy must not turn the
+  spread back into everybody at once.
 
 ### Reconnection
 
@@ -404,7 +414,7 @@ authorization or mutation runs. A parser may name a more specific code.
   the last interval and agrees with the phase and round it holds; nothing else counts
   (a draw frame, a chat line, a config notice or an Engine.IO pong proves the transport,
   not the seat), and a probe is forced at least every 15 s so a silent one-way failure
-  is noticed before the transport's 20 s ping timeout (#564,
+  is noticed before the transport would notice it at all (20–45 s, §1) (#564,
   [`frontend/src/lib/heartbeatSchedule.ts`](../frontend/src/lib/heartbeatSchedule.ts)).
   A reply is judged against the seat as it is when the reply lands, and only from the
   socket, room and seat the probe was sent on: an answer older than a turn change that
@@ -428,8 +438,10 @@ next command. The windows are **sliding**: each hit is timestamped and a command
 refused when the window ending now already holds the budget's worth, so an allowance
 never resets at a boundary a burst could straddle
 ([`handlers/budgets.py`](../backend/app/handlers/budgets.py)). The drawing budget is additionally bound to
-`client.flush_interval_ms` below, since the interval decides how many frames a
-legitimate drawer produces and the budget decides how many are accepted.
+the client's flush intervals, since the interval decides how many frames a
+legitimate drawer produces and the budget decides how many are accepted — to
+whichever of `client.flush_interval_ms` and `client.polling_flush_interval_ms` (§1) is
+shorter, because one caller's budget has to admit either transport.
 
 | Kind | Commands | Budget |
 | --- | --- | --- |
@@ -613,7 +625,7 @@ Shared bounds:
 The other direction has a door too (#602). Engine.IO queues every packet for a socket
 without a bound and drains the queue as fast as the peer reads; a peer that cannot keep
 up holds the writer on the transport's slack and everything after that piles up — a
-full canvas sync at a time — for as long as it takes the ping timeout (~45 s) to notice.
+full canvas sync at a time — for as long as it takes the ping timeout (up to 45 s after the last pong, §1) to notice.
 [`backend/app/socket_server.py`](../backend/app/socket_server.py) accounts for every
 packet at `send_packet`, trimmed to what the socket's queue still holds, and closes the
 socket past either bound:
@@ -853,8 +865,8 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `turn_starting` | `{drawerId, drawerNickname, drawerNameColor, roundNumber, totalRounds, seconds, canvas: [revision, generation, sequence, historyHash], gameStarted?: true}` — the turn's new canvas identity, and on a game's first turn the fact that it started: one message where `canvas_reset` and `game_started` used to precede it (#880). A restart says so in its own announcement | room |
 | `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
-| `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend}` | **per socket** |
-| `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `correctGuessers: [[playerId, seconds]]` in guessing order, and `guessed` — this seat's correct-guess receipt (what a correct `guess` is answered with, §2), or `null` (R-CONN-13) | one socket |
+| `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, drawerFlushIntervalMs}` — the last being the cadence the drawing seat flushes at, which is what this socket paces its playback of the drawer's batches by (§1, R-DRAW-01) | **per socket** |
+| `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `drawerFlushIntervalMs` (§1), `correctGuessers: [[playerId, seconds]]` in guessing order, and `guessed` — this seat's correct-guess receipt (what a correct `guess` is answered with, §2), or `null` (R-CONN-13) | one socket |
 | `turn_ended` | `TurnEndedPayload` | room |
 | `game_ended` | `{scores, highlights, drawings}` — each drawing carrying `turnId` and its `reactions[]` | room |
 | `last_game` | the same `{scores, highlights, drawings}`, for a socket that joined or rejoined the waiting room after `game_ended` (#871) — the recap without the end-of-game moment | one socket |
@@ -2252,7 +2264,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (37) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (39) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

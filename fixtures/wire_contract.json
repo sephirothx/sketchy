@@ -2250,7 +2250,8 @@
    "contractVersion",
    "drawingFramesPerWindow",
    "drawingWindowSeconds",
-   "flushIntervalMs"
+   "flushIntervalMs",
+   "pollingFlushIntervalMs"
   ],
   "game:rule_snapshot": [
    "allowedColors",
@@ -2450,6 +2451,7 @@
   ],
   "presenters:turn_payload": [
    "correctGuessers",
+   "drawerFlushIntervalMs",
    "drawerId",
    "hintCost",
    "hintSpend",
@@ -2549,6 +2551,7 @@
    "totalBytes"
   ],
   "services.game_flow:_begin_drawing": [
+   "drawerFlushIntervalMs",
    "drawerId",
    "hintCost",
    "hintSpend",
@@ -2715,7 +2718,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 37,
+ "protocolVersion": 39,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -2909,7 +2912,7 @@
  },
  "versions": {
   "CANVAS_HISTORY_VERSION": 1,
-  "CLIENT_CONFIG_CONTRACT_VERSION": 4,
+  "CLIENT_CONFIG_CONTRACT_VERSION": 5,
   "LIVE_DRAWING_VERSION": 1,
   "PAUSE_NOTICE_CONTRACT_VERSION": 1,
   "SHUTDOWN_NOTICE_CONTRACT_VERSION": 1

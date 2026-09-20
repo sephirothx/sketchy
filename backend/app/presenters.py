@@ -74,10 +74,16 @@ def turn_payload(
     player: Player | None = None,
     spectators_see_prompt: bool = False,
     reactions: list[dict] | None = None,
+    drawer_flush_interval_ms: int | None = None,
 ) -> dict:
     player_id = player.id if player else None
     return {
         "phase": game.phase.value,
+        # What the drawing seat flushes at, so this socket plays each batch
+        # out over the interval that produced it rather than its own
+        # transport's (R-DRAW-01). Passed in: this module does no I/O and the
+        # drawer's transport is a socket fact.
+        "drawerFlushIntervalMs": drawer_flush_interval_ms,
         # The turn's durable id, so a reaction can name the drawing it is
         # about; and the reactions so far, so a reconnect sees the tally and
         # its own pick rather than an empty control.

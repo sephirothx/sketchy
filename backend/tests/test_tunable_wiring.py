@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import pytest
 
+from app.client_config import ClientConfig
 from app.flow_timing import FlowTiming
 from app.handlers.budgets import CommandBudgetPolicy
 from app.game import Game
@@ -188,3 +189,45 @@ def test_the_environment_still_supplies_the_boot_drain():
     )
     assert coordinator.drain_seconds == 0
     assert settings.source("shutdown.drain_seconds") == "environment"
+
+
+# ------------------------------------------------------------ client cadences
+
+
+def test_the_polling_cadence_moves_what_the_next_client_is_told():
+    """#887 added a second interval and left it a bare dataclass default, so
+    the one transport worth quietening was the one that needed a deploy."""
+    config = ClientConfig()
+    settings = a_registry(client=config)
+
+    settings.set("client.polling_flush_interval_ms", 320)
+
+    assert config.payload()["pollingFlushIntervalMs"] == 320
+    assert config.payload()["flushIntervalMs"] == 80, "the WebSocket one is its own"
+
+
+def test_the_polling_cadence_is_bounded_server_side():
+    """R-CONF-03, and the client mirrors these bounds (`clientConfig.ts`)."""
+    config = ClientConfig()
+    settings = a_registry(client=config)
+
+    with pytest.raises(TunableError, match="between 10 and 1000"):
+        settings.set("client.polling_flush_interval_ms", 1001)
+    assert config.polling_flush_interval_ms == 240
+
+
+def test_the_drawing_budget_is_checked_against_whichever_cadence_is_faster():
+    """The budget is per caller, not per transport: the interval that has to
+    fit under it is the one producing more frames, whichever of the two."""
+    config = ClientConfig()
+    settings = a_registry(client=config)
+
+    with pytest.raises(TunableError, match="client.polling_flush_interval_ms"):
+        settings.set("client.polling_flush_interval_ms", 10)
+    assert config.polling_flush_interval_ms == 240
+
+    # Raised past the WebSocket one, it is no longer the binding cadence, and
+    # the constraint goes back to naming the interval that is.
+    settings.set("client.polling_flush_interval_ms", 400)
+    with pytest.raises(TunableError, match="client.flush_interval_ms"):
+        settings.set("client.flush_interval_ms", 10)

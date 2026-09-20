@@ -525,3 +525,39 @@ async def test_the_sweep_samples_every_open_backlog_so_the_distribution_is_visib
     assert 'sketchy_socket_backlog_bytes_bucket{le="0.0"} 1' in lines  # the one keeping up
     assert 'sketchy_socket_backlog_age_seconds_bucket{le="1.0"} 1' in lines
     assert 'sketchy_socket_backlog_age_seconds_bucket{le="2.5"} 2' in lines
+
+
+def test_engineio_settings_are_this_repository_s_rather_than_the_library_s():
+    """#887: #561 pinned the WebSocket layer and left the one under it to the
+    library, where a version bump could move it and nothing would say so. A
+    silent socket is closed 45 s after its last pong - the interval, then the
+    timeout - which is deliberately longer than the seat's 30 s reconnect
+    grace, and 20 to 45 s after the client actually went quiet."""
+    from app.socket_server import (
+        ENGINEIO_ALLOW_UPGRADES,
+        ENGINEIO_COMPRESSION_THRESHOLD,
+        ENGINEIO_HTTP_COMPRESSION,
+        ENGINEIO_PING_INTERVAL_SECONDS,
+        ENGINEIO_PING_TIMEOUT_SECONDS,
+    )
+
+    server = BoundedSocketServer(async_mode="asgi")
+
+    assert server.eio.ping_interval == ENGINEIO_PING_INTERVAL_SECONDS == 25
+    assert server.eio.ping_timeout == ENGINEIO_PING_TIMEOUT_SECONDS == 20
+    assert server.eio.http_compression is ENGINEIO_HTTP_COMPRESSION is True
+    assert server.eio.compression_threshold == ENGINEIO_COMPRESSION_THRESHOLD == 1024
+    assert server.eio.allow_upgrades is ENGINEIO_ALLOW_UPGRADES is True
+    # Whatever the library's own defaults become.
+    assert BoundedSocketServer(async_mode="asgi", ping_interval=5).eio.ping_interval == 5
+
+
+def test_a_polling_session_is_told_a_cadence_of_its_own():
+    """Every flush is an HTTP POST there, with more header than frame (#887)."""
+    from app.client_config import client_config
+
+    payload = client_config.payload()
+
+    assert payload["pollingFlushIntervalMs"] == 240
+    assert payload["flushIntervalMs"] == 80
+    assert payload["pollingFlushIntervalMs"] == 3 * payload["flushIntervalMs"]

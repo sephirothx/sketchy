@@ -25,6 +25,11 @@ before it answers an AFK check on their behalf. */
 
 export interface ClientConfig {
   flushIntervalMs: number;
+  /** The same, for a session on long-polling. Version 5 (#887): every flush
+  is an HTTP POST there, with more header than frame, so a drawer on polling
+  sends a third as many and a viewer on it sees ink this far behind the hand
+  instead of `flushIntervalMs` behind. */
+  pollingFlushIntervalMs: number;
   /** The drawing allowance a `draw` frame spends: this many frames per
   window. Version 3 (#597) added it so a replay after a stall can pace itself
   under the allowance instead of bursting into a silent refusal. */
@@ -38,6 +43,7 @@ export interface ClientConfig {
 /** What the client uses until a server says otherwise, and if one never does. */
 export const DEFAULT_CLIENT_CONFIG: ClientConfig = {
   flushIntervalMs: 80,
+  pollingFlushIntervalMs: 240,
   drawingFramesPerWindow: 100,
   drawingWindowSeconds: 2,
   afkInputWindowMs: 60_000,
@@ -50,6 +56,7 @@ refuses a number that would break the client outright: a zero or negative
 interval is a busy loop, and a huge one is a canvas that never updates. */
 const BOUNDS: Record<keyof ClientConfig, { min: number; max: number }> = {
   flushIntervalMs: { min: 10, max: 200 },
+  pollingFlushIntervalMs: { min: 10, max: 1000 },
   drawingFramesPerWindow: { min: 50, max: 400 },
   drawingWindowSeconds: { min: 0.5, max: 10 },
   // A window of zero would ask somebody who is typing; one of an hour would
@@ -72,7 +79,7 @@ function reading(
 }
 
 /** The notice shape this build understands. */
-export const CLIENT_CONFIG_CONTRACT_VERSION = 4;
+export const CLIENT_CONFIG_CONTRACT_VERSION = 5;
 
 /** Read a `client_config` notice, or `null` if it is not one this build knows.
 
@@ -89,6 +96,7 @@ export function parseClientConfig(payload: unknown): ClientConfig | null {
   if (record.contractVersion !== CLIENT_CONFIG_CONTRACT_VERSION) return null;
   return {
     flushIntervalMs: reading(record, "flushIntervalMs"),
+    pollingFlushIntervalMs: reading(record, "pollingFlushIntervalMs"),
     drawingFramesPerWindow: reading(record, "drawingFramesPerWindow"),
     drawingWindowSeconds: reading(record, "drawingWindowSeconds"),
     afkInputWindowMs: reading(record, "afkInputWindowMs"),
@@ -101,6 +109,32 @@ const listeners = new Set<(config: ClientConfig) => void>();
 /** The cadences in force right now. */
 export function currentClientConfig(): ClientConfig {
   return current;
+}
+
+/** A cadence the server named for somebody *else* - the drawing seat's, on
+`turn_started` and `sync_game` (R-DRAW-01) - held to the same mirrored bounds
+as the ones this client runs at, and falling back to the baseline.
+
+The range is the union of the two: a drawer may be on either transport, and
+which one is not this client's business. Unbounded it would degrade safely -
+a span at or below zero paints the batch at once and `MAX_LAG_MS` caps the
+other end - but every other cadence on the wire is checked here, and a value
+that is only safe by accident is one nobody has decided about. */
+export function senderFlushInterval(value: unknown): number {
+  const { min } = BOUNDS.flushIntervalMs;
+  const { max } = BOUNDS.pollingFlushIntervalMs;
+  if (typeof value !== "number" || !Number.isFinite(value)) return current.flushIntervalMs;
+  if (value < min || value > max) return current.flushIntervalMs;
+  return value;
+}
+
+/** How long queued points wait before they go out, for the transport this
+session is actually on (#887). */
+export function flushIntervalFor(
+  transport: string | null | undefined,
+  config: ClientConfig = current,
+): number {
+  return transport === "polling" ? config.pollingFlushIntervalMs : config.flushIntervalMs;
 }
 
 /** Adopt a notice from the server, telling everyone who is listening.

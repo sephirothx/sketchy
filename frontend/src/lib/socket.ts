@@ -12,6 +12,7 @@ import {
   RECONNECTION_DELAY_MS,
   RECONNECTION_RANDOMIZATION,
   pingWindowMs,
+  attemptIsInFlight,
   createRestartLatch,
   postReconnectDelayMs,
   shouldReconnectImmediately,
@@ -149,6 +150,7 @@ socket.on("connect", () => {
   restoreOrdinaryBackoff();
 });
 
+
 // The network came back, or the page came out of the back/forward cache
 // (#886). Either way the backoff this connection was waiting out describes a
 // network that no longer exists: try now rather than in up to ten seconds.
@@ -160,9 +162,20 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
       connected: socket.connected,
       updateRequired: isUpdateRequired(),
       restartExpected: restart.restartExpected(),
+      attemptInFlight: attemptIsInFlight(managerReadyState()),
     };
     if (!shouldReconnectImmediately(now)) return;
     restoreOrdinaryBackoff();
+    // Through a close, because a bare `connect()` here does nothing at all:
+    // `Socket.connect()` skips `Manager.open()` while the manager is
+    // reconnecting, and `open()` returns early while an attempt is in flight -
+    // between them that is every state a waiting client is in, so the handler
+    // was a no-op and the whole point of it (#886: connect now rather than in
+    // up to ten seconds) never fired. `disconnect()` cancels the pending retry
+    // and its backoff; `connect()` then opens one attempt immediately. The
+    // guard above is what keeps that close from aborting a handshake that is
+    // already under way.
+    socket.disconnect();
     socket.connect();
   };
   window.addEventListener("online", reconnectNow);
@@ -309,13 +322,17 @@ function armStallWatchdog(): void {
   }, CONNECT_TIMEOUT_MS);
 }
 
+/** The manager's own `_readyState`: "closed", "opening" or "open". */
+function managerReadyState(): string | undefined {
+  return (socket.io as unknown as { _readyState?: string })._readyState;
+}
+
 const managerOpen = socket.io.open.bind(socket.io);
 socket.io.open = ((callback?: (err?: Error) => void) => {
   // Only an attempt that actually starts is watched: `connect()` on a socket
   // already open or opening is a no-op in the manager and must not arm a
   // timer against a connection that is fine.
-  const state = (socket.io as unknown as { _readyState?: string })._readyState;
-  if (state !== "open" && state !== "opening") armStallWatchdog();
+  if (!attemptIsInFlight(managerReadyState())) armStallWatchdog();
   return managerOpen(callback);
 }) as typeof socket.io.open;
 socket.io.on("open", disarmStallWatchdog);
@@ -414,6 +431,30 @@ socket.on("server_full", () => {
   serverFullReason = ui.socket.sketchyIsFullRightNow;
   serverFullListeners.forEach((listener) => listener(serverFullReason!));
 });
+
+/** The transport this session is on, or null before one is open. Read by the
+drawing cadence (#887): a flush on long-polling is an HTTP POST. */
+export function currentTransport(): string | null {
+  return socket.io?.engine?.transport?.name ?? null;
+}
+
+/** Subscribe to the transport changing: a new connection, or a polling
+session upgrading to WebSocket under it (#887). */
+export function onTransportChange(listener: (transport: string | null) => void): () => void {
+  const tell = () => listener(currentTransport());
+  const watchEngine = () => {
+    tell();
+    socket.io.engine?.on("upgrade", tell);
+  };
+  socket.on("connect", tell);
+  socket.io.on("open", watchEngine);
+  if (socket.connected) watchEngine();
+  return () => {
+    socket.off("connect", tell);
+    socket.io.off("open", watchEngine);
+    socket.io.engine?.off("upgrade", tell);
+  };
+}
 
 /** The reason this client was turned away, if it was. */
 export function currentServerFullReason(): string | null {

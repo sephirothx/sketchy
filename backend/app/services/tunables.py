@@ -359,6 +359,19 @@ def client_tunables(config: ClientConfig) -> list[Tunable]:
             ),
         ),
         _number(
+            config, "polling_flush_interval_ms",
+            name="client.polling_flush_interval_ms", default=240,
+            minimum=10, maximum=1000, unit="ms", audience_=CLIENT,
+            description=(
+                "The same, for a drawer on long-polling, where every flush is "
+                "an HTTP POST carrying more header than frame (#887). Its "
+                "ceiling is higher because that transport is the one worth "
+                "spending lag to quieten, and it may be set below the "
+                "WebSocket interval - a deployment that has decided polling "
+                "is cheap for it is allowed to say so."
+            ),
+        ),
+        _number(
             config, "afk_input_window_ms",
             name="client.afk_input_window_ms", default=60_000,
             minimum=5_000, maximum=600_000, unit="ms", audience_=CLIENT,
@@ -384,25 +397,31 @@ def drawing_headroom(policy: CommandBudgetPolicy) -> JointConstraint:
     The factor of two is the budget's own sizing rule, not a new one: a jittery
     connection bunches frames after a stall, so a ceiling at exactly the
     drawer's rate would refuse the catch-up rather than an abuser.
+
+    There are two intervals since #887 and one budget: the budget is per
+    caller, not per transport, so the interval that has to fit under it is
+    whichever of them produces more frames - the shorter one.
     """
     window = next(
         item["window_seconds"]
         for item in policy.describe()
         if item["name"] == "drawing"
     )
+    intervals = ("client.flush_interval_ms", "client.polling_flush_interval_ms")
 
     def check(values: Mapping[str, float]) -> None:
-        interval = values["client.flush_interval_ms"]
+        name = min(intervals, key=lambda key: values[key])
+        interval = values[name]
         limit = values["budget.drawing"]
         produced = window * 1000 / interval
         if limit < produced * 2:
             raise TunableError(
-                f"a flush interval of {int(interval)}ms produces "
+                f"{name} of {int(interval)}ms produces "
                 f"{produced:.0f} frames per {_seconds(window)}s, which needs a "
                 f"drawing budget of at least {produced * 2:.0f}; it is {int(limit)}"
             )
 
-    return JointConstraint(("client.flush_interval_ms", "budget.drawing"), check)
+    return JointConstraint((*intervals, "budget.drawing"), check)
 
 
 def build_runtime_settings(

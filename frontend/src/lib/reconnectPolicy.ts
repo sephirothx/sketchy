@@ -202,11 +202,51 @@ network that is no longer the one in front of it. Except during a planned
 restart, where the hold this client drew is the whole point of the spread
 (R-CONN-14) - a device waking mid-deploy must not turn it into everybody at
 once - and except on a tab that has been told to reload, whose socket is
-down for good. */
+down for good.
+
+And except while an attempt is already in flight. Reopening means closing
+first (`socket.ts` says why), and closing aborts a handshake that is already
+under way - so on an interface that flaps, every `online` would restart the
+attempt and none would ever finish. Waiting out an attempt costs at most one
+connection timeout; interrupting them costs all of them. */
 export function shouldReconnectImmediately(state: {
   connected: boolean;
   updateRequired: boolean;
   restartExpected: boolean;
+  attemptInFlight?: boolean;
 }): boolean {
-  return !state.connected && !state.updateRequired && !state.restartExpected;
+  return (
+    !state.connected
+    && !state.updateRequired
+    && !state.restartExpected
+    && !state.attemptInFlight
+  );
+}
+
+/** Whether the manager has a connection attempt under way, from its own ready
+state (`Manager._readyState`).
+
+Read from the manager rather than tracked from `reconnect_attempt`, because
+three paths open a connection without emitting that event - the first connect
+once identity has settled, the stall watchdog's reopen, and
+`reconnectWithCurrentIdentity` - and each of those is a handshake a network
+return must not abort. The stall watchdog is the one that matters: it fires on
+a network that silently drops handshakes, which is exactly the network that
+fires `online` again and again. `_readyState` is set inside `Manager.open()`
+itself, so it covers every caller.
+
+`"open"` counts as in flight because the engine being up is not the socket
+being connected: the namespace CONNECT is still a round trip away, and closing
+in that window throws away a handshake that had all but finished.
+
+That is also the one window this costs something. The stall watchdog disarms
+at the *engine* open, so a server that opens the transport and then never
+acknowledges the Socket.IO CONNECT leaves an open manager, a disconnected
+socket, and now a suppressed `online` too. Nothing here shortens it, on
+purpose: retrying is what the watchdog does for a transport that never came
+up, and this failure is the application above it, where putting polling first
+would change nothing. Engine.IO closes the session 45 s after the last pong
+(wire-protocol §1) and the ordinary reconnect follows. */
+export function attemptIsInFlight(managerReadyState: string | undefined): boolean {
+  return managerReadyState === "opening" || managerReadyState === "open";
 }

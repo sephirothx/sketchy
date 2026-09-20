@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useRef } from "react";
+import { flushIntervalFor } from "../lib/clientConfig";
+import { useClientConfig, useTransport } from "./useClientConfig";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import type { PointerEvent as ReactPointerEvent, RefObject } from "react";
 import {
@@ -34,7 +36,6 @@ import {
 import { PenStroke, type PaintRun } from "../lib/penStroke";
 import { createPointThinner, type PointThinner, type ThinnedPoint } from "../lib/pointThinning";
 import { QUIET_FRAME_SHARE, createWidthThinner, widthTolerance, type WidthThinner } from "../lib/widthKeyframes";
-import { useClientConfig } from "./useClientConfig";
 import type { CanvasProtocol } from "./useCanvasProtocol";
 import type { DrawTool, StrokeFillPayload, StrokePoint } from "../types";
 
@@ -50,8 +51,15 @@ interface DrawingSettings {
   brushCursor: string;
   /** The player's setting (R-DRAW-17): off, and a pen draws like a mouse. */
   penPressure: boolean;
-  /** No turn's point budget applies: the scratch pad, which no server replays. */
-  unbudgeted?: boolean;
+  /** Nothing this canvas draws leaves the tab: the scratch pad (#829).
+
+  Two things follow, and they are one fact rather than a coincidence worth
+  reusing a narrower flag for. No turn's point budget applies, because no
+  server ever replays these points; and the flush cadence is the baseline
+  whatever transport the session is on, because a longer interval buys bytes
+  on a wire this canvas does not use and only delays the player's own ink off
+  the preview layer. */
+  local?: boolean;
 }
 
 interface CanvasPointerInput {
@@ -78,16 +86,23 @@ export function useCanvasPointerInput(
     tool,
     brushCursor,
     penPressure,
-    unbudgeted = false,
+    local = false,
   } = settings;
   // Painting locally past the point budget would put pixels on screen that
   // the server never accepted, and they would vanish at the next replay. Read
   // straight from the store: the handlers below are rebuilt every render, so
   // they always close over the current answer.
-  const strokeAvailable = useCanvasBudgetStore((state) => unbudgeted || state.strokeAvailable);
+  const strokeAvailable = useCanvasBudgetStore((state) => local || state.strokeAvailable);
   // Server-decided, so a deployment can tune the trade between bandwidth and
   // how smooth a stroke looks to everyone who is not drawing it.
-  const { flushIntervalMs } = useClientConfig();
+  const config = useClientConfig();
+  // The transport decides which of the two cadences applies (#887); it can
+  // change under a session, when a polling one is upgraded. Only for a canvas
+  // whose frames go somewhere - `local` says why.
+  const transport = useTransport();
+  const flushIntervalMs = local
+    ? config.flushIntervalMs
+    : flushIntervalFor(transport, config);
 
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);
