@@ -1,4 +1,6 @@
 import { create } from "zustand";
+
+import { senderFlushInterval } from "../lib/clientConfig.ts";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules.ts";
 import { applyReactionEvent } from "../lib/reactions.ts";
 import type {
@@ -350,8 +352,12 @@ export const useGameStore = create<GameStore>((set) => ({
       phase: "drawing",
       // Null until a turn says otherwise, and back to null between turns: the
       // renderer falls back to the baseline, which is what it assumed before
-      // the server started saying (#887).
-      drawerFlushIntervalMs: drawerFlushIntervalMs ?? null,
+      // the server started saying (#887). Bounded like every other cadence
+      // the server sends, against the union of the two transports' ranges.
+      drawerFlushIntervalMs:
+        drawerFlushIntervalMs === undefined || drawerFlushIntervalMs === null
+          ? null
+          : senderFlushInterval(drawerFlushIntervalMs),
       currentTurnId: turnId ?? s.currentTurnId,
       drawingReactions:
         turnId && reactions

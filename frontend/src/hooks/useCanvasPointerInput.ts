@@ -90,9 +90,14 @@ export function useCanvasPointerInput(
   // how smooth a stroke looks to everyone who is not drawing it.
   const config = useClientConfig();
   // The transport decides which of the two cadences applies (#887); it can
-  // change under a session, when a polling one is upgraded.
+  // change under a session, when a polling one is upgraded. Only for a canvas
+  // whose frames go somewhere: the scratch pad's stay in the tab (#829), so
+  // the polling cadence would buy it no bytes at all and cost the player up
+  // to 240 ms before their own ink is committed off the preview layer.
   const transport = useTransport();
-  const flushIntervalMs = flushIntervalFor(transport, config);
+  const flushIntervalMs = unbudgeted
+    ? config.flushIntervalMs
+    : flushIntervalFor(transport, config);
 
   const activePointerIdRef = useRef<number | null>(null);
   const pendingPointsRef = useRef<StrokePoint[]>([]);

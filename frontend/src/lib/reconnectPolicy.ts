@@ -222,3 +222,22 @@ export function shouldReconnectImmediately(state: {
     && !state.attemptInFlight
   );
 }
+
+/** Whether the manager has a connection attempt under way, from its own ready
+state (`Manager._readyState`).
+
+Read from the manager rather than tracked from `reconnect_attempt`, because
+three paths open a connection without emitting that event - the first connect
+once identity has settled, the stall watchdog's reopen, and
+`reconnectWithCurrentIdentity` - and each of those is a handshake a network
+return must not abort. The stall watchdog is the one that matters: it fires on
+a network that silently drops handshakes, which is exactly the network that
+fires `online` again and again. `_readyState` is set inside `Manager.open()`
+itself, so it covers every caller.
+
+`"open"` counts as in flight because the engine being up is not the socket
+being connected: the namespace CONNECT is still a round trip away, and closing
+in that window throws away a handshake that had all but finished. */
+export function attemptIsInFlight(managerReadyState: string | undefined): boolean {
+  return managerReadyState === "opening" || managerReadyState === "open";
+}

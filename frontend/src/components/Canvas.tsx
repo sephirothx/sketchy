@@ -20,8 +20,7 @@ import {
 } from "../lib/canvasHistory";
 import { useSettingsStore } from "../store/settingsStore";
 import { useGameStore } from "../store/gameStore";
-import { currentClientConfig, flushIntervalFor } from "../lib/clientConfig";
-import { currentTransport } from "../lib/socket";
+import { currentClientConfig } from "../lib/clientConfig";
 import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { createCanvasSurface, createLayerSurface, type CanvasSurface, type LayerSurface } from "../lib/canvasSurface";
@@ -166,10 +165,11 @@ const drawerInterval = () =>
 
 export const Canvas = memo(createCanvas(useCanvasProtocol, "canvas", false, drawerInterval));
 
-/** The scratch pad's canvas: nothing it draws leaves the tab. Its sender is
-this client, so its cadence is this client's - the same one
-`useCanvasPointerInput` flushes the pad at. */
-const padInterval = () => flushIntervalFor(currentTransport());
+/** The scratch pad's canvas: nothing it draws leaves the tab, so its sender is
+this client and the baseline is what `useCanvasPointerInput` flushes it at. It
+never pays the polling cadence: that cadence buys bytes on a transport the pad
+does not use (#829). */
+const padInterval = () => currentClientConfig().flushIntervalMs;
 
 export const ScratchPadCanvas = memo(
   createCanvas(useScratchPadProtocol, "scratchPad", true, padInterval),

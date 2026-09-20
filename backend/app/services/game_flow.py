@@ -1102,9 +1102,9 @@ class GameFlowService:
         Read when a turn starts and when a socket resyncs, rather than
         tracked: the only transport change that happens is polling upgrading
         to WebSocket, which leaves a viewer pacing slower than the sender
-        until the next turn - the harmless direction, since `MAX_LAG_MS`
-        already compresses a schedule that has fallen behind. The reverse
-        never occurs, and a drawer with no socket is between reconnects, where
+        until the next turn - the forgiving direction rather than a free one,
+        since `MAX_LAG_MS` compresses a schedule that has fallen behind rather
+        than letting it drift. The reverse never occurs, and a drawer with no socket is between reconnects, where
         the baseline is as good an answer as any.
         """
         game = room.game

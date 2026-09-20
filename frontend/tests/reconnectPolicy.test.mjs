@@ -12,6 +12,7 @@ import {
   afterFailedRebind,
   createRestartLatch,
   pingWindowMs,
+  attemptIsInFlight,
   shouldReconnectImmediately,
   shutdownHoldMs,
   transportAlive,
@@ -134,6 +135,25 @@ test("a network coming back connects now - unless a restart's hold is still runn
     false,
     "reopening closes first, and closing would abort the handshake under way",
   );
+});
+
+test("an attempt is in flight however it was opened, not only on a retry", () => {
+  // The gap the first version had: `attemptInFlight` was set from
+  // `reconnect_attempt`, which three paths never emit - the first connect,
+  // the stall watchdog's reopen, and `reconnectWithCurrentIdentity`. Against
+  // a blackholed address a manual open sits at `opening` with no such event,
+  // so the guard was absent on exactly the network that flaps. The manager's
+  // own ready state is set inside `open()`, so it covers all of them.
+  assert.equal(attemptIsInFlight("opening"), true, "a manual open is an attempt");
+  assert.equal(attemptIsInFlight("open"), true, "the namespace connect is still a round trip");
+  assert.equal(attemptIsInFlight("closed"), false);
+  assert.equal(attemptIsInFlight(undefined), false, "no manager, nothing to interrupt");
+});
+
+test("the network-return handler reads the manager, not the retry event", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const source = await readFile(new URL("../src/lib/socket.ts", import.meta.url), "utf8");
+  assert.match(source, /attemptInFlight: attemptIsInFlight\(managerReadyState\(\)\)/);
 });
 
 test("a flapping interface does not interrupt the handshake it keeps asking for", () => {

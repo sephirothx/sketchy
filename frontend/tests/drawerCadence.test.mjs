@@ -19,6 +19,7 @@ import { readFileSync } from "node:fs";
 import { createStrokePlayback } from "../src/lib/strokePlayback.ts";
 import { createProtocolRenderer } from "../src/lib/protocolRenderer.ts";
 import { createCanvasSurface } from "../src/lib/canvasSurface.ts";
+import { senderFlushInterval, resetClientConfig } from "../src/lib/clientConfig.ts";
 
 const STYLE = { radius: 2, color: [0, 0, 0, 255] };
 const FRAME_MS = 16;
@@ -118,4 +119,34 @@ test("the renderer's module graph has no socket in it", () => {
   );
   assert.ok(!/from "\.\/socket/.test(source), "the renderer imports the socket singleton");
   assert.ok(!/clientConfig/.test(source), "the renderer reads a cadence of its own");
+});
+
+test("a cadence named for the drawing seat is bounded like any other", () => {
+  // It arrives on `turn_started` rather than in `client_config`, so it used to
+  // skip the mirrored bounds every other cadence goes through. The range is
+  // the union of the two transports': a drawer may be on either.
+  resetClientConfig();
+  assert.equal(senderFlushInterval(240), 240, "a polling drawer");
+  assert.equal(senderFlushInterval(80), 80, "a WebSocket drawer");
+  assert.equal(senderFlushInterval(10), 10, "the floor");
+  assert.equal(senderFlushInterval(1000), 1000, "the ceiling");
+  for (const bad of [0, -80, 1001, Number.NaN, Number.POSITIVE_INFINITY, "240", null, undefined, {}]) {
+    assert.equal(senderFlushInterval(bad), 80, `${String(bad)} should fall back`);
+  }
+});
+
+test("the scratch pad never pays the polling cadence", async () => {
+  // Its frames stay in the tab (#829), so a longer interval buys no bytes and
+  // only delays the player's own ink off the preview layer.
+  const { readFile } = await import("node:fs/promises");
+  const pointer = await readFile(
+    new URL("../src/hooks/useCanvasPointerInput.ts", import.meta.url), "utf8",
+  );
+  assert.match(
+    pointer,
+    /unbudgeted\s*\n?\s*\?\s*config\.flushIntervalMs/,
+    "the pad's own flush is the baseline, not its transport's",
+  );
+  const canvas = await readFile(new URL("../src/components/Canvas.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(canvas, /currentTransport/, "and neither is its playback");
 });

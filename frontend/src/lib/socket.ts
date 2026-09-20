@@ -12,6 +12,7 @@ import {
   RECONNECTION_DELAY_MS,
   RECONNECTION_RANDOMIZATION,
   pingWindowMs,
+  attemptIsInFlight,
   createRestartLatch,
   postReconnectDelayMs,
   shouldReconnectImmediately,
@@ -149,12 +150,6 @@ socket.on("connect", () => {
   restoreOrdinaryBackoff();
 });
 
-// Whether a handshake is under way right now, from the events both ends of one
-// emit. Only used to keep the network-return handler from interrupting it.
-let attemptInFlight = false;
-socket.io.on("reconnect_attempt", () => { attemptInFlight = true; });
-socket.on("connect", () => { attemptInFlight = false; });
-socket.on("connect_error", () => { attemptInFlight = false; });
 
 // The network came back, or the page came out of the back/forward cache
 // (#886). Either way the backoff this connection was waiting out describes a
@@ -167,7 +162,7 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
       connected: socket.connected,
       updateRequired: isUpdateRequired(),
       restartExpected: restart.restartExpected(),
-      attemptInFlight,
+      attemptInFlight: attemptIsInFlight(managerReadyState()),
     };
     if (!shouldReconnectImmediately(now)) return;
     restoreOrdinaryBackoff();
@@ -327,13 +322,17 @@ function armStallWatchdog(): void {
   }, CONNECT_TIMEOUT_MS);
 }
 
+/** The manager's own `_readyState`: "closed", "opening" or "open". */
+function managerReadyState(): string | undefined {
+  return (socket.io as unknown as { _readyState?: string })._readyState;
+}
+
 const managerOpen = socket.io.open.bind(socket.io);
 socket.io.open = ((callback?: (err?: Error) => void) => {
   // Only an attempt that actually starts is watched: `connect()` on a socket
   // already open or opening is a no-op in the manager and must not arm a
   // timer against a connection that is fine.
-  const state = (socket.io as unknown as { _readyState?: string })._readyState;
-  if (state !== "open" && state !== "opening") armStallWatchdog();
+  if (!attemptIsInFlight(managerReadyState())) armStallWatchdog();
   return managerOpen(callback);
 }) as typeof socket.io.open;
 socket.io.on("open", disarmStallWatchdog);
