@@ -14,7 +14,6 @@ from typing import Mapping, Protocol
 
 from app.announcements import Announcement
 from app.auth.avatars import avatar_url
-from app.client_config import client_config
 from app.flow_timing import timing
 from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase
 from app.domain_values import (
@@ -953,7 +952,7 @@ class GameFlowService:
                     player,
                     room.spectators_see_prompt,
                     reactions=room.drawing_reactions_for(game.current_turn_id),
-                    drawer_flush_interval_ms=self._drawer_flush_interval_ms(room),
+                    drawer_transport=self._drawer_transport(room),
                 ),
                 to=sid,
             )
@@ -1095,27 +1094,35 @@ class GameFlowService:
         if payload is not None:
             await self._sio.emit("last_game", payload, to=sid)
 
-    def _drawer_flush_interval_ms(self, room: Room) -> int:
-        """The cadence the drawing seat is flushing at, for the room to pace
+    def _drawer_transport(self, room: Room) -> str | None:
+        """Which transport the drawing seat is on, for the room to pace
         playback by (R-DRAW-01).
+
+        The transport, not the interval it resolves to. Both are facts this
+        process holds, but they move on different clocks: the two cadences are
+        `client_config` values an administrator can change while a turn is
+        running, and every client is told the moment they do, whereas which
+        transport the drawer is on changes at most once a session. Sending the
+        resolved milliseconds left every viewer pacing at the old cadence
+        until the next turn began; sending the transport lets each viewer
+        resolve it against the config it has already been given.
 
         Read when a turn starts and when a socket resyncs, rather than
         tracked: the only transport change that happens is polling upgrading
         to WebSocket, which leaves a viewer pacing slower than the sender
-        until the next turn - the forgiving direction rather than a free one,
+        until that next turn - the forgiving direction rather than a free one,
         since `MAX_LAG_MS` compresses a schedule that has fallen behind rather
-        than letting it drift. The reverse never occurs, and a drawer with no socket is between reconnects, where
-        the baseline is as good an answer as any.
+        than letting it drift. The reverse never occurs. `None` is a drawer
+        with no socket, between reconnects, and reads as the baseline.
         """
         game = room.game
         drawer = room.players.get(game.current_drawer) if game else None
-        transport: str | None = None
-        if drawer is not None and drawer.sid:
-            try:
-                transport = str(self._sio.transport(drawer.sid))
-            except Exception:
-                transport = None
-        return client_config.flush_interval_for(transport)
+        if drawer is None or not drawer.sid:
+            return None
+        try:
+            return str(self._sio.transport(drawer.sid))
+        except Exception:
+            return None
 
     def _turn_payload(
         self,
@@ -1123,10 +1130,10 @@ class GameFlowService:
         player: Player | None = None,
         spectators_see_prompt: bool = False,
         reactions: list[dict] | None = None,
-        drawer_flush_interval_ms: int | None = None,
+        drawer_transport: str | None = None,
     ) -> dict:
         return turn_payload(
-            game, player, spectators_see_prompt, reactions, drawer_flush_interval_ms
+            game, player, spectators_see_prompt, reactions, drawer_transport
         )
 
     async def _start_turn(self, room: Room, *, game_started: bool = False) -> None:
@@ -1185,7 +1192,7 @@ class GameFlowService:
         )
         game.set_phase_deadline(game.drawing_seconds)
         # Read once for the whole fan-out: one drawer, one transport.
-        drawer_interval = self._drawer_flush_interval_ms(room)
+        drawer_transport = self._drawer_transport(room)
         # One emit per socket, deliberately, even though at turn start every
         # guesser's payload is identical - nothing has been bought yet, so only
         # the drawer and prompt-seeing spectators actually diverge. Broadcasting
@@ -1214,7 +1221,7 @@ class GameFlowService:
                     "letterPrices": game.wheel_letter_prices(p.id) if game.hint_mode == "wheel" else None,
                     "hintSpend": 0,
                     "maxHintSpend": MAX_HINT_SPEND,
-                    "drawerFlushIntervalMs": drawer_interval,
+                    "drawerTransport": drawer_transport,
                 },
                 to=p.sid,
             )

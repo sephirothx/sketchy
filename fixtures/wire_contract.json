@@ -2451,8 +2451,8 @@
   ],
   "presenters:turn_payload": [
    "correctGuessers",
-   "drawerFlushIntervalMs",
    "drawerId",
+   "drawerTransport",
    "hintCost",
    "hintSpend",
    "letterPrices",
@@ -2551,8 +2551,8 @@
    "totalBytes"
   ],
   "services.game_flow:_begin_drawing": [
-   "drawerFlushIntervalMs",
    "drawerId",
+   "drawerTransport",
    "hintCost",
    "hintSpend",
    "letterPrices",
@@ -2718,7 +2718,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 39,
+ "protocolVersion": 40,
  "refusal": {
   "codes": [
    "invalid_payload",

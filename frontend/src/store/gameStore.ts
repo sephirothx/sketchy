@@ -1,6 +1,5 @@
 import { create } from "zustand";
 
-import { senderFlushInterval } from "../lib/clientConfig.ts";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules.ts";
 import { applyReactionEvent } from "../lib/reactions.ts";
 import type {
@@ -62,10 +61,12 @@ interface GameStore {
   phase: GamePhase;
   drawerId: string | null;
   maskedPrompt: string;
-  /** The cadence the drawing seat is flushing at, as the server stated it for
-  this turn, or null until one does. What playback schedules each received
-  batch over (R-DRAW-01). */
-  drawerFlushIntervalMs: number | null;
+  /** Which transport the drawing seat is on, as the server stated it for this
+  turn, or null until one does. Playback resolves it against the cadences in
+  force to schedule each received batch (R-DRAW-01) - the transport rather
+  than the interval, so an administrator moving a cadence mid-turn reaches
+  every viewer at once instead of at the next turn. */
+  drawerTransport: string | null;
   myPrompt: string | null;
   guessedPrompt: string | null;
   promptChoices: string[];
@@ -139,10 +140,9 @@ interface GameStore {
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
     maxHintSpend?: number;
-    /** The cadence the drawing seat is flushing at, which decides how this
-        client paces playback of its batches (R-DRAW-01). Absent only from a
-        server older than the field. */
-    drawerFlushIntervalMs?: number | null;
+    /** Which transport the drawing seat is on, which decides how this client
+        paces playback of its batches (R-DRAW-01). */
+    drawerTransport?: string | null;
     /** On a sync: who has already guessed, with the server's seconds into the
         drawing, and this seat's own receipt if it is one of them (#870). */
     correctGuessers?: [string, number][];
@@ -193,7 +193,7 @@ const initialGameFields = {
   phase: "idle" as GamePhase,
   drawerId: null as string | null,
   maskedPrompt: "",
-  drawerFlushIntervalMs: null as number | null,
+  drawerTransport: null as string | null,
   myPrompt: null as string | null,
   guessedPrompt: null as string | null,
   promptChoices: [] as string[],
@@ -347,17 +347,15 @@ export const useGameStore = create<GameStore>((set) => ({
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: seconds,
     }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions, correctGuessers, guessed, drawerFlushIntervalMs }) =>
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions, correctGuessers, guessed, drawerTransport }) =>
     set((s) => ({
       phase: "drawing",
-      // Null until a turn says otherwise, and back to null between turns: the
-      // renderer falls back to the baseline, which is what it assumed before
-      // the server started saying (#887). Bounded like every other cadence
-      // the server sends, against the union of the two transports' ranges.
-      drawerFlushIntervalMs:
-        drawerFlushIntervalMs === undefined || drawerFlushIntervalMs === null
-          ? null
-          : senderFlushInterval(drawerFlushIntervalMs),
+      // Null until a turn says otherwise, and back to null between turns,
+      // where the baseline applies - what playback assumed before the server
+      // said anything (#887). Nothing to bound here: `flushIntervalFor`
+      // resolves "polling" and treats every other value as the baseline, so
+      // an unexpected string degrades exactly as a missing one does.
+      drawerTransport: drawerTransport ?? null,
       currentTurnId: turnId ?? s.currentTurnId,
       drawingReactions:
         turnId && reactions

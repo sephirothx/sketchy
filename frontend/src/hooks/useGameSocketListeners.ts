@@ -121,7 +121,7 @@ export function useGameSocketListeners() {
       letterPrices?: Record<string, number> | null;
       hintSpend?: number;
       maxHintSpend?: number;
-      drawerFlushIntervalMs?: number | null;
+      drawerTransport?: string | null;
     }) => {
       playRoundStartSound();
       store.getState().startDrawing(payload);
@@ -248,7 +248,7 @@ export function useGameSocketListeners() {
       maxHintSpend?: number;
       correctGuessers?: [string, number][];
       guessed?: (GuessBreakdown & { prompt: string }) | null;
-      drawerFlushIntervalMs?: number | null;
+      drawerTransport?: string | null;
     }) => {
       if (payload.phase === "choosing_prompt") {
         store.getState().startChoosing({
@@ -274,7 +274,7 @@ export function useGameSocketListeners() {
           maxHintSpend: payload.maxHintSpend,
           correctGuessers: payload.correctGuessers,
           guessed: payload.guessed,
-          drawerFlushIntervalMs: payload.drawerFlushIntervalMs,
+          drawerTransport: payload.drawerTransport,
         });
       }
     };

@@ -173,7 +173,7 @@ test("a server that names no polling cadence leaves the client on the default", 
 test("a transport picks a cadence for the hand that draws, never for a viewer (#887)", async () => {
   // Only the drawer's own flush is chosen by its own transport. A viewer
   // paces playback by the interval that produced the batch, which the server
-  // states (`drawerFlushIntervalMs`) and the renderer takes as an argument -
+  // names (`drawerTransport`) and the renderer takes as an argument -
   // reaching for a local answer here is how the wrong party's transport got
   // used. See `drawerCadence.test.mjs` for what each mismatch looks like.
   const { readFile } = await import("node:fs/promises");
