@@ -203,9 +203,12 @@ returns ([`hooks/useLobbyChannel.ts`](../frontend/src/hooks/useLobbyChannel.ts),
   it used to cost a `join_room` and a `sync_game` per seat per return.
 - **`online`, and a `pageshow` from the back/forward cache, connect at once**,
   resetting the backoff: the delay it was waiting out describes a network that
-  is no longer the one in front of it. Not during a planned restart, where the
-  hold this client drew is the point (R-CONN-14) - a device waking mid-deploy
-  must not turn the spread back into everybody at once.
+  is no longer the one in front of it. Through a close and a fresh connect,
+  never a bare one: by then the manager is usually waiting out its own
+  backoff, and a second attempt beside its pending one leaves two handshakes
+  racing for the seat. Not during a planned restart, where the hold this
+  client drew is the point (R-CONN-14) - a device waking mid-deploy must not
+  turn the spread back into everybody at once.
 
 ### Reconnection
 

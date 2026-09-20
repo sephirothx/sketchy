@@ -163,6 +163,13 @@ if (typeof window !== "undefined" && typeof window.addEventListener === "functio
     };
     if (!shouldReconnectImmediately(now)) return;
     restoreOrdinaryBackoff();
+    // Through a close, not a bare `connect()`: the manager is usually already
+    // waiting out a backoff by now, and opening a second attempt beside its
+    // pending one leaves two handshakes racing - measured, the seat that won
+    // was not the one the page was using, and the next command was never
+    // answered. `disconnect()` cancels the pending retry, and `connect()`
+    // starts one attempt.
+    socket.disconnect();
     socket.connect();
   };
   window.addEventListener("online", reconnectNow);
