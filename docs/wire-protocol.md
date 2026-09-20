@@ -883,10 +883,14 @@ were never true together:
 - **The roster goes before the turn its leaving caused.** Losing the drawer
   starts the next turn; the `room_state` without that seat is flushed first,
   so no client holds a turn whose player list still contains the player who
-  left it.
+  left it. However the seat goes - given up, or evicted by a vote, an
+  administrator or a ban - the ordering is the same.
 - **A timed hint is checked per seat, not once per checkpoint.** Every emit
   awaits, and a turn that ends in one of those gaps stops the rest; the hint
-  names its turn as well, so a client that has already ended it drops it.
+  names its turn as well, and a client takes a named hint only while it is
+  drawing that very turn: an abandoned turn goes straight to the next
+  `turn_starting` or to `game_ended`, never through `turn_ended`, so "has this
+  turn ended" is not a question the phase alone answers.
 
 ### Key payload shapes
 

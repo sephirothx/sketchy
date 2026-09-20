@@ -482,6 +482,12 @@ class HandlerContext:
             # out and then handed the next turn.
             await self.sio.leave_room(player_sid, room.id)
         if room.game and room.state == "playing":
+            # The roster without this seat goes first, as it does when a seat
+            # is given up (#883): evicting the drawer starts the next turn,
+            # and its preamble must not reach a client whose player list still
+            # holds the player it just lost.
+            await self.game_flow._emit_room_state(room)
+            await self.game_flow._flush_room_state(room)
             await self.game_flow._remove_player_from_game(room, player_id)
         if player_sid:
             if notice is not None:

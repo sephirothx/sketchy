@@ -387,10 +387,16 @@ export const useGameStore = create<GameStore>((set) => ({
   setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend, turnId }) =>
     set((s) => {
       // A timed hint is emitted per seat, and the turn can end between two of
-      // those emits: a hint for a turn this client has ended would re-mask the
-      // prompt `turn_ended` just showed in full (#883).
-      if (turnId !== undefined && s.currentTurnId !== null && turnId !== s.currentTurnId) return s;
-      if (s.phase === "turn_results" && turnId !== undefined) return s;
+      // those emits: a hint for a turn this client is no longer drawing would
+      // re-mask a prompt that has been revealed, or put the last turn's blanks
+      // on screen while the next drawer is still choosing (#883). So a named
+      // hint is taken only while this client is drawing that very turn - an
+      // abandoned turn goes straight to `turn_starting` or `game_ended`, never
+      // through `turn_results`. A bought hint names no turn and always lands:
+      // it answers something the player just did.
+      if (turnId !== undefined && (s.phase !== "drawing" || s.currentTurnId !== turnId)) {
+        return s;
+      }
       return {
         maskedPrompt,
         nextHintCost: hintCost ?? s.nextHintCost,

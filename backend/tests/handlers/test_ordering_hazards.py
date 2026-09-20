@@ -115,3 +115,27 @@ async def test_a_timed_hint_is_dropped_when_the_turn_ends_between_two_seats():
     assert len(hints) == 1, "the rest of the room was told after the turn had ended"
     [hint] = calls(ctx, "hint_revealed")
     assert hint.args[1]["turnId"] == game.current_turn_id, "a hint names its turn"
+
+
+async def test_evicting_the_drawer_sends_the_roster_before_the_next_turn():
+    """The same ordering a seat given up gets: a kick that starts the next
+    turn must not deliver its preamble to a roster that still has the drawer."""
+    room_manager, room, players = build_room(
+        rounds=2, accounts={"Ann": "user-ann", "Bob": "user-bob", "Cid": "user-cid"}
+    )
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    game = await start_a_turn(ctx, room, players)
+    drawer = next(p for p in room.player_list() if p.id == game.current_drawer)
+    ctx.sio.emit.reset_mock()
+
+    await ctx.evict_player(room, drawer.id, notice=("kicked", {"reason": "votes"}))
+
+    events = [call.args[0] for call in ctx.sio.emit.await_args_list]
+    assert "turn_starting" in events, "the turn moved on"
+    without_the_drawer = next(
+        index
+        for index, call in enumerate(ctx.sio.emit.await_args_list)
+        if call.args[0] == "room_state"
+        and drawer.id not in [player["playerId"] for player in call.args[1]["players"]]
+    )
+    assert without_the_drawer < events.index("turn_starting"), events
