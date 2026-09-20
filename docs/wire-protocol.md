@@ -1195,7 +1195,14 @@ fixed when the drain starts, so a change to the configured default cannot move i
 [`frontend/src/lib/clientConfig.ts`](../frontend/src/lib/clientConfig.ts)):
 
 ```ts
-{ contractVersion: 2, flushIntervalMs: number }
+{
+  contractVersion: 5,
+  flushIntervalMs: number,
+  pollingFlushIntervalMs: number,
+  drawingFramesPerWindow: number,
+  drawingWindowSeconds: number,
+  afkInputWindowMs: number,
+}
 ```
 
 Cadences the *client* runs at, decided by the server so a deployment can tune them
@@ -1209,8 +1216,20 @@ the interval that follows it (§6, *Playback on the viewer*), and the default is
 instead of 40. It still ships rather than compiles, so it can be moved while somebody
 watches.
 
-Version 2 dropped `lobbyPollIntervalMs`. The lobby is told about rooms over its
-channel now (#462) and has no cadence of its own to be given.
+The version is checked **as a whole** before any field is read, the way the shutdown
+and pause notices are: a later server could give a field a different meaning rather
+than a different name, and a client that took the fields it recognised would apply half
+a contract it does not understand. An unknown version leaves every compiled default in
+place, which is the same direction each field-level fallback takes.
+
+Version 2 dropped `lobbyPollIntervalMs` — the lobby is told about rooms over its
+channel now (#462) and has no cadence of its own to be given. Version 3 added the
+drawing allowance a `draw` frame spends (#597), so a client replaying a stroke after a
+stall can pace itself under it instead of bursting into a refusal that drops the frame
+nobody is waiting on. Version 4 added `afkInputWindowMs` (#677), how recently this
+client must have seen a pointer or a key to answer an AFK check on the player's behalf.
+Version 5 added `pollingFlushIntervalMs` (#887), the flush cadence for a session on
+long-polling, where every flush is an HTTP POST carrying more header than frame (§1).
 
 The client keeps its compiled defaults for any field that is missing or outside
 what it can run, because a server that cannot say is not a reason to stop drawing.
