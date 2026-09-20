@@ -249,3 +249,38 @@ async def test_a_hung_teardown_of_the_room_left_behind_neither_blocks_nor_refuse
     await ctx.drain_room_cleanups(2)
     assert ctx.room_cleanups == set()
     ctx.room_codes.retire_ephemeral.assert_awaited_once_with(old["code"])
+
+
+async def test_a_hung_history_staging_for_the_game_left_behind_does_not_hold_the_entry(
+    scaled, monkeypatch
+):
+    """The old room is not empty - a spectator stays - so it is not torn down,
+    but the game the leaver was the last player of is abandoned, and that
+    stages history. Entry-driven, the staging runs on its own (#879)."""
+    from app.game import Game
+    from tests.fake_game_history_repo import FakeGameHistoryRepository
+
+    room_manager = RoomManager()
+    worker = SimpleNamespace(stage=stalls(3600), bind_outcome=lambda *_: None)
+    ctx, sio, sessions = build_stack(
+        room_manager, game_history_repo=FakeGameHistoryRepository(), finished_games=worker
+    )
+    await sessions.save("host", {"user_id": "user-1"})
+    await sessions.save("watcher", {"user_id": "user-2"})
+    create = sio.handlers["/"]["create_room"]
+    old = await create("host", {"nickname": "Host"})
+    await sio.handlers["/"]["join_room"](
+        "watcher", {"roomId": old["roomId"], "nickname": "Watcher", "asSpectator": True}
+    )
+    room = room_manager.get_room(old["roomId"])
+    room.state = "playing"
+    room.game = Game(turn_order=[old["playerId"]])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+
+    started = asyncio.get_running_loop().time()
+    answer = await create("host", {"nickname": "Host"})
+
+    assert answer["ok"] is True
+    assert asyncio.get_running_loop().time() - started < 0.3
+    assert room.game is None and room.players, "the game went, the spectator stayed"
+    assert len(ctx.room_cleanups) == 1, "its history is staged on its own"

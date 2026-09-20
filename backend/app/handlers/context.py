@@ -509,12 +509,22 @@ class HandlerContext:
         if removed is None:
             return False
         if defer_durable:
-            task = asyncio.create_task(self._retire_removed_room(removed))
-            self.room_cleanups.add(task)
-            task.add_done_callback(self.room_cleanups.discard)
+            self.defer_cleanup(self._retire_removed_room(removed))
             return True
         await self._retire_removed_room(removed)
         return True
+
+    def defer_cleanup(self, coroutine) -> None:
+        """Run a durable cleanup an entry caused on its own, tracked (#879).
+
+        The entry has a deadline and holds the socket's seating gate; these
+        writes have neither, and cutting one short is worse than letting it
+        run - a staging cancelled halfway loses the game, a retirement
+        cancelled leaves the code claimed. So they are handed here instead.
+        """
+        task = asyncio.create_task(coroutine)
+        self.room_cleanups.add(task)
+        task.add_done_callback(self.room_cleanups.discard)
 
     async def _retire_removed_room(self, removed) -> None:
         # A room can be torn down while it still holds a game: the last player

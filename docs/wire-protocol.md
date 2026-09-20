@@ -454,11 +454,12 @@ these paths that means a second room, or a game started twice. Instead:
   still being made waits for it and takes the room its leader made - read from the
   leader, not from the account's memo, which another tab may have moved on. Sockets have
   separate seating gates, so without that both would make one. An entry also releases
-  whatever seat its socket held **before** its last checks, and when that empties the
-  old room, only the in-memory half of the teardown is waited on: the abandoned game and
-  the code retirement run as a task of their own (drained at shutdown), because either
+  whatever seat its socket held **before** its last checks, and only the in-memory half
+  of what that causes is waited on. Whether the old room empties or a spectator keeps it
+  standing, the durable writes - the abandoned game's history, the retirement of a
+  removed room's code - run as tasks of their own (drained at shutdown), because either
   could hold the entry past its deadline with the seating gate pinned, and neither is
-  safe to cut short - a cancelled staging loses the game, a cancelled retirement leaves
+  safe to cut short: a cancelled staging loses the game, a cancelled retirement leaves
   the code claimed until the next start.
 - **A late answer is given back.** Should an entry's success arrive after the client
   gave up (`emitEntry`), the client sends `leave_room {roomId}`: the player was told it
