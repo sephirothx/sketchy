@@ -20,7 +20,7 @@ import {
 } from "../lib/canvasHistory";
 import { useSettingsStore } from "../store/settingsStore";
 import { useGameStore } from "../store/gameStore";
-import { currentClientConfig } from "../lib/clientConfig";
+import { currentClientConfig, flushIntervalFor } from "../lib/clientConfig";
 import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { createCanvasSurface, createLayerSurface, type CanvasSurface, type LayerSurface } from "../lib/canvasSurface";
@@ -157,12 +157,16 @@ function createCanvas(
   });
 }
 
-/** The drawing seat's cadence, as the server most recently stated it, or the
-baseline until a turn does. A getter rather than a subscription: playback reads
-it when it schedules a batch, and a turn that changes it has already re-sent
-`turn_started` by then. */
-const drawerInterval = () =>
-  useGameStore.getState().drawerFlushIntervalMs ?? currentClientConfig().flushIntervalMs;
+/** The drawing seat's cadence: the transport the server most recently named
+for it, resolved against the cadences in force right now.
+
+Resolved here rather than sent resolved, so that an administrator moving
+`client.flush_interval_ms` mid-turn reaches every viewer through the notice
+that already goes to all of them, instead of leaving them pacing at the old
+cadence until the next turn began. A getter rather than a subscription for the
+same reason: playback reads it when it schedules a batch, so it gets the
+current answer to both halves. */
+const drawerInterval = () => flushIntervalFor(useGameStore.getState().drawerTransport);
 
 export const Canvas = memo(createCanvas(useCanvasProtocol, "canvas", false, drawerInterval));
 

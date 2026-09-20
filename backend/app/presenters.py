@@ -74,16 +74,20 @@ def turn_payload(
     player: Player | None = None,
     spectators_see_prompt: bool = False,
     reactions: list[dict] | None = None,
-    drawer_flush_interval_ms: int | None = None,
+    drawer_transport: str | None = None,
 ) -> dict:
     player_id = player.id if player else None
     return {
         "phase": game.phase.value,
-        # What the drawing seat flushes at, so this socket plays each batch
-        # out over the interval that produced it rather than its own
-        # transport's (R-DRAW-01). Passed in: this module does no I/O and the
-        # drawer's transport is a socket fact.
-        "drawerFlushIntervalMs": drawer_flush_interval_ms,
+        # Which transport the drawing seat is on, so this socket plays each
+        # batch out over the interval that produced it rather than its own
+        # (R-DRAW-01). The transport rather than the milliseconds, because the
+        # milliseconds are a `client_config` value that an administrator can
+        # move mid-turn and every client is told about at once; sending the
+        # resolved number left every viewer pacing at the old one until the
+        # next turn. Passed in: this module does no I/O, and which transport a
+        # socket is on is a socket fact.
+        "drawerTransport": drawer_transport,
         # The turn's durable id, so a reaction can name the drawing it is
         # about; and the reactions so far, so a reconnect sees the tally and
         # its own pick rather than an empty control.

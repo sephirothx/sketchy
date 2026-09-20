@@ -111,25 +111,16 @@ export function currentClientConfig(): ClientConfig {
   return current;
 }
 
-/** A cadence the server named for somebody *else* - the drawing seat's, on
-`turn_started` and `sync_game` (R-DRAW-01) - held to the same mirrored bounds
-as the ones this client runs at, and falling back to the baseline.
+/** How long queued points wait before they go out, for a session on this
+transport (#887).
 
-The range is the union of the two: a drawer may be on either transport, and
-which one is not this client's business. Unbounded it would degrade safely -
-a span at or below zero paints the batch at once and `MAX_LAG_MS` caps the
-other end - but every other cadence on the wire is checked here, and a value
-that is only safe by accident is one nobody has decided about. */
-export function senderFlushInterval(value: unknown): number {
-  const { min } = BOUNDS.flushIntervalMs;
-  const { max } = BOUNDS.pollingFlushIntervalMs;
-  if (typeof value !== "number" || !Number.isFinite(value)) return current.flushIntervalMs;
-  if (value < min || value > max) return current.flushIntervalMs;
-  return value;
-}
-
-/** How long queued points wait before they go out, for the transport this
-session is actually on (#887). */
+Used for two transports that are not always the same one: this client's, for
+its own flush, and the drawing seat's, which the server names on `turn_started`
+and `sync_game` so a viewer can pace playback by the cadence that produced each
+batch (R-DRAW-01). Resolving the drawer's here rather than receiving it
+resolved is what lets an administrator's change to either cadence reach a
+viewer mid-turn. Nothing needs bounding: only `"polling"` is recognised and
+everything else, including a value no build has heard of, is the baseline. */
 export function flushIntervalFor(
   transport: string | null | undefined,
   config: ClientConfig = current,

@@ -4,7 +4,7 @@ Until #887 there was one interval, so a viewer could assume its own: every
 drawer flushed at 80 ms and every viewer paced at 80 ms, matched by
 construction. A cadence of its own for long-polling broke that, and nothing on
 the wire says what the sender flushed at - so the server says it
-(`drawerFlushIntervalMs` on `turn_started` and `sync_game`, R-DRAW-01) and the
+(`drawerTransport` on `turn_started` and `sync_game`, R-DRAW-01) and the
 renderer takes it as an argument.
 
 Both mismatches are failures, in opposite directions: pacing a 240 ms batch
@@ -19,7 +19,12 @@ import { readFileSync } from "node:fs";
 import { createStrokePlayback } from "../src/lib/strokePlayback.ts";
 import { createProtocolRenderer } from "../src/lib/protocolRenderer.ts";
 import { createCanvasSurface } from "../src/lib/canvasSurface.ts";
-import { senderFlushInterval, resetClientConfig } from "../src/lib/clientConfig.ts";
+import { useGameStore } from "../src/store/gameStore.ts";
+import {
+  applyClientConfig,
+  flushIntervalFor,
+  resetClientConfig,
+} from "../src/lib/clientConfig.ts";
 
 const STYLE = { radius: 2, color: [0, 0, 0, 255] };
 const FRAME_MS = 16;
@@ -121,17 +126,35 @@ test("the renderer's module graph has no socket in it", () => {
   assert.ok(!/clientConfig/.test(source), "the renderer reads a cadence of its own");
 });
 
-test("a cadence named for the drawing seat is bounded like any other", () => {
-  // It arrives on `turn_started` rather than in `client_config`, so it used to
-  // skip the mirrored bounds every other cadence goes through. The range is
-  // the union of the two transports': a drawer may be on either.
+test("the drawing seat's transport resolves against whatever the cadences are now", () => {
+  // The reason it is the transport on the wire and not the milliseconds. An
+  // administrator can move either cadence while a turn is running, and every
+  // client is told at once (`client_config`); a viewer holding the resolved
+  // number went on pacing at the old one until the next turn began.
   resetClientConfig();
-  assert.equal(senderFlushInterval(240), 240, "a polling drawer");
-  assert.equal(senderFlushInterval(80), 80, "a WebSocket drawer");
-  assert.equal(senderFlushInterval(10), 10, "the floor");
-  assert.equal(senderFlushInterval(1000), 1000, "the ceiling");
-  for (const bad of [0, -80, 1001, Number.NaN, Number.POSITIVE_INFINITY, "240", null, undefined, {}]) {
-    assert.equal(senderFlushInterval(bad), 80, `${String(bad)} should fall back`);
+  assert.equal(flushIntervalFor("polling"), 240);
+  assert.equal(flushIntervalFor("websocket"), 80);
+
+  applyClientConfig({
+    contractVersion: 5,
+    flushIntervalMs: 120,
+    pollingFlushIntervalMs: 360,
+    drawingFramesPerWindow: 100,
+    drawingWindowSeconds: 2,
+    afkInputWindowMs: 60_000,
+  });
+
+  assert.equal(flushIntervalFor("polling"), 360, "the new cadence, mid-turn");
+  assert.equal(flushIntervalFor("websocket"), 120);
+  resetClientConfig();
+});
+
+test("anything but polling is the baseline, so nothing needs bounding", () => {
+  // The value is an enum on the wire, not a number: a transport this build
+  // has never heard of degrades exactly as a missing one does.
+  resetClientConfig();
+  for (const value of [null, undefined, "", "websocket", "webtransport", "POLLING", 240, {}]) {
+    assert.equal(flushIntervalFor(value), 80, `${String(value)} should be the baseline`);
   }
 });
 
@@ -149,4 +172,49 @@ test("the scratch pad never pays the polling cadence", async () => {
   );
   const canvas = await readFile(new URL("../src/components/Canvas.tsx", import.meta.url), "utf8");
   assert.doesNotMatch(canvas, /currentTransport/, "and neither is its playback");
+});
+
+/** What `Canvas.tsx` hands the renderer: the seat's transport as the last turn
+named it, resolved against the cadences in force at the moment a batch is
+scheduled. */
+const drawerInterval = () => flushIntervalFor(useGameStore.getState().drawerTransport);
+
+function aTurnDrawnOver(transport) {
+  const store = useGameStore.getState();
+  store.reset();
+  store.startDrawing({
+    drawerId: "p1", maskedPrompt: "_ _ _", roundNumber: 1, totalRounds: 3,
+    seconds: 80, turnId: "t1", drawerTransport: transport,
+  });
+}
+
+test("a cadence an administrator moves mid-turn reaches the viewer's pacing", () => {
+  // The whole reason the transport is what travels. Before, the turn's payload
+  // carried the resolved milliseconds, so a viewer went on pacing at the
+  // cadence in force when the turn started - and `client_config` had already
+  // told it the new one.
+  resetClientConfig();
+  aTurnDrawnOver("polling");
+  assert.equal(drawerInterval(), 240);
+
+  applyClientConfig({
+    contractVersion: 5,
+    flushIntervalMs: 80,
+    pollingFlushIntervalMs: 360,
+    drawingFramesPerWindow: 100,
+    drawingWindowSeconds: 2,
+    afkInputWindowMs: 60_000,
+  });
+
+  assert.equal(drawerInterval(), 360, "still the same turn, and no new payload");
+  useGameStore.getState().reset();
+  resetClientConfig();
+});
+
+test("a turn that names no transport paces at the baseline", () => {
+  resetClientConfig();
+  aTurnDrawnOver(undefined);
+  assert.equal(useGameStore.getState().drawerTransport, null);
+  assert.equal(drawerInterval(), 80);
+  useGameStore.getState().reset();
 });

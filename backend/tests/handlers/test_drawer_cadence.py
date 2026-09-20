@@ -1,4 +1,4 @@
-"""The room is told what the drawing seat flushes at (R-DRAW-01, #887).
+"""The room is told which transport the drawing seat is on (R-DRAW-01, #887).
 
 A viewer plays each received batch out over the interval that produced it, so
 that the interval reads as a line rather than as steps (#559). While every
@@ -7,12 +7,16 @@ its own for long-polling ended that, and nothing on the wire says what the
 sender batched at. The server does know - it holds the drawer's socket - so it
 says, on `turn_started` and on the `sync_game` a late arrival or a rebind
 takes.
+
+The *transport*, not the milliseconds it resolves to. The cadences themselves
+are tunables an administrator can move while a turn is running, and the notice
+that carries them already reaches every client at once; a viewer handed the
+resolved number went on pacing at the old one until the next turn began.
 """
 from __future__ import annotations
 
 from unittest.mock import AsyncMock, Mock
 
-from app.client_config import client_config
 from app.game import Phase
 from tests.fake_game_history_repo import FakeGameHistoryRepository
 from tests.handlers.helpers import build_context, build_room
@@ -35,7 +39,7 @@ def a_room(transport: str | None):
     return ctx, room
 
 
-async def test_a_turn_tells_every_seat_the_drawers_cadence():
+async def test_a_turn_tells_every_seat_the_drawers_transport():
     ctx, room = a_room("polling")
 
     await ctx.game_flow._start_fresh_game(room, list(room.player_list()))
@@ -45,16 +49,15 @@ async def test_a_turn_tells_every_seat_the_drawers_cadence():
 
     told = payloads(ctx, "turn_started")
     assert told, "the turn started"
-    assert all(p["drawerFlushIntervalMs"] == 240 for p in told), told
+    assert all(p["drawerTransport"] == "polling" for p in told), told
     # One drawer, one transport: not a lookup per recipient.
     assert ctx.sio.transport.call_count == 1
 
 
-async def test_a_websocket_drawer_is_the_baseline_and_so_is_a_drawer_with_no_socket():
-    for transport, expected in (
-        ("websocket", client_config.flush_interval_ms),
-        (None, client_config.flush_interval_ms),
-    ):
+async def test_a_websocket_drawer_says_so_and_a_drawer_with_no_socket_says_nothing():
+    # `None` is a seat between reconnects; the client reads anything that is
+    # not "polling" as the baseline, so it needs no answer of its own.
+    for transport, expected in (("websocket", "websocket"), (None, None)):
         ctx, room = a_room(transport)
         await ctx.game_flow._start_fresh_game(room, list(room.player_list()))
         room.game.force_prompt_choice()
@@ -62,7 +65,7 @@ async def test_a_websocket_drawer_is_the_baseline_and_so_is_a_drawer_with_no_soc
         await ctx.game_flow._begin_drawing(room)
 
         told = payloads(ctx, "turn_started")
-        assert told and all(p["drawerFlushIntervalMs"] == expected for p in told), (
+        assert told and all(p["drawerTransport"] == expected for p in told), (
             transport,
             told,
         )
@@ -83,4 +86,4 @@ async def test_a_socket_that_syncs_mid_turn_is_told_it_too():
     await ctx.game_flow._sync_player_view(watcher.sid, room, watcher)
 
     [synced] = payloads(ctx, "sync_game")
-    assert synced["drawerFlushIntervalMs"] == 240, synced
+    assert synced["drawerTransport"] == "polling", synced

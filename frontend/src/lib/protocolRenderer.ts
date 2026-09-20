@@ -61,7 +61,7 @@ export function createProtocolRenderer(
     // The cadence the *sender* batched at, never this client's transport: a
     // batch has to be played out over the interval that produced it, or the
     // schedule is wrong in one direction or the other (#887). The server says
-    // which the drawing seat is using (`drawerFlushIntervalMs`), because
+    // which transport the drawing seat is on (`drawerTransport`), because
     // nothing on the wire itself does; without it a viewer paced an 80 ms
     // batch over 240 ms - past `MAX_LAG_MS` on the next frame, so every batch
     // became a crawl and a snap - or a 240 ms batch over 80, which is the
