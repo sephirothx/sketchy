@@ -899,7 +899,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `friends_changed` | `{}` — this account's friend lists moved. Deliberately contentless: the list endpoint is the truth, and one event covers a request arriving and one being answered rather than two shapes to keep agreeing with it. The client still says **which** of those happened, by comparing the lists across the refetch this triggers (R-FRIEND-12) — so naming it costs no wire surface, and the event does not have to grow a second shape | every socket of **both** affected accounts, the one that acted included: its REST answer refreshes only the tab that called, and a second lobby has no other way to hear |
 | `email_state_changed` | `{}` — this account's recovery address state moved: an address was offered, one was confirmed, or the weekly reminder was closed. Contentless for the reason `friends_changed` is: `GET /api/auth/email` is the truth, and the address itself is not something to put on a broadcast. The client re-reads it, and re-reads again on reconnecting, which is how a tab hears a change it was offline for | every socket of the account. The confirmation link is presented without a session, usually in a tab of its own, so this is the only way the tabs that were already showing the reminder hear that it is done |
 | `friend_invite_received` | `{fromUserId, displayName, inviteToken, expiresIn}` — **no room code, name, or id** | every socket of the invited account |
-| `client_config` | `ClientConfig` — cadences the client runs at, and since version 3 the drawing allowance its frames spend (`drawingFramesPerWindow`, `drawingWindowSeconds`), so a replay can pace itself under it (§7). Version 4 adds `afkInputWindowMs`: how recently the client must have seen a pointer or a key to answer an `afk_check` for the player | one socket at handshake; every socket when a cadence or the drawing budget changes |
+| `client_config` | `ClientConfig` — cadences the client runs at, and since version 3 the drawing allowance its frames spend (`drawingFramesPerWindow`, `drawingWindowSeconds`), so a replay can pace itself under it (§7). Version 4 adds `afkInputWindowMs`: how recently the client must have seen a pointer or a key to answer an `afk_check` for the player. Version 5 adds `pollingFlushIntervalMs`, the flush cadence for a session on long-polling (§1). The full shape is under *Key payload shapes* | one socket at handshake; every socket when a cadence or the drawing budget changes |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
 
@@ -1195,7 +1195,14 @@ fixed when the drain starts, so a change to the configured default cannot move i
 [`frontend/src/lib/clientConfig.ts`](../frontend/src/lib/clientConfig.ts)):
 
 ```ts
-{ contractVersion: 2, flushIntervalMs: number }
+{
+  contractVersion: 5,
+  flushIntervalMs: number,
+  pollingFlushIntervalMs: number,
+  drawingFramesPerWindow: number,
+  drawingWindowSeconds: number,
+  afkInputWindowMs: number,
+}
 ```
 
 Cadences the *client* runs at, decided by the server so a deployment can tune them
@@ -1209,8 +1216,20 @@ the interval that follows it (§6, *Playback on the viewer*), and the default is
 instead of 40. It still ships rather than compiles, so it can be moved while somebody
 watches.
 
-Version 2 dropped `lobbyPollIntervalMs`. The lobby is told about rooms over its
-channel now (#462) and has no cadence of its own to be given.
+The version is checked **as a whole** before any field is read, the way the shutdown
+and pause notices are: a later server could give a field a different meaning rather
+than a different name, and a client that took the fields it recognised would apply half
+a contract it does not understand. An unknown version leaves every compiled default in
+place, which is the same direction each field-level fallback takes.
+
+Version 2 dropped `lobbyPollIntervalMs` — the lobby is told about rooms over its
+channel now (#462) and has no cadence of its own to be given. Version 3 added the
+drawing allowance a `draw` frame spends (#597), so a client replaying a stroke after a
+stall can pace itself under it instead of bursting into a refusal that drops the frame
+nobody is waiting on. Version 4 added `afkInputWindowMs` (#677), how recently this
+client must have seen a pointer or a key to answer an AFK check on the player's behalf.
+Version 5 added `pollingFlushIntervalMs` (#887), the flush cadence for a session on
+long-polling, where every flush is an HTTP POST carrying more header than frame (§1).
 
 The client keeps its compiled defaults for any field that is missing or outside
 what it can run, because a server that cannot say is not a reason to stop drawing.
@@ -2271,9 +2290,9 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `SCORING_RULES_VERSION` (1) | Any constant or algorithm that can change a score | Any such change; every completed game freezes its rule snapshot |
 | `GAME_RULE_SNAPSHOT_VERSION` (1) | The stored rule-snapshot JSON contract | The snapshot's *shape* changes |
 | `score_ledger_version` | The score-event ledger contract | The ledger's semantics change |
-| `contractVersion` on `server_shutdown` | The shutdown notice | The notice's shape changes |
-| `contractVersion` on `server_paused` | The maintenance-pause notice | The notice's shape changes |
-| `contractVersion` on `client_config` (3) | The client-cadence notice | A cadence is added, removed or renamed |
+| `contractVersion` on `server_shutdown` (1) | The shutdown notice | The notice's shape changes |
+| `contractVersion` on `server_paused` (1) | The maintenance-pause notice | The notice's shape changes |
+| `contractVersion` on `client_config` (5) | The client-cadence notice | A cadence is added, removed or renamed |
 | Data export `schema_version` (11) | The export document, pinned by [`fixtures/account_data_export_v11_fields.json`](../fixtures/account_data_export_v11_fields.json) | The export's field surface changes |
 
 ### The contract as a document
