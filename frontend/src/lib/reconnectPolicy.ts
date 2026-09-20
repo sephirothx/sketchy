@@ -237,7 +237,16 @@ itself, so it covers every caller.
 
 `"open"` counts as in flight because the engine being up is not the socket
 being connected: the namespace CONNECT is still a round trip away, and closing
-in that window throws away a handshake that had all but finished. */
+in that window throws away a handshake that had all but finished.
+
+That is also the one window this costs something. The stall watchdog disarms
+at the *engine* open, so a server that opens the transport and then never
+acknowledges the Socket.IO CONNECT leaves an open manager, a disconnected
+socket, and now a suppressed `online` too. Nothing here shortens it, on
+purpose: retrying is what the watchdog does for a transport that never came
+up, and this failure is the application above it, where putting polling first
+would change nothing. Engine.IO closes the session 45 s after the last pong
+(wire-protocol §1) and the ordinary reconnect follows. */
 export function attemptIsInFlight(managerReadyState: string | undefined): boolean {
   return managerReadyState === "opening" || managerReadyState === "open";
 }

@@ -144,7 +144,7 @@ test("the scratch pad never pays the polling cadence", async () => {
   );
   assert.match(
     pointer,
-    /unbudgeted\s*\n?\s*\?\s*config\.flushIntervalMs/,
+    /local\s*\n?\s*\?\s*config\.flushIntervalMs/,
     "the pad's own flush is the baseline, not its transport's",
   );
   const canvas = await readFile(new URL("../src/components/Canvas.tsx", import.meta.url), "utf8");

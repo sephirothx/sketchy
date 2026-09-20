@@ -53,7 +53,8 @@ export interface CanvasRef {
 function createCanvas(
   useProtocol: (renderer: CanvasProtocolRenderer) => CanvasProtocol,
   region: RenderRegion,
-  unbudgeted: boolean,
+  // Nothing this canvas draws leaves the tab (`useCanvasPointerInput`).
+  local: boolean,
   // The cadence whoever produced these frames is flushing at, which is what
   // playback schedules a batch over (R-DRAW-01).
   senderIntervalMs: () => number,
@@ -119,7 +120,7 @@ function createCanvas(
       surfaceRef,
       previewSurfaceRef,
       previewContextRef,
-      { isDrawer, color, brushWidth, tool, brushCursor, penPressure, unbudgeted },
+      { isDrawer, color, brushWidth, tool, brushCursor, penPressure, local },
     );
 
     useImperativeHandle(ref, () => ({
