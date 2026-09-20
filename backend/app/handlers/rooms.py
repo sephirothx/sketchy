@@ -15,6 +15,7 @@ from app.services.runtime_metrics import metrics
 from app.services.telemetry import telemetry
 from app.handlers.payloads import (
     CreateRoomPayload,
+    QuickPlayPayload,
     JoinRoomPayload,
     LeaveRoomPayload,
     PayloadError,
@@ -45,6 +46,7 @@ from app.rooms import (
     generate_random_name_color,
     normalize_name_color,
 )
+from app.drawing_rules import DEFAULT_COLOR_MODE
 from app.handlers.refusals import ErrorCode, refuse
 
 logger = logging.getLogger("sketchy.handlers.rooms")
@@ -173,6 +175,16 @@ async def _give_back_allowance(ctx: HandlerContext, user_id) -> None:
 ENDED_ACCOUNT_ACKNOWLEDGEMENT = {
     "ok": False, "errorCode": ErrorCode.ACCOUNT_ENDED,
     "error": "This account is no longer active.",
+}
+
+
+ACCOUNT_REQUIRED_TO_OPEN = {
+    "ok": False,
+    "errorCode": ErrorCode.ACCOUNT_REQUIRED,
+    "error": (
+        "Sketchy could not start a session for you, so it cannot open "
+        "a room. Allow cookies for this site and reload."
+    ),
 }
 
 
@@ -305,13 +317,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         # a factual seat - but creating is the command that allocates a room,
         # a code reservation and a prompt pool, and a ceiling nothing can be
         # keyed on is not a ceiling.
-        return {
-            "ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED,
-            "error": (
-                "Sketchy could not start a session for you, so it cannot open "
-                "a room. Allow cookies for this site and reload."
-            ),
-        }
+        return ACCOUNT_REQUIRED_TO_OPEN
     repeat = _room_already_created(ctx, identity.user_id, payload.request_id)
     if repeat is not None:
         # A retry of a creation that happened: the answer was lost, or came
@@ -689,9 +695,6 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
             }
         return {"ok": False, "errorCode": ErrorCode.ROOM_NOT_FOUND, "error": "Room not found"}
 
-    if payload.quick_play and not _open_for_quick_play(room):
-        return QUICK_PLAY_REFUSAL
-
     return await _seat_in_room(
         ctx,
         sid,
@@ -700,24 +703,31 @@ async def _join_room(ctx: HandlerContext, sid, data, seated: list):
         seated,
         soft=payload.soft,
         reconnect_only=payload.reconnect_only,
-        quick_play=payload.quick_play,
     )
 
 
-QUICK_PLAY_REFUSAL = {
+# A room that stopped being open between being ranked and being sat in. Never
+# sent: `quick_play` compares it by identity and picks again (#931), and the
+# deadline is what ends the picking.
+QUICK_PLAY_CLOSED = {
     "ok": False,
-    "errorCode": ErrorCode.ROOM_NOT_OPEN,
-    "error": "That room is no longer open to Quick play",
+    "errorCode": ErrorCode.ROOM_FULL,
+    "error": "That room is no longer open",
 }
+
+# The refusals that are about one room rather than the player: Quick play
+# tries the next room instead of answering them.
+QUICK_PLAY_SKIPS = frozenset(
+    {ErrorCode.ROOM_FULL, ErrorCode.ROOM_NOT_FOUND, ErrorCode.ROOM_ENDED}
+)
 
 
 def _open_for_quick_play(room) -> bool:
     """Public and waiting, with no game running (R-UX-14).
 
-    Asked twice: when the room is resolved, which saves the work for a room
-    that plainly is not, and again immediately before the seat is added, with
-    no await in between, because the host can start the game or make the room
-    private while the identity is being resolved.
+    Asked when the rooms are ranked and again immediately before the seat is
+    added, with no await in between: the host can start the game or make the
+    room private while the entry is being made.
     """
     return bool(room.is_public) and room.state == "waiting" and not room.game
 
@@ -732,6 +742,7 @@ async def _seat_in_room(
     soft: bool = False,
     reconnect_only: bool = False,
     quick_play: bool = False,
+    identity=None,
 ):
     """Take a seat in a room that has already been resolved.
 
@@ -853,20 +864,23 @@ async def _seat_in_room(
     if reconnect_only:
         return {"ok": False, "errorCode": ErrorCode.NO_SESSION_TO_RESUME, "error": "No existing session in this room"}
 
-    try:
-        identity = await _bounded(
-            resolve_identity(
-                ctx,
-                sid,
-                payload.nickname,
-                payload.colorblind_safe_colors,
-            ),
-            "resolving who is entering",
-        )
-    except IdentityError as error:
-        return {"ok": False, "errorCode": error.error_code, "error": str(error), "field": "nickname"}
-    except EntryTimedOut:
-        return BUSY_ACKNOWLEDGEMENT
+    if identity is None:
+        # Quick play resolves it once and tries rooms with it (#931); an
+        # ordinary join resolves it here.
+        try:
+            identity = await _bounded(
+                resolve_identity(
+                    ctx,
+                    sid,
+                    payload.nickname,
+                    payload.colorblind_safe_colors,
+                ),
+                "resolving who is entering",
+            )
+        except IdentityError as error:
+            return {"ok": False, "errorCode": error.error_code, "error": str(error), "field": "nickname"}
+        except EntryTimedOut:
+            return BUSY_ACKNOWLEDGEMENT
 
     if payload.as_spectator and not ctx.room_capacity.admits_a_spectator(room):
         # Deliberately not `room_full`: that code is what makes the client
@@ -891,7 +905,7 @@ async def _seat_in_room(
     # seat: the room may have started or gone private since it was resolved.
     if quick_play and not _open_for_quick_play(room):
         ctx.room_capacity.refund_join(sid)
-        return QUICK_PLAY_REFUSAL
+        return QUICK_PLAY_CLOSED
     if entry_expired():
         # As for a room: a seat the client was told it did not get must not
         # exist (#879).
@@ -1217,8 +1231,136 @@ async def leave_room(ctx: HandlerContext, sid, data=None):
         await ctx.game_flow.release_seat(sid, room, player)
 
 
+async def quick_play(ctx: HandlerContext, sid, data):
+    """One press from the lobby into a room (#931, R-UX-14).
+
+    The client used to decide this from the lobby's room list and walk the
+    candidates, one `join_room` each: a round trip per candidate, a dependency
+    on a list that had to have arrived, and - when several visitors pressed in
+    the same moment, which is what a shared link produces - a room each,
+    because every one of them read the same empty list. The server holds the
+    rooms, so it picks: the fullest public room that is waiting in the
+    caller's language with a seat free, or a new public room on the defaults
+    the create form mirrors.
+
+    Choosing and seating are separated by awaits, so a room can fill or start
+    in between; that refusal is not the caller's answer, it is the next room's
+    turn. Openers of one language share the first room made: the one that
+    opens it registers itself, the rest wait and then find it among the
+    candidates, so twenty presses on an empty server fill rooms rather than
+    opening twenty.
+    """
+    seated: list = []
+    with entry_deadline():
+        async with ctx.seating(sid):
+            answer = await _quick_play(ctx, sid, data, seated)
+        await _after_seating(ctx, seated)
+    return answer
+
+
+async def _quick_play(ctx: HandlerContext, sid, data, seated: list):
+    try:
+        payload = parse_payload(QuickPlayPayload, data)
+    except PayloadError as error:
+        return error.acknowledgement()
+    if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
+        return ctx.shutdown.rejection_acknowledgement()
+    try:
+        identity = await _bounded(
+            resolve_identity(ctx, sid, payload.nickname, payload.colorblind_safe_colors),
+            "resolving who is entering",
+        )
+    except IdentityError as error:
+        return {"ok": False, "errorCode": error.error_code, "error": str(error), "field": "nickname"}
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+
+    entering = _EnteringAs(payload)
+    while not entry_expired():
+        for room in _quick_play_candidates(ctx, payload.prompt_language):
+            answer = await _seat_in_room(
+                ctx, sid, room, entering, seated, quick_play=True, identity=identity
+            )
+            if answer is QUICK_PLAY_CLOSED or answer.get("errorCode") in QUICK_PLAY_SKIPS:
+                continue
+            return {**answer, "created": False} if answer.get("ok") else answer
+        opening = ctx.quick_play_openings.get(payload.prompt_language)
+        if opening is not None:
+            # Somebody is already opening a room for this language: take a
+            # seat in theirs rather than opening a second one beside it.
+            try:
+                await _bounded(asyncio.shield(opening), "waiting for a room to open")
+            except EntryTimedOut:
+                return BUSY_ACKNOWLEDGEMENT
+            continue
+        return await _open_a_quick_play_room(ctx, sid, payload, identity, seated)
+    return BUSY_ACKNOWLEDGEMENT
+
+
+def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
+    """The rooms worth trying, fullest first (R-UX-14).
+
+    Only this language - a room in another would hand the player words they
+    can neither draw nor guess - and never a game already under way. Fullest
+    first, because the room one seat short of a game is the one worth filling.
+    """
+    # Seated rather than active: a seat held by somebody disconnected inside
+    # their grace, or marked AFK, is still taken - `add_player` counts those,
+    # and ranking by anything else offers a room that would refuse the seat.
+    open_rooms = [
+        room
+        for room in ctx.room_manager.rooms.values()
+        if _open_for_quick_play(room)
+        and room.prompt_language == language
+        and len(room.seated_players()) < room.max_players
+    ]
+    return sorted(open_rooms, key=lambda room: (-len(room.seated_players()), room.id))
+
+
+async def _open_a_quick_play_room(
+    ctx: HandlerContext, sid, payload, identity, seated: list
+):
+    """Open the room Quick play falls back to, and let others in behind it."""
+    if not identity.user_id:
+        # The same boundary `create_room` draws: joining is open to a socket
+        # with no account, opening a room is not, because the ceilings are
+        # keyed on one.
+        return ACCOUNT_REQUIRED_TO_OPEN
+    language = payload.prompt_language
+    opening = asyncio.get_running_loop().create_future()
+    ctx.quick_play_openings[language] = opening
+    answer: dict | None = None
+    try:
+        answer = await _create_new_room(
+            ctx, sid, _quick_play_room(payload), identity, seated
+        )
+        return {**answer, "created": True} if answer.get("ok") else answer
+    finally:
+        del ctx.quick_play_openings[language]
+        opening.set_result(answer.get("roomId") if answer and answer.get("ok") else None)
+
+
+def _quick_play_room(payload) -> CreateRoomPayload:
+    """The room Quick play opens: the payload's own defaults, public, in the
+    caller's language, and colour-safe when they are (R-UX-14).
+
+    Server-side on purpose (#931): the rule that picks a room and the room it
+    opens when none fits are one decision, and a client cannot ask Quick play
+    for something else. The name is left empty, so the room is given one.
+    """
+    return CreateRoomPayload(
+        nickname=payload.nickname,
+        nameColor=payload.name_color,
+        colorblindSafeColors=payload.colorblind_safe_colors,
+        isPublic=True,
+        promptLanguage=payload.prompt_language,
+        colorMode="colorblind_safe" if payload.colorblind_safe_colors else DEFAULT_COLOR_MODE,
+    )
+
+
 def register(ctx: HandlerContext) -> None:
     ctx.on("create_room", handler=partial(create_room, ctx))
+    ctx.on("quick_play", handler=partial(quick_play, ctx))
     ctx.on("get_room_settings", handler=partial(get_room_settings, ctx))
     ctx.on("get_custom_prompts", handler=partial(get_custom_prompts, ctx))
     ctx.on("get_recap_drawing", handler=partial(get_recap_drawing, ctx))

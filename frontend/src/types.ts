@@ -552,7 +552,6 @@ export type ErrorCode =
   | "not_in_room"
   | "room_not_found"
   | "room_ended"
-  | "room_not_open"
   | "could_not_create_room"
   | "no_session_to_resume"
   | "host_only"

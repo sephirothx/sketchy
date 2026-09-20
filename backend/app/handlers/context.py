@@ -169,6 +169,11 @@ class HandlerContext:
     # The durable half of teardowns an entry started (#879), running on their
     # own so the entry does not wait on them; drained at shutdown.
     room_cleanups: set[asyncio.Task] = field(default_factory=set, init=False, repr=False)
+    # The Quick play room being opened for each language (#931), so presses
+    # that find nothing fill the first room rather than opening one each.
+    quick_play_openings: dict[str, asyncio.Future] = field(
+        default_factory=dict, init=False, repr=False
+    )
     # Guesses being handled, by (sid, guess id), until they are answered: a
     # retry of one still in flight waits for its answer (#884).
     guesses_in_flight: dict[tuple[str, int], asyncio.Future] = field(

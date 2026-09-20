@@ -319,10 +319,6 @@ class JoinRoomPayload(RequestModel):
     # "Do I already hold a seat here?" - used by the invite screen, which must
     # not seat a visitor who is still deciding whether to play or spectate.
     reconnect_only: bool = Field(default=False, alias="reconnectOnly")
-    # Quick play (#589): seat me only if the room is still public and waiting
-    # when the seat is taken. The client chose it from a list that is a moment
-    # old, and ordinary joins deliberately admit a game in progress.
-    quick_play: bool = Field(default=False, alias="quickPlay")
 
     @field_validator("nickname")
     @classmethod
@@ -343,11 +339,46 @@ class JoinRoomPayload(RequestModel):
     def requires_room_reference(self) -> "JoinRoomPayload":
         if not self.room_id and not self.code:
             raise ValueError("roomId or code is required")
-        # Quick play picks a room from the public list and takes a seat to
-        # play in; a code or a spectator seat is not what it is for.
-        if self.quick_play and (not self.room_id or self.as_spectator):
-            raise ValueError("quickPlay needs roomId and a player seat")
         return self
+
+
+class QuickPlayPayload(RequestModel):
+    """One press from the lobby into a room (#931, R-UX-14).
+
+    Who is pressing and what language their words are in - nothing about the
+    room. The server picks a public room that is waiting in that language, or
+    opens one on the defaults above, so the rule and the room are in one place
+    rather than mirrored in a client that decides from a list a moment old.
+    """
+
+    nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
+    name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
+    colorblind_safe_colors: bool = Field(default=False, alias="colorblindSafeColors")
+    prompt_language: str = Field(default="en", alias="promptLanguage", max_length=32)
+
+    @field_validator("prompt_language")
+    @classmethod
+    def valid_prompt_language(cls, value: str) -> str:
+        """Canonical here, or the room this opens cannot be built - and the
+        rooms it ranks are keyed on the canonical tag."""
+        try:
+            return validate_prompt_language(value)
+        except ValueError as error:
+            raise ValueError(str(error)) from error
+
+    @field_validator("nickname")
+    @classmethod
+    def normalize_nickname(cls, value: str) -> str:
+        # Trimmed and checked here, unlike a join's: this one may open a room,
+        # and a name the room could not be created under must be refused at
+        # the door rather than raise on the way in.
+        value = value.strip()
+        if not value:
+            return value
+        try:
+            return validate_name(value)
+        except NameError_ as error:
+            raise ValueError(str(error)) from error
 
 
 class AddFriendPayload(RequestModel):

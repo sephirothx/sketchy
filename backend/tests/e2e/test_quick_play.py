@@ -20,10 +20,23 @@ HOLD_ROOM_ENTRIES = """
 (() => {
   const send = WebSocket.prototype.send;
   WebSocket.prototype.send = function (data) {
-    if (typeof data === "string" && /\\["(join_room|create_room|join_friend_room)"/.test(data)) {
+    if (typeof data === "string" && /\\["(join_room|create_room|join_friend_room|quick_play)"/.test(data)) {
       setTimeout(() => send.call(this, data), 1500);
       return;
     }
+    return send.call(this, data);
+  };
+})();
+"""
+
+
+# Drops this page's `watch_lobby`, so no room list ever arrives. Quick play is
+# the server's decision since #931 and must not wait for one.
+BLOCK_THE_LOBBY_FEED = """
+(() => {
+  const send = WebSocket.prototype.send;
+  WebSocket.prototype.send = function (data) {
+    if (typeof data === "string" && /\\["watch_lobby"/.test(data)) return;
     return send.call(this, data);
   };
 })();
@@ -234,4 +247,36 @@ async def test_an_invite_link_waits_while_another_way_in_is_in_flight():
             await friend_context.close()
             await guest_context.close()
             await other_context.close()
+            await browser.close()
+
+
+async def test_quick_play_needs_no_room_list():
+    """#931: the press used to be decided from the lobby's list, so it waited
+    for one - up to ten seconds after naming a first-time visitor, whose
+    naming reconnects the socket. The server decides it now."""
+    tag = random.randint(1000, 9999)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context(viewport={"width": 1280, "height": 900}, locale="de-DE")
+        blind_context = await browser.new_context(viewport={"width": 1280, "height": 900}, locale="de-DE")
+        host = await host_context.new_page()
+        blind = await blind_context.new_page()
+        try:
+            code, _ = await open_public_room(host, f"QpDeHost{tag}")
+
+            await blind.add_init_script(BLOCK_THE_LOBBY_FEED)
+            await blind.goto(BASE_URL)
+            await use_guest_name(blind, f"QpBlind{tag}")
+            await blind.wait_for_selector(".lobby-rooms-panel")
+            # No list: the panel is still loading, and the button is live.
+            assert await blind.locator('[data-testid="public-room-card"]').count() == 0
+            await expect(blind.locator('[data-testid="quick-play"]')).to_be_enabled()
+            await blind.click('[data-testid="quick-play"]')
+
+            # And it lands in the room the server knows is waiting.
+            await blind.wait_for_selector('[data-testid="waiting-room"]')
+            assert await room_code(blind) == code
+        finally:
+            await host_context.close()
+            await blind_context.close()
             await browser.close()
