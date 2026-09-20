@@ -109,3 +109,22 @@ export function replyIsCurrent(
   if (now.lastAuthoritativeAt !== null && now.lastAuthoritativeAt > scope.sentAt) return false;
   return true;
 }
+
+
+/** Whether a tab coming back into view has to ask the server anything (#886).
+
+A hidden tab keeps its socket and keeps receiving: a phase event that landed
+while it was away is as good as one that landed in front of the player, so a
+one-second alt-tab has nothing to reconcile. What is worth a soft rebind is a
+tab that was away longer than the forced-probe interval - the same
+`MAX_GAP_MS` a visible seat is never allowed to exceed - or one that heard
+nothing authoritative while it was gone, which is the case the probe exists
+for. Before this, every return sent a `join_room` and took a `sync_game`. */
+export function shouldResyncOnReturn(options: {
+  hiddenForMs: number;
+  heardWhileHidden: boolean;
+  maxGapMs?: number;
+}): boolean {
+  const maxGap = options.maxGapMs ?? MAX_GAP_MS;
+  return options.hiddenForMs >= maxGap || !options.heardWhileHidden;
+}

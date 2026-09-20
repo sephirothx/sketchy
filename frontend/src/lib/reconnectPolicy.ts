@@ -192,3 +192,21 @@ export function createRestartLatch(): RestartLatch {
     },
   };
 }
+
+
+/** Whether a network coming back, or a page restored from the back/forward
+cache, should connect right now (#886).
+
+It should: the backoff it would otherwise wait out was measured against a
+network that is no longer the one in front of it. Except during a planned
+restart, where the hold this client drew is the whole point of the spread
+(R-CONN-14) - a device waking mid-deploy must not turn it into everybody at
+once - and except on a tab that has been told to reload, whose socket is
+down for good. */
+export function shouldReconnectImmediately(state: {
+  connected: boolean;
+  updateRequired: boolean;
+  restartExpected: boolean;
+}): boolean {
+  return !state.connected && !state.updateRequired && !state.restartExpected;
+}

@@ -1,6 +1,6 @@
 import { useEffect } from "react";
 
-import { resubscribeDelayMs } from "../lib/lobbyChannel";
+import { createHiddenWatch, resubscribeDelayMs } from "../lib/lobbyChannel";
 import { createPendingDeltas } from "../lib/lobbyChannel";
 import { chatResumeRequest } from "../lib/lobbyChat";
 import { emitWithAck, socket } from "../lib/socket";
@@ -65,12 +65,37 @@ export function useLobbyChannel(): void {
       retry = null;
     }
 
+    const hidden = createHiddenWatch({
+      leave: () => {
+        if (cancelled) return;
+        // Anything already in flight belongs to the subscription being given
+        // up: its answer must not land on a tab that has left the channel.
+        generation += 1;
+        asking = false;
+        wanted = false;
+        baseline = false;
+        pending.clear();
+        stopRetrying();
+        usePresenceStore.getState().reset();
+        useRoomsStore.getState().markStale();
+        if (socket.connected) socket.emit("unwatch_lobby", {});
+      },
+      rejoin: () => {
+        if (!cancelled) void subscribe();
+      },
+      setTimeout: (handler, delayMs) => window.setTimeout(handler, delayMs),
+      clearTimeout: (id) => window.clearTimeout(id),
+    });
+    const onVisibility = () => hidden.noteVisibility(document.visibilityState === "hidden");
     async function subscribe(): Promise<void> {
       // One in flight at a time. Every delta that finds the store out of step
       // asks for a resync, and while the answer is on its way each further
       // delta finds it out of step again - so without this a single missed
       // message turns into one subscription per tick.
-      if (cancelled || !socket.connected) return;
+      // Nothing re-subscribes a tab that has left the channel for being
+      // hidden (#886) - a reconnect while it is away included; coming back
+      // into view is what asks again.
+      if (cancelled || !socket.connected || !hidden.watching) return;
       if (asking) {
         wanted = true;
         return;
@@ -91,7 +116,7 @@ export function useLobbyChannel(): void {
       const chatHeld = chatResumeRequest(useLobbyChatStore.getState().chat, owner);
       try {
         const answer = await emitWithAck<Record<string, unknown>>("watch_lobby", chatHeld);
-        if (cancelled || mine !== generation) return;
+        if (cancelled || mine !== generation || !hidden.watching) return;
         if (!answer?.ok) {
           // The baseline has a budget of its own (#885); a refusal says when
           // to ask again, and asking sooner would only be refused again.
@@ -143,6 +168,11 @@ export function useLobbyChannel(): void {
         }
       }
     }
+
+    // A tab hidden for a while stops being a watcher (#886): it kept taking
+    // every tick, room change and chat line while nobody was looking. It
+    // leaves the channel after the grace and re-subscribes on return, which
+    // costs one baseline - and only the chat it does not hold (#885).
 
     // Held while the baseline is pending; past the buffer's cap a fresh
     // baseline is asked for, since what was held no longer joins onto anything.
@@ -217,6 +247,11 @@ export function useLobbyChannel(): void {
     socket.on("lobby_chat_message", onChat);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
+    document.addEventListener("visibilitychange", onVisibility);
+    // A tab can be opened in the background, or restored there when the
+    // browser starts: `visibilitychange` only fires on a change, so the state
+    // it is already in has to be read (#886).
+    onVisibility();
     if (socket.connected) void subscribe();
 
     return () => {
@@ -228,6 +263,8 @@ export function useLobbyChannel(): void {
       socket.off("lobby_chat_message", onChat);
       socket.off("connect", onConnect);
       socket.off("disconnect", onDisconnect);
+      document.removeEventListener("visibilitychange", onVisibility);
+      hidden.stop();
       usePresenceStore.getState().reset();
       useRoomsStore.getState().reset();
       useLobbyChatStore.getState().reset();

@@ -184,6 +184,27 @@ the cookie to a session record and stores `{"user_id": …}` on the Socket.IO se
   need it for. There is no acknowledgement on a handshake to put these in, and
   `room_state` is per-room so it never reaches a client sitting in the lobby.
 
+### A tab that goes away and comes back
+
+What the client does when the page is hidden, shown again, or the network
+returns ([`hooks/useLobbyChannel.ts`](../frontend/src/hooks/useLobbyChannel.ts),
+[`hooks/useRoomSessionReconnect.ts`](../frontend/src/hooks/useRoomSessionReconnect.ts),
+#886):
+
+- **Hidden for 30 s: the lobby leaves the channel** (`unwatch_lobby`) and its
+  presence list is dropped, the room list marked stale. Showing the tab again
+  re-subscribes. Nothing re-subscribes while it is away, a reconnect included.
+- **A seat re-binds on return only when it has something to reconcile**: away
+  longer than the forced-probe interval (`MAX_GAP_MS`, 15 s), or nothing
+  authoritative arrived while it was away. A hidden tab keeps its socket and
+  keeps receiving, so a short alt-tab with a phase event in it costs nothing;
+  it used to cost a `join_room` and a `sync_game` per seat per return.
+- **`online`, and a `pageshow` from the back/forward cache, connect at once**,
+  resetting the backoff: the delay it was waiting out describes a network that
+  is no longer the one in front of it. Not during a planned restart, where the
+  hold this client drew is the point (R-CONN-14) - a device waking mid-deploy
+  must not turn the spread back into everybody at once.
+
 ### Reconnection
 
 How a client comes back ([`lib/reconnectPolicy.ts`](../frontend/src/lib/reconnectPolicy.ts),
@@ -654,7 +675,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `propose_restart_vote` | `EmptyPayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `cast_restart_vote` | `RestartVotePayload` | ✓ | [`restart.py`](../backend/app/handlers/restart.py) |
 | `watch_lobby` | `WatchLobbyPayload` `{chatSince?, chatEpoch?}` — the last chat line held and the process that numbered it, so only newer lines are sent (#885) | ✓ — joins the channel first, so a `send_lobby_chat` queued behind it is from a watcher; the acknowledgement carries every baseline (presence, rooms, chat), read after the handler's lookups with nothing yielding before the answer. Presence and rooms are the **last completed broadcast**, built once per tick and shared by every asker (#885), so the next delta follows them exactly; a delta already on its way when the answer is built reaches the socket first, and the client holds it and replays it (#600) | [`lobby.py`](../backend/app/handlers/lobby.py) |
-| `unwatch_lobby` | `EmptyPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
+| `unwatch_lobby` | `EmptyPayload` | ✓ — sent when the lobby is navigated away from, and when the tab has been hidden for 30 s (#886): a background tab was taking every tick, room change and chat line for as long as it stayed open. Coming back re-subscribes, which costs one baseline and only the chat the tab does not already hold | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `send_lobby_chat` | `TextPayload` | ✓ | [`lobby.py`](../backend/app/handlers/lobby.py) |
 | `add_friend` | `AddFriendPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `friends_in_room` | `EmptyPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |

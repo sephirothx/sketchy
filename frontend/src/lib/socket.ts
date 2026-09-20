@@ -14,6 +14,7 @@ import {
   pingWindowMs,
   createRestartLatch,
   postReconnectDelayMs,
+  shouldReconnectImmediately,
   transportAlive,
 } from "./reconnectPolicy.ts";
 
@@ -147,6 +148,28 @@ socket.on("connect", () => {
   restart.noteConnect();
   restoreOrdinaryBackoff();
 });
+
+// The network came back, or the page came out of the back/forward cache
+// (#886). Either way the backoff this connection was waiting out describes a
+// network that no longer exists: try now rather than in up to ten seconds.
+// Guarded on the method, not the object: a unit test may stand `window` up as
+// the module scope to give `apiRequest` a timer.
+if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+  const reconnectNow = () => {
+    const now = {
+      connected: socket.connected,
+      updateRequired: isUpdateRequired(),
+      restartExpected: restart.restartExpected(),
+    };
+    if (!shouldReconnectImmediately(now)) return;
+    restoreOrdinaryBackoff();
+    socket.connect();
+  };
+  window.addEventListener("online", reconnectNow);
+  window.addEventListener("pageshow", (event) => {
+    if ((event as PageTransitionEvent).persisted) reconnectNow();
+  });
+}
 
 /** Whether the server said it was restarting and has not come back yet. A
 room then waits out a deploy before giving up. */

@@ -108,3 +108,68 @@ export function createPendingDeltas(limit: number = MAX_HELD_DELTAS): PendingDel
     },
   };
 }
+
+
+/** How long a lobby tab may sit hidden before it leaves the channel (#886).
+
+A hidden tab was still a watcher: it took every presence tick, every room
+change and every chat line for as long as it stayed open, which on a desktop
+is most of the day. Long enough that an alt-tab costs nothing, short enough
+that a tab left in the background is not a subscription. Coming back
+re-subscribes, and the acknowledgement is the whole baseline again - cheap
+since #885, which sends only the chat the tab does not already hold. */
+export const LOBBY_HIDDEN_GRACE_MS = 30_000;
+
+export interface HiddenWatch {
+  /** The tab's visibility moved. */
+  noteVisibility(hidden: boolean): void;
+  /** Stop watching (the lobby unmounted). */
+  stop(): void;
+  /** Whether this tab is still a watcher. */
+  readonly watching: boolean;
+}
+
+/** Leave the channel after the grace, and rejoin on return (#886).
+
+A state machine rather than three flags in the hook: hidden, shown again
+before the grace is up, shown again after it, and unmounted in any of those.
+Timers are passed in, so this is testable without a tab to hide. */
+export function createHiddenWatch(options: {
+  graceMs?: number;
+  leave: () => void;
+  rejoin: () => void;
+  setTimeout: (handler: () => void, delayMs: number) => number;
+  clearTimeout: (id: number) => void;
+}): HiddenWatch {
+  const grace = options.graceMs ?? LOBBY_HIDDEN_GRACE_MS;
+  let timer: number | null = null;
+  let watching = true;
+  const stopTimer = () => {
+    if (timer === null) return;
+    options.clearTimeout(timer);
+    timer = null;
+  };
+  return {
+    noteVisibility(hidden) {
+      if (hidden) {
+        if (!watching || timer !== null) return;
+        timer = options.setTimeout(() => {
+          timer = null;
+          watching = false;
+          options.leave();
+        }, grace);
+        return;
+      }
+      stopTimer();
+      if (watching) return;
+      watching = true;
+      options.rejoin();
+    },
+    stop() {
+      stopTimer();
+    },
+    get watching() {
+      return watching;
+    },
+  };
+}

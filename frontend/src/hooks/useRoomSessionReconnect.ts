@@ -1,6 +1,11 @@
 import { useEffect } from "react";
 import { observeServerCanvasSequence, onSessionRebindRequested } from "../lib/canvasRecovery";
-import { createHeartbeatSchedule, HEARTBEAT_MS, replyIsCurrent } from "../lib/heartbeatSchedule";
+import {
+  createHeartbeatSchedule,
+  HEARTBEAT_MS,
+  replyIsCurrent,
+  shouldResyncOnReturn,
+} from "../lib/heartbeatSchedule";
 import { emitWithAck, restartExpected, socket, transportIsAlive } from "../lib/socket";
 import { RESTART_PATIENCE_MS, afterFailedRebind, escalateHeartbeat } from "../lib/reconnectPolicy";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
@@ -59,6 +64,8 @@ export function useRoomSessionReconnect() {
     let consecutiveHeartbeatFailures = 0;
     // How far this run of missed probes has escalated, and when it may next
     // (#872): each escalation pushes the next one out.
+    // When this tab was hidden, so a return knows how long it was away.
+    let hiddenAt: number | null = null;
     let heartbeatEscalations = 0;
     let nextEscalationAt = 0;
     // Skips a probe when an authoritative event inside the last interval
@@ -184,10 +191,29 @@ export function useRoomSessionReconnect() {
     }
 
     function onVisibility() {
-      if (document.visibilityState !== "visible") return;
+      if (document.visibilityState !== "visible") {
+        hiddenAt = Date.now();
+        return;
+      }
+      const wasHiddenAt = hiddenAt;
+      hiddenAt = null;
       const { code, phase, roomState } = useGameStore.getState();
       if (!code) return;
       if (!ACTIVE_PHASES.has(phase) && roomState !== "playing") return;
+      // Not on every return (#886): a hidden tab keeps its socket and keeps
+      // receiving, so a short one with a phase event in it has nothing to
+      // reconcile. It used to cost a `join_room` and a `sync_game` per seat
+      // per alt-tab.
+      if (
+        wasHiddenAt !== null
+        && socket.connected
+        && !shouldResyncOnReturn({
+          hiddenForMs: Date.now() - wasHiddenAt,
+          heardWhileHidden: lastAuthoritativeAt !== null && lastAuthoritativeAt >= wasHiddenAt,
+        })
+      ) {
+        return;
+      }
       queueRebind({ soft: true });
     }
 
