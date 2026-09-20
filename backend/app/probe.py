@@ -118,7 +118,8 @@ def urllib_transport(timeout: float = STEP_TIMEOUT_SECONDS) -> Transport:
     async def transport(method, url, body, headers, *, wait_seconds: float | None = None):
         # A thread of our own rather than `asyncio.to_thread`, so that a
         # cancelled request is abandoned instead of joined. The server holds
-        # a quiet poll until its ping cycle runs out - 45 s by default - and
+        # a quiet poll until its ping cycle runs out - 45 s by default, the
+        # ping interval plus the ping timeout (`socket_server.py`, #887) - and
         # it keeps holding it after the session is closed: a client-sent close
         # packet ends the session without answering the poll. Joining that
         # thread is what made a 100 ms probe take 45 s to exit, and the E2E

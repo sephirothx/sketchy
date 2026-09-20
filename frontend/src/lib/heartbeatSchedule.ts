@@ -17,7 +17,9 @@ the transport is alive and nothing about the seat - the phase, the round or
 the binding may be stale under a healthy stream of drawing - which is why a
 "silence only" rule was refused in the issue. And whatever the events say, a
 probe is forced at least every `MAX_GAP_MS`: the transport itself
-notices nothing for 25-45 s (its ping interval plus timeout, #887), and a silent one-way failure has to be noticed before it.
+closes a silent socket 45 s after its last pong (a ping 25 s after it, a close
+20 s after that goes unanswered, #887), which is 20-45 s after the client
+actually went quiet, and a silent one-way failure has to be noticed before it.
 
 A reply is judged against the state the seat holds *when it lands*, not the
 one it held when the probe left: the two can differ across a turn change,

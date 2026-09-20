@@ -29,8 +29,8 @@ Companion documents: [`architecture.md`](architecture.md) ·
 | Scheme | Production is HTTPS only (#467): a handshake over plain `ws:` is closed before it is accepted (uvicorn answers 403), and a plain HTTP request is redirected with 308 to `PUBLIC_BASE_URL`; only `/api/health`, `/api/ready` and `/metrics` answer plain. A `Content-Security-Policy` on every response names `wss://` and `ws://` of the serving host beside `'self'` in `connect-src`, for browsers predating CSP 3 |
 | REST base | `/api`, relative to whatever origin served the page |
 | Default ack timeout | 8000 ms (`DEFAULT_ACK_TIMEOUT_MS`) |
-| Engine.IO | Pinned in [`socket_server.py`](../backend/app/socket_server.py) rather than inherited (#887), the way #561 pinned the layer above it: `ping_interval` **25 s**, `ping_timeout` **20 s**, `http_compression` **on** above a `compression_threshold` of **1024 B**, `allow_upgrades` **on**. So a connection that has gone silent is noticed between 25 and 45 s — the server sends a ping every 25 s and closes 20 s after one goes unanswered. That is deliberately *longer* than the seat's 30 s reconnect grace (R-CONN-01), because a phone that changes network should come back to its seat; a client that needs to know sooner has `session_ping` (R-CONN-12, every 5 s, forced every 15 s). The threshold is the polling transport's — a WebSocket has its own compression, above — and stays at 1024 B: measured over a captured gate stream, the responses are either tiny (median 97 B) or already past it, so lowering it to 256 B compresses nothing extra, and 128 B saves 149 B in three minutes while making one response bigger (`benchmarks/polling_compression.py`) |
-| Drawing cadence by transport | `flushIntervalMs` **80 ms** on a WebSocket, `pollingFlushIntervalMs` **240 ms** on long-polling (`client_config` version 5, #887). Every flush on polling is an HTTP POST carrying 0.6–0.8 KB of headers and cookie around a base64'd frame: at 80 ms that is ~25 KB/s of header alone, and a third as many POSTs costs a viewer on that transport ink up to 240 ms behind the hand instead of 80 ms. A polling session upgraded to WebSocket mid-session picks the faster cadence up with it. It is the **drawer's** transport that picks the cadence, never the viewer's: a batch is played out over the interval that produced it (§6), nothing on the wire says what the sender flushed at, so playback assumes the baseline - a viewer stretching an 80 ms batch over 240 ms would pass its lag budget on the next frame and compress every batch into a crawl and a snap |
+| Engine.IO | Pinned in [`socket_server.py`](../backend/app/socket_server.py) rather than inherited (#887), the way #561 pinned the layer above it: `ping_interval` **25 s**, `ping_timeout` **20 s**, `http_compression` **on** above a `compression_threshold` of **1024 B**, `allow_upgrades` **on**. So a silent socket is closed **45 s after its last pong** — the ping is not a cycle of its own: Engine.IO schedules the next one when a pong arrives, sends it 25 s later, and closes 20 s after it goes unanswered, which is also what both read loops time out at. Measured from the moment the client actually went quiet that is **20–45 s**, floored by the *timeout*, since it may have died anywhere inside the interval it was waiting out. The 45 s is deliberately *longer* than the seat's 30 s reconnect grace (R-CONN-01): a phone that changes network is usually back in its seat before the server has noticed the old socket at all, so the seat is never released. A client that needs to know sooner has `session_ping` (R-CONN-12, every 5 s, forced every 15 s). The threshold is the polling transport's — a WebSocket has its own compression, above — and stays at 1024 B: measured over a captured gate stream, the responses are either tiny (median 97 B) or already past it, so lowering it to 256 B compresses nothing extra, and 128 B saves 149 B in three minutes while making one response bigger (`benchmarks/polling_compression.py`) |
+| Drawing cadence by transport | `flushIntervalMs` **80 ms** on a WebSocket, `pollingFlushIntervalMs` **240 ms** on long-polling (`client_config` version 5, #887). Every flush on polling is an HTTP POST carrying 0.6–0.8 KB of headers and cookie around a base64'd frame: at 80 ms that is ~25 KB/s of header alone, and a third as many POSTs costs a viewer on that transport ink up to 240 ms behind the hand instead of 80 ms. A polling session upgraded to WebSocket mid-session picks the faster cadence up with it. Both are administrator-settable (`client.flush_interval_ms` 10–200 ms, `client.polling_flush_interval_ms` 10–1000 ms, R-CONF-01), and the drawing budget is checked against whichever of the two is shorter, since the budget is per caller rather than per transport (§ Command budgets). It is the **drawer's** transport that picks the cadence, never the viewer's: a batch is played out over the interval that produced it (§6), nothing on the wire says what the sender flushed at, so playback assumes the baseline - a viewer stretching an 80 ms batch over 240 ms would pass its lag budget on the next frame and compress every batch into a crawl and a snap |
 | WebSocket implementation | **wsproto**, named by [`backend/app/server.py`](../backend/app/server.py) through [`backend/app/ws_transport.py`](../backend/app/ws_transport.py) and pinned in `requirements.txt` — never uvicorn's `auto`, which picked by what happened to be installed (#561) |
 | Compression | **permessage-deflate with context takeover**, negotiated on every WebSocket: zlib level 6, memLevel 8, a **15-bit (32 KB) server window** the server states in its response whether or not the browser asked (`SERVER_MAX_WINDOW_BITS`); each accepted connection is counted under what it actually negotiated (`sketchy_socket_transport_total{compression}`) |
 
@@ -409,7 +409,7 @@ authorization or mutation runs. A parser may name a more specific code.
   the last interval and agrees with the phase and round it holds; nothing else counts
   (a draw frame, a chat line, a config notice or an Engine.IO pong proves the transport,
   not the seat), and a probe is forced at least every 15 s so a silent one-way failure
-  is noticed before the transport would notice it at all (25-45 s, §1) (#564,
+  is noticed before the transport would notice it at all (20–45 s, §1) (#564,
   [`frontend/src/lib/heartbeatSchedule.ts`](../frontend/src/lib/heartbeatSchedule.ts)).
   A reply is judged against the seat as it is when the reply lands, and only from the
   socket, room and seat the probe was sent on: an answer older than a turn change that
@@ -433,8 +433,10 @@ next command. The windows are **sliding**: each hit is timestamped and a command
 refused when the window ending now already holds the budget's worth, so an allowance
 never resets at a boundary a burst could straddle
 ([`handlers/budgets.py`](../backend/app/handlers/budgets.py)). The drawing budget is additionally bound to
-`client.flush_interval_ms` below, since the interval decides how many frames a
-legitimate drawer produces and the budget decides how many are accepted.
+the client's flush intervals, since the interval decides how many frames a
+legitimate drawer produces and the budget decides how many are accepted — to
+whichever of `client.flush_interval_ms` and `client.polling_flush_interval_ms` (§1) is
+shorter, because one caller's budget has to admit either transport.
 
 | Kind | Commands | Budget |
 | --- | --- | --- |
@@ -618,7 +620,7 @@ Shared bounds:
 The other direction has a door too (#602). Engine.IO queues every packet for a socket
 without a bound and drains the queue as fast as the peer reads; a peer that cannot keep
 up holds the writer on the transport's slack and everything after that piles up — a
-full canvas sync at a time — for as long as it takes the ping timeout (25–45 s, §1) to notice.
+full canvas sync at a time — for as long as it takes the ping timeout (up to 45 s after the last pong, §1) to notice.
 [`backend/app/socket_server.py`](../backend/app/socket_server.py) accounts for every
 packet at `send_packet`, trimmed to what the socket's queue still holds, and closes the
 socket past either bound:

@@ -10,7 +10,6 @@ canvas history over the binary sync path, then live frames), and guesses.
 """
 from __future__ import annotations
 
-import asyncio
 import json
 import re
 
@@ -74,7 +73,10 @@ async def test_a_browser_that_cannot_open_websockets_plays_over_polling():
             if "client_config" in body:
                 configs.append(body)
 
-        guest.on("response", lambda response: asyncio.ensure_future(note_config(response)))
+        # Registered directly: `Page` is an `AsyncIOEventEmitter`, so it awaits
+        # the coroutine itself. Wrapping it in a bare `ensure_future` leaves
+        # the task referenced by nothing, and it may be collected mid-await.
+        guest.on("response", note_config)
         host_sockets = []
         host.on("websocket", lambda ws: host_sockets.append(ws.url))
 
@@ -100,7 +102,9 @@ async def test_a_browser_that_cannot_open_websockets_plays_over_polling():
             # WebSocket one, because every flush there is an HTTP POST with
             # more header than frame (#887).
             assert configs, "the polling session was never told its cadences"
-            told = json.loads(re.search(r'\["client_config",(\{.*?\})\]', configs[-1]).group(1))
+            notice = re.search(r'\["client_config",(\{.*?\})\]', configs[-1])
+            assert notice, f"the notice is not shaped as it was read: {configs[-1][:400]}"
+            told = json.loads(notice.group(1))
             assert told["pollingFlushIntervalMs"] == 240, told
             assert told["flushIntervalMs"] == 80, told
 

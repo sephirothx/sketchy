@@ -110,8 +110,8 @@ MAX_PACKET_BYTES = 1024 * 1024
 #: for a socket without a bound and its writer drains the queue as fast as the
 #: peer reads; a peer that stops reading holds the writer on the transport's
 #: 64 KiB of slack and everything after that piles up in the queue - a full
-#: canvas sync at a time, for as long as it takes the ping timeout (25-45 s) to
-#: notice. These two are the budget: the oldest queued packet's age, which a
+#: canvas sync at a time, for as long as it takes the ping timeout (up to 45 s
+#: after the last pong) to notice. These two are the budget: the oldest queued packet's age, which a
 #: healthy socket keeps at milliseconds and a stalled one grows at the rate of
 #: the stall, and the bytes queued, the hard cap a burst of syncs cannot pass.
 #: Past either the socket is closed and its queue discarded whole; the client
@@ -193,10 +193,17 @@ class _Window:
 # These are the values the app was tuned against; each is here with its
 # reason, and the wire protocol states them.
 #
-# A dead connection is noticed between the interval and interval + timeout -
-# 25 to 45 s. Deliberately longer than the seat's 30 s reconnect grace
-# (R-CONN-01): a phone that switches network keeps its seat, and a client
-# that knows sooner has its own liveness check (`session_ping`, R-CONN-12).
+# A dead connection is closed 45 s after the last pong, not on a cycle of its
+# own: engineio schedules the next ping when a pong arrives (`schedule_ping`),
+# sends it `ping_interval` later, and closes `ping_timeout` after that one goes
+# unanswered - the same 45 s both read loops time out at. Measured from the
+# moment a client actually went quiet, that is 20 to 45 s, floored by the
+# *timeout*, since it may have died anywhere inside the interval it was
+# waiting out. The 45 s is deliberately longer than the seat's 30 s reconnect
+# grace (R-CONN-01): a phone that switches network is usually back in its seat
+# before the server has noticed the old socket at all, so the seat is never
+# released - and a client that needs to know sooner has its own liveness
+# check (`session_ping`, R-CONN-12).
 ENGINEIO_PING_INTERVAL_SECONDS = 25
 ENGINEIO_PING_TIMEOUT_SECONDS = 20
 # Polling responses are compressed; a WebSocket has its own compression

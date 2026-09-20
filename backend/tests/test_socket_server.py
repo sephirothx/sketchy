@@ -530,8 +530,9 @@ async def test_the_sweep_samples_every_open_backlog_so_the_distribution_is_visib
 def test_engineio_settings_are_this_repository_s_rather_than_the_library_s():
     """#887: #561 pinned the WebSocket layer and left the one under it to the
     library, where a version bump could move it and nothing would say so. A
-    dead connection is noticed between the interval and interval + timeout -
-    25 to 45 s - deliberately longer than the seat's 30 s reconnect grace."""
+    silent socket is closed 45 s after its last pong - the interval, then the
+    timeout - which is deliberately longer than the seat's 30 s reconnect
+    grace, and 20 to 45 s after the client actually went quiet."""
     from app.socket_server import (
         ENGINEIO_ALLOW_UPGRADES,
         ENGINEIO_COMPRESSION_THRESHOLD,
