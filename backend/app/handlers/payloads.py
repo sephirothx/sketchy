@@ -356,10 +356,29 @@ class QuickPlayPayload(RequestModel):
     colorblind_safe_colors: bool = Field(default=False, alias="colorblindSafeColors")
     prompt_language: str = Field(default="en", alias="promptLanguage", max_length=32)
 
+    @field_validator("prompt_language")
+    @classmethod
+    def valid_prompt_language(cls, value: str) -> str:
+        """Canonical here, or the room this opens cannot be built - and the
+        rooms it ranks are keyed on the canonical tag."""
+        try:
+            return validate_prompt_language(value)
+        except ValueError as error:
+            raise ValueError(str(error)) from error
+
     @field_validator("nickname")
     @classmethod
     def normalize_nickname(cls, value: str) -> str:
-        return value.strip()
+        # Trimmed and checked here, unlike a join's: this one may open a room,
+        # and a name the room could not be created under must be refused at
+        # the door rather than raise on the way in.
+        value = value.strip()
+        if not value:
+            return value
+        try:
+            return validate_name(value)
+        except NameError_ as error:
+            raise ValueError(str(error)) from error
 
 
 class AddFriendPayload(RequestModel):

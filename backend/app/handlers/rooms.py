@@ -178,6 +178,16 @@ ENDED_ACCOUNT_ACKNOWLEDGEMENT = {
 }
 
 
+ACCOUNT_REQUIRED_TO_OPEN = {
+    "ok": False,
+    "errorCode": ErrorCode.ACCOUNT_REQUIRED,
+    "error": (
+        "Sketchy could not start a session for you, so it cannot open "
+        "a room. Allow cookies for this site and reload."
+    ),
+}
+
+
 BUSY_ACKNOWLEDGEMENT = {
     "ok": False, "errorCode": ErrorCode.DATABASE_BUSY,
     "error": "Sketchy is having trouble reaching its database. Please try again.",
@@ -307,13 +317,7 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
         # a factual seat - but creating is the command that allocates a room,
         # a code reservation and a prompt pool, and a ceiling nothing can be
         # keyed on is not a ceiling.
-        return {
-            "ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED,
-            "error": (
-                "Sketchy could not start a session for you, so it cannot open "
-                "a room. Allow cookies for this site and reload."
-            ),
-        }
+        return ACCOUNT_REQUIRED_TO_OPEN
     repeat = _room_already_created(ctx, identity.user_id, payload.request_id)
     if repeat is not None:
         # A retry of a creation that happened: the answer was lost, or came
@@ -1300,20 +1304,28 @@ def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
     can neither draw nor guess - and never a game already under way. Fullest
     first, because the room one seat short of a game is the one worth filling.
     """
+    # Seated rather than active: a seat held by somebody disconnected inside
+    # their grace, or marked AFK, is still taken - `add_player` counts those,
+    # and ranking by anything else offers a room that would refuse the seat.
     open_rooms = [
         room
         for room in ctx.room_manager.rooms.values()
         if _open_for_quick_play(room)
         and room.prompt_language == language
-        and len(room.active_players()) < room.max_players
+        and len(room.seated_players()) < room.max_players
     ]
-    return sorted(open_rooms, key=lambda room: (-len(room.active_players()), room.id))
+    return sorted(open_rooms, key=lambda room: (-len(room.seated_players()), room.id))
 
 
 async def _open_a_quick_play_room(
     ctx: HandlerContext, sid, payload, identity, seated: list
 ):
     """Open the room Quick play falls back to, and let others in behind it."""
+    if not identity.user_id:
+        # The same boundary `create_room` draws: joining is open to a socket
+        # with no account, opening a room is not, because the ceilings are
+        # keyed on one.
+        return ACCOUNT_REQUIRED_TO_OPEN
     language = payload.prompt_language
     opening = asyncio.get_running_loop().create_future()
     ctx.quick_play_openings[language] = opening

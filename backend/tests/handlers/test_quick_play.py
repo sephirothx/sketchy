@@ -172,3 +172,59 @@ async def test_a_press_that_cannot_be_named_is_refused_rather_than_seated(monkey
 
     assert answer["ok"] is False and answer["errorCode"] == "name_in_use"
     assert sum(players(room) for room in room_manager.rooms.values()) == 1
+
+
+async def test_a_visitor_with_no_session_is_refused_rather_than_opening_a_room():
+    """Joining is open to a socket with no account; opening a room is not -
+    the ceilings are keyed on one - and it must say so rather than raise."""
+    room_manager = RoomManager()
+    sio, _ = server(room_manager)
+    sio.get_session = AsyncMock(return_value={})
+
+    answer = await press(sio)
+
+    assert answer["ok"] is False and answer["errorCode"] == "account_required"
+    assert "cookies" in answer["error"]
+    assert room_manager.rooms == {}
+
+
+async def test_a_language_or_a_name_the_room_could_not_be_opened_under_is_refused_at_the_door():
+    room_manager = RoomManager()
+    sio, _ = server(room_manager)
+
+    unknown = await press(sio, promptLanguage="klingon")
+    illegal = await press(sio, nickname="no spaces allowed!")
+    blank = await press(sio, nickname="  ")
+
+    assert unknown["ok"] is False and unknown["errorCode"] == "invalid_payload"
+    assert illegal["ok"] is False and illegal["errorCode"] == "invalid_payload"
+    # A blank one is refused where every entry refuses it, by name.
+    assert blank["ok"] is False and blank["errorCode"] == "invalid_nickname"
+    assert room_manager.rooms == {}
+
+
+async def test_a_language_tag_in_another_case_still_finds_its_rooms():
+    room_manager = RoomManager()
+    waiting = waiting_room(room_manager, language="it", seats=2)
+    sio, _ = server(room_manager)
+
+    answer = await press(sio, promptLanguage="IT")
+
+    assert answer["roomId"] == waiting.id, "the tag is canonical before it is matched"
+
+
+async def test_a_room_whose_seats_are_all_taken_is_not_offered_even_if_somebody_is_away():
+    """`add_player` counts seats, not the players the game is waiting on: a
+    seat held through a disconnect grace or an AFK mark is still taken."""
+    room_manager = RoomManager()
+    room = waiting_room(room_manager, seats=2, max_players=2)
+    list(room.players.values())[0].connected = False
+    list(room.players.values())[1].is_afk = True
+    sio, ctx = server(room_manager)
+
+    # Never offered, so no seat is asked for and refused on the way past.
+    assert room_handlers._quick_play_candidates(ctx, "en") == []
+
+    answer = await press(sio)
+    assert answer["created"] is True and answer["roomId"] != room.id
+    assert players(room) == 2
