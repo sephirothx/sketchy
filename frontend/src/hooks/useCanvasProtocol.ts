@@ -75,6 +75,11 @@ export interface CanvasProtocolRenderer {
   apply(packet: LiveDrawingPacket): void;
   clear(): void;
   replay(actions: DecodedCanvasAction[]): void;
+  /** Let go of what the renderer holds outside the component: its playback
+  queue, its timers and its `visibilitychange` listener (#886). Called when
+  the canvas unmounts - a room entry, a scratch pad, a double mount under
+  StrictMode - each of which used to leave one behind for the page's life. */
+  dispose(): void;
 }
 
 export interface CanvasProtocol {
