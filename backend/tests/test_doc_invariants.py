@@ -226,3 +226,59 @@ def test_the_database_document_names_the_current_head_and_every_table():
     start = document.index("| Domain | Tables |")
     mapped = set(re.findall(r"`([a-z_]+)`", document[start : document.index("\n\n", start)]))
     assert mapped == tables
+
+
+# --- the numbers the wire document states about itself --------------------------
+
+
+NOTICE_VERSIONS = {
+    "server_shutdown": "SHUTDOWN_NOTICE_CONTRACT_VERSION",
+    "server_paused": "PAUSE_NOTICE_CONTRACT_VERSION",
+    "client_config": "CLIENT_CONFIG_CONTRACT_VERSION",
+}
+
+
+def test_every_notice_version_the_wire_document_states_is_the_one_in_force():
+    """A version written in prose goes stale silently, and twice has.
+
+    `client_config` was documented as contract 3 while the code sent 5: the
+    parenthetical was written when the notice was at 3 (#652) and neither #677
+    nor #887 touched it on their way past, because nothing reads it. The same
+    number appears twice in the document - once in the version table of §11 and
+    once in the notice's own payload block in §5 - and each is an ordinary line
+    of a seven-hundred-row file, which is what makes this a test rather than a
+    rule.
+
+    Both places are checked against the constant the server actually sends, so
+    a version bump that leaves either behind fails here rather than at the next
+    reader.
+    """
+    from app import wire_contract
+
+    doc = (wire_contract.REPO_ROOT / "docs" / "wire-protocol.md").read_text(encoding="utf-8")
+    versions = wire_contract.build_contract()["versions"]
+
+    for notice, constant in NOTICE_VERSIONS.items():
+        in_force = versions[constant]
+        row = re.search(
+            rf"^\| `contractVersion` on `{notice}` \((\d+)\) \|", doc, re.M
+        )
+        assert row, f"§11's version table has no numbered row for `{notice}`"
+        assert int(row.group(1)) == in_force, (
+            f"§11 says `{notice}` is contract {row.group(1)}; the server sends {in_force}"
+        )
+
+    # And the shape each notice is documented in carries the same number.
+    for notice in NOTICE_VERSIONS:
+        # Anchored at the start of a line: the notice is named in prose
+        # elsewhere, and a loose match walks to the wrong code block.
+        block = re.search(
+            rf"^\*\*`{notice}`\*\*.*?```ts\n(.*?)```", doc, re.S | re.M
+        )
+        assert block, f"§5 documents no payload block for `{notice}`"
+        stated = re.search(r"contractVersion:\s*(\d+)", block.group(1))
+        assert stated, f"`{notice}`'s payload block does not state its version"
+        assert int(stated.group(1)) == versions[NOTICE_VERSIONS[notice]], (
+            f"`{notice}`'s payload block says {stated.group(1)}; "
+            f"the server sends {versions[NOTICE_VERSIONS[notice]]}"
+        )
