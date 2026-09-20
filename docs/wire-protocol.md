@@ -840,7 +840,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `drawing_reaction` | `DrawingReaction` — one seat reacted to, or took its reaction back from, one drawing; on a finished game's recap also `highlight`, the refreshed most-reacted card or `null` (#871). No `room_state` follows it | room, the drawer included |
 | `chat_message` | `ChatMessage` | room or a filtered recipient list |
 | `correct_guess` | `{playerId, nickname, points}` | room |
-| `hint_revealed` | `{maskedPrompt}` — a **timed** checkpoint hint, which answers no command; a bought hint answers in its own acknowledgement (#884) | **per socket**, each seat its own masked prompt |
+| `hint_revealed` | `{maskedPrompt, turnId}` — a **timed** checkpoint hint, which answers no command; a bought hint answers in its own acknowledgement (#884) and names no turn, being an answer to something the player just did. `turnId` is the turn the hint belongs to: the loop emits one per seat and the turn can end between two of them, so a client drops a hint for a turn it has already ended rather than re-masking the prompt `turn_ended` revealed (#883) | **per socket**, each seat its own masked prompt |
 | `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
 | `canvas_undo` | `[generation, sequence, revisionBefore, revisionAfter, historyHash]` | room (or one socket) |
@@ -869,6 +869,24 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `client_config` | `ClientConfig` — cadences the client runs at, and since version 3 the drawing allowance its frames spend (`drawingFramesPerWindow`, `drawingWindowSeconds`), so a replay can pace itself under it (§7). Version 4 adds `afkInputWindowMs`: how recently the client must have seen a pointer or a key to answer an `afk_check` for the player | one socket at handshake; every socket when a cadence or the drawing budget changes |
 
 Plus Socket.IO's own `connect`, `disconnect`, and `connect_error`.
+
+### Ordering a client may rely on
+
+Socket.IO delivers one socket's messages in the order they were emitted, so
+what a client can be caught by is the order the server chooses. Three of those
+were wrong (#883), and each showed up as the client holding two facts that
+were never true together:
+
+- **A seat that is removed leaves the room before the removal is broadcast.**
+  An evicted socket used to stay in the room while the game moved on without
+  it, so a kicked player was told they were out and then handed the next turn.
+- **The roster goes before the turn its leaving caused.** Losing the drawer
+  starts the next turn; the `room_state` without that seat is flushed first,
+  so no client holds a turn whose player list still contains the player who
+  left it.
+- **A timed hint is checked per seat, not once per checkpoint.** Every emit
+  awaits, and a turn that ends in one of those gaps stops the rest; the hint
+  names its turn as well, so a client that has already ended it drops it.
 
 ### Key payload shapes
 
@@ -2209,7 +2227,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (36) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (37) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

@@ -146,6 +146,8 @@ interface GameStore {
     hintCost?: number | null;
     letterPrices?: Record<string, number> | null;
     hintSpend?: number;
+    /** Which turn the hint belongs to, when the server named one (#883). */
+    turnId?: string;
   }) => void;
   endTurn: (payload: TurnEndedPayload) => void;
   endGame: (payload: GameEndedPayload) => void;
@@ -382,13 +384,20 @@ export const useGameStore = create<GameStore>((set) => ({
       lastGuessBreakdown: breakdown !== undefined ? breakdown : s.lastGuessBreakdown,
     })),
   setMaskedPrompt: (prompt) => set({ maskedPrompt: prompt }),
-  setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend }) =>
-    set((s) => ({
-      maskedPrompt,
-      nextHintCost: hintCost ?? s.nextHintCost,
-      letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
-      hintSpend: hintSpend ?? s.hintSpend,
-    })),
+  setHintRevealed: ({ maskedPrompt, hintCost, letterPrices, hintSpend, turnId }) =>
+    set((s) => {
+      // A timed hint is emitted per seat, and the turn can end between two of
+      // those emits: a hint for a turn this client has ended would re-mask the
+      // prompt `turn_ended` just showed in full (#883).
+      if (turnId !== undefined && s.currentTurnId !== null && turnId !== s.currentTurnId) return s;
+      if (s.phase === "turn_results" && turnId !== undefined) return s;
+      return {
+        maskedPrompt,
+        nextHintCost: hintCost ?? s.nextHintCost,
+        letterPrices: letterPrices !== undefined ? letterPrices : s.letterPrices,
+        hintSpend: hintSpend ?? s.hintSpend,
+      };
+    }),
   endTurn: (payload) =>
     set((s) => ({
       phase: "turn_results",
