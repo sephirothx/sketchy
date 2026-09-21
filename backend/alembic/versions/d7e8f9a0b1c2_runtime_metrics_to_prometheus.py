@@ -27,7 +27,7 @@ it the batches do not commit between each other, and the exclusive lock the
 check's replacement takes is held to the end, so `VALIDATE` scans under it. And
 `autocommit_block()`, which would make the batches commit, cannot run under a
 transaction the runner rather than Alembic opened. Resolving that is a decision
-about the runner, not about this revision.
+about the runner, not about this revision (#969).
 
 This one is safe regardless, because nothing is deployed: it runs on an empty
 production database, or a development one with nothing writing beside it. For

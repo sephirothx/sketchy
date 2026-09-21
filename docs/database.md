@@ -2704,7 +2704,7 @@ create a table, rewrite either ledger or disable the trigger.
    under it, and `autocommit_block()` — which the concurrent-index rule requires —
    cannot run at all, because the transaction is the runner's, not Alembic's. Until the
    runner changes, a revision written to these rules is only as safe as running it on a
-   database nothing is writing to, which is true of every revision before launch.
+   database nothing is writing to, which is true of every revision before launch. #969 tracks the runner change.
 
    A call that is safe for a reason the lint cannot see says so on its line or the one
    above: `# online-ddl: <why>`. Every revision then runs over rows in CI:
