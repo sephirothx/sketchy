@@ -40,7 +40,6 @@ from app.services.drawing_storage import DrawingStoreFootprint, DrawingStoreSize
 from app.services.queue_depths import QueueDepths, QueueSnapshot
 from app.services.readiness import ReadinessProbe
 from app.services.runtime_metrics import (
-    daily_totals,
     metrics,
     recent_events,
     stored_event_count,
@@ -670,15 +669,6 @@ def create_operations_router(
             "retention": _retention_json(retention_sweeps_from(loop_snapshot())),
             "series": signals["series"],
         }
-
-    @router.get("/api/admin/metrics/daily")
-    async def daily(
-        request: Request,
-        days: int = Query(default=30, ge=1, le=365),
-    ):
-        """The permanent aggregates, which outlive the raw rows behind them."""
-        await require_admin(request)
-        return {"days": await daily_totals(session_factory, days=days)}
 
     @router.get("/api/admin/metrics/events")
     async def events(

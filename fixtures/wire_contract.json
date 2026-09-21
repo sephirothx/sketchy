@@ -2694,10 +2694,6 @@
   "services.readiness:last_database_result": [
    "checkedAgoSeconds"
   ],
-  "services.runtime_metrics:daily_totals": [
-   "valueMax",
-   "valueSum"
-  ],
   "services.runtime_metrics:recent_events": [
    "eventType",
    "occurredAt",

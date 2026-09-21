@@ -9,7 +9,7 @@ import pytest
 from sqlalchemy import event, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.db.models import RuntimeEvent, RuntimeStatsDaily
+from app.db.models import RuntimeEvent
 from app.domain_values import RuntimeEventType
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.runtime_metrics import (
@@ -44,27 +44,13 @@ def _record(recorder: RuntimeMetrics, count: int, *, days: int = 3) -> None:
         )
 
 
-async def _totals(factory) -> tuple[int, dict[tuple[str, str], tuple[int, int, int | None]]]:
+async def _raw(factory) -> int:
     async with factory() as session:
-        raw = await session.scalar(select(func.count(RuntimeEvent.id)))
-        rows = (await session.scalars(select(RuntimeStatsDaily))).all()
-    return raw, {
-        (row.stat_date.isoformat(), row.metric): (row.occurrences, row.value_sum, row.value_max)
-        for row in rows
-    }
-
-
-def _expected(count: int, *, days: int = 3) -> dict[tuple[str, str], tuple[int, int, int | None]]:
-    base = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
-    expected: dict[tuple[str, str], list[int]] = {}
-    for index in range(count):
-        day = (base + timedelta(days=index % days, minutes=index)).date().isoformat()
-        expected.setdefault((day, EVENT_TYPES[index % len(EVENT_TYPES)].value), []).append(index % 17)
-    return {key: (len(values), sum(values), max(values)) for key, values in expected.items()}
+        return await session.scalar(select(func.count(RuntimeEvent.id)))
 
 
 @pytest.mark.parametrize("count", [1, 100, 5000])
-async def test_a_flush_is_bounded_inserts_and_one_upsert_per_group_chunk(count):
+async def test_a_flush_is_bounded_inserts_and_nothing_else(count):
     factory, engine = await create_test_db()
     try:
         recorder = RuntimeMetrics(max_buffered=10_000)
@@ -74,20 +60,19 @@ async def test_a_flush_is_bounded_inserts_and_one_upsert_per_group_chunk(count):
         assert await flush_events(factory, recorder=recorder) == count
 
         inserts = [s for s in statements if s.lstrip().startswith("INSERT INTO runtime_events")]
-        upserts = [s for s in statements if s.lstrip().startswith("INSERT INTO runtime_stats_daily")]
-        selects = [s for s in statements if "runtime_stats_daily" in s and s.lstrip().startswith("SELECT")]
         assert len(inserts) == -(-count // INSERT_CHUNK_ROWS), "one executemany per chunk"
         assert not any("RETURNING" in s for s in inserts), "no ids come back"
-        assert len(upserts) == 1 and "ON CONFLICT" in upserts[0]
-        assert not selects, "no read per day and metric"
-        raw, daily = await _totals(factory)
-        assert raw == count and daily == _expected(count)
+        # The daily roll-up is Prometheus's now (#965): a flush writes the
+        # rows and touches no other table.
+        writes = [s for s in statements if s.lstrip().upper().startswith(("INSERT", "UPDATE", "DELETE"))]
+        assert writes == inserts, writes
+        assert await _raw(factory) == count
         assert recorder.buffered == 0
     finally:
         await engine.dispose()
 
 
-async def test_a_second_flush_adds_to_the_same_days():
+async def test_a_second_flush_appends():
     factory, engine = await create_test_db()
     try:
         recorder = RuntimeMetrics()
@@ -95,10 +80,7 @@ async def test_a_second_flush_adds_to_the_same_days():
         await flush_events(factory, recorder=recorder)
         _record(recorder, 40)
         await flush_events(factory, recorder=recorder)
-        raw, daily = await _totals(factory)
-        once = _expected(40)
-        assert raw == 80
-        assert daily == {key: (n * 2, total * 2, biggest) for key, (n, total, biggest) in once.items()}
+        assert await _raw(factory) == 80
     finally:
         await engine.dispose()
 
@@ -108,14 +90,13 @@ async def test_a_failed_transaction_keeps_the_batch_and_counts_the_failure(monke
     try:
         recorder = RuntimeMetrics()
         _record(recorder, 30)
-        calls = {"n": 0}
         real = AsyncSession.execute
 
-        async def flaky(self, *args, **kwargs):
-            calls["n"] += 1
-            if calls["n"] == 2:
+        async def flaky(self, statement, *args, **kwargs):
+            # The batch's insert, whatever runs before it in the transaction.
+            if getattr(getattr(statement, "table", None), "name", None) == "runtime_events":
                 raise RuntimeError("the insert broke")
-            return await real(self, *args, **kwargs)
+            return await real(self, statement, *args, **kwargs)
 
         monkeypatch.setattr(AsyncSession, "execute", flaky)
         with pytest.raises(RuntimeError):
@@ -124,11 +105,10 @@ async def test_a_failed_transaction_keeps_the_batch_and_counts_the_failure(monke
 
         assert recorder.buffered == 30 and recorder.failed_flushes == 1
         assert recorder.dropped_events == 0
-        assert (await _totals(factory)) == (0, {})
+        assert await _raw(factory) == 0
 
         assert await flush_events(factory, recorder=recorder) == 30
-        raw, daily = await _totals(factory)
-        assert raw == 30 and daily == _expected(30)
+        assert await _raw(factory) == 30
         assert recorder.buffered == 0
     finally:
         await engine.dispose()
@@ -231,8 +211,7 @@ async def test_an_event_naming_a_purged_or_erased_account_does_not_poison_the_ba
         async with factory() as session:
             rows = (await session.scalars(select(RuntimeEvent).order_by(RuntimeEvent.id))).all()
         assert [row.user_id for row in rows] == [UUID(live.id), None, None]
-        raw, daily = await _totals(factory)
-        assert raw == 3 and daily[("2026-08-03", "room.created")][0] == 3
+        assert await _raw(factory) == 3
     finally:
         await engine.dispose()
 
@@ -246,7 +225,7 @@ async def test_a_flush_takes_at_most_its_batch_and_the_overflow_is_still_counted
         assert await flush_events(factory, recorder=recorder, batch_size=20) == 20
         assert recorder.buffered == 30
         assert await flush_events(factory, recorder=recorder, batch_size=100) == 30
-        raw, _ = await _totals(factory)
+        raw = await _raw(factory)
         assert raw == 50
     finally:
         await engine.dispose()

@@ -2447,10 +2447,13 @@ because a database round trip per join would be felt as lag in a drawing. The
 buffer is bounded and drops oldest when full, counting what it dropped, so a
 gap is visible rather than silent.
 
-Raw observations are kept for 30 days and rolled into permanent daily totals
-first. What retention costs is the ability to ask about one particular minute
-last month; the shape of the month survives. Unbounded event rows on embedded
-SQLite is a disk that fills up quietly.
+Raw observations are kept for 30 days and then deleted. What retention costs is
+the ability to ask about one particular minute last month; the shape of the month
+is Prometheus's, from `sketchy_events_total` - so set its retention past its 15-day
+default (`--storage.tsdb.retention.time=1y`) for the trend to outlive a fortnight.
+Only observations the database is for are written: those keyed to an account or a
+room, timer overruns and abandoned history writes. A drawing's size and a throttle
+are counted on `/metrics` and nothing more (#965).
 
 Migrations run with SQLite foreign keys off and finish with a
 `PRAGMA foreign_key_check`. Batch mode rebuilds a table by copy, drop, rename,

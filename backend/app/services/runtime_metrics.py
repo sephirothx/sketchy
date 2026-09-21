@@ -14,18 +14,25 @@ an in-process count is the true count and no cross-worker aggregation exists to
 get wrong. They are exact and they vanish on restart, which is correct: a live
 count of rooms is not a historical fact.
 
-Events are buffered and written in batches. A row per join and disconnect
-written inline would put a database round trip in the socket path, where a slow
-write would be felt as lag in a drawing. The buffer is bounded and drops oldest
-rather than growing without limit, because losing observations is much better
-than losing the server that makes them - and the number dropped is itself
-recorded, so the gap is visible rather than silent.
+Events are counted, and most are also buffered and written in batches. A row
+per join and disconnect written inline would put a database round trip in the
+socket path, where a slow write would be felt as lag in a drawing. The buffer
+is bounded and drops oldest rather than growing without limit, because losing
+observations is much better than losing the server that makes them - and the
+number dropped is itself recorded, so the gap is visible rather than silent.
+
+Every event is counted into `sketchy_events_total{event}`; only some are
+written (#965). A pure measure Prometheus already holds in more detail - a
+drawing's size, a throttle - is counted and nothing more, and the trend over
+days is Prometheus's too: the permanent daily roll-up this module used to keep
+beside the raw rows is gone, because everything in it was derivable from the
+counter and nothing but one chart read it.
 """
 from __future__ import annotations
 
 from collections import Counter, deque
 from dataclasses import dataclass, field, replace
-from datetime import date, datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 from uuid import UUID
 import argparse
 import asyncio
@@ -34,14 +41,12 @@ import logging
 import os
 
 from sqlalchemy import delete, func, insert, select
-from sqlalchemy.dialects.postgresql import insert as postgresql_insert
-from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.telemetry import database_operation_of
 from app.logging_config import configure_logging
-from app.db.models import RuntimeEvent, RuntimeStatsDaily
-from app.domain_values import RuntimeEventType
+from app.db.models import RuntimeEvent
+from app.domain_values import COUNTED_ONLY_RUNTIME_EVENTS, RuntimeEventType
 from app.auth.erasure import erased_identity_ids
 from app.services.readiness import LoopHealth
 from app.services.sweeps import (
@@ -134,6 +139,10 @@ class RuntimeMetrics:
         details: dict | None = None,
         now: datetime | None = None,
     ) -> None:
+        self._totals[event_type.value] += 1
+        if event_type in COUNTED_ONLY_RUNTIME_EVENTS:
+            # Counted, never written: `/metrics` carries it (#965).
+            return
         if len(self._buffer) == self._buffer.maxlen:
             # deque drops the oldest for us; counting it is what keeps the gap
             # from being invisible.
@@ -148,7 +157,6 @@ class RuntimeMetrics:
                 details=details or {},
             )
         )
-        self._totals[event_type.value] += 1
 
     def observe(
         self,
@@ -209,10 +217,6 @@ class RuntimeMetrics:
 metrics = RuntimeMetrics()
 
 
-def _utc_date(value: datetime) -> date:
-    return value.astimezone(timezone.utc).date()
-
-
 # asyncpg binds at most 32,767 parameters per statement; the insert chunk is
 # sized from the table's own column count so adding a column shrinks the
 # chunk rather than breaking the flush.
@@ -229,15 +233,6 @@ class _CancelledDuringCommit(BaseException):
     """A cancel that arrived while COMMIT was in flight: counted as ambiguous
     inside the transaction block, re-raised as the cancellation outside it."""
 
-
-
-def _daily_insert(session: AsyncSession):
-    dialect = session.get_bind().dialect.name
-    if dialect == "postgresql":
-        return postgresql_insert(RuntimeStatsDaily), func.greatest
-    if dialect == "sqlite":
-        return sqlite_insert(RuntimeStatsDaily), func.max
-    raise RuntimeError(f"Unsupported runtime metrics dialect: {dialect}")
 
 
 async def _normalize_account_references(
@@ -269,15 +264,11 @@ async def flush_events(
     recorder: RuntimeMetrics | None = None,
     batch_size: int = FLUSH_BATCH_EVENTS,
 ) -> int:
-    """Write buffered observations, and roll them into the daily totals.
+    """Write buffered observations.
 
-    Both in one transaction: an event row that survives without its aggregate
-    would be lost the day retention removes it. The batch stays buffered
-    until that transaction has committed, so a failure keeps it for the
-    next flush rather than losing it silently (#614); the raw rows go in
-    bounded chunks with no returned ids, and the daily totals are grouped
-    here and written as one ordered upsert per chunk instead of a read and
-    a write per day and metric.
+    The batch stays buffered until its transaction has committed, so a
+    failure keeps it for the next flush rather than losing it silently
+    (#614); the rows go in bounded chunks with no returned ids.
     """
     source = recorder or metrics
     pending = source.snapshot(batch_size)
@@ -307,7 +298,6 @@ async def flush_events(
                         insert(RuntimeEvent).inline(),
                         rows[start : start + INSERT_CHUNK_ROWS],
                     )
-                await _roll_up(session, written)
             except BaseException:
                 await session.rollback()
                 raise
@@ -342,85 +332,6 @@ async def flush_events(
     return len(pending)
 
 
-# Fixed size buckets kept beside the drawing events' daily totals (#895).
-# `runtime_stats_daily` is permanent but keeps only a count, a sum and a
-# maximum per metric, and the raw events go after thirty days, so without
-# these the distribution of drawing sizes - the number every storage decision
-# turns on - would be lost. One extra metric row per bucket per day, e.g.
-# `drawing.stored.le_16k`; `gt_1m` catches the rest. No schema change.
-SIZE_BUCKET_EVENTS = frozenset({"drawing.stored", "drawing.encoded"})
-SIZE_BUCKETS = (
-    (1024, "le_1k"),
-    (4096, "le_4k"),
-    (16384, "le_16k"),
-    (65536, "le_64k"),
-    (262144, "le_256k"),
-    (1048576, "le_1m"),
-)
-
-
-def size_bucket_label(value: int) -> str:
-    for bound, label in SIZE_BUCKETS:
-        if value <= bound:
-            return label
-    return "gt_1m"
-
-
-def _size_bucket_metrics(event: PendingEvent) -> tuple[str, ...]:
-    if event.event_type not in SIZE_BUCKET_EVENTS or event.value is None:
-        return ()
-    return (f"{event.event_type}.{size_bucket_label(event.value)}",)
-
-
-async def _roll_up(session: AsyncSession, events: list[PendingEvent]) -> None:
-    """Add a batch to `runtime_stats_daily`, which is kept for ever.
-
-    Grouped in memory by day and metric, then upserted in ascending
-    (day, metric) order - the same order every flush takes, so two writers
-    cannot deadlock on the rows - with additive occurrences and sum and a
-    greatest-of max, `updated_at` set explicitly in the assignment.
-    """
-    occurrences: Counter[tuple[date, str]] = Counter()
-    sums: Counter[tuple[date, str]] = Counter()
-    maxima: dict[tuple[date, str], int] = {}
-    for event in events:
-        day = _utc_date(event.occurred_at)
-        for metric in (event.event_type, *_size_bucket_metrics(event)):
-            key = (day, metric)
-            occurrences[key] += 1
-            if event.value is not None:
-                sums[key] += event.value
-                maxima[key] = max(maxima.get(key, event.value), event.value)
-    rows = [
-        {
-            "stat_date": stat_date,
-            "metric": metric,
-            "occurrences": count,
-            "value_sum": sums[(stat_date, metric)],
-            "value_max": maxima.get((stat_date, metric)),
-        }
-        for (stat_date, metric), count in sorted(occurrences.items())
-    ]
-    statement_for, greatest = _daily_insert(session)
-    for start in range(0, len(rows), INSERT_CHUNK_ROWS):
-        statement = statement_for.values(rows[start : start + INSERT_CHUNK_ROWS])
-        excluded = statement.excluded
-        await session.execute(
-            statement.on_conflict_do_update(
-                index_elements=["stat_date", "metric"],
-                set_={
-                    "occurrences": RuntimeStatsDaily.occurrences + excluded.occurrences,
-                    "value_sum": RuntimeStatsDaily.value_sum + excluded.value_sum,
-                    "value_max": greatest(
-                        func.coalesce(RuntimeStatsDaily.value_max, excluded.value_max),
-                        func.coalesce(excluded.value_max, RuntimeStatsDaily.value_max),
-                    ),
-                    "updated_at": func.now(),
-                },
-            )
-        )
-
-
 async def purge_expired_events(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -430,10 +341,10 @@ async def purge_expired_events(
 ) -> SweepReport:
     """Drop raw rows past the retention window, a committed batch at a time.
 
-    The aggregates they were rolled into are permanent, so what is lost is the
-    ability to ask about one particular minute a month ago - not the trend.
-    That asymmetry is the whole reason for keeping two tables: unbounded event
-    rows on an embedded database is a disk that fills up quietly.
+    What is lost is the ability to ask about one particular minute a month
+    ago, not the trend, which Prometheus keeps from `sketchy_events_total`
+    (#965). Unbounded event rows on an embedded database is a disk that fills
+    up quietly.
     """
     cutoff = (now or datetime.now(timezone.utc)) - timedelta(
         days=days if days is not None else retention_days()
@@ -508,36 +419,6 @@ async def stop_metrics_loop(
     if session_factory is not None:
         with contextlib.suppress(Exception):
             await flush_events(session_factory)
-
-
-async def daily_totals(
-    session_factory: async_sessionmaker[AsyncSession],
-    *,
-    days: int = 30,
-    now: datetime | None = None,
-) -> list[dict]:
-    """The permanent aggregates, newest day first."""
-    since = _utc_date((now or datetime.now(timezone.utc)) - timedelta(days=days))
-    async with session_factory() as session:
-        rows = (
-            await session.execute(
-                select(RuntimeStatsDaily)
-                .where(RuntimeStatsDaily.stat_date >= since)
-                .order_by(
-                    RuntimeStatsDaily.stat_date.desc(), RuntimeStatsDaily.metric
-                )
-            )
-        ).scalars().all()
-    return [
-        {
-            "date": row.stat_date.isoformat(),
-            "metric": row.metric,
-            "occurrences": row.occurrences,
-            "valueSum": row.value_sum,
-            "valueMax": row.value_max,
-        }
-        for row in rows
-    ]
 
 
 async def recent_events(

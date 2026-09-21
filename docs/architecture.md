@@ -310,7 +310,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Room-setting presets | Database | Yes |
 | Room-code reservations (including retirement) | Database | Yes |
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
-| Runtime observations (30 days) and permanent daily roll-ups | Database | Yes |
+| Runtime observations (30 days; the trend is Prometheus's, #965) | Database | Yes |
 | Who is connected, and whether they are seated | `PresenceRegistry` (memory) | No |
 | When each socket last did something a person did, and which have an open **AFK check** | `ActivityLedger` and `AfkWatch` (memory) | No |
 | The public room list a watching lobby holds | `LobbyBroadcaster` (memory, derived from `RoomManager`) | No |
@@ -1298,7 +1298,8 @@ Two things are recorded, answering two different questions
   as lag inside a drawing. The buffer is bounded, drops oldest when full, and counts
   what it dropped so a gap is visible rather than silent.
 
-Raw observations are kept 30 days and rolled into permanent daily totals first.
+Raw observations are kept 30 days and then deleted; the trend is Prometheus's, from
+`sketchy_events_total` (#965).
 Operators read this through `GET /metrics` (Prometheus text, bearer token, disabled
 until `METRICS_TOKEN` is set) or `/admin/operations` in the app. The per-player view
 there is a surveillance surface on the game's own players, so **every use writes an

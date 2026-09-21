@@ -286,9 +286,9 @@ class _GameSizing:
             telemetry.drawing_stored(
                 magic, raw_bytes=raw_bytes, stored_bytes=stored_bytes, actions=actions, seconds=seconds
             )
-            # The long view: the raw event is kept thirty days, its daily
-            # roll-up for ever, and it carries the stored size beside
-            # `drawing.stored`'s wire size so the ratio survives too.
+            # Counted on `/metrics` and not stored (#965): the sizes and the
+            # encoding's ratio are the `sketchy_drawing_*_bytes` histograms
+            # just above, which Prometheus keeps for as long as it retains.
             metrics.record(RuntimeEventType.DRAWING_ENCODED, value=stored_bytes)
         telemetry.game_rows_written(
             {

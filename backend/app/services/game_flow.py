@@ -315,7 +315,9 @@ class GameFlowService:
             # How late the loop actually was. A single worker owns every room,
             # so this is the first thing that degrades under load and the last
             # thing anyone could previously see.
-            late_ms = int((time.monotonic() - scheduled_at - seconds) * 1000)
+            late_seconds = time.monotonic() - scheduled_at - seconds
+            telemetry.note_phase_timer_lateness(late_seconds)
+            late_ms = int(late_seconds * 1000)
             if late_ms >= TIMER_OVERRUN_REPORT_MS:
                 metrics.record(
                     RuntimeEventType.TIMER_OVERRAN,

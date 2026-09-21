@@ -12,7 +12,7 @@ from sqlalchemy import func, select
 from app.api.operations import create_operations_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
-from app.db.models import AuditEvent, RuntimeEvent, RuntimeStatsDaily, User
+from app.db.models import AuditEvent, RuntimeEvent, User
 from app.domain_values import RuntimeEventType, UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.runtime_metrics import (
@@ -99,32 +99,39 @@ async def promote(factory, user_id: str) -> None:
             user.role = UserRole.ADMIN.value
 
 
-async def test_observations_become_rows_and_daily_totals(env):
+async def test_observations_become_rows_and_pure_measures_are_only_counted(env):
+    """Every observation is counted on `/metrics`; only those the database is
+    for are written (#965). A drawing's size and a throttle are Prometheus's,
+    where the sizes are histograms and a throttle is counted by its code."""
     _, factory = env
     recorder = RuntimeMetrics()
     day = datetime(2026, 8, 24, 12, 0, tzinfo=timezone.utc)
     recorder.record(RuntimeEventType.ROOM_CREATED, room_id="r1", now=day)
-    recorder.record(
-        RuntimeEventType.ROOM_CLOSED, room_id="r1", value=90, now=day
-    )
-    recorder.record(
-        RuntimeEventType.ROOM_CLOSED, room_id="r2", value=310, now=day
-    )
+    recorder.record(RuntimeEventType.ROOM_CLOSED, room_id="r1", value=90, now=day)
+    recorder.record(RuntimeEventType.ROOM_CLOSED, room_id="r2", value=310, now=day)
+    recorder.record(RuntimeEventType.DRAWING_STORED, value=4096, now=day)
+    recorder.record(RuntimeEventType.DRAWING_ENCODED, value=1200, now=day)
+    recorder.record(RuntimeEventType.COMMAND_THROTTLED, now=day)
+    recorder.record(RuntimeEventType.RECAP_BUDGET_DROPPED, now=day)
 
     assert await flush_events(factory, recorder=recorder) == 3
     # Draining is what makes a second flush a no-op rather than a duplicate.
     assert await flush_events(factory, recorder=recorder) == 0
 
     async with factory() as session:
-        assert await session.scalar(select(func.count(RuntimeEvent.id))) == 3
-        closed = await session.get(RuntimeStatsDaily, (day.date(), "room.closed"))
-        assert closed.occurrences == 2
-        assert closed.value_sum == 400
-        # The longest-lived room, which an average would hide.
-        assert closed.value_max == 310
+        stored = dict(
+            (await session.execute(
+                select(RuntimeEvent.event_type, func.count(RuntimeEvent.id)).group_by(RuntimeEvent.event_type)
+            )).all()
+        )
+    assert stored == {"room.created": 1, "room.closed": 2}
+    assert recorder.totals() == {
+        "room.created": 1, "room.closed": 2, "drawing.stored": 1,
+        "drawing.encoded": 1, "command.throttled": 1, "recap.budget_dropped": 1,
+    }, "every observation is still counted"
 
 
-async def test_retention_keeps_the_trend_and_drops_the_detail(env):
+async def test_retention_drops_the_rows_past_the_window(env):
     _, factory = env
     recorder = RuntimeMetrics()
     now = datetime(2026, 8, 24, tzinfo=timezone.utc)
@@ -139,12 +146,6 @@ async def test_retention_keeps_the_trend_and_drops_the_detail(env):
     assert removed == 1
     async with factory() as session:
         assert await session.scalar(select(func.count(RuntimeEvent.id))) == 1
-        # The aggregate for the purged day is untouched: what is lost is the
-        # ability to ask about one minute, not the shape of the month.
-        surviving = await session.scalar(
-            select(func.count(RuntimeStatsDaily.metric))
-        )
-        assert surviving == 2
 
 
 async def test_a_full_buffer_drops_the_oldest_and_says_so(env):
@@ -179,7 +180,6 @@ async def test_the_operator_views_are_closed_to_everyone_else(env):
 
     for path in (
         "/api/admin/metrics",
-        "/api/admin/metrics/daily",
         "/api/admin/metrics/events",
         "/api/admin/audit",
     ):
