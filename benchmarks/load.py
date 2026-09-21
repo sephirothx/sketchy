@@ -22,6 +22,17 @@ back through the reconnect grace (R-CONN-01), and a set of lobby watchers hold
 the lobby channel open for the whole run so presence and room-list deltas are
 being fanned out too.
 
+Every seat asks for the drawing when the browser would (R-DRAW-13, #877): once
+when a game starts, which is when the browser's canvas mounts and stays
+mounted for the game, and again after every reconnect, claiming the prefix it
+holds so a verified claim is answered with a tail. It tracks that prefix the
+way the browser does - an action for every path start, shape, fill and clear,
+one back for an undo, the hash from each commit and each sync. Until this was
+added the server pushed the canvas on every join and rebind, so a seat got it
+unasked; #877 stopped the push, and the gate went on without a canvas at all -
+none of the sync load real players cause, and #882's tail reading always
+`none`.
+
 What is measured, client-side with one clock for every seat:
 
 - **Acknowledgement latency** of every command that has one, p50/p95/p99.
@@ -54,6 +65,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import base64
 import json
 import os
 import platform
@@ -71,6 +83,8 @@ BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
+from app.canvas_history import binary_action_count
+from app.live_drawing import CLEAR_TAG, FILL_TAG, PATH_START_TAG, SHAPE_TAG
 from app.protocol import PROTOCOL_VERSION
 
 TRACE = Path(ROOT_DIR) / "fixtures" / "live_strokes" / "hand-long.json"
@@ -122,6 +136,11 @@ class Samples:
     unexpected_disconnects: int = 0
     reconnects: int = 0
     failed_reconnects: int = 0
+    canvas_requests: int = 0
+    canvas_requests_claimed: int = 0
+    canvas_claims_mid_stroke: int = 0
+    canvas_full_syncs: int = 0
+    canvas_tails: int = 0
     errors: list[str] = field(default_factory=list)
 
     def ack(self, command: str, ms: float) -> None:
@@ -146,6 +165,54 @@ def percentile(values: list[float], fraction: float) -> float:
 # ---------------------------------------------------------------- one seat
 
 
+#: The live-drawing frames that put one more action in the history. The rest
+#: - points, a path's end - extend or close the action already open.
+ADDS_AN_ACTION = frozenset({PATH_START_TAG, SHAPE_TAG, FILL_TAG, CLEAR_TAG})
+
+
+def frame_tag(frame) -> int | None:
+    """A live-drawing frame's tag, from its header byte alone.
+
+    A frame arrives as the drawer sent it: bytes, a header-only frame as an
+    int, or base64 text (#882's `/base64` mix)."""
+    if isinstance(frame, bool):
+        return None
+    if isinstance(frame, int):
+        return frame & 0x0F
+    if isinstance(frame, str):
+        try:
+            raw = base64.b64decode(frame[:4])
+        except ValueError:
+            return None
+    else:
+        raw = bytes(frame)
+    return raw[0] & 0x0F if raw else None
+
+
+@dataclass
+class HeldCanvas:
+    """The drawing a seat holds, as the browser tracks it (`useCanvasProtocol`).
+
+    `action_count` counts an open path, as the browser's history does, while
+    `history_hash` only ever comes from the server - a commit, an undo, a sync
+    - so it is the hash of the finalized prefix. A claim made mid-stroke is
+    therefore the one miss the server calls by design (`open_path`), exactly
+    as it is from a browser."""
+
+    generation: int
+    action_count: int
+    history_hash: int
+    # A path start seen and not yet committed: the count includes a record
+    # the hash does not cover. Only read to explain a claim that misses.
+    open_path: bool = False
+
+    def claim(self) -> list[int] | None:
+        # `authoritativePrefixClaim`: nothing held is not a prefix worth naming.
+        if self.action_count <= 0:
+            return None
+        return [self.generation, self.action_count, self.history_hash]
+
+
 class Seat:
     """One connected player: an account, a socket, and what it is doing."""
 
@@ -163,6 +230,11 @@ class Seat:
         # last reached this seat; the harness applies them all, so each one
         # agrees with the seat by construction (#564).
         self.last_authoritative_at: float | None = None
+        # The drawing this seat holds, from when its canvas "mounts" (a game
+        # starting) to when it would unmount (the game ending). Kept on the
+        # seat, not the socket, so a reconnect claims what the old socket had.
+        self.held: HeldCanvas | None = None
+        self.sync_request_id = 0
         self.closing = False
 
     async def provision(self, http: aiohttp.ClientSession) -> None:
@@ -204,7 +276,16 @@ class Seat:
         @sio.on("turn_starting")
         async def on_turn_starting(payload):
             self.canvas = list(payload["canvas"])
+            # A new turn is a new, empty canvas with a known identity:
+            # `[revision, generation, sequence, historyHash]`.
+            self.held = HeldCanvas(
+                generation=int(self.canvas[1]), action_count=0, history_hash=int(self.canvas[3])
+            )
             await self._note_authoritative(payload)
+            if payload.get("gameStarted"):
+                # The browser's canvas mounts as the room turns to play, and
+                # its first act is to ask for the drawing (R-DRAW-13).
+                self.harness.spawn(self.request_canvas())
 
         for authoritative in ("turn_started", "turn_ended", "sync_game", "room_state"):
             sio.on(authoritative, self._note_authoritative)
@@ -234,6 +315,9 @@ class Seat:
 
         @sio.on("game_ended")
         async def on_game_ended(payload):
+            # The game-end screen replaces the canvas; the next game mounts a
+            # fresh one and asks again.
+            self.held = None
             if self.room.seats[0] is self:
                 self.harness.spawn(self.room.start_game(delay=2.0))
 
@@ -250,6 +334,44 @@ class Seat:
             sent_at = self.room.frame_sent_at.get(frame if isinstance(frame, (str, int)) else bytes(frame))
             if sent_at is not None:
                 samples.fanout_ms.append((time.monotonic() - sent_at) * 1000)
+            held = self.held
+            if held is None:
+                return
+            tag = frame_tag(frame)
+            if tag in ADDS_AN_ACTION:
+                held.action_count += 1
+                held.open_path = tag == PATH_START_TAG
+            if commit is not None:
+                held.open_path = False
+                # `[generation, sequence, revision, historyHash]`
+                held.generation = int(commit[0])
+                held.history_hash = int(commit[3])
+
+        @sio.on("canvas_undo")
+        async def on_canvas_undo(payload):
+            # `[generation, sequence, revisionBefore, revisionAfter, historyHash]`
+            if self.held is not None:
+                self.held.action_count = max(0, self.held.action_count - 1)
+                self.held.generation = int(payload[0])
+                self.held.history_hash = int(payload[4])
+
+        @sio.on("sync_strokes")
+        async def on_sync_strokes(history, _revision, generation, _sequence, history_hash, _request_id):
+            samples.canvas_full_syncs += 1
+            self.held = HeldCanvas(
+                generation=int(generation),
+                action_count=binary_action_count(bytes(history)),
+                history_hash=int(history_hash),
+            )
+
+        @sio.on("sync_strokes_tail")
+        async def on_sync_strokes_tail(tail, base, _revision, generation, _sequence, history_hash, _request_id):
+            samples.canvas_tails += 1
+            self.held = HeldCanvas(
+                generation=int(generation),
+                action_count=int(base) + binary_action_count(bytes(tail)),
+                history_hash=int(history_hash),
+            )
 
         if (
             self.harness.capture is not None
@@ -394,6 +516,29 @@ class Seat:
             last_probe = now
             await self.call("session_ping", {})
 
+    async def request_canvas(self) -> None:
+        """Ask for the drawing, claiming what this seat holds (R-DRAW-13).
+
+        The browser's transaction, reduced to what the gate needs
+        (`lib/canvasSyncRequests.ts`): a refusal that says when to ask again is
+        asked again after that long, a couple of times at most. The reply is
+        the `sync_strokes` or `sync_strokes_tail` the handlers above apply."""
+        for _attempt in range(3):
+            if self.harness.stopping or self.sio is None or not self.sio.connected:
+                return
+            self.sync_request_id += 1
+            claim = self.held.claim() if self.held is not None else None
+            payload = [self.sync_request_id, *claim] if claim else [self.sync_request_id]
+            self.harness.samples.canvas_requests += 1
+            if claim:
+                self.harness.samples.canvas_requests_claimed += 1
+                if self.held is not None and self.held.open_path:
+                    self.harness.samples.canvas_claims_mid_stroke += 1
+            answer = await self.call("request_sync_strokes", payload)
+            if not answer or answer.get("ok") or "retryAfterMs" not in answer:
+                return
+            await asyncio.sleep(float(answer["retryAfterMs"]) / 1000)
+
     async def reconnect_cycle(self) -> None:
         """Drop and come back, taking the seat back inside the grace."""
         while not self.harness.stopping:
@@ -413,6 +558,11 @@ class Seat:
                 continue
             if answer and answer.get("ok"):
                 self.harness.samples.reconnects += 1
+                # A new socket has rebound the seat: the browser asks again,
+                # claiming the prefix it kept across the gap, and a verified
+                # claim is answered with only what it missed (#877).
+                if self.held is not None:
+                    await self.request_canvas()
             else:
                 self.harness.samples.failed_reconnects += 1
 
@@ -753,6 +903,16 @@ class Harness:
             "unexpectedDisconnects": s.unexpected_disconnects,
             "reconnects": s.reconnects,
             "failedReconnects": s.failed_reconnects,
+            # What the seats asked for the drawing, and what they were sent
+            # (R-DRAW-13): the client's half of #882's tail-claim reading.
+            "canvasRequests": s.canvas_requests,
+            "canvasRequestsClaimed": s.canvas_requests_claimed,
+            # Claims made while a path was open: the count covers a record the
+            # hash does not, so the server cannot verify them (#882 reads them
+            # as `hash` once the stroke has finished in the gap).
+            "canvasClaimsMidStroke": s.canvas_claims_mid_stroke,
+            "canvasFullSyncs": s.canvas_full_syncs,
+            "canvasTails": s.canvas_tails,
             "turnsStarted": s.turns_started,
             "turnsEnded": s.turns_ended,
             "turnsSkipped": s.turns_skipped,
@@ -1013,6 +1173,9 @@ def print_report(report: dict) -> None:
         print(f"  recovery notices by reason: {m['recoveryNotices']}")
     print(f"  outbound backlog high-water: {m['backlogBytesMax']:.0f} B, oldest {m['backlogAgeMaxMs']:.0f} ms; "
           f"closures {m['backlogClosures'] or 'none'} with {m['slowViewers']} slow viewers")
+    print(f"  canvas requests: {m['canvasRequests']:.0f} ({m['canvasRequestsClaimed']:.0f} claiming a prefix, "
+          f"{m['canvasClaimsMidStroke']:.0f} of them mid-stroke); "
+          f"answered with {m['canvasFullSyncs']:.0f} full syncs and {m['canvasTails']:.0f} tails")
     print(f"  RSS every 15 s: {m['rssSeriesMB']}")
     print(f"  on the wire: out {m['wireBytesOutMB']:.2f} MB of {m['bytesOutMB']:.2f} MB of packets "
           f"({100 * m['wireBytesOutMB'] / max(m['bytesOutMB'], 1e-9):.1f}%), in {m['wireBytesInMB']:.2f} MB of "

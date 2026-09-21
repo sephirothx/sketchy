@@ -123,45 +123,85 @@ the browser's offer, a seat costs ~470 KB above idle against ~130 KB without, ab
 compressor alone; the decompressor for what the client sends, at the same window, and
 wsproto's buffers are the rest): ~140 MB at 420 sockets, against the 1.5 GB alert.
 
-**Measured, combined (#568, #869).** One guest's whole inbound stream is captured under
-the release load gate's full population (50 rooms, 400 seats,
-`benchmarks/run_load.sh --capture-seat`) and replayed through one context at the server's
-settings ([`benchmarks/room_state_deltas.py`](../benchmarks/room_state_deltas.py)). The
-current capture is
-[`fixtures/viewer_streams/gate-viewer-180s-869.jsonl`](../fixtures/viewer_streams/gate-viewer-180s-869.jsonl),
-taken after room chat lines stopped carrying `retainedMessageId`; the one #568 closed on
-is kept beside it as
-[`gate-viewer-180s.jsonl`](../fixtures/viewer_streams/gate-viewer-180s.jsonl):
+**Measured, combined (#568, #869, #888).** One guest's whole inbound stream is captured
+under the release load gate's full population (50 rooms, 400 seats,
+`benchmarks/run_load.sh --duration 180 --slow-viewers 0 --capture-seat`) and replayed
+through one context at the server's settings
+([`benchmarks/room_state_deltas.py`](../benchmarks/room_state_deltas.py)). The current
+capture is
+[`fixtures/viewer_streams/gate-viewer-180s-888.jsonl`](../fixtures/viewer_streams/gate-viewer-180s-888.jsonl),
+taken once epic #888 had landed. Its baseline,
+[`gate-viewer-180s-888-baseline.jsonl`](../fixtures/viewer_streams/gate-viewer-180s-888-baseline.jsonl),
+is the tree the epic started from (`337268e9`) under the **same workload**: that tree's
+gate with #938's fix applied, because the gate's between-turn chat had been refused by
+the server until then, and a baseline without it would have credited the epic with chat
+it never sent. Each tree is driven the way its own browser behaved — the old server
+pushed the canvas on join and rebind, today's is asked for it — and the replay
+compresses both streams identically, so the comparison holds although the old gate never
+negotiated compression. The captures #568 and #869 closed on are kept beside them
+([`gate-viewer-180s.jsonl`](../fixtures/viewer_streams/gate-viewer-180s.jsonl),
+[`gate-viewer-180s-869.jsonl`](../fixtures/viewer_streams/gate-viewer-180s-869.jsonl)).
 
-| A guest's stream, 184 s | #568 uncompressed | #568 on the wire | #869 uncompressed | #869 on the wire |
+| A guest's stream, 184 s | before #888 uncompressed | before #888 on the wire | after #888 uncompressed | after #888 on the wire |
 | --- | ---: | ---: | ---: | ---: |
-| whole stream | 108.0 KB (431) | 11.7 KB — 64 B/s per seat | 100.9 KB (424) | 7.2 KB — **39 B/s per seat** |
-| `chat_message` | 31.3 KB (171) | 5.8 KB (50%) | 21.5 KB (174) | 1.3 KB (18%) |
-| `draw` | 3.7 KB (127) | 2.2 KB (19%) | 3.7 KB (127) | 2.2 KB (31%) |
-| `room_state` | 66.3 KB (28) | 1.8 KB (15%) | 68.9 KB (29) | 1.8 KB (25%) |
-| everything else | 6.7 KB | 1.9 KB | 6.8 KB | 1.8 KB |
+| whole stream | 106.1 KB (431) | 12.1 KB — 66 B/s per seat | 100.5 KB (415) | 7.1 KB — **39 B/s per seat** |
+| `chat_message` | 34.7 KB (187) | 6.4 KB (53%) | 24.9 KB (192) | 1.4 KB (20%) |
+| `draw` | 3.7 KB (127) | 2.2 KB (19%) | 3.7 KB (127) | 2.2 KB (32%) |
+| `room_state` | 61.3 KB (26) | 1.7 KB (14%) | 67.3 KB (28) | 1.8 KB (26%) |
+| presence events | 2.3 KB (25) | 0.2 KB (2%) | — | — |
+| everything else | 4.1 KB (66) | 1.5 KB | 4.6 KB (68) | 1.6 KB |
 
-A capture of the tree just before #869, under the same run, measured 12.1 KB (chat
-6.3 KB, 34 B a line), so the change is −41% of a viewer's stream and chat 34 → 7.5 B a
-line. The UUIDv7 each line carried was the cost: its random half is entropy deflate
-cannot remove, and nothing in a room read it.
+**The epic's whole effect on a player's stream is −41% on the wire, and it is one
+change.** Chat went from 6.4 to 1.4 KB, which is all but 4 B of the 5.0 KB saved: the
+UUIDv7 each line carried (#869) was entropy deflate cannot remove, and nothing in a room
+read it. Everything else nets out to about zero on this stream. #880 removed the 25
+presence messages (−225 B) and `room_state` grew by what it now carries as `causes`
+(+123 B); the first turn names its canvas in `turn_starting` (+45 B) instead of sending
+`canvas_reset` and `game_started` (−69 B); and the canvas the browser asks for at game
+start adds 52 B the seat never received before, because nothing pushed one into a
+waiting room.
 
-The gate itself measured 64.6 MB of packet bytes out before compression over five
-minutes for 420 sockets (~0.5 KB/s per seat), 43% fewer draw messages and about half the
-draw bytes against the state before the epic (#560, #559, #603), and ack p95 under
-15 ms throughout. Two things the table says that the estimates did not. At #568, chat,
-not drawing, was the largest share of a viewer's wire bytes once drawing was thinned and
-folded — and #869 found the reason was the per-line id, not the per-line message; drawing
-is the largest share now. And a **room-state delta protocol is not worth building
-(#493)** — replacing every `room_state` after the first with the patch the issue
-describes (changed top-level keys and a version) saves 1.5% of the stream on the wire at
-#568 and 2.6% at #869, 1.0 B/s per seat either way, 0.4 KB/s at 400 seats, against
-15–17% of the uncompressed stream (the long-polling bound), while building a snapshot
-costs 4 µs for a 16-seat room, 0.01% of a core at the gate's rate. The compressor already
-does the delta: through this real mixed stream a `room_state` costs 63 B on the wire, the
-same as through a context that saw nothing else (62 B). A smaller window changes that
-(4 KB: 12.2 KB → 9.2 KB with deltas), which is one more reason the window is 32 KB
-(§above). Requirements N-14 records the decision.
+What one seat's 184 s does not contain is where most of the epic's other changes act.
+Its room finished no game in the window (#871's recap), it is not one of the gate's
+reconnecting seats (#872's spread, #877's tail), and it is neither a lobby watcher (#885)
+nor a player with the lobby open in a waiting room (#873 changed what the *browser*
+subscribes to there, which no gate seat ever did). The whole population sees more of
+them: packet bytes out before compression, every socket, 180 s, went **43.1 → 37.9 MB
+(−12%)**, about three quarters of it chat's raw saving (~10 KB a seat) and the rest the
+reconnect canvas becoming a tail, the folded events and the lobby. The two runs'
+server-side figures are not comparable — the old gate never negotiated compression, and
+that is most of the difference in memory and timer lateness (#875 measured it).
+
+**The gate asks for the canvas (#888).** Since #877 the server sends a canvas only when
+asked, and the gate's seats never asked: the gate had carried none of the canvas-sync
+load real players cause, and #882's tail-claim reading said `none` throughout. A seat now
+asks when the browser would — once when a game starts, which is when the browser's
+canvas mounts and stays mounted for the game, and again after every reconnect, claiming
+the prefix it holds — and tracks that prefix the way the browser does. On the recorded
+five-minute gate (requirements, *Scale target*) that is 906 requests, 499 of them claims,
+460 answered with a tail. The misses are 17 claims whose turn ended during the gap
+(`generation`) and 22 made mid-stroke (`hash`). The second is the browser's own claim,
+made identically: its count includes the open path while its hash covers only the
+finished actions, so a stroke that finishes during the gap leaves nothing the server can
+verify, and a player who reconnects while watching somebody draw takes a full sync —
+about 4% of reconnects.
+
+A **room-state delta protocol is still not worth building (#493).** Replacing every
+`room_state` after the first with the patch the issue describes (changed top-level keys
+and a version) saves 1.9% of the stream on the wire after #888 (7,095 → 6,960 B) and 1.7%
+before it, 0.7 B/s per seat, against 14% of the uncompressed stream (the long-polling
+bound), while building a snapshot costs 4 µs for a 16-seat room. The compressor already
+does the delta: through this real mixed stream a `room_state` costs 66 B on the wire,
+about what it costs through a context that saw nothing else (65 B). A smaller window
+changes that (4 KB: 11.2 KB → 9.6 KB with deltas), which is one more reason the window is
+32 KB (§above). Requirements N-14 records the decision.
+
+The earlier measurements stand as they were taken. At #568, chat — not drawing — was the
+largest share of a viewer's wire bytes once drawing was thinned and folded, and #869 found
+the reason was the per-line id rather than the per-line message; drawing is the largest
+share now. The #568 gate measured 64.6 MB of packet bytes out before compression over
+five minutes for 420 sockets, 43% fewer draw messages and about half the draw bytes
+against the state before that epic (#560, #559, #603).
 
 The server's own counters (`sketchy_socket_bytes_{in,out}_total`, §9) sit **before** all
 of this: they count Engine.IO packet bytes as the server handed them to the transport,
