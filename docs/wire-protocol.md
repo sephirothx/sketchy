@@ -177,16 +177,26 @@ asked, and the gate's seats never asked: the gate had carried none of the canvas
 load real players cause, and #882's tail-claim reading said `none` throughout. A seat now
 asks when the browser would — once when a game starts, which is when the browser's
 canvas mounts and stays mounted for the game, and again after every reconnect, claiming
-the prefix it holds — and tracks that prefix the way the browser does. On the recorded
-five-minute gate (requirements, *Scale target*) that is 910 requests, 500 of them claims,
-456 answered with a tail. Both kinds of miss are the browser's own behaviour, modelled
+the prefix it holds — and tracks that prefix the way the browser does. Nothing asks
+periodically, in the gate or the browser: a heartbeat's soft rebind and a tab coming back
+ask for nothing (#886), so in normal play a player asks about once a game and once per
+real reconnect. On the recorded five-minute gate (requirements, *Scale target*) that is
+910 requests, 500 of them claims, 456 answered with a tail — counts set by the gate's
+reconnect schedule rather than by normal play: a quarter of the non-host seats drop every
+30–60 s, 1.7 reconnects a second across 400 seats, which is a stress case for the grace.
+The 410 unclaimed requests are the game-start ones, one per seat per game. Even so, canvas
+syncs are **0.4% of the gate's bytes out** (0.23 MB of 58.1 MB, full syncs and tails
+together): re-syncs were already rare, and the gate now carries them rather than
+nothing. Both kinds of miss are the browser's own behaviour, modelled
 rather than invented. 17 are claims whose turn ended during the gap (`generation`): the
 browser's canvas resets only on `turn_starting`, never on `sync_game`, so it too comes
 back holding the old generation. 27 were made mid-stroke (`hash`), which the gate counts
 separately and which match the server's misses exactly: the browser's count includes the
 open path while its hash covers only the finished actions, so a stroke that finishes
 during the gap leaves nothing the server can verify, and a player who reconnects while
-watching somebody draw takes a full sync — about 5% of reconnects. As the browser does, a
+watching somebody draw takes a full sync — about 5% of reconnects, which is 5% of an
+event that is already rare, at about a kilobyte each for a 20-stroke drawing. Left as it
+is. As the browser does, a
 seat drops its canvas when it comes back to a finished game (`last_game`), abandons a
 request a new turn overtakes, and applies only the reply its outstanding request is
 owed.
