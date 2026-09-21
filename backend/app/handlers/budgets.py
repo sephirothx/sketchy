@@ -140,6 +140,18 @@ LOBBY_BASELINE = BudgetClass(
     description="Lobby baselines (watch_lobby) per ten seconds.",
 )
 
+CLIENT_HEALTH = BudgetClass(
+    name="client_health",
+    # Its own kind rather than `action` (#876): a report is the client's to
+    # send on its own schedule - at most one a minute, only when something
+    # happened - and must never spend an allowance a player's click needs.
+    # Two leaves room for a report that crossed a reconnect with the next.
+    default=Budget(limit=2, window_seconds=60.0),
+    minimum=1,
+    maximum=10,
+    description="Client connection-health reports per minute.",
+)
+
 BUDGET_CLASSES: tuple[BudgetClass, ...] = (
     DRAWING,
     CONVERSATION,
@@ -148,6 +160,7 @@ BUDGET_CLASSES: tuple[BudgetClass, ...] = (
     ACTION,
     LOBBY_CHAT,
     LOBBY_BASELINE,
+    CLIENT_HEALTH,
 )
 
 # Commands not named here answer to `action`, so a command added without a
@@ -161,6 +174,7 @@ COMMAND_CLASSES: Mapping[str, str] = {
     "watch_lobby": LOBBY_BASELINE.name,
     "request_sync_strokes": RESYNC.name,
     "session_ping": HEARTBEAT.name,
+    "client_health": CLIENT_HEALTH.name,
 }
 
 
@@ -169,7 +183,16 @@ COMMAND_CLASSES: Mapping[str, str] = {
 # Everything else - including `undo_stroke`, which shares drawing's budget but
 # is a control somebody pressed and is sent with `emitWithAck` - is refused out
 # loud, because silence on an awaited command reads as the server hanging.
-SILENT_COMMANDS: frozenset[str] = frozenset({"draw"})
+#
+# `client_health` is fire-and-forget for the same reason from the other side:
+# the client sends it without an acknowledgement, so a refusal it could not
+# read would only be bytes (#876).
+SILENT_COMMANDS: frozenset[str] = frozenset({"draw", "client_health"})
+
+# Commands whose throttling is counted and nothing more: no log line and no
+# stored event naming the socket. A client's health report goes no further
+# than its series (R-OBS-20), and a throttled one is still one of its reports.
+UNRECORDED_COMMANDS: frozenset[str] = frozenset({"client_health"})
 
 
 class CommandBudgetPolicy:

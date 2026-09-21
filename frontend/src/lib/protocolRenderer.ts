@@ -39,6 +39,10 @@ export function createProtocolRenderer(
   // none and it goes on the document, as it always has.
   listeners: Pick<Document, "addEventListener" | "removeEventListener"> | null =
     typeof document === "undefined" ? null : document,
+  // Told when a viewer's playback fell behind and was compressed (#876).
+  // Absent for a canvas whose frames never crossed a network - the scratch
+  // pad - where a compression would say nothing about a connection.
+  onCompress?: () => void,
 ): CanvasProtocolRenderer {
   // Where the open path ends *as queued*, in canvas pixels, and the style
   // it is drawn in. Updated the moment a frame is queued, never inside a
@@ -67,6 +71,14 @@ export function createProtocolRenderer(
     // became a crawl and a snap - or a 240 ms batch over 80, which is the
     // stepping #559 removed.
     intervalMs,
+    // A hidden tab gets no animation frames, so its queue grows and every
+    // batch that lands is "late": counted only while the tab is on screen,
+    // or the series would measure hidden tabs rather than lag.
+    onCompress: onCompress
+      ? () => {
+          if (typeof document === "undefined" || document.visibilityState !== "hidden") onCompress();
+        }
+      : undefined,
     // Spans of the received segments rather than the interpolated polyline,
     // so a stroke played out a frame at a time ends as the pixels the drawer
     // and every replay have (#940).

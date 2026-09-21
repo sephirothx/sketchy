@@ -1,6 +1,7 @@
 {
  "commandClasses": [
   "action",
+  "client_health",
   "conversation",
   "drawing",
   "heartbeat",
@@ -101,6 +102,60 @@
     "type": "object"
    },
    "silent": false
+  },
+  "client_health": {
+   "commandClass": "client_health",
+   "payload": {
+    "additionalProperties": false,
+    "description": "What only the client can see about its connection (#876, R-OBS-20).\n\nCounts since its last report, and the join-to-drawing times it measured.\nNo identifier, no content and no free text: every field is a bounded\ninteger, so a report can say how often something happened and nothing\nabout who, where or what. The transport it is labelled with is the one\nthe server sees the report arrive on, never one the client names.",
+    "properties": {
+     "droppedEmits": {
+      "default": 0,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Droppedemits",
+      "type": "integer"
+     },
+     "joinToDrawingMs": {
+      "items": {
+       "type": "integer"
+      },
+      "maxItems": 8,
+      "title": "Jointodrawingms",
+      "type": "array"
+     },
+     "playbackCompressions": {
+      "default": 0,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Playbackcompressions",
+      "type": "integer"
+     },
+     "stallFallbacks": {
+      "default": 0,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Stallfallbacks",
+      "type": "integer"
+     },
+     "syncExhausted": {
+      "default": 0,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Syncexhausted",
+      "type": "integer"
+     },
+     "tailRejected": {
+      "default": 0,
+      "maximum": 1000,
+      "minimum": 0,
+      "title": "Tailrejected",
+      "type": "integer"
+     }
+    },
+    "type": "object"
+   },
+   "silent": true
   },
   "create_room": {
    "commandClass": "action",
@@ -2718,7 +2773,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 40,
+ "protocolVersion": 41,
  "refusal": {
   "codes": [
    "invalid_payload",

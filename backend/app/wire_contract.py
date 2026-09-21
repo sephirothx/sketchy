@@ -64,6 +64,7 @@ COMMAND_PAYLOADS: dict[str, type[payloads.RequestModel] | str] = {
     "buy_hint": payloads.HintPayload,
     "buy_wheel_letter": payloads.WheelLetterPayload,
     "cast_restart_vote": payloads.RestartVotePayload,
+    "client_health": payloads.ClientHealthPayload,
     "create_room": payloads.CreateRoomPayload,
     "dismiss_colorblind_suggestion": payloads.EmptyPayload,
     "draw": "parse_draw_payload",

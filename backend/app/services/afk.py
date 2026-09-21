@@ -83,6 +83,9 @@ INACTIVITY_EXEMPT_COMMANDS: frozenset[str] = frozenset(
         "unwatch_lobby",
         "get_room_settings",
         "get_custom_prompts",
+        # Sent by the client on its own schedule (#876): a report says
+        # nothing about whether anybody is at the keyboard.
+        "client_health",
     }
 )
 

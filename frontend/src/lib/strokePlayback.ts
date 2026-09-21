@@ -90,9 +90,20 @@ export function createStrokePlayback(options: {
   `points[k + 1]` lies on; paint those for pixels that match the whole. */
   paint: (points: Point[], style: SegmentStyle, spans: SegmentSpan[]) => void;
   maxLagMs?: number;
+  /** Told once each time the schedule falls past the lag bound (#876): once
+  per episode of falling behind, not once per batch compressed inside it - a
+  hiccup that delivers twenty queued batches is one incident, and a schedule
+  sitting at the bound compresses on every batch until it is back inside.
+  Only told: whether it counts - a hidden tab's queue grows because it is
+  hidden, not because anything is late - is the caller's to decide. */
+  onCompress?: () => void;
 }): StrokePlayback {
   const maxLag = options.maxLagMs ?? MAX_LAG_MS;
   const queue: Item[] = [];
+  // Inside an episode of falling behind: set when the schedule first passes
+  // the bound, cleared once a batch lands with it back inside, or the queue
+  // is emptied (#876).
+  let behind = false;
 
   function lastDueEnd(now: number): number {
     for (let index = queue.length - 1; index >= 0; index -= 1) {
@@ -159,7 +170,14 @@ export function createStrokePlayback(options: {
     // the viewer catches up over the next interval rather than at a jump.
     const end = lastDueEnd(now);
     const excess = end - now - maxLag;
-    if (excess <= 0) return;
+    if (excess <= 0) {
+      behind = false;
+      return;
+    }
+    if (!behind) {
+      behind = true;
+      options.onCompress?.();
+    }
     for (const item of queue) {
       if (item.kind !== "segments") continue;
       item.dueStart = Math.max(now, item.dueStart - excess);
@@ -208,6 +226,7 @@ export function createStrokePlayback(options: {
         }
         return true;
       }
+      behind = false;
       return false;
     },
     drain() {
@@ -216,9 +235,11 @@ export function createStrokePlayback(options: {
         if (item.kind === "barrier") item.run();
         else paintUpTo(item, item.points.length - 1);
       }
+      behind = false;
     },
     cancel() {
       queue.length = 0;
+      behind = false;
     },
     pending: () => queue.length > 0,
   };

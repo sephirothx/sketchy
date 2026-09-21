@@ -9,7 +9,8 @@ nobody will ever read.
 Deliberately a ring buffer and nothing else. It never sends anything on its own,
 never persists, and is read only when a player chooses to attach it. An error log
 that phoned home would be telemetry, which is a different thing needing a
-different conversation. */
+different conversation - and that conversation was #876: what the client does
+send on its own is `connectionHealth.ts`, counts only, never these entries. */
 
 import { redactDiagnostic } from "./crashReport.ts";
 

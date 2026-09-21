@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+from functools import partial
 
 import socketio
 from socketio.exceptions import ConnectionRefusedError
@@ -17,6 +18,7 @@ from app.domain_values import RuntimeEventType
 from app.client_config import client_config
 from app.flow_timing import timing
 from app.handlers.context import HandlerContext
+from app.handlers.payloads import ClientHealthPayload, PayloadError, parse_payload
 from app import protocol
 from app.protocol import PROTOCOL_VERSION, client_protocol_version
 from app.rooms import Player, Room, _metrics_user_id as metrics_user_id
@@ -341,6 +343,32 @@ async def _begin_reconnect_grace(
     )
 
 
+async def client_health(ctx: HandlerContext, sid, data=None):
+    """Observe what only the client can see about its connection (R-OBS-20).
+
+    Into unlabelled series and nowhere else: nothing is logged, stored or
+    keyed to the account the socket belongs to, although it arrives on an
+    authenticated socket - that is what makes it connection health and not
+    the activity report N-19 refuses. The transport label is the server's
+    reading of the socket, so no value a client chose becomes a series.
+    """
+    try:
+        report = parse_payload(ClientHealthPayload, data)
+    except PayloadError as error:
+        # Dropped and counted: the door counts a refusal by its code (#882).
+        return error.acknowledgement()
+    telemetry.note_client_health(
+        _transport_of(ctx, sid),
+        tail_rejected=report.tail_rejected,
+        sync_exhausted=report.sync_exhausted,
+        dropped_emits=report.dropped_emits,
+        stall_fallbacks=report.stall_fallbacks,
+        playback_compressions=report.playback_compressions,
+        join_to_drawing_ms=report.join_to_drawing_ms,
+    )
+    return {"ok": True}
+
+
 def register(ctx: HandlerContext) -> None:
     async def on_connect(sid, environ, auth):
         async with ctx.game_flow.room_state_batch():
@@ -359,3 +387,4 @@ def register(ctx: HandlerContext) -> None:
             logger.exception("disconnect handler failed for %s", sid)
 
     ctx.sio.on("disconnect", handler=on_disconnect)
+    ctx.on("client_health", handler=partial(client_health, ctx))
