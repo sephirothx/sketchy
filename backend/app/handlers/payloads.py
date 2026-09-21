@@ -477,6 +477,47 @@ class WatchLobbyPayload(RequestModel):
     )
 
 
+#: Per report, which the client sends at most once a minute and only when
+#: something happened (#876). A count this high in a minute is a client in a
+#: loop, not a measurement - the bound is what keeps it from being either.
+MAX_HEALTH_COUNT = 1000
+#: Mid-turn entries measured in one report. More than a handful in a minute is
+#: a player hopping rooms, and the first few already say how long it took.
+MAX_JOIN_TO_DRAWING_READINGS = 8
+#: Past a minute the entry did not "take a while", it failed, and the canvas
+#: transaction's own recovery is what answers that.
+MAX_JOIN_TO_DRAWING_MS = 60_000
+
+
+class ClientHealthPayload(RequestModel):
+    """What only the client can see about its connection (#876, R-OBS-20).
+
+    Counts since its last report, and the join-to-drawing times it measured.
+    No identifier, no content and no free text: every field is a bounded
+    integer, so a report can say how often something happened and nothing
+    about who, where or what. The transport it is labelled with is the one
+    the server sees the report arrive on, never one the client names.
+    """
+
+    tail_rejected: int = Field(default=0, alias="tailRejected", ge=0, le=MAX_HEALTH_COUNT)
+    sync_exhausted: int = Field(default=0, alias="syncExhausted", ge=0, le=MAX_HEALTH_COUNT)
+    dropped_emits: int = Field(default=0, alias="droppedEmits", ge=0, le=MAX_HEALTH_COUNT)
+    stall_fallbacks: int = Field(default=0, alias="stallFallbacks", ge=0, le=MAX_HEALTH_COUNT)
+    playback_compressions: int = Field(
+        default=0, alias="playbackCompressions", ge=0, le=MAX_HEALTH_COUNT
+    )
+    join_to_drawing_ms: list[int] = Field(
+        default_factory=list, alias="joinToDrawingMs", max_length=MAX_JOIN_TO_DRAWING_READINGS
+    )
+
+    @field_validator("join_to_drawing_ms")
+    @classmethod
+    def _readings_in_range(cls, readings: list[int]) -> list[int]:
+        if any(not 0 <= reading <= MAX_JOIN_TO_DRAWING_MS for reading in readings):
+            raise ValueError("a join-to-drawing reading is out of range")
+        return readings
+
+
 class RecapDrawingPayload(RequestModel):
     index: int = Field(ge=0, le=MAX_CANVAS_SEQUENCE)
 

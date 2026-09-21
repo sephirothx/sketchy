@@ -29,6 +29,8 @@ import type { ErrorCode } from "../types";
 import { recordClientError } from "../lib/clientErrorLog";
 import { emitWithAck, socket } from "../lib/socket";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
+import { useGameStore } from "../store/gameStore";
+import { noteHealth, noteJoinToDrawing } from "../lib/connectionHealth";
 
 const MAX_PENDING_CANVAS_ACTIONS = 256;
 
@@ -163,7 +165,12 @@ export function useCanvasProtocol(
         { timeoutMs: CANVAS_SYNC_TIMEOUT_MS },
       ),
       claim: authoritativePrefixClaim,
-      exhausted: () => requestSessionRebind(),
+      exhausted: () => {
+        // Every retry spent and still no canvas: the seat is rebound as a
+        // last resort, which the server sees only as a join (#876).
+        noteHealth("syncExhausted");
+        requestSessionRebind();
+      },
       setTimeout: (handler, delayMs) => window.setTimeout(handler, delayMs),
       clearTimeout: (timeoutId) => window.clearTimeout(timeoutId),
     });
@@ -342,9 +349,20 @@ export function useCanvasProtocol(
       if (commit !== undefined) onCanvasCommit(commit);
     };
 
+    // When this canvas mounted, until its first drawing is on screen (#876):
+    // how long a player entering mid-turn looks at an empty canvas. Read at
+    // the first converged sync rather than at mount, because a seat is sent
+    // the room before its `sync_game` and the canvas mounts in between - by
+    // the reply, the phase says whether this was a mid-turn entry.
+    let mountedAt: number | null = performance.now();
+
     // The reply was applied. A converged canvas discharges every trigger
     // coalesced meanwhile; one that fell back asks once more.
     const finishSync = (converged: boolean) => {
+      if (converged && mountedAt !== null) {
+        if (useGameStore.getState().phase === "drawing") noteJoinToDrawing(performance.now() - mountedAt);
+        mountedAt = null;
+      }
       ensureSyncRequester().applied(converged);
     };
 
@@ -431,8 +449,12 @@ export function useCanvasProtocol(
       generation: unknown,
       sequence: unknown,
       historyHash: unknown,
+      source: "full" | "tail",
     ): void => {
       if (!historyRef.current.replace(actions, revision, generation, sequence, historyHash)) {
+        // A tail that does not hash to what the server said costs a full
+        // sync, and only this side can tell it happened (#876).
+        if (source === "tail") noteHealth("tailRejected");
         finishSync(false);
         requestAuthoritativeSync();
         return;
@@ -542,7 +564,7 @@ export function useCanvasProtocol(
         requestAuthoritativeSync();
         return;
       }
-      adoptAuthority(actions, revision, generation, sequence, historyHash);
+      adoptAuthority(actions, revision, generation, sequence, historyHash, "full");
     };
 
     // Only the actions this client was missing, spliced onto the prefix it
@@ -575,12 +597,13 @@ export function useCanvasProtocol(
         || baseCount < 0
         || baseCount > historyRef.current.actions.length
       ) {
+        noteHealth("tailRejected");
         finishSync(false);
         requestAuthoritativeSync();
         return;
       }
       const combined = historyRef.current.actions.slice(0, baseCount).concat(tail);
-      adoptAuthority(combined, revision, generation, sequence, historyHash);
+      adoptAuthority(combined, revision, generation, sequence, historyHash, "tail");
     };
 
     function onCanvasCommit(payload: unknown) {
@@ -654,6 +677,9 @@ export function useCanvasProtocol(
     };
 
     const onCanvasReset = (payload: unknown) => {
+      // A new turn began before this canvas's first drawing arrived: there is
+      // no wait left to measure, only a fresh, empty canvas (#876).
+      mountedAt = null;
       if (!historyRef.current.reset(payload)) {
         requestAuthoritativeSync();
         return;

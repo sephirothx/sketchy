@@ -90,6 +90,11 @@ export function createStrokePlayback(options: {
   `points[k + 1]` lies on; paint those for pixels that match the whole. */
   paint: (points: Point[], style: SegmentStyle, spans: SegmentSpan[]) => void;
   maxLagMs?: number;
+  /** Told each time a batch arrives to a schedule already past the lag bound
+  and the queue is pulled in (#876). Only told: whether it counts - a hidden
+  tab's queue grows because it is hidden, not because anything is late - is
+  the caller's to decide. */
+  onCompress?: () => void;
 }): StrokePlayback {
   const maxLag = options.maxLagMs ?? MAX_LAG_MS;
   const queue: Item[] = [];
@@ -160,6 +165,7 @@ export function createStrokePlayback(options: {
     const end = lastDueEnd(now);
     const excess = end - now - maxLag;
     if (excess <= 0) return;
+    options.onCompress?.();
     for (const item of queue) {
       if (item.kind !== "segments") continue;
       item.dueStart = Math.max(now, item.dueStart - excess);

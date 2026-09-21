@@ -1,6 +1,12 @@
 import { io, Socket } from "socket.io-client";
 import { applyClientConfig } from "./clientConfig.ts";
 import { recordClientError } from "./clientErrorLog.ts";
+import {
+  HEALTH_REPORT_INTERVAL_MS,
+  noteHealth,
+  restoreHealthReport,
+  takeHealthReport,
+} from "./connectionHealth.ts";
 import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
 import { isUpdateRequired, markUpdateRequired } from "./updateRequired.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
@@ -315,6 +321,7 @@ function armStallWatchdog(): void {
     opts.transports = next;
     recordClientError("socket", `transport fallback: the ${opts.transports[1]} attempt stalled, trying polling first`);
     telemetry.fallbacks += 1;
+    noteHealth("stallFallbacks");
     // A fresh engine reads the new order; nothing was connected, so nobody
     // sees a disconnect.
     socket.disconnect();
@@ -662,8 +669,39 @@ just rejoined. Live drawing is deliberately not routed through here - its
 frames carry a generation and sequence the server checks, and it has an
 explicit resync path, so replay is already answered there. */
 export function emitTransient(event: string, ...args: unknown[]): void {
+  // A volatile emit on a socket that is down is discarded without a word,
+  // which is the point of it - and why nobody could say how often (#876).
+  if (!socket.connected) noteHealth("droppedEmits");
   socket.volatile.emit(event, ...args);
 }
+
+// The connection-health report (#876, `connectionHealth.ts`): at most once a
+// minute, only when something happened, and only on a socket that is up - a
+// report kept for a socket that is down goes with the next one rather than
+// being counted as a dropped emit of its own. Started by the first connection,
+// not at import, so a test that loads this module arms no timer.
+let healthTimer: ReturnType<typeof setInterval> | null = null;
+
+function sendHealthReport(): void {
+  if (!socket.connected) return;
+  const report = takeHealthReport();
+  if (report === null) return;
+  try {
+    socket.volatile.emit("client_health", report);
+  } catch {
+    restoreHealthReport(report);
+  }
+}
+
+socket.on("connect", () => {
+  if (healthTimer !== null || typeof setInterval !== "function") return;
+  healthTimer = setInterval(sendHealthReport, HEALTH_REPORT_INTERVAL_MS);
+  // A tab closing takes its last minute with it unless it is sent now;
+  // best effort, since a page being unloaded may not get to write it.
+  if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+    window.addEventListener("pagehide", sendHealthReport);
+  }
+});
 
 /** How long a guess waits for the server's acknowledgement before it is resent. */
 export const GUESS_ACK_TIMEOUT_MS = 2000;

@@ -21,6 +21,7 @@ import {
 import { useSettingsStore } from "../store/settingsStore";
 import { useGameStore } from "../store/gameStore";
 import { currentClientConfig, flushIntervalFor } from "../lib/clientConfig";
+import { noteHealth } from "../lib/connectionHealth";
 import type { DrawTool } from "../types";
 import { saveCanvasImage } from "../lib/canvasDownload";
 import { createCanvasSurface, createLayerSurface, type CanvasSurface, type LayerSurface } from "../lib/canvasSurface";
@@ -98,7 +99,12 @@ function createCanvas(
     }, []);
 
     const renderer = useMemo(
-      () => createProtocolRenderer(surfaceRef, senderIntervalMs),
+      () => createProtocolRenderer(
+        surfaceRef,
+        senderIntervalMs,
+        undefined,
+        local ? undefined : () => noteHealth("playbackCompressions"),
+      ),
       [],
     );
     // What the renderer holds lives outside React, so React has to let it go
