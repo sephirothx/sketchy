@@ -31,7 +31,8 @@ how often the gate saw it emitted, and what a 4 KB and an 8 KB window would have
 done to the same stream.
 
 Usage:
-  backend/.venv/bin/python benchmarks/room_state_deltas.py
+  backend/.venv/bin/python benchmarks/room_state_deltas.py                     # today's (#888)
+  backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewer_streams/gate-viewer-180s-888-baseline.jsonl   # the tree before #888, same workload
   backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewer_streams/gate-viewer-180s.jsonl   # the #568 capture
 """
 from __future__ import annotations
@@ -154,8 +155,8 @@ def build_room(players: int):
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--stream", type=Path, default=STREAM_DIR / "gate-viewer-180s-869.jsonl")
-    parser.add_argument("--emits-per-second", type=float, default=1446 / 180, help="room_state emits the gate saw server-wide, per second (default: the 180 s capture run, 1446 in 180 s)")
+    parser.add_argument("--stream", type=Path, default=STREAM_DIR / "gate-viewer-180s-888.jsonl")
+    parser.add_argument("--emits-per-second", type=float, default=1446 / 180, help="room_state emits the gate saw server-wide, per second; only feeds the build-cost line (default: the #869 capture run, 1446 in 180 s - since #880 there are fewer, so this overstates the cost, which is 0.00%% of a core either way)")
     parser.add_argument("--json-output", type=Path)
     args = parser.parse_args()
 

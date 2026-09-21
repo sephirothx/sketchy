@@ -2004,6 +2004,9 @@ backend/.venv/bin/python benchmarks/path_widths.py --brush 6 12 32 --tolerance 0
 # Would room-state deltas pay? Replayed on a real viewer's stream captured under the gate (#493)
 backend/.venv/bin/python benchmarks/room_state_deltas.py
 ./benchmarks/run_load.sh --duration 180 --slow-viewers 0 --capture-seat fixtures/viewer_streams/gate-viewer-180s-<change>.jsonl   # re-capture; keep the old one
+# The #888 pair: -888 after the epic, -888-baseline the tree it started from (337268e9) under the same
+# workload, its gate with #938's chat fix applied. A before/after needs both runs, not an old capture.
+backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewer_streams/gate-viewer-180s-888-baseline.jsonl
 
 # A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
 METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
@@ -2204,7 +2207,11 @@ through one deflate context at the server's settings as captured and with every
 1.5–2.6% on the wire, so `room_state` stays whole (N-14); the same replay gives the
 per-event wire shares wire-protocol.md §1 records. A capture is raw input like a
 stroke trace: re-capture with the command above, name it for what it is, and keep
-the old one.
+the old one. A capture measures the protocol *and* whatever the gate's seats happen to
+do, so a before/after needs its baseline re-recorded under today's workload rather than
+an old capture: the gate changed twice during #888 (#938 made its between-turn chat
+land, and its seats now ask for the canvas as the browser does), and against the #869
+capture either change would have been credited to the protocol.
 
 `slow_viewer.py` stages the case the outbound budget exists for (#602): a room near the
 canvas ceiling, a spectator that stops reading at the transport while pulling a full
@@ -2214,20 +2221,22 @@ takes back hashes to what the server said. It also measures the slack *under* th
 budget - about 1.2 MB on a loopback before the server's queue grows at all.
 
 `run_load.sh` is the **release load gate** (#461): it starts a server with the
-limits a swarm from one address would trip raised, then drives the documented
-scale target - 50 rooms of 8 seats, 400 seats, plus 20 lobby watchers - with real
+limits a swarm from one address would trip raised, then drives the documented scale
+target - 50 rooms of 8 seats, 400 seats, plus 20 lobby watchers - with real
 Socket.IO clients over WebSocket for five minutes: every room plays games
 continuously (a recorded hand drawing streamed at its own timing by whoever is
-offered prompts, chat and guesses from the rest, a correct guess in half the
-turns), a quarter of the seats drop and reconnect on a schedule, and the lobby
-channel is held open. It reports acknowledgement latency (p50/p95/p99, per
-command), draw fan-out latency from the drawer's send to a viewer's receipt,
-timer overrun on turns that ran their full length, unexpected disconnects and
-failed reconnects, and, scraped from `/metrics`, event-loop lag, resident memory
-and its growth, database query latency, rejected packets and canvas recovery
-notices - each against a threshold, exiting non-zero on a breach. It is run by
-hand on the reference environment before a release (R-ENG-11 keeps it out of
-CI), and the numbers it last produced are recorded with that environment in
+offered prompts, chat and guesses from the rest, a correct guess in half the turns),
+a quarter of the seats drop and reconnect on a schedule, and the lobby channel is
+held open. Every seat asks for the drawing when the browser would - when a game
+starts, and after each reconnect claiming the prefix it holds (#877) - so the
+canvas-sync load real players cause is in the run. It reports acknowledgement
+latency (p50/p95/p99, per command), draw fan-out latency from the drawer's send to a
+viewer's receipt, timer overrun on turns that ran their full length, unexpected
+disconnects and failed reconnects, and, scraped from `/metrics`, event-loop lag,
+resident memory and its growth, database query latency, rejected packets and canvas
+recovery notices - each against a threshold, exiting non-zero on a breach. It is run
+by hand on the reference environment before a release (R-ENG-11 keeps it out of CI),
+and the numbers it last produced are recorded with that environment in
 `docs/requirements.md` under the scale target.
 
 The deflate-window benchmark decides the WebSocket compressor's two constants in
