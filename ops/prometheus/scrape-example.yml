@@ -1,5 +1,13 @@
 # A Prometheus scrape job for one Sketchy worker. `/metrics` is disabled
 # until METRICS_TOKEN is set on the server and answers 401 without it.
+#
+# Retention is a command-line flag, not part of this file, and it decides how
+# far back every trend goes: since #965 nothing in the database keeps a daily
+# roll-up, and the default is 15 days. Run Prometheus with
+#
+#   --storage.tsdb.retention.time=1y
+#
+# or longer. The dashboards in ops/grafana/ read this Prometheus (#968).
 scrape_configs:
   - job_name: sketchy
     metrics_path: /metrics

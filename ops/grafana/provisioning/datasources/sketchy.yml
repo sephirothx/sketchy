@@ -1,0 +1,20 @@
+# The Prometheus the dashboards read (#968). Grafana expands environment
+# variables in provisioning files, so nothing host-specific lives here:
+#
+#   SKETCHY_PROMETHEUS_URL   e.g. http://prometheus:9090
+#
+# The uid is what the dashboards' `datasource` variable defaults to; it is
+# checked against them in backend/tests/test_grafana_dashboards.py.
+#
+# Grafana 12 and later ship the Prometheus datasource as a plugin installed
+# from grafana.com on first start; offline, install it beforehand
+# (`grafana cli plugins install prometheus`) - see ../plugins/README.md.
+apiVersion: 1
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: ${SKETCHY_PROMETHEUS_URL}
+    isDefault: true
+    editable: false
