@@ -149,6 +149,9 @@ REBIND_BUCKETS = (0.5, 1.0, 2.0, 3.0, 5.0, 7.5, 10.0, 15.0, 20.0, 25.0, 30.0)
 # A late joiner's wait for the drawing (#876), from a same-machine sync to one
 # held behind a resync backoff (2, 4, 8 s): dense where it is still bearable.
 JOIN_TO_DRAWING_BUCKETS = (0.1, 0.25, 0.5, 1.0, 2.0, 3.0, 5.0, 8.0, 13.0, 20.0, 30.0, 60.0)
+# How late a phase timer fired (#965): milliseconds on a healthy loop, and the
+# 250 ms `timer.overran` threshold sits inside the range on purpose.
+TIMER_LATENESS_BUCKETS = (0.001, 0.005, 0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0)
 # Engine.IO ping to pong, which is network round trip plus both event loops.
 RTT_BUCKETS = (0.01, 0.025, 0.05, 0.1, 0.25, 0.5, 1.0, 2.5, 5.0, 10.0, 20.0)
 # Why a socket went, as python-socketio names it, and a bucket for anything a
@@ -803,6 +806,15 @@ class Telemetry:
         # `event` is a closed set this module names and `transport` the
         # server's reading of the socket, so no value a client chose becomes
         # a label, and nothing here knows whose report it was.
+        # Every phase timer's lateness, not only the overruns past 250 ms that
+        # `timer.overran` stores (#965): the whole distribution, so the trend
+        # that the permanent daily roll-up used to keep is Prometheus's, and a
+        # loop drifting toward the threshold shows before it crosses it.
+        self.phase_timer_lateness = Histogram(
+            "sketchy_phase_timer_lateness_seconds",
+            "How late each phase timer fired, from the time it was due.",
+            TIMER_LATENESS_BUCKETS,
+        )
         self.client_health_reports = LabelledCounter(
             "sketchy_client_health_reports_total",
             "Connection-health reports clients sent, by the transport they arrived on.",
@@ -1163,6 +1175,9 @@ class Telemetry:
         now = self._clock()
         for milliseconds in join_to_drawing_ms:
             self.client_join_to_drawing.observe(milliseconds / 1000, (transport,), now=now)
+
+    def note_phase_timer_lateness(self, seconds: float) -> None:
+        self.phase_timer_lateness.observe(seconds, now=self._clock())
 
     def note_seat_rebind(self, seconds: float) -> None:
         self.seat_rebinds.observe(seconds, now=self._clock())
@@ -1574,6 +1589,7 @@ class Telemetry:
         lines += self.socket_sessions.lines()
         lines += self.seat_rebinds.lines()
         lines += self.socket_ping_rtt.lines()
+        lines += self.phase_timer_lateness.lines()
         lines += self.client_health_reports.lines()
         lines += self.client_health_events.lines()
         lines += self.client_join_to_drawing.lines()

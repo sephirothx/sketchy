@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c3e4f5a6b7d8_drawing_encoded_event.py` (#895). Both this line and the table
+`d7e8f9a0b1c2_runtime_metrics_to_prometheus.py` (#965). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -33,7 +33,7 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 | Lifecycle invariants | **A row shape no writer produces is refused by the row** (#553): a registered account has credentials and only it does; a curated offer names its version and nothing else does; a prompt is picked at most as often as offered and guessed by at most everyone who faced it; a reviewed report carries when; a friendship is answered iff not pending; an export that is ready has its document, failed its code, both a completion time, anything past pending a start time; a stored drawing says when it was stored and holds exactly its declared bytes, an erased one when it was erased and no bytes or object key, and a drawing belongs to a turn of its own game (`fk_turn_drawings_turn_same_game`); a failed mail says why; public visibility is the official catalogue's; a session expires after it was created; an avatar has positive dimensions within the upload ceiling; a revocation has an actor and a reason only when it happened. The checks complement the transaction ordering of #606–#609; they do not replace it. Proven positive and negative on both engines in `tests/test_lifecycle_constraints.py` | [`db/models.py`](../backend/app/db/models.py) |
 | Foreign-key indexes | **Every foreign key a delete walks has an index leading with its column(s)**, or a documented exemption: `ON DELETE CASCADE`, `SET NULL` and `RESTRICT` all make PostgreSQL find the referencing rows when the referenced row goes, and without such an index that is a scan of the whole child table per deleted parent (#551). A composite FK counts as covered when one of its columns references a key on its own (a globally unique id) and the child has an index leading with that column. Nullable actor references (`moderated_by_user_id`, `issued_by_user_id`, `revoked_by_user_id`) carry a **partial** index over the rows where they are set — one entry per action taken rather than one per row. Asserted by `test_every_foreign_key_a_delete_walks_has_an_index_or_a_documented_reason`; the exemptions live beside it — the two there now (`turn_records (game_id, drawer_participant_id)` and `score_events (game_id, turn_id)`, #890) reference a seat and a turn that are only ever deleted with their whole game, which history never is (R-PRIV-05); an operator deleting one game by hand walks that game's rows through the `game_id`-leading key | [`db/models.py`](../backend/app/db/models.py) · [`tests/test_db_models.py`](../backend/tests/test_db_models.py) |
 | Read indexes | **Every non-unique index is read by something** (#890): it leads with a foreign key's column, which a delete walks, or with a column some statement in `backend/app` names. An index nothing reads is a write on every insert and update for no return, and on a table updated in place it stops the update from being heap-only — an update that changes an indexed column writes a new entry into *every* index of the table. #890 removed seven: `auth_sessions.idle_expires_at` (moved on every session touch), `room_messages (game_id, turn_id, created_at)` (the largest index on the table with the most rows), the friendship acceptance partial index, `planned_shutdown_abandonments.room_instance_id`, `turn_drawing_reactions.game_id`, and the two foreign-key indexes exempted in the row above. Asserted by `test_every_index_is_read_by_something`, with `UNREAD_INDEX_ALLOWED` for a reader the static search cannot see; `idx_scan = 0` in the monthly review (§13) is the live check | [`tests/test_db_models.py`](../backend/tests/test_db_models.py) |
-| Page fill (PostgreSQL) | **`fillfactor = 85` on tables updated in place far more often than inserted** — `auth_sessions`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_stats_daily`, `runtime_stats_daily` (#890). At the default 100 an update finds its page full and has to put the new version on another page, which makes it non-heap-only even when no indexed column changed. Declared as `UPDATED_IN_PLACE` table info, set by revision `a1c2e3f4b5d6`, and held together by the migration chain test, because Alembic compares neither. Measured on 20,000 sessions, three rounds touching 12.5% each: 910 → 315 B of WAL per touch, 0 → 99.99% heap-only, and the table no longer grows under touches (`benchmarks/index_write_cost.py`) | [`db/models.py`](../backend/app/db/models.py) (`UPDATED_IN_PLACE`) |
+| Page fill (PostgreSQL) | **`fillfactor = 85` on tables updated in place far more often than inserted** — `auth_sessions`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_stats_daily` (#890; `runtime_stats_daily` had it too until #965 removed the table). At the default 100 an update finds its page full and has to put the new version on another page, which makes it non-heap-only even when no indexed column changed. Declared as `UPDATED_IN_PLACE` table info, set by revision `a1c2e3f4b5d6`, and held together by the migration chain test, because Alembic compares neither. Measured on 20,000 sessions, three rounds touching 12.5% each: 910 → 315 B of WAL per touch, 0 → 99.99% heap-only, and the table no longer grows under touches (`benchmarks/index_write_cost.py`) | [`db/models.py`](../backend/app/db/models.py) (`UPDATED_IN_PLACE`) |
 | JSON columns | `jsonb` on PostgreSQL (parsed form, comparable, GIN-indexable), text on SQLite. A Python `None` stores as SQL `NULL`, never the JSON token `null` | [`db/models.py`](../backend/app/db/models.py) (`PortableJSON`) |
 | SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection, test fixtures included | [`db/__init__.py:41`](../backend/app/db/__init__.py), [`tests/dbfixtures.py`](../backend/tests/dbfixtures.py) |
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-62 tables in eight domains.
+61 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -146,7 +146,7 @@ erDiagram
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
 | **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
-| **Runtime analytics** | `runtime_events`, `runtime_stats_daily` |
+| **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
 
 ---
@@ -2063,14 +2063,24 @@ itself) · `event_type` · `occurred_at` · `room_id` · `user_id` (`SET NULL`) 
 `null`, which is what the type stored before `PortableJSON` declared
 `none_as_null`).
 
-Types: `room.created`, `room.closed`, `player.joined`, `player.left`,
-`player.disconnected`, `player.reconnected`, `player.evicted`, `command.throttled`, `game.started`,
-`game.finished`, `game.abandoned`, `turn.ended`, `timer.overran`,
-`canvas.payload_observed`, `drawing.stored` (the wire frame's bytes), `drawing.encoded`
-(the same drawing's stored bytes, #895), `recap.budget_dropped`,
-`history.write_abandoned` (a finished game's history or prompt-usage write the server gave
-up on; `details.kind` is `game` or `prompt_usage`, `details.reason` is `timeout` or `error`,
-`value` is the milliseconds spent before giving up — #482).
+**Every observation is counted on `/metrics`** (`sketchy_events_total{event}`); only
+those the database is for are written here (#965). Stored: `room.created`,
+`room.closed`, `player.joined`, `player.left`, `player.disconnected`,
+`player.reconnected`, `player.evicted`, `game.finished`, `game.abandoned` — keyed to an
+account or a room, and what the Operations page's audited per-player activity view and
+its room filter read, which Prometheus cannot and should not hold — and `timer.overran`
+(`value` the milliseconds late, only past 250 ms) and `history.write_abandoned` (a
+finished game's history or prompt-usage write the server gave up on; `details.kind` is
+`game` or `prompt_usage`, `details.reason` is `timeout` or `error`, `value` is the
+milliseconds spent before giving up — #482), each worth a durable row even if the
+metrics stack was down when it happened (R-OBS-10). **Counted only**: `drawing.stored`
+(the wire frame's bytes) and `drawing.encoded` (the same drawing's stored bytes, #895),
+whose sizes are the `sketchy_drawing_*_bytes` histograms below; `command.throttled`,
+which is `sketchy_socket_refusals_total{code="too_fast"}` per command (#882) and the one
+type unbounded under abuse; and `recap.budget_dropped`. The `CHECK` on `event_type`
+lists the stored set, so a counted-only type cannot be written by accident.
+`game.started`, `turn.ended` and `canvas.payload_observed` were declared and never
+written; #965 removed them.
 
 Observations are **buffered and written in batches**, because a database round trip per
 join would be felt as lag inside a drawing. The buffer is bounded and drops oldest when
@@ -2079,35 +2089,28 @@ flushed on the way out of a planned shutdown, so the observations describing a r
 are not the ones lost to it.
 
 A flush takes the oldest 5,000 events but leaves them buffered until its transaction has
-committed (#614): the raw rows go in as `executemany` chunks sized from the table's own
+committed (#614): the rows go in as `executemany` chunks sized from the table's own
 column count (about 4,300 rows under asyncpg's 32,767-parameter ceiling) with no ids
-returned, the daily totals are grouped in memory and written as one ordered additive
-upsert per chunk with `updated_at` assigned explicitly, and an observation naming an
-account that was erased or purged since is detached from it (the erasure barrier,
-`app.auth.erasure`) rather than failing the batch's foreign key. What can still be lost
-is counted apart, on the recorder and on `/metrics`: overflow
-(`sketchy_events_dropped_total`), a transaction that failed before its commit
-(`sketchy_event_flushes_failed_total`, the batch stays for the next flush), a cancelled
-flush (`sketchy_event_flushes_interrupted_total`, kept too), and a commit whose outcome
-the driver could not report (`sketchy_event_batches_ambiguous_total`,
+returned, and an observation naming an account that was erased or purged since is
+detached from it (the erasure barrier, `app.auth.erasure`) rather than failing the
+batch's foreign key. What can still be lost is counted apart, on the recorder and on
+`/metrics`: overflow (`sketchy_events_dropped_total`), a transaction that failed before
+its commit (`sketchy_event_flushes_failed_total`, the batch stays for the next flush), a
+cancelled flush (`sketchy_event_flushes_interrupted_total`, kept too), and a commit whose
+outcome the driver could not report (`sketchy_event_batches_ambiguous_total`,
 `sketchy_events_lost_to_ambiguity_total`) — that batch is let go rather than retried,
 because a raw row has no identity that would make a second write a no-op.
 
-### `runtime_stats_daily`
-`stat_date` + `metric` composite **PK** · `occurrences` · `value_sum` (BIGINT) ·
-`value_max` · `updated_at`.
-
-Raw events are kept `RUNTIME_EVENT_RETENTION_DAYS` (default 30) and **rolled into these
-permanent daily totals first**. What retention costs is the ability to ask about one
-particular minute last month; the shape of the month survives. Unbounded event rows on
-embedded SQLite is a disk that fills up quietly.
-
-A count, a sum and a maximum keep a month's shape but not a distribution, and the drawing
-sizes are the distribution every storage decision turns on. So `drawing.stored` and
-`drawing.encoded` also roll into fixed size buckets (#895) — one extra metric row per
-bucket per day: `drawing.stored.le_1k`, `…le_4k`, `…le_16k`, `…le_64k`, `…le_256k`,
-`…le_1m` and `…gt_1m`, the same for `drawing.encoded` — so the distribution outlives the
-raw events without a schema change.
+**The trend is Prometheus's.** Rows are kept `RUNTIME_EVENT_RETENTION_DAYS` (default 30)
+and then deleted; nothing is rolled up first. A permanent daily roll-up,
+`runtime_stats_daily` (a count, a sum and a maximum per metric per day, plus fixed
+drawing-size buckets from #895), sat beside this table until #965: everything in it was
+derivable from `sketchy_events_total` and the size histograms, and the one chart that
+read it now reads Grafana. Keeping a trend past 30 days is therefore a Prometheus
+retention setting (its default is 15 days; `--storage.tsdb.retention.time=1y` covers a
+year), and `sketchy_phase_timer_lateness_seconds` carries every phase timer's lateness,
+not only the overruns this table stores, so the loop drifting toward the threshold is
+visible before it crosses it.
 
 ### Sizing facts on `/metrics`
 
@@ -2161,7 +2164,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Delivered/failed outbox mail | 30 days (`OUTBOX_RETENTION`); tokens scrubbed at send/give-up | 6 h | Pending mail, still owed an attempt at any age | Hourly retention sweep (sent rows by `sent_at`, failed rows by `created_at`) | `email_outbox` |
 | Expired one-shot tokens | Until expiry; consumed on presentation | 6 h | — | Hourly retention sweep (nothing scheduled it before #550) | `auth_tokens` |
 | Pinned report evidence | Protected report policy (outlives the message) | — | Permanently kept: it is the evidence | Copied on report submission | — |
-| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | 6 h | — | Rolled up first, then swept hourly by the retention loop (the metrics loop's own purge before #478) | `runtime_events` |
+| Raw runtime events | `RUNTIME_EVENT_RETENTION_DAYS` (30) | 6 h | — | Swept hourly by the retention loop (the metrics loop's own purge before #478) | `runtime_events` |
 | Daily runtime roll-ups | Permanent | — | Permanently kept | — | — |
 | Shutdown abandonments | 90 days | 6 h | — | Hourly retention sweep (startup-only before #550) | `shutdown_abandonments` |
 | Bug report rows | Indefinite | — | Permanently kept: a defect outlives its triage | — | — |

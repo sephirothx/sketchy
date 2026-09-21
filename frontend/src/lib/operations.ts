@@ -20,14 +20,6 @@ export type LiveMetrics = {
   games: { finished: number; abandoned: number; shutdown: number };
 };
 
-export type DailyTotal = {
-  date: string;
-  metric: string;
-  occurrences: number;
-  valueSum: number;
-  valueMax: number | null;
-};
-
 export type RuntimeEventRow = {
   id: string;
   eventType: string;
@@ -55,20 +47,6 @@ export type AuditEntry = {
 };
 
 /** One day's worth of one metric, for a sparkline. */
-export type Series = { date: string; value: number }[];
-
-/** Collapse the daily rows into one metric's series, oldest first.
-
-The API returns newest first because that is the useful order for a table; a
-chart reads the other way, and sorting here keeps both callers honest about
-which they wanted. */
-export function seriesFor(days: DailyTotal[], metric: string): Series {
-  return days
-    .filter((day) => day.metric === metric)
-    .map((day) => ({ date: day.date, value: day.occurrences }))
-    .sort((left, right) => left.date.localeCompare(right.date));
-}
-
 /** The share of games that stopped without ending, as a percentage.
 
 Worth watching rather than the raw count: ten abandoned games out of twelve is
@@ -81,10 +59,6 @@ export function abandonmentRate(games: LiveMetrics["games"]): number | null {
 
 export function readLiveMetrics(): Promise<LiveMetrics> {
   return apiRequest<LiveMetrics>("/api/admin/metrics");
-}
-
-export function readDailyTotals(days = 30): Promise<{ days: DailyTotal[] }> {
-  return apiRequest(`/api/admin/metrics/daily?days=${days}`);
 }
 
 export function readRuntimeEvents(

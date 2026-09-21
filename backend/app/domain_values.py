@@ -378,16 +378,13 @@ class RuntimeEventType(StrEnum):
     PLAYER_DISCONNECTED = "player.disconnected"
     PLAYER_RECONNECTED = "player.reconnected"
     PLAYER_EVICTED = "player.evicted"
-    GAME_STARTED = "game.started"
     GAME_FINISHED = "game.finished"
     GAME_ABANDONED = "game.abandoned"
-    TURN_ENDED = "turn.ended"
     TIMER_OVERRAN = "timer.overran"
-    CANVAS_PAYLOAD_OBSERVED = "canvas.payload_observed"
     DRAWING_STORED = "drawing.stored"
     # The same drawing as written to the database (#895): its value is the
-    # stored bytes where `drawing.stored` carries the wire frame's, so the
-    # daily roll-up keeps the encoding's ratio after the raw events go.
+    # stored bytes where `drawing.stored` carries the wire frame's. Both are
+    # counted only: their sizes live in `sketchy_drawing_*_bytes` (#965).
     DRAWING_ENCODED = "drawing.encoded"
     RECAP_BUDGET_DROPPED = "recap.budget_dropped"
     COMMAND_THROTTLED = "command.throttled"
@@ -598,7 +595,26 @@ GAME_VISIBILITIES = tuple(visibility.value for visibility in GameVisibility)
 FINISHED_GAME_HANDOFF_STATES = tuple(state.value for state in FinishedGameHandoffState)
 HANDOFF_PART_STATES = tuple(state.value for state in HandoffPartState)
 HANDOFF_FAILURE_CODES = tuple(code.value for code in HandoffFailureCode)
-RUNTIME_EVENT_TYPES = tuple(event.value for event in RuntimeEventType)
+# Observations counted on `/metrics` (`sketchy_events_total{event}`) and never
+# written to `runtime_events` (#965). Each is a pure measure Prometheus already
+# holds in more detail - the drawing sizes as histograms, a throttle by its
+# command and code - and nothing in the app reads its row. `command.throttled`
+# is the one that is unbounded under abuse, which is exactly when a database
+# row per event costs most. What stays stored is either keyed to an account or
+# a room for the moderation activity view, or a record worth keeping even if
+# the metrics stack was down when it happened: a timer overrun's lateness, a
+# finished game's history the server gave up writing (R-OBS-10).
+COUNTED_ONLY_RUNTIME_EVENTS = frozenset(
+    {
+        RuntimeEventType.DRAWING_STORED,
+        RuntimeEventType.DRAWING_ENCODED,
+        RuntimeEventType.RECAP_BUDGET_DROPPED,
+        RuntimeEventType.COMMAND_THROTTLED,
+    }
+)
+STORED_RUNTIME_EVENT_TYPES = tuple(
+    event.value for event in RuntimeEventType if event not in COUNTED_ONLY_RUNTIME_EVENTS
+)
 AUTH_TOKEN_PURPOSES = tuple(purpose.value for purpose in AuthTokenPurpose)
 EMAIL_OUTBOX_STATES = tuple(state.value for state in EmailOutboxState)
 EMAIL_TEMPLATES = tuple(template.value for template in EmailTemplate)

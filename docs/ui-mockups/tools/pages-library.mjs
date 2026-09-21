@@ -427,8 +427,6 @@ const auditRow = (time, body, tag, tagKind) => `
   <span style="margin-left: auto; flex: none">${chip(tag, tagKind)}</span>
 </div>`;
 
-const opsBars = [42, 55, 38, 61, 70, 52, 78, 64, 58, 84, 76, 66]
-  .map((h) => `<span style="flex: 1; height: ${h}%; border-radius: 5px 5px 0 0; background: ${T.primary}; opacity: 0.85"></span>`).join('');
 
 
 // The overview's signal panels (#540), matching what OverviewSignals.tsx
@@ -582,20 +580,7 @@ export const AdminOpsPage = `
     ${metricCard('Abandoned', '28%', '142 of 507 this window', true)}
   </div>
 ${overviewSignals}
-  <div style="display: grid; grid-template-columns: 1.5fr 1fr; gap: 12px; margin-bottom: 14px">
-    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
-      <div style="display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin-bottom: 12px">
-        <div>
-          <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">Rooms opened</h2>
-          <p style="font-size: 12.5px; color: ${T.faint}; font-weight: 700; margin-top: 2px">Last 12 hours · 38 today</p>
-        </div>
-        ${selectBox('Hourly')}
-      </div>
-      <div aria-label="Rooms opened by hour" style="display: flex; align-items: flex-end; gap: 7px; height: 150px; border-bottom: 1.5px solid ${T.lineStrong}; padding: 8px 8px 0; background: ${T.well}; border: 1px solid ${T.line}; border-bottom: 1.5px solid ${T.lineStrong}; border-radius: ${T.radiusSm} ${T.radiusSm} 0 0">${opsBars}</div>
-      <div style="display: flex; justify-content: space-between; margin-top: 7px; font-size: 11.5px; font-weight: 700; color: ${T.faint}"><span>06:00</span><span>12:00</span><span>18:00</span></div>
-    </section>
-
-    <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}">
+  <section style="background: ${T.card}; border: 1.5px solid ${T.line}; border-radius: ${T.radius}; padding: 16px 18px; box-shadow: ${T.shadow}; margin-bottom: 14px">
       <div style="display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px">
         <h2 style="font-family: ${T.display}; font-weight: 600; font-size: 17px; color: ${T.ink}">Recorder health</h2>
         ${chip('Healthy', 'success')}
@@ -603,12 +588,10 @@ ${overviewSignals}
       ${healthRow('Observations stored', '184,291')}
       ${healthRow('Waiting to write', '12')}
       ${healthRow('Dropped this window', '0')}
-      ${healthRow('Daily roll-up', 'ran 02:00')}
       ${healthRow('Stored-drawing checks', '0 failures')}
       <h3 style="font-size: 13px; font-weight: 800; color: ${T.ink}; margin-top: 14px">Attention</h3>
       <p style="font-size: 12.5px; color: ${T.muted}; font-weight: 600; line-height: 1.5; margin-top: 5px">Abandoned games sit at 28% this window — 9 today. Nothing else needs an operator.</p>
-    </section>
-  </div>
+  </section>
 
 </div>`;
 

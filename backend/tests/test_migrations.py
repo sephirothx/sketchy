@@ -231,6 +231,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "d7e8f9a0b1c2",
         "c3e4f5a6b7d8",
         "b2d3e4f5a6c7",
         "a1c2e3f4b5d6",
@@ -699,5 +700,90 @@ async def test_an_unlisted_list_becomes_private(tmp_path):
                 )
             ).one()
         assert tuple(row) == ("private", None)
+    finally:
+        await engine.dispose()
+
+
+_COUNTED_ONLY = (
+    "game.started", "turn.ended", "canvas.payload_observed",
+    "drawing.stored", "drawing.encoded", "recap.budget_dropped",
+    "command.throttled",
+)
+_STILL_STORED = ("player.joined", "timer.overran", "history.write_abandoned")
+
+
+async def _exercise_runtime_metrics_revision(engine: AsyncEngine) -> None:
+    """#965 narrows what `runtime_events` stores and drops the daily roll-up.
+    The narrower check would refuse rows of the types that leave it, so the
+    revision deletes them first - batched, since this is one of the largest
+    tables - and on PostgreSQL adds the check NOT VALID and validates it
+    separately. Neither is reached by the populated-upgrade fixture, which
+    holds no such rows, so both are exercised here, with rows present."""
+    await _migrate(engine, alembic_command.upgrade, "head")
+    await _migrate(engine, alembic_command.downgrade, "c3e4f5a6b7d8")
+    async with engine.begin() as connection:
+        for event_type in (*_COUNTED_ONLY, *_STILL_STORED):
+            for _ in range(3):
+                await connection.execute(
+                    text("INSERT INTO runtime_events (event_type, value) VALUES (:type, 7)"),
+                    {"type": event_type},
+                )
+        await connection.execute(
+            text(
+                "INSERT INTO runtime_stats_daily (stat_date, metric, occurrences, value_sum)"
+                " VALUES (CURRENT_DATE, 'player.joined', 3, 0)"
+            )
+        )
+
+    await _migrate(engine, alembic_command.upgrade, "d7e8f9a0b1c2")
+
+    async with engine.connect() as connection:
+        kept = dict(
+            (
+                await connection.execute(
+                    text("SELECT event_type, COUNT(*) FROM runtime_events GROUP BY event_type")
+                )
+            ).all()
+        )
+        tables = await connection.run_sync(lambda sync: inspect(sync).get_table_names())
+    assert kept == {event_type: 3 for event_type in _STILL_STORED}, "only the removed types went"
+    assert "runtime_stats_daily" not in tables
+    with pytest.raises(IntegrityError):
+        async with engine.begin() as connection:
+            await connection.execute(
+                text("INSERT INTO runtime_events (event_type) VALUES ('drawing.stored')")
+            )
+
+    # Going back: the wider check and an empty roll-up table again.
+    await _migrate(engine, alembic_command.downgrade, "c3e4f5a6b7d8")
+    async with engine.begin() as connection:
+        await connection.execute(
+            text("INSERT INTO runtime_events (event_type) VALUES ('drawing.stored')")
+        )
+        assert (
+            await connection.execute(text("SELECT COUNT(*) FROM runtime_stats_daily"))
+        ).scalar() == 0
+    await _migrate(engine, alembic_command.upgrade, "head")
+    async with engine.begin() as connection:
+        await connection.execute(text("DELETE FROM runtime_events"))
+
+
+async def test_the_runtime_metrics_revision_keeps_what_the_database_is_for(tmp_path):
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'runtime-metrics.db'}")
+    try:
+        await _exercise_runtime_metrics_revision(engine)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"),
+    reason="requires the disposable PostgreSQL CI database",
+)
+async def test_the_runtime_metrics_revision_on_postgresql():
+    """The path that matters: NOT VALID, then VALIDATE, over rows present."""
+    engine = create_async_engine(os.environ["TEST_DATABASE_URL"])
+    try:
+        await _exercise_runtime_metrics_revision(engine)
     finally:
         await engine.dispose()

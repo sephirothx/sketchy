@@ -26,13 +26,10 @@ import {
   abandonmentRate,
   attentionReasons,
   readAuditLedger,
-  readDailyTotals,
   readLiveSnapshot,
   readPlayerActivity,
   readRuntimeEvents,
-  seriesFor,
   type AuditEntry,
-  type DailyTotal,
   type LiveSnapshot,
   type RuntimeEventRow,
 } from "../lib/operations";
@@ -40,16 +37,6 @@ import {
 // The live numbers are re-read this often while the overview is on screen.
 // Same period as the clock that says "checked Ns ago", so the two agree.
 const POLL_MS = 10_000;
-
-const TRENDS = [
-  { metric: "room.created", label: "Rooms opened" },
-  { metric: "game.finished", label: "Games finished" },
-  { metric: "game.abandoned", label: "Games abandoned" },
-  { metric: "player.disconnected", label: "Disconnects" },
-  { metric: "timer.overran", label: "Timer overruns" },
-];
-
-const CHART_DAYS = 14;
 
 const TAB_IDS = "ops";
 
@@ -79,13 +66,6 @@ function shortTime(iso: string, timeFormat: TimeFormat): string {
   return then.toLocaleDateString([], { month: "short", day: "numeric" });
 }
 
-function axisLabel(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString([], {
-    month: "short",
-    day: "numeric",
-  });
-}
-
 /** The ledger names what happened; the chip names which system did it. */
 function auditTag(eventType: string): { label: string; kind: "danger" | "success" | "primary" | "neutral" } {
   if (/ban|suspend|moderation|report/.test(eventType)) {
@@ -104,44 +84,12 @@ function auditTag(eventType: string): { label: string; kind: "danger" | "success
   return { label: "Logged", kind: "neutral" };
 }
 
-function DailyBars({ days, metric }: { days: DailyTotal[]; metric: string }) {
-  const series = seriesFor(days, metric).slice(-CHART_DAYS);
-  const max = Math.max(1, ...series.map((point) => point.value));
-  if (series.length === 0) {
-    return <p className="ops-empty">Nothing recorded yet.</p>;
-  }
-  return (
-    <>
-      <div
-        className="ops-chart-bars"
-        role="img"
-        aria-label={`${metric} per day, last ${series.length} days`}
-      >
-        {series.map((point) => (
-          <span
-            key={point.date}
-            className="ops-chart-bar"
-            style={{ height: `${Math.round((point.value / max) * 100)}%` }}
-            title={`${point.date}: ${point.value}`}
-          />
-        ))}
-      </div>
-      <div className="ops-chart-axis">
-        <span>{axisLabel(series[0].date)}</span>
-        {series.length > 2 && (
-          <span>{axisLabel(series[Math.floor(series.length / 2)].date)}</span>
-        )}
-        <span>{axisLabel(series[series.length - 1].date)}</span>
-      </div>
-    </>
-  );
-}
-
 /** The operator's view of the server, laid out as the mockup's dashboard:
-status banner, live metric cards, a daily trend chart beside recorder health,
-and the audit ledger. Live counts come from the worker's own memory, which is
-exact because one worker owns everything; the chart comes from permanent daily
-aggregates, which outlive the raw rows behind them. */
+status banner, live metric cards, recorder health and the audit ledger. Live
+counts come from the worker's own memory, which is exact because one worker owns
+everything. Trends over days are not here: they are Prometheus's, from
+`sketchy_events_total`, and read in Grafana (#965) - the permanent daily totals
+this page used to chart were a second copy of that counter. */
 export function AdminOperationsPage() {
   const { timeFormat, dateTime } = useClock();
   const [live, setLive] = useState<LiveSnapshot | null>(null);
@@ -149,10 +97,8 @@ export function AdminOperationsPage() {
   // "accepting rooms" unconditionally, which is the opposite of the truth
   // while a maintenance pause is on.
   const [maintenance, setMaintenance] = useState<MaintenanceState | null>(null);
-  const [days, setDays] = useState<DailyTotal[]>([]);
   const [audit, setAudit] = useState<AuditEntry[]>([]);
   const [events, setEvents] = useState<RuntimeEventRow[]>([]);
-  const [chartMetric, setChartMetric] = useState(TRENDS[0].metric);
   const [tab, setTab] = useState(() => tabFromLocation(window.location.search));
   const [eventFilter, setEventFilter] = useState("");
   const [roomFilter, setRoomFilter] = useState("");
@@ -188,13 +134,11 @@ export function AdminOperationsPage() {
     lastPolledRef.current = Date.now();
     void Promise.all([
       readLiveSnapshot(),
-      readDailyTotals(),
       readAuditLedger({ limit: 200 }),
       readMaintenance(),
     ])
-      .then(([metrics, daily, ledger, admission]) => {
+      .then(([metrics, ledger, admission]) => {
         setLive(metrics);
-        setDays(daily.days);
         setAudit(ledger.entries);
         setMaintenance(admission);
         setCheckedAt(Date.now());
@@ -205,8 +149,8 @@ export function AdminOperationsPage() {
 
   // Only the live snapshot is polled, only while the overview is the tab on
   // screen and the document is visible: a background tab asking every ten
-  // seconds is exactly the load a dashboard should not be, and the daily
-  // aggregates and the ledger do not change at that pace.
+  // seconds is exactly the load a dashboard should not be, and the ledger
+  // does not change at that pace.
   useEffect(() => {
     if (tab !== "overview" || !allowed) return;
     if (document.visibilityState !== "visible") return;
@@ -280,12 +224,6 @@ export function AdminOperationsPage() {
   }, [tab]);
 
   const rate = live ? abandonmentRate(live.games) : null;
-  const chartLabel =
-    TRENDS.find((trend) => trend.metric === chartMetric)?.label ?? chartMetric;
-  const chartToday = useMemo(
-    () => seriesFor(days, chartMetric).at(-1)?.value ?? 0,
-    [days, chartMetric],
-  );
   const checkedAgo =
     checkedAt === null ? null : Math.max(0, Math.round((now - checkedAt) / 1000));
   // One ordered list of what needs an operator, shared by the banner, the
@@ -391,87 +329,61 @@ export function AdminOperationsPage() {
             <RetentionCard live={live} reasons={reasons} />
           </div>
 
-          <div className="ops-columns">
-            <section className="ops-card" aria-label="Daily trend">
-              <div className="ops-card-head">
-                <div>
-                  <h2>{chartLabel}</h2>
-                  <p className="ops-card-sub">
-                    Last {CHART_DAYS} days · {chartToday} today
-                  </p>
-                </div>
-                <select
-                  className="ops-select"
-                  aria-label="Charted metric"
-                  value={chartMetric}
-                  onChange={(change) => setChartMetric(change.target.value)}
-                >
-                  {TRENDS.map((trend) => (
-                    <option key={trend.metric} value={trend.metric}>
-                      {trend.label}
-                    </option>
+          <section className="ops-card ops-recorder" aria-label="Recorder health">
+            <div className="ops-card-head">
+              <h2>Recorder health</h2>
+              <Chip kind={recorderHealthy ? "success" : "warm"}>
+                {recorderHealthy ? "Healthy" : "Attention"}
+              </Chip>
+            </div>
+            <div className="ops-health-row">
+              <span className="ops-health-dot" aria-hidden="true" />
+              <strong>Observations stored</strong>
+              <span>{live.recorder.storedEvents.toLocaleString()}</span>
+            </div>
+            <div className="ops-health-row">
+              <span className="ops-health-dot" aria-hidden="true" />
+              <strong>Waiting to write</strong>
+              <span>{live.recorder.buffered}</span>
+            </div>
+            <div
+              className={`ops-health-row${recorderHealthy ? "" : " is-warning"}`}
+            >
+              <span className="ops-health-dot" aria-hidden="true" />
+              <strong>Dropped this window</strong>
+              <span>{live.recorder.dropped}</span>
+            </div>
+            <div
+              className={`ops-health-row${live.recorder.failedFlushes + live.recorder.interruptedFlushes > 0 ? " is-warning" : ""}`}
+            >
+              <span className="ops-health-dot" aria-hidden="true" />
+              <strong>Flushes failed / interrupted</strong>
+              <span>
+                {live.recorder.failedFlushes} / {live.recorder.interruptedFlushes}
+              </span>
+            </div>
+            <div
+              className={`ops-health-row${live.recorder.lostToAmbiguity > 0 ? " is-warning" : ""}`}
+            >
+              <span className="ops-health-dot" aria-hidden="true" />
+              <strong>Lost to unknown commits</strong>
+              <span>
+                {live.recorder.lostToAmbiguity} in {live.recorder.ambiguousBatches} batches
+              </span>
+            </div>
+            <div className="ops-attention">
+              <h3>Attention</h3>
+              {reasons.length === 0 ? (
+                <p>Nothing needs an operator.</p>
+              ) : (
+                <ul>
+                  {reasons.map((reason) => (
+                    <li key={reason.key}>{reason.text}</li>
                   ))}
-                </select>
-              </div>
-              <DailyBars days={days} metric={chartMetric} />
-            </section>
-
-            <section className="ops-card" aria-label="Recorder health">
-              <div className="ops-card-head">
-                <h2>Recorder health</h2>
-                <Chip kind={recorderHealthy ? "success" : "warm"}>
-                  {recorderHealthy ? "Healthy" : "Attention"}
-                </Chip>
-              </div>
-              <div className="ops-health-row">
-                <span className="ops-health-dot" aria-hidden="true" />
-                <strong>Observations stored</strong>
-                <span>{live.recorder.storedEvents.toLocaleString()}</span>
-              </div>
-              <div className="ops-health-row">
-                <span className="ops-health-dot" aria-hidden="true" />
-                <strong>Waiting to write</strong>
-                <span>{live.recorder.buffered}</span>
-              </div>
-              <div
-                className={`ops-health-row${recorderHealthy ? "" : " is-warning"}`}
-              >
-                <span className="ops-health-dot" aria-hidden="true" />
-                <strong>Dropped this window</strong>
-                <span>{live.recorder.dropped}</span>
-              </div>
-              <div
-                className={`ops-health-row${live.recorder.failedFlushes + live.recorder.interruptedFlushes > 0 ? " is-warning" : ""}`}
-              >
-                <span className="ops-health-dot" aria-hidden="true" />
-                <strong>Flushes failed / interrupted</strong>
-                <span>
-                  {live.recorder.failedFlushes} / {live.recorder.interruptedFlushes}
-                </span>
-              </div>
-              <div
-                className={`ops-health-row${live.recorder.lostToAmbiguity > 0 ? " is-warning" : ""}`}
-              >
-                <span className="ops-health-dot" aria-hidden="true" />
-                <strong>Lost to unknown commits</strong>
-                <span>
-                  {live.recorder.lostToAmbiguity} in {live.recorder.ambiguousBatches} batches
-                </span>
-              </div>
-              <div className="ops-attention">
-                <h3>Attention</h3>
-                {reasons.length === 0 ? (
-                  <p>Nothing needs an operator.</p>
-                ) : (
-                  <ul>
-                    {reasons.map((reason) => (
-                      <li key={reason.key}>{reason.text}</li>
-                    ))}
-                  </ul>
-                )}
-              </div>
-            </section>
-          </div>
+                </ul>
+              )}
+            </div>
+          </section>
 
         </>
       )}
@@ -491,8 +403,8 @@ export function AdminOperationsPage() {
           <div>
             <h2>Recorded activity</h2>
             <p className="ops-card-sub">
-              Raw observations, before they are rolled into the daily totals
-              the chart draws.
+              Raw observations the database keeps for 30 days: what is keyed to
+              an account or a room, timer overruns and abandoned history writes.
             </p>
           </div>
         </div>

@@ -43,7 +43,7 @@ from app.domain_values import (
     GameOutcome,
     GameVisibility,
     HandoffPartState,
-    RUNTIME_EVENT_TYPES,
+    STORED_RUNTIME_EVENT_TYPES,
     AUTH_TOKEN_PURPOSES,
     EMAIL_OUTBOX_STATES,
     EMAIL_TEMPLATES,
@@ -619,10 +619,10 @@ class UserSettings(Base):
 class RuntimeEvent(Base):
     """One thing the server observed about itself.
 
-    Kept for a bounded window and rolled into `runtime_stats_daily`, which is
-    kept for ever. Raw rows answer "what happened last Tuesday at four"; the
-    aggregates answer "is this getting worse", and only the second question is
-    worth unbounded storage on an embedded database.
+    Kept for a bounded window. Raw rows answer "what happened last Tuesday at
+    four" and back the moderation activity view; "is this getting worse" is
+    Prometheus's, from `sketchy_events_total` (#965), which is why the permanent
+    daily roll-up that used to sit beside this table is gone.
 
     `user_id` is nullable and `ON DELETE SET NULL`: an observation stays true
     after the account that caused it is erased, but stops naming anyone.
@@ -630,7 +630,7 @@ class RuntimeEvent(Base):
 
     __tablename__ = "runtime_events"
     __table_args__ = (
-        _values_check("event_type", RUNTIME_EVENT_TYPES, "ck_runtime_events_type"),
+        _values_check("event_type", STORED_RUNTIME_EVENT_TYPES, "ck_runtime_events_type"),
         Index("ix_runtime_events_occurred_at", "occurred_at"),
         Index("ix_runtime_events_type_occurred", "event_type", "occurred_at"),
     )
@@ -662,35 +662,6 @@ class RuntimeEvent(Base):
     value: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # Null, not '{}', for the common eventless observation.
     details: Mapped[dict | None] = mapped_column(PortableJSON, nullable=True)
-
-
-class RuntimeStatsDaily(Base):
-    """Permanent daily roll-up of the raw event stream.
-
-    Shaped after `UserStatsDaily`: one row per day per metric, summed and
-    counted on write so the raw rows behind it can be discarded.
-    """
-
-    __tablename__ = "runtime_stats_daily"
-    __table_args__ = (
-        CheckConstraint(
-            "occurrences >= 0 AND value_sum >= 0", name="ck_runtime_stats_nonnegative"
-        ),
-        UPDATED_IN_PLACE,
-    )
-
-    stat_date: Mapped[date] = mapped_column(Date(), primary_key=True)
-    metric: Mapped[str] = mapped_column(String(32), primary_key=True)
-    occurrences: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=text("0"), nullable=False
-    )
-    value_sum: Mapped[int] = mapped_column(
-        BigInteger, default=0, server_default=text("0"), nullable=False
-    )
-    value_max: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    updated_at: Mapped[datetime] = mapped_column(
-        UTCDateTime(), server_default=func.now(), onupdate=func.now(), nullable=False
-    )
 
 
 class AuthToken(Base):
