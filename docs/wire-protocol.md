@@ -178,19 +178,24 @@ load real players cause, and #882's tail-claim reading said `none` throughout. A
 asks when the browser would — once when a game starts, which is when the browser's
 canvas mounts and stays mounted for the game, and again after every reconnect, claiming
 the prefix it holds — and tracks that prefix the way the browser does. On the recorded
-five-minute gate (requirements, *Scale target*) that is 906 requests, 499 of them claims,
-460 answered with a tail. The misses are 17 claims whose turn ended during the gap
-(`generation`) and 22 made mid-stroke (`hash`). The second is the browser's own claim,
-made identically: its count includes the open path while its hash covers only the
-finished actions, so a stroke that finishes during the gap leaves nothing the server can
-verify, and a player who reconnects while watching somebody draw takes a full sync —
-about 4% of reconnects.
+five-minute gate (requirements, *Scale target*) that is 910 requests, 500 of them claims,
+456 answered with a tail. Both kinds of miss are the browser's own behaviour, modelled
+rather than invented. 17 are claims whose turn ended during the gap (`generation`): the
+browser's canvas resets only on `turn_starting`, never on `sync_game`, so it too comes
+back holding the old generation. 27 were made mid-stroke (`hash`), which the gate counts
+separately and which match the server's misses exactly: the browser's count includes the
+open path while its hash covers only the finished actions, so a stroke that finishes
+during the gap leaves nothing the server can verify, and a player who reconnects while
+watching somebody draw takes a full sync — about 5% of reconnects. As the browser does, a
+seat drops its canvas when it comes back to a finished game (`last_game`), abandons a
+request a new turn overtakes, and applies only the reply its outstanding request is
+owed.
 
 A **room-state delta protocol is still not worth building (#493).** Replacing every
 `room_state` after the first with the patch the issue describes (changed top-level keys
-and a version) saves 1.9% of the stream on the wire after #888 (7,095 → 6,960 B) and 1.7%
-before it, 0.7 B/s per seat, against 14% of the uncompressed stream (the long-polling
-bound), while building a snapshot costs 4 µs for a 16-seat room. The compressor already
+and a version) saves 1.9% of the stream on the wire after #888 (7,095 → 6,960 B, 0.7 B/s
+per seat) and 1.7% before it (1.1 B/s), against 14% of the uncompressed stream (the
+long-polling bound), while building a snapshot costs 4 µs for a 16-seat room. The compressor already
 does the delta: through this real mixed stream a `room_state` costs 66 B on the wire,
 about what it costs through a context that saw nothing else (65 B). A smaller window
 changes that (4 KB: 11.2 KB → 9.6 KB with deltas), which is one more reason the window is

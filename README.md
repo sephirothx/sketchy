@@ -2221,22 +2221,22 @@ takes back hashes to what the server said. It also measures the slack *under* th
 budget - about 1.2 MB on a loopback before the server's queue grows at all.
 
 `run_load.sh` is the **release load gate** (#461): it starts a server with the
-limits a swarm from one address would trip raised, then drives the documented
-scale target - 50 rooms of 8 seats, 400 seats, plus 20 lobby watchers - with real
+limits a swarm from one address would trip raised, then drives the documented scale
+target - 50 rooms of 8 seats, 400 seats, plus 20 lobby watchers - with real
 Socket.IO clients over WebSocket for five minutes: every room plays games
 continuously (a recorded hand drawing streamed at its own timing by whoever is
-offered prompts, chat and guesses from the rest, a correct guess in half the
-turns), a quarter of the seats drop and reconnect on a schedule, and the lobby
-channel is held open. Every seat asks for the drawing when the browser would - when a
-game starts, and after each reconnect claiming the prefix it holds (#877) - so the
-canvas-sync load real players cause is in the run. It reports acknowledgement latency (p50/p95/p99, per
-command), draw fan-out latency from the drawer's send to a viewer's receipt,
-timer overrun on turns that ran their full length, unexpected disconnects and
-failed reconnects, and, scraped from `/metrics`, event-loop lag, resident memory
-and its growth, database query latency, rejected packets and canvas recovery
-notices - each against a threshold, exiting non-zero on a breach. It is run by
-hand on the reference environment before a release (R-ENG-11 keeps it out of
-CI), and the numbers it last produced are recorded with that environment in
+offered prompts, chat and guesses from the rest, a correct guess in half the turns),
+a quarter of the seats drop and reconnect on a schedule, and the lobby channel is
+held open. Every seat asks for the drawing when the browser would - when a game
+starts, and after each reconnect claiming the prefix it holds (#877) - so the
+canvas-sync load real players cause is in the run. It reports acknowledgement
+latency (p50/p95/p99, per command), draw fan-out latency from the drawer's send to a
+viewer's receipt, timer overrun on turns that ran their full length, unexpected
+disconnects and failed reconnects, and, scraped from `/metrics`, event-loop lag,
+resident memory and its growth, database query latency, rejected packets and canvas
+recovery notices - each against a threshold, exiting non-zero on a breach. It is run
+by hand on the reference environment before a release (R-ENG-11 keeps it out of CI),
+and the numbers it last produced are recorded with that environment in
 `docs/requirements.md` under the scale target.
 
 The deflate-window benchmark decides the WebSocket compressor's two constants in

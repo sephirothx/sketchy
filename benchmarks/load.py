@@ -235,6 +235,10 @@ class Seat:
         # seat, not the socket, so a reconnect claims what the old socket had.
         self.held: HeldCanvas | None = None
         self.sync_request_id = 0
+        # The request a reply must answer to be applied, as the browser's
+        # transaction does (`canvasSyncRequests.ts`): a reply for any other id,
+        # or for a request a new turn abandoned, is stale and ignored.
+        self.outstanding_sync: int | None = None
         self.closing = False
 
     async def provision(self, http: aiohttp.ClientSession) -> None:
@@ -281,6 +285,9 @@ class Seat:
             self.held = HeldCanvas(
                 generation=int(self.canvas[1]), action_count=0, history_hash=int(self.canvas[3])
             )
+            # A sync still owed against the old generation is worthless now,
+            # and the browser abandons it (`onCanvasReset`).
+            self.outstanding_sync = None
             await self._note_authoritative(payload)
             if payload.get("gameStarted"):
                 # The browser's canvas mounts as the room turns to play, and
@@ -312,6 +319,14 @@ class Seat:
                 if self.turn_deadline is not None and self.turn_full_length:
                     samples.overrun_ms.append((time.monotonic() - self.turn_deadline) * 1000)
             self.turn_deadline = None
+
+        @sio.on("last_game")
+        async def on_last_game(_payload):
+            # The recap for a seat that came back after the game ended (#871):
+            # it rejoined a waiting room, where the browser has no canvas, so
+            # it holds nothing and asks for nothing.
+            self.held = None
+            self.outstanding_sync = None
 
         @sio.on("game_ended")
         async def on_game_ended(payload):
@@ -356,7 +371,10 @@ class Seat:
                 self.held.history_hash = int(payload[4])
 
         @sio.on("sync_strokes")
-        async def on_sync_strokes(history, _revision, generation, _sequence, history_hash, _request_id):
+        async def on_sync_strokes(history, _revision, generation, _sequence, history_hash, request_id):
+            if request_id != self.outstanding_sync:
+                return
+            self.outstanding_sync = None
             samples.canvas_full_syncs += 1
             self.held = HeldCanvas(
                 generation=int(generation),
@@ -365,7 +383,10 @@ class Seat:
             )
 
         @sio.on("sync_strokes_tail")
-        async def on_sync_strokes_tail(tail, base, _revision, generation, _sequence, history_hash, _request_id):
+        async def on_sync_strokes_tail(tail, base, _revision, generation, _sequence, history_hash, request_id):
+            if request_id != self.outstanding_sync:
+                return
+            self.outstanding_sync = None
             samples.canvas_tails += 1
             self.held = HeldCanvas(
                 generation=int(generation),
@@ -527,6 +548,7 @@ class Seat:
             if self.harness.stopping or self.sio is None or not self.sio.connected:
                 return
             self.sync_request_id += 1
+            self.outstanding_sync = self.sync_request_id
             claim = self.held.claim() if self.held is not None else None
             payload = [self.sync_request_id, *claim] if claim else [self.sync_request_id]
             self.harness.samples.canvas_requests += 1
@@ -560,7 +582,11 @@ class Seat:
                 self.harness.samples.reconnects += 1
                 # A new socket has rebound the seat: the browser asks again,
                 # claiming the prefix it kept across the gap, and a verified
-                # claim is answered with only what it missed (#877).
+                # claim is answered with only what it missed (#877). A turn
+                # that changed during the gap is claimed all the same - the
+                # browser's canvas resets only on `turn_starting`, never on
+                # `sync_game` (`useCanvasProtocol.ts`), so it too still holds
+                # the old generation - and is answered with a full sync.
                 if self.held is not None:
                     await self.request_canvas()
             else:

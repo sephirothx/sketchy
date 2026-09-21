@@ -33,17 +33,17 @@ result is recorded here so the target is a measurement rather than a sentence:
 
 | Signal | Measured | Threshold |
 | --- | --- | --- |
-| Acknowledgement latency p50 / p95 / p99 | 2.4 / 9.5 / 33.3 ms | p95 ≤ 100, p99 ≤ 250 ms |
-| Draw fan-out latency p50 / p95 | 1.4 / 3.8 ms | p95 ≤ 150 ms |
-| Timer overrun p95 / max | 40.9 / 51.6 ms | p95 ≤ 250 ms |
-| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 2 / ≤ 5 ms | ≤ 100 / ≤ 250 ms |
-| Resident memory idle → after warm-up → peak | 198 → 373 → 401 MB (484 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 7.5 %) |
+| Acknowledgement latency p50 / p95 / p99 | 2.0 / 9.9 / 53.6 ms | p95 ≤ 100, p99 ≤ 250 ms |
+| Draw fan-out latency p50 / p95 | 1.3 / 6.1 ms | p95 ≤ 150 ms |
+| Timer overrun p95 / max | 45.3 / 64.5 ms | p95 ≤ 250 ms |
+| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 2 / ≤ 2 ms | ≤ 100 / ≤ 250 ms |
+| Resident memory idle → after warm-up → peak | 200 → 345 → 385 MB (442 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 11.6 %) |
 | Database query p99 (bucket bound) | ≤ 25 ms | ≤ 50 ms |
-| Unexpected disconnects / failed reconnects | 0 / 0 (of 506 reconnects) | 0 / 0 |
-| Outbound backlog high-water (bytes / oldest) and closures | 23119 B / 811 ms; closures none with 4 slow viewers | closures = slow viewers; budget 10 s / 4 MiB |
+| Unexpected disconnects / failed reconnects | 0 / 0 (of 510 reconnects) | 0 / 0 |
+| Outbound backlog high-water (bytes / oldest) and closures | 25988 B / 40 ms; closures none with 4 slow viewers | closures = slow viewers; budget 10 s / 4 MiB |
 | Packets rejected / fault notices (all notices by reason) | 0 / 0 (none) | 0 / 0 |
-| Traffic | 57.9 MB out, 2.0 MB in; 22719 frames sent, 157065 received; 14868 guesses, 972 chats | — |
-| On the wire (after permessage-deflate) | 6.8 MB out (11.7% of packet bytes), 1.4 MB in; sockets by compression deflate-15 × 930 | — |
+| Traffic | 58.1 MB out, 2.0 MB in; 22592 frames sent, 156302 received; 14893 guesses, 925 chats | — |
+| On the wire (after permessage-deflate) | 6.8 MB out (11.6% of packet bytes), 1.4 MB in; sockets by compression deflate-15 × 934 | — |
 <!-- load-gate-result:end -->
 
 ---
