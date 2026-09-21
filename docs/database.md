@@ -2689,7 +2689,22 @@ create a table, rewrite either ledger or disable the trigger.
      rewrite under an exclusive lock;
    - a new `NOT NULL` column has a `server_default` — without one it fails outright on a
      table with rows;
-   - a backfill `UPDATE` or `DELETE` is batched, like the retention sweeps.
+   - a backfill `UPDATE` or `DELETE` is batched, like the retention sweeps;
+   - a `CHECK` is narrowed only in a revision later than the one whose code stopped
+     writing the values it drops: the runbook migrates before the old replica is
+     replaced, so that replica is still writing them while the migration runs, and a
+     row it commits after the delete makes `VALIDATE` fail the deploy, then fails every
+     flush it makes afterwards. Expand, deploy, then contract.
+
+   **These rules do not yet do what they say.** `upgrade_database` runs every revision
+   in one transaction — it holds a transaction-scoped advisory lock so two deploys
+   cannot migrate at once, and applies the application role's grants in the same
+   transaction (#896). Inside it a batched write does not commit between batches, the
+   exclusive lock a `NOT VALID` constraint takes is held to the end so `VALIDATE` scans
+   under it, and `autocommit_block()` — which the concurrent-index rule requires —
+   cannot run at all, because the transaction is the runner's, not Alembic's. Until the
+   runner changes, a revision written to these rules is only as safe as running it on a
+   database nothing is writing to, which is true of every revision before launch.
 
    A call that is safe for a reason the lint cannot see says so on its line or the one
    above: `# online-ddl: <why>`. Every revision then runs over rows in CI:

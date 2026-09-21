@@ -180,7 +180,6 @@ async def test_the_operator_views_are_closed_to_everyone_else(env):
 
     for path in (
         "/api/admin/metrics",
-        "/api/admin/metrics/daily",
         "/api/admin/metrics/events",
         "/api/admin/audit",
     ):

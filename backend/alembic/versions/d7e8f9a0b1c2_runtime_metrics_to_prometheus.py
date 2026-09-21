@@ -17,9 +17,24 @@ write (R-OBS-10).
 `runtime_stats_daily` goes with them. Everything in it was derivable from the
 counter, and the one chart that read it now reads Grafana.
 
-The delete is batched like the retention sweeps, and on PostgreSQL the check
-is added `NOT VALID` and validated in a separate statement, whose lock lets
-writes through (`tests/test_online_ddl.py`).
+The shape is the one `tests/test_online_ddl.py` asks for - the delete in
+batches, the check replaced `NOT VALID` and validated in a separate statement -
+but **it buys nothing yet, and this revision does not rely on it.** Every
+revision runs inside one transaction: `upgrade_database` holds a
+transaction-scoped advisory lock so two deploys cannot migrate at once, and
+applies the application role's grants in the same transaction (#896). Inside
+it the batches do not commit between each other, and the exclusive lock the
+check's replacement takes is held to the end, so `VALIDATE` scans under it. And
+`autocommit_block()`, which would make the batches commit, cannot run under a
+transaction the runner rather than Alembic opened. Resolving that is a decision
+about the runner, not about this revision.
+
+This one is safe regardless, because nothing is deployed: it runs on an empty
+production database, or a development one with nothing writing beside it. For
+the same reason narrowing the check is safe here; after launch a check that
+running code might still violate has to be narrowed in a later revision than
+the one that stops writing it (`docs/database.md`, *Adding a table or
+column*).
 
 Going back restores the wider check and an empty roll-up table: the rows that
 were deleted were thirty-day diagnostics, and the roll-up is rebuilt from the
@@ -68,7 +83,7 @@ def _delete_removed_rows() -> None:
     )
     bind = op.get_bind()
     while True:
-        # online-ddl: batched like the retention sweeps, a bounded DELETE per statement
+        # online-ddl: bounded per statement; commits with the revision, which is safe only while nothing is deployed (see the docstring)
         if bind.execute(statement).rowcount == 0:
             return
 

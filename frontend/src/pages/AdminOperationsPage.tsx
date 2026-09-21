@@ -403,7 +403,7 @@ export function AdminOperationsPage() {
           <div>
             <h2>Recorded activity</h2>
             <p className="ops-card-sub">
-              Raw observations the database keeps for 30 days: what is keyed to
+              Raw observations the database keeps for its retention window: what is keyed to
               an account or a room, timer overruns and abandoned history writes.
             </p>
           </div>
