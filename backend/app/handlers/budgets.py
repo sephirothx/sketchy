@@ -185,9 +185,14 @@ COMMAND_CLASSES: Mapping[str, str] = {
 # loud, because silence on an awaited command reads as the server hanging.
 #
 # `client_health` is fire-and-forget for the same reason from the other side:
-# the client sends it volatile and awaits nothing, so a refusal it could not
+# the client sends it without an acknowledgement, so a refusal it could not
 # read would only be bytes (#876).
 SILENT_COMMANDS: frozenset[str] = frozenset({"draw", "client_health"})
+
+# Commands whose throttling is counted and nothing more: no log line and no
+# stored event naming the socket. A client's health report goes no further
+# than its series (R-OBS-20), and a throttled one is still one of its reports.
+UNRECORDED_COMMANDS: frozenset[str] = frozenset({"client_health"})
 
 
 class CommandBudgetPolicy:

@@ -4,7 +4,6 @@ import { recordClientError } from "./clientErrorLog.ts";
 import {
   HEALTH_REPORT_INTERVAL_MS,
   noteHealth,
-  restoreHealthReport,
   takeHealthReport,
 } from "./connectionHealth.ts";
 import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
@@ -669,28 +668,28 @@ just rejoined. Live drawing is deliberately not routed through here - its
 frames carry a generation and sequence the server checks, and it has an
 explicit resync path, so replay is already answered there. */
 export function emitTransient(event: string, ...args: unknown[]): void {
-  // A volatile emit on a socket that is down is discarded without a word,
-  // which is the point of it - and why nobody could say how often (#876).
-  if (!socket.connected) noteHealth("droppedEmits");
+  // socket.io discards a volatile packet, without a word, exactly when the
+  // transport is not writable: a socket that is down, and on long-polling
+  // any moment a POST is in flight. The same test here, so what is counted
+  // is what was dropped rather than a guess at it (#876).
+  if (!socket.io.engine?.transport?.writable) noteHealth("droppedEmits");
   socket.volatile.emit(event, ...args);
 }
 
 // The connection-health report (#876, `connectionHealth.ts`): at most once a
 // minute, only when something happened, and only on a socket that is up - a
 // report kept for a socket that is down goes with the next one rather than
-// being counted as a dropped emit of its own. Started by the first connection,
-// not at import, so a test that loads this module arms no timer.
+// being counted as a dropped emit of its own. Not volatile: a volatile packet
+// is discarded whenever the transport is not writable, which on long-polling
+// is every in-flight POST, so polling reports - the transport this exists to
+// diagnose - would be lost more often than the rest. Started by the first
+// connection, not at import, so a test that loads this module arms no timer.
 let healthTimer: ReturnType<typeof setInterval> | null = null;
 
 function sendHealthReport(): void {
   if (!socket.connected) return;
   const report = takeHealthReport();
-  if (report === null) return;
-  try {
-    socket.volatile.emit("client_health", report);
-  } catch {
-    restoreHealthReport(report);
-  }
+  if (report !== null) socket.emit("client_health", report);
 }
 
 socket.on("connect", () => {

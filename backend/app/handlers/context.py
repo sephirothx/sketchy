@@ -22,7 +22,12 @@ from app.domain_values import RuntimeEventType
 from app.handlers.refusals import ErrorCode, refuse
 from app.live_drawing import frame_kind
 from app.protocol import PROTOCOL_VERSION, stale_client_bucket
-from app.handlers.budgets import SILENT_COMMANDS, CommandBudgetPolicy, CommandBudgets
+from app.handlers.budgets import (
+    SILENT_COMMANDS,
+    UNRECORDED_COMMANDS,
+    CommandBudgetPolicy,
+    CommandBudgets,
+)
 from app.rooms import RoomManager
 from app.services.afk import INACTIVITY_EXEMPT_COMMANDS, ActivityLedger
 from app.services.runtime_metrics import metrics
@@ -280,17 +285,23 @@ class HandlerContext:
                 return result
             telemetry.socket_event(command, "throttled", None)
             _note_door_refusal(command, ErrorCode.TOO_FAST, "throttled", args)
-            if self._command_windows.should_report(key, budget):
+            # A client's health report goes no further than its series, a
+            # throttled one included (R-OBS-20): the count by code above is
+            # anonymous, a log line or a stored event naming the socket is not.
+            if command not in UNRECORDED_COMMANDS and self._command_windows.should_report(key, budget):
                 logger.warning("throttled %s from %s", command, sid)
                 metrics.record(
                     RuntimeEventType.COMMAND_THROTTLED, details={"command": command}
                 )
-            if command in SILENT_COMMANDS:
-                # A frame nobody is waiting on. Answering would put an error on
-                # screen in the middle of a stroke, about a frame the client
-                # never expected a reply to. Remembered instead, for the
-                # handler to act on at the next frame.
+            if command == "draw":
+                # A frame nobody is waiting on, and the drawer painted it:
+                # remembered, for the handler to close the torn path at the
+                # next frame. Only a draw frame - another silent command
+                # dropped here lost nothing of the stroke (#876).
                 self.dropped_draw_frames.add(sid)
+            if command in SILENT_COMMANDS:
+                # Answering would put an error on screen about something the
+                # client never expected a reply to.
                 return None
             return {
                 "ok": False, "errorCode": ErrorCode.TOO_FAST, "retryAfterMs": int(budget.window_seconds * 1000),

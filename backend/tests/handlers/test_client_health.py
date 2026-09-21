@@ -151,7 +151,7 @@ def test_a_report_answers_to_its_own_budget_and_never_to_a_players():
 
 
 def test_a_report_is_fire_and_forget_and_says_nothing_about_the_keyboard():
-    """Sent volatile, on the client's schedule: a refusal is not read, and a
+    """Sent without an acknowledgement, on the client's schedule: a refusal is not read, and a
     report is not a person doing something (the AFK check, #677)."""
     assert "client_health" in SILENT_COMMANDS
     assert "client_health" in INACTIVITY_EXEMPT_COMMANDS
@@ -168,3 +168,47 @@ async def test_a_third_report_inside_a_minute_is_throttled_without_a_word(monkey
     assert first == second == {"ok": True}
     assert third is None, "fire-and-forget: a refusal nobody reads is only bytes"
     assert counts(store) == {("dropped_emit", "websocket"): 2}
+
+
+async def test_a_throttled_report_leaves_the_drawers_stroke_alone(monkeypatch, caplog):
+    """The silent-throttle branch was written for `draw`: it remembered the
+    socket as having lost a frame, so the drawer's next frame closed the path
+    for the whole room and forced a resync. A report shares the branch's
+    silence and nothing else - and a throttle of one is not logged or stored
+    against its socket either (R-OBS-20)."""
+    from tests.handlers.test_protocol_decision_metrics import drawing_room
+    from tests.handlers.helpers import canvas_action
+    from app.live_drawing import encode_live_drawing
+
+    fresh_store(monkeypatch)
+    recorded = []
+    monkeypatch.setattr(
+        "app.handlers.context.metrics.record", lambda *args, **kwargs: recorded.append(args)
+    )
+    sio, context, room = drawing_room()
+    sio.transport = Mock(return_value="websocket")
+    draw = sio.handlers["/"]["draw"]
+    health = sio.handlers["/"]["client_health"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.1, "y": 0.2, "color": "#112233", "width": 5}),
+        canvas_action(room.game, 1),
+    )
+    with caplog.at_level(logging.DEBUG):
+        for _ in range(3):  # the third is over the budget of two a minute
+            await health("drawer-sid", {"droppedEmits": 1})
+
+    assert "drawer-sid" not in context.dropped_draw_frames, "a report is not a lost draw frame"
+    sio.emit.reset_mock()
+    await draw(
+        "drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.2, "y": 0.3}]})
+    )
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "canvas_stale" not in events, events
+    assert "draw" in events, "the stroke carried on for the room"
+    assert not [r for r in caplog.records if "client_health" in r.getMessage()]
+    from app.domain_values import RuntimeEventType
+    throttles = [args for args in recorded if args and args[0] == RuntimeEventType.COMMAND_THROTTLED]
+    assert throttles == [], "no throttle event stored for a report"
+    await context.timers.close()

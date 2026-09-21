@@ -810,9 +810,10 @@ class Telemetry:
         )
         self.client_health_events = LabelledCounter(
             "sketchy_client_health_events_total",
-            "Client-reported events only the client can see: a canvas tail that failed its "
-            "hash check, a canvas sync that ran out of retries, an emit dropped while the "
-            "socket was down, a stall-watchdog fallback to polling, a playback compression.",
+            "Client-reported events only the client can see: a canvas tail it could not "
+            "apply, a canvas sync that ran out of retries, a fire-and-forget emit discarded "
+            "because the transport was not writable, a stall-watchdog fallback to polling, "
+            "an episode of playback falling behind.",
             ("event", "transport"),
         )
         self.client_join_to_drawing = Histogram(

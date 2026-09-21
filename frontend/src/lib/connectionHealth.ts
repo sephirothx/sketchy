@@ -2,9 +2,12 @@
 
 The server observes a connection's life on its own (R-OBS-18): why a socket
 closed, how long it lived, the ping round trip, the transport. What it cannot
-see is what happened on this side: a canvas tail that failed its hash check, a
-sync that ran out of retries, an emit dropped while the socket was down, the
-stall watchdog putting polling first, a viewer's playback falling behind, and
+see is what happened on this side: a canvas tail it could not apply (its base,
+its decoding, or a history that does not hash to what the server said), a sync
+that ran out of retries, a fire-and-forget emit socket.io discarded because the
+transport was not writable (down, or a long-polling POST in flight), the stall
+watchdog putting polling first, an episode of a viewer's playback falling
+behind (one per incident, not per batch it compressed), and
 how long a late joiner looked at an empty canvas. Those are the inputs to the
 resync backoff, the stall watchdog's 6 s, `MAX_LAG_MS` and the ack timeout,
 which were otherwise chosen without field data.
@@ -54,8 +57,6 @@ export interface HealthLedger {
   noteJoinToDrawing(milliseconds: number): void;
   /** The report to send, or `null` when nothing happened; taking it clears it. */
   take(): ClientHealthReport | null;
-  /** Put back a report that could not be sent, so the next one carries it. */
-  restore(report: ClientHealthReport): void;
 }
 
 function zeroCounts(): Record<HealthEvent, number> {
@@ -91,12 +92,6 @@ export function createHealthLedger(): HealthLedger {
       joins = [];
       return report;
     },
-    restore(report) {
-      for (const event of EVENTS) {
-        counts[event] = Math.min(MAX_HEALTH_COUNT, counts[event] + report[event]);
-      }
-      for (const milliseconds of report.joinToDrawingMs) addJoin(milliseconds);
-    },
   };
 }
 
@@ -115,6 +110,3 @@ export function takeHealthReport(): ClientHealthReport | null {
   return ledger.take();
 }
 
-export function restoreHealthReport(report: ClientHealthReport): void {
-  ledger.restore(report);
-}

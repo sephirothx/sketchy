@@ -452,8 +452,9 @@ export function useCanvasProtocol(
       source: "full" | "tail",
     ): void => {
       if (!historyRef.current.replace(actions, revision, generation, sequence, historyHash)) {
-        // A tail that does not hash to what the server said costs a full
-        // sync, and only this side can tell it happened (#876).
+        // A tail that could not be applied - one that does not hash to what
+        // the server said, or whose identity does not fit this history -
+        // costs a full sync, and only this side can tell it happened (#876).
         if (source === "tail") noteHealth("tailRejected");
         finishSync(false);
         requestAuthoritativeSync();

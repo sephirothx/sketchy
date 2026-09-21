@@ -56,15 +56,6 @@ test("a report is held to the bounds the server enforces", () => {
   assert.deepEqual(ledger.take().joinToDrawingMs, [MAX_JOIN_TO_DRAWING_MS, 0]);
 });
 
-test("a report that could not be sent goes with the next one", () => {
-  const ledger = createHealthLedger();
-  ledger.note("tailRejected");
-  const unsent = ledger.take();
-  ledger.note("tailRejected");
-  ledger.restore(unsent);
-  assert.equal(ledger.take().tailRejected, 2);
-});
-
 test("a report names nothing but its counts", () => {
   // No identifier, no content, no free text: the whole payload is these keys,
   // and every value a number the server bounds.
@@ -95,9 +86,14 @@ test("playback says when it compresses a schedule that fell behind, and only the
   play.advance(80);
   play.enqueueSegments({ x: 1, y: 0 }, [{ x: 2, y: 0 }], style, 80);
   assert.equal(compressions, 0);
-  // A burst: five batches at once is 400 ms queued, past the 250 ms bound.
-  for (let i = 0; i < 5; i += 1) play.enqueueSegments({ x: i, y: 1 }, [{ x: i + 1, y: 1 }], style, 100);
-  assert.ok(compressions > 0, "a burst past the lag bound is a compression");
+  // A burst: twenty batches at once is 1.6 s queued, far past the 250 ms
+  // bound - and one incident of falling behind, however many batches it holds.
+  for (let i = 0; i < 20; i += 1) play.enqueueSegments({ x: i, y: 1 }, [{ x: i + 1, y: 1 }], style, 100);
+  assert.equal(compressions, 1, "one burst is one episode, not a count of its batches");
+  // Caught up, then behind again: a second episode.
+  play.advance(10_000);
+  for (let i = 0; i < 20; i += 1) play.enqueueSegments({ x: i, y: 2 }, [{ x: i + 1, y: 2 }], style, 10_000);
+  assert.equal(compressions, 2);
 });
 
 function surface() {
