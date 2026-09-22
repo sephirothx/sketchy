@@ -800,7 +800,7 @@ async def test_a_line_reported_the_moment_it_was_said_is_in_the_evidence():
     """The retention writer lingers a quarter of a second for the rest of a
     batch (#972), and report evidence reads `room_messages` directly: a
     report filed at once found nothing to cite until the queue is flushed."""
-    from uuid import UUID, uuid4
+    from uuid import uuid4
 
     from app.db.models import User
 
