@@ -26,6 +26,7 @@ from app.canvas_storage import (
     stored_drawing_wire_payload,
 )
 from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_PIN_SLOTS
+from app.content_encoding import accepts_encoding
 from app.services.telemetry import telemetry
 from app.repositories.interfaces import (
     DrawingReactionResult,
@@ -168,21 +169,21 @@ class WireDrawingCache:
         self.bytes = 0
         self._entries: OrderedDict[str, tuple[bytes, bytes]] = OrderedDict()
 
-    def get(self, checksum: str) -> tuple[bytes, bytes] | None:
-        entry = self._entries.get(checksum)
+    def get(self, key: str) -> tuple[bytes, bytes] | None:
+        entry = self._entries.get(key)
         if entry is not None:
-            self._entries.move_to_end(checksum)
+            self._entries.move_to_end(key)
         return entry
 
     def clear(self) -> None:
         self._entries.clear()
         self.bytes = 0
 
-    def put(self, checksum: str, wire: bytes, gzipped: bytes) -> None:
+    def put(self, key: str, wire: bytes, gzipped: bytes) -> None:
         size = len(wire) + len(gzipped)
-        if not checksum or checksum in self._entries or size > self.max_bytes:
+        if not key or key.startswith("-") or key in self._entries or size > self.max_bytes:
             return
-        self._entries[checksum] = (wire, gzipped)
+        self._entries[key] = (wire, gzipped)
         self.bytes += size
         while self.bytes > self.max_bytes:
             _, (old_wire, old_gzipped) = self._entries.popitem(last=False)
@@ -190,6 +191,18 @@ class WireDrawingCache:
 
 
 drawing_cache = WireDrawingCache()
+#: Decodes in flight, by cache key: concurrent misses for one drawing - the
+#: This week shelf right after a restart - share one decode (#979 review).
+_fills: dict[str, asyncio.Future] = {}
+#: Below this a drawing goes out as it is: the gzip framing costs more than it
+#: saves, which is the response middleware's own floor.
+GZIP_MINIMUM_BYTES = 500
+
+
+def _cache_key(checksum: str) -> str:
+    """The stored checksum and the wire version it decodes into, as the
+    `ETag` does: a new wire version changes the bytes without the checksum."""
+    return f"{checksum}-w{CANVAS_HISTORY_VERSION}"
 
 
 def _decoded_drawing(blob: bytes, checksum: str | None) -> tuple[bytes, bytes]:
@@ -227,12 +240,47 @@ async def serve_drawing(
     if if_none_match is not None and validator_matches(if_none_match, validator):
         # A copy that is still current: neither read nor decoded.
         return Response(status_code=304, headers={**cache_headers, "ETag": validator})
-    cached = drawing_cache.get(checksum)
+    cached = drawing_cache.get(_cache_key(checksum))
     if cached is not None:
         telemetry.drawing_cache_requests.inc(("hit",))
         wire, gzipped = cached
     else:
         telemetry.drawing_cache_requests.inc(("miss",))
+        wire, gzipped, stored_checksum = await _decode_once(checksum, turn_id, drawing_of)
+        validator = drawing_validator(stored_checksum)
+    encoded = len(wire) >= GZIP_MINIMUM_BYTES and accepts_encoding(
+        request.headers.get("accept-encoding"), "gzip"
+    )
+    headers = {**cache_headers, "ETag": validator}
+    if encoded:
+        # Already compressed, so the response middleware leaves it be.
+        headers["Content-Encoding"] = "gzip"
+        headers["Vary"] = "Accept-Encoding"
+    return Response(
+        content=gzipped if encoded else wire,
+        media_type="application/octet-stream",
+        headers=headers,
+    )
+
+
+async def _decode_once(
+    checksum: str,
+    turn_id: str,
+    drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
+) -> tuple[bytes, bytes, str]:
+    """Read and decode a drawing the cache does not hold, once however many
+    ask at the same moment. Every asker was already let in by its own access
+    query; only the bytes are shared, refusals included."""
+    key = _cache_key(checksum)
+    pending = _fills.get(key)
+    if pending is not None:
+        return await asyncio.shield(pending)
+    pending = asyncio.get_running_loop().create_future()
+    # Retrieved even when nobody else waited, so a refusal is not reported
+    # as an exception nobody looked at.
+    pending.add_done_callback(lambda future: future.cancelled() or future.exception())
+    _fills[key] = pending
+    try:
         drawing = await drawing_of()
         if drawing is None:
             raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
@@ -252,21 +300,19 @@ async def serve_drawing(
             ) from error
         # Keyed by the checksum these bytes were verified against, which is
         # the row's own - it may have changed since the question above.
-        drawing_cache.put(drawing.checksum_sha256, wire, gzipped)
-        validator = drawing_validator(drawing.checksum_sha256)
-    encoded = "gzip" in request.headers.get("accept-encoding", "").lower()
-    return Response(
-        content=gzipped if encoded else wire,
-        media_type="application/octet-stream",
-        headers={
-            **cache_headers,
-            "ETag": validator,
-            "Vary": "Accept-Encoding",
-            # Already compressed, so the response middleware leaves it be.
-            **({"Content-Encoding": "gzip"} if encoded else {}),
-        },
-    )
-
+        drawing_cache.put(_cache_key(drawing.checksum_sha256), wire, gzipped)
+        result = (wire, gzipped, drawing.checksum_sha256)
+        pending.set_result(result)
+        return result
+    except BaseException as error:
+        if not pending.done():
+            if isinstance(error, asyncio.CancelledError):
+                pending.cancel()
+            else:
+                pending.set_exception(error)
+        raise
+    finally:
+        _fills.pop(key, None)
 
 def create_profile_router(
     user_repo: UserRepository,

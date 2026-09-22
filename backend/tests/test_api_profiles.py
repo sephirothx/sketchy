@@ -1079,7 +1079,7 @@ async def test_a_drawing_fetched_again_is_neither_read_nor_decoded_again(env, mo
     http, users, history, factory = env
     ann = await users.create_anonymous(display_name="Ann")
     bob = await users.create_anonymous(display_name="Bob")
-    blob = _skch()
+    blob = _large_frame()
     game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
     turn_id = record_game.last_turn_id
     decodes: list[int] = []
@@ -1111,6 +1111,9 @@ async def test_a_drawing_fetched_again_is_neither_read_nor_decoded_again(env, mo
     plain = await http.get(url, headers={"Accept-Encoding": "identity"})
     assert "content-encoding" not in plain.headers and plain.content == blob
     assert profiles.drawing_cache.bytes == len(blob) + len(gzip.compress(blob, 6, mtime=0))
+    # Keyed by the wire version as well as the checksum, as the ETag is.
+    [key] = list(profiles.drawing_cache._entries)
+    assert key.endswith(f"-w{profiles.CANVAS_HISTORY_VERSION}")
 
 
 async def test_a_warm_cache_answers_nobody_the_drawing_was_not_for(env):
@@ -1141,3 +1144,80 @@ def test_the_drawing_cache_is_bounded_in_bytes_and_forgets_the_least_recent():
     assert cache.bytes == 80
     cache.put("huge", b"x" * 200, b"")
     assert cache.get("huge") is None and cache.bytes == 80
+
+
+
+def _large_frame() -> bytes:
+    """A drawing well past the 500-byte floor under which none is gzipped."""
+    from app.canvas_history import PackedCanvasHistory
+
+    history = PackedCanvasHistory()
+    for stroke in range(6):
+        history.append_path(
+            [((step % 50) / 50, (step // 50 + stroke) / 10) for step in range(120)],
+            color=0x223344,
+            width=3,
+        )
+    return history.binary_payload()
+
+
+async def test_a_small_drawing_goes_out_as_it_is_and_vary_rides_only_the_gzip(env):
+    """Gzip framing costs more than it saves on a few hundred bytes; and a
+    `Vary` on the identity answer was repeated by the response middleware."""
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    small = _skch()
+    assert len(small) < 500
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=small)
+    await sign_in_as(http, factory, ann.id)
+    response = await http.get(
+        f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing",
+        headers={"Accept-Encoding": "gzip"},
+    )
+    assert response.content == small
+    assert "content-encoding" not in response.headers and "vary" not in response.headers
+
+
+async def test_gzip_refused_with_q_zero_is_not_sent(env):
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_large_frame())
+    await sign_in_as(http, factory, ann.id)
+    response = await http.get(
+        f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing",
+        headers={"Accept-Encoding": "gzip;q=0, identity"},
+    )
+    assert response.status_code == 200 and "content-encoding" not in response.headers
+
+
+async def test_concurrent_misses_for_one_drawing_decode_it_once(env, monkeypatch):
+    """The This week shelf right after a restart: everybody asks at once."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    decodes: list[int] = []
+    real_decode = profiles.stored_drawing_wire_payload
+
+    def slow_decode(*args, **kwargs):
+        decodes.append(1)
+        import time
+
+        time.sleep(0.05)  # on the worker thread, so the others arrive meanwhile
+        return real_decode(*args, **kwargs)
+
+    monkeypatch.setattr(profiles, "stored_drawing_wire_payload", slow_decode)
+    await sign_in_as(http, factory, ann.id)
+    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    responses = await asyncio.gather(*(http.get(url) for _ in range(5)))
+    assert [response.status_code for response in responses] == [200] * 5
+    assert all(response.content == blob for response in responses)
+    assert decodes == [1]
+    assert profiles._fills == {}

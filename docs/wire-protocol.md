@@ -1965,12 +1965,14 @@ caps while the deltas are undone. A blob that lies about any of it is reported c
 The row's checksum and `byte_size` describe the **stored** bytes, so a read verifies what
 the database holds before decoding; the drawing route's `ETag` is that checksum, which is
 a valid validator because a stored blob decodes to one frame. For the same reason the decoded bytes
-are shared across the three drawing routes by that checksum (#979): the first fetch
-decodes the blob and gzips the frame once, on a worker thread, into a byte-bounded
-in-process LRU (32 MiB, `sketchy_drawing_cache_bytes`); a later fetch asks the route's
-own access query — the same one the `ETag` is answered from — and is then served the
-held bytes, `Content-Encoding: gzip` when the client accepts it, with `Vary:
-Accept-Encoding`. Only the bytes are shared, never the answer to who may have them. The decode-only golden
+are shared across the four drawing routes — participant, pin, gallery and moderator — by
+that checksum and the wire version (#979): the first fetch decodes the blob and gzips the
+frame once, on a worker thread, into a byte-bounded in-process LRU (32 MiB,
+`sketchy_drawing_cache_bytes`), and concurrent misses for one drawing share that decode;
+a later fetch asks the route's own access query — the same one the `ETag` is answered
+from — and is then served the held bytes, `Content-Encoding: gzip` with `Vary:
+Accept-Encoding` when the client accepts gzip (`q=0` refuses) and the frame is 500 bytes
+or more, as they are otherwise. Only the bytes are shared, never the answer to who may have them. The decode-only golden
 blobs live in [`fixtures/stored_drawings_v1.json`](../fixtures/stored_drawings_v1.json)
 and [`fixtures/stored_drawings_v2.json`](../fixtures/stored_drawings_v2.json), one file a
 format: entries may be added, never removed or changed. On PostgreSQL the payload columns are
