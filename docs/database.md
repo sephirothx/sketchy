@@ -275,7 +275,9 @@ Notable design points:
   room seat and when a game is persisted — deliberately not on page load, login, or an
   ordinary profile write, because it drives retention. The seat's stamp is one `UPDATE`,
   written after the join is acknowledged rather than before (#980): nothing about the
-  seat depends on it, and a lost stamp costs a retention clock a few seconds.
+  seat depends on it. A stamp that fails is logged and dropped, so `last_active_at` keeps
+  its previous value until the account's next seat — which for a player who seldom plays
+  can be weeks, bringing the retention sweep that much closer.
 
 ### `auth_sessions`
 One revocable signed-in device.

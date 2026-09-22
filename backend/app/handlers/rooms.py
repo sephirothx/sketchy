@@ -235,9 +235,9 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     ):
         return
     try:
-        # Bounded like the rest of the entry path. It runs outside the gate,
-        # so a hang here no longer strands a seat - but it still holds up the
-        # acknowledgement the player is waiting for.
+        # Bounded like the rest of the entry path, so a hang cannot keep the
+        # task alive for ever. Nobody waits on it: it runs after the
+        # acknowledgement, on its own (#980).
         await _bounded(
             ctx.user_repo.touch_last_active(player.user_id), "recording activity"
         )
