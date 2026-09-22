@@ -8,7 +8,8 @@ driver whether the connection is already closed - free, no round trip - and
 pings only one that has been idle for `DB_POOL_PING_IDLE_SECONDS`.
 
 Measured as a session would feel it: open a session, run one trivial
-statement, close it, over and over, on one pooled connection.
+statement, close it, over and over, on one pooled connection. Nothing is
+written, and no table is read: `SELECT 1` on a database of any shape.
 
 Usage:
   DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench \\
@@ -66,7 +67,10 @@ def report(name: str, samples: list[float]) -> None:
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--sessions", type=int, default=300)
-    parser.add_argument("--url", default=os.environ.get("DATABASE_URL", ""))
+    parser.add_argument(
+        "--url",
+        default=os.environ.get("TEST_DATABASE_URL") or os.environ.get("DATABASE_URL", ""),
+    )
     arguments = parser.parse_args()
     if not arguments.url.startswith("postgresql"):
         raise SystemExit("Set DATABASE_URL to a PostgreSQL database; SQLite has no round trip to save.")
