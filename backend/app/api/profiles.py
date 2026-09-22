@@ -292,22 +292,26 @@ async def _decode_once(
         # fill is not reported as an exception nobody looked at.
         fill.add_done_callback(lambda task: task.cancelled() or task.exception())
         _fills[key] = fill
+    # Watched rather than awaited: `await fill` hands this caller's
+    # cancellation straight to the fill, because `Task.cancel` cancels the
+    # future the task is waiting on - so one caller's disconnect would cancel
+    # the decode every other waiter is waiting on, which is the thing this
+    # single-flight exists to prevent (#979 fourth review). `asyncio.wait`
+    # watches it from the outside; our own cancellation leaves it running.
+    await asyncio.wait({fill})
     try:
         # The fill's own answer, not whatever the cache ended up holding: a
         # decode the cache declined - too large for it, or a checksum that
-        # changed while it ran - is still this caller's drawing (#979 third
-        # review). Awaited plainly: a task is not cancelled by a waiter going
-        # away, so no `shield` is needed, and shielding here logged an error
-        # for every routine disconnect whose fill then refused.
-        return await fill
+        # changed while it ran - is still this caller's drawing.
+        return fill.result()
     except asyncio.CancelledError:
-        if started_it or not fill.cancelled():
-            # Our own cancellation, not the fill's: this caller is going away.
-            raise
+        # The fill was cancelled from outside. This caller was not, and still
+        # wants its bytes - whether or not it was the one that started it.
+        pass
     except Exception:
         if started_it:
             raise
-    # Somebody else's refusal, or a fill cancelled from outside, says nothing
+    # Somebody else's refusal, or a fill that was cancelled, says nothing
     # about this caller's access - a participant may still have a drawing the
     # Gallery may not (R-GAL-09). Read what it left, and ask again if it left
     # nothing.

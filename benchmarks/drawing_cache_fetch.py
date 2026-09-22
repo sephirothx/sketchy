@@ -6,12 +6,15 @@ the response middleware gzip the result - all three on the loop every room
 shares, for bytes that never change. The cache holds the decoded pair, so the
 second fetch of a drawing pays a dictionary lookup.
 
-The stored blob is served from memory here: the point is the CPU the *loop*
-spends per fetch, and a benchmark that also measured SQLite would bury it.
-Both columns are read off one run: **cold** is a checksum never seen before,
-which is what every fetch cost before this cache existed, and **warm** is the
-second and later fetch of one drawing, which is what a shelf everybody opens
-actually does.
+The stored blob is served from memory here: the point is the CPU a fetch
+spends, and a benchmark that also measured SQLite would bury it. Two figures
+per column: the loop thread's own CPU, and the process's - the decode runs on
+a worker thread, so only the first is what a room shares.
+Both columns are read off one run: **cold** is a checksum never seen before -
+what every fetch costs when the cache misses - and **warm** is the second and
+later fetch of one drawing, which is what a shelf everybody opens does. Before
+this change every fetch was a cold one *and* ran on the loop thread, so the
+loop figure there is this run's process column.
 
 Usage:
   backend/.venv/bin/python benchmarks/drawing_cache_fetch.py --fetches 40
@@ -23,7 +26,7 @@ import asyncio
 import hashlib
 import os
 import sys
-from time import process_time
+from time import process_time, thread_time
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
@@ -90,14 +93,24 @@ def app_for(payloads: list[bytes]) -> FastAPI:
     return app
 
 
-async def fetch_all(http, paths: list[str]) -> float:
-    """Milliseconds of process CPU per fetch - the loop's own thread, which is
-    the only thread any of this runs on."""
-    started = process_time()
+async def fetch_all(http, paths: list[str]) -> tuple[float, float]:
+    """Per fetch: milliseconds of CPU on the **loop's own thread**, and of the
+    whole process.
+
+    The two differ because the decode runs on a worker thread: the loop's
+    figure is what a room shares, the process's is what the machine pays. A
+    benchmark that reported only the second would call a thread's work the
+    loop's.
+    """
+    started_loop, started_all = thread_time(), process_time()
     for path in paths:
         answer = await http.get(path, headers={"Accept-Encoding": "gzip"})
         assert answer.status_code == 200, answer.status_code
-    return (process_time() - started) * 1000 / len(paths)
+    count = len(paths)
+    return (
+        (thread_time() - started_loop) * 1000 / count,
+        (process_time() - started_all) * 1000 / count,
+    )
 
 
 async def measure(name: str, shape: tuple[int, int], fetches: int) -> None:
@@ -106,9 +119,14 @@ async def measure(name: str, shape: tuple[int, int], fetches: int) -> None:
     app = app_for(cold_payloads)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://bench") as http:
         await http.get("/drawing/0", headers={"Accept-Encoding": "gzip"})  # warm the stack
-        cold = await fetch_all(http, [f"/drawing/{index}" for index in range(1, fetches)])
-        warm = await fetch_all(http, ["/drawing/0"] * fetches)
-    print(f"{name:<28} | {len(cold_payloads[0]):>9} | {cold:>9.2f} | {warm:>9.2f}")
+        cold_loop, cold_all = await fetch_all(
+            http, [f"/drawing/{index}" for index in range(1, fetches)]
+        )
+        warm_loop, warm_all = await fetch_all(http, ["/drawing/0"] * fetches)
+    print(
+        f"{name:<28} | {len(cold_payloads[0]):>9} | {cold_loop:>7.2f} | {cold_all:>7.2f} | "
+        f"{warm_loop:>7.2f} | {warm_all:>7.2f}"
+    )
 
 
 async def main() -> None:
@@ -116,8 +134,9 @@ async def main() -> None:
     parser.add_argument("--fetches", type=int, default=40, help="warm fetches per drawing")
     arguments = parser.parse_args()
 
-    print(f"{'Drawing':<28} | {'stored B':>9} | {'cold ms':>9} | {'warm ms':>9}")
-    print("-" * 64)
+    print(f"{'Drawing':<28} | {'stored B':>9} | {'cold ms':>7} | {'  (all)':>7} | "
+          f"{'warm ms':>7} | {'  (all)':>7}")
+    print("-" * 82)
     await measure("Ordinary (6 strokes)", (6, 120), arguments.fetches)
     await measure("Stroke-heavy (60 strokes)", (60, 400), arguments.fetches)
     await measure("Very heavy (240 strokes)", (240, 600), arguments.fetches)

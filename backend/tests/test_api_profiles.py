@@ -1263,6 +1263,11 @@ async def test_a_fill_survives_the_caller_that_started_it_going_away(env):
     a shutdown, a timeout - must not cancel the read the other waiters are
     waiting on (#979 review).
 
+    The read is counted, because "a waiter got its bytes" is also true when
+    the fill was cancelled and the waiter quietly read the drawing again: the
+    invariant is one decode, and `await fill` loses it, since cancelling a
+    task cancels the future it is waiting on (#979 fourth review).
+
     At `_decode_once` rather than through HTTP: cancelling a request with a
     query in flight tears down its database connection, which is a different
     story from this one.
@@ -1279,8 +1284,10 @@ async def test_a_fill_survives_the_caller_that_started_it_going_away(env):
     turn_id = record_game.last_turn_id
     detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
     release = asyncio.Event()
+    reads: list[int] = []
 
     async def slow_read():
+        reads.append(1)
         await release.wait()
         return detail
 
@@ -1289,13 +1296,53 @@ async def test_a_fill_survives_the_caller_that_started_it_going_away(env):
     await asyncio.sleep(0.02)
     waiter = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
     await asyncio.sleep(0.02)
+    fill = profiles._fills[profiles._cache_key(checksum)]
     owner.cancel()
+    await asyncio.sleep(0.02)
+    assert not fill.cancelled() and not fill.done(), "the fill outlives its starter"
     release.set()
 
     wire, gzipped, served_checksum = await asyncio.wait_for(waiter, timeout=5)
     assert wire == blob and served_checksum == checksum
+    assert reads == [1], "one read, not one per caller that stayed"
     assert profiles.drawing_cache.get(profiles._cache_key(checksum)) is not None
     assert profiles._fills == {}
+
+
+async def test_a_waiter_going_away_leaves_the_others_their_decode(env):
+    """The same, for a waiter rather than the starter: the cancellation of
+    anybody attached to a shared fill stays with them (#979 fourth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    release = asyncio.Event()
+    reads: list[int] = []
+
+    async def slow_read():
+        reads.append(1)
+        await release.wait()
+        return detail
+
+    checksum = detail.checksum_sha256
+    owner = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
+    await asyncio.sleep(0.02)
+    waiter = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
+    await asyncio.sleep(0.02)
+    waiter.cancel()
+    await asyncio.sleep(0.02)
+    release.set()
+
+    wire, _gzipped, served = await asyncio.wait_for(owner, timeout=5)
+    assert wire == blob and served == checksum
+    assert reads == [1]
 
 
 async def test_one_decode_serves_every_door_to_the_same_drawing(env, monkeypatch):
@@ -1485,6 +1532,57 @@ def test_the_cache_size_is_exposed_to_the_scrape():
         line.startswith("sketchy_drawing_cache_bytes")
         for line in telemetry.prometheus_lines()
     )
+
+
+def test_a_drawing_with_no_stored_checksum_is_not_cached_at_all():
+    """`checksum_sha256 or ""` is what the repositories hand over for a row
+    with no digest, and its key is the bare wire version - one key every such
+    drawing would share, serving one drawer's bytes for another's (#979
+    fourth review)."""
+    import app.api.profiles as profiles
+
+    cache = profiles.WireDrawingCache(max_bytes=1024)
+    cache.put(profiles._cache_key(""), b"first drawing", b"gz")
+    cache.put("", b"nameless", b"gz")
+
+    assert cache.get(profiles._cache_key("")) is None
+    assert cache.bytes == 0
+
+
+async def test_a_second_caller_asking_again_does_not_clear_the_shared_fill(env):
+    """The fallback read is not the shared one: popping `_fills` from it would
+    take out the entry a later caller is waiting on (#979 fourth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    key = profiles._cache_key(detail.checksum_sha256)
+    release = asyncio.Event()
+
+    async def held():
+        await release.wait()
+        return detail
+
+    shared = asyncio.ensure_future(profiles._fill_cache(key, turn_id, held))
+    shared.add_done_callback(lambda task: task.cancelled() or task.exception())
+    profiles._fills[key] = shared
+    await asyncio.sleep(0)
+
+    # Another caller's own read, the one `_decode_once` falls back to.
+    fallback = await profiles._fill_cache(key, turn_id, lambda: _answer(detail), store=False)
+
+    assert fallback[0] == blob
+    assert profiles._fills.get(key) is shared, "the shared fill is still there"
+    release.set()
+    await asyncio.wait_for(shared, timeout=5)
+    assert profiles._fills == {}
 
 
 async def test_the_cache_counter_says_which_it_was(env):
