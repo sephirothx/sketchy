@@ -681,7 +681,7 @@ async def test_an_erased_drawers_unreadable_drawing_is_a_tombstone_and_anyone_el
 
     carol = (await users.create_anonymous(display_name="Carol")).id
     live_game = history_for(str(generate_uuid()), carol, bob, drawing=b"not a frame")
-    with pytest.raises(Exception):
+    with pytest.raises(ValueError):
         await history.save_game(
             live_game.record, live_game.participants, live_game.turns,
             live_game.score_events, live_game.drawings, live_game.reactions,
