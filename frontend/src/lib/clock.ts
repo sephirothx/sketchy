@@ -48,7 +48,11 @@ function clockOptions(format: TimeFormat): Intl.DateTimeFormatOptions {
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
 function formatterFor(kind: string, options: Intl.DateTimeFormatOptions, format = ""): Intl.DateTimeFormat {
-  const key = `${kind}|${displayLocale ?? ""}|${format}`;
+  // The time zone too: a formatter keeps the one it was built in, where the
+  // `toLocale*String` calls it replaced read the current one every time - a
+  // laptop that wakes up somewhere else would keep the old clock.
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const key = `${kind}|${displayLocale ?? ""}|${format}|${timeZone}`;
   let formatter = formatters.get(key);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(displayLocale, options);

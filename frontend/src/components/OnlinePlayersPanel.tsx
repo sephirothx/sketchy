@@ -21,6 +21,7 @@ import { ReportAccountDialog } from "./ReportAccountDialog";
 import { Button } from "./ui/Button";
 import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { refusalText } from "../lib/refusals.ts";
 
 /** Who else is here, beside the room list.
@@ -43,6 +44,7 @@ this size by typing anyway. Finding a specific person is a different feature
 from seeing who is around: it is the profile, reached from a row's menu here or
 from a game's participant list. */
 export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
+  useLocaleRerender();
   const presence = usePresenceStore((state) => state.presence);
   const myUserId = useAuthStore((state) => state.user?.id ?? null);
   const iAmAGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);

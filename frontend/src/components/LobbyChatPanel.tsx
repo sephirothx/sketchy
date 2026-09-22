@@ -12,6 +12,7 @@ import type { AckResponse } from "../types";
 import { ChevronRightIcon } from "./icons";
 import { ReportLobbyLineDialog } from "./ReportLobbyLineDialog";
 import { refusalText } from "../lib/refusals.ts";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"
@@ -33,6 +34,7 @@ it. A visitor who has not chosen one yet is offered that instead of a box
 that would refuse them, and choosing it reconnects the socket, which is what
 makes the next line theirs. */
 export const LobbyChatPanel = memo(function LobbyChatPanel() {
+  const locale = useLocaleRerender();
   const { timeFormat } = useClock();
   const lines = useLobbyChatStore((state) => state.chat.lines);
   const awaitingName = useAuthStore((state) => needsIdentity(state.user));
@@ -123,6 +125,7 @@ export const LobbyChatPanel = memo(function LobbyChatPanel() {
                 viewer={viewer}
                 now={now}
                 timeFormat={timeFormat}
+                locale={locale}
                 onReport={setReporting}
               />
             ))
@@ -191,6 +194,8 @@ const LobbyChatLineRow = memo(function LobbyChatLineRow({
   viewer: AuthUser | null;
   now: number;
   timeFormat: TimeFormat;
+  /** Unused in the body; there so memo sees a language switch. */
+  locale: string;
   onReport: (line: LobbyChatLine) => void;
 }) {
   const at = new Date(line.sentAt);

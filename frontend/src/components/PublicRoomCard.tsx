@@ -6,6 +6,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
 
 interface RosterEntry {
@@ -52,6 +53,7 @@ const ROW_RULES_SHOWN = 3;
  * glance down each column. Still nothing that names a player.
  */
 export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card" }: PublicRoomCardProps) {
+  useLocaleRerender();
   const full = room.isFull || room.playerCount >= room.maxPlayers;
   const playing = room.state === "playing";
   const languageLabel = promptLanguageLabel(room.promptLanguage);
