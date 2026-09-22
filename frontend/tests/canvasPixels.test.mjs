@@ -343,3 +343,16 @@ test("a dot of width w is w pixels across when its edge falls on pixel centres, 
     }
   }
 });
+
+test("a thumbnail is the area average of what it covers, not a sample of it", async () => {
+  const { downscalePixels } = await import("../src/lib/canvasThumbnail.ts");
+  // A 4x2 source: left half black, right half white, halved to 2x1.
+  const source = new Uint8ClampedArray(4 * 2 * 4);
+  for (let y = 0; y < 2; y++) for (let x = 0; x < 4; x++) source.set(x < 2 ? [0, 0, 0, 255] : [255, 255, 255, 255], (y * 4 + x) * 4);
+  assert.deepEqual([...downscalePixels(source, 4, 2, 2, 1)], [0, 0, 0, 255, 255, 255, 255, 255]);
+  // A one-pixel line a sample could miss still leaves its trace.
+  const line = new Uint8ClampedArray(4 * 4 * 4).fill(255);
+  line.set([0, 0, 0, 255], (1 * 4 + 1) * 4);
+  const small = downscalePixels(line, 4, 4, 2, 2);
+  assert.ok(small[0] < 255, "the dark pixel is averaged in, not skipped");
+});
