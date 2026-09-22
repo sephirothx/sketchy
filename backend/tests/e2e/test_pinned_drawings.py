@@ -99,7 +99,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await shelf.wait_for()
             await expect(shelf.locator(".profile-shelf-item")).to_have_count(1)
             await expect(shelf.locator(".profile-shelf-prompt").first).to_have_text(first_prompt)
-            await lobby.locator(".profile-shelf-canvas canvas").first.wait_for()
+            await lobby.locator(".profile-shelf-canvas img").first.wait_for()
 
             # The other player, signed in, sees the shelf without controls.
             visitor = await other_context.new_page()
