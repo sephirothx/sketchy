@@ -16,7 +16,15 @@ from app.server import EVENT_LOOP, HTTP_PROTOCOL, DrainingServer
 async def _app(scope, receive, send):
     if scope["type"] != "http":
         return
-    body = b"%s %s" % (scope["method"].encode(), b"ok")
+    # Read the request whole before answering: closing on unread bytes makes
+    # Linux reset the connection, which a client reads as no answer at all.
+    received = 0
+    while True:
+        message = await receive()
+        received += len(message.get("body", b""))
+        if not message.get("more_body"):
+            break
+    body = b"%s %s" % (scope["method"].encode(), b"ok" if not received else b"%d" % received)
     await send({"type": "http.response.start", "status": 200, "headers": [(b"content-length", str(len(body)).encode())]})
     await send({"type": "http.response.body", "body": body})
 
@@ -85,7 +93,8 @@ def test_a_body_is_never_counted_as_head(served):
         b"POST / HTTP/1.1\r\nHost: t\r\nConnection: close\r\nContent-Length: "
         + str(len(body)).encode() + b"\r\n\r\n" + body
     )
-    assert _exchange(served, request).startswith(b"HTTP/1.1 200")
+    answer = _exchange(served, request)
+    assert answer.startswith(b"HTTP/1.1 200") and answer.endswith(b"POST %d" % len(body))
 
 
 def test_headers_just_under_the_bound_are_accepted(served):
