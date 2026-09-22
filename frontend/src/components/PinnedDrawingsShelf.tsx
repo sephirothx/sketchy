@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { CanvasSnapshot } from "./CanvasSnapshot";
+import { useState } from "react";
+import { DrawingThumbnail } from "./DrawingThumbnail";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingRecapGallery } from "./DrawingRecapGallery";
 import { ReactionTally } from "./ReactionTally";
 import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
-import { decodeCanvasHistory } from "../lib/canvasHistory";
-import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { refusalText } from "../lib/refusals.ts";
 import { fetchPinnedDrawing, setGalleryReaction } from "../lib/profile";
 import { movePin, pinsAsRecapEntries, withoutPin } from "../lib/pinnedDrawings";
@@ -193,53 +191,22 @@ export function PinnedDrawingsShelf({
   );
 }
 
-/**
- * One shelf slot: the frame fetched and replayed at thumbnail size. Fetched
- * on mount rather than through the gallery's cache because the shelf shows
- * all six at once, and the gallery opens on one.
- */
+/** One shelf slot, drawn at the slot's size once the shelf is near the
+    viewport (`DrawingThumbnail`). Fetched directly rather than through the
+    gallery's cache because the shelf shows all six at once, and the gallery
+    opens on one. */
 function PinnedThumbnail({ userId, pin }: { userId: string; pin: ProfilePin }) {
-  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const generation = useRef(0);
-
-  // Keyed by turn id from the parent, so a different pin is a fresh
-  // thumbnail rather than one that has to reset its own state in an effect.
-  useEffect(() => {
-    const mine = ++generation.current;
-    void (async () => {
-      try {
-        const bytes = await fetchPinnedDrawing(userId, pin.turnId);
-        if (mine !== generation.current) return;
-        const decoded = decodeCanvasHistory(bytes);
-        if (!decoded) {
-          setFailed(true);
-          return;
-        }
-        setActions(decoded);
-      } catch {
-        if (mine !== generation.current) return;
-        setFailed(true);
-      }
-    })();
-    return () => {
-      generation.current += 1;
-    };
-  }, [userId, pin.turnId]);
-
   return (
-    <div className="profile-shelf-canvas" aria-busy={actions === null && !failed}>
-      {failed ? (
-        <span className="profile-note">{ui.profilePage.couldNotLoadThisDrawing}</span>
-      ) : actions === null ? null : (
-        <CanvasSnapshot
-          actions={actions}
-          label={ui.drawingRecapGallery.drawingLabel({
-            prompt: pin.prompt,
-            drawer: pin.drawerDisplayName,
-          })}
-        />
-      )}
-    </div>
+    <DrawingThumbnail
+      drawingKey={`${userId}:${pin.turnId}`}
+      load={() => fetchPinnedDrawing(userId, pin.turnId)}
+      label={ui.drawingRecapGallery.drawingLabel({
+        prompt: pin.prompt,
+        drawer: pin.drawerDisplayName,
+      })}
+      className="profile-shelf-canvas"
+      noteClassName="profile-note"
+      failedText={ui.profilePage.couldNotLoadThisDrawing}
+    />
   );
 }
