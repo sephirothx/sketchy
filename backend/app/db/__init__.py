@@ -51,9 +51,14 @@ POSTGRES_POOL_RECYCLE_SECONDS = 1_800
 # own work, when most sessions run one statement. A backend the server ended
 # (a restart, `pg_terminate_backend`, an idle-in-transaction timeout) closes
 # its socket, which asyncpg has already seen by the next checkout, so that
-# case costs a flag read rather than a ping; what only a ping finds is a
-# connection whose peer vanished without a word - a dropped NAT entry, a
-# failed-over host - and that takes a quiet spell to happen.
+# case costs a flag read rather than a ping. What only a ping finds is a
+# connection whose peer vanished without closing it - a dropped NAT entry, a
+# failed-over host, a reset nobody has read yet - and the trade is explicit:
+# a connection that died that way less than 30 s after its last use fails the
+# next caller's first statement, where `pool_pre_ping` would have replaced it
+# unseen. SQLAlchemy invalidates it on that failure, so it fails once, not
+# again; a caller that treats a read error as "nothing found" (the block
+# filter does, R-BLOCK-06) answers as it would to any database error.
 POSTGRES_POOL_PING_IDLE_SECONDS = 30
 POSTGRES_MIGRATION_LOCK_ID = int.from_bytes(b"SKETCHY", "big")
 
@@ -131,7 +136,7 @@ def get_engine_connect_args(url: str, *, role: str = "web") -> dict[str, Any]:
     For PostgreSQL that is the role's `application_name` - what
     `pg_stat_activity` shows - and its server-enforced budgets. asyncpg sends
     `server_settings` on every connection it opens, so a pooled connection
-    that was recycled or re-established after a pre-ping failure carries
+    that was recycled or replaced after failing its checkout check carries
     them too; nothing has to re-apply them on checkout.
     """
     if url.startswith("sqlite"):
