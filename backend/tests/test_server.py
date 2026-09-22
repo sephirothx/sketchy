@@ -158,7 +158,9 @@ def test_the_event_loop_and_http_parser_are_named_and_actually_used():
         server.run()
 
     config = draining.call_args.args[0]
-    assert (config.loop, config.http) == ("uvloop", "httptools")
+    from app.http_transport import BoundedHttpToolsProtocol
+
+    assert (config.loop, config.http) == ("uvloop", BoundedHttpToolsProtocol)
     factory = asyncio_module.run.call_args.kwargs["loop_factory"]
     import uvloop
 
@@ -168,9 +170,7 @@ def test_the_event_loop_and_http_parser_are_named_and_actually_used():
     finally:
         loop.close()
     config.load()
-    from uvicorn.protocols.http.httptools_impl import HttpToolsProtocol
-
-    assert config.http_protocol_class is HttpToolsProtocol
+    assert config.http_protocol_class is BoundedHttpToolsProtocol
 
 
 def test_the_named_libraries_are_pinned_requirements():

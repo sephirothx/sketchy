@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 import socket
@@ -10,6 +11,7 @@ import socket
 import uvicorn
 
 from app.deployment import reconnect_spread_seconds, shutdown_drain_seconds
+from app.http_transport import BoundedHttpToolsProtocol
 from app.logging_config import JSON_FORMAT, configure_logging, log_format
 from app.main import shutdown_coordinator, sio
 from app.ws_transport import WS_PROTOCOL
@@ -18,6 +20,8 @@ from app.ws_transport import WS_PROTOCOL
 # What an operator or a supervisor sends to stop the process. A repeat of any
 # of them means "stop waiting", not "start again".
 _TERMINATION_SIGNALS = frozenset({signal.SIGINT, signal.SIGTERM})
+
+logger = logging.getLogger("sketchy.server")
 
 # How long an idle keep-alive connection is held open before the server closes
 # it. Decided here rather than inherited, because whoever closes an idle pooled
@@ -32,14 +36,17 @@ _TERMINATION_SIGNALS = frozenset({signal.SIGINT, signal.SIGTERM})
 KEEP_ALIVE_SECONDS = 75
 
 # The event loop and the HTTP parser, named rather than left to what happens to
-# be installed (#977) - the reason #561 named the WebSocket library. Stock
-# asyncio with h11 is what ran until now, whatever the environment held,
-# because `asyncio.run` below was handed no loop factory and uvicorn's own
-# choice never reached it. Measured: an HTTP request or a long-poll costs the
-# loop ~75 us through h11 and ~13 us through httptools on uvloop, and the loop
-# every room shares is also the one carrying their strokes.
+# be installed (#977) - the reason #561 named the WebSocket library. Until then
+# the loop was always stock asyncio, because `asyncio.run` below was handed no
+# loop factory, and the parser was whatever `http="auto"` found: httptools in a
+# development venv that happened to hold it, h11 on an install from
+# requirements.txt, which never listed it. Measured, an HTTP request or a
+# long-poll costs the loop ~75 us through h11 and ~13 us through httptools on
+# uvloop, and the loop every room shares is also the one carrying their
+# strokes. httptools holds a request head of any size, where h11 refused past
+# 16 KiB, so the class named here puts that bound back (`app.http_transport`).
 EVENT_LOOP = "uvloop"
-HTTP_PROTOCOL = "httptools"
+HTTP_PROTOCOL = BoundedHttpToolsProtocol
 
 
 class DrainingServer(uvicorn.Server):
@@ -65,6 +72,18 @@ class DrainingServer(uvicorn.Server):
         if self.should_exit and sig in _TERMINATION_SIGNALS:
             self.force_exit = True
         super().handle_exit(sig, frame)
+
+    async def serve(self, sockets: list[socket.socket] | None = None) -> None:
+        # Said once, from inside the running loop, so the log names what is
+        # actually serving rather than what was asked for (#977).
+        if not self.config.loaded:
+            self.config.load()
+        logger.info(
+            "serving on %s with %s",
+            type(asyncio.get_running_loop()).__module__ + "." + type(asyncio.get_running_loop()).__name__,
+            self.config.http_protocol_class.__name__,
+        )
+        await super().serve(sockets=sockets)
 
     async def shutdown(self, sockets: list[socket.socket] | None = None) -> None:
         # Stock Uvicorn closes live WebSockets before sending ASGI lifespan

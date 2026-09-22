@@ -652,6 +652,13 @@ export DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy
 HOST=0.0.0.0 PORT=8000 .venv/bin/python -m app.server
 ```
 
+`app.server` runs on uvloop with the httptools parser, both pinned in
+`requirements.txt` and named rather than left to what is installed, and logs
+`serving on uvloop.Loop with BoundedHttpToolsProtocol` at startup. An HTTP request
+costs the event loop ~13 µs there against ~75 µs on stock asyncio with h11. The parser
+refuses a request head past 16 KiB with **431**, the bound h11 enforced and httptools
+alone does not (#977).
+
 Sketchy v1 supports exactly one application worker. Do not pass Uvicorn
 `--workers`, and leave `WEB_CONCURRENCY`/`UVICORN_WORKERS` unset or set to `1`;
 startup rejects other values. Live rooms, games, canvases, timers, Socket.IO

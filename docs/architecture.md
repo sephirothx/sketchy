@@ -84,7 +84,8 @@ The backend is deliberately layered so that the interesting logic is pure and
 unit-testable, and the I/O is thin.
 
 ```
-app/server.py         Uvicorn runner with a draining shutdown
+app/server.py         Uvicorn runner with a draining shutdown, on uvloop with httptools
+app/http_transport.py httptools with the 16 KiB request-head bound h11 had
 app/ws_transport.py   The WebSocket implementation and deflate window, chosen on purpose
 app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 ├── app/api/          REST routers (profiles, prompt lists, moderation, operations, …)
@@ -1785,6 +1786,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/user_stats_projection.py`](../backend/app/services/user_stats_projection.py) | Incremental, merge-scoped and full rebuild paths for bounded-cost profile statistics. |
 | [`app/state.py`](../backend/app/state.py) | Process-wide singletons shared between the REST routes and Socket.IO handlers. |
 | [`app/wire_contract.py`](../backend/app/wire_contract.py) | The socket contract as one document, so a change to it is a diff, not a guess. |
+| [`app/http_transport.py`](../backend/app/http_transport.py) | The HTTP/1.1 transport: httptools, with the request-head bound h11 had. |
 | [`app/ws_transport.py`](../backend/app/ws_transport.py) | The WebSocket transport, chosen on purpose: wsproto, with a deflate window this module sets rather than one the client happens to ask for. |
 
 ### Frontend
