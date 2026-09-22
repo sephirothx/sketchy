@@ -8,6 +8,8 @@ from app.deployment import (
     is_production,
     public_base_url,
     reconnect_spread_seconds,
+    HISTORY_ENCODE_WORKERS,
+    history_encode_workers,
     shutdown_drain_seconds,
     validate_database_configuration,
     validate_mail_configuration,
@@ -292,3 +294,19 @@ def test_the_mail_refusal_says_what_to_set_without_quoting_the_environment():
     message = str(refusal.value)
     assert "SMTP_HOST" in message
     assert "hunter2" not in message
+
+
+@pytest.mark.parametrize(
+    ("value", "expected"),
+    [(None, HISTORY_ENCODE_WORKERS), ("", HISTORY_ENCODE_WORKERS), ("4", 4), ("1", 1),
+     ("0", HISTORY_ENCODE_WORKERS), ("17", HISTORY_ENCODE_WORKERS), ("many", HISTORY_ENCODE_WORKERS)],
+)
+def test_the_history_encode_pools_take_their_size_from_the_environment(
+    monkeypatch, value, expected
+):
+    """A host that ends more games at once than the documented ceiling can
+    widen the queue in front of staging's ten-second bound (#976)."""
+    monkeypatch.delenv("HISTORY_ENCODE_WORKERS", raising=False)
+    if value is not None:
+        monkeypatch.setenv("HISTORY_ENCODE_WORKERS", value)
+    assert history_encode_workers() == expected

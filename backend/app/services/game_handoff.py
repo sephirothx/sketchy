@@ -62,6 +62,7 @@ from uuid import UUID
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.deployment import history_encode_workers
 from app.db.models import FinishedGameEnvelope as EnvelopeRow
 from app.db.models import generate_uuid
 from app.domain_values import (
@@ -468,7 +469,9 @@ def envelope_checksum(payload: bytes) -> str:
 # The envelope's own threads (#976 review). Staging runs inside the room's
 # ten-second bound and a timeout there loses the game, so the encode must not
 # wait for a thread in the default pool, which blocking SMTP can hold.
-_ENVELOPE_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="history-envelope")
+_ENVELOPE_POOL = ThreadPoolExecutor(
+    max_workers=history_encode_workers(), thread_name_prefix="history-envelope"
+)
 
 
 def _encode_with_checksum(envelope: FinishedGameEnvelope) -> tuple[bytes, str]:

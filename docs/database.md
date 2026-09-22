@@ -2132,7 +2132,7 @@ visible before it crosses it.
 What the storage reviews of #471, #545, #549 and #558 had to guess from seeded shapes is
 recorded as it is written (#895), each after its write has committed and none carrying a
 user identifier: `sketchy_drawing_raw_bytes`, `sketchy_drawing_stored_bytes`,
-`sketchy_drawing_actions` and `sketchy_drawing_encode_seconds`, labelled by the format
+`sketchy_drawing_actions` and `sketchy_drawing_encode_seconds` (the encoding thread's own CPU time since #976, not wall time, which on a worker thread also counts the turns the event loop takes), labelled by the format
 stored (`SKCD` encoded, `SKCH` verbatim); `sketchy_history_rows_per_game{table}` for
 every table a finished game writes; `sketchy_handoff_envelope_bytes`;
 `sketchy_messages_retained_total{kind,audience}` with `sketchy_message_recipients{audience}`

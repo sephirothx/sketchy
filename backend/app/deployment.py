@@ -251,6 +251,24 @@ def validate_worker_topology(environ: Mapping[str, str] | None = None) -> None:
             )
 
 
+#: Threads each of the history write's two encode pools gets (#976). Two by
+#: default: the work is pure Python sharing the GIL, so more threads buy
+#: overlap with the database rather than parallelism.
+HISTORY_ENCODE_WORKERS = 2
+
+
+def history_encode_workers() -> int:
+    """How many threads encode finished games; `HISTORY_ENCODE_WORKERS` sets it."""
+    raw = os.environ.get("HISTORY_ENCODE_WORKERS", "").strip()
+    if not raw:
+        return HISTORY_ENCODE_WORKERS
+    try:
+        value = int(raw)
+    except ValueError:
+        return HISTORY_ENCODE_WORKERS
+    return value if 1 <= value <= 16 else HISTORY_ENCODE_WORKERS
+
+
 def shutdown_drain_seconds(environ: Mapping[str, str] | None = None) -> float:
     """Parse the bounded planned-deploy drain window."""
 

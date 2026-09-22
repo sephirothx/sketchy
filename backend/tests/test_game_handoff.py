@@ -585,10 +585,14 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
 
     on_loop: list[str] = []
 
+    ran_on: dict[str, set[str]] = {}
+
     def watched(name, function):
         def call(*args, **kwargs):
-            if threading.current_thread() is threading.main_thread():
+            thread = threading.current_thread()
+            if thread is threading.main_thread():
                 on_loop.append(name)
+            ran_on.setdefault(name, set()).add(thread.name)
             return function(*args, **kwargs)
         return call
 
@@ -627,6 +631,13 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
 
     assert report.recorded == 1
     assert on_loop == []
+    # On the history write's own pools, not the default one `asyncio.to_thread`
+    # shares with blocking SMTP: a staging that waits there for a thread can
+    # spend its ten-second bound and lose the game (#976 review).
+    assert all(name.startswith("history-envelope") for name in ran_on["encode"]), ran_on
+    assert all(name.startswith("history-envelope") for name in ran_on["decode"]), ran_on
+    assert all(name.startswith("history-encode") for name in ran_on["prepare"]), ran_on
+    assert all(name.startswith("history-encode") for name in ran_on["digest"]), ran_on
     write_opens = next(
         index for index, statement in enumerate(order) if statement.startswith("SELECT game_records.id AS")
     )
@@ -702,3 +713,15 @@ async def test_a_replay_of_a_written_game_encodes_nothing(env, monkeypatch):
     monkeypatch.setattr(repository_module, "prepare_stored_drawing", lambda payload: (prepared.append(1), real(payload))[1])
     assert await history.save_game(*arguments) == first
     assert prepared == []
+
+
+def test_a_drawing_row_cannot_be_built_without_its_prepared_bytes():
+    """`prepared` is required, so no caller can quietly put the encode back on
+    the thread it is called from (#976 review)."""
+    import inspect
+
+    from app.repositories.sqlalchemy import _turn_drawing
+
+    prepared = inspect.signature(_turn_drawing).parameters["prepared"]
+    assert prepared.default is inspect.Parameter.empty
+    assert inspect.signature(_turn_drawing).parameters["sizing"].default is inspect.Parameter.empty

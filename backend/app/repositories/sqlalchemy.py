@@ -21,6 +21,7 @@ from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.services.runtime_metrics import metrics
 from app.services.telemetry import database_operation_of, telemetry
+from app.deployment import history_encode_workers
 from app.db.models import (
     GalleryShelfReview,
     AuditEvent,
@@ -332,7 +333,16 @@ class _UnpreparedDrawing:
 # The history write's own threads (#976 review), rather than the default pool
 # `asyncio.to_thread` shares with blocking SMTP and everything else: a game's
 # drawings must never wait behind a slow mail relay for a thread.
-_ENCODE_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="history-encode")
+#
+# The queue behind them is what staging's ten-second bound is spent on when
+# many games end together: one stroke-heavy envelope is ~144 ms of encode, so
+# at `HISTORY_ENCODE_WORKERS` threads the whole documented ceiling of 50 rooms
+# ending in the same instant is ~7 s of queued work at 1 thread and ~1.8 s at
+# 4 - inside the bound, but not by much, and the threads share the GIL. Raise
+# the setting on a host that ends more games at once than that.
+_ENCODE_POOL = ThreadPoolExecutor(
+    max_workers=history_encode_workers(), thread_name_prefix="history-encode"
+)
 
 
 async def _off_loop(function, *args):
@@ -374,8 +384,8 @@ def _turn_drawing(
     drawing: TurnDrawingInput,
     turn_id: UUID,
     game_id: UUID,
-    sizing: _GameSizing | None = None,
-    prepared: _PreparedDrawing | None = None,
+    sizing: _GameSizing | None,
+    prepared: _PreparedDrawing,
 ) -> TurnDrawing:
     """Build the row for one turn's drawing, stored or explained.
 
@@ -393,8 +403,6 @@ def _turn_drawing(
                 drawing.unavailable_reason or DRAWING_UNAVAILABLE_RECAP_BUDGET
             ),
         )
-    if prepared is None:
-        prepared = _prepare_drawing(drawing.payload)
     if sizing is not None:
         sizing.drawings.append(
             (
