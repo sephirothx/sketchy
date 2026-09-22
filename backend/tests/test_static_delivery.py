@@ -1,4 +1,5 @@
 import gzip
+import os
 from pathlib import Path
 
 import pytest
@@ -417,6 +418,11 @@ async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path, cod
     asset = dist / "assets" / "escape-AbCdEf12.js"
     asset.write_bytes(b"export const ok = true;\n" * 100)
     (dist / "assets" / f"escape-AbCdEf12.js{suffix}").symlink_to(outside / "secret.txt")
+    # And the same trick without a symlink: a hard link is a regular file by
+    # every test an `lstat` can make except how many names it has.
+    linked = dist / "assets" / "linked-AbCdEf12.js"
+    linked.write_bytes(b"export const linked = true;\n" * 100)
+    os.link(outside / "secret.txt", dist / "assets" / f"linked-AbCdEf12.js{suffix}")
     # And a directory that merely looks like a copy must not raise mid-response.
     (dist / "assets" / "weird-AbCdEf12.js").write_bytes(b"export const weird = 1;\n" * 100)
     (dist / "assets" / f"weird-AbCdEf12.js{suffix}").mkdir()
@@ -427,9 +433,13 @@ async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path, cod
     escaped = await request(app, "/assets/escape-AbCdEf12.js", headers=accept)
     weird = await request(app, "/assets/weird-AbCdEf12.js", headers=accept)
 
+    hardlinked = await request(app, "/assets/linked-AbCdEf12.js", headers=accept)
+
     assert escaped[0] == 200 and escaped[2] == asset.read_bytes()
     assert "content-encoding" not in escaped[1]
     assert weird[0] == 200 and "content-encoding" not in weird[1]
+    assert hardlinked[0] == 200 and hardlinked[2] == linked.read_bytes()
+    assert "content-encoding" not in hardlinked[1]
 
 
 async def test_a_304_answers_for_the_representation_it_would_have_sent(built_app):

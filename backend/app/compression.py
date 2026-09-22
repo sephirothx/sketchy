@@ -74,11 +74,12 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
     and modification time give it its own validators, so a conditional request
     is answered against the bytes it would actually receive.
 
-    A sibling is only served when `lstat` says it is a **regular file**, which
-    is the check the suffix trick needs (#978 review): a `<file>.br` symlink
-    planted in the build output would otherwise serve a file from outside the
-    tree - bytes `StaticFiles` refuses under their own name - and a directory
-    called `<file>.br` would raise after the response had started. A symlinked
+    A sibling is only served when `lstat` says it is a **regular file with one
+    name**, which is the check the suffix trick needs (#978 review): a
+    `<file>.br` symlink or hard link planted in the build output would
+    otherwise serve a file from outside the tree - bytes `StaticFiles` refuses
+    under their own name - and a directory called `<file>.br` would raise
+    after the response had started. A symlinked
     parent inside the build needs no check here: `StaticFiles` refuses the
     original under that path first, so there is no response to attach a copy
     to. `directory` is accepted for callers that want to say where the build
@@ -98,7 +99,12 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
             sibling_stat = os.lstat(sibling)
         except OSError:
             continue
-        if not stat.S_ISREG(sibling_stat.st_mode):
+        if not stat.S_ISREG(sibling_stat.st_mode) or sibling_stat.st_nlink != 1:
+            # A regular file that nothing else names. The build writes each
+            # copy fresh, so a second name on it is a hard link planted in the
+            # output - the symlink trick again, and one `lstat` cannot
+            # otherwise tell from the copy it claims to be (#978 third
+            # review).
             continue
         variant = FileResponse(
             sibling,
