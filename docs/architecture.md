@@ -287,9 +287,11 @@ refusing it (§7, *Authorization*), and keep their 200: the URL exists, the acco
 Three frontend conventions worth knowing:
 
 1. **`autoConnect` is off** ([`frontend/src/lib/socket.ts:13`](../frontend/src/lib/socket.ts)).
-   The handshake reads the session cookie exactly once, and on a first visit that
-   cookie does not exist until `GET /api/auth/me` has provisioned the account.
-   `App.tsx` connects only once identity has settled.
+   The handshake reads the session cookie exactly once, and `GET /api/auth/me` may
+   rotate it, so `App.tsx` connects only once identity has settled. That read is
+   started by `index.html` itself, before any bundle has downloaded, and adopted by
+   the first `apiRequest` for it ([`lib/api.ts`](../frontend/src/lib/api.ts), #983);
+   a registered account's settings come back in the same answer.
 2. **`emitWithAck` never hands a packet to a disconnected socket**
    ([`frontend/src/lib/socket.ts:139`](../frontend/src/lib/socket.ts)). Socket.IO would
    queue it and deliver it on reconnect, so a request reported as failed could arrive
