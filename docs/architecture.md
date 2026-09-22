@@ -62,6 +62,11 @@ Socket.IO owns `/socket.io`, FastAPI owns everything else, and when
 makes single-port self-hosting and same-origin cookie sessions work without CORS
 credentials or CSRF tokens.
 
+The mount (`SPAStaticFiles`) serves the build's Brotli or gzip copy of a file when the
+browser accepts one — `npm run build` writes them (`frontend/scripts/precompress.mjs`) —
+so the bundle is never compressed on the event loop; `DynamicGZipMiddleware` gzips the
+rest at level 4, never a response whose type is already compressed (#978).
+
 ### The single-worker rule
 
 **v1 supports exactly one application worker.** Live rooms, games, canvases, timers,
@@ -1725,6 +1730,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/identifiers.py`](../backend/app/identifiers.py) | Central generation policy for durable entity identifiers. |
 | [`app/live_drawing.py`](../backend/app/live_drawing.py) | Compact, versioned binary frames for live drawing Socket.IO events. |
 | [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody - as JSON in production, stamped with their request or command, secrets redacted. |
+| [`app/content_encoding.py`](../backend/app/content_encoding.py) | Which content codings a request accepts, read the way RFC 9110 §12.5.3 says. |
 | [`app/correlation.py`](../backend/app/correlation.py) | The request id, socket id and command a log line belongs to, carried as task-local context. |
 | [`app/probe.py`](../backend/app/probe.py) | The synthetic game - two guests, a room, one stroke - over Socket.IO long-polling with the standard library; the `sketchy_probe_*` textfile series. |
 | [`app/main.py`](../backend/app/main.py) | ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app. |

@@ -2309,9 +2309,10 @@ When `frontend/dist` exists, `app/main.py` mounts it as static files on the same
 so the whole game (UI + API + WebSocket) is served from a single port. `npm run build`
 ends by writing a Brotli and a gzip copy beside every compressible file in `dist/`
 (`frontend/scripts/precompress.mjs`), and the server hands over the copy the browser
-accepts rather than compressing the bundle per request, which was ~22 ms of event-loop
-time per cold page load at gzip level 9 (#978). Everything else it gzips at level 4, never an
-already-compressed format (fonts, images). It serves Vite's fingerprinted `/assets/` files with a
+accepts rather than compressing the bundle per request: measured on the current bundle,
+a cold page load cost the event loop 48.5 ms at gzip level 9 and costs 1.2 ms now, and sends
+428 KB instead of 577 (#978). Everything else it gzips at level 4, and never a response whose
+type is already compressed (images, fonts, audio, video, archives). It serves Vite's fingerprinted `/assets/` files with a
 one-year `immutable` cache policy, and serves `index.html` (including client-route fallbacks)
 with `no-cache` so browsers discover new deployments promptly. A URL the client has no page
 for gets that same shell — it is what draws the not-found page — but with a **404** status,

@@ -8,7 +8,10 @@ import pytest
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 
-from app.main import DYNAMIC_GZIP_LEVEL, configure_frontend
+from fastapi.responses import Response
+
+from app.content_encoding import accepts_encoding
+from app.main import DYNAMIC_GZIP_LEVEL, DynamicGZipMiddleware, configure_frontend
 
 BUNDLE = b"console.log('sketchy');\n" * 400  # ~10 KB, well past the middleware's floor
 
@@ -34,6 +37,11 @@ async def client(dist):
     @app.get("/api/big")
     async def big():
         return {"rows": ["x" * 40] * 200}
+
+    @app.get("/api/avatars/{key}")
+    async def avatar(key: str):
+        # Served under a bare key, as the real avatar route is: no extension.
+        return Response(bytes(range(256)) * 20, media_type="image/png")
 
     configure_frontend(app, dist)
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
@@ -82,3 +90,42 @@ async def test_dynamic_responses_are_gzipped_at_the_cheaper_level(client):
     assert response.headers["content-encoding"] == "gzip"
     assert response.json()["rows"][0] == "x" * 40
     assert DYNAMIC_GZIP_LEVEL == 4
+    assert DynamicGZipMiddleware(app=None).compresslevel == DYNAMIC_GZIP_LEVEL
+
+
+async def test_an_image_under_a_bare_key_is_never_gzipped(client):
+    """By type, not by extension: an avatar URL has none."""
+    response = await client.get("/api/avatars/0123abcd", headers={"Accept-Encoding": "gzip"})
+    assert response.status_code == 200 and "content-encoding" not in response.headers
+
+
+async def test_an_encoding_refused_with_q_zero_is_not_served(client):
+    br_refused = await client.get("/assets/index-abc123.js", headers={"Accept-Encoding": "br;q=0, gzip"})
+    assert br_refused.headers["content-encoding"] == "gzip"
+    none = await client.get("/assets/index-abc123.js", headers={"Accept-Encoding": "gzip;q=0, identity"})
+    assert "content-encoding" not in none.headers and none.content == BUNDLE
+    dynamic = await client.get("/api/big", headers={"Accept-Encoding": "gzip;q=0"})
+    assert "content-encoding" not in dynamic.headers
+
+
+async def test_a_copy_has_its_own_validator_and_every_304_says_vary(client):
+    original = await client.get("/assets/index-abc123.js", headers={"Accept-Encoding": "identity"})
+    copy = await client.get("/assets/index-abc123.js", headers={"Accept-Encoding": "gzip"})
+    assert copy.headers["etag"] != original.headers["etag"]
+    # A 304 StaticFiles answers itself, from the original's modification time.
+    again = await client.get(
+        "/assets/index-abc123.js",
+        headers={"Accept-Encoding": "br", "If-Modified-Since": original.headers["last-modified"]},
+    )
+    assert again.status_code == 304 and again.headers["vary"] == "Accept-Encoding"
+
+
+def test_accept_encoding_is_read_with_its_weights():
+    assert accepts_encoding("gzip, deflate, br", "br")
+    assert not accepts_encoding("br;q=0, gzip", "br")
+    assert accepts_encoding("br;q=0, gzip", "gzip")
+    assert not accepts_encoding("*;q=0", "gzip")
+    assert accepts_encoding("*", "gzip") and not accepts_encoding("*, gzip;q=0", "gzip")
+    assert accepts_encoding("GZIP;Q=0.5", "gzip")
+    assert not accepts_encoding(None, "gzip") and not accepts_encoding("", "gzip")
+    assert not accepts_encoding("gzip;q=nonsense", "gzip")

@@ -19,9 +19,10 @@ from starlette.staticfiles import NotModifiedResponse
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse
-from starlette.middleware.gzip import GZipMiddleware
+from starlette.middleware.gzip import GZipMiddleware, GZipResponder
 
 from app.api.errors import install_refusal_handler
+from app.content_encoding import accepts_encoding
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
     SHELF_TTL_SECONDS,
@@ -171,12 +172,17 @@ class SPAStaticFiles(StaticFiles):
         (~22 ms per cold page load). The copy answers with the original's
         type, its own validator, and a 304 when that validator is current.
         """
+        if response.status_code == 304:
+            # Answered by StaticFiles itself, before any copy was chosen; a 304
+            # repeats the `Vary` its 200 would have carried (RFC 9110 §15.4.5).
+            response.headers["Vary"] = "Accept-Encoding"
+            return response
         if not isinstance(response, FileResponse) or response.status_code != 200:
             return response
         request_headers = Headers(scope=scope)
-        accepted = request_headers.get("accept-encoding", "").lower()
+        accepted = request_headers.get("accept-encoding")
         for encoding, suffix in (("br", ".br"), ("gzip", ".gz")):
-            if encoding not in accepted:
+            if not accepts_encoding(accepted, encoding):
                 continue
             sibling = Path(str(response.path) + suffix)
             try:
@@ -197,28 +203,49 @@ class SPAStaticFiles(StaticFiles):
         return response
 
 
-#: What the response middleware never compresses: already-compressed formats,
-#: where a second pass costs CPU for nothing (a woff2 came out 23 bytes larger).
-INCOMPRESSIBLE_SUFFIXES = frozenset(
-    {".woff", ".woff2", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico",
-     ".mp3", ".ogg", ".wav", ".br", ".gz", ".zip"}
+#: Response types the middleware never compresses: they are compressed
+#: already, and a second pass costs loop time for nothing (a woff2 came out 23
+#: bytes larger). By type, not by the URL's extension: an avatar is served
+#: under a bare key.
+INCOMPRESSIBLE_CONTENT_TYPES = (
+    "image/", "font/", "audio/", "video/",
+    "application/zip", "application/gzip", "application/x-brotli",
 )
 #: For what is compressed on the fly - API JSON, mostly - a level that costs a
 #: quarter of Starlette's default 9 for a few percent more bytes (#978).
 DYNAMIC_GZIP_LEVEL = 4
 
 
+class _TypedGZipResponder(GZipResponder):
+    """Starlette's responder, told which response types to leave alone."""
+
+    async def send_with_compression(self, message) -> None:
+        if message["type"] == "http.response.start":
+            await super().send_with_compression(message)
+            content_type = Headers(raw=message["headers"]).get("content-type", "")
+            if content_type.startswith(INCOMPRESSIBLE_CONTENT_TYPES):
+                self.content_type_is_excluded = True
+            return
+        await super().send_with_compression(message)
+
+
 class DynamicGZipMiddleware(GZipMiddleware):
-    """Gzip at `DYNAMIC_GZIP_LEVEL`, and never an already-compressed file."""
+    """Gzip at `DYNAMIC_GZIP_LEVEL`, only where the client accepts it, and
+    never a response that is compressed already."""
 
     def __init__(self, app, minimum_size: int = 500) -> None:
         super().__init__(app, minimum_size=minimum_size, compresslevel=DYNAMIC_GZIP_LEVEL)
 
     async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] == "http" and Path(scope["path"]).suffix.lower() in INCOMPRESSIBLE_SUFFIXES:
-            await self.app(scope, receive, send)
+        if scope["type"] == "http" and accepts_encoding(
+            Headers(scope=scope).get("accept-encoding"), "gzip"
+        ):
+            responder = _TypedGZipResponder(
+                self.app, self.minimum_size, compresslevel=self.compresslevel
+            )
+            await responder(scope, receive, send)
             return
-        await super().__call__(scope, receive, send)
+        await self.app(scope, receive, send)
 
 
 def configure_frontend(app: FastAPI, directory: Path) -> None:
