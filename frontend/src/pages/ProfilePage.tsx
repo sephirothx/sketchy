@@ -47,6 +47,7 @@ import { FriendMarkIcon } from "../components/icons";
 import { ui } from "../content/ui/index.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
+import "../styles/lazy/profile.css";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {

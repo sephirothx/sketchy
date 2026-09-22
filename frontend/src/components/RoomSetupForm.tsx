@@ -48,6 +48,7 @@ import type {
   ScoringMode,
 } from "../types";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/toolbar.css";
 
 /** Everything both surfaces set. Custom prompts travel beside it, because they
     are a reducer rather than a value. */

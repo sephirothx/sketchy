@@ -18,6 +18,7 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/gallery.css";
 
 const SORTS: readonly GallerySort[] = ["hot", "new", "top"];
 const WINDOWS: readonly GalleryWindow[] = ["all", "month", "week"];

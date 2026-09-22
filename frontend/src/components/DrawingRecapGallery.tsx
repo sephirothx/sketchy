@@ -9,6 +9,8 @@ import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { DrawingRecapMetadata } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
+import "../styles/lazy/drawing-recap.css";
+import "../styles/lazy/reactions.css";
 
 interface DrawingRecapGalleryProps {
   entries: DrawingRecapMetadata[];

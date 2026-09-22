@@ -6,6 +6,7 @@ import { decodeCanvasHistory } from "../lib/canvasHistory";
 import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { fetchGalleryDrawing, galleryAge, type GalleryEntry } from "../lib/gallery";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/gallery.css";
 
 /**
  * The pieces the Gallery's feed and rail share (#524): a card that replays

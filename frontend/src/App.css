@@ -1,5 +1,11 @@
 @layer reset, theme, layout, components, utilities;
 
+/* What every page needs. A surface only some pages draw is imported by the
+   components that draw it, through styles/lazy/, so its rules arrive with
+   that page's chunk rather than in the entry stylesheet (#475) - and still in
+   the components layer, which is what the wrapper is for: a stylesheet
+   imported from a module is unlayered, and unlayered rules beat every layer. */
+
 @import "./styles/reset.css" layer(reset);
 @import "./styles/theme.css" layer(theme);
 @import "./styles/primitives.css" layer(components);
@@ -7,24 +13,17 @@
 @import "./styles/layout-primitives.css" layer(components);
 @import "./styles/create-room-page.css" layer(components);
 @import "./styles/lobby-page.css" layer(components);
-@import "./styles/community-lists.css" layer(components);
-@import "./styles/gallery.css" layer(components);
 @import "./styles/not-found.css" layer(components);
 @import "./styles/crash.css" layer(components);
 @import "./styles/game-room.css" layer(components);
-@import "./styles/toolbar.css" layer(components);
 @import "./styles/chat.css" layer(components);
 @import "./styles/overlays.css" layer(components);
-@import "./styles/drawing-recap.css" layer(components);
-@import "./styles/game-results.css" layer(components);
-@import "./styles/reactions.css" layer(components);
-@import "./styles/player-list.css" layer(components);
+@import "./styles/game-results-shared.css" layer(components);
+@import "./styles/player-list-shared.css" layer(components);
 @import "./styles/dialogs.css" layer(components);
 @import "./styles/canvas.css" layer(components);
-@import "./styles/settings.css" layer(components);
-@import "./styles/friends.css" layer(components);
+@import "./styles/settings-shared.css" layer(components);
 @import "./styles/account.css" layer(components);
-@import "./styles/operator.css" layer(components);
-@import "./styles/profile.css" layer(components);
-@import "./styles/prompt-lists.css" layer(components);
+@import "./styles/operator-shared.css" layer(components);
+@import "./styles/profile-shared.css" layer(components);
 @import "./styles/a11y.css" layer(utilities);

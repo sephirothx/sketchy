@@ -23,6 +23,7 @@ import type {
 } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
+import "../styles/lazy/toolbar.css";
 
 interface WaitingRoomPanelProps {
   name: string;

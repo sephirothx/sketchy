@@ -1,0 +1,23 @@
+/* The rules from settings.css that the entry chunk needs, kept at its place in the
+   cascade (App.css) while settings.css itself is fetched with the pages that use
+   the rest of it (#475). */
+.lobby-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  margin-bottom: 26px;
+}
+
+.header-settings-button:hover {
+  border-color: var(--line-strong);
+  color: var(--ink);
+}
+
+.header-settings-button svg {
+  transition: transform 0.2s ease;
+}
+
+.header-settings-button:hover svg {
+  transform: rotate(30deg);
+}

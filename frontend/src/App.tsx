@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { Suspense, useEffect } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import {
   isFriendsPath,
@@ -12,21 +12,24 @@ import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
 import { useServerNotices } from "./hooks/useServerNotices";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
-import { CreateRoomPage } from "./pages/CreateRoomPage";
-import { GameRoomPage } from "./pages/GameRoomPage";
-import { PromptStatsPage } from "./pages/PromptStatsPage";
-import { ProfilePage } from "./pages/ProfilePage";
-import { CommunityCataloguePage } from "./pages/CommunityCataloguePage";
-import { GalleryDrawingPage } from "./pages/GalleryDrawingPage";
-import { GalleryPage } from "./pages/GalleryPage";
-import { MyPromptListsPage } from "./pages/MyPromptListsPage";
-import { AccountRecoveryPage } from "./pages/AccountRecoveryPage";
-import { AdminOperationsPage } from "./pages/AdminOperationsPage";
-import { BugReportsPage } from "./pages/BugReportsPage";
-import { ModerationPage } from "./pages/ModerationPage";
-import { NotFoundPage } from "./pages/NotFoundPage";
-import { SettingsOverlay } from "./components/SettingsOverlay";
-import { FriendsOverlay } from "./components/FriendsOverlay";
+import {
+  AccountRecoveryPage,
+  AdminOperationsPage,
+  BugReportsPage,
+  CommunityCataloguePage,
+  CreateRoomPage,
+  FriendsOverlay,
+  GalleryDrawingPage,
+  GalleryPage,
+  GameRoomPage,
+  ModerationPage,
+  MyPromptListsPage,
+  NotFoundPage,
+  ProfilePage,
+  PromptStatsPage,
+  RulesPage,
+  SettingsOverlay,
+} from "./routeModules";
 import { ConfettiCanvas } from "./components/ConfettiCanvas";
 import { ToastProvider } from "./components/ToastProvider";
 import { AppBanners } from "./components/AppBanners";
@@ -35,7 +38,6 @@ import { FriendInviteNotice } from "./components/FriendInviteNotice";
 import { SuspensionNotice } from "./components/SuspensionNotice";
 import { RoleChangeNotice } from "./components/RoleChangeNotice";
 import { ReportsReviewedNotice } from "./components/ReportsReviewedNotice";
-import { RulesPage } from "./pages/RulesPage";
 import { WarningNotice } from "./components/WarningNotice";
 import { CrashProbe } from "./lib/crashTestSeam";
 import { useAuthStore } from "./store/authStore";
@@ -78,8 +80,13 @@ function AppRoutes() {
     ? (overlayBackgroundOf(location.state) ?? "/")
     : location;
 
+  // One boundary for the pages and one for the overlays, both drawing nothing
+  // while a chunk arrives: navigations are transitions, so a page already on
+  // screen stays there until the next one is ready, and only a first visit to
+  // a page's address - or an overlay opened over it - waits on a blank.
   return (
     <>
+      <Suspense fallback={null}>
       <Routes location={behind}>
         <Route path="/" element={<LobbyBrowserPage />} />
         <Route path="/create" element={<CreateRoomPage />} />
@@ -113,8 +120,11 @@ function AppRoutes() {
             exactly the URLs that land here. */}
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
-      {isSettingsPath(location.pathname) && <SettingsOverlay />}
-      {isFriendsPath(location.pathname) && <FriendsOverlay />}
+      </Suspense>
+      <Suspense fallback={null}>
+        {isSettingsPath(location.pathname) && <SettingsOverlay />}
+        {isFriendsPath(location.pathname) && <FriendsOverlay />}
+      </Suspense>
     </>
   );
 }

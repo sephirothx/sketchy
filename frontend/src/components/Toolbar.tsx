@@ -35,6 +35,7 @@ import {
 } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import { BRUSH_SIZES, DEFAULT_ERASER_SIZE, isBrushSize, stopPosition } from "../lib/brushSizes";
+import "../styles/lazy/toolbar.css";
 
 
 type MobilePanel = "tool" | "color" | "size" | null;

@@ -12,6 +12,7 @@ import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { chatLineText } from "../lib/announcements.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/toolbar.css";
 
 interface RoomChatPanelProps {
   messages: ChatMessage[];
