@@ -9,6 +9,7 @@ from uuid import UUID
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.db import read_session
 from app.db.models import UserBlock
 
 
@@ -82,7 +83,7 @@ class BlockService:
         return blocker_ids
 
     async def _read_blockers(self, db_user_id: UUID) -> frozenset[str]:
-        async with self._session_factory() as session:
+        async with read_session(self._session_factory) as session:
             return frozenset(
                 str(value)
                 for value in (

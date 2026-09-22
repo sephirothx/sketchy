@@ -38,7 +38,7 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 | SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection, test fixtures included | [`db/__init__.py:41`](../backend/app/db/__init__.py), [`tests/dbfixtures.py`](../backend/tests/dbfixtures.py) |
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
 | PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
-| Pool (PostgreSQL) | 5 persistent + 5 overflow, pre-ping, 10 s timeout, 30 min recycle; all four tunable | [`db/__init__.py:25`](../backend/app/db/__init__.py) |
+| Pool (PostgreSQL) | 5 persistent + 5 overflow, 10 s timeout, 30 min recycle; a connection is checked for a closed socket on every checkout and pinged only after 30 s unused (#973: `pool_pre_ping`'s ping was three round trips before every session); single-statement hot reads run under `AUTOCOMMIT` (`read_session`), one round trip instead of three; all five tunable | [`db/__init__.py:43`](../backend/app/db/__init__.py) |
 | Roles (PostgreSQL) | The web process connects as `sketchy_app`, which may read and write rows and only append to `audit_events` and `score_events`; the schema belongs to `sketchy_owner`, used only by the migration command, which grants the application its privileges. Production refuses an owner connection (#896, R-PLAT-22; §13 *Roles*) | [`db/roles.py`](../backend/app/db/roles.py) |
 | Session budgets (PostgreSQL) | Every connection carries its role's `application_name` and server-enforced `statement_timeout` / `lock_timeout` / `idle_in_transaction_session_timeout`, sent by asyncpg at connect so a recycled or re-established connection carries them too: **web** 30 s / 5 s / 60 s, **migration** 600 s / 5 s / 60 s (the lock budget covers the deploy advisory lock), **maintenance** 600 s / 5 s / 120 s for every operator command. Validated from the environment at startup beside the pool settings; SQLite is untouched. They bound one statement, one lock wait and one idle transaction — not a whole sweep, which has budgets of its own (§10) (#555) | [`db/__init__.py`](../backend/app/db/__init__.py) (`POSTGRES_ROLE_BUDGETS`) |
 
@@ -2463,7 +2463,7 @@ connects as `sketchy-migration` (600 s / 5 s / 60 s) and every operator command 
 as `sketchy-maintenance` (600 s / 5 s / 120 s). A statement that hits its budget fails
 with `canceling statement due to statement timeout` (or `lock timeout`) and the
 connection stays usable; an idle transaction that hits its budget has its connection
-terminated, and the pool's pre-ping replaces it on the next checkout. Override with the
+terminated, and the next checkout finds its socket closed and replaces it (#973). Override with the
 `DB_*_TIMEOUT_SECONDS` variables (README → Database & Configuration); raising one is
 not a fix for unbounded work, which the sweeps' own budgets bound.
 

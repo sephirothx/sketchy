@@ -1,13 +1,14 @@
 """Database engine, session management, and lifecycle initialization."""
 from __future__ import annotations
 
-from collections.abc import Callable
+from collections.abc import AsyncIterator, Callable
+from contextlib import asynccontextmanager
 from dataclasses import dataclass
 import logging
 import os
 import sys
 from pathlib import Path
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import Any
 import warnings
 import weakref
@@ -43,6 +44,17 @@ POSTGRES_POOL_SIZE = 5
 POSTGRES_MAX_OVERFLOW = 5
 POSTGRES_POOL_TIMEOUT_SECONDS = 10
 POSTGRES_POOL_RECYCLE_SECONDS = 1_800
+# A pooled connection returned this long ago or more is pinged before it is
+# handed out again (#973); one used more recently is not. SQLAlchemy's
+# `pool_pre_ping` pinged on *every* checkout, and on asyncpg its ping is
+# BEGIN, a statement and ROLLBACK - three round trips before each session's
+# own work, when most sessions run one statement. A backend the server ended
+# (a restart, `pg_terminate_backend`, an idle-in-transaction timeout) closes
+# its socket, which asyncpg has already seen by the next checkout, so that
+# case costs a flag read rather than a ping; what only a ping finds is a
+# connection whose peer vanished without a word - a dropped NAT entry, a
+# failed-over host - and that takes a quiet spell to happen.
+POSTGRES_POOL_PING_IDLE_SECONDS = 30
 POSTGRES_MIGRATION_LOCK_ID = int.from_bytes(b"SKETCHY", "big")
 
 # Server-enforced budgets for a PostgreSQL connection, by the role the
@@ -199,7 +211,6 @@ def get_engine_pool_options(url: str) -> dict[str, Any]:
         return {}
     return {
         "poolclass": TimedQueuePool,
-        "pool_pre_ping": True,
         "pool_size": _integer_setting(
             "DB_POOL_SIZE", POSTGRES_POOL_SIZE, minimum=1
         ),
@@ -213,6 +224,75 @@ def get_engine_pool_options(url: str) -> dict[str, Any]:
             "DB_POOL_RECYCLE_SECONDS", POSTGRES_POOL_RECYCLE_SECONDS, minimum=1
         ),
     }
+
+
+def pool_ping_idle_seconds() -> int:
+    """How long a pooled connection may sit unused before it is pinged."""
+    return _integer_setting(
+        "DB_POOL_PING_IDLE_SECONDS", POSTGRES_POOL_PING_IDLE_SECONDS, minimum=0
+    )
+
+
+_RETURNED_AT = "sketchy_returned_at"
+
+#: Execution options for a read that is one statement (#973).
+AUTOCOMMIT = {"isolation_level": "AUTOCOMMIT"}
+
+
+@asynccontextmanager
+async def read_session(
+    session_factory: async_sessionmaker[AsyncSession],
+) -> AsyncIterator[AsyncSession]:
+    """A session for a read that is a single statement, run outside a transaction.
+
+    On PostgreSQL a session's first statement opens a transaction and closing
+    the session ends it: `BEGIN` and `ROLLBACK` around a lone `SELECT` are two
+    of its three round trips. One statement is already its own snapshot, so
+    under `AUTOCOMMIT` it is one round trip. SQLite is left alone: its
+    transaction is a call into the same process, and toggling the setting
+    there costs more than it saves.
+
+    Only for one statement. Two statements under this see two snapshots, and
+    a write under it commits on its own.
+    """
+    async with session_factory() as session:
+        if session.bind is not None and session.bind.dialect.name == "postgresql":
+            await session.connection(execution_options=AUTOCOMMIT)
+        yield session
+
+
+def install_idle_ping(engine: AsyncEngine, *, idle_seconds: float, clock=monotonic) -> None:
+    """Check a connection on checkout the cheap way, and ping only a quiet one.
+
+    Replaces `pool_pre_ping` (#973). Every checkout asks the driver whether the
+    connection is already closed, which is free; a connection unused for
+    `idle_seconds` or more is also pinged. Either finding raises
+    `DisconnectionError`, on which the pool discards the connection and hands
+    out another - the same recovery `pool_pre_ping` used, without its three
+    round trips on every busy checkout.
+    """
+    dialect = engine.sync_engine.dialect
+
+    def stamp(_dbapi_connection, record) -> None:
+        record.info[_RETURNED_AT] = clock()
+
+    def check(dbapi_connection, record, _proxy) -> None:
+        driver = getattr(dbapi_connection, "driver_connection", None)
+        is_closed = getattr(driver, "is_closed", None)
+        if is_closed is not None and is_closed():
+            raise sa_exc.DisconnectionError("connection closed while pooled")
+        returned_at = record.info.get(_RETURNED_AT)
+        if returned_at is None or clock() - returned_at < idle_seconds:
+            return
+        try:
+            dialect.do_ping(dbapi_connection)
+        except Exception as error:
+            raise sa_exc.DisconnectionError("pooled connection failed its ping") from error
+
+    # A fresh connection counts as just returned: it was opened a moment ago.
+    event.listen(engine.sync_engine, "connect", stamp)
+    event.listen(engine.sync_engine, "checkin", stamp)
+    event.listen(engine.sync_engine, "checkout", check)
 
 
 def pool_gauges(engine: AsyncEngine, *, max_overflow: int | None = None) -> PoolGauges | None:
@@ -365,6 +445,8 @@ def create_db_engine(url: str | None = None, *, role: str = "web") -> AsyncEngin
     )
     if resolved_url.startswith("sqlite"):
         event.listen(engine.sync_engine, "connect", configure_sqlite_connection)
+    if resolved_url.startswith("postgresql"):
+        install_idle_ping(engine, idle_seconds=pool_ping_idle_seconds())
     instrument_engine(engine)
     return engine
 
