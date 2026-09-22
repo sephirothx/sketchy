@@ -839,3 +839,70 @@ async def test_a_line_reported_the_moment_it_was_said_is_in_the_evidence():
         await ctx.timers.close()
     finally:
         await engine.dispose()
+
+
+async def test_a_report_holds_no_connection_while_it_waits_for_the_queue(tmp_path, caplog):
+    """The flush waits for the retention writer to get a connection, so a
+    report that waits for it *while holding one* deadlocks against its own
+    evidence - and the lines the report is about are exactly what goes
+    missing (#972 fourth review). It held the erasure barrier's lock across
+    that wait, too.
+
+    On a pool of one, which is what the production pool becomes under enough
+    concurrent reports; the suite's usual fixture is a `StaticPool`, where
+    writer and report share one connection and the deadlock cannot appear.
+    """
+    import logging
+    from uuid import uuid4
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import AsyncAdaptedQueuePool
+
+    from app.db.models import Base, User
+
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'one-connection.db'}",
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout=5,
+    )
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(room, "Reporter", user_id=str(reporter_id), is_anonymous=False)
+    target = room_manager.add_player(room, "Target", user_id=str(target_id), is_anonymous=False)
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        async with factory() as session:
+            async with session.begin():
+                session.add_all([
+                    User(id=account, username=name, password_hash="hash", display_name=name, state="registered")
+                    for account, name in ((reporter_id, "Reporter"), (target_id, "Target"))
+                ])
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager, session_factory=factory)
+        sessions = {
+            "reporter-sid": {"room_id": room.id, "player_id": reporter.id},
+            "target-sid": {"room_id": room.id, "player_id": target.id},
+        }
+        sio.get_session = AsyncMock(side_effect=lambda sid, namespace=None: sessions[sid])
+        sio.emit = AsyncMock()
+
+        await sio.handlers["/"]["send_chat"]("target-sid", {"text": "something worth reporting"})
+        with caplog.at_level(logging.WARNING):
+            result = await sio.handlers["/"]["report_player"](
+                "reporter-sid",
+                {"targetPlayerId": target.id, "reason": "harassment", "details": "Just now."},
+            )
+
+        assert result["ok"] is True
+        assert result["evidenceCount"] == 1, "the cited line was written before the read"
+        assert "not flushed" not in caplog.text
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()

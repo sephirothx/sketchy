@@ -683,6 +683,106 @@ async def test_a_flush_that_lands_before_the_linger_still_cuts_it():
         await engine.dispose()
 
 
+async def test_a_flush_lands_on_a_writer_already_inside_its_linger():
+    """The other half of the cut. Once the writer is suspended in the linger
+    it has already read `_cut`, so only the event reaches it: deleting
+    `_wake.set()` from `flush` left every test green (#972 fourth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=30)
+        await _say(service, room, player, "cited line")
+        # Long enough for the writer to take the row and suspend itself inside
+        # `wait_for(self._wake.wait())`, which is the case `_cut` cannot cut.
+        for _ in range(50):
+            await asyncio.sleep(0.005)
+            if not service._wake.is_set() and service._queue.qsize() == 0:
+                break
+        started = time.monotonic()
+        await asyncio.wait_for(service.flush(), timeout=5)
+        assert time.monotonic() - started < 1
+        async with factory() as session:
+            assert await session.scalar(select(RoomMessage.text)) == "cited line"
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_cancelled_writer_settles_the_batch_it_was_holding():
+    """Counted where it happens, not repaired later: `_ensure_worker`'s
+    reconciliation rescued the observable behaviour, so the settle on the way
+    out was dead to every test (#972 fourth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=30)
+        await _say(service, room, player, "lost to the cancellation")
+        await asyncio.sleep(0)
+        service._worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await service._worker
+
+        assert service._written == service._enqueued == 1
+        assert service._queue._unfinished_tasks == 0, "join would wait for ever"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_flush_that_gave_up_stops_holding_the_linger_open():
+    """The cut is process-wide: left standing by a flush that timed out on a
+    stalled database, it would go on cutting every room's linger short - the
+    batching this exists for - until the writer caught up (#972 fourth
+    review)."""
+    factory, engine = await create_test_db()
+    monkey = MessageRetentionService(factory, linger_seconds=30)
+    try:
+        room, player = await _talking_room(factory)
+        held = asyncio.Event()
+
+        async def never(_batch):
+            await held.wait()
+
+        monkey._write = never
+        await _say(monkey, room, player, "unwritable")
+        with patch("app.services.message_retention.EVIDENCE_FLUSH_SECONDS", 0.05):
+            await asyncio.wait_for(monkey.flush(), timeout=5)
+
+        assert monkey._cut == monkey._written, "the cut is not left standing"
+        held.set()
+        await asyncio.wait_for(monkey.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_line_said_during_shutdown_leaves_no_writer_behind():
+    """`aclose` used to let go of the writer before draining, so a line
+    recorded while it drained started a second one - which nothing cancelled,
+    and which the lost-row reconciliation, written for a single writer, could
+    not account for (#972 fourth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        await _say(service, room, player, "before the shutdown")
+        worker = service._worker
+
+        closing = asyncio.create_task(service.aclose())
+        await asyncio.sleep(0)
+        await _say(service, room, player, "said during the shutdown")
+        await asyncio.wait_for(closing, timeout=5)
+
+        assert service._worker is None
+        assert worker.done(), "the writer aclose held is the one it stopped"
+        writers = [
+            task
+            for task in asyncio.all_tasks()
+            if not task.done() and "_write_queued" in repr(task.get_coro())
+        ]
+        assert writers == [], "no second writer outlives the shutdown"
+    finally:
+        await engine.dispose()
+
+
 async def test_a_flush_after_a_writer_was_lost_does_not_wait_out_its_bound(caplog):
     """A writer cancelled while lingering takes its batch with it. Unaccounted,
     those rows leave `flush` waiting its whole bound - and `drain` waiting for

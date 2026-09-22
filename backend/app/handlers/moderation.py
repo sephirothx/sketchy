@@ -181,6 +181,12 @@ async def report_player(ctx: HandlerContext, sid, data):
         drawing_from_live_room(room, target.id) if payload.include_drawing else None
     )
 
+    # Two transactions with the flush between them (#972 fourth review). The
+    # first answers everything that can refuse the report, cheaply; then the
+    # connection goes back to the pool while the retention writer is waited
+    # for, because waiting for that writer to get a connection *while holding
+    # one* is how a handful of concurrent reports starve it - and the lines
+    # the report is about are what goes missing. The second writes.
     async with ctx.session_factory() as session:
         async with session.begin():
             # The erasure barrier (app.auth.erasure): the seat was
@@ -224,15 +230,23 @@ async def report_player(ctx: HandlerContext, sid, data):
                         "ok": False, "errorCode": ErrorCode.CANNOT_REPORT,
                         "error": "That player has no picture to report.",
                     }
-            # The lines the report cites may still be waiting in the
-            # retention queue's linger (#972); written first, so the read
-            # below finds them. Here rather than before the transaction: a
-            # report that is refused - an erased account, a duplicate, a
-            # picture that is not there - answers without waiting for the
-            # queue at all (#972 third review). It returns at once unless
-            # lines it needs really are unwritten.
-            if ctx.message_retention is not None:
-                await ctx.message_retention.flush()
+    # The lines the report cites may still be waiting in the retention queue's
+    # linger (#972); written first, so the read below finds them. After the
+    # refusals, so an erased account, a duplicate or a picture that is not
+    # there answers without waiting for the queue at all - and outside any
+    # transaction, holding no connection and no lock.
+    if ctx.message_retention is not None:
+        await ctx.message_retention.flush()
+
+    async with ctx.session_factory() as session:
+        async with session.begin():
+            # The barrier again, because the one above belonged to a
+            # transaction that has ended: what is written must be written
+            # under a lock that still holds (R-PRIV-15).
+            try:
+                await require_live_account(session, reporter.user_id)
+            except AccountErasedError:
+                return {"ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED, "error": "Sign in first."}
             messages = await evidence_from_live_room(
                 session,
                 room_instance_id=UUID(room.retention_scope_id),

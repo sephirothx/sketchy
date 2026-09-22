@@ -123,6 +123,8 @@ class MessageRetentionService:
         # window - 254 ms where the wait should have been 3 (#972 third
         # review).
         self._cut = 0
+        # How many readers are waiting on that cut right now.
+        self._flushing = 0
 
     async def record(
         self,
@@ -300,15 +302,14 @@ class MessageRetentionService:
                     )
                 except Exception:
                     logger.exception("Failed to retain %d messages", len(batch))
-            except asyncio.CancelledError:
-                # Settled on the way out as well: these rows have left the
-                # queue, and a batch cancelled mid-linger that nobody accounts
-                # for hangs every later `drain` on `join()` and leaves every
-                # later `flush` waiting its whole bound for a row no one will
-                # write (#972 third review).
+            finally:
+                # Written, dropped or cancelled: these rows have left the
+                # queue, and a batch nobody accounts for hangs every later
+                # `drain` on `join()` and leaves every later `flush` waiting
+                # its whole bound for a row no one will write (#972 third
+                # review). A `finally` rather than an `except`, because there
+                # is no path where they are still outstanding.
                 self._settle(batch)
-                raise
-            self._settle(batch)
 
     def _settle(self, batch: list[RoomMessage]) -> None:
         """Account for a batch that has left the queue, written or not.
@@ -398,13 +399,23 @@ class MessageRetentionService:
         # already waiting.
         self._cut = max(self._cut, target)
         self._wake.set()
+        self._flushing += 1
         deadline = time.monotonic() + EVIDENCE_FLUSH_SECONDS
-        while self._written < target:
-            remaining = deadline - time.monotonic()
-            if remaining <= 0:
-                break
-            with contextlib.suppress(asyncio.TimeoutError):
-                await asyncio.wait_for(self._progress.wait(), timeout=remaining)
+        try:
+            while self._written < target:
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    break
+                with contextlib.suppress(asyncio.TimeoutError):
+                    await asyncio.wait_for(self._progress.wait(), timeout=remaining)
+        finally:
+            self._flushing -= 1
+            if not self._flushing:
+                # Nobody is waiting any more. Left standing, a cut nothing
+                # reached - a flush that gave up on a stalled database - would
+                # go on suppressing the linger for every room until the writer
+                # caught up with it (#972 fourth review).
+                self._cut = self._written
         if self._written < target:
             logger.warning(
                 "Retention queue not flushed within %ss for a report", EVIDENCE_FLUSH_SECONDS
@@ -420,7 +431,10 @@ class MessageRetentionService:
         worker = self._worker
         if worker is None:
             return
-        self._worker = None
+        # Still `self._worker` while the drain runs: cleared any earlier and a
+        # line recorded during it starts a second writer, which nothing then
+        # cancels and which the lost-row reconciliation cannot account for
+        # (#972 fourth review).
         self._draining += 1
         self._wake.set()
         try:
@@ -432,6 +446,7 @@ class MessageRetentionService:
             )
         finally:
             self._draining -= 1
+        self._worker = None
         worker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await worker

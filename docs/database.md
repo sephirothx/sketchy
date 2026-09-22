@@ -891,9 +891,11 @@ inserts in 2,874 transactions, and with the barrier's reads half of every statem
 the process ran. Batched, the same 60 s run wrote every line with 205 inserts, and
 the process's statements fell 16,929 → 8,643 (SQLite, counted with an engine listener;
 the shape is the same on PostgreSQL, the per-statement cost is not). A report reads its evidence from this table, so both report paths flush
-the queue (bounded at 2 s) immediately before that read, and a line cited the moment it
-was said is found; a report refused before the read - an erased account, a duplicate,
-a picture that is not there - never waits for the queue. The flush waits only for the
+the queue (bounded at 2 s) before that read and **outside any transaction of their own**:
+waiting for the writer to get a connection while holding one is how concurrent reports
+starve the very writer whose rows they are waiting for. A report refused before the
+flush - an erased account, a duplicate, a picture that is not there - never waits for
+the queue at all. The flush waits only for the
 lines queued when it was called, not for what other rooms say meanwhile, and it cuts
 the current linger short without cutting anybody else's.
 
