@@ -95,4 +95,5 @@ def _empty_drawing_cache():
     profiles = sys.modules.get("app.api.profiles")
     if profiles is not None:
         profiles.drawing_cache.clear()
+        profiles._fills.clear()
     yield

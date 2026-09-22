@@ -147,8 +147,9 @@ def validator_matches(if_none_match: str, validator: str) -> bool:
 
 #: Bytes of decoded drawings kept in memory, both encodings counted (#979).
 DRAWING_CACHE_BYTES = 32 * 1024 * 1024
-#: The level the cached gzip copy is made at, once, off the loop. The
-#: response middleware compresses at 9 on the loop, per request.
+#: The level the cached gzip copy is made at: once, off the loop, and kept.
+#: The response middleware would compress the same bytes per request (at
+#: `DYNAMIC_COMPRESSLEVEL`, 4 since #1030) on the loop instead.
 DRAWING_GZIP_LEVEL = 6
 
 
@@ -156,7 +157,7 @@ class WireDrawingCache:
     """Decoded drawings by stored checksum, most recently served kept (#979).
 
     Every fetch used to decode the stored blob back to wire bytes (1 ms for an
-    ordinary drawing, 8 ms for a heavy one) and gzip the result at level 9 -
+    ordinary drawing, 8 ms for a heavy one) and gzip the result on the loop -
     ~2 ms and ~25 ms of event loop, back to back, for bytes that are the same
     for everybody: the lobby's This week shelf is six drawings fetched by
     every visitor. The checksum is the stored blob's SHA-256 and decoding is
@@ -269,17 +270,52 @@ async def _decode_once(
     drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
 ) -> tuple[bytes, bytes, str]:
     """Read and decode a drawing the cache does not hold, once however many
-    ask at the same moment. Every asker was already let in by its own access
-    query; only the bytes are shared, refusals included."""
+    ask at the same moment.
+
+    Only *bytes* are shared. A refusal is not: the fill runs against one
+    caller's own query, and a drawing hidden between another caller's access
+    check and this read is a 404 for that caller alone - a participant may
+    still have it when the Gallery may not (R-GAL-09). Everyone else that was
+    waiting reads the cache, and asks its own query again if the fill left
+    nothing there.
+
+    The fill is a task of its own, so the caller that started it going away -
+    a shutdown, a timeout - does not cancel the read every other waiter is
+    waiting on (#979 review).
+    """
     key = _cache_key(checksum)
-    pending = _fills.get(key)
-    if pending is not None:
-        return await asyncio.shield(pending)
-    pending = asyncio.get_running_loop().create_future()
-    # Retrieved even when nobody else waited, so a refusal is not reported
-    # as an exception nobody looked at.
-    pending.add_done_callback(lambda future: future.cancelled() or future.exception())
-    _fills[key] = pending
+    fill = _fills.get(key)
+    started_it = fill is None
+    if fill is None:
+        fill = asyncio.ensure_future(_fill_cache(key, turn_id, drawing_of))
+        # Retrieved even when every waiter has gone, so a refusal inside the
+        # fill is not reported as an exception nobody looked at.
+        fill.add_done_callback(lambda task: task.cancelled() or task.exception())
+        _fills[key] = fill
+    try:
+        await asyncio.shield(fill)
+    except Exception:
+        if started_it:
+            raise
+        # Somebody else's refusal says nothing about this caller's access.
+        pass
+    cached = drawing_cache.get(key)
+    if cached is not None:
+        return cached[0], cached[1], checksum
+    if started_it:
+        raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+    # The shared fill found nothing; ask with this caller's own query.
+    return await _fill_cache(_cache_key(checksum), turn_id, drawing_of, store=False)
+
+
+async def _fill_cache(
+    key: str,
+    turn_id: str,
+    drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
+    *,
+    store: bool = True,
+) -> tuple[bytes, bytes, str]:
+    """Read the blob, decode and gzip it off the loop, and hold the result."""
     try:
         drawing = await drawing_of()
         if drawing is None:
@@ -301,18 +337,11 @@ async def _decode_once(
         # Keyed by the checksum these bytes were verified against, which is
         # the row's own - it may have changed since the question above.
         drawing_cache.put(_cache_key(drawing.checksum_sha256), wire, gzipped)
-        result = (wire, gzipped, drawing.checksum_sha256)
-        pending.set_result(result)
-        return result
-    except BaseException as error:
-        if not pending.done():
-            if isinstance(error, asyncio.CancelledError):
-                pending.cancel()
-            else:
-                pending.set_exception(error)
-        raise
+        return wire, gzipped, drawing.checksum_sha256
     finally:
-        _fills.pop(key, None)
+        if store:
+            _fills.pop(key, None)
+
 
 def create_profile_router(
     user_repo: UserRepository,

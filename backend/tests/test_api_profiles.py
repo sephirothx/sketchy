@@ -1221,3 +1221,126 @@ async def test_concurrent_misses_for_one_drawing_decode_it_once(env, monkeypatch
     assert all(response.content == blob for response in responses)
     assert decodes == [1]
     assert profiles._fills == {}
+
+
+async def test_a_refusal_inside_a_shared_fill_is_not_handed_to_the_other_waiters(env, monkeypatch):
+    """Only bytes are shared. A drawing hidden between one caller's access
+    check and its read is that caller's 404; a participant may still have it
+    (R-GAL-09, #979 review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, ann.id)
+    url = f"/api/games/{game_id}/turns/{turn_id}/drawing"
+
+    reads = []
+    real_read = history.get_turn_drawing
+
+    async def refuse_the_first_read(*args, **kwargs):
+        reads.append(1)
+        if len(reads) == 1:
+            await asyncio.sleep(0.05)  # the second request arrives meanwhile
+            return None  # as if it had just been hidden
+        return await real_read(*args, **kwargs)
+
+    monkeypatch.setattr(history, "get_turn_drawing", refuse_the_first_read)
+    first, second = await asyncio.gather(http.get(url), http.get(url))
+    assert {first.status_code, second.status_code} == {404, 200}
+    served = first if first.status_code == 200 else second
+    assert served.content == blob
+    assert profiles._fills == {}
+
+
+async def test_a_fill_survives_the_caller_that_started_it_going_away(env, monkeypatch):
+    """The fill is a task of its own: a shutdown or a timeout cancelling the
+    caller must not cancel the read everyone else is waiting on."""
+    import asyncio
+
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    await sign_in_as(http, factory, ann.id)
+    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    slow = asyncio.Event()
+    real_read = history.get_turn_drawing
+
+    async def wait_first(*args, **kwargs):
+        await slow.wait()
+        return await real_read(*args, **kwargs)
+
+    monkeypatch.setattr(history, "get_turn_drawing", wait_first)
+    owner = asyncio.create_task(http.get(url))
+    await asyncio.sleep(0.02)
+    waiter = asyncio.create_task(http.get(url))
+    await asyncio.sleep(0.02)
+    owner.cancel()  # the request that started the fill goes away
+    slow.set()
+    answer = await asyncio.wait_for(waiter, timeout=5)
+    assert answer.status_code == 200 and answer.content == blob
+
+
+async def test_the_cache_counter_says_which_it_was(env):
+    from app.services.telemetry import telemetry
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_large_frame())
+    await sign_in_as(http, factory, ann.id)
+    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    misses = telemetry.drawing_cache_requests.get(("miss",))
+    hits = telemetry.drawing_cache_requests.get(("hit",))
+    assert (await http.get(url)).status_code == 200
+    assert (await http.get(url)).status_code == 200
+    assert telemetry.drawing_cache_requests.get(("miss",)) == misses + 1
+    assert telemetry.drawing_cache_requests.get(("hit",)) == hits + 1
+
+
+async def test_behind_the_real_middleware_the_answer_is_encoded_once(monkeypatch):
+    """Mounted as production mounts it: the response middleware must leave a
+    body that already carries `Content-Encoding` alone (a second pass would
+    make the decoded bytes gzip, not the frame), and must not repeat `Vary`
+    (#979 review)."""
+    from app.compression import SelectiveGZipMiddleware
+
+    monkeypatch.setenv("IP_HASH_SECRET", "profiles-middleware-secret")
+    session_factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(session_factory)
+    history = SqlAlchemyGameHistoryRepository(session_factory)
+    app = FastAPI()
+    install_refusal_handler(app)
+    app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
+    app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
+    app.include_router(create_profile_router(users, history))
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            ann = await users.create_anonymous(display_name="Ann")
+            bob = await users.create_anonymous(display_name="Bob")
+            blob = _large_frame()
+            game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+            await sign_in_as(http, session_factory, ann.id)
+            url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+            for _ in range(2):  # the miss and then the hit
+                response = await http.get(url, headers={"Accept-Encoding": "gzip"})
+                assert response.status_code == 200
+                assert response.content == blob
+                assert response.headers["content-encoding"] == "gzip"
+                assert response.headers["vary"].lower().count("accept-encoding") == 1
+            # The small-body floor is not asserted here: on `main` the session
+            # middleware is still a `BaseHTTPMiddleware`, which streams every
+            # response, and Starlette's gzip compresses a streamed body at any
+            # size. #1026 makes that layer plain ASGI and the floor applies
+            # again; `test_a_small_drawing_goes_out_as_it_is...` covers the
+            # route's own half.
+    finally:
+        await engine.dispose()
