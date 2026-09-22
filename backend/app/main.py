@@ -20,7 +20,7 @@ from starlette.exceptions import HTTPException
 from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
-from app.compression import SelectiveGZipMiddleware, precompressed_variant
+from app.compression import PRECOMPRESSED_SIBLINGS, SelectiveGZipMiddleware, precompressed_variant
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
     SHELF_TTL_SECONDS,
@@ -119,6 +119,17 @@ from app.services.shutdown import (
 )
 
 
+PRECOMPRESSED_SUFFIXES = tuple(suffix for _, suffix in PRECOMPRESSED_SIBLINGS)
+_VALIDATORS = {b"if-none-match", b"if-modified-since"}
+
+
+def _without_validators(scope):
+    return {
+        **scope,
+        "headers": [(name, value) for name, value in scope["headers"] if name.lower() not in _VALIDATORS],
+    }
+
+
 class SPAStaticFiles(StaticFiles):
     """Serve the SPA for extensionless client routes while preserving real 404s.
 
@@ -129,6 +140,12 @@ class SPAStaticFiles(StaticFiles):
     """
 
     async def get_response(self, path: str, scope):
+        # The build's compressed copies are served in place of the file they
+        # sit beside, never under their own names: asked for directly, one
+        # would go out as the original's type with no Content-Encoding and a
+        # compressed body (#978).
+        if path.endswith(PRECOMPRESSED_SUFFIXES):
+            raise HTTPException(status_code=404)
         try:
             response = await super().get_response(path, scope)
         except HTTPException as exc:
@@ -139,7 +156,11 @@ class SPAStaticFiles(StaticFiles):
             )
             if not serves_the_shell:
                 raise
-            response = await super().get_response("index.html", scope)
+            # Without the request's validators: those belong to the URL that
+            # was asked for, and a match against the shell would answer 304 -
+            # which the status below turns into a 404 with no body, a blank
+            # page where the not-found page should be.
+            response = await super().get_response("index.html", _without_validators(scope))
             # The shell either way, because only the client can draw the
             # not-found page - but a URL it has no page for says so in its
             # status. Otherwise every typo answers 200, and a crawler or an

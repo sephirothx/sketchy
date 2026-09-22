@@ -333,3 +333,28 @@ def test_accept_encoding_is_parsed_not_substring_matched(header, expected):
     from app.compression import accepted_encodings
 
     assert accepted_encodings(header) == expected
+
+
+@pytest.mark.parametrize("path", ["/index.html.gz", "/index.html.br", "/assets/app-AbCdEf12.js.gz", "/assets/app-AbCdEf12.js.br"])
+async def test_a_precompressed_copy_is_not_served_under_its_own_name(built_app, path):
+    """Asked for directly, a copy would go out as the original's type with no
+    Content-Encoding and a compressed body."""
+    app, _, _ = built_app
+
+    status, _, _ = await request(app, path, headers={"Accept-Encoding": "br, gzip"})
+
+    assert status == 404
+
+
+@pytest.mark.parametrize("validator", ["If-None-Match", "If-Modified-Since"])
+async def test_the_not_found_shell_ignores_validators_meant_for_another_url(built_app, validator):
+    """A validator that happens to match the shell must not turn the page that
+    draws "not found" into a 404 with no body."""
+    app, index, _ = built_app
+    _, root, _ = await request(app, "/")
+    value = root["etag"] if validator == "If-None-Match" else "Fri, 01 Jan 2100 00:00:00 GMT"
+
+    status, _, body = await request(app, "/nope", headers={validator: value})
+
+    assert status == 404
+    assert body == index
