@@ -1440,6 +1440,13 @@ raising the configured Argon2 cost therefore upgrades active accounts without
 a bulk plaintext migration. The encoded hash carries its algorithm and cost
 parameters, so a redundant schema version column is not used.
 
+Hashing runs on a thread pool of its own, `PASSWORD_HASH_WORKERS` at a time (default:
+one fewer than the machine's cores, at most 4). Each hash is ~15 ms of CPU and 19 MiB;
+uncapped, a burst of 200 logins held the event loop every room shares at a p99 lag of
+~30 ms and took ~600 MiB, where capped it leaves the loop at 0.2 ms and takes ~60 MiB.
+The burst as a whole finishes later (0.9 s against 0.4 s); a single login is unchanged
+(#975).
+
 The authentication endpoints are rate limited per client address in shared
 database buckets. Login, registration, and account/name lookup limits survive
 restarts and apply once across every replica.

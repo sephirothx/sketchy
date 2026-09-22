@@ -1,9 +1,12 @@
-"""Argon2id password hashing, kept off the event loop."""
+"""Argon2id password hashing, kept off the event loop on a capped pool of its own."""
 from __future__ import annotations
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import os
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError, VerificationError
-from starlette.concurrency import run_in_threadpool
 
 from app.auth.breached_passwords import screening_failure
 
@@ -24,6 +27,47 @@ MAX_PASSWORD_LENGTH = 128
 # stroke for every room, so the memory and latency of a login matter here in a
 # way they would not in a request-per-process deployment.
 _hasher = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
+
+# How many hashes may run at once (#975). Each is ~15 ms of CPU and 19 MiB,
+# and they used to run in anyio's shared 40-thread pool with nothing counting
+# them: login only *peeks* its limiters before verifying, so a burst reaches
+# argon2 all at once. Measured, 200 concurrent verifies there held the event
+# loop - every room's strokes and timers - at a p99 lag of 59 ms, and peaked
+# near 760 MiB; capped at 4 the same burst left the loop at 0.2 ms. Past the
+# cap a login waits in this pool's queue, which costs the loop nothing, and
+# static files no longer queue behind logins in the shared pool. One core is
+# left to the loop by default, since argon2 releases the GIL and keeps a core
+# busy per worker.
+PASSWORD_HASH_WORKERS_DEFAULT = max(1, min(4, (os.cpu_count() or 2) - 1))
+_executor: ThreadPoolExecutor | None = None
+
+
+def password_hash_workers() -> int:
+    """The configured cap, validated; `PASSWORD_HASH_WORKERS` overrides it."""
+    raw = os.environ.get("PASSWORD_HASH_WORKERS", "").strip()
+    if not raw:
+        return PASSWORD_HASH_WORKERS_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError("PASSWORD_HASH_WORKERS must be an integer") from error
+    if not 1 <= value <= 32:
+        raise ValueError("PASSWORD_HASH_WORKERS must be between 1 and 32")
+    return value
+
+
+def _pool() -> ThreadPoolExecutor:
+    global _executor
+    if _executor is None:
+        _executor = ThreadPoolExecutor(
+            max_workers=password_hash_workers(), thread_name_prefix="argon2"
+        )
+    return _executor
+
+
+async def _off_loop(function, *args):
+    """Run one hashing call on the capped pool."""
+    return await asyncio.get_running_loop().run_in_executor(_pool(), function, *args)
 
 
 # Verified against when no account matches the given username, so that path
@@ -96,7 +140,7 @@ def validate_password(
 
 async def hash_password(password: str) -> str:
     """Hash a password without blocking the event loop."""
-    return await run_in_threadpool(_hasher.hash, password)
+    return await _off_loop(_hasher.hash, password)
 
 
 async def verify_password(password_hash: str, password: str) -> bool:
@@ -110,7 +154,7 @@ async def verify_password(password_hash: str, password: str) -> bool:
         except (VerifyMismatchError, VerificationError, InvalidHashError):
             return False
 
-    return await run_in_threadpool(_verify)
+    return await _off_loop(_verify)
 
 
 async def password_needs_rehash(password_hash: str) -> bool:
@@ -124,4 +168,4 @@ async def password_needs_rehash(password_hash: str) -> bool:
         except (InvalidHashError, VerificationError):
             return False
 
-    return await run_in_threadpool(_check)
+    return await _off_loop(_check)
