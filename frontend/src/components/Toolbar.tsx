@@ -35,6 +35,7 @@ import {
 } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import { BRUSH_SIZES, DEFAULT_ERASER_SIZE, isBrushSize, stopPosition } from "../lib/brushSizes";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import "../styles/lazy/toolbar.css";
 
 
@@ -110,6 +111,7 @@ export const Toolbar = memo(function Toolbar({
   scratchPad = false,
   onSave,
 }: ToolbarProps) {
+  useLocaleRerender();
   recordRender("toolbar");
   const isMobile = useMediaQuery("(max-width: 900px)");
   const fillAvailable = useCanvasBudgetStore((state) => scratchPad || state.fillAvailable);

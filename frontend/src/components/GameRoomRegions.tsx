@@ -26,6 +26,7 @@ import type { DrawingReaction } from "../types";
 import type { RoomShellMode } from "./RoomShell";
 import { useRoomStage } from "../hooks/useServerNotices";
 import { DrainFinalCountdown } from "./RoomStageNotice";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
 
 const NO_REACTIONS: DrawingReaction[] = [];
@@ -94,6 +95,7 @@ export function ConnectedDrawingReactionControl({
 }
 
 export const ConnectedRoomPlayersPanel = memo(function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
+  useLocaleRerender();
   const players = useGameStore((state) => state.players);
   const drawerId = useGameStore((state) => state.drawerId);
   const myPlayerId = useGameStore((state) => state.playerId);
@@ -127,6 +129,7 @@ export const ConnectedRoomChatPanel = memo(function ConnectedRoomChatPanel({
   mode,
   onFocusChange,
 }: ConnectedRoomChatPanelProps) {
+  useLocaleRerender();
   const messages = useGameStore((state) => state.messages);
   const players = useGameStore((state) => state.players);
   const phase = useGameStore((state) => state.phase);
@@ -291,6 +294,7 @@ interface GameplayRegionProps {
 }
 
 export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps) {
+  useLocaleRerender();
   const clockPaused = useRoomStage().kind !== "live";
   recordRender("gameplay");
   const isMobile = useMediaQuery("(max-width: 900px)");
