@@ -107,6 +107,12 @@ class MessageRetentionService:
         # empty is not a reason to hold lines back.
         self._wake = asyncio.Event()
         self._draining = 0
+        # How many rows have been taken, and how many have been dealt with:
+        # `flush` waits for the ones already queued when it was called, not
+        # for whatever other rooms say while it waits (#972 review).
+        self._enqueued = 0
+        self._written = 0
+        self._progress = asyncio.Condition()
 
     async def record(
         self,
@@ -231,6 +237,7 @@ class MessageRetentionService:
                 described,
             )
             return None
+        self._enqueued += 1
         if self._queue.qsize() >= self._batch_size - 1:
             # The line the writer holds plus these fill a batch: write now.
             self._wake.set()
@@ -277,6 +284,9 @@ class MessageRetentionService:
                 # without this a failed write would hang every `drain`.
                 for _ in batch:
                     self._queue.task_done()
+                self._written += len(batch)
+                async with self._progress:
+                    self._progress.notify_all()
 
     async def _linger(self) -> None:
         """Give the rest of a batch a moment to arrive, unless it is already
@@ -335,12 +345,24 @@ class MessageRetentionService:
             self._draining -= 1
 
     async def flush(self) -> None:
-        """Write what is queued now, for a reader that needs it: report
-        evidence reads `room_messages` directly, and a line still lingering
-        in the queue would be missing from it (#972 review). Bounded, so a
-        database that has stopped answering cannot hold the report up."""
+        """Write the lines queued right now, for a reader that needs them.
+
+        Report evidence reads `room_messages` directly, and a line still
+        inside the writer's linger would be missing from it (#972 review).
+        Only what is already queued is waited for - a busy server keeps
+        lingering for everyone else meanwhile - and the wait is bounded, so a
+        database that has stopped answering cannot hold a report up.
+        """
+        target = self._enqueued
+        if self._written >= target:
+            return
+        self._wake.set()  # cut the batch being lingered over, once
         try:
-            await asyncio.wait_for(self.drain(), timeout=EVIDENCE_FLUSH_SECONDS)
+            async with self._progress:
+                await asyncio.wait_for(
+                    self._progress.wait_for(lambda: self._written >= target),
+                    timeout=EVIDENCE_FLUSH_SECONDS,
+                )
         except asyncio.TimeoutError:
             logger.warning(
                 "Retention queue not flushed within %ss for a report", EVIDENCE_FLUSH_SECONDS

@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
+import pytest
 import socketio
 from sqlalchemy import select
 
@@ -594,5 +595,73 @@ async def test_a_full_batch_is_written_without_waiting_out_the_linger():
         await asyncio.wait_for(service._queue.join(), timeout=5)
         assert sizes == [3]
         await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_flush_waits_for_what_was_queued_and_no_longer(monkeypatch):
+    """Not `queue.join()`: that waits for lines other rooms enqueue while the
+    report is waiting, and on a busy server a report could wait a long time
+    for messages it never cited (#972 review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0.05)
+        await _say(service, room, player, "cited line")
+        keep_talking = True
+
+        async def another_room_keeps_talking():
+            while keep_talking:
+                await _say(service, room, player, "somebody else")
+                await asyncio.sleep(0.01)
+
+        chatter = asyncio.create_task(another_room_keeps_talking())
+        await asyncio.wait_for(service.flush(), timeout=2)
+        keep_talking = False
+        await chatter
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert "cited line" in kept
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_flush_gives_up_on_a_database_that_has_stopped_answering(monkeypatch, caplog):
+    """Bounded: a report reads what is there rather than waiting for ever."""
+    import logging
+
+    from app.services.message_retention import EVIDENCE_FLUSH_SECONDS
+
+    assert EVIDENCE_FLUSH_SECONDS == 2
+    monkeypatch.setattr(
+        "app.services.message_retention.EVIDENCE_FLUSH_SECONDS", 0.05
+    )
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Hung")
+    player = room_manager.add_player(room, "Talker", user_id=str(generate_uuid()))
+    player.sid = "sid-talker"
+    service = MessageRetentionService(HangingFactory())
+    caplog.set_level(logging.WARNING)
+    await _say(service, room, player, "never written")
+    await asyncio.wait_for(service.flush(), timeout=2)
+    assert "not flushed" in caplog.text
+    await close_hanging_service(service, monkeypatch)
+
+
+async def test_the_linger_is_skipped_while_anybody_is_draining_and_when_a_batch_is_full():
+    """The two early exits, directly: without them a drain waits out the
+    linger, and a full batch sits still while more arrives (#972 review)."""
+    factory, engine = await create_test_db()
+    try:
+        service = MessageRetentionService(factory, batch_size=2, linger_seconds=60)
+        service._draining = 1
+        await asyncio.wait_for(service._linger(), timeout=1)  # draining: no wait
+        service._draining = 0
+        service._queue.put_nowait(object())  # qsize 1 >= batch_size - 1
+        await asyncio.wait_for(service._linger(), timeout=1)  # full: no wait
+        service._queue.get_nowait()
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(service._linger(), timeout=0.2)  # otherwise it waits
     finally:
         await engine.dispose()
