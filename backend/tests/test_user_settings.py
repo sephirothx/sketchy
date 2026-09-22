@@ -279,3 +279,23 @@ async def test_me_carries_a_registered_accounts_settings_and_a_guest_none(env):
     assert me["settings"] == (await http.get("/api/users/me/settings")).json()
     assert me["settings"]["locale"] == "it"
     assert me["settings"]["theme"] == "dark"
+
+
+async def test_me_still_answers_when_the_settings_read_fails(env, monkeypatch):
+    """The session may have rotated earlier in the same request; failing the
+    whole answer would drop the new cookie with the old token already revoked.
+    Without settings the page fetches them on their own."""
+    http, _ = env
+    registered = await http.post(
+        "/api/auth/register", json={"username": "MeResilient", "password": PASSWORD}
+    )
+    assert registered.status_code == 200
+
+    async def unavailable(*args, **kwargs):
+        raise RuntimeError("database busy")
+
+    monkeypatch.setattr("app.auth.routes.settings_of_registered_account", unavailable)
+    me = await http.get("/api/auth/me")
+    assert me.status_code == 200
+    assert me.json()["username"] == "MeResilient"
+    assert "settings" not in me.json()

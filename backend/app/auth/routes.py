@@ -705,9 +705,18 @@ def create_auth_router(
             # holds its first paint for this answer anyway (R-I18N-06), and
             # asking for them separately put a second round trip - and a
             # second session - in front of every registered player's lobby.
-            payload["settings"] = await settings_of_registered_account(
-                session_factory, user_id=str(user.id)
-            )
+            #
+            # Never at the cost of the answer: the session may have just been
+            # rotated above, and a 500 here would drop the new cookie while the
+            # old token is already revoked - past the grace window that reads
+            # as a replay and signs the player out everywhere. Left out, the
+            # page asks for the settings on their own, as it did before.
+            try:
+                payload["settings"] = await settings_of_registered_account(
+                    session_factory, user_id=str(user.id)
+                )
+            except Exception:
+                logger.warning("auth_me_settings_unavailable", exc_info=True)
         return payload
 
     @router.get("/nickname-available")
