@@ -274,6 +274,44 @@ async def test_a_reset_link_works_once(env):
     assert second.status_code == 400
 
 
+async def test_a_busy_pool_refuses_a_real_reset_and_leaves_the_link_usable(env, monkeypatch):
+    """The leg of the busy-pool test that actually reaches the hash. With a
+    token that names nobody the route refuses before hashing, so a `400` there
+    says nothing: the silent-success mutation on this route survived every
+    test (#975 fourth review).
+    """
+    from app.auth import routes as routes_module
+    from app.auth.password import PasswordHashingBusy
+
+    new_client, factory = env
+    http = new_client()
+    await register(http, "BusyReset", email="busyreset@example.com")
+    await verify_via_email(http, factory)
+    await http.post("/api/auth/password/forgot", json={"identifier": "BusyReset"})
+    token = token_in(await drain(factory))
+    real_hash = routes_module.hash_password
+
+    async def busy(_password):
+        raise PasswordHashingBusy()
+
+    monkeypatch.setattr(routes_module, "hash_password", busy)
+    refused = await http.post(
+        "/api/auth/password/reset", json={"token": token, "password": NEW_PASSWORD}
+    )
+    assert refused.status_code == 503, refused.text
+
+    # Nothing was spent: the old password still works, and so does the link.
+    monkeypatch.setattr(routes_module, "hash_password", real_hash)
+    old = await new_client().post(
+        "/api/auth/login", json={"username": "BusyReset", "password": PASSWORD}
+    )
+    assert old.status_code == 200
+    again = await new_client().post(
+        "/api/auth/password/reset", json={"token": token, "password": NEW_PASSWORD}
+    )
+    assert again.status_code == 200, again.text
+
+
 async def test_an_expired_link_is_refused(env):
     new_client, factory = env
     http = new_client()

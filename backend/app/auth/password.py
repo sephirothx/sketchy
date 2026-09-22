@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
 import os
+import threading
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError, VerificationError
@@ -56,6 +57,9 @@ RETRY_AFTER_SECONDS = 1
 _executor: ThreadPoolExecutor | None = None
 _workers = 0
 _outstanding = 0
+#: Held only on the path where a closed loop leaves the release to the worker
+#: thread; the loop's own releases stay single-threaded.
+_release_lock = threading.Lock()
 
 
 class PasswordHashingBusy(Refusal):
@@ -123,8 +127,25 @@ async def _off_loop(function, *args):
     # there would let the queue grow past the cap unseen (#975 review). The
     # callback runs on the worker thread, so the count is put back on the loop
     # rather than written from there.
-    job.add_done_callback(lambda _job: loop.call_soon_threadsafe(_release))
+    job.add_done_callback(lambda _job: _release_on(loop))
     return await asyncio.wrap_future(job)
+
+
+def _release_on(loop: asyncio.AbstractEventLoop) -> None:
+    """Put one slot back, from whichever thread the job ended on.
+
+    Normally the loop does it, so the count stays single-threaded. A loop that
+    has already closed - a process shutting down, or a test whose loop ended
+    while a hash was still running - refuses the callback, and a slot dropped
+    there is one the process never gets back: the refusal floor creeps down
+    until everything is answered "busy" (#975 fourth review). So that case is
+    counted here instead, under the lock the other threads take.
+    """
+    try:
+        loop.call_soon_threadsafe(_release)
+    except RuntimeError:
+        with _release_lock:
+            _release()
 
 
 def _release() -> None:

@@ -749,11 +749,37 @@ async def test_a_busy_pool_refuses_every_route_whose_hash_is_the_point(client, m
     )
     assert change.status_code == 503, change.text
 
+    # The reset route with a token that names nobody is refused before any
+    # hashing, so it says nothing about the pool; the leg that does reach the
+    # hash is driven with a real token in `tests/test_account_recovery.py`.
     reset = await client.post(
         "/api/auth/password/reset",
         json={"token": "whatever", "password": "a-better-password"},
     )
-    assert reset.status_code in (400, 503), reset.text  # refused, never a silent success
+    assert reset.status_code == 400, reset.text
+
+    # Every proof of a password runs on the same pool: turning a second factor
+    # off, replacing the codes that bypass it, and stepping up to a staff
+    # action. A busy pool that answered "yes" there would hand a stolen cookie
+    # the one thing it does not carry (#975 fourth review).
+    real_verify = routes_module.verify_password
+
+    async def busy_verify(_hash, _password):
+        raise PasswordHashingBusy()
+
+    monkeypatch.setattr(routes_module, "verify_password", busy_verify)
+    for method, path, body in (
+        ("DELETE", "/api/auth/second-factor", {"password": "a-good-password"}),
+        ("POST", "/api/auth/second-factor/recovery-codes", {"password": "a-good-password"}),
+        (
+            "POST",
+            "/api/auth/second-factor/confirm-owner",
+            {"password": "a-good-password", "code": "000000"},
+        ),
+    ):
+        proof = await client.request(method, path, json=body)
+        assert proof.status_code == 503, f"{path}: {proof.text}"
+    monkeypatch.setattr(routes_module, "verify_password", real_verify)
 
     await client.post("/api/auth/logout")
     await become_guest(client, "BusyNewcomer")

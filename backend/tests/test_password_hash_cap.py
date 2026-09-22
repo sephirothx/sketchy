@@ -142,3 +142,23 @@ def test_the_shipped_bound_is_the_documented_one():
     assert password.QUEUED_PER_WORKER == 16
     assert password.RETRY_AFTER_SECONDS == 1
     assert 1 <= password.PASSWORD_HASH_WORKERS_DEFAULT <= 4
+
+
+def test_a_slot_is_not_lost_when_the_loop_closed_under_the_hash():
+    """The release is posted to the loop, and a loop that has already closed
+    refuses it. Dropped there, the slot never comes back: the process answers
+    "busy" a little sooner for ever after, and pytest gives every async test a
+    loop of its own, so one such test lowers the floor for the whole worker
+    (#975 fourth review)."""
+    import asyncio
+
+    from app.auth import password as password_module
+
+    released = asyncio.new_event_loop()
+    released.close()
+    before = password_module._outstanding
+    password_module._outstanding = before + 1
+
+    password_module._release_on(released)
+
+    assert password_module._outstanding == before
