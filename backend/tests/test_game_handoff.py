@@ -594,6 +594,7 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
 
     monkeypatch.setattr(handoff_module, "encode_envelope", watched("encode", handoff_module.encode_envelope))
     monkeypatch.setattr(handoff_module, "decode_envelope", watched("decode", handoff_module.decode_envelope))
+    monkeypatch.setattr(handoff_module, "envelope_checksum", watched("checksum", handoff_module.envelope_checksum))
     monkeypatch.setattr(repository_module, "prepare_stored_drawing", watched("prepare", prepare_stored_drawing))
     monkeypatch.setattr(
         repository_module.SqlAlchemyGameHistoryRepository,
@@ -601,17 +602,103 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
         staticmethod(watched("digest", repository_module.SqlAlchemyGameHistoryRepository._payload_hash)),
     )
     session_factory, users, history, store = env
+    # In order, every statement and every drawing prepared: the drawings must
+    # all be ready before the write transaction's first statement, never
+    # inside the transaction that locks the players' rows.
+    from sqlalchemy import event
+
+    order: list[str] = []
+    event.listen(
+        session_factory.kw["bind"].sync_engine,
+        "before_cursor_execute",
+        lambda _c, _cur, statement, *_a: order.append(statement),
+    )
+    real_prepare = repository_module.prepare_stored_drawing
+    monkeypatch.setattr(
+        repository_module,
+        "prepare_stored_drawing",
+        watched("prepare", lambda payload: (order.append("<prepare>"), real_prepare(payload))[1]),
+    )
     ann, bob = await two_players(users)
     worker = worker_for(store, history)
-    frame = _frame(2)
+    frame = _path_heavy_frame()
     await worker.stage(FinishedGameEnvelope(history_for(str(generate_uuid()), ann, bob, drawing=frame)))
     report = await worker.drain()
 
     assert report.recorded == 1
     assert on_loop == []
+    write_opens = next(
+        index for index, statement in enumerate(order) if statement.startswith("SELECT game_records.id AS")
+    )
+    assert "<prepare>" in order and order.index("<prepare>") < write_opens
     expected_blob, magic, version, checksum = prepare_stored_drawing(frame)
     async with session_factory() as session:
         [drawing] = (await session.scalars(select(TurnDrawing))).all()
+    assert magic == b"SKCD", "the delta encoding, not a frame stored as it travels"
     assert (drawing.payload, drawing.format_magic, drawing.format_version, drawing.checksum_sha256) == (
         expected_blob, magic.decode("ascii"), version, checksum,
     )
+
+
+def _path_heavy_frame() -> bytes:
+    """A frame big enough that the stored form is the delta encoding."""
+    import math
+
+    from app.canvas_history import PackedCanvasHistory
+
+    history = PackedCanvasHistory()
+    for stroke in range(20):
+        history.append_path(
+            [(0.5 + 0.4 * math.cos(step / 30 + stroke), 0.5 + 0.4 * math.sin(step / 25)) for step in range(200)],
+            color=0x112233,
+            width=4,
+        )
+    return history.binary_payload()
+
+
+async def test_an_erased_drawers_unreadable_drawing_is_a_tombstone_and_anyone_elses_fails(env):
+    """Preparing moved before the transaction, where the erased set is not yet
+    known; a drawing that cannot be prepared still fails the write only if it
+    is going to be written (#976 review)."""
+    from uuid import UUID
+
+    from app.db.models import User
+    from app.domain_values import AccountState
+
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    async with session_factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(ann))).state = AccountState.DELETED.value
+    erased_game = history_for(str(generate_uuid()), ann, bob, drawing=b"not a frame")
+    await history.save_game(
+        erased_game.record, erased_game.participants, erased_game.turns,
+        erased_game.score_events, erased_game.drawings, erased_game.reactions,
+    )
+    async with session_factory() as session:
+        [row] = (await session.scalars(select(TurnDrawing))).all()
+    assert row.status != "ready" and row.payload is None
+
+    carol = (await users.create_anonymous(display_name="Carol")).id
+    live_game = history_for(str(generate_uuid()), carol, bob, drawing=b"not a frame")
+    with pytest.raises(Exception):
+        await history.save_game(
+            live_game.record, live_game.participants, live_game.turns,
+            live_game.score_events, live_game.drawings, live_game.reactions,
+        )
+
+
+async def test_a_replay_of_a_written_game_encodes_nothing(env, monkeypatch):
+    """Answered by one read before any drawing is prepared (#976 review)."""
+    import app.repositories.sqlalchemy as repository_module
+
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    game = history_for(str(generate_uuid()), ann, bob, drawing=_frame(2))
+    arguments = (game.record, game.participants, game.turns, game.score_events, game.drawings, game.reactions)
+    first = await history.save_game(*arguments)
+    prepared: list[int] = []
+    real = repository_module.prepare_stored_drawing
+    monkeypatch.setattr(repository_module, "prepare_stored_drawing", lambda payload: (prepared.append(1), real(payload))[1])
+    assert await history.save_game(*arguments) == first
+    assert prepared == []

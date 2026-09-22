@@ -9,7 +9,8 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import time
-from time import perf_counter
+from concurrent.futures import ThreadPoolExecutor
+from time import thread_time
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
@@ -319,8 +320,29 @@ class _PreparedDrawing:
     seconds: float
 
 
+@dataclass(frozen=True)
+class _UnpreparedDrawing:
+    """A drawing whose stored form could not be made, and why. Raised only
+    if the row is written: an erased drawer's drawing is a tombstone whatever
+    its bytes were, as it was when this ran inside the transaction."""
+
+    error: Exception
+
+
+# The history write's own threads (#976 review), rather than the default pool
+# `asyncio.to_thread` shares with blocking SMTP and everything else: a game's
+# drawings must never wait behind a slow mail relay for a thread.
+_ENCODE_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="history-encode")
+
+
+async def _off_loop(function, *args):
+    return await asyncio.get_running_loop().run_in_executor(_ENCODE_POOL, function, *args)
+
+
 def _prepare_drawing(payload: bytes) -> _PreparedDrawing:
-    started = perf_counter()
+    # Thread time, not wall time: on a worker thread the wall clock also
+    # counts the GIL turns the event loop takes meanwhile.
+    started = thread_time()
     blob, magic, version, checksum = prepare_stored_drawing(payload)
     return _PreparedDrawing(
         blob=blob,
@@ -329,8 +351,23 @@ def _prepare_drawing(payload: bytes) -> _PreparedDrawing:
         checksum=checksum,
         wire_bytes=len(payload),
         action_count=binary_action_count(payload),
-        seconds=perf_counter() - started,
+        seconds=thread_time() - started,
     )
+
+
+def _prepare_drawings(
+    drawings: list[TurnDrawingInput] | None,
+) -> list[_PreparedDrawing | _UnpreparedDrawing | None]:
+    prepared: list[_PreparedDrawing | _UnpreparedDrawing | None] = []
+    for drawing in drawings or []:
+        if drawing.payload is None:
+            prepared.append(None)
+            continue
+        try:
+            prepared.append(_prepare_drawing(drawing.payload))
+        except Exception as error:  # noqa: BLE001 - re-raised if the row is written
+            prepared.append(_UnpreparedDrawing(error))
+    return prepared
 
 
 def _turn_drawing(
@@ -1423,26 +1460,6 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
 
-    @classmethod
-    def _prepare_write(
-        cls,
-        game_record: GameRecordInput,
-        participants: list[GameParticipantInput],
-        turns: list[TurnRecordInput],
-        score_events: list[ScoreEventInput],
-        reactions: list[TurnDrawingReactionInput],
-        drawings: list[TurnDrawingInput] | None,
-    ) -> tuple[str, list[_PreparedDrawing | None]]:
-        """The content digest and each drawing's stored form, off the loop."""
-        payload_hash = cls._payload_hash(
-            game_record, participants, turns, score_events, reactions, drawings
-        )
-        prepared = [
-            None if drawing.payload is None else _prepare_drawing(drawing.payload)
-            for drawing in drawings or []
-        ]
-        return payload_hash, prepared
-
     @database_operation_of("save_game")
     async def save_game(
         self,
@@ -1464,18 +1481,33 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         }
         if game_record.prompt_source_mode not in GAME_PROMPT_SOURCE_MODES:
             raise ValueError("Unknown game prompt source mode")
-        # Everything CPU-bound is done here, on a worker thread and before the
-        # transaction opens (#976): each drawing's storage encoding - a pure
-        # Python decode and delta walk, then zlib and SHA-256 - and the content
-        # digest. It used to run on the event loop inside the transaction that
-        # holds every player's `users` row: ~14 ms for a game of eight
-        # ordinary drawings, ~217 ms for a stroke-heavy one, with every room's
-        # strokes and timers waiting. On a thread the loop keeps its turn
-        # every GIL switch interval, and the locks are held only for the writes.
-        payload_hash, prepared = await asyncio.to_thread(
-            self._prepare_write,
+        # Everything CPU-bound is done on the history write's own threads and
+        # before the transaction opens (#976): the content digest, then each
+        # drawing's storage encoding - a pure Python decode and delta walk,
+        # then zlib and SHA-256. It used to run on the event loop inside the
+        # transaction that holds every player's `users` row: ~14 ms for a game
+        # of eight ordinary drawings, ~217 ms for a stroke-heavy one, with
+        # every room's strokes and timers waiting. The loop still shares the
+        # GIL with the encode while it runs, but gets its turn every switch
+        # interval, and the locks are held only for the writes.
+        payload_hash = await _off_loop(
+            self._payload_hash,
             game_record, participants, turns, score_events, reactions, drawings,
         )
+        # A replay of a game already written is answered here, by one read,
+        # before any drawing is encoded for nothing (#976 review). The check
+        # inside the transaction below stays: it is the one that is exact.
+        async with self._session_factory() as session:
+            written = await session.scalar(
+                select(GameRecord.payload_hash).where(GameRecord.id == record_id)
+            )
+        if written is not None:
+            if written == payload_hash:
+                return _public_id(record_id)
+            raise GameHistoryConflictError(
+                f"Game '{record_id}' already exists with different content."
+            )
+        prepared = await _off_loop(_prepare_drawings, drawings)
         sizing = _GameSizing()
         try:
             async with self._session_factory() as session:
@@ -1925,6 +1957,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             _erased_turn_drawing(drawing_turn_id, record_id)
                         )
                         continue
+                    if isinstance(prepared_drawing, _UnpreparedDrawing):
+                        raise prepared_drawing.error
                     drawing_row = _turn_drawing(
                         drawing, drawing_turn_id, record_id, sizing, prepared_drawing
                     )

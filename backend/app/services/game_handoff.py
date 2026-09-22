@@ -50,6 +50,7 @@ import logging
 import os
 import time
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -464,6 +465,12 @@ def envelope_checksum(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+# The envelope's own threads (#976 review). Staging runs inside the room's
+# ten-second bound and a timeout there loses the game, so the encode must not
+# wait for a thread in the default pool, which blocking SMTP can hold.
+_ENVELOPE_POOL = ThreadPoolExecutor(max_workers=2, thread_name_prefix="history-envelope")
+
+
 def _encode_with_checksum(envelope: FinishedGameEnvelope) -> tuple[bytes, str]:
     payload = encode_envelope(envelope)
     return payload, envelope_checksum(payload)
@@ -818,8 +825,8 @@ async def replay_claim(
 
     try:
         # Off the loop, like the encode at staging (#976).
-        envelope = await asyncio.to_thread(
-            _verified_decode, claim.payload, claim.version, claim.checksum
+        envelope = await asyncio.get_running_loop().run_in_executor(
+            _ENVELOPE_POOL, _verified_decode, claim.payload, claim.version, claim.checksum
         )
     except EnvelopeUnreadable as error:
         return await _fail(HandoffFailureCode.UNREADABLE, str(error))
@@ -966,11 +973,13 @@ class FinishedGameHandoffWorker:
         """The one write a room waits on. Raises on a database that will
         not take it, or an envelope past the ceiling; the caller records
         either as a lost game."""
-        # On a worker thread (#976): the drawings are the bulk, base64 and
+        # On the envelope's own threads (#976): the drawings are the bulk, base64 and
         # deflate over them ~11 ms for an ordinary game and ~99 ms for a
         # stroke-heavy one, on the loop every room shares, at the moment a
         # room is showing its results.
-        payload, checksum = await asyncio.to_thread(_encode_with_checksum, envelope)
+        payload, checksum = await asyncio.get_running_loop().run_in_executor(
+            _ENVELOPE_POOL, _encode_with_checksum, envelope
+        )
         if len(payload) > self._max_bytes:
             raise EnvelopeTooLarge(len(payload), self._max_bytes)
         outcome = await self._store.stage(

@@ -1238,13 +1238,19 @@ itself runs through the same erasure barrier as every writer (R-PRIV-15), so con
 erased while an envelope waited is tombstoned on the way in, never restored.
 
 **Nothing is encoded on the event loop** (#976). The envelope's JSON and deflate at
-staging, its checksum and decode at replay, and inside `save_game` each drawing's stored
-form and the game's content digest all run on worker threads, and the drawings are
-encoded *before* the transaction opens rather than inside the one holding every
-player's `users` row. The stored bytes are unchanged. `benchmarks/finish_game_stall.py`,
-8 turns: the loop's longest wait while a game is staged and replayed fell 16 → 1.5 ms
-for ordinary drawings and ~200 → 12.7 ms for stroke-heavy ones; what remains is the
-pure-Python encode sharing the GIL, which now yields every switch interval.
+staging, its checksum and decode at replay, and in `save_game` the game's content digest
+and each drawing's stored form all run on small thread pools of their own — not the
+default pool, which blocking SMTP can hold while a staging waits inside its ten-second
+bound. `save_game` answers a replay of a game already written with one read before
+encoding anything, and prepares the drawings *before* the transaction that holds every
+player's `users` row; a drawing that cannot be prepared fails the write only if it would
+be written, so an erased drawer's is still a tombstone. The stored bytes are unchanged.
+`benchmarks/finish_game_stall.py`, 8 turns, one idle 1 ms ticker on the loop: its
+longest wait while a game is staged and replayed fell 16 → 1.5 ms for ordinary drawings
+and ~200 → 12.7 ms for stroke-heavy ones. The encode still takes the same CPU and shares
+the GIL with the loop while it runs, so the loop runs at reduced throughput for those
+few hundred milliseconds rather than stopping for them; `sizing` records the encode's
+thread time.
 
 ```bash
 cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # replay by hand
