@@ -997,19 +997,6 @@ async def _rebound_account(
     return colour, bool(stored)
 
 
-async def _account_name_color(ctx: HandlerContext, user_id: str | None) -> str | None:
-    """The color stored on an account, if it has one."""
-    if ctx.user_repo is None or not user_id:
-        return None
-    try:
-        account = await _bounded(
-            ctx.user_repo.get_by_id(user_id), "reading an account's colour"
-        )
-    except EntryTimedOut:
-        return None
-    return normalize_name_color(account.name_color) if account else None
-
-
 async def _refresh_seat_identity(
     ctx: HandlerContext, player, name_color: str | None
 ) -> None:

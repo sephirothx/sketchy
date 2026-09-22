@@ -302,6 +302,7 @@ async def test_a_seat_confirming_itself_reads_the_account_once_too():
         room = room_manager.create_room(name="Still here")
         player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
         player.is_anonymous = False
+        player.name_color = "#101010"
         player.sid = "sid-here"
         await sio.save_session(
             "sid-here",
@@ -316,6 +317,8 @@ async def test_a_seat_confirming_itself_reads_the_account_once_too():
 
         assert answer["ok"] is True
         assert player.colorblind_safe_colors is True, "the stored preference, not the payload"
+        # A heartbeat confirms a seat; it does not re-identify it.
+        assert player.name_color == "#101010", "the confirm branch leaves the colour alone"
         assert not any(s.lstrip().startswith("SELECT user_settings.") for s in statements)
         reads = [s for s in statements if s.lstrip().startswith("SELECT users.")]
         assert len(reads) <= 1 and all("user_settings" in read for read in reads), reads
@@ -347,6 +350,69 @@ async def test_a_seat_whose_account_is_gone_keeps_what_it_carries():
 
         assert (colour, colorblind) == (None, True), "what the seat carries"
         assert statements == [], "and no second read for settings that are not there"
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_repository_that_does_not_read_the_preference_falls_back(monkeypatch):
+    """The default `get_seat_account` answers `(account, None)` - "I did not
+    read the preference" - and the seat then reads it on its own rather than
+    trusting the payload. Changing that fallback to the payload's value passed
+    every test (#980 fourth review, R-SET-01)."""
+    from app.handlers.rooms import _rebound_account
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        room = room_manager.create_room(name="Old repository")
+        player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        player.is_anonymous = False
+        player.colorblind_safe_colors = False
+
+        async def without_the_preference(user_id):
+            return await users.get_by_id(user_id), None
+
+        ctx.user_repo.get_seat_account = without_the_preference
+
+        colour, colorblind = await _rebound_account(ctx, player, requested=False)
+
+        assert colour == "#4f7cff"
+        assert colorblind is True, "read from the stored preference, not the payload"
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_merged_read_that_stalls_leaves_the_seat_as_it_was():
+    """A slow database must not hand a registered seat the payload's value -
+    the spoof the resolution exists to prevent - and the merged read had no
+    test for its own stall (#980 fourth review)."""
+    import asyncio
+
+    from app.handlers.rooms import _rebound_account
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        room = room_manager.create_room(name="Stalled")
+        player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        player.is_anonymous = False
+        player.name_color = "#111111"
+        player.colorblind_safe_colors = True
+
+        async def never(user_id):
+            await asyncio.sleep(3600)
+
+        ctx.user_repo.get_seat_account = never
+        import app.handlers.rooms as rooms_handlers
+
+        token_ = rooms_handlers._entry_deadline.set(asyncio.get_running_loop().time() - 1)
+        try:
+            colour, colorblind = await _rebound_account(ctx, player, requested=False)
+        finally:
+            rooms_handlers._entry_deadline.reset(token_)
+
+        assert (colour, colorblind) == (None, True), "the seat keeps what it carries"
+        assert player.name_color == "#111111"
     finally:
         await ctx.timers.close()
         await engine.dispose()
