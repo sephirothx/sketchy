@@ -1,3 +1,7 @@
+"""Static delivery: cache policy, the build's compressed copies, and their validators.
+
+R-PLAT-09, #978.
+"""
 import gzip
 import os
 from pathlib import Path
