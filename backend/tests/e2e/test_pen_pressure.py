@@ -61,7 +61,7 @@ async def _start_turn(host_page, player_page):
     drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
     viewing = player_page if drawing is host_page else host_page
     await drawing.click('.prompt-choices button:first-child')
-    await drawing.wait_for_selector('canvas.drawing-canvas')
+    await drawing.wait_for_selector('canvas.drawing-canvas.drawable')
     await viewing.wait_for_selector('canvas.drawing-canvas')
 
     return drawing, viewing

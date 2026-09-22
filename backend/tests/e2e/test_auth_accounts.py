@@ -245,7 +245,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
                 except PlaywrightTimeoutError:
                     prompt = None
                 if prompt:
-                    await drawer.wait_for_selector("canvas.drawing-canvas")
+                    await drawer.wait_for_selector("canvas.drawing-canvas.drawable")
                     guess_input = other.locator(".chat-input input")
                     await guess_input.fill(prompt)
                     await guess_input.press("Enter")
