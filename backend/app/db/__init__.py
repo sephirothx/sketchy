@@ -294,10 +294,10 @@ def install_idle_ping(engine: AsyncEngine, *, idle_seconds: float, clock=monoton
         if returned_at is None or clock() - returned_at < idle_seconds:
             return
         try:
-            # `_do_ping_w_event` is what the pool's own pre-ping called: it
-            # fires `do_ping` through the dialect's event hooks, and a handler
-            # may answer False rather than raise (SQLAlchemy reads a falsy
-            # answer as a failed ping).
+            # `_do_ping_w_event` is what the pool's own pre-ping called: the
+            # dialect's `do_ping`, with the driver errors it raises passed
+            # through the engine's error handling first, so a disconnect comes
+            # back as a falsy answer rather than as the driver's exception.
             if not dialect._do_ping_w_event(dbapi_connection):
                 raise sa_exc.DisconnectionError("pooled connection failed its ping")
         except sa_exc.DisconnectionError:
