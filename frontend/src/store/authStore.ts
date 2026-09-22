@@ -9,6 +9,7 @@ import {
   applyAccountSettings,
   currentSettingsPayload,
   fetchUserSettings,
+  type AccountSettings,
 } from "../lib/userSettings";
 import { loadCatalogue, ui } from "../content/ui/index.ts";
 
@@ -171,10 +172,18 @@ function reconcileNameColor(user: AuthUser | null): void {
     .catch(() => {});
 }
 
-async function loadRegisteredSettings(user: AuthUser | null): Promise<void> {
+/** What `/api/auth/me` answers: the account, and - for a registered one - its
+    settings, which the first paint needs and used to cost a request of their
+    own (#983). Only the account is kept in the store. */
+type MeResponse = AuthUser & { settings?: AccountSettings };
+
+async function loadRegisteredSettings(
+  user: AuthUser | null,
+  known?: AccountSettings,
+): Promise<void> {
   if (!user || user.isAnonymous) return;
   try {
-    const settings = await fetchUserSettings();
+    const settings = known ?? await fetchUserSettings();
     // Fetched before they are applied, so an account's language is in place
     // by the time the paint this read is holding goes ahead (R-I18N-06).
     await loadCatalogue(settings.locale);
@@ -252,27 +261,29 @@ export const useAuthStore = create<AuthStore>((set, get) => {
   nameDraft: "",
 
   fetchMe: async () => {
-    // Single-flight. GET /api/auth/me is the call that creates the account, so
-    // two concurrent cookieless requests would mint two guests and race over
-    // which cookie survives. React StrictMode replays mount effects in
-    // development, which makes that the normal case rather than a rare one.
+    // Single-flight. `/me` creates nothing any more - naming yourself does -
+    // but it can rotate the session cookie, and two reads racing would each
+    // set one. React StrictMode replays mount effects in development, which
+    // makes that the normal case rather than a rare one. The first read adopts
+    // the one `index.html` already started (#983).
     if (inFlightFetchMe) return inFlightFetchMe;
 
     set({ isLoading: true });
     const startedAt = identityVersion;
     inFlightFetchMe = (async () => {
       try {
-        const user = await apiRequest<AuthUser>("/api/auth/me");
+        const { settings, ...user } = (await apiRequest<MeResponse | null>("/api/auth/me")) ?? {};
+        const account = "id" in user ? (user as AuthUser) : null;
         if (identityVersion !== startedAt) {
           // Somebody was provisioned while this was in the air. They are the
           // truth; this answer describes a moment that has passed.
           set({ isLoading: false, hasResolved: true });
           return get().user;
         }
-        set({ user, isLoading: false, hasResolved: true });
-        reconcileNameColor(user);
-        await loadRegisteredSettings(user);
-        return user;
+        set({ user: account, isLoading: false, hasResolved: true });
+        reconcileNameColor(account);
+        await loadRegisteredSettings(account, settings);
+        return account;
       } catch {
         // Offline or the server is down. The app still works: play continues
         // without a durable identity rather than blocking on the account.

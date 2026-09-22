@@ -151,9 +151,9 @@ function App() {
   useEmailStateSync();
   useServerNotices();
 
-  // The only call that provisions a guest, so it runs once on arrival and
-  // gives every visitor a durable identity before they create or join a room.
-  // The socket connects afterwards either way: the handshake reads the session
+  // Who this visitor is, asked once on arrival (naming yourself is what
+  // creates an account; this only reads one, and a registered account's
+  // settings with it). The socket connects afterwards either way: the handshake reads the session
   // cookie once, and connecting first would bind it to no account. A failed
   // lookup still connects, so play degrades rather than stopping.
   useEffect(() => {

@@ -254,3 +254,28 @@ async def test_database_checks_reject_invalid_theme_and_volume(env):
                         sound_effects_volume=2,
                     )
                 )
+
+
+async def test_me_carries_a_registered_accounts_settings_and_a_guest_none(env):
+    """The page holds its first paint for `/me` (R-I18N-06), so a registered
+    account's settings ride along rather than costing a second round trip
+    (#983). A guest has no stored settings, and is not given any."""
+    http, _ = env
+    await http.post("/api/auth/display-name", json={"displayName": "Visitor"})
+    guest = (await http.get("/api/auth/me")).json()
+    assert "settings" not in guest
+
+    registered = await http.post(
+        "/api/auth/register",
+        json={
+            "username": "MeSettings",
+            "password": PASSWORD,
+            "settings": {"theme": "dark", "locale": "it", "penPressure": False},
+        },
+    )
+    assert registered.status_code == 200
+
+    me = (await http.get("/api/auth/me")).json()
+    assert me["settings"] == (await http.get("/api/users/me/settings")).json()
+    assert me["settings"]["locale"] == "it"
+    assert me["settings"]["theme"] == "dark"

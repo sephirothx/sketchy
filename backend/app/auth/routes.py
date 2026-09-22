@@ -75,6 +75,7 @@ from app.auth.recovery import (
     reset_password,
 )
 from app.api.serializers import user_payload
+from app.api.user_settings import settings_of_registered_account
 from app.services.guest_names import online_guest_holding
 from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
@@ -630,7 +631,9 @@ def create_auth_router(
 
     @router.get("/me")
     async def me(request: Request, response: Response):
-        """Return the caller's account, or nothing if they do not have one.
+        """Return the caller's account, or nothing if they do not have one -
+        with a registered account's settings, which the page needs before it
+        paints.
 
         Deliberately creates nothing. This runs on every page load, including
         ones nobody is behind - a crawler, a link preview, an uptime check -
@@ -696,6 +699,14 @@ def create_auth_router(
                     choosing=False,
                 )
                 is not None
+            )
+        if user.state == AccountState.REGISTERED.value:
+            # A registered account's settings ride along (#983): the page
+            # holds its first paint for this answer anyway (R-I18N-06), and
+            # asking for them separately put a second round trip - and a
+            # second session - in front of every registered player's lobby.
+            payload["settings"] = await settings_of_registered_account(
+                session_factory, user_id=str(user.id)
             )
         return payload
 
