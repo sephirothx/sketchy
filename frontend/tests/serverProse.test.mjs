@@ -37,6 +37,8 @@ const REVIEWED = {
   "pages/CrashPage.tsx: entry.message": "the same, on the crash page",
   "lib/bugReports.ts: entry.message": "the staff triage text, pasted into an issue in English",
   "lib/socket.ts: error?.message": "a transport failure, recorded in the client error log",
+  "lib/chunkReload.ts: error.message":
+    "the browser's failed-import error, read for the chunk URL it names and never shown",
   "components/InviteEntryPage.tsx: state.message": "a room-entry state, written from the catalogue",
   "components/PictureCropDialog.tsx: failure.message": "an AvatarInputError, thrown with catalogue text",
   "components/ToastProvider.tsx: toast.message": "a toast's own text, written by whoever raised it",

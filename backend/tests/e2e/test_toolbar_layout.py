@@ -133,7 +133,7 @@ async def test_the_toolbar_holds_together_at_every_desktop_width():
             await host_page.wait_for_selector('.prompt-choices, [data-testid="choosing-prompt-status"]')
             drawer = host_page if await host_page.query_selector('.prompt-choices') else player_page
             await drawer.click('.prompt-choices button:first-child')
-            await drawer.wait_for_selector('canvas.drawing-canvas')
+            await drawer.wait_for_selector('canvas.drawing-canvas.drawable')
             await drawer.wait_for_selector('.canvas-area .toolbar-container')
 
             broken = {}

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import { promptLanguageLabel } from "../lib/promptLanguages";
 import { gameLength, changedRoomRules } from "../lib/roomCardFacts";
 import { emitWithAck } from "../lib/socket";
@@ -6,6 +6,7 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
 
 interface RosterEntry {
@@ -20,7 +21,9 @@ interface PublicRoomCardProps {
   room: RoomSummary;
   busy: boolean;
   pendingMode: "join" | "spectate" | null;
-  onJoin: (asSpectator: boolean) => void;
+  /** Stable across renders, so a card whose room did not change skips its
+      render when the list's does (#991). */
+  onJoin: (room: RoomSummary, asSpectator: boolean) => void;
   /** `row` on a wide lobby, where each room has a row of its own (#581). */
   layout?: "card" | "row";
 }
@@ -49,7 +52,8 @@ const ROW_RULES_SHOWN = 3;
  * only the rules that differ from a new room's — where comparing rooms is a
  * glance down each column. Still nothing that names a player.
  */
-export function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card" }: PublicRoomCardProps) {
+export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card" }: PublicRoomCardProps) {
+  useLocaleRerender();
   const full = room.isFull || room.playerCount >= room.maxPlayers;
   const playing = room.state === "playing";
   const languageLabel = promptLanguageLabel(room.promptLanguage);
@@ -138,7 +142,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card
           type="button"
           className={`btn ${playing ? "btn-warm" : "btn-primary"} public-room-primary-action`}
           disabled={busy}
-          onClick={() => onJoin(false)}
+          onClick={() => onJoin(room, false)}
         >
           {pendingMode === "join" ? ui.publicRoomCard.joining : ui.publicRoomCard.join}
         </button>
@@ -147,7 +151,7 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card
         type="button"
         className="btn btn-secondary public-room-secondary-action"
         disabled={busy}
-        onClick={() => onJoin(true)}
+        onClick={() => onJoin(room, true)}
       >
         <EyeIcon size={14} />
         {pendingMode === "spectate" ? ui.publicRoomCard.joining : ui.publicRoomCard.spectate}
@@ -254,4 +258,4 @@ export function PublicRoomCard({ room, busy, pendingMode, onJoin, layout = "card
       {actions}
     </article>
   );
-}
+});

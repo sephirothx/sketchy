@@ -180,22 +180,51 @@ export async function apiBinaryRequest(
   }
 }
 
+/** A request `index.html` started before any script had loaded (#983).
+
+The page cannot paint until `/api/auth/me` has answered (R-I18N-06), and
+asking only once the entry chunk had downloaded and run put that round trip
+behind the largest download on the page, though it depends on nothing in it.
+So the shell asks first, and the first `apiRequest` for the same path adopts
+the answer instead of asking again - once: a later call is a new question. */
+interface ShellRequest {
+  path: string;
+  response: Promise<Response>;
+  abort: () => void;
+}
+
+declare global {
+  interface Window {
+    __sketchyShellRequest?: ShellRequest;
+  }
+}
+
+function takeShellRequest(path: string): ShellRequest | null {
+  if (typeof window === "undefined") return null;
+  const early = window.__sketchyShellRequest;
+  if (!early || early.path !== path) return null;
+  delete window.__sketchyShellRequest;
+  return early;
+}
+
 export async function apiRequest<T>(
   path: string,
   options: { method?: string; body?: unknown; timeoutMs?: number } = {},
 ): Promise<T> {
   const { method = "GET", body, timeoutMs = DEFAULT_TIMEOUT_MS } = options;
+  const early = method === "GET" && body === undefined ? takeShellRequest(path) : null;
   const controller = new AbortController();
-  const timer = window.setTimeout(() => controller.abort(), timeoutMs);
+  // The shell's request is held to the same deadline as one made here.
+  const timer = window.setTimeout(() => (early ? early.abort() : controller.abort()), timeoutMs);
 
   try {
-    const response = await fetch(path, {
+    const response = await (early?.response ?? fetch(path, {
       method,
       credentials: "same-origin",
       headers: body === undefined ? undefined : { "Content-Type": "application/json" },
       body: body === undefined ? undefined : JSON.stringify(body),
       signal: controller.signal,
-    });
+    }));
 
     checkProtocol(response);
     const text = await response.text();

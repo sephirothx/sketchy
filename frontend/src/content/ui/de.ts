@@ -677,6 +677,8 @@ export const DE: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Neue Räume pausieren wegen Wartung. Bereits laufende Runden gehen ganz\n          normal weiter.",
     serverWasUpdatedBackAnyGame: "Der Server wurde aktualisiert und ist zurück. Laufende Runden wurden beendet.",
     dismiss: "Ausblenden",
+    couldNotOpenThis: "Das ließ sich nicht öffnen. Prüf deine Verbindung und versuch es noch einmal.",
+    tryAgain: "Noch einmal versuchen",
   },
 
   appHeader: {

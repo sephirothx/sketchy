@@ -376,6 +376,9 @@ jobs:
 
       - run: npm run build
 
+      # What a first visit downloads stays inside its budget (#475).
+      - run: npm run bundle:check
+
   supply-chain:
     name: Dependency advisories
     runs-on: ubuntu-latest

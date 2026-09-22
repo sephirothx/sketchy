@@ -89,6 +89,8 @@ import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
+import "../styles/lazy/settings.css";
+import "../styles/lazy/toolbar.css";
 
 /* ------------------------------------------------------------- vocabulary */
 

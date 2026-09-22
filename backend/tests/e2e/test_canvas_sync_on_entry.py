@@ -57,7 +57,7 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
             viewing = player_page if drawing is host_page else host_page
             await drawing.click('.prompt-choices button:first-child')
-            await drawing.wait_for_selector('canvas.drawing-canvas')
+            await drawing.wait_for_selector('canvas.drawing-canvas.drawable')
             await viewing.wait_for_selector('canvas.drawing-canvas')
             box = await (await drawing.query_selector('canvas.drawing-canvas')).bounding_box()
             for offset in (40, 120, 200):
