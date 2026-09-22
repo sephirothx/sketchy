@@ -48,11 +48,13 @@ function clockOptions(format: TimeFormat): Intl.DateTimeFormatOptions {
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
 function formatterFor(kind: string, options: Intl.DateTimeFormatOptions, format = ""): Intl.DateTimeFormat {
-  // The time zone too: a formatter keeps the one it was built in, where the
-  // `toLocale*String` calls it replaced read the current one every time - a
-  // laptop that wakes up somewhere else would keep the old clock.
-  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-  const key = `${kind}|${displayLocale ?? ""}|${format}|${timeZone}`;
+  // The time zone's offset too: a formatter keeps the zone it was built in,
+  // where the `toLocale*String` calls it replaced read the current one every
+  // time, so a laptop that wakes up somewhere else would keep the old clock.
+  // The offset rather than the zone's name, which costs as much to read
+  // (~22 µs, it builds a formatter) as the call the cache saves; the offset
+  // is ~0.5 µs and moves when the zone does (#991 re-review).
+  const key = `${kind}|${displayLocale ?? ""}|${format}|${new Date().getTimezoneOffset()}`;
   let formatter = formatters.get(key);
   if (!formatter) {
     formatter = new Intl.DateTimeFormat(displayLocale, options);
