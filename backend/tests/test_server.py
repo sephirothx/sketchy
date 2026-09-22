@@ -1,5 +1,7 @@
 """The production runner drains before Uvicorn closes established sockets."""
 
+from pathlib import Path
+import re
 import signal
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, Mock, patch
@@ -143,3 +145,35 @@ def test_the_keep_alive_timeout_is_decided_rather_than_inherited():
     config = draining.call_args.args[0]
     assert config.timeout_keep_alive == server.KEEP_ALIVE_SECONDS
     assert config.timeout_keep_alive > uvicorn.Config("app.main:app").timeout_keep_alive
+
+
+def test_the_event_loop_and_http_parser_are_named_and_actually_used():
+    """#977: `asyncio.run` with no loop factory built a stock loop whatever
+    `loop` said, and neither library was a requirement - so what served was
+    whatever the environment happened to hold."""
+    with (
+        patch.object(server, "DrainingServer") as draining,
+        patch.object(server, "asyncio") as asyncio_module,
+    ):
+        server.run()
+
+    config = draining.call_args.args[0]
+    assert (config.loop, config.http) == ("uvloop", "httptools")
+    factory = asyncio_module.run.call_args.kwargs["loop_factory"]
+    import uvloop
+
+    loop = factory()
+    try:
+        assert isinstance(loop, uvloop.Loop)
+    finally:
+        loop.close()
+    config.load()
+    from uvicorn.protocols.http.httptools_impl import HttpToolsProtocol
+
+    assert config.http_protocol_class is HttpToolsProtocol
+
+
+def test_the_named_libraries_are_pinned_requirements():
+    requirements = (Path(__file__).parents[1] / "requirements.txt").read_text()
+    for name in ("uvloop", "httptools"):
+        assert re.search(rf"^{name}==", requirements, re.MULTILINE), name

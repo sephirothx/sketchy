@@ -31,6 +31,16 @@ _TERMINATION_SIGNALS = frozenset({signal.SIGINT, signal.SIGTERM})
 # that closes first, which it can do without a request in flight (#735).
 KEEP_ALIVE_SECONDS = 75
 
+# The event loop and the HTTP parser, named rather than left to what happens to
+# be installed (#977) - the reason #561 named the WebSocket library. Stock
+# asyncio with h11 is what ran until now, whatever the environment held,
+# because `asyncio.run` below was handed no loop factory and uvicorn's own
+# choice never reached it. Measured: an HTTP request or a long-poll costs the
+# loop ~75 us through h11 and ~13 us through httptools on uvloop, and the loop
+# every room shares is also the one carrying their strokes.
+EVENT_LOOP = "uvloop"
+HTTP_PROTOCOL = "httptools"
+
 
 class DrainingServer(uvicorn.Server):
     """Stop listeners, drain existing games, then run normal Uvicorn shutdown."""
@@ -106,13 +116,17 @@ def run() -> None:
         # Named, not "auto": which library answers a WebSocket decides the
         # deflate window, and auto decided it by what happened to be installed.
         ws=WS_PROTOCOL,
+        loop=EVENT_LOOP,
+        http=HTTP_PROTOCOL,
         timeout_keep_alive=KEEP_ALIVE_SECONDS,
         # This bound begins after the application drain. Leave enough time for
         # the ordinary 10-second atomic finished-history write to settle.
         timeout_graceful_shutdown=15,
     )
     try:
-        asyncio.run(DrainingServer(config).serve())
+        # The factory is what makes `loop` above true: `asyncio.run` would
+        # otherwise build a stock loop and uvicorn would serve on it.
+        asyncio.run(DrainingServer(config).serve(), loop_factory=config.get_loop_factory())
     except KeyboardInterrupt:
         # Uvicorn re-raises the SIGINT it captured once its own graceful
         # shutdown has finished, and asyncio.run turns that into a traceback.
