@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
@@ -100,7 +100,7 @@ interface ToolbarProps {
   onSave?: () => void;
 }
 
-export function Toolbar({
+export const Toolbar = memo(function Toolbar({
   color,
   onColorChange,
   brushWidth,
@@ -638,4 +638,4 @@ export function Toolbar({
       </div>
     </div>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
@@ -62,10 +62,12 @@ export function useToolbarState(isDrawer: boolean) {
 
   const activeWidth = tool === "eraser" ? eraserWidth : brushWidth;
 
-  function handleWidthChange(newWidth: number) {
+  // Stable per tool, so the memoised Toolbar is not re-rendered - and its
+  // layout re-measured - by a new function on every gameplay render (#987).
+  const handleWidthChange = useCallback((newWidth: number) => {
     if (tool === "eraser") setEraserWidth(newWidth);
     else setBrushWidth(newWidth);
-  }
+  }, [tool]);
 
   return {
     color,
