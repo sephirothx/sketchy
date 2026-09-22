@@ -358,3 +358,85 @@ async def test_the_not_found_shell_ignores_validators_meant_for_another_url(buil
 
     assert status == 404
     assert body == index
+
+
+async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path):
+    """A `<file>.br` symlink planted in the build output pointed outside the
+    tree, and was served under the original's name - bytes StaticFiles refuses
+    under their own (#978 review). Reachable only with write access to the
+    build output, so this is defence in depth."""
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "secret.txt").write_bytes(b"not part of the build" * 50)
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    _write_build(dist)
+    asset = dist / "assets" / "escape-AbCdEf12.js"
+    asset.write_bytes(b"export const ok = true;\n" * 100)
+    (dist / "assets" / "escape-AbCdEf12.js.br").symlink_to(outside / "secret.txt")
+    # And a directory that merely looks like a copy must not raise mid-response.
+    (dist / "assets" / "weird-AbCdEf12.js").write_bytes(b"export const weird = 1;\n" * 100)
+    (dist / "assets" / "weird-AbCdEf12.js.br").mkdir()
+    app = FastAPI()
+    configure_frontend(app, dist)
+
+    escaped = await request(app, "/assets/escape-AbCdEf12.js", headers={"Accept-Encoding": "br"})
+    weird = await request(app, "/assets/weird-AbCdEf12.js", headers={"Accept-Encoding": "br"})
+
+    assert escaped[0] == 200 and escaped[2] == asset.read_bytes()
+    assert "content-encoding" not in escaped[1]
+    assert weird[0] == 200 and "content-encoding" not in weird[1]
+
+
+async def test_a_304_answers_for_the_representation_it_would_have_sent(built_app):
+    """The conditional was evaluated against the identity file before a copy
+    was chosen, so the 304 carried the identity `ETag` and no `Vary`: a shared
+    cache could then hand the Brotli body to a client that asked for none
+    (#978 review)."""
+    app, _, _ = built_app
+    accept = {"Accept-Encoding": "br"}
+
+    _, identity_headers, _ = await request(
+        app, "/assets/app-AbCdEf12.js", headers={"Accept-Encoding": "identity"}
+    )
+    _, brotli_headers, _ = await request(app, "/assets/app-AbCdEf12.js", headers=accept)
+    assert identity_headers["etag"] != brotli_headers["etag"]
+
+    status, headers, body = await request(
+        app,
+        "/assets/app-AbCdEf12.js",
+        headers={**accept, "If-None-Match": brotli_headers["etag"]},
+    )
+    assert (status, body) == (304, b"")
+    assert headers["etag"] == brotli_headers["etag"]
+    assert "accept-encoding" in headers.get("vary", "").lower()
+
+    # The identity validator does not match the copy the client would get.
+    stale, _, _ = await request(
+        app,
+        "/assets/app-AbCdEf12.js",
+        headers={**accept, "If-None-Match": identity_headers["etag"]},
+    )
+    assert stale == 200
+
+    # An identity answer says so too: the representation varies either way.
+    _, plain_headers, _ = await request(
+        app, "/assets/app-AbCdEf12.js", headers={"Accept-Encoding": "identity"}
+    )
+    assert "accept-encoding" in plain_headers.get("vary", "").lower()
+    plain_304, plain_304_headers, _ = await request(
+        app,
+        "/assets/app-AbCdEf12.js",
+        headers={"Accept-Encoding": "identity", "If-None-Match": identity_headers["etag"]},
+    )
+    assert plain_304 == 304
+    assert "accept-encoding" in plain_304_headers.get("vary", "").lower()
+
+    # A 304 from the modification time carries `Vary` as well.
+    by_time, time_headers, _ = await request(
+        app,
+        "/assets/app-AbCdEf12.js",
+        headers={**accept, "If-Modified-Since": brotli_headers["last-modified"]},
+    )
+    assert by_time == 304
+    assert "accept-encoding" in time_headers.get("vary", "").lower()

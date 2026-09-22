@@ -2302,7 +2302,7 @@ fallbacks) `no-cache`, so browsers discover new deployments promptly. Every text
 the build emits has a Brotli (`.br`) and a gzip (`.gz`) copy beside it, and the server
 answers with the best one `Accept-Encoding` admits — a coding given `q=0` is refused —
 setting `Content-Encoding` and `Vary: Accept-Encoding`. The copy has its own `ETag`, so
-a conditional request is answered against the bytes the client would receive. Nothing
+a conditional request is answered against the bytes the client would receive — the copy is chosen before the validators are compared, so a 304 carries that copy's `ETag` and `Vary: Accept-Encoding`, never the identity file's (#978). A copy is served only when it is a regular file: a symlink or a directory wearing the `.br` name is ignored. Nothing
 static is compressed per request ([`backend/app/compression.py`](../backend/app/compression.py), #978).
 Dynamic responses are gzipped at level 4. Images, fonts, audio and video never are,
 because they are compressed formats already. A reverse proxy may take over compression,

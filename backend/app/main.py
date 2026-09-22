@@ -17,6 +17,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
+from starlette.responses import FileResponse
 from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
@@ -139,6 +140,27 @@ class SPAStaticFiles(StaticFiles):
     missing file, and anything under /api/, stays a plain 404 with no body.
     """
 
+    def file_response(self, full_path, stat_result, scope, status_code: int = 200):
+        """Answer with the build's compressed copy when the client takes one,
+        and decide the conditional **once**, against what will be sent (#978).
+
+        Starlette evaluates `If-None-Match`/`If-Modified-Since` against the
+        identity file and answers 304 from it, before any copy is chosen: that
+        304 carried the identity `ETag` and no `Vary`, so a shared cache could
+        hand the Brotli body to a client that asked for none (#978 review).
+        """
+        response = FileResponse(full_path, status_code=status_code, stat_result=stat_result)
+        variant = precompressed_variant(response, scope)
+        if variant is not None:
+            variant.status_code = status_code
+            response = variant
+        # The representation varies by `Accept-Encoding` whether or not a copy
+        # exists here, and a 304 repeats what its 200 would have carried.
+        response.headers.add_vary_header("Accept-Encoding")
+        if status_code == 200 and self.is_not_modified(response.headers, Headers(scope=scope)):
+            return NotModifiedResponse(response.headers)
+        return response
+
     async def get_response(self, path: str, scope):
         # The build's compressed copies are served in place of the file they
         # sit beside, never under their own names: asked for directly, one
@@ -170,16 +192,6 @@ class SPAStaticFiles(StaticFiles):
             # normalizes that one, and the root arrives as "." rather than "/".
             if not is_client_route(scope["path"]):
                 response.status_code = 404
-
-        # The build's own compressed copy when the client takes one, so
-        # nothing is compressed on the loop for a static file (#978).
-        variant = precompressed_variant(response, scope)
-        if variant is not None:
-            status_code = response.status_code
-            response = variant
-            response.status_code = status_code
-            if status_code == 200 and self.is_not_modified(response.headers, Headers(scope=scope)):
-                response = NotModifiedResponse(response.headers)
 
         if path.startswith("assets/"):
             response.headers["Cache-Control"] = (

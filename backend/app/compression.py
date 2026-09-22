@@ -16,6 +16,7 @@ them slightly larger.
 from __future__ import annotations
 
 import os
+import stat
 
 from starlette.datastructures import Headers, MutableHeaders
 from starlette.middleware.gzip import GZipMiddleware, GZipResponder, IdentityResponder
@@ -64,6 +65,16 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
     compression middleware pass it through untouched. The sibling's own size
     and modification time give it its own validators, so a conditional request
     is answered against the bytes it would actually receive.
+
+    A sibling is only served when `lstat` says it is a **regular file**, which
+    is the check the suffix trick needs (#978 review): a `<file>.br` symlink
+    planted in the build output would otherwise serve a file from outside the
+    tree - bytes `StaticFiles` refuses under their own name - and a directory
+    called `<file>.br` would raise after the response had started. A symlinked
+    parent inside the build needs no check here: `StaticFiles` refuses the
+    original under that path first, so there is no response to attach a copy
+    to. `directory` is accepted for callers that want to say where the build
+    is; it is not used to decide.
     """
     if not isinstance(response, FileResponse):
         return None
@@ -73,6 +84,9 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
             continue
         sibling = f"{response.path}{suffix}"
         try:
+            link_stat = os.lstat(sibling)
+            if not stat.S_ISREG(link_stat.st_mode):
+                continue
             stat_result = os.stat(sibling)
         except OSError:
             continue
