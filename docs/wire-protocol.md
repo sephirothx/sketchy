@@ -2296,11 +2296,17 @@ must not bury the one change an operator made.
 ### Static delivery
 
 When `frontend/dist` exists it is mounted on the same FastAPI app
-([`backend/app/deployment.py`](../backend/app/deployment.py)): gzip for eligible
-responses, Vite's fingerprinted `/assets/` served `immutable` with a one-year lifetime,
-and `index.html` (including client-route fallbacks) served `no-cache` so browsers
-discover new deployments promptly. A reverse proxy may replace the gzip layer but must
-preserve that cache distinction and send `Vary: Accept-Encoding`.
+([`backend/app/main.py`](../backend/app/main.py)). Vite's fingerprinted `/assets/` are
+served `immutable` with a one-year lifetime, and `index.html` (including client-route
+fallbacks) `no-cache`, so browsers discover new deployments promptly. Every text file
+the build emits has a Brotli (`.br`) and a gzip (`.gz`) copy beside it, and the server
+answers with the best one `Accept-Encoding` admits — a coding given `q=0` is refused —
+setting `Content-Encoding` and `Vary: Accept-Encoding`. The copy has its own `ETag`, so
+a conditional request is answered against the bytes the client would receive. Nothing
+static is compressed per request ([`backend/app/compression.py`](../backend/app/compression.py), #978).
+Dynamic responses are gzipped at level 4. Images, fonts, audio and video never are,
+because they are compressed formats already. A reverse proxy may take over compression,
+but must keep the cache distinction and `Vary: Accept-Encoding`.
 
 ---
 

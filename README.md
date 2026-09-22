@@ -1658,6 +1658,7 @@ backend/
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
     api/          REST routers: player profiles, prompt lists, and prompt stats
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, health and room endpoints
+    compression.py Serving the build's precompressed copies; cheap gzip for what stays dynamic
     handlers/
       __init__.py    Registers all handler domains and returns their lifecycle context
       context.py     Shared HandlerContext for Socket.IO, rooms, timers, and repositories
@@ -2313,8 +2314,10 @@ locally without a PostgreSQL server, omit them all — the same `frontend/dist`
 is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
-so the whole game (UI + API + WebSocket) is served from a single port. The built-in server
-gzip-compresses eligible responses, serves Vite's fingerprinted `/assets/` files with a
+so the whole game (UI + API + WebSocket) is served from a single port. The build writes a
+Brotli and a gzip copy beside every text file it emits, and the server hands over whichever
+the browser accepts instead of compressing on the loop every room shares (what is left
+dynamic is gzipped at level 4; images and fonts never are). It serves Vite's fingerprinted `/assets/` files with a
 one-year `immutable` cache policy, and serves `index.html` (including client-route fallbacks)
 with `no-cache` so browsers discover new deployments promptly. A URL the client has no page
 for gets that same shell — it is what draws the not-found page — but with a **404** status,
@@ -2330,7 +2333,7 @@ player may send with a line about what they were doing. The two ways out appear 
 report has gone (or could not go), so a crash is heard about before it is left behind.
 Browser-stored settings are left alone; only the in-memory game state is reset.
 
-If a reverse proxy handles compression instead, it may replace the gzip layer, but it should
+If a reverse proxy handles compression instead, it may serve the build's `.br`/`.gz` copies itself or compress on its own, but it should
 preserve the same cache distinction: fingerprinted assets are immutable while the SPA HTML
 must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encoding`.
 
