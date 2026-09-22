@@ -49,25 +49,48 @@ export async function reloadForMissingChunk(environment: ChunkReloadEnvironment)
   return true;
 }
 
-/** The chunk URL a failed dynamic import names, where the browser says. */
+/** The chunk a failed import or preload names, where the error says: an
+    absolute URL (Chrome, Firefox) or a root-relative `/assets/` path (Vite's
+    own "Unable to preload CSS for ..."). */
 export function failedChunkUrl(error: unknown): string | null {
   const message = error instanceof Error ? error.message : String(error ?? "");
-  return message.match(/https?:\/\/\S+?\.(?:js|css)\b/)?.[0] ?? null;
+  return message.match(/(?:https?:\/\/[^\s]+?)?\/assets\/[^\s]+?\.(?:js|css)\b/)?.[0] ?? null;
+}
+
+/** How to find out whether a failed chunk is gone, or null when the failure
+    is not a missing chunk at all.
+
+A named chunk is asked for again: a 404 is a deploy, anything else is not.
+An unnamed failure is Safari's import error - always a `TypeError` whose
+message names nothing - and there a server that answers is the best evidence
+there is. Anything else unnamed is the module throwing while it evaluated,
+which a reload does not fix and which would cost the client error log the
+crash report is about to read. */
+export function chunkCheckFor(error: unknown): (() => Promise<boolean>) | null {
+  const url = failedChunkUrl(error);
+  if (url) {
+    return () => fetch(url, { method: "HEAD", cache: "no-store" }).then(
+      (response) => response.status === 404,
+      () => false,
+    );
+  }
+  if (!(error instanceof TypeError)) return null;
+  return () => fetch("/", { method: "HEAD", cache: "no-store" }).then(
+    (response) => response.ok,
+    () => false,
+  );
 }
 
 /** Answer Vite's report of a failed dynamic import, for the whole app. */
 export function installChunkReload(): void {
   if (typeof window === "undefined") return;
   window.addEventListener("vite:preloadError", (event) => {
-    const url = failedChunkUrl((event as Event & { payload?: unknown }).payload);
+    const chunkIsGone = chunkCheckFor((event as Event & { payload?: unknown }).payload);
+    if (!chunkIsGone) return;
     void reloadForMissingChunk({
       build: `${__APP_COMMIT_SHA__} ${__APP_BUILD_TIME__}`,
       storage: sessionStorage,
-      chunkIsGone: () =>
-        fetch(url ?? "/", { method: "HEAD", cache: "no-store" }).then(
-          (response) => (url ? response.status === 404 : response.ok),
-          () => false,
-        ),
+      chunkIsGone,
       reload: () => window.location.reload(),
     });
   });

@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { failedChunkUrl, reloadForMissingChunk } from "../src/lib/chunkReload.ts";
+import { chunkCheckFor, failedChunkUrl, reloadForMissingChunk } from "../src/lib/chunkReload.ts";
 
 function environment({ gone = true, stored = null, throws = false } = {}) {
   const calls = { reloads: 0, written: null };
@@ -66,6 +66,17 @@ test("the failed chunk is read from the browser's error, where it is named", () 
     failedChunkUrl(new TypeError("error loading dynamically imported module: http://localhost:8000/assets/de-X9.js")),
     "http://localhost:8000/assets/de-X9.js",
   );
+  // Vite's own CSS preload failure names a root-relative path.
+  assert.equal(failedChunkUrl(new Error("Unable to preload CSS for /assets/gallery-Ab12.css")), "/assets/gallery-Ab12.css");
   // Safari's message names nothing; the caller falls back to asking the server.
   assert.equal(failedChunkUrl(new TypeError("Importing a module script failed.")), null);
+});
+
+test("a module that threw while evaluating is not a missing chunk, and gets no reload", () => {
+  // A reload fixes nothing there and loses the client error log.
+  assert.equal(chunkCheckFor(new Error("boom inside the page module")), null);
+  assert.equal(chunkCheckFor(new RangeError("Invalid array length")), null);
+  // Named chunks and Safari's unnamed import error are still checked.
+  assert.equal(typeof chunkCheckFor(new Error("Unable to preload CSS for /assets/x-1.css")), "function");
+  assert.equal(typeof chunkCheckFor(new TypeError("Importing a module script failed.")), "function");
 });
