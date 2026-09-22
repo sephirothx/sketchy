@@ -2296,8 +2296,10 @@ must not bury the one change an operator made.
 ### Static delivery
 
 When `frontend/dist` exists it is mounted on the same FastAPI app
-([`backend/app/deployment.py`](../backend/app/deployment.py)): gzip for eligible
-responses, Vite's fingerprinted `/assets/` served `immutable` with a one-year lifetime,
+([`backend/app/deployment.py`](../backend/app/deployment.py)): the build's own Brotli or gzip
+copy of a file when the browser accepts one (`Content-Encoding` set, `Vary: Accept-Encoding`,
+the copy's own `ETag`, #978), gzip at level 4 for other eligible responses and never for fonts
+or images, Vite's fingerprinted `/assets/` served `immutable` with a one-year lifetime,
 and `index.html` (including client-route fallbacks) served `no-cache` so browsers
 discover new deployments promptly. A reverse proxy may replace the gzip layer but must
 preserve that cache distinction and send `Vary: Accept-Encoding`.

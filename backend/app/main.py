@@ -15,7 +15,10 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.staticfiles import NotModifiedResponse
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
+from starlette.responses import FileResponse
 from starlette.middleware.gzip import GZipMiddleware
 
 from app.api.errors import install_refusal_handler
@@ -148,6 +151,7 @@ class SPAStaticFiles(StaticFiles):
             if not is_client_route(scope["path"]):
                 response.status_code = 404
 
+        response = self._precompressed(response, scope)
         if path.startswith("assets/"):
             response.headers["Cache-Control"] = (
                 "public, max-age=31536000, immutable"
@@ -158,11 +162,69 @@ class SPAStaticFiles(StaticFiles):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
+    def _precompressed(self, response, scope):
+        """The build's Brotli or gzip copy of a file, when the browser takes it (#978).
+
+        `frontend/scripts/precompress.mjs` writes `<file>.br` and `<file>.gz`
+        beside everything worth compressing, once, at build time; without them
+        the bundle was gzipped at level 9 on the event loop for every client
+        (~22 ms per cold page load). The copy answers with the original's
+        type, its own validator, and a 304 when that validator is current.
+        """
+        if not isinstance(response, FileResponse) or response.status_code != 200:
+            return response
+        request_headers = Headers(scope=scope)
+        accepted = request_headers.get("accept-encoding", "").lower()
+        for encoding, suffix in (("br", ".br"), ("gzip", ".gz")):
+            if encoding not in accepted:
+                continue
+            sibling = Path(str(response.path) + suffix)
+            try:
+                sibling_stat = sibling.stat()
+            except OSError:
+                continue
+            compressed = FileResponse(
+                sibling,
+                stat_result=sibling_stat,
+                media_type=response.media_type,
+                headers={"Content-Encoding": encoding, "Vary": "Accept-Encoding"},
+            )
+            if self.is_not_modified(compressed.headers, request_headers):
+                return NotModifiedResponse(compressed.headers)
+            compressed.status_code = response.status_code
+            return compressed
+        response.headers["Vary"] = "Accept-Encoding"
+        return response
+
+
+#: What the response middleware never compresses: already-compressed formats,
+#: where a second pass costs CPU for nothing (a woff2 came out 23 bytes larger).
+INCOMPRESSIBLE_SUFFIXES = frozenset(
+    {".woff", ".woff2", ".png", ".jpg", ".jpeg", ".gif", ".webp", ".avif", ".ico",
+     ".mp3", ".ogg", ".wav", ".br", ".gz", ".zip"}
+)
+#: For what is compressed on the fly - API JSON, mostly - a level that costs a
+#: quarter of Starlette's default 9 for a few percent more bytes (#978).
+DYNAMIC_GZIP_LEVEL = 4
+
+
+class DynamicGZipMiddleware(GZipMiddleware):
+    """Gzip at `DYNAMIC_GZIP_LEVEL`, and never an already-compressed file."""
+
+    def __init__(self, app, minimum_size: int = 500) -> None:
+        super().__init__(app, minimum_size=minimum_size, compresslevel=DYNAMIC_GZIP_LEVEL)
+
+    async def __call__(self, scope, receive, send) -> None:
+        if scope["type"] == "http" and Path(scope["path"]).suffix.lower() in INCOMPRESSIBLE_SUFFIXES:
+            await self.app(scope, receive, send)
+            return
+        await super().__call__(scope, receive, send)
+
 
 def configure_frontend(app: FastAPI, directory: Path) -> None:
     """Enable static compression and mount the production frontend when present."""
 
-    app.add_middleware(GZipMiddleware, minimum_size=500)
+    app.add_middleware(DynamicGZipMiddleware, minimum_size=500)
     if directory.is_dir():
         app.mount(
             "/",

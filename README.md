@@ -1722,6 +1722,7 @@ frontend/
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
+  scripts/precompress.mjs  Post-build: a Brotli and a gzip copy beside each compressible file in dist/
 ops/
   prometheus/       Scrape example, recording and alert rules (application and PostgreSQL)
   postgres/         initdb flags, postgresql.conf include, one-time init script, and its check
@@ -2305,8 +2306,12 @@ locally without a PostgreSQL server, omit them all — the same `frontend/dist`
 is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
-so the whole game (UI + API + WebSocket) is served from a single port. The built-in server
-gzip-compresses eligible responses, serves Vite's fingerprinted `/assets/` files with a
+so the whole game (UI + API + WebSocket) is served from a single port. `npm run build`
+ends by writing a Brotli and a gzip copy beside every compressible file in `dist/`
+(`frontend/scripts/precompress.mjs`), and the server hands over the copy the browser
+accepts rather than compressing the bundle per request, which was ~22 ms of event-loop
+time per cold page load at gzip level 9 (#978). Everything else it gzips at level 4, never an
+already-compressed format (fonts, images). It serves Vite's fingerprinted `/assets/` files with a
 one-year `immutable` cache policy, and serves `index.html` (including client-route fallbacks)
 with `no-cache` so browsers discover new deployments promptly. A URL the client has no page
 for gets that same shell — it is what draws the not-found page — but with a **404** status,
