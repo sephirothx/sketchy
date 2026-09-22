@@ -3320,7 +3320,7 @@ async def test_a_lobby_line_cited_the_moment_it_was_said_is_found(monkeypatch):
     reporter_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     target_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
     try:
-        reporter = await register(reporter_http, "LingerReporter")
+        await register(reporter_http, "LingerReporter")
         target = await register(target_http, "LingerTarget")
         line = await retention.record_lobby(
             user_id=target["id"], display_name="LingerTarget", name_color=None,
