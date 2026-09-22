@@ -297,16 +297,18 @@ def test_the_mail_refusal_says_what_to_set_without_quoting_the_environment():
 
 
 @pytest.mark.parametrize(
-    ("value", "expected"),
-    [(None, HISTORY_ENCODE_WORKERS), ("", HISTORY_ENCODE_WORKERS), ("4", 4), ("1", 1),
-     ("0", HISTORY_ENCODE_WORKERS), ("17", HISTORY_ENCODE_WORKERS), ("many", HISTORY_ENCODE_WORKERS)],
+    ("value", "expected"), [(None, HISTORY_ENCODE_WORKERS), ("", HISTORY_ENCODE_WORKERS), ("4", 4), ("1", 1), ("16", 16)]
 )
-def test_the_history_encode_pools_take_their_size_from_the_environment(
-    monkeypatch, value, expected
-):
+def test_the_history_encode_pools_take_their_size_from_the_environment(value, expected):
     """A host that ends more games at once than the documented ceiling can
-    widen the queue in front of staging's ten-second bound (#976)."""
-    monkeypatch.delenv("HISTORY_ENCODE_WORKERS", raising=False)
-    if value is not None:
-        monkeypatch.setenv("HISTORY_ENCODE_WORKERS", value)
-    assert history_encode_workers() == expected
+    widen the queue in front of the write (#976)."""
+    environ = {} if value is None else {"HISTORY_ENCODE_WORKERS": value}
+    assert history_encode_workers(environ) == expected
+
+
+@pytest.mark.parametrize("value", ["0", "17", "many", "-1"])
+def test_a_history_encode_width_it_cannot_use_is_refused(value):
+    """Like every other setting here: a typo is heard at startup, not served
+    silently as the default (#976 third review)."""
+    with pytest.raises(ValueError, match="HISTORY_ENCODE_WORKERS"):
+        history_encode_workers({"HISTORY_ENCODE_WORKERS": value})

@@ -330,23 +330,24 @@ class _UnpreparedDrawing:
     error: Exception
 
 
-# The history write's own threads (#976 review), rather than the default pool
+# The drawings' own threads (#976 review), rather than the default pool
 # `asyncio.to_thread` shares with blocking SMTP and everything else: a game's
-# drawings must never wait behind a slow mail relay for a thread.
-#
-# The queue behind them is what staging's ten-second bound is spent on when
-# many games end together: one stroke-heavy envelope is ~144 ms of encode, so
-# at `HISTORY_ENCODE_WORKERS` threads the whole documented ceiling of 50 rooms
-# ending in the same instant is ~7 s of queued work at 1 thread and ~1.8 s at
-# 4 - inside the bound, but not by much, and the threads share the GIL. Raise
-# the setting on a host that ends more games at once than that.
-_ENCODE_POOL = ThreadPoolExecutor(
-    max_workers=history_encode_workers(), thread_name_prefix="history-encode"
-)
+# drawings must never wait behind a slow mail relay for a thread. Built on
+# first use, so the value that sizes it is one startup has validated.
+_ENCODE_POOL: ThreadPoolExecutor | None = None
+
+
+def _encode_pool() -> ThreadPoolExecutor:
+    global _ENCODE_POOL
+    if _ENCODE_POOL is None:
+        _ENCODE_POOL = ThreadPoolExecutor(
+            max_workers=history_encode_workers(), thread_name_prefix="history-encode"
+        )
+    return _ENCODE_POOL
 
 
 async def _off_loop(function, *args):
-    return await asyncio.get_running_loop().run_in_executor(_ENCODE_POOL, function, *args)
+    return await asyncio.get_running_loop().run_in_executor(_encode_pool(), function, *args)
 
 
 def _prepare_drawing(payload: bytes) -> _PreparedDrawing:

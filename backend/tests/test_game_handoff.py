@@ -725,3 +725,66 @@ def test_a_drawing_row_cannot_be_built_without_its_prepared_bytes():
     prepared = inspect.signature(_turn_drawing).parameters["prepared"]
     assert prepared.default is inspect.Parameter.empty
     assert inspect.signature(_turn_drawing).parameters["sizing"].default is inspect.Parameter.empty
+
+
+def test_both_encode_pools_are_as_wide_as_the_setting(monkeypatch):
+    """The setting is only worth having if it reaches both pools: replacing
+    each `max_workers` with a literal passed every test (#976 third review)."""
+    import app.repositories.sqlalchemy as repository_module
+    import app.services.game_handoff as handoff
+
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "3")
+    monkeypatch.setattr(repository_module, "_ENCODE_POOL", None)
+    monkeypatch.setattr(handoff, "_ENVELOPE_POOL", None)
+    try:
+        assert repository_module._encode_pool()._max_workers == 3
+        assert handoff._envelope_pool()._max_workers == 3
+        assert repository_module._encode_pool()._thread_name_prefix == "history-encode"
+        assert handoff._envelope_pool()._thread_name_prefix == "history-envelope"
+    finally:
+        for module, name in ((repository_module, "_ENCODE_POOL"), (handoff, "_ENVELOPE_POOL")):
+            pool = getattr(module, name)
+            if pool is not None:
+                pool.shutdown(wait=False)
+            setattr(module, name, None)
+
+
+async def test_the_encode_is_not_inside_the_write_bound(monkeypatch):
+    """A room's ten-second bound is for the write. A burst of endings queueing
+    on the envelope pool must cost latency, not games, so an encode that takes
+    longer than the bound still ends with the game staged (#976 third review)."""
+    from types import SimpleNamespace
+
+    import app.services.game_flow as flow_module
+
+    monkeypatch.setattr(flow_module, "HISTORY_WRITE_TIMEOUT_SECONDS", 0.05)
+
+    class SlowEncode:
+        def __init__(self) -> None:
+            self.written: list[str] = []
+
+        async def encode(self, envelope):
+            await asyncio.sleep(0.2)
+            return envelope
+
+        async def stage_encoded(self, staged):
+            self.written.append(staged.game_id)
+            return StageOutcome.STAGED
+
+    worker = SlowEncode()
+    flow = object.__new__(flow_module.GameFlowService)
+    flow._ctx = SimpleNamespace(finished_games=worker)
+    outcomes: list[tuple[str, str]] = []
+    flow.note_history_outcome = lambda game_id, state, room=None: outcomes.append(
+        (game_id, state)
+    )
+    flow._note_abandoned_write = lambda room, kind, reason, started: outcomes.append(
+        (kind, reason)
+    )
+
+    await flow._hand_off_finished_game(
+        SimpleNamespace(id="room"), SimpleNamespace(game_id="game")
+    )
+
+    assert worker.written == ["game"], "the slow encode cost latency, not the game"
+    assert outcomes == []

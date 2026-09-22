@@ -775,6 +775,7 @@ process. These deployment settings can be tuned without code changes:
 | `EXPORT_MAX_BYTES` | `67108864` | Ceiling on one export document, in JSON bytes before compression; past it the job fails as `too_large` |
 | `HISTORY_HANDOFF_SWEEP_SECONDS` | `60` | How often the finished-game handoff loop looks for staged games nobody woke it for, retries the ones that are due, and reclaims a claim a crash left behind |
 | `HISTORY_HANDOFF_MAX_BYTES` | `16777216` | Ceiling on one staged finished game (deflated); past it the game is lost and counted as `too_large` |
+| `HISTORY_ENCODE_WORKERS` | `2` | Threads that encode a finished game, in each of the two pools that do it (the envelope's and the drawings'), 1-16. The encode is CPU off the event loop, so this is how many endings can be encoded at once before the rest queue; a host that ends many games at once can widen it, and a wrong value is refused at startup rather than served as the default |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |

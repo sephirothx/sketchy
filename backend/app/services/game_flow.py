@@ -1398,8 +1398,12 @@ class GameFlowService:
             return
         started = time.monotonic()
         try:
+            # The encode is not inside the bound (#976): it is CPU on the
+            # envelope pool, and a burst of endings queueing there must cost
+            # latency rather than games. The bound is for the write.
+            staged = await worker.encode(envelope)
             await asyncio.wait_for(
-                worker.stage(envelope), timeout=HISTORY_WRITE_TIMEOUT_SECONDS
+                worker.stage_encoded(staged), timeout=HISTORY_WRITE_TIMEOUT_SECONDS
             )
         except asyncio.TimeoutError:
             logger.error(

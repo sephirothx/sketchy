@@ -54,6 +54,7 @@ from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db, verify_least_privilege
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
+    history_encode_workers,
     is_production,
     public_base_url,
     reconnect_spread_seconds,
@@ -570,6 +571,8 @@ async def adopt_stored_settings() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Refused at startup rather than at the first finished game.
+    history_encode_workers()
     shutdown_coordinator.begin_startup(
         drain_seconds=shutdown_drain_seconds(),
         reconnect_spread_seconds=reconnect_spread_seconds(),

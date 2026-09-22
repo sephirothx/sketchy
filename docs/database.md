@@ -1213,7 +1213,10 @@ The checks keep a row honest: a `failed` row has a code and a time and **no payl
 any other row has a payload; a `processing` row has both halves of its claim.
 
 **Flow.** The staging insert is bounded like the direct write was (10 s) and is the one
-thing that can still lose a game: a database that is down at the moment a game ends.
+thing that can still lose a game: a database that is down at the moment a game ends. The
+bound covers the insert only — the envelope is encoded before it, off the loop and
+unbounded (#976), so a burst of endings queueing for an encode thread costs the room
+latency rather than its game.
 That loss is recorded exactly as before (`history.write_abandoned`, kind `handoff`) —
 the issue is explicit that an outbox in the same unavailable database is not an outage
 guarantee, and this table does not pretend to be one. Everything after the insert is
@@ -1240,8 +1243,11 @@ erased while an envelope waited is tombstoned on the way in, never restored.
 **Nothing is encoded on the event loop** (#976). The envelope's JSON and deflate at
 staging, its checksum and decode at replay, and in `save_game` the game's content digest
 and each drawing's stored form all run on small thread pools of their own — not the
-default pool, which blocking SMTP can hold while a staging waits inside its ten-second
-bound. `save_game` answers a replay of a game already written with one read before
+default pool, which blocking SMTP can hold while a staging waits for its insert. Each
+pool is `HISTORY_ENCODE_WORKERS` threads wide (2 by default, 1-16, refused at startup if
+it is neither), which is how many endings encode at once before the rest queue: one
+stroke-heavy envelope measures ~143 ms, so 50 rooms ending in the same instant is ~3.7 s
+of encode at the default. `save_game` answers a replay of a game already written with one read before
 encoding anything, and prepares the drawings *before* the transaction that holds every
 player's `users` row; a drawing that cannot be prepared fails the write only if it would
 be written, so an erased drawer's is still a tombstone. The stored bytes are unchanged.

@@ -257,16 +257,24 @@ def validate_worker_topology(environ: Mapping[str, str] | None = None) -> None:
 HISTORY_ENCODE_WORKERS = 2
 
 
-def history_encode_workers() -> int:
-    """How many threads encode finished games; `HISTORY_ENCODE_WORKERS` sets it."""
-    raw = os.environ.get("HISTORY_ENCODE_WORKERS", "").strip()
+def history_encode_workers(environ: Mapping[str, str] | None = None) -> int:
+    """How many threads encode finished games; `HISTORY_ENCODE_WORKERS` sets it.
+
+    Refuses a value it cannot use rather than quietly serving the default: a
+    host that meant to widen this queue should hear about a typo at startup,
+    the way every other setting in this module answers one.
+    """
+    values = os.environ if environ is None else environ
+    raw = values.get("HISTORY_ENCODE_WORKERS", "").strip()
     if not raw:
         return HISTORY_ENCODE_WORKERS
     try:
         value = int(raw)
-    except ValueError:
-        return HISTORY_ENCODE_WORKERS
-    return value if 1 <= value <= 16 else HISTORY_ENCODE_WORKERS
+    except ValueError as error:
+        raise ValueError("HISTORY_ENCODE_WORKERS must be an integer") from error
+    if not 1 <= value <= 16:
+        raise ValueError("HISTORY_ENCODE_WORKERS must be between 1 and 16")
+    return value
 
 
 def shutdown_drain_seconds(environ: Mapping[str, str] | None = None) -> float:
