@@ -720,3 +720,58 @@ async def test_a_reset_link_that_names_nothing_is_refused_before_anything_is_has
         codes.add(answer.status_code)
     assert 429 in codes, "the route is rate limited"
     assert hashes == []
+
+
+async def test_a_busy_pool_refuses_every_route_whose_hash_is_the_point(client, monkeypatch):
+    """The whole security argument of the cap is an asymmetry: the rehash after
+    a successful login is skipped, and every other hash is fatal. Suppressing
+    the refusal in one of those would report a password change that never
+    happened (#975 third review)."""
+    from app.auth import routes as routes_module
+    from app.auth.password import PasswordHashingBusy
+
+    await become_guest(client, "BusyVisitor")
+    registered = await client.post(
+        "/api/auth/register",
+        json={"username": "BusyRoutes", "password": "a-good-password"},
+    )
+    assert registered.status_code == 200
+    real_hash = routes_module.hash_password
+
+    async def busy(_password):
+        raise PasswordHashingBusy()
+
+    monkeypatch.setattr(routes_module, "hash_password", busy)
+
+    change = await client.post(
+        "/api/auth/password/change",
+        json={"currentPassword": "a-good-password", "password": "a-better-password"},
+    )
+    assert change.status_code == 503, change.text
+
+    reset = await client.post(
+        "/api/auth/password/reset",
+        json={"token": "whatever", "password": "a-better-password"},
+    )
+    assert reset.status_code in (400, 503), reset.text  # refused, never a silent success
+
+    await client.post("/api/auth/logout")
+    await become_guest(client, "BusyNewcomer")
+    fresh = await client.post(
+        "/api/auth/register",
+        json={"username": "BusyRegister", "password": "a-good-password"},
+    )
+    assert fresh.status_code == 503, fresh.text
+
+    # The password did not change under any of them.
+    monkeypatch.setattr(routes_module, "hash_password", real_hash)
+    still_the_old_one = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRoutes", "password": "a-good-password"},
+    )
+    assert still_the_old_one.status_code == 200
+    with_the_new_one = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRoutes", "password": "a-better-password"},
+    )
+    assert with_the_new_one.status_code == 401

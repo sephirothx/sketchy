@@ -373,6 +373,15 @@ def create_auth_router(
     )
     # Looser than requesting a reset: this costs a lookup rather than somebody
     # else's inbox, and one page load with a reload or two must not exhaust it.
+    # The POST that finishes a reset gets a bucket of its own: sharing the
+    # preflight's would let a page opened a few times behind one address spend
+    # the allowance the user needs for the last step (#975 third review).
+    reset_perform_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset_perform",
+        limit=_limit("AUTH_RESET_PERFORM_LIMIT", 10),
+        window_seconds=3600,
+    )
     reset_check_limiter = PersistentRateLimiter(
         session_factory,
         scope="password_reset_check",
@@ -1375,7 +1384,7 @@ def create_auth_router(
         # Limited like its siblings: this route hashes, and the hashing pool
         # is shared with every sign-in, so an unlimited one is a way to hold
         # that queue full from outside (#975 review).
-        await throttle(reset_check_limiter, request)
+        await throttle(reset_perform_limiter, request)
         # Read without consuming, so a password refused below leaves the link
         # unspent (R-AUTH-08, R-AUTH-10).
         reset_username, reset_email = await password_reset_identity(

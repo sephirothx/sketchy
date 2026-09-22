@@ -134,3 +134,11 @@ async def test_a_cancelled_caller_does_not_hand_its_slot_to_somebody_else(capped
         await asyncio.sleep(0.01)
     assert password._outstanding == 0
     assert await password.verify_password("hashed:x", "x") is True
+
+
+def test_the_shipped_bound_is_the_documented_one():
+    """Every test that exercises the cap overrides these, so the values the
+    server actually ships are asserted here (#975 third review)."""
+    assert password.QUEUED_PER_WORKER == 16
+    assert password.RETRY_AFTER_SECONDS == 1
+    assert 1 <= password.PASSWORD_HASH_WORKERS_DEFAULT <= 4

@@ -106,22 +106,28 @@ def max_queued() -> int:
 async def _off_loop(function, *args):
     """Run one hashing call on the capped pool, or refuse if it is backed up.
 
-    The count is only ever touched on the event loop, so it needs no lock.
+    The count is only ever written on the event loop - the worker thread posts
+    its release back - so it needs no lock.
     """
     global _outstanding
     pool = _pool()
     if _outstanding >= max_queued():
         raise PasswordHashingBusy()
+    loop = asyncio.get_running_loop()
+    # Submitted first: a `submit` that raises must not leave a slot taken for
+    # the life of the process (#975 third review).
+    job = pool.submit(function, *args)
     _outstanding += 1
     # Counted out when the job itself ends, not when the caller stops waiting:
     # a cancelled caller leaves queued work behind, and releasing its slot
-    # there would let the queue grow past the cap unseen (#975 review).
-    job = pool.submit(function, *args)
-    job.add_done_callback(_release)
+    # there would let the queue grow past the cap unseen (#975 review). The
+    # callback runs on the worker thread, so the count is put back on the loop
+    # rather than written from there.
+    job.add_done_callback(lambda _job: loop.call_soon_threadsafe(_release))
     return await asyncio.wrap_future(job)
 
 
-def _release(_job) -> None:
+def _release() -> None:
     global _outstanding
     _outstanding -= 1
 
