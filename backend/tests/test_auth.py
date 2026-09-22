@@ -651,3 +651,72 @@ def test_in_production_the_cookie_is_host_prefixed_and_secure_whatever_the_reque
     assert session_token_from_cookie_header("sketchy_session=abc") is None, "the plain name is not production's"
     monkeypatch.delenv("SKETCHY_ENV")
     assert session_token_from_cookie_header("sketchy_session=abc") == "abc"
+
+
+async def test_a_busy_hashing_pool_never_refuses_a_correct_password(client, monkeypatch):
+    """The rehash after a successful login is an optimisation (R-AUTH-01); the
+    cap's refusal must not turn a right password into a 503 - and refuse
+    exactly the accounts whose hash is out of date (#975 review)."""
+    from unittest.mock import AsyncMock
+
+    from app.auth import routes as routes_module
+    from app.auth.password import PasswordHashingBusy
+
+    await become_guest(client, "RehashVisitor")
+    await client.post(
+        "/api/auth/register",
+        json={"username": "BusyRehash", "password": "a-good-password"},
+    )
+    await client.post("/api/auth/logout")
+    monkeypatch.setattr(
+        routes_module, "password_needs_rehash", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        routes_module, "hash_password", AsyncMock(side_effect=PasswordHashingBusy())
+    )
+
+    response = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRehash", "password": "a-good-password"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.cookies or response.headers.get("set-cookie"), "signed in all the same"
+
+
+async def test_a_reset_link_that_names_nothing_is_refused_before_anything_is_hashed(
+    client, monkeypatch
+):
+    """The route hashes, and the hashing pool is shared with every sign-in, so
+    an unlimited one is a way to hold that queue full from outside (#975
+    review). It is limited like its siblings, and hashes only for a link that
+    still names an account."""
+    from app.auth import routes as routes_module
+
+    hashes = []
+    real_hash = routes_module.hash_password
+
+    async def counted(password):
+        hashes.append(1)
+        return await real_hash(password)
+
+    monkeypatch.setattr(routes_module, "hash_password", counted)
+
+    refused = await client.post(
+        "/api/auth/password/reset",
+        json={"token": "not-a-real-token", "password": "another-good-password"},
+    )
+
+    assert refused.status_code == 400
+    assert "expired or already been used" in refused.text
+    assert hashes == [], "no hash is spent on a link that names nothing"
+    # And the route is on a limiter, unlike before.
+    codes = set()
+    for _ in range(32):  # the check limiter's default is 30 an hour
+        answer = await client.post(
+            "/api/auth/password/reset",
+            json={"token": "not-a-real-token", "password": "another-good-password"},
+        )
+        codes.add(answer.status_code)
+    assert 429 in codes, "the route is rate limited"
+    assert hashes == []

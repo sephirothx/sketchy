@@ -1020,3 +1020,67 @@ async def test_a_reset_and_a_change_racing_for_one_account_apply_in_turn(
             )
         )
         assert live == 0
+
+
+async def test_resetting_with_a_token_that_is_no_longer_usable_changes_nothing(env):
+    """The route now refuses a link that names nobody before it hashes (#975
+    review), so the consuming path is proved here instead: it is the one that
+    decides under its own lock, and it must answer nothing rather than reset
+    somebody."""
+    from app.auth.recovery import reset_password
+
+    _, factory = env
+    assert (
+        await reset_password(
+            factory,
+            token="not-a-real-token",
+            password_hash="argon2-hash",
+        )
+        is None
+    )
+
+
+async def test_an_expired_or_spent_reset_token_is_refused_where_it_is_consumed(env):
+    """The route refuses a link that names nobody before hashing (#975
+    review), so these two are proved at the layer that decides: a token that
+    is past its life, and one already spent."""
+    from app.auth.tokens import consume_token, hash_token, token_is_usable
+    from app.domain_values import AuthTokenPurpose as TokenPurpose
+    from app.db.models import AuthToken, User, generate_uuid
+
+    _, factory = env
+    now = datetime.now(timezone.utc)
+    account = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=account, display_name="Expired"))
+            await session.flush()
+            session.add_all([
+                AuthToken(
+                    token_hash=hash_token("expired-token"),
+                    purpose=TokenPurpose.PASSWORD_RESET.value,
+                    user_id=account,
+                    expires_at=now - timedelta(hours=1),
+                ),
+                AuthToken(
+                    token_hash=hash_token("spent-token"),
+                    purpose=TokenPurpose.PASSWORD_RESET.value,
+                    user_id=account,
+                    expires_at=now + timedelta(hours=1),
+                    consumed_at=now - timedelta(minutes=1),
+                ),
+            ])
+    async with factory() as session:
+        assert await token_is_usable(
+            session, token="expired-token", purpose=TokenPurpose.PASSWORD_RESET
+        ) is False
+        assert await token_is_usable(
+            session, token="spent-token", purpose=TokenPurpose.PASSWORD_RESET
+        ) is False
+        # Consuming takes the row either way, and answers nothing.
+        assert await consume_token(
+            session, token="expired-token", purpose=TokenPurpose.PASSWORD_RESET
+        ) is None
+        assert await consume_token(
+            session, token="spent-token", purpose=TokenPurpose.PASSWORD_RESET
+        ) is None

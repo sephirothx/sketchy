@@ -52,6 +52,7 @@ from app.auth.password import (
     DUMMY_HASH,
     MAX_PASSWORD_LENGTH,
     PasswordPolicyError,
+    PasswordHashingBusy,
     hash_password,
     password_needs_rehash,
     validate_password,
@@ -1004,12 +1005,20 @@ def create_auth_router(
         await login_guard.note_success(username=body.username)
 
         if await password_needs_rehash(credentials.password_hash):
-            replacement_hash = await hash_password(body.password)
-            await user_repo.replace_password_hash(
-                credentials.user.id,
-                credentials.password_hash,
-                replacement_hash,
-            )
+            try:
+                replacement_hash = await hash_password(body.password)
+            except PasswordHashingBusy:
+                # The password was right and the sign-in stands; raising the
+                # cap's refusal here would turn a correct password into a 503,
+                # and refuse exactly the accounts whose hash is out of date
+                # (#975 review). The next login rehashes instead.
+                logger.info("skipped the login rehash: the hashing pool is busy")
+            else:
+                await user_repo.replace_password_hash(
+                    credentials.user.id,
+                    credentials.password_hash,
+                    replacement_hash,
+                )
 
         account, _ = await _sign_this_browser_in(response, request, credentials.user)
         return user_payload(account)
@@ -1363,11 +1372,23 @@ def create_auth_router(
     async def perform_password_reset(
         body: ResetPasswordBody, request: Request, response: Response
     ):
+        # Limited like its siblings: this route hashes, and the hashing pool
+        # is shared with every sign-in, so an unlimited one is a way to hold
+        # that queue full from outside (#975 review).
+        await throttle(reset_check_limiter, request)
         # Read without consuming, so a password refused below leaves the link
         # unspent (R-AUTH-08, R-AUTH-10).
         reset_username, reset_email = await password_reset_identity(
             session_factory, token=body.token
         )
+        if reset_username is None and reset_email is None:
+            # A link that names nothing is refused before anything is hashed;
+            # `reset_password` below checks it again under its own lock.
+            raise Refusal(
+                400,
+                ErrorCode.RESET_LINK_INVALID,
+                "That reset link has expired or already been used.",
+            )
         try:
             password = validate_password(
                 body.password, username=reset_username, email=reset_email

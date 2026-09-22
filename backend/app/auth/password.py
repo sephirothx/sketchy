@@ -34,8 +34,9 @@ _hasher = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
 # and they used to run in anyio's shared 40-thread pool with nothing counting
 # them: login only *peeks* its limiters before verifying, so a burst reaches
 # argon2 all at once. Measured, 200 concurrent verifies there held the event
-# loop - every room's strokes and timers - at a p99 lag of 59 ms, and peaked
-# near 760 MiB; capped at 4 the same burst left the loop at 0.2 ms. Past the
+# loop - every room's strokes and timers - at a p99 lag of ~30 ms and a worst
+# of ~70 ms, and peaked ~600 MiB above idle; capped at 4 the same burst left
+# the loop at 0.2 ms and took ~58 MiB. Past the
 # cap a login waits in this pool's queue, which costs the loop nothing, and
 # static files no longer queue behind logins in the shared pool. One core is
 # left to the loop by default, since argon2 releases the GIL and keeps a core
@@ -53,16 +54,21 @@ PASSWORD_HASH_WORKERS_DEFAULT = max(1, min(4, (os.process_cpu_count() or 2) - 1)
 QUEUED_PER_WORKER = 16
 RETRY_AFTER_SECONDS = 1
 _executor: ThreadPoolExecutor | None = None
+_workers = 0
 _outstanding = 0
 
 
 class PasswordHashingBusy(Refusal):
-    """More hashing is waiting than the pool gets through in a moment."""
+    """More hashing is waiting than the pool gets through in a moment.
+
+    A server-state refusal rather than `too_fast`, which would tell a player
+    who did nothing wrong to slow down (#975 review).
+    """
 
     def __init__(self) -> None:
         super().__init__(
             503,
-            ErrorCode.TOO_FAST,
+            ErrorCode.SERVER_BUSY,
             "The server is busy signing people in. Try again in a moment.",
             retry_after_ms=RETRY_AFTER_SECONDS * 1000,
             headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
@@ -84,12 +90,17 @@ def password_hash_workers() -> int:
 
 
 def _pool() -> ThreadPoolExecutor:
-    global _executor
+    global _executor, _workers
     if _executor is None:
-        _executor = ThreadPoolExecutor(
-            max_workers=password_hash_workers(), thread_name_prefix="argon2"
-        )
+        _workers = password_hash_workers()
+        _executor = ThreadPoolExecutor(max_workers=_workers, thread_name_prefix="argon2")
     return _executor
+
+
+def max_queued() -> int:
+    """Hashes that may be waiting or running before the next is refused."""
+    _pool()
+    return _workers * QUEUED_PER_WORKER
 
 
 async def _off_loop(function, *args):
@@ -99,13 +110,20 @@ async def _off_loop(function, *args):
     """
     global _outstanding
     pool = _pool()
-    if _outstanding >= pool._max_workers * QUEUED_PER_WORKER:
+    if _outstanding >= max_queued():
         raise PasswordHashingBusy()
     _outstanding += 1
-    try:
-        return await asyncio.get_running_loop().run_in_executor(pool, function, *args)
-    finally:
-        _outstanding -= 1
+    # Counted out when the job itself ends, not when the caller stops waiting:
+    # a cancelled caller leaves queued work behind, and releasing its slot
+    # there would let the queue grow past the cap unseen (#975 review).
+    job = pool.submit(function, *args)
+    job.add_done_callback(_release)
+    return await asyncio.wrap_future(job)
+
+
+def _release(_job) -> None:
+    global _outstanding
+    _outstanding -= 1
 
 
 # Verified against when no account matches the given username, so that path

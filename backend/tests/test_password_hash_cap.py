@@ -8,6 +8,7 @@ import time
 import pytest
 
 from app.auth import password
+from app.refusals import ErrorCode
 
 
 class CountingHasher:
@@ -40,7 +41,7 @@ class CountingHasher:
 @pytest.fixture
 def capped(monkeypatch):
     """A fresh pool at a known cap, torn down after the test."""
-    monkeypatch.setenv("PASSWORD_HASH_WORKERS", "2")
+    monkeypatch.setenv("PASSWORD_HASH_WORKERS", "5")  # no default produces 5
     hasher = CountingHasher()
     monkeypatch.setattr(password, "_hasher", hasher)
     monkeypatch.setattr(password, "_executor", None)
@@ -53,14 +54,14 @@ def capped(monkeypatch):
 async def test_a_burst_of_logins_runs_at_most_the_cap_at_once(capped, monkeypatch):
     """Login peeks its limiters before verifying, so a burst reaches argon2
     whole; in the shared 40-thread pool 200 of them at once held the loop at
-    a p99 lag of 59 ms and took ~760 MiB."""
+    a p99 lag of ~30 ms and took ~600 MiB above idle."""
     monkeypatch.setattr(password, "QUEUED_PER_WORKER", 100)
     results = await asyncio.gather(
         *(password.verify_password("hashed:secret", "secret") for _ in range(30)),
         *(password.hash_password(f"pw-{index}") for index in range(10)),
     )
     assert capped.calls == 40
-    assert capped.most == 2
+    assert capped.most == 5
     assert results[:30] == [True] * 30
 
 
@@ -87,14 +88,17 @@ async def test_past_the_queue_depth_a_hash_is_refused_not_queued(capped, monkeyp
     """Login charges a failure only after verifying, so a burst of unknown
     usernames reaches argon2 whole; queued without a bound, every real login
     behind it waited the whole burst out (#975 review)."""
-    monkeypatch.setattr(password, "QUEUED_PER_WORKER", 3)  # 2 workers x 3 = 6
+    monkeypatch.setattr(password, "QUEUED_PER_WORKER", 2)  # 5 workers x 2 = 10
     results = await asyncio.gather(
-        *(password.verify_password("hashed:x", "x") for _ in range(10)),
+        *(password.verify_password("hashed:x", "x") for _ in range(14)),
         return_exceptions=True,
     )
     refused = [result for result in results if isinstance(result, password.PasswordHashingBusy)]
-    assert len(refused) == 4 and capped.calls == 6
+    assert len(refused) == 4 and capped.calls == 10
     assert refused[0].status_code == 503 and refused[0].headers["Retry-After"] == "1"
+    assert refused[0].code == ErrorCode.SERVER_BUSY, "a server-state refusal, not the caller's fault"
+    # A refusal costs no slot: the counter is back where it started.
+    assert password._outstanding == 0
     # And the pool takes work again once the backlog has gone.
     assert await password.verify_password("hashed:x", "x") is True
 
@@ -107,3 +111,26 @@ async def test_the_rehash_check_does_not_queue_behind_the_burst(capped, monkeypa
     monkeypatch.setattr(password, "_off_loop", no_pool)
     capped.check_needs_rehash = lambda value: True
     assert await password.password_needs_rehash("$argon2id$v=19$m=8,t=1,p=1$c2FsdA$aGFzaA") is True
+
+
+async def test_a_cancelled_caller_does_not_hand_its_slot_to_somebody_else(capped, monkeypatch):
+    """The work stays queued when the caller stops waiting, so the slot must
+    stay taken until the job itself ends (#975 review)."""
+    monkeypatch.setattr(password, "QUEUED_PER_WORKER", 1)  # 5 workers x 1 = 5
+    waiting = [
+        asyncio.create_task(password.verify_password("hashed:x", "x")) for _ in range(5)
+    ]
+    await asyncio.sleep(0.01)
+    for task in waiting:
+        task.cancel()
+    await asyncio.gather(*waiting, return_exceptions=True)
+    # The threads are still working through those five; a sixth is refused.
+    with pytest.raises(password.PasswordHashingBusy):
+        await password.verify_password("hashed:x", "x")
+    # Once they finish, the slots come back.
+    for _ in range(200):
+        if password._outstanding == 0:
+            break
+        await asyncio.sleep(0.01)
+    assert password._outstanding == 0
+    assert await password.verify_password("hashed:x", "x") is True
