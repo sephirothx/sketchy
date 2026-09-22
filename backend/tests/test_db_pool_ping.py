@@ -40,11 +40,14 @@ def test_the_idle_threshold_defaults_and_is_overridable(monkeypatch):
     assert "pool_pre_ping" not in get_engine_pool_options("postgresql+asyncpg://db/x")
 
 
-async def _pinged_engine(clock):
+async def _pinged_engine(clock, tmp_path):
+    """One pooled connection with the checkout listener, on the suite's engine:
+    the listener is the same code on both, and only PostgreSQL installs it."""
+    url = PG_URL if ON_POSTGRESQL else f"sqlite+aiosqlite:///{tmp_path / 'ping.db'}"
     engine = create_async_engine(
-        PG_URL,
-        connect_args=get_engine_connect_args(PG_URL),
-        **{**get_engine_pool_options(PG_URL), "pool_size": 1, "max_overflow": 0},
+        url,
+        connect_args=get_engine_connect_args(url),
+        **{**get_engine_pool_options(url), "pool_size": 1, "max_overflow": 0},
     )
     install_idle_ping(engine, idle_seconds=30, clock=clock)
     pings: list[int] = []
@@ -60,15 +63,20 @@ async def _pinged_engine(clock):
 
 
 async def _backend_pid(factory) -> int:
+    """Which pooled connection answered: the backend pid, or the driver
+    object's identity on SQLite."""
     async with factory() as session:
-        return (await session.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+        if ON_POSTGRESQL:
+            return (await session.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+        connection = await session.connection()
+        raw = await connection.get_raw_connection()
+        return id(raw.driver_connection)
 
 
-@needs_postgresql
-async def test_a_busy_connection_is_not_pinged():
+async def test_a_busy_connection_is_not_pinged(tmp_path):
     """The ping `pool_pre_ping` sent on every checkout was three round trips
     before a session's own work; a connection in steady use needs none."""
-    engine, factory, pings, _ = await _pinged_engine(Clock())
+    engine, factory, pings, _ = await _pinged_engine(Clock(), tmp_path)
     try:
         for _ in range(5):
             await _backend_pid(factory)
@@ -77,10 +85,9 @@ async def test_a_busy_connection_is_not_pinged():
         await engine.dispose()
 
 
-@needs_postgresql
-async def test_a_connection_quiet_for_the_threshold_is_pinged_once():
+async def test_a_connection_quiet_for_the_threshold_is_pinged_once(tmp_path):
     clock = Clock()
-    engine, factory, pings, _ = await _pinged_engine(clock)
+    engine, factory, pings, _ = await _pinged_engine(clock, tmp_path)
     try:
         first = await _backend_pid(factory)
         clock.now += 31
@@ -93,10 +100,10 @@ async def test_a_connection_quiet_for_the_threshold_is_pinged_once():
 
 
 @needs_postgresql
-async def test_a_connection_the_server_ended_is_replaced_without_a_ping():
+async def test_a_connection_the_server_ended_is_replaced_without_a_ping(tmp_path):
     """A terminated backend closes its socket, which the driver has seen by
     the next checkout: the caller gets a fresh connection, not the error."""
-    engine, factory, pings, _ = await _pinged_engine(Clock())
+    engine, factory, pings, _ = await _pinged_engine(Clock(), tmp_path)
     other = create_async_engine(PG_URL)
     try:
         victim = await _backend_pid(factory)
@@ -110,13 +117,12 @@ async def test_a_connection_the_server_ended_is_replaced_without_a_ping():
         await engine.dispose()
 
 
-@needs_postgresql
-async def test_a_quiet_connection_that_fails_its_ping_is_replaced():
+async def test_a_quiet_connection_that_fails_its_ping_is_replaced(tmp_path):
     """What only a ping finds: a peer that vanished without closing anything.
     Simulated by a failing ping, since a half-open socket cannot be made on
     loopback."""
     clock = Clock()
-    engine, factory, pings, dialect = await _pinged_engine(clock)
+    engine, factory, pings, dialect = await _pinged_engine(clock, tmp_path)
     try:
         first = await _backend_pid(factory)
         clock.now += 31
@@ -168,5 +174,25 @@ async def test_one_statement_reads_open_no_transaction(monkeypatch):
         async with factory() as session:
             await session.execute(text("SELECT 1"))
         assert started == [1]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    ON_POSTGRESQL, reason="asyncpg's flag is read-only; the terminated-backend test covers it there"
+)
+async def test_a_connection_the_driver_reports_closed_is_replaced_without_a_ping(tmp_path, monkeypatch):
+    """The free check: whatever the driver already knows is closed is never
+    handed out, and costs no ping to find."""
+    engine, factory, pings, _ = await _pinged_engine(Clock(), tmp_path)
+    try:
+        async with factory() as session:
+            connection = await session.connection()
+            raw = await connection.get_raw_connection()
+            driver = raw.driver_connection
+        first = id(driver)
+        monkeypatch.setattr(driver, "is_closed", lambda: True, raising=False)
+        assert await _backend_pid(factory) != first
+        assert pings == []
     finally:
         await engine.dispose()
