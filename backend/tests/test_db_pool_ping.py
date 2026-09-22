@@ -255,3 +255,95 @@ def test_the_installed_ping_honours_the_configured_threshold(monkeypatch):
     assert pings == [], "100 s is not quiet when the threshold is 900"
     check(object(), quiet_for(901), None)
     assert pings == [1]
+
+
+async def test_a_quiet_connection_whose_ping_answers_falsely_is_replaced(tmp_path):
+    """The production shape of a failed ping on asyncpg: the dialect funnels
+    the driver's error through its own handling and *returns False* rather
+    than raising, so a guard that only catches exceptions lets a dead
+    connection through. Deleting the falsy check passed both suites (#973
+    fourth review)."""
+    clock = Clock()
+    engine, factory, pings, dialect = await _pinged_engine(clock, tmp_path)
+    try:
+        first = await _backend_pid(factory)
+
+        def answers_falsely(_dbapi_connection):
+            pings.append(1)
+            return False
+
+        dialect._do_ping_w_event = answers_falsely
+        clock.now += 31
+        assert await _backend_pid(factory) != first, "the pooled connection was kept"
+        assert pings == [1]
+    finally:
+        await engine.dispose()
+
+
+async def test_a_sqlite_read_session_is_left_in_its_own_transaction(tmp_path):
+    """`read_session` is a PostgreSQL optimisation: SQLite's transaction is a
+    call into this process, and putting it under `AUTOCOMMIT` costs more than
+    it saves. Removing the dialect guard ran SQLite that way with both suites
+    green (#973 fourth review)."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db import read_session
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'read.db'}"
+    engine = create_async_engine(url, connect_args=get_engine_connect_args(url))
+    factory = async_sessionmaker(engine)
+    try:
+        async with read_session(factory) as session:
+            connection = await session.connection()
+            options = connection.sync_connection.get_execution_options()
+            assert options.get("isolation_level") is None, options
+            assert (await session.execute(text("SELECT 1"))).scalar_one() == 1
+            assert session.in_transaction()
+    finally:
+        await engine.dispose()
+
+
+async def test_the_threshold_is_the_boundary_it_says(tmp_path):
+    """Quiet *for* the threshold, not longer: only +31 s was ever probed, so
+    turning the comparison round passed (#973 fourth review)."""
+    clock = Clock()
+    engine, factory, pings, _ = await _pinged_engine(clock, tmp_path)
+    try:
+        await _backend_pid(factory)
+        clock.now += 29.9
+        await _backend_pid(factory)
+        assert pings == [], "a connection inside the window is not pinged"
+        clock.now += 30
+        await _backend_pid(factory)
+        assert pings == [1], "one that has reached it is"
+    finally:
+        await engine.dispose()
+
+
+async def test_zero_pings_every_checkout_again(tmp_path, monkeypatch):
+    """The documented way back to `pool_pre_ping`'s guarantee for a deployment
+    that wants it. Raising the minimum to 1 would take it away with every test
+    still green (#973 fourth review)."""
+    monkeypatch.setenv("DB_POOL_PING_IDLE_SECONDS", "0")
+    assert pool_ping_idle_seconds() == 0
+
+    clock = Clock()
+    url = PG_URL if ON_POSTGRESQL else f"sqlite+aiosqlite:///{tmp_path / 'always.db'}"
+    engine = create_async_engine(
+        url,
+        connect_args=get_engine_connect_args(url),
+        **{**get_engine_pool_options(url), "pool_size": 1, "max_overflow": 0},
+    )
+    install_idle_ping(engine, idle_seconds=pool_ping_idle_seconds(), clock=clock)
+    pings: list[int] = []
+    dialect = engine.sync_engine.dialect
+    real_ping = dialect.do_ping
+    dialect.do_ping = lambda connection: (pings.append(1), real_ping(connection))[1]
+    factory = async_sessionmaker(engine)
+    try:
+        for _ in range(3):
+            async with factory() as session:
+                await session.execute(text("SELECT 1"))
+        assert len(pings) >= 2, "every checkout after the first is pinged"
+    finally:
+        await engine.dispose()

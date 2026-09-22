@@ -44,11 +44,19 @@ class BlockService:
 
         A hit is the ordinary case - the cache is warmed when the sender takes
         a seat and invalidated on every change - and a miss is a bounded read.
-        A read that does not come back in time answers "nobody", and the line
-        goes out unfiltered: blocking is a presentation filter, not a security
-        boundary, and the sender is in the room either way, in the player list
-        and on the scoreboard. Silence would be the worse failure, and one the
-        sender could not see.
+        A read that does not come back in time, **or fails outright**, answers
+        "nobody" and the line goes out unfiltered: blocking is a presentation
+        filter, not a security boundary, and the sender is in the room either
+        way, in the player list and on the scoreboard. Silence would be the
+        worse failure, and one the sender could not see.
+
+        Since #973 a failure is one more shape this covers: a pooled
+        connection that died quietly less than 30 s after its last use fails
+        the next caller's first statement once, and that caller may be this
+        one. It is not retried here - a retry inside the chat path is a second
+        wait on the same database, which is the delay this method exists to
+        avoid - so the line goes out unfiltered and the pool replaces the
+        connection for whoever comes next.
         """
 
         if not blocked_user_id:
