@@ -8,6 +8,7 @@ import hmac
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.routing import get_route_path
 from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth.bans import suspension_payload
@@ -165,19 +166,34 @@ class SessionAuthMiddleware:
         # Read off the scope rather than built into a `Request` first: the
         # gate runs on every request including static files, and parsing a URL
         # to answer it costs more than the answer (#974 review).
-        if not scope["path"].startswith(SESSION_PATH_PREFIX):
+        #
+        # The route path, not `scope["path"]`: behind a proxy that serves this
+        # app under a prefix, uvicorn's `--root-path` leaves that prefix on
+        # the raw path, and every `/api/` request would arrive as
+        # `/prefix/api/...` - past the gate, with no session resolved and no
+        # suspension refused. Starlette's own routing answers the same
+        # question the same way, so the gate and the routes cannot disagree.
+        path = get_route_path(scope)
+        if not path.startswith(SESSION_PATH_PREFIX):
             _set_state(Request(scope), token="", ip_hash=None, session=None, banned_user_id=None)
             await self.app(scope, receive, send)
             return
         request = Request(scope)
-        refusal = await self._resolve(request)
+        refusal = await self._resolve(request, path)
         if refusal is not None:
             await refusal(scope, receive, send)
             return
         await self.app(scope, receive, send)
 
-    async def _resolve(self, request: Request) -> Response | None:
-        """Fill the request's session state; a refusal to send instead, if any."""
+    async def _resolve(self, request: Request, path: str) -> Response | None:
+        """Fill the request's session state; a refusal to send instead, if any.
+
+        Decided on the path the gate already resolved, not on
+        `request.url.path`: that one is re-parsed out of a rebuilt URL, so a
+        path holding an encoded `?` comes back cut short at it - and a cut
+        path is how `/api/anything%3F` would read as neither the API nor an
+        escape hatch.
+        """
         raw_token = request.cookies.get(cookie_name(), "")
         request.state.session_token = raw_token
         # Computed once here and left on the request, for every route that
@@ -197,19 +213,19 @@ class SessionAuthMiddleware:
             ),
         )
         privacy_escape_hatch = (
-            request.url.path.startswith("/api/auth/data-exports")
-            or request.url.path == "/api/auth/account"
-            or request.url.path == "/api/auth/logout"
+            path.startswith("/api/auth/data-exports")
+            or path == "/api/auth/account"
+            or path == "/api/auth/logout"
             # The drawings the suspension notice is about: the refusal below
             # names them, and this is the one path that can hand them over.
             # One per report the decision covered (#620), so the path names
             # which; the route checks it against that decision group.
-            or request.url.path.startswith("/api/suspension/drawings/")
+            or path.startswith("/api/suspension/drawings/")
         )
         if (
             resolution.banned_user_id is not None
-            and request.url.path.startswith("/api/")
-            and request.url.path != "/api/health"
+            and path.startswith("/api/")
+            and path != "/api/health"
             and not privacy_escape_hatch
         ):
             # Say why, and until when. A player told only that they are

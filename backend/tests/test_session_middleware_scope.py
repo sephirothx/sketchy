@@ -78,41 +78,88 @@ async def test_a_static_file_costs_no_statement_even_with_a_session_cookie(env):
     assert statements
 
 
+def _layers(root) -> list[tuple[object, str]]:
+    """Every ASGI layer reachable from `root`, mounts and unbuilt stacks included.
+
+    A linear walk down `.app` stops at the first router, so a
+    `BaseHTTPMiddleware` wrapping a mounted sub-application - or one added to a
+    router whose stack this process has not built yet - was invisible to it
+    (#974 third review).
+    """
+    found: list[tuple[object, str]] = []
+    seen: set[int] = set()
+    pending = [root]
+    while pending:
+        layer = pending.pop()
+        if layer is None or id(layer) in seen:
+            continue
+        seen.add(id(layer))
+        found.append((layer, type(layer).__name__))
+        pending.append(getattr(layer, "app", None))
+        pending.append(getattr(layer, "other_asgi_app", None))
+        pending.append(getattr(layer, "middleware_stack", None))
+        for route in getattr(layer, "routes", ()) or ():
+            pending.append(getattr(route, "app", None))
+        for middleware in getattr(layer, "user_middleware", ()) or ():
+            cls = getattr(middleware, "cls", None)
+            if isinstance(cls, type):
+                found.append((cls, cls.__name__))
+    return found
+
+
+def _base_http_middlewares(root) -> list[str]:
+    return [
+        name
+        for layer, name in _layers(root)
+        if isinstance(layer, BaseHTTPMiddleware)
+        or (isinstance(layer, type) and issubclass(layer, BaseHTTPMiddleware))
+    ]
+
+
 def test_nothing_in_the_exported_application_is_a_base_http_middleware():
     """Walked from `app.main.app`, the object uvicorn serves - not the bare
     router, which does not contain the layers wrapping it (#974 review).
     `BaseHTTPMiddleware` costs ~80 µs of loop time per request here, on every
     request including the static files this PR stops resolving sessions for.
     """
-    from app.main import api, app
+    from app.main import app
 
-    seen: list[str] = []
-    layer = app
-    while layer is not None:
-        seen.append(type(layer).__name__)
-        assert not isinstance(layer, BaseHTTPMiddleware), seen
-        layer = getattr(layer, "app", None) or getattr(layer, "other_asgi_app", None)
-    # …and the routers' own stack, which the walk above ends at.
-    offenders = [
-        middleware.cls.__name__
-        for middleware in api.user_middleware
-        if isinstance(middleware.cls, type) and issubclass(middleware.cls, BaseHTTPMiddleware)
-    ]
-    assert offenders == []
+    seen = [name for _layer, name in _layers(app)]
+    assert _base_http_middlewares(app) == [], seen
     assert "SecurityHeadersMiddleware" in seen and "ASGIApp" in seen, seen
+    assert "SessionAuthMiddleware" in seen, seen
 
 
-def test_the_walk_would_see_a_probe_anywhere_in_the_exported_stack(monkeypatch):
+def _wrapped(target):
+    return _Probe(target)
+
+
+def _mounted(target):
+    outer = FastAPI()
+    outer.mount("/sub", _Probe(target))
+    return outer
+
+
+def _added_to_a_router(target):
+    outer = FastAPI()
+    outer.add_middleware(_Probe)
+    outer.mount("/sub", target)
+    return outer
+
+
+class _Probe(BaseHTTPMiddleware):
+    pass
+
+
+@pytest.mark.parametrize("place", [_wrapped, _mounted, _added_to_a_router])
+def test_the_walk_would_see_a_probe_anywhere_in_the_exported_stack(place, monkeypatch):
     """The check above is only worth having if it reaches the layers the bare
-    router does not contain."""
-    from starlette.middleware.base import BaseHTTPMiddleware as Base
-
+    router does not contain: one wrapping the export, one inside a mount, and
+    one added to a router whose stack has not been built."""
     import app.main as main_module
 
-    class Probe(Base):
-        pass
-
-    monkeypatch.setattr(main_module, "app", Probe(main_module.app))
+    monkeypatch.setattr(main_module, "app", place(main_module.app))
+    assert _base_http_middlewares(main_module.app) == ["_Probe"]
     with pytest.raises(AssertionError):
         test_nothing_in_the_exported_application_is_a_base_http_middleware()
 
@@ -128,3 +175,59 @@ async def test_only_the_api_prefix_itself_resolves_a_session(env):
     for path in ("/apifoo", "/api", "/apifoo/api/x"):
         await client.get(path)
     assert statements == []
+
+
+async def test_a_prefix_deployment_still_resolves_its_api(monkeypatch):
+    """Behind a proxy that serves Sketchy under a prefix, uvicorn's
+    `--root-path` leaves the prefix on the raw path. Gating on that path would
+    let every `/api/` request past unresolved: no session, no suspension, and
+    the routes would still route (#974 third review)."""
+    monkeypatch.setenv("IP_HASH_SECRET", "prefix-test-secret")
+    factory, engine = await create_test_db()
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+
+    @app.get("/api/whoami")
+    async def whoami(request: Request):
+        return {"userId": request.state.user_id}
+
+    transport = ASGITransport(app=app, root_path="/sketchy")
+    client = AsyncClient(transport=transport, base_url="http://test")
+    try:
+        registered = await client.post(
+            "/sketchy/api/auth/register",
+            json={"username": "PrefixTester", "password": "a-good-password"},
+        )
+        assert registered.status_code == 200
+        answer = await client.get("/sketchy/api/whoami")
+        assert answer.json()["userId"] == registered.json()["id"]
+    finally:
+        await client.aclose()
+        await engine.dispose()
+
+
+async def test_a_suspension_is_refused_on_a_path_holding_an_encoded_question_mark(env, monkeypatch):
+    """The escape hatches are matched on the path the gate resolved, not on
+    `request.url.path`, which is re-parsed from a rebuilt URL and comes back
+    cut at the first `?` - including one that arrived percent-encoded. Cut,
+    `/api/auth/account%3Fx` reads as the account route and a suspended caller
+    is let through it (#974 third review)."""
+    import app.auth.middleware as middleware_module
+    from app.auth.sessions import SessionResolution
+
+    client, _statements = env
+
+    async def suspended(*_args, **_kwargs):
+        return SessionResolution(session=None, banned_user_id="banned-account")
+
+    async def payload(*_args, **_kwargs):
+        return {"reason": "suspended"}
+
+    monkeypatch.setattr(middleware_module, "resolve_session_status", suspended)
+    monkeypatch.setattr(middleware_module, "suspension_payload", payload)
+
+    assert (await client.get("/api/whoami")).status_code == 403
+    # The hatch itself still opens, on the path that really is the hatch.
+    assert (await client.get("/api/auth/account%3Fx")).status_code == 403
+    assert (await client.delete("/api/auth/account")).status_code != 403
