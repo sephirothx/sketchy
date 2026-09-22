@@ -1986,6 +1986,10 @@ backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
 
+# What a pooled connection pays before its first statement, pre-ping against idle-ping (#973)
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench \
+  backend/.venv/bin/python benchmarks/pool_checkout_ping.py --sessions 300
+
 # The stored drawing format, frame by frame: bytes, ratio, p95 encode/decode (#547)
 backend/.venv/bin/python benchmarks/drawing_compression.py
 
