@@ -29,6 +29,14 @@ MESSAGE_RETENTION = timedelta(days=30)
 # bounded memory rather than growing until the process dies.
 QUEUE_DEPTH = 2000
 WRITE_BATCH = 100
+# How long the writer waits after the first line of a batch for the rest of it
+# (#972). Taking only what was already queued made a batch of one: rooms talk
+# a line at a time, never two in the same instant, so the load gate wrote 2,885
+# lines in 2,874 transactions - each an insert plus the erasure barrier's two
+# reads, half of every statement the process ran. A line is reportable a
+# quarter of a second later than before; nothing reads it sooner, since
+# delivery never waited on this write and a report selects its own evidence.
+WRITE_LINGER_SECONDS = 0.25
 WRITE_TIMEOUT_SECONDS = 10
 SHUTDOWN_DRAIN_SECONDS = 5
 
@@ -84,11 +92,18 @@ class MessageRetentionService:
         *,
         queue_depth: int = QUEUE_DEPTH,
         batch_size: int = WRITE_BATCH,
+        linger_seconds: float = WRITE_LINGER_SECONDS,
     ) -> None:
         self._session_factory = session_factory
         self._queue: asyncio.Queue[RoomMessage] = asyncio.Queue(maxsize=queue_depth)
         self._batch_size = batch_size
+        self._linger_seconds = linger_seconds
         self._worker: asyncio.Task[None] | None = None
+        # Cuts a linger short: set when a full batch is waiting, and for as
+        # long as anybody is draining - a caller waiting for the queue to
+        # empty is not a reason to hold lines back.
+        self._wake = asyncio.Event()
+        self._draining = 0
 
     async def record(
         self,
@@ -213,6 +228,9 @@ class MessageRetentionService:
                 described,
             )
             return None
+        if self._queue.qsize() >= self._batch_size - 1:
+            # The line the writer holds plus these fill a batch: write now.
+            self._wake.set()
         return str(row.id)
 
     def _ensure_worker(self) -> None:
@@ -225,11 +243,15 @@ class MessageRetentionService:
         """Write what is waiting, in batches, for as long as anything is.
 
         Batched because the alternative is a transaction per message, and a
-        busy room is the case that matters. Every failure is survived except
-        cancellation: one bad batch must not stop every later message.
+        busy room is the case that matters. A batch is what arrived within
+        `WRITE_LINGER_SECONDS` of its first line, not only what happened to be
+        queued already - which, a line at a time, was nothing. Every failure is
+        survived except cancellation: one bad batch must not stop every later
+        message.
         """
         while True:
             batch = [await self._queue.get()]
+            await self._linger()
             while len(batch) < self._batch_size:
                 try:
                     batch.append(self._queue.get_nowait())
@@ -252,6 +274,19 @@ class MessageRetentionService:
                 # without this a failed write would hang every `drain`.
                 for _ in batch:
                     self._queue.task_done()
+
+    async def _linger(self) -> None:
+        """Give the rest of a batch a moment to arrive, unless it is already
+        here or somebody is waiting for the queue to empty."""
+        if (
+            self._linger_seconds <= 0
+            or self._draining
+            or self._queue.qsize() >= self._batch_size - 1
+        ):
+            return
+        self._wake.clear()
+        with contextlib.suppress(asyncio.TimeoutError):
+            await asyncio.wait_for(self._wake.wait(), timeout=self._linger_seconds)
 
     @database_operation_of("message_batch")
     async def _write(self, batch: list[RoomMessage]) -> None:
@@ -289,7 +324,12 @@ class MessageRetentionService:
 
         if self._worker is None:
             return
-        await self._queue.join()
+        self._draining += 1
+        self._wake.set()
+        try:
+            await self._queue.join()
+        finally:
+            self._draining -= 1
 
     async def aclose(self) -> None:
         """Write what is still waiting, then stop - bounded, on the way out.
@@ -302,6 +342,8 @@ class MessageRetentionService:
         if worker is None:
             return
         self._worker = None
+        self._draining += 1
+        self._wake.set()
         try:
             await asyncio.wait_for(self._queue.join(), timeout=SHUTDOWN_DRAIN_SECONDS)
         except asyncio.TimeoutError:
@@ -309,6 +351,8 @@ class MessageRetentionService:
                 "Gave up retaining %d queued messages at shutdown",
                 self._queue.qsize(),
             )
+        finally:
+            self._draining -= 1
         worker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await worker

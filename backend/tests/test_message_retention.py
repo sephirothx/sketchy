@@ -508,3 +508,91 @@ async def test_a_lobby_line_with_no_account_behind_it_is_not_kept():
         is None
     )
     await service.aclose()
+
+
+async def _talking_room(factory):
+    """A room with one account-backed seat that can be retained."""
+    room = RoomManager().create_room(name="Chatty")
+    talker_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=talker_id, display_name="Talker"))
+    player = RoomManager().add_player(room, "Talker", user_id=str(talker_id))
+    player.sid = "sid-talker"
+    return room, player
+
+
+def _counting_writes(service) -> list[int]:
+    """Record the size of every batch the service writes."""
+    sizes: list[int] = []
+    write = service._write
+
+    async def counted(batch):
+        sizes.append(len(batch))
+        await write(batch)
+
+    service._write = counted
+    return sizes
+
+
+async def _say(service, room, player, text):
+    return await service.record(
+        room=room, player=player, text=text, message_kind="chat",
+        audience="room", recipient_sids=[player.sid],
+    )
+
+
+async def test_lines_said_a_moment_apart_are_written_in_one_batch():
+    """Rooms talk a line at a time, never two in one instant, so taking only
+    what was already queued wrote a transaction per line (#972). The writer
+    waits a moment after the first line for the rest of its batch."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0.5)
+        sizes = _counting_writes(service)
+        for index in range(5):
+            await _say(service, room, player, f"line {index}")
+            await asyncio.sleep(0.02)
+        # Not `drain`, which cuts the linger short: this waits the way the
+        # production writer does between two ordinary lines.
+        await asyncio.wait_for(service._queue.join(), timeout=5)
+        assert sizes == [5]
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert sorted(kept) == [f"line {index}" for index in range(5)]
+        await service.aclose()
+    finally:
+        await engine.dispose()
+
+
+async def test_drain_does_not_wait_out_the_linger():
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=60)
+        await _say(service, room, player, "now, please")
+        await asyncio.sleep(0)  # the writer holds the line and starts to linger
+        await asyncio.wait_for(service.drain(), timeout=5)
+        async with factory() as session:
+            assert await session.scalar(select(RoomMessage.text)) == "now, please"
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_full_batch_is_written_without_waiting_out_the_linger():
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, batch_size=3, linger_seconds=60)
+        sizes = _counting_writes(service)
+        await _say(service, room, player, "one")
+        await asyncio.sleep(0)
+        await _say(service, room, player, "two")
+        await _say(service, room, player, "three")
+        await asyncio.wait_for(service._queue.join(), timeout=5)
+        assert sizes == [3]
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
