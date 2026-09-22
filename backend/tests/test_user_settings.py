@@ -254,3 +254,48 @@ async def test_database_checks_reject_invalid_theme_and_volume(env):
                         sound_effects_volume=2,
                     )
                 )
+
+
+async def test_me_carries_a_registered_accounts_settings_and_a_guest_none(env):
+    """The page holds its first paint for `/me` (R-I18N-06), so a registered
+    account's settings ride along rather than costing a second round trip
+    (#983). A guest has no stored settings, and is not given any."""
+    http, _ = env
+    await http.post("/api/auth/display-name", json={"displayName": "Visitor"})
+    guest = (await http.get("/api/auth/me")).json()
+    assert "settings" not in guest
+
+    registered = await http.post(
+        "/api/auth/register",
+        json={
+            "username": "MeSettings",
+            "password": PASSWORD,
+            "settings": {"theme": "dark", "locale": "it", "penPressure": False},
+        },
+    )
+    assert registered.status_code == 200
+
+    me = (await http.get("/api/auth/me")).json()
+    assert me["settings"] == (await http.get("/api/users/me/settings")).json()
+    assert me["settings"]["locale"] == "it"
+    assert me["settings"]["theme"] == "dark"
+
+
+async def test_me_still_answers_when_the_settings_read_fails(env, monkeypatch):
+    """The session may have rotated earlier in the same request; failing the
+    whole answer would drop the new cookie with the old token already revoked.
+    Without settings the page fetches them on their own."""
+    http, _ = env
+    registered = await http.post(
+        "/api/auth/register", json={"username": "MeResilient", "password": PASSWORD}
+    )
+    assert registered.status_code == 200
+
+    async def unavailable(*args, **kwargs):
+        raise RuntimeError("database busy")
+
+    monkeypatch.setattr("app.auth.routes.settings_of_registered_account", unavailable)
+    me = await http.get("/api/auth/me")
+    assert me.status_code == 200
+    assert me.json()["username"] == "MeResilient"
+    assert "settings" not in me.json()

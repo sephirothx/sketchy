@@ -8,6 +8,7 @@ import type { DrawTool } from "../types";
 import { DEFAULT_ERASER_SIZE } from "../lib/brushSizes";
 import { useSettingsStore } from "../store/settingsStore";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/toolbar.css";
 
 /**
  * The scratch pad (#829, #591): the game's canvas and toolbar, with nothing

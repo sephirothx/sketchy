@@ -20,6 +20,9 @@ import type {
   ScoringMode,
 } from "../types";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/profile.css";
+import "../styles/lazy/prompt-lists.css";
+import "../styles/lazy/prompt-stats.css";
 
 /* A list of 592 prompts rendered whole is a 25 496px page on a phone -
    thirty screens of scroll. Paged, with the count stated, so nothing is

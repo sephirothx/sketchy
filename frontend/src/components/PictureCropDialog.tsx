@@ -12,6 +12,7 @@ import {
 import { AvatarInputError, encodePicture, loadPicture, type LoadedPicture } from "../lib/avatars";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/settings.css";
 
 /** The square the player frames the picture in, in CSS pixels. */
 export const CROP_VIEWPORT = 272;

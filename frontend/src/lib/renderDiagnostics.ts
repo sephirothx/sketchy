@@ -6,6 +6,7 @@ export type RenderRegion =
   | "scratchPad"
   | "toolbar"
   | "chat"
+  | "chatLine"
   | "players";
 
 interface RenderDiagnostics {

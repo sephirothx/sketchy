@@ -1,6 +1,10 @@
 import { execSync } from 'node:child_process'
+import { readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs'
+import { join } from 'node:path'
+import { brotliCompressSync, constants as zlibConstants, gzipSync } from 'node:zlib'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
+import type { Plugin } from 'vite'
 
 // Best-effort short commit SHA + commit date, embedded at build time so the
 // running build can display exactly what it was built from. Falls back to
@@ -38,6 +42,42 @@ function getLocalBuildTime(): string {
 
 const buildTime = getLocalBuildTime()
 
+// Text the server would otherwise gzip itself, for every client, on the loop
+// every room shares (#978). Images and fonts are compressed formats already.
+const PRECOMPRESS = /\.(?:js|css|html|svg|json|webmanifest|txt|map)$/
+const PRECOMPRESS_MIN_BYTES = 1024
+
+/** Write a Brotli and a gzip copy beside every text file the build emits, at
+    the highest settings: paid once here instead of per request on the server,
+    which serves whichever copy the client accepts (`backend/app/compression.py`). */
+function precompress(): Plugin {
+  let outDir = 'dist'
+  return {
+    name: 'sketchy-precompress',
+    apply: 'build',
+    configResolved(config) {
+      outDir = config.build.outDir
+    },
+    closeBundle() {
+      const walk = (dir: string): string[] =>
+        readdirSync(dir, { withFileTypes: true }).flatMap((entry) =>
+          entry.isDirectory() ? walk(join(dir, entry.name)) : [join(dir, entry.name)],
+        )
+      for (const file of walk(outDir)) {
+        if (!PRECOMPRESS.test(file) || statSync(file).size < PRECOMPRESS_MIN_BYTES) continue
+        const bytes = readFileSync(file)
+        writeFileSync(`${file}.br`, brotliCompressSync(bytes, {
+          params: {
+            [zlibConstants.BROTLI_PARAM_QUALITY]: zlibConstants.BROTLI_MAX_QUALITY,
+            [zlibConstants.BROTLI_PARAM_SIZE_HINT]: bytes.length,
+          },
+        }))
+        writeFileSync(`${file}.gz`, gzipSync(bytes, { level: 9 }))
+      }
+    },
+  }
+}
+
 // The API and Socket.IO endpoints are same-origin in every real deployment:
 // the backend serves the built frontend itself (see SPAStaticFiles in
 // backend/app/main.py). The Vite dev server on :5173 is the one exception, so
@@ -48,7 +88,7 @@ const DEV_BACKEND = 'http://localhost:8000'
 
 // https://vite.dev/config/
 export default defineConfig({
-  plugins: [react()],
+  plugins: [react(), precompress()],
   server: {
     proxy: {
       // The backend admits a browser only from its own origin (#465). Through
@@ -63,6 +103,25 @@ export default defineConfig({
         headers: { origin: DEV_BACKEND },
         configure: (proxy) => {
           proxy.on('proxyReqWs', (proxyReq) => proxyReq.setHeader('origin', DEV_BACKEND))
+        },
+      },
+    },
+  },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              // The libraries every page runs on, in a chunk of their own
+              // (#475). Its name carries a hash of its contents, and those
+              // change only when a dependency does - so a returning player's
+              // browser keeps it across deploys of the app itself, which is
+              // most of them, instead of downloading React again each time.
+              name: 'vendor',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|zustand|socket\.io-client|socket\.io-parser|engine\.io-client|engine\.io-parser|@socket\.io[\\/]component-emitter)[\\/]/,
+            },
+          ],
         },
       },
     },

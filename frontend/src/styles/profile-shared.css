@@ -1,0 +1,16 @@
+/* The rules from profile.css that the entry chunk needs, kept at its place in the
+   cascade (App.css) while profile.css itself is fetched with the pages that use
+   the rest of it (#475). */
+.report-quoted-picture {
+  display: flex;
+  justify-content: center;
+  margin: 0 0 4px;
+}
+
+.report-quoted-picture img {
+  border: 1px solid var(--rule, rgb(0 0 0 / 12%));
+  border-radius: var(--radius-sm);
+  height: 128px;
+  object-fit: cover;
+  width: 128px;
+}

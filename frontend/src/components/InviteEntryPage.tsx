@@ -10,6 +10,7 @@ import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/toolbar.css";
 
 const INVITE_LOADING_DELAY_MS = 250;
 
