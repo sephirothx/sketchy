@@ -1985,6 +1985,9 @@ backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
 
+# What a request pays for the session middleware: the gate, and the wrapper (#974)
+backend/.venv/bin/python benchmarks/session_middleware_cost.py --requests 1000
+
 # The stored drawing format, frame by frame: bytes, ratio, p95 encode/decode (#547)
 backend/.venv/bin/python benchmarks/drawing_compression.py
 
