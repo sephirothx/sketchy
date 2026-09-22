@@ -80,10 +80,11 @@ function AppRoutes() {
     ? (overlayBackgroundOf(location.state) ?? "/")
     : location;
 
-  // One boundary for the pages and one for the overlays, both drawing nothing
-  // while a chunk arrives: navigations are transitions, so a page already on
-  // screen stays there until the next one is ready, and only a first visit to
-  // a page's address - or an overlay opened over it - waits on a blank.
+  // The pages draw nothing while their chunk arrives: navigations are
+  // transitions, so a page already on screen stays there until the next one
+  // is ready, and only a first visit to a page's address waits on a blank.
+  // The overlays load themselves (`LazyOverlay`), so a failed fetch over a
+  // live room is a retry notice, not the crash page.
   return (
     <>
       <Suspense fallback={null}>
@@ -121,10 +122,8 @@ function AppRoutes() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </Suspense>
-      <Suspense fallback={null}>
-        {isSettingsPath(location.pathname) && <SettingsOverlay />}
-        {isFriendsPath(location.pathname) && <FriendsOverlay />}
-      </Suspense>
+      {isSettingsPath(location.pathname) && <SettingsOverlay />}
+      {isFriendsPath(location.pathname) && <FriendsOverlay />}
     </>
   );
 }

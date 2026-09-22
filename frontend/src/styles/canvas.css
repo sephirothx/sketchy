@@ -42,6 +42,10 @@
 }
 
 @container scratch-pad-toolbar (max-width: 360px) {
+  /* Qualified with .toolbar-compact so it outranks toolbar.css's compact
+     strip gap rather than relying on coming after it: that sheet now loads
+     with the pad (#475), after this one. */
+  .scratch-pad-toolbar .toolbar-compact .toolbar-mobile-strip,
   .scratch-pad-toolbar .toolbar-mobile-strip {
     flex-wrap: wrap;
     gap: 6px 4px;

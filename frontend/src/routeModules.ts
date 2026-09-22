@@ -11,6 +11,7 @@ so it is fetched as soon as the lobby has painted (`prefetchPlayRoutes`), and
 straight away when the address already is a room (`prefetchRouteFor`) - an
 invite link should not wait for the lobby it is not showing. */
 import { lazy } from "react";
+import { lazyOverlay } from "./components/LazyOverlay";
 
 const load = {
   createRoom: () => import("./pages/CreateRoomPage"),
@@ -53,8 +54,10 @@ export const AdminOperationsPage = lazy(() =>
 export const ModerationPage = lazy(() => load.moderation().then((m) => ({ default: m.ModerationPage })));
 export const BugReportsPage = lazy(() => load.bugReports().then((m) => ({ default: m.BugReportsPage })));
 export const NotFoundPage = lazy(() => load.notFound().then((m) => ({ default: m.NotFoundPage })));
-export const SettingsOverlay = lazy(() => load.settingsOverlay().then((m) => ({ default: m.SettingsOverlay })));
-export const FriendsOverlay = lazy(() => load.friendsOverlay().then((m) => ({ default: m.FriendsOverlay })));
+// The overlays open over a live room, so a chunk that cannot be fetched gets a
+// retry notice rather than the crash page (`LazyOverlay`).
+export const SettingsOverlay = lazyOverlay(() => load.settingsOverlay().then((m) => m.SettingsOverlay));
+export const FriendsOverlay = lazyOverlay(() => load.friendsOverlay().then((m) => m.FriendsOverlay));
 
 /** Start fetching the page `pathname` will draw, before anything renders.
 
@@ -96,5 +99,8 @@ export function prefetchPlayRoutes(): void {
     void load.gameRoom().catch(() => undefined);
     void load.createRoom().catch(() => undefined);
     void import("./components/ScratchPad").catch(() => undefined);
+    // Opened from inside a room as often as from the lobby, and a room is
+    // where a connection is most likely to drop before it is wanted.
+    void load.settingsOverlay().catch(() => undefined);
   });
 }

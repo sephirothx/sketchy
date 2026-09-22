@@ -108,6 +108,14 @@
   white-space: nowrap;
 }
 
+/* A guest's name keeps its lighter weight here too. account.css says so for
+   every name at the same specificity, and used to win by coming later; this
+   sheet now loads with the room (#475), after it, so the rule is restated
+   where the tie is. */
+.player-name .colored-player-name.is-guest {
+  font-weight: 600;
+}
+
 .player-status {
   align-items: center;
   display: inline-flex;

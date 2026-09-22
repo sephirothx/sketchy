@@ -687,6 +687,8 @@ export const EN = {
     newRoomsArePausedMaintenanceGames: "New rooms are paused for maintenance. Games already running carry on\n          as normal.",
     serverWasUpdatedBackAnyGame: "The server was updated and is back. Any game in progress ended.",
     dismiss: "Dismiss",
+    couldNotOpenThis: "This could not be opened. Check your connection and try again.",
+    tryAgain: "Try again",
   },
 
   appHeader: {

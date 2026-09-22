@@ -241,8 +241,10 @@ which keeps it in the `components` layer: a stylesheet imported from a module is
 otherwise unlayered, and unlayered rules beat every layer. A tab open across a deploy
 asks for chunk names the server no longer has.
 [`lib/chunkReload.ts`](../frontend/src/lib/chunkReload.ts) reloads it onto the new build
-once per build, and only if the server answers, because a reload with the server down
-lands on the browser's error page instead of the app's. CI holds the first-load set to a
+once per build, and only when the failed chunk itself answers 404: a reload with the server
+down lands on the browser's error page, and one after a one-off failure throws the page away
+for nothing. The two overlays load themselves ([`LazyOverlay`](../frontend/src/components/LazyOverlay.tsx)),
+so a chunk that cannot be fetched over a live room is a notice with a reload, not the crash page. CI holds the first-load set to a
 gzip budget (`npm run bundle:check`, [`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)).
 
 Routes ([`frontend/src/App.tsx:90`](../frontend/src/App.tsx)):
