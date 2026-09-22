@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+from time import monotonic
 
 import pytest
 from sqlalchemy import text
@@ -220,3 +221,37 @@ def test_a_postgresql_engine_registers_the_idle_ping():
     assert "check" in _listener_names(engine, "checkout")
     assert "stamp" in _listener_names(engine, "checkin")
     assert "stamp" in _listener_names(engine, "connect")
+
+
+def test_the_installed_ping_honours_the_configured_threshold(monkeypatch):
+    """The wiring test above pins *which* listeners are registered, not where
+    their threshold comes from: hardcoding 30 seconds left
+    `DB_POOL_PING_IDLE_SECONDS` dead with the whole suite green, while the
+    README still documented it (#973 third review).
+
+    No connection is made - creating an engine opens nothing - so this runs
+    wherever the suite runs.
+    """
+    from types import SimpleNamespace
+
+    from app.db import _RETURNED_AT, create_db_engine
+
+    monkeypatch.setenv("DB_POOL_PING_IDLE_SECONDS", "900")
+    engine = create_db_engine("postgresql+asyncpg://sketchy@127.0.0.1/never-connected")
+    check = next(
+        listener
+        for listener in engine.sync_engine.pool.dispatch.checkout
+        if listener.__name__ == "check"
+    )
+    pings: list[int] = []
+    monkeypatch.setattr(
+        engine.sync_engine.dialect,
+        "_do_ping_w_event",
+        lambda _connection: (pings.append(1), True)[1],
+    )
+
+    quiet_for = lambda seconds: SimpleNamespace(info={_RETURNED_AT: monotonic() - seconds})
+    check(object(), quiet_for(100), None)
+    assert pings == [], "100 s is not quiet when the threshold is 900"
+    check(object(), quiet_for(901), None)
+    assert pings == [1]
