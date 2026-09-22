@@ -889,7 +889,8 @@ in one transaction that also runs the erasure barrier's two reads once for the b
 rooms rarely say two lines in the same instant: under the load gate that was 2,885
 inserts in 2,874 transactions, and with the barrier's reads half of every statement
 the process ran. Batched, the same 60 s run wrote every line with 205 inserts, and
-the process's statements fell 16,929 → 8,643.
+the process's statements fell 16,929 → 8,643. A report reads its evidence from this table, so both report paths flush
+the queue first (bounded at 2 s), and a line cited the moment it was said is found.
 
 **No index by game or turn** (#890): `game_id` and `turn_id` are correlation columns — no read filters on them and neither is a foreign key — and the `(game_id, turn_id, created_at)` index that used to cover them was the largest on the table. Dropping it, measured on 100,000 six-recipient lines (`benchmarks/index_write_cost.py`): index bytes per row 205 → 102, WAL per insert 918 → 773 B, heap plus indexes −16%.
 

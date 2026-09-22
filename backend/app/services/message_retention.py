@@ -33,11 +33,14 @@ WRITE_BATCH = 100
 # (#972). Taking only what was already queued made a batch of one: rooms talk
 # a line at a time, never two in the same instant, so the load gate wrote 2,885
 # lines in 2,874 transactions - each an insert plus the erasure barrier's two
-# reads, half of every statement the process ran. A line is reportable a
-# quarter of a second later than before; nothing reads it sooner, since
-# delivery never waited on this write and a report selects its own evidence.
+# reads, half of every statement the process ran. Delivery never waited on
+# this write; the one reader that cannot wait out the linger - a report citing
+# a line said a moment ago - flushes the queue first (`flush`).
 WRITE_LINGER_SECONDS = 0.25
 WRITE_TIMEOUT_SECONDS = 10
+# How long a report waits for queued lines to be written before reading its
+# evidence; past it the report reads what is there, as before batching.
+EVIDENCE_FLUSH_SECONDS = 2
 SHUTDOWN_DRAIN_SECONDS = 5
 
 logger = logging.getLogger(__name__)
@@ -330,6 +333,18 @@ class MessageRetentionService:
             await self._queue.join()
         finally:
             self._draining -= 1
+
+    async def flush(self) -> None:
+        """Write what is queued now, for a reader that needs it: report
+        evidence reads `room_messages` directly, and a line still lingering
+        in the queue would be missing from it (#972 review). Bounded, so a
+        database that has stopped answering cannot hold the report up."""
+        try:
+            await asyncio.wait_for(self.drain(), timeout=EVIDENCE_FLUSH_SECONDS)
+        except asyncio.TimeoutError:
+            logger.warning(
+                "Retention queue not flushed within %ss for a report", EVIDENCE_FLUSH_SECONDS
+            )
 
     async def aclose(self) -> None:
         """Write what is still waiting, then stop - bounded, on the way out.

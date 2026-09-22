@@ -794,3 +794,48 @@ async def test_a_room_report_needs_no_words_of_its_own():
             assert report.details == ""
     finally:
         await engine.dispose()
+
+
+async def test_a_line_reported_the_moment_it_was_said_is_in_the_evidence():
+    """The retention writer lingers a quarter of a second for the rest of a
+    batch (#972), and report evidence reads `room_messages` directly: a
+    report filed at once found nothing to cite until the queue is flushed."""
+    from uuid import UUID, uuid4
+
+    from app.db.models import User
+
+    factory, engine = await create_test_db()
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(room, "Reporter", user_id=str(reporter_id), is_anonymous=False)
+    target = room_manager.add_player(room, "Target", user_id=str(target_id), is_anonymous=False)
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all([
+                    User(id=account, username=name, password_hash="hash", display_name=name, state="registered")
+                    for account, name in ((reporter_id, "Reporter"), (target_id, "Target"))
+                ])
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager, session_factory=factory)
+        sessions = {
+            "reporter-sid": {"room_id": room.id, "player_id": reporter.id},
+            "target-sid": {"room_id": room.id, "player_id": target.id},
+        }
+        sio.get_session = AsyncMock(side_effect=lambda sid, namespace=None: sessions[sid])
+        sio.emit = AsyncMock()
+
+        said = await sio.handlers["/"]["send_chat"]("target-sid", {"text": "something worth reporting"})
+        assert said == {"ok": True}
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "harassment", "details": "Just now."},
+        )
+        assert result["ok"] is True
+        assert result["evidenceCount"] == 1
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()

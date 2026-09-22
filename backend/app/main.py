@@ -795,6 +795,11 @@ api.include_router(
         on_avatar_changed=refresh_avatar_on_live_surfaces,
         game_history_repo=game_history_repo,
         on_gallery_decision=gallery_shelf.invalidate,
+        flush_retained_messages=(
+            handler_context.message_retention.flush
+            if handler_context.message_retention is not None
+            else None
+        ),
     )
 )
 api.include_router(

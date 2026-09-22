@@ -181,6 +181,10 @@ async def report_player(ctx: HandlerContext, sid, data):
         drawing_from_live_room(room, target.id) if payload.include_drawing else None
     )
 
+    # The lines the report cites may still be waiting in the retention
+    # queue's linger (#972); written first, so the evidence read finds them.
+    if ctx.message_retention is not None:
+        await ctx.message_retention.flush()
     async with ctx.session_factory() as session:
         async with session.begin():
             # The erasure barrier (app.auth.erasure): the seat was

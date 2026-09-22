@@ -3301,3 +3301,41 @@ async def test_an_acknowledgement_cannot_name_somebody_elses_report(env):
     assert taken.json() == {"ok": True, "acknowledged": 0}
     # ...and its own reporter still has it waiting.
     assert (await theirs_http.get("/api/reports/reviewed")).json()["count"] == 1
+
+
+async def test_a_lobby_line_cited_the_moment_it_was_said_is_found(monkeypatch):
+    """The line's id is handed out when it is queued, and the writer lingers
+    a quarter of a second for the rest of a batch (#972): a report citing it
+    at once was refused as unavailable until the router flushed the queue."""
+    from app.services.message_retention import MessageRetentionService
+
+    monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
+    factory, engine = await create_test_db()
+    retention = MessageRetentionService(factory)
+    users = SqlAlchemyUserRepository(factory)
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(users, factory))
+    app.include_router(create_moderation_router(factory, flush_retained_messages=retention.flush))
+    reporter_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    target_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    try:
+        reporter = await register(reporter_http, "LingerReporter")
+        target = await register(target_http, "LingerTarget")
+        line = await retention.record_lobby(
+            user_id=target["id"], display_name="LingerTarget", name_color=None,
+            is_anonymous=False, text="said just now", sent_at=datetime.now(timezone.utc),
+        )
+        response = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"], "reason": "harassment",
+                "details": "Just now.", "messageIds": [line],
+            },
+        )
+        assert response.status_code == 201, response.text
+    finally:
+        await retention.aclose()
+        await reporter_http.aclose()
+        await target_http.aclose()
+        await engine.dispose()

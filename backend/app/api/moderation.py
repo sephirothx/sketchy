@@ -1063,6 +1063,9 @@ def create_moderation_router(
     # is written, so the cached This week shelf does not wait a minute for it.
     game_history_repo: GameHistoryRepository | None = None,
     on_gallery_decision: Callable[[], None] | None = None,
+    # Writes the chat lines still waiting in the retention queue, so a report
+    # citing one a moment after it was said finds it (#972).
+    flush_retained_messages: Callable[[], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
     report_limiter = PersistentRateLimiter(
@@ -1242,6 +1245,8 @@ def create_moderation_router(
             raise Refusal(422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself.")
         request_id, ip_hash = await audit_coordinates(request, session_factory)
 
+        if body.message_ids and flush_retained_messages is not None:
+            await flush_retained_messages()
         async with session_factory() as session:
             async with session.begin():
                 # The erasure barrier (app.auth.erasure): the reporter's
