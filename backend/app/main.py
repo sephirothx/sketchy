@@ -15,10 +15,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
-from starlette.middleware.gzip import GZipMiddleware
+from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
+from app.compression import SelectiveGZipMiddleware, precompressed_variant
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
     SHELF_TTL_SECONDS,
@@ -148,6 +150,16 @@ class SPAStaticFiles(StaticFiles):
             if not is_client_route(scope["path"]):
                 response.status_code = 404
 
+        # The build's own compressed copy when the client takes one, so
+        # nothing is compressed on the loop for a static file (#978).
+        variant = precompressed_variant(response, scope)
+        if variant is not None:
+            status_code = response.status_code
+            response = variant
+            response.status_code = status_code
+            if status_code == 200 and self.is_not_modified(response.headers, Headers(scope=scope)):
+                response = NotModifiedResponse(response.headers)
+
         if path.startswith("assets/"):
             response.headers["Cache-Control"] = (
                 "public, max-age=31536000, immutable"
@@ -160,9 +172,13 @@ class SPAStaticFiles(StaticFiles):
 
 
 def configure_frontend(app: FastAPI, directory: Path) -> None:
-    """Enable static compression and mount the production frontend when present."""
+    """Compress what is dynamic, and mount the production frontend when present.
 
-    app.add_middleware(GZipMiddleware, minimum_size=500)
+    Static files are served from the build's precompressed copies
+    (`app/compression.py`); the middleware is for everything else.
+    """
+
+    app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
     if directory.is_dir():
         app.mount(
             "/",

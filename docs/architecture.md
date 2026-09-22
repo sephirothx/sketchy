@@ -1748,6 +1748,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/identifiers.py`](../backend/app/identifiers.py) | Central generation policy for durable entity identifiers. |
 | [`app/live_drawing.py`](../backend/app/live_drawing.py) | Compact, versioned binary frames for live drawing Socket.IO events. |
 | [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody - as JSON in production, stamped with their request or command, secrets redacted. |
+| [`app/compression.py`](../backend/app/compression.py) | What the server compresses on its own loop, and what it serves already compressed. |
 | [`app/correlation.py`](../backend/app/correlation.py) | The request id, socket id and command a log line belongs to, carried as task-local context. |
 | [`app/probe.py`](../backend/app/probe.py) | The synthetic game - two guests, a room, one stroke - over Socket.IO long-polling with the standard library; the `sketchy_probe_*` textfile series. |
 | [`app/main.py`](../backend/app/main.py) | ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app. |
