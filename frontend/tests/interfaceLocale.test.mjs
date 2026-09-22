@@ -8,7 +8,11 @@ import {
   preferredLocale,
   resolveLocale,
 } from "../src/lib/interfaceLocale.ts";
-import { catalogueFor, setCatalogue, ui } from "../src/content/ui/index.ts";
+import { catalogueFor, loadCatalogue, setCatalogue, ui } from "../src/content/ui/index.ts";
+
+// Every locale but English is fetched on demand (#982); these tests read all
+// of them.
+await Promise.all(LOCALES.map(loadCatalogue));
 
 test("a locale is offered only when its catalogue is complete", () => {
   // The list is derived from the catalogues rather than declared beside them,

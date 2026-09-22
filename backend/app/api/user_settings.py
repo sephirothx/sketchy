@@ -187,6 +187,31 @@ async def get_or_create_user_settings(
         return user_settings_payload(settings)
 
 
+async def settings_of_registered_account(
+    session_factory: async_sessionmaker[AsyncSession], *, user_id: str
+) -> dict:
+    """The settings of an account the caller has already read as registered.
+
+    `GET /api/auth/me` carries them (#983), and has just read the account row,
+    so this skips `_registered_user`'s second read of it: one statement in the
+    steady state, where `get_or_create_user_settings` sends two (R-PLAT-17).
+    An account registered before settings were seeded gets its row here, as it
+    would there.
+    """
+    db_user_id = UUID(user_id)
+    async with session_factory() as session:
+        async with session.begin():
+            settings = await session.get(UserSettings, db_user_id)
+            if settings is None:
+                settings = UserSettings(
+                    user_id=db_user_id,
+                    **_settings_values(UserSettingsSeed()),
+                )
+                session.add(settings)
+                await session.flush()
+        return user_settings_payload(settings)
+
+
 async def seed_user_settings(
     session_factory: async_sessionmaker[AsyncSession],
     *,

@@ -17,6 +17,7 @@ import {
   RoundsIcon,
   UsersIcon,
 } from "./icons";
+import { useCooldownSeconds } from "../hooks/useCooldownSeconds";
 import { ui } from "../content/ui/index.ts";
 
 export interface RoomMenuActions {
@@ -25,7 +26,8 @@ export interface RoomMenuActions {
   isAfk: boolean;
   canProposeRestart: boolean;
   restartBusy: boolean;
-  restartCooldownSeconds: number;
+  /** When the next restart vote may be called, as a `Date.now()` timestamp. */
+  restartCooldownUntil: number;
   onCopyLink: () => void;
   /** Only where the players are not already on screen: a phone in play. */
   onOpenPlayers?: () => void;
@@ -55,8 +57,9 @@ function RoomMenuRows({ actions, run, asMenu }: {
 }) {
   const role = asMenu ? "menuitem" : undefined;
   const {
-    code, isPlaying, isAfk, canProposeRestart, restartBusy, restartCooldownSeconds,
+    code, isPlaying, isAfk, canProposeRestart, restartBusy, restartCooldownUntil,
   } = actions;
+  const restartCooldownSeconds = useCooldownSeconds(restartCooldownUntil);
   return (
     <ul className="sheet-menu" role={asMenu ? "none" : undefined}>
       {isPlaying && actions.onOpenPlayers && (

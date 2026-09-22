@@ -33,6 +33,8 @@ import { useEmailStateStore } from "../store/emailStateStore";
 import type { CopiedFrom, OwnedPromptList, PromptLanguage, PromptTag } from "../types";
 import { refusalCode, refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/community-lists.css";
+import "../styles/lazy/prompt-lists.css";
 
 const LANGUAGES: PromptLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt"];
 const EMPTY_DRAFT: PromptListDraft = {

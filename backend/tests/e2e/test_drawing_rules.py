@@ -74,7 +74,7 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
                 host_page if await host_page.query_selector('.prompt-choices') else player_page
             )
             await drawer_page.click('.prompt-choices button:first-child')
-            await drawer_page.wait_for_selector('canvas.drawing-canvas')
+            await drawer_page.wait_for_selector('canvas.drawing-canvas.drawable')
             await drawer_page.wait_for_selector('.toolbar-tools')
 
             tools = await drawer_page.eval_on_selector_all(
