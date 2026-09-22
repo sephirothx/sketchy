@@ -32,6 +32,24 @@
     <meta name="twitter:card" content="summary_large_image" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, interactive-widget=resizes-content" />
     <title>Sketchy</title>
+    <!-- Ask who this is before any bundle has downloaded (#983): the first
+         paint waits for the answer, and it depends on nothing in the bundle.
+         lib/api.ts adopts this request rather than making its own, so it is
+         still the one request - a second cookieless one would race it. The
+         catch only keeps a network failure from being reported as unhandled;
+         the adopter sees the rejection. -->
+    <script>
+      try {
+        var sketchyAbort = new AbortController();
+        var sketchyMe = fetch("/api/auth/me", { credentials: "same-origin", signal: sketchyAbort.signal });
+        sketchyMe.catch(function () {});
+        window.__sketchyShellRequest = {
+          path: "/api/auth/me",
+          response: sketchyMe,
+          abort: function () { sketchyAbort.abort(); },
+        };
+      } catch (e) {}
+    </script>
     <script>
       try {
         var stored = localStorage.getItem("sketchy_theme");

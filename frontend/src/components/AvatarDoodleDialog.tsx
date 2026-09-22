@@ -14,6 +14,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
 import { Avatar } from "./ui/Avatar";
 import { ModalShell } from "./ui/ModalShell";
+import "../styles/lazy/settings.css";
 
 /**
  * Pick one of our doodles to wear (#579).

@@ -677,6 +677,8 @@ export const NL: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Nieuwe kamers zijn gepauzeerd voor onderhoud. Spellen die al lopen gaan\n          gewoon door.",
     serverWasUpdatedBackAnyGame: "De server is bijgewerkt en is terug. Lopende spellen zijn beëindigd.",
     dismiss: "Sluiten",
+    couldNotOpenThis: "Dit kon niet worden geopend. Controleer je verbinding en probeer het opnieuw.",
+    tryAgain: "Opnieuw proberen",
   },
 
   appHeader: {

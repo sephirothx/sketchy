@@ -2,27 +2,14 @@
    Four sections in one rail on every device, rows that apply as they change,
    no footer - there is nothing to submit (R-SET-05, R-SET-06). */
 
-.lobby-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-end;
-  gap: 16px;
-  margin-bottom: 26px;
-}
+
 
 /* Sizing comes from .btn.btn-icon; this adds only the hover flourish. */
-.header-settings-button:hover {
-  border-color: var(--line-strong);
-  color: var(--ink);
-}
 
-.header-settings-button svg {
-  transition: transform 0.2s ease;
-}
 
-.header-settings-button:hover svg {
-  transform: rotate(30deg);
-}
+
+
+
 
 /* ------------------------------------------------------------- the sheet */
 

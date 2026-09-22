@@ -16,8 +16,16 @@ labelled (R-I18N-07).
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { CATALOGUE_LOCALES, catalogueFor, FALLBACK_LOCALE } from "../src/content/ui/index.ts";
+import {
+  CATALOGUE_LOCALES,
+  catalogueFor,
+  FALLBACK_LOCALE,
+  loadCatalogue,
+} from "../src/content/ui/index.ts";
 import { REVIEWED } from "../src/content/ui/reviewed.ts";
+
+// Every locale but English is fetched on demand (#982); this reads all of them.
+await Promise.all(CATALOGUE_LOCALES.map(loadCatalogue));
 
 /** Every leaf of a catalogue, as `group.entry` paths. */
 function entries(node, path = []) {

@@ -19,7 +19,13 @@ import {
   migrateKeyBindings,
   readStoredBrushCursor,
 } from "./settingsMigrations.ts";
-import { setCatalogue, ui } from "../content/ui/index.ts";
+import {
+  interfaceLocale,
+  isCatalogueLoaded,
+  loadCatalogue,
+  setCatalogue,
+  ui,
+} from "../content/ui/index.ts";
 import {
   applyDocumentLocale,
   rememberLocale,
@@ -287,7 +293,9 @@ interface SettingsStore {
   setColorblindSafeColors: (enabled: boolean) => void;
   setTimeFormat: (timeFormat: TimeFormat) => void;
   setPromptLanguage: (promptLanguage: PromptLanguage) => void;
-  setLocale: (locale: Locale) => void;
+  /** Settles with whether the switch took effect: a language whose words
+      could not be fetched leaves the interface as it was. */
+  setLocale: (locale: Locale) => Promise<boolean>;
   resetKeyBindings: () => void;
 }
 
@@ -301,18 +309,50 @@ try {
 const initialTheme = loadStoredTheme();
 applyThemeToDocument(initialTheme);
 
+/** The locale most recently asked for, so a slow fetch that lands after a
+    later choice does not overwrite it. */
+let wantedLocale = "";
+
+/** Read the interface in `locale`, fetching its words first if they are not
+here yet (#982). Applies at once when they are - the common case once a
+language has been read - and otherwise when they land, unless something
+else was chosen meanwhile. A fetch that failed changes nothing: the reader
+keeps the words they have, and their stored choice is not overwritten with
+a fallback they never asked for. Settles with whether `locale` is now the one
+in force.
+
+`remember` is false only for the first resolution: that is the browser's
+languages speaking, not a choice, and storing it would make it outrank the
+browser from then on - a guest who changed their browser's language would
+keep the old one for good (R-I18N-06). */
+function switchLocale(locale: string, remember = true): Promise<boolean> {
+  wantedLocale = locale;
+  const commit = (): boolean => {
+    if (wantedLocale !== locale || !isCatalogueLoaded(locale)) return false;
+    const inForce = setCatalogue(locale);
+    if (remember) rememberLocale(inForce);
+    applyDocumentLocale(inForce);
+    setClockLocale(inForce);
+    if (useSettingsStore.getState().locale !== inForce) {
+      useSettingsStore.setState({ locale: inForce });
+    }
+    return true;
+  };
+  if (isCatalogueLoaded(locale)) return Promise.resolve(commit());
+  return loadCatalogue(locale).then(commit);
+}
+
 // Before the first paint, not after it: a page that renders in English and
 // then switches has already shown the wrong language to whoever reads
-// slowest (R-I18N-06). An account's own choice arrives later, with the rest
-// of its settings, and moves the app again if it differs.
-const initialLocale = setCatalogue(
-  resolveLocale({
-    stored: storedLocale(),
-    browser: typeof navigator === "undefined" ? [] : navigator.languages,
-  }),
-);
-applyDocumentLocale(initialLocale);
-setClockLocale(initialLocale);
+// slowest (R-I18N-06). The words are fetched from here; `main.tsx` holds the
+// paint for them. An account's own choice arrives later, with the rest of its
+// settings, and moves the app again if it differs.
+const requestedLocale = resolveLocale({
+  stored: storedLocale(),
+  browser: typeof navigator === "undefined" ? [] : navigator.languages,
+});
+applyDocumentLocale(interfaceLocale());
+setClockLocale(interfaceLocale());
 
 export const useSettingsStore = create<SettingsStore>((set) => ({
   keyBindings: loadStoredKeyBindings(),
@@ -326,7 +366,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
   colorblindSafeColors: loadStoredFlag("sketchy_colorblindsafecolors", false),
   timeFormat: loadStoredTimeFormat(),
   promptLanguage: loadStoredPromptLanguage(),
-  locale: initialLocale,
+  locale: interfaceLocale(),
   nameColor: loadStoredNameColor(),
   setAllSettings: ({
     keyBindings,
@@ -340,9 +380,9 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
     colorblindSafeColors = false,
     timeFormat = DEFAULT_TIME_FORMAT,
     promptLanguage = loadStoredPromptLanguage(),
-    locale = initialLocale,
+    locale = requestedLocale,
     nameColor,
-  }) =>
+  }) => {
     set(() => {
       localStorage.setItem("sketchy_keybindings", JSON.stringify(keyBindings));
       localStorage.setItem(BRUSH_CURSOR_KEY, brushCursor);
@@ -358,13 +398,6 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem(PROMPT_LANGUAGE_KEY, promptLanguage);
       localStorage.setItem("sketchy_namecolor", nameColor);
       applyThemeToDocument(theme);
-      // The account's choice wins over this browser's, and is remembered
-      // here too so the next visit does not flash the other language before
-      // the settings arrive.
-      const inForce = setCatalogue(locale);
-      rememberLocale(inForce);
-      applyDocumentLocale(inForce);
-      setClockLocale(inForce);
       return {
         keyBindings,
         brushCursor,
@@ -377,10 +410,14 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
         colorblindSafeColors,
         timeFormat,
         promptLanguage,
-        locale: inForce,
         nameColor,
       };
-    }),
+    });
+    // The account's choice wins over this browser's, and is remembered here
+    // too so the next visit does not flash the other language before the
+    // settings arrive.
+    void switchLocale(locale);
+  },
   setKeyBinding: (action, keys) =>
     set((state) => {
       const updated = { ...state.keyBindings, [action]: keys };
@@ -441,14 +478,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_timeformat", timeFormat);
       return { timeFormat };
     }),
-  setLocale: (locale) =>
-    set(() => {
-      const inForce = setCatalogue(locale);
-      rememberLocale(inForce);
-      applyDocumentLocale(inForce);
-      setClockLocale(inForce);
-      return { locale: inForce };
-    }),
+  setLocale: (locale) => switchLocale(locale),
   setPromptLanguage: (promptLanguage) =>
     set(() => {
       localStorage.setItem(PROMPT_LANGUAGE_KEY, promptLanguage);
@@ -460,6 +490,11 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       return { keyBindings: DEFAULT_KEY_BINDINGS };
     }),
 }));
+
+/** Settles once the reader's language can be read - what `main.tsx` holds
+    the first paint for. Never rejects: a language that cannot be fetched
+    leaves the page in English. */
+export const initialLocaleReady: Promise<void> = switchLocale(requestedLocale, false).then(() => undefined);
 
 if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
   const media = window.matchMedia("(prefers-color-scheme: dark)");
