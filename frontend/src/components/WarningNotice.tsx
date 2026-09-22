@@ -9,7 +9,7 @@ import {
   type PendingWarning,
 } from "../lib/moderation";
 import { asReportReason, humanizeCategory } from "../lib/moderation";
-import { ruleAnchorFor } from "../content/rules";
+import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { ReportedDrawing } from "./ReportedDrawing";

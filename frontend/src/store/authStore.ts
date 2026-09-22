@@ -10,7 +10,7 @@ import {
   currentSettingsPayload,
   fetchUserSettings,
 } from "../lib/userSettings";
-import { ui } from "../content/ui/index.ts";
+import { loadCatalogue, ui } from "../content/ui/index.ts";
 
 export interface AuthUser {
   id: string;
@@ -174,7 +174,11 @@ function reconcileNameColor(user: AuthUser | null): void {
 async function loadRegisteredSettings(user: AuthUser | null): Promise<void> {
   if (!user || user.isAnonymous) return;
   try {
-    applyAccountSettings(await fetchUserSettings());
+    const settings = await fetchUserSettings();
+    // Fetched before they are applied, so an account's language is in place
+    // by the time the paint this read is holding goes ahead (R-I18N-06).
+    await loadCatalogue(settings.locale);
+    applyAccountSettings(settings);
   } catch {
     // Settings are an enhancement, not an authentication dependency. Keep the
     // local copy when offline and try again on the next account resolution.
