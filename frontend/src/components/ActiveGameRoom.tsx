@@ -532,15 +532,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
             )
           }
           chat={
-            <ConnectedRoomChatPanel mode={roomView} onFocusChange={isMobile ? setIsInputFocused : ignoreFocus} />
+            <ConnectedRoomChatPanel mode={roomView} onFocusChange={setIsInputFocused} />
           }
         />
       )}
     </div>
   );
 }
-
-/** The guess input's focus matters only on a phone, where it hides chrome
-    (`isGuessFocused`); elsewhere a focus change re-rendered the whole room for
-    nothing (#987). */
-function ignoreFocus() {}
