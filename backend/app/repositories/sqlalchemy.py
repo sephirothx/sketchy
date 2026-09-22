@@ -306,11 +306,39 @@ class _GameSizing:
         )
 
 
+@dataclass(frozen=True)
+class _PreparedDrawing:
+    """One drawing encoded for storage, before the transaction that writes it."""
+
+    blob: bytes
+    magic: bytes
+    version: int
+    checksum: str
+    wire_bytes: int
+    action_count: int
+    seconds: float
+
+
+def _prepare_drawing(payload: bytes) -> _PreparedDrawing:
+    started = perf_counter()
+    blob, magic, version, checksum = prepare_stored_drawing(payload)
+    return _PreparedDrawing(
+        blob=blob,
+        magic=magic,
+        version=version,
+        checksum=checksum,
+        wire_bytes=len(payload),
+        action_count=binary_action_count(payload),
+        seconds=perf_counter() - started,
+    )
+
+
 def _turn_drawing(
     drawing: TurnDrawingInput,
     turn_id: UUID,
     game_id: UUID,
     sizing: _GameSizing | None = None,
+    prepared: _PreparedDrawing | None = None,
 ) -> TurnDrawing:
     """Build the row for one turn's drawing, stored or explained.
 
@@ -328,27 +356,27 @@ def _turn_drawing(
                 drawing.unavailable_reason or DRAWING_UNAVAILABLE_RECAP_BUDGET
             ),
         )
-    started = perf_counter()
-    blob, magic, version, checksum = prepare_stored_drawing(drawing.payload)
+    if prepared is None:
+        prepared = _prepare_drawing(drawing.payload)
     if sizing is not None:
         sizing.drawings.append(
             (
-                magic.decode("ascii"),
-                len(drawing.payload),
-                len(blob),
-                binary_action_count(drawing.payload),
-                perf_counter() - started,
+                prepared.magic.decode("ascii"),
+                prepared.wire_bytes,
+                len(prepared.blob),
+                prepared.action_count,
+                prepared.seconds,
             )
         )
     return TurnDrawing(
         turn_id=turn_id,
         game_id=game_id,
         status=TurnDrawingStatus.READY.value,
-        format_magic=magic.decode("ascii"),
-        format_version=version,
-        payload=blob,
-        byte_size=len(blob),
-        checksum_sha256=checksum,
+        format_magic=prepared.magic.decode("ascii"),
+        format_version=prepared.version,
+        payload=prepared.blob,
+        byte_size=len(prepared.blob),
+        checksum_sha256=prepared.checksum,
         stored_at=datetime.now(timezone.utc),
     )
 
@@ -1395,6 +1423,26 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             json.dumps(payload, sort_keys=True, separators=(",", ":")).encode()
         ).hexdigest()
 
+    @classmethod
+    def _prepare_write(
+        cls,
+        game_record: GameRecordInput,
+        participants: list[GameParticipantInput],
+        turns: list[TurnRecordInput],
+        score_events: list[ScoreEventInput],
+        reactions: list[TurnDrawingReactionInput],
+        drawings: list[TurnDrawingInput] | None,
+    ) -> tuple[str, list[_PreparedDrawing | None]]:
+        """The content digest and each drawing's stored form, off the loop."""
+        payload_hash = cls._payload_hash(
+            game_record, participants, turns, score_events, reactions, drawings
+        )
+        prepared = [
+            None if drawing.payload is None else _prepare_drawing(drawing.payload)
+            for drawing in drawings or []
+        ]
+        return payload_hash, prepared
+
     @database_operation_of("save_game")
     async def save_game(
         self,
@@ -1416,8 +1464,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         }
         if game_record.prompt_source_mode not in GAME_PROMPT_SOURCE_MODES:
             raise ValueError("Unknown game prompt source mode")
-        payload_hash = self._payload_hash(
-            game_record, participants, turns, score_events, reactions, drawings
+        # Everything CPU-bound is done here, on a worker thread and before the
+        # transaction opens (#976): each drawing's storage encoding - a pure
+        # Python decode and delta walk, then zlib and SHA-256 - and the content
+        # digest. It used to run on the event loop inside the transaction that
+        # holds every player's `users` row: ~14 ms for a game of eight
+        # ordinary drawings, ~217 ms for a stroke-heavy one, with every room's
+        # strokes and timers waiting. On a thread the loop keeps its turn
+        # every GIL switch interval, and the locks are held only for the writes.
+        payload_hash, prepared = await asyncio.to_thread(
+            self._prepare_write,
+            game_record, participants, turns, score_events, reactions, drawings,
         )
         sizing = _GameSizing()
         try:
@@ -1853,7 +1910,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # a row written now and filled in later could never be
                 # completed by any retry.
                 drawing_rows: dict[UUID, TurnDrawing] = {}
-                for drawing in drawings or []:
+                for drawing, prepared_drawing in zip(drawings or [], prepared, strict=True):
                     drawing_turn_id = _optional_entity_id(drawing.turn_id)
                     if (
                         drawing_turn_id is None
@@ -1868,7 +1925,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             _erased_turn_drawing(drawing_turn_id, record_id)
                         )
                         continue
-                    drawing_row = _turn_drawing(drawing, drawing_turn_id, record_id, sizing)
+                    drawing_row = _turn_drawing(
+                        drawing, drawing_turn_id, record_id, sizing, prepared_drawing
+                    )
                     drawing_rows[drawing_turn_id] = drawing_row
                     session.add(drawing_row)
 

@@ -1984,6 +1984,11 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
   backend/.venv/bin/python benchmarks/drawing_store_footprint.py --games 50
 # Read its live sizes, never a backup taken from it: every turn it seeds carries the same
 # frame, so a `pg_dump` of its output compresses ~50x and says nothing about a real store.
+
+# How long finishing a game holds the event loop: stage and replay 8-turn games, ordinary and
+# stroke-heavy drawings, with a 1 ms ticker on the loop (#976; disposable database only)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/finish_game_stall.py --games 4
 # Which permessage-deflate window and memLevel the server should use (bytes, CPU, memory)
 backend/.venv/bin/python benchmarks/deflate_windows.py
 

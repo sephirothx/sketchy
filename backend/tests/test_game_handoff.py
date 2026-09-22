@@ -570,3 +570,48 @@ async def test_a_usage_batch_is_a_fact_of_its_own(env):
         facts = (await session.scalars(select(PromptUsageFact))).all()
     assert batches == {batch_id: 1, empty_id: 0}
     assert len(facts) == 1
+
+
+async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypatch):
+    """The envelope's deflate, its decode, and each drawing's storage encoding
+    run on worker threads (#976): on the loop they were ~27 ms for an ordinary
+    game and ~325 ms for a stroke-heavy one, every room waiting - part of it
+    inside the transaction holding each player's `users` row. What is stored
+    is unchanged, byte for byte."""
+    import threading
+
+    import app.repositories.sqlalchemy as repository_module
+    from app.canvas_storage import prepare_stored_drawing
+
+    on_loop: list[str] = []
+
+    def watched(name, function):
+        def call(*args, **kwargs):
+            if threading.current_thread() is threading.main_thread():
+                on_loop.append(name)
+            return function(*args, **kwargs)
+        return call
+
+    monkeypatch.setattr(handoff_module, "encode_envelope", watched("encode", handoff_module.encode_envelope))
+    monkeypatch.setattr(handoff_module, "decode_envelope", watched("decode", handoff_module.decode_envelope))
+    monkeypatch.setattr(repository_module, "prepare_stored_drawing", watched("prepare", prepare_stored_drawing))
+    monkeypatch.setattr(
+        repository_module.SqlAlchemyGameHistoryRepository,
+        "_payload_hash",
+        staticmethod(watched("digest", repository_module.SqlAlchemyGameHistoryRepository._payload_hash)),
+    )
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    worker = worker_for(store, history)
+    frame = _frame(2)
+    await worker.stage(FinishedGameEnvelope(history_for(str(generate_uuid()), ann, bob, drawing=frame)))
+    report = await worker.drain()
+
+    assert report.recorded == 1
+    assert on_loop == []
+    expected_blob, magic, version, checksum = prepare_stored_drawing(frame)
+    async with session_factory() as session:
+        [drawing] = (await session.scalars(select(TurnDrawing))).all()
+    assert (drawing.payload, drawing.format_magic, drawing.format_version, drawing.checksum_sha256) == (
+        expected_blob, magic.decode("ascii"), version, checksum,
+    )
