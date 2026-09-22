@@ -143,20 +143,21 @@ async def test_a_signed_in_handshake_and_a_registered_seat_cost_what_they_should
     factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
     try:
         before = (await users.get_by_id(account.id)).last_active_at
+        before_tasks = {"seen": set(_last_seen_writes), "activity": set(rooms_handlers._activity_writes)}
         statements = _count_statements(engine)
         await sio.handlers["/"]["connect"](
             "sid-1",
             {"HTTP_COOKIE": f"{cookie_name()}={token}", "HTTP_USER_AGENT": USER_AGENT},
             {"protocol": PROTOCOL_VERSION},
         )
-        await asyncio.gather(*_last_seen_writes)
+        await asyncio.gather(*list(_last_seen_writes - before_tasks["seen"]))
         handshake = [s for s in statements if not s.lstrip().upper().startswith(("BEGIN", "COMMIT", "ROLLBACK"))]
         statements.clear()
 
         answer = await sio.handlers["/"]["create_room"]("sid-1", {"nickname": "ignored", "name": "Room"})
         assert answer["ok"] is True
         seat_before_stamp = list(statements)
-        await asyncio.gather(*rooms_handlers._activity_writes)
+        await asyncio.gather(*list(set(rooms_handlers._activity_writes) - before_tasks["activity"]))
         stamp = statements[len(seat_before_stamp):]
 
         player = room_manager.get_room(answer["roomId"]).players[answer["playerId"]]
@@ -181,6 +182,80 @@ async def test_a_signed_in_handshake_and_a_registered_seat_cost_what_they_should
         assert len(account_reads) == 1 and "user_settings" in account_reads[0]
         assert not any(s.lstrip().startswith("SELECT user_settings.") for s in seat_before_stamp)
         assert not any("FROM user_blocks" in s for s in seat_before_stamp)
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_the_activity_stamp_lands_even_when_the_entry_ran_out_of_time():
+    """The task is created with the entry's context, so the entry's six-second
+    deadline followed it: under exactly the load this runs after, the stamp
+    was dropped before reaching the database (#980 review)."""
+    import asyncio
+
+    from app.handlers import rooms as rooms_handlers
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        before = (await users.get_by_id(account.id)).last_active_at
+        started_with = set(rooms_handlers._activity_writes)
+        room = room_manager.create_room(name="Late")
+        player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        # As if the entry had spent its whole deadline before seating.
+        token_ = rooms_handlers._entry_deadline.set(asyncio.get_running_loop().time() - 1)
+        try:
+            await rooms_handlers._after_seating(ctx, [player])
+        finally:
+            rooms_handlers._entry_deadline.reset(token_)
+        await asyncio.gather(*list(set(rooms_handlers._activity_writes) - started_with))
+        assert (await users.get_by_id(account.id)).last_active_at > before
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_guest_seat_keeps_the_preference_it_asked_for():
+    """A guest has no settings row, so the stored answer must not overrule the
+    payload: making the guest branch prefer the column passed every test
+    before (#980 review)."""
+    from app.handlers.identity import resolve_identity
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        guest = await users.create_anonymous("GuestSeat")
+        await sio.save_session("sid-guest", {"user_id": guest.id})
+        identity = await resolve_identity(
+            ctx, "sid-guest", "ignored", requested_colorblind_safe_colors=True
+        )
+        assert identity.is_anonymous and identity.nickname == "GuestSeat"
+        assert identity.colorblind_safe_colors is True
+        plain = await resolve_identity(
+            ctx, "sid-guest", "ignored", requested_colorblind_safe_colors=False
+        )
+        assert plain.colorblind_safe_colors is False
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_returning_registered_seat_reads_its_account_once():
+    """The rebind path asked for the settings row and the account one after
+    the other - the pair the entry path merged, on the path a reconnect herd
+    walks (#980 review)."""
+    from app.handlers.rooms import _rebound_account
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        room = room_manager.create_room(name="Back")
+        player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        player.is_anonymous = False
+        statements = _count_statements(engine)
+        colour, colorblind = await _rebound_account(ctx, player, requested=False)
+        assert colorblind is True, "the stored preference, not the payload"
+        reads = [s for s in statements if s.lstrip().startswith("SELECT users.")]
+        assert len(reads) == 1 and "user_settings" in reads[0]
+        assert not any(s.lstrip().startswith("SELECT user_settings.") for s in statements)
+        assert colour == player.name_color or colour is None
     finally:
         await ctx.timers.close()
         await engine.dispose()

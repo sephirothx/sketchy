@@ -235,11 +235,16 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     ):
         return
     try:
-        # Bounded like the rest of the entry path, so a hang cannot keep the
-        # task alive for ever. Nobody waits on it: it runs after the
-        # acknowledgement, on its own (#980).
+        # Bounded so a hang cannot keep the task alive for ever, but not by
+        # the entry's deadline: the task is created with the entry's context,
+        # so `within_entry=True` would hand it whatever was left of six
+        # seconds - nothing, under exactly the load this runs after - and drop
+        # the stamp without reaching the database (#980 review). Nobody waits
+        # on it; it runs after the acknowledgement, on its own.
         await _bounded(
-            ctx.user_repo.touch_last_active(player.user_id), "recording activity"
+            ctx.user_repo.touch_last_active(player.user_id),
+            "recording activity",
+            within_entry=False,
         )
     except EntryTimedOut:
         pass
@@ -835,13 +840,11 @@ async def _seat_in_room(
         # the path a guest returns through after registering or logging in
         # mid-game, so the seat has to pick up the new name and status.
         await _refresh_seat_identity(ctx, player, name_color)
-        player.colorblind_safe_colors = await _seat_colour_preference(
+        stored, player.colorblind_safe_colors = await _rebound_account(
             ctx, player, payload.colorblind_safe_colors
         )
-        if not player.is_anonymous:
-            stored = await _account_name_color(ctx, player.user_id)
-            if stored or name_color:
-                player.name_color = stored or name_color
+        if not player.is_anonymous and (stored or name_color):
+            player.name_color = stored or name_color
         if not ctx.room_capacity.admits_a_takeover(player.id):
             return {
                 "ok": False, "errorCode": ErrorCode.SEAT_CHANGING_TOO_FAST,
@@ -957,6 +960,32 @@ async def _seat_in_room(
         return await _unseat_an_ended_account(ctx, room, player)
     seated.append(player)
     return session_payload(room, player)
+
+
+async def _rebound_account(
+    ctx: HandlerContext, player, requested: bool
+) -> tuple[str | None, bool]:
+    """A returning registered seat's colour and colour-safe preference, in one
+    read (#980): the rebind path asked for the settings row and the account
+    one after the other, which is the pair the entry path already merged - and
+    this is the path a reconnect herd walks.
+
+    A guest has nothing stored, so their payload stays the authority; a read
+    that stalls leaves the seat exactly as it was.
+    """
+    if ctx.user_repo is None or not player.user_id or player.is_anonymous:
+        return None, await _seat_colour_preference(ctx, player, requested)
+    try:
+        account, stored = await _bounded(
+            ctx.user_repo.get_seat_account(player.user_id), "refreshing a returning seat"
+        )
+    except EntryTimedOut:
+        return None, player.colorblind_safe_colors
+    colour = normalize_name_color(account.name_color) if account else None
+    if stored is None:
+        # A repository that does not read the preference with the account.
+        return colour, await _seat_colour_preference(ctx, player, requested)
+    return colour, bool(stored)
 
 
 async def _account_name_color(ctx: HandlerContext, user_id: str | None) -> str | None:
