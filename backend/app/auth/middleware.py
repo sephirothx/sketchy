@@ -162,11 +162,14 @@ class SessionAuthMiddleware:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        request = Request(scope)
-        if not request.url.path.startswith(SESSION_PATH_PREFIX):
-            _set_state(request, token="", ip_hash=None, session=None, banned_user_id=None)
+        # Read off the scope rather than built into a `Request` first: the
+        # gate runs on every request including static files, and parsing a URL
+        # to answer it costs more than the answer (#974 review).
+        if not scope["path"].startswith(SESSION_PATH_PREFIX):
+            _set_state(Request(scope), token="", ip_hash=None, session=None, banned_user_id=None)
             await self.app(scope, receive, send)
             return
+        request = Request(scope)
         refusal = await self._resolve(request)
         if refusal is not None:
             await refusal(scope, receive, send)

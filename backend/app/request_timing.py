@@ -7,8 +7,9 @@ waited - including the session lookup, the size guard, and compression -
 rather than the handler's view of itself.
 
 Pure ASGI, like `RequestSizeLimitMiddleware` and for the same reason:
-`BaseHTTPMiddleware` buffers bodies and breaks streaming, and a timer must
-not change what it times.
+`BaseHTTPMiddleware` reads the request body to hand it on, and runs the rest
+of the app in a task of its own behind a memory stream - and a timer must not
+change what it times.
 
 The label is the route *template* (`/api/rooms/{room_id}`), never the path,
 so the number of series cannot grow with the number of rooms. FastAPI writes

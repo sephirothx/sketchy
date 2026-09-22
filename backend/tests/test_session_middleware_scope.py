@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
@@ -77,17 +78,43 @@ async def test_a_static_file_costs_no_statement_even_with_a_session_cookie(env):
     assert statements
 
 
-def test_no_middleware_in_the_application_stack_is_a_base_http_middleware():
-    """`BaseHTTPMiddleware` costs ~80 µs of loop time per request here; every
-    layer the app installs is plain ASGI."""
-    from app.main import api
+def test_nothing_in_the_exported_application_is_a_base_http_middleware():
+    """Walked from `app.main.app`, the object uvicorn serves - not the bare
+    router, which does not contain the layers wrapping it (#974 review).
+    `BaseHTTPMiddleware` costs ~80 µs of loop time per request here, on every
+    request including the static files this PR stops resolving sessions for.
+    """
+    from app.main import api, app
 
+    seen: list[str] = []
+    layer = app
+    while layer is not None:
+        seen.append(type(layer).__name__)
+        assert not isinstance(layer, BaseHTTPMiddleware), seen
+        layer = getattr(layer, "app", None) or getattr(layer, "other_asgi_app", None)
+    # …and the routers' own stack, which the walk above ends at.
     offenders = [
         middleware.cls.__name__
         for middleware in api.user_middleware
         if isinstance(middleware.cls, type) and issubclass(middleware.cls, BaseHTTPMiddleware)
     ]
     assert offenders == []
+    assert "SecurityHeadersMiddleware" in seen and "ASGIApp" in seen, seen
+
+
+def test_the_walk_would_see_a_probe_anywhere_in_the_exported_stack(monkeypatch):
+    """The check above is only worth having if it reaches the layers the bare
+    router does not contain."""
+    from starlette.middleware.base import BaseHTTPMiddleware as Base
+
+    import app.main as main_module
+
+    class Probe(Base):
+        pass
+
+    monkeypatch.setattr(main_module, "app", Probe(main_module.app))
+    with pytest.raises(AssertionError):
+        test_nothing_in_the_exported_application_is_a_base_http_middleware()
 
 
 async def test_only_the_api_prefix_itself_resolves_a_session(env):
