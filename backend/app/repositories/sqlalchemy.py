@@ -386,7 +386,9 @@ def _turn_drawing(
     turn_id: UUID,
     game_id: UUID,
     sizing: _GameSizing | None,
-    prepared: _PreparedDrawing,
+    # `None` for a drawing with no payload: there was nothing to prepare, and
+    # the row below says so instead of carrying bytes.
+    prepared: _PreparedDrawing | None,
 ) -> TurnDrawing:
     """Build the row for one turn's drawing, stored or explained.
 

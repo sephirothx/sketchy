@@ -10,6 +10,7 @@ repositories, on SQLite by default and on PostgreSQL under
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -788,3 +789,94 @@ async def test_the_encode_is_not_inside_the_write_bound(monkeypatch):
 
     assert worker.written == ["game"], "the slow encode cost latency, not the game"
     assert outcomes == []
+
+
+async def test_the_shutdown_drain_cancels_and_counts_what_it_cannot_wait_for(caplog):
+    """A deferred staging left running when the budget is spent used to be
+    neither awaited nor cancelled: the loop closed under it, the game was lost
+    with no counter, and the room kept saying "pending" (#976 fourth review).
+    """
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    started = asyncio.Event()
+
+    async def never_finishes():
+        started.set()
+        await asyncio.sleep(3600)
+
+    ctx.defer_cleanup(never_finishes())
+    await asyncio.wait_for(started.wait(), timeout=2)
+    [task] = list(ctx.room_cleanups)
+
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(0.05), timeout=5)
+
+    assert task.cancelled(), "the drain does not leave it to the loop closing"
+    assert "Cancelling 1 deferred room cleanup" in caplog.text
+
+
+async def test_a_staging_cancelled_by_the_drain_is_counted_as_a_lost_write(monkeypatch):
+    """Counted like every other lost write before it goes, rather than
+    disappearing with the process (#976 fourth review)."""
+    from types import SimpleNamespace
+
+    import app.services.game_flow as flow_module
+
+    class Stuck:
+        async def encode(self, envelope):
+            await asyncio.sleep(3600)
+
+        async def stage_encoded(self, staged):  # pragma: no cover - never reached
+            raise AssertionError("the encode never finished")
+
+    flow = object.__new__(flow_module.GameFlowService)
+    flow._ctx = SimpleNamespace(finished_games=Stuck())
+    abandoned: list[tuple[str, str]] = []
+    outcomes: list[tuple[str, str]] = []
+    flow._note_abandoned_write = lambda room, kind, reason, start: abandoned.append((kind, reason))
+    flow.note_history_outcome = lambda game_id, state, room=None: outcomes.append((game_id, state))
+
+    handoff = asyncio.create_task(
+        flow._hand_off_finished_game(
+            SimpleNamespace(id="room"), SimpleNamespace(game_id="game")
+        )
+    )
+    await asyncio.sleep(0.02)
+    handoff.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await handoff
+
+    assert abandoned == [("handoff", "cancelled")]
+    assert outcomes == [("game", "failed")]
+
+
+async def test_staging_wakes_the_loop_rather_than_waiting_for_its_sweep(env):
+    """Without the wake a staged game sits until the sweep comes round - up to
+    a minute of a room saying "pending" for a write that is ready (#976 fourth
+    review)."""
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    worker = worker_for(store, history)
+    woken: list[int] = []
+    worker.wake = lambda: woken.append(1)
+
+    envelope = FinishedGameEnvelope(history_for(str(generate_uuid()), ann, bob))
+    assert await worker.stage_encoded(await worker.encode(envelope)) is StageOutcome.STAGED
+
+    assert woken == [1]
+
+
+async def test_the_lifespan_refuses_a_width_the_process_cannot_use(monkeypatch):
+    """Validated in the lifespan, so a typo is heard at startup rather than at
+    the first finished game - and driven through the lifespan itself, because
+    making that call unreachable passed every test (#976 fourth review)."""
+    import app.main as main_module
+
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "nonsense")
+    with pytest.raises(ValueError, match="HISTORY_ENCODE_WORKERS"):
+        async with main_module.lifespan(None):
+            raise AssertionError("the process started with a width it cannot use")

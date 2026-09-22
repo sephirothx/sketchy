@@ -574,6 +574,25 @@ class HandlerContext:
                 logger.exception("Failed to retire an ephemeral room code")
 
     async def drain_room_cleanups(self, within_seconds: float) -> None:
-        """Let deferred teardowns finish before the process stops."""
-        if self.room_cleanups:
-            await asyncio.wait(set(self.room_cleanups), timeout=within_seconds)
+        """Let deferred teardowns finish before the process stops.
+
+        What is still running when the budget is spent is cancelled here
+        rather than left to the loop closing under it: these tasks stage
+        finished games (#976), and a task nobody waits for and nobody cancels
+        is a game lost with no counter and a room left saying "pending"
+        (#976 fourth review). A cancelled staging records its own loss.
+        """
+        if not self.room_cleanups:
+            return
+        pending = set(self.room_cleanups)
+        _done, still_running = await asyncio.wait(pending, timeout=within_seconds)
+        if not still_running:
+            return
+        logger.warning(
+            "Cancelling %d deferred room cleanup(s) still running after %ss",
+            len(still_running),
+            within_seconds,
+        )
+        for task in still_running:
+            task.cancel()
+        await asyncio.wait(still_running)

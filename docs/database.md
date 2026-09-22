@@ -1216,7 +1216,10 @@ any other row has a payload; a `processing` row has both halves of its claim.
 thing that can still lose a game: a database that is down at the moment a game ends. The
 bound covers the insert only — the envelope is encoded before it, off the loop and
 unbounded (#976), so a burst of endings queueing for an encode thread costs the room
-latency rather than its game.
+latency rather than its game. The whole handoff runs on a task of its own rather than
+inside the action that ended the game, so neither the result nor the waiting room waits
+for it; a planned shutdown drains those tasks with a budget that covers an encode as
+well as the write, and cancels and counts whatever is still running after it.
 That loss is recorded exactly as before (`history.write_abandoned`, kind `handoff`) —
 the issue is explicit that an outbox in the same unavailable database is not an outage
 guarantee, and this table does not pretend to be one. Everything after the insert is

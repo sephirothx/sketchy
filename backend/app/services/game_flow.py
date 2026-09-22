@@ -59,6 +59,12 @@ TIMER_OVERRUN_REPORT_MS = 250
 # history itself is written by the handoff loop with its own budget and
 # retries. The reaction path and the entry path share this bound.
 HISTORY_WRITE_TIMEOUT_SECONDS = WRITE_TIMEOUT_SECONDS
+#: What a shutdown allows for encodes still queued on the envelope pool, on
+#: top of the write's own bound. One stroke-heavy envelope is ~143 ms, and the
+#: documented ceiling of 50 rooms ending at once is a few seconds of queue at
+#: the default width (#976): the drain has to outlast that, or it returns
+#: while a staging is still being encoded.
+HISTORY_ENCODE_DRAIN_SECONDS = 10
 # The same ten seconds the entry path and the finished-game write allow. A
 # game start that cannot read its prompts must refuse rather than hang the
 # host, and an unbounded database call on a request path is its own finding.
@@ -1357,10 +1363,9 @@ class GameFlowService:
         room.game = None
         self._note_history_write_started(room, game, history)
         envelope = FinishedGameEnvelope(history) if history else None
-        if defer_durable:
-            self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
-        else:
-            await self._hand_off_finished_game(room, envelope)
+        # On its own task for the same reason as at the end of a game: the
+        # room is told what happened without waiting for the write about it.
+        self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
         return True
 
     def _note_history_write_started(self, room: Room, game: Game, history) -> None:
@@ -1413,6 +1418,14 @@ class GameFlowService:
             )
             self._note_abandoned_write(room, "handoff", "timeout", started)
             self.note_history_outcome(envelope.game_id, "failed", room=room)
+        except asyncio.CancelledError:
+            # The shutdown drain gave up on this task. Counted like any other
+            # lost write before it goes, rather than disappearing with the
+            # process (#976 fourth review).
+            logger.error("Staging game history for room %s was cancelled", room.id)
+            self._note_abandoned_write(room, "handoff", "cancelled", started)
+            self.note_history_outcome(envelope.game_id, "failed", room=room)
+            raise
         except EnvelopeTooLarge as error:
             logger.error("Game %s for room %s cannot be staged: %s", envelope.game_id, room.id, error)
             self._note_abandoned_write(room, "handoff", "too_large", started)
@@ -1538,10 +1551,13 @@ class GameFlowService:
             # database round trip.
             usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
             envelope = FinishedGameEnvelope(history, usage, revision_ids) if history else None
-            if defer_durable:
-                self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
-            else:
-                await self._hand_off_finished_game(room, envelope)
+            # Always on its own task (#976 fourth review), never inside the
+            # action: a game ends inside a `room_state_batch`, so awaiting the
+            # handoff here put the encode - deliberately unbounded, so that a
+            # burst of endings costs latency rather than games - in front of
+            # the room's own snapshot. Tracked, so the shutdown drain still
+            # waits for it.
+            self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
         else:
             await self._start_turn(room)
 
