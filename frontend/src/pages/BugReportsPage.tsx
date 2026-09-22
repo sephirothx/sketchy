@@ -21,6 +21,7 @@ import { canAdminister } from "../lib/operatorAccess";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
+import "../styles/lazy/operator.css";
 
 function formatWhen(value: string, dateTime: (date: Date) => string): string {
   return dateTime(new Date(value));

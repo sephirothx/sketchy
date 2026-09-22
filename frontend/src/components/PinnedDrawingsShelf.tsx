@@ -12,6 +12,7 @@ import { movePin, pinsAsRecapEntries, withoutPin } from "../lib/pinnedDrawings";
 import type { ProfilePin } from "../lib/pinnedDrawings";
 import { reactionEligibility } from "../lib/reactions";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/profile.css";
 
 interface PinnedDrawingsShelfProps {
   /** Whose shelf: the bytes are fetched through this profile's pin route. */

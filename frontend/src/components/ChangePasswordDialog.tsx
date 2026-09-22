@@ -6,6 +6,7 @@ import { useToast } from "../lib/toast";
 import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/settings.css";
 
 
 

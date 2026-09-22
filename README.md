@@ -1698,11 +1698,14 @@ backend/
     e2e/          Multi-browser Playwright scenarios
     test_*.py     Domain, protocol, payload, wire-contract, timer, DB, repository, and performance unit tests
 frontend/
-  scripts/bundle-report.mjs What a first visit downloads from a build: raw, gzip and brotli per chunk
+  scripts/bundle-report.mjs What a first visit downloads from a build: raw, gzip and brotli per chunk,
+                  and the first-load budget CI holds it to (`npm run bundle:check`)
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
                   SettingsOverlay, FriendsOverlay
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, BugReportsPage (admin triage)
+    routeModules.ts Every page but the lobby, fetched as its own chunk when first needed
+    styles/lazy/  Stylesheets fetched with the pages that draw them, kept in the components layer
     content/rules/ The published rules, one typed module per language (all seven);
                   anchors.ts is the link notices use, kept apart from the documents
     content/ui/   Every word the interface says, one typed module per language
@@ -1811,6 +1814,7 @@ Beyond lint, tests, PostgreSQL migrations, and multi-browser E2E:
 | Credential scan | A credential in the tree, or in **any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. The range is resolved with the same baseline fallback as the artifact scan, and fails closed rather than falling back to the tree, so a first push or a force-push is not a way around it. Merge diffs are requested explicitly, because `git log -p` emits no patch for a merge commit — a secret introduced only while resolving a conflict, present in neither parent, is otherwise invisible to both scans. One historical finding is carried in `.gitleaks-known.json` — an earlier revision of the artifact scanner named PEM armour in a comment — pinned to its commit, file, rule, and line, holding no secret, and unable to excuse anything else. Runs alongside the artifact scan, which catches file *shapes* by their bytes rather than secrets in source |
 | Dependency advisories | A known advisory in `requirements.txt`, `requirements-dev.txt`, or the frontend lockfile. Build and test dependencies count: they run in CI, with a checkout, before anything they touched reaches a player |
 | Wire contract baseline | `fixtures/wire_contract.json` no longer matches the tree, or (a warning until launch) the socket contract differs from the base branch under the same `PROTOCOL_VERSION`. Regenerate with `scripts/check-wire-contract.py --write`; see `docs/wire-protocol.md` §11 |
+| Bundle budget | The first-load set, meaning the entry script and stylesheet plus every chunk they import statically, going over its gzip budget (`npm run bundle:check`, [`frontend/scripts/bundle-report.mjs`](frontend/scripts/bundle-report.mjs)). A page, a language or a stylesheet that slips back into the entry chunk is caught by the change that caused it, not noticed at launch |
 | Coverage floors | A risk-critical module dropping below **either** of its two floors in [`scripts/check-coverage.py`](scripts/check-coverage.py) — statements and branches, on authentication, moderation, request limits, payload validation, drawing storage, deployment, readiness. Both, because either alone can be met without exercising the code: `auth/blocks.py` reads 82% by statements and 50% by branches, so half its conditions have only ever gone one way. Per module rather than in total, because a suite this size absorbs one module losing its tests without moving the total more than a rounding error. A report produced without `--cov-branch` is refused rather than checked against the wrong number, and a module that vanishes from the report fails too, so a rename cannot retire a floor silently |
 
 The coverage gate has its own tests in

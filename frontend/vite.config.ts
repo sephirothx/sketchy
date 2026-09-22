@@ -67,6 +67,25 @@ export default defineConfig({
       },
     },
   },
+  build: {
+    rolldownOptions: {
+      output: {
+        codeSplitting: {
+          groups: [
+            {
+              // The libraries every page runs on, in a chunk of their own
+              // (#475). Its name carries a hash of its contents, and those
+              // change only when a dependency does - so a returning player's
+              // browser keeps it across deploys of the app itself, which is
+              // most of them, instead of downloading React again each time.
+              name: 'vendor',
+              test: /[\\/]node_modules[\\/](react|react-dom|scheduler|react-router|react-router-dom|zustand|socket\.io-client|socket\.io-parser|engine\.io-client|engine\.io-parser|@socket\.io[\\/]component-emitter)[\\/]/,
+            },
+          ],
+        },
+      },
+    },
+  },
   define: {
     __APP_COMMIT_SHA__: JSON.stringify(gitLog('--format=%h') + (isWorkingTreeDirty() ? '*' : '')),
     __APP_COMMIT_DATE__: JSON.stringify(gitLog('--date=short --format=%cd')),

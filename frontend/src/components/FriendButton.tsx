@@ -3,6 +3,7 @@ import type { FriendAction } from "../lib/friends";
 import { Button } from "./ui/Button";
 import { PlusIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/friends.css";
 
 /** The one control for "become friends with this person".
 

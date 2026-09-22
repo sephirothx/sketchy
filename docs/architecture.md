@@ -203,6 +203,7 @@ budget. Details of all of this are in [`wire-protocol.md`](wire-protocol.md).
 ```
 frontend/src/
 ├── main.tsx, App.tsx      Router, identity bootstrap (the first paint waits for the account, bounded), socket connection
+├── routeModules.ts        Every page and overlay but the lobby as a chunk of its own, and what is prefetched when (#475)
 ├── pages/                 One component per route
 ├── components/            Canvas, toolbar, player list, dialogs, overlays
 ├── content/ui/            The interface's words, one typed module per locale; English in the entry chunk, every other locale
@@ -222,10 +223,31 @@ frontend/src/
 │   ├── crashReport.ts     Pre-fills and redacts the crash page's bug report
 │   └── crashTestSeam.ts   Diagnostics-build hook the E2E suite uses to make a screen throw
 ├── types.ts               Shared TypeScript types for every socket payload
-└── styles/                CSS, one file per surface
+└── styles/                CSS, one file per surface; styles/lazy/ wraps the surfaces fetched with their pages
 ```
 
-Routes ([`frontend/src/App.tsx:59`](../frontend/src/App.tsx)):
+**What a first visit downloads.** The entry chunk holds the lobby and what every page
+needs: the socket, the stores, the app-level listeners, English, and the crash page.
+Every other page and both overlays are chunks of their own
+([`routeModules.ts`](../frontend/src/routeModules.ts)), and so is every interface
+language but English (#982). The chunk for the address being opened is fetched while
+the first paint waits on the account, not after it. The room, Create and the offline
+banner's scratch pad are fetched once the lobby has painted, because a player is about
+to need them, and the scratch pad cannot be fetched once the connection it stands in
+for has gone. React, the router and socket.io are a separate `vendor` chunk whose hash
+changes only when a dependency does, so a deploy of the app leaves them cached. A
+surface's stylesheet travels with the components that draw it, through `styles/lazy/`,
+which keeps it in the `components` layer: a stylesheet imported from a module is
+otherwise unlayered, and unlayered rules beat every layer. A tab open across a deploy
+asks for chunk names the server no longer has.
+[`lib/chunkReload.ts`](../frontend/src/lib/chunkReload.ts) reloads it onto the new build
+once per build, and only when the failed chunk itself answers 404: a reload with the server
+down lands on the browser's error page, and one after a one-off failure throws the page away
+for nothing. The two overlays load themselves ([`LazyOverlay`](../frontend/src/components/LazyOverlay.tsx)),
+so a chunk that cannot be fetched over a live room is a notice with a reload, not the crash page. CI holds the first-load set to a
+gzip budget (`npm run bundle:check`, [`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)).
+
+Routes ([`frontend/src/App.tsx:90`](../frontend/src/App.tsx)):
 
 | Path | Page |
 | --- | --- |

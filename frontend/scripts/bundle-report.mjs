@@ -7,6 +7,12 @@ prints raw, gzip -9 and brotli sizes - for that first-load set and for every
 other chunk, which is only fetched when something asks for it.
 
     npm run build && node scripts/bundle-report.mjs [dist] [--json]
+    node scripts/bundle-report.mjs dist --budget js=215,css=41
+
+`--budget` fails the run when the first-load set's gzip size, in KB, is over
+either figure: `npm run bundle:check` is what CI runs after the build, so a
+page that slips back into the entry chunk is caught by the change that did it
+rather than noticed at launch (#475).
 
 Written for the frontend performance epic (#981), so each change in it is
 measured the same way before and after. */
@@ -16,7 +22,11 @@ import { brotliCompressSync, constants, gzipSync } from "node:zlib";
 
 const args = process.argv.slice(2);
 const json = args.includes("--json");
-const dist = args.find((arg) => !arg.startsWith("--")) ?? "dist";
+const budgetArg = args[args.indexOf("--budget") + 1];
+const budget = args.includes("--budget")
+  ? Object.fromEntries(budgetArg.split(",").map((pair) => pair.split("=")).map(([k, v]) => [k, Number(v)]))
+  : null;
+const dist = args.find((arg, i) => !arg.startsWith("--") && args[i - 1] !== "--budget") ?? "dist";
 const assets = join(dist, "assets");
 
 function sizes(file) {
@@ -77,4 +87,13 @@ if (json) {
   for (const row of report.chunks) {
     console.log(`${row.first ? "*" : " "} ${kb(row.raw)}  ${kb(row.gzip)}  ${kb(row.brotli)}  ${row.file}`);
   }
+}
+
+if (budget) {
+  const over = Object.entries(budget).filter(([kind, limit]) => report.firstLoad[kind].gzip / 1000 > limit);
+  for (const [kind, limit] of over) {
+    console.error(`\nfirst-load ${kind} is ${(report.firstLoad[kind].gzip / 1000).toFixed(1)} KB gzip, over its ${limit} KB budget`);
+  }
+  if (over.length) process.exit(1);
+  console.log(`\nwithin budget: ${Object.entries(budget).map(([k, v]) => `${k} <= ${v} KB gzip`).join(", ")}`);
 }
