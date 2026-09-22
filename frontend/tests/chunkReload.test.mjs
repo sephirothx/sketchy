@@ -76,6 +76,9 @@ test("a module that threw while evaluating is not a missing chunk, and gets no r
   // A reload fixes nothing there and loses the client error log.
   assert.equal(chunkCheckFor(new Error("boom inside the page module")), null);
   assert.equal(chunkCheckFor(new RangeError("Invalid array length")), null);
+  // The commonest evaluation errors are TypeErrors too.
+  assert.equal(chunkCheckFor(new TypeError("Cannot read properties of undefined (reading 'x')")), null);
+  assert.equal(chunkCheckFor(new TypeError("x is not a function")), null);
   // Named chunks and Safari's unnamed import error are still checked.
   assert.equal(typeof chunkCheckFor(new Error("Unable to preload CSS for /assets/x-1.css")), "function");
   assert.equal(typeof chunkCheckFor(new TypeError("Importing a module script failed.")), "function");

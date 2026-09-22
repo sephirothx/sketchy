@@ -57,15 +57,19 @@ export function failedChunkUrl(error: unknown): string | null {
   return message.match(/(?:https?:\/\/[^\s]+?)?\/assets\/[^\s]+?\.(?:js|css)\b/)?.[0] ?? null;
 }
 
+/** Safari's error for any failed dynamic import: it names nothing, so this
+    exact message is the only way to tell it from a module that threw. */
+const SAFARI_IMPORT_FAILURE = /^Importing a module script failed\.?$/;
+
 /** How to find out whether a failed chunk is gone, or null when the failure
     is not a missing chunk at all.
 
 A named chunk is asked for again: a 404 is a deploy, anything else is not.
-An unnamed failure is Safari's import error - always a `TypeError` whose
-message names nothing - and there a server that answers is the best evidence
-there is. Anything else unnamed is the module throwing while it evaluated,
-which a reload does not fix and which would cost the client error log the
-crash report is about to read. */
+An unnamed failure is checked only when it is Safari's import error, told
+apart by its exact message: a server that answers is the best evidence there
+is. Its type is no help - a module that throws while it evaluates most often
+throws a `TypeError` too ("x is not a function"), and a reload fixes nothing
+there and costs the client error log the crash report is about to read. */
 export function chunkCheckFor(error: unknown): (() => Promise<boolean>) | null {
   const url = failedChunkUrl(error);
   if (url) {
@@ -74,7 +78,8 @@ export function chunkCheckFor(error: unknown): (() => Promise<boolean>) | null {
       () => false,
     );
   }
-  if (!(error instanceof TypeError)) return null;
+  const message = error instanceof Error ? error.message : "";
+  if (!SAFARI_IMPORT_FAILURE.test(message)) return null;
   return () => fetch("/", { method: "HEAD", cache: "no-store" }).then(
     (response) => response.ok,
     () => false,
