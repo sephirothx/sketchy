@@ -50,16 +50,31 @@ export function ConfettiCanvas() {
     let particles: Particle[] = [];
     let animId: number | null = null;
 
+    // Sized to the viewport only while there is confetti on it (#986). The
+    // canvas covers the whole page on every screen, so a viewport-sized
+    // backing store left behind after the first burst was 8 MB at 1080p and
+    // 33 MB at 4K held for the rest of the session, and a full-page layer to
+    // composite; a 0x0 canvas holds neither.
     function resize() {
-      if (canvas) {
+      if (canvas && animId !== null) {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
       }
     }
-    resize();
+    function release() {
+      if (canvas) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+    }
+    release();
     window.addEventListener("resize", resize);
 
     function addParticles(mode: "burst" | "shower") {
+      if (animId === null && canvas) {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
+      }
       const width = canvas?.width ?? window.innerWidth;
       const height = canvas?.height ?? window.innerHeight;
       const count = mode === "burst" ? 70 : 180;
@@ -145,7 +160,7 @@ export function ConfettiCanvas() {
         animId = requestAnimationFrame(loop);
       } else {
         animId = null;
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        release();
       }
     }
 
