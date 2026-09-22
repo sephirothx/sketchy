@@ -39,29 +39,47 @@ function clockOptions(format: TimeFormat): Intl.DateTimeFormatOptions {
   return { hour: "2-digit", minute: "2-digit" };
 }
 
+// One formatter per kind, locale and time format (#991). A `toLocale*String`
+// call builds a new `Intl.DateTimeFormat` every time - resolving the locale,
+// the calendar and the pattern afresh - and a lobby chat of 200 lines called
+// two per line on every render, so a keystroke there cost ~400 of them. The
+// cache is keyed on everything the output depends on, so a change of
+// language or of Time format simply reaches for a different entry.
+const formatters = new Map<string, Intl.DateTimeFormat>();
+
+function formatterFor(kind: string, options: Intl.DateTimeFormatOptions, format = ""): Intl.DateTimeFormat {
+  const key = `${kind}|${displayLocale ?? ""}|${format}`;
+  let formatter = formatters.get(key);
+  if (!formatter) {
+    formatter = new Intl.DateTimeFormat(displayLocale, options);
+    formatters.set(key, formatter);
+  }
+  return formatter;
+}
+
 /** Just the time of day: "15:05", "3:05 PM", or whatever the device does. */
 export function formatClock(date: Date, format: TimeFormat): string {
   if (Number.isNaN(date.getTime())) return ui.clock.unknown;
-  return date.toLocaleTimeString(displayLocale, clockOptions(format));
+  return formatterFor("clock", clockOptions(format), format).format(date);
 }
 
 /** Day and time together, for anything that happened on some other day. */
 export function formatDateTime(date: Date, format: TimeFormat): string {
   if (Number.isNaN(date.getTime())) return ui.clock.unknown;
-  return date.toLocaleString(displayLocale, {
+  return formatterFor("dateTime", {
     year: "numeric",
     month: "short",
     day: "numeric",
     ...clockOptions(format),
-  });
+  }, format).format(date);
 }
 
 /** A day alone; no clock, so no preference to honour. */
 export function formatDate(date: Date): string {
   if (Number.isNaN(date.getTime())) return ui.clock.unknown;
-  return date.toLocaleDateString(displayLocale, {
+  return formatterFor("date", {
     year: "numeric",
     month: "short",
     day: "numeric",
-  });
+  }).format(date);
 }

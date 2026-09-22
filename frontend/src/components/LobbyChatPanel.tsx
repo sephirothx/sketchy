@@ -1,11 +1,12 @@
 import { useClock } from "../hooks/useClock";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useRef, useState } from "react";
 import type { FormEvent } from "react";
 
 import { chatTimeLabel, reportableLine, type LobbyChatLine } from "../lib/lobbyChat";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
-import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
+import { IdentityRequiredError, needsIdentity, useAuthStore, type AuthUser } from "../store/authStore";
+import { formatDateTime, type TimeFormat } from "../lib/clock";
 import { useLobbyChatStore } from "../store/lobbyChatStore";
 import type { AckResponse } from "../types";
 import { ChevronRightIcon } from "./icons";
@@ -31,8 +32,8 @@ Anyone with a name may speak - the same boundary as the online list beside
 it. A visitor who has not chosen one yet is offered that instead of a box
 that would refuse them, and choosing it reconnects the socket, which is what
 makes the next line theirs. */
-export function LobbyChatPanel() {
-  const { timeFormat, dateTime } = useClock();
+export const LobbyChatPanel = memo(function LobbyChatPanel() {
+  const { timeFormat } = useClock();
   const lines = useLobbyChatStore((state) => state.chat.lines);
   const awaitingName = useAuthStore((state) => needsIdentity(state.user));
   const viewer = useAuthStore((state) => state.user);
@@ -115,45 +116,16 @@ export function LobbyChatPanel() {
           {lines.length === 0 ? (
             <p className="lobby-chat-empty">{ui.lobbyChatPanel.nobodyHasSaidAnythingYet}</p>
           ) : (
-            lines.map((line) => {
-              const at = new Date(line.sentAt);
-              const nameClass = playerNameClass(line.isAnonymous);
-              const nameStyle = playerNameStyle(line.nameColor ?? undefined, line.isAnonymous);
-              return (
-                <div key={line.seq} className="chat-message lobby-chat-line">
-                  <span className="lobby-chat-body">
-                    {/* The name is the way to report the line: there is no
-                        room menu here, and a line's author is the only
-                        thing on it worth acting on. A line that cannot be
-                        reported - our own, retention withheld its id, or we
-                        are a guest - keeps the name as plain text, with no
-                        explanation: nothing is owed for an action that was
-                        never offered. */}
-                    {reportableLine(line, viewer) ? (
-                      <button
-                        type="button"
-                        className={`lobby-chat-author ${nameClass}`}
-                        style={nameStyle}
-                        title={ui.lobbyChatPanel.reportThisLine({ name: line.displayName })}
-                        aria-label={ui.lobbyChatPanel.reportThisLine({ name: line.displayName })}
-                        onClick={() => setReporting(line)}
-                      >
-                        {line.displayName}:
-                      </button>
-                    ) : (
-                      <strong className={nameClass} style={nameStyle}>
-                        {line.displayName}:
-                      </strong>
-                    )}{" "}
-                    {line.text}
-                  </span>
-                  {/* Fresh or stale at a glance; the whole instant on hover. */}
-                  <time className="lobby-chat-time" dateTime={at.toISOString()} title={dateTime(at)}>
-                    {chatTimeLabel(line.sentAt, now, timeFormat)}
-                  </time>
-                </div>
-              );
-            })
+            lines.map((line) => (
+              <LobbyChatLineRow
+                key={line.seq}
+                line={line}
+                viewer={viewer}
+                now={now}
+                timeFormat={timeFormat}
+                onReport={setReporting}
+              />
+            ))
           )}
         </div>
       </div>
@@ -201,4 +173,61 @@ export function LobbyChatPanel() {
       )}
     </section>
   );
-}
+});
+
+/** One line, memoised on what it shows (#991): the panel's input is state on
+    the panel, so every keystroke re-rendered every line - up to the 200 the
+    store keeps, each formatting two dates - and the room list's once-a-second
+    deltas did the same through the page. The clock tick still reaches every
+    line, which is what keeps "2 min ago" true. */
+const LobbyChatLineRow = memo(function LobbyChatLineRow({
+  line,
+  viewer,
+  now,
+  timeFormat,
+  onReport,
+}: {
+  line: LobbyChatLine;
+  viewer: AuthUser | null;
+  now: number;
+  timeFormat: TimeFormat;
+  onReport: (line: LobbyChatLine) => void;
+}) {
+  const at = new Date(line.sentAt);
+  const nameClass = playerNameClass(line.isAnonymous);
+  const nameStyle = playerNameStyle(line.nameColor ?? undefined, line.isAnonymous);
+  return (
+    <div className="chat-message lobby-chat-line">
+      <span className="lobby-chat-body">
+        {/* The name is the way to report the line: there is no
+            room menu here, and a line's author is the only
+            thing on it worth acting on. A line that cannot be
+            reported - our own, retention withheld its id, or we
+            are a guest - keeps the name as plain text, with no
+            explanation: nothing is owed for an action that was
+            never offered. */}
+        {reportableLine(line, viewer) ? (
+          <button
+            type="button"
+            className={`lobby-chat-author ${nameClass}`}
+            style={nameStyle}
+            title={ui.lobbyChatPanel.reportThisLine({ name: line.displayName })}
+            aria-label={ui.lobbyChatPanel.reportThisLine({ name: line.displayName })}
+            onClick={() => onReport(line)}
+          >
+            {line.displayName}:
+          </button>
+        ) : (
+          <strong className={nameClass} style={nameStyle}>
+            {line.displayName}:
+          </strong>
+        )}{" "}
+        {line.text}
+      </span>
+      {/* Fresh or stale at a glance; the whole instant on hover. */}
+      <time className="lobby-chat-time" dateTime={at.toISOString()} title={formatDateTime(at, timeFormat)}>
+        {chatTimeLabel(line.sentAt, now, timeFormat)}
+      </time>
+    </div>
+  );
+});

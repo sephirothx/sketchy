@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { sessionFrom } from "../lib/roomEntryState";
@@ -42,7 +42,7 @@ answer "no such player" about somebody who is online — and nobody scans a list
 this size by typing anyway. Finding a specific person is a different feature
 from seeing who is around: it is the profile, reached from a row's menu here or
 from a game's participant list. */
-export function OnlinePlayersPanel() {
+export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
   const presence = usePresenceStore((state) => state.presence);
   const myUserId = useAuthStore((state) => state.user?.id ?? null);
   const iAmAGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);
@@ -213,4 +213,4 @@ export function OnlinePlayersPanel() {
       )}
     </section>
   );
-}
+});
