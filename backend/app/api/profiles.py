@@ -1,8 +1,11 @@
 """Public profile endpoints: lifetime stats and browsable game history."""
 from __future__ import annotations
 
-import logging
+import asyncio
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable
+import gzip
+import logging
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -23,6 +26,7 @@ from app.canvas_storage import (
     stored_drawing_wire_payload,
 )
 from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_PIN_SLOTS
+from app.services.telemetry import telemetry
 from app.repositories.interfaces import (
     DrawingReactionResult,
     GameHistoryRepository,
@@ -140,6 +144,60 @@ def validator_matches(if_none_match: str, validator: str) -> bool:
     return any(bare(tag) == bare(validator) for tag in if_none_match.split(",") if tag.strip())
 
 
+#: Bytes of decoded drawings kept in memory, both encodings counted (#979).
+DRAWING_CACHE_BYTES = 32 * 1024 * 1024
+#: The level the cached gzip copy is made at, once, off the loop. The
+#: response middleware compresses at 9 on the loop, per request.
+DRAWING_GZIP_LEVEL = 6
+
+
+class WireDrawingCache:
+    """Decoded drawings by stored checksum, most recently served kept (#979).
+
+    Every fetch used to decode the stored blob back to wire bytes (1 ms for an
+    ordinary drawing, 8 ms for a heavy one) and gzip the result at level 9 -
+    ~2 ms and ~25 ms of event loop, back to back, for bytes that are the same
+    for everybody: the lobby's This week shelf is six drawings fetched by
+    every visitor. The checksum is the stored blob's SHA-256 and decoding is
+    deterministic, so a checksum names exactly one wire payload. Only the
+    bytes are shared: who may have them is asked on every request.
+    """
+
+    def __init__(self, max_bytes: int = DRAWING_CACHE_BYTES) -> None:
+        self.max_bytes = max_bytes
+        self.bytes = 0
+        self._entries: OrderedDict[str, tuple[bytes, bytes]] = OrderedDict()
+
+    def get(self, checksum: str) -> tuple[bytes, bytes] | None:
+        entry = self._entries.get(checksum)
+        if entry is not None:
+            self._entries.move_to_end(checksum)
+        return entry
+
+    def clear(self) -> None:
+        self._entries.clear()
+        self.bytes = 0
+
+    def put(self, checksum: str, wire: bytes, gzipped: bytes) -> None:
+        size = len(wire) + len(gzipped)
+        if not checksum or checksum in self._entries or size > self.max_bytes:
+            return
+        self._entries[checksum] = (wire, gzipped)
+        self.bytes += size
+        while self.bytes > self.max_bytes:
+            _, (old_wire, old_gzipped) = self._entries.popitem(last=False)
+            self.bytes -= len(old_wire) + len(old_gzipped)
+
+
+drawing_cache = WireDrawingCache()
+
+
+def _decoded_drawing(blob: bytes, checksum: str | None) -> tuple[bytes, bytes]:
+    """The wire payload and its gzip, for a worker thread."""
+    wire = stored_drawing_wire_payload(blob, checksum=checksum)
+    return wire, gzip.compress(wire, compresslevel=DRAWING_GZIP_LEVEL, mtime=0)
+
+
 async def serve_drawing(
     request: Request,
     turn_id: str,
@@ -159,41 +217,53 @@ async def serve_drawing(
         # lifetime runs out.
         "Cache-Control": "private, no-cache",
     }
-    if_none_match = request.headers.get("if-none-match")
-    if if_none_match is not None:
-        # A validator is answered from the metadata alone: the blob is
-        # neither read nor decoded for a copy that is still current.
-        checksum = await checksum_of()
-        if checksum is None:
-            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-        validator = drawing_validator(checksum)
-        if validator_matches(if_none_match, validator):
-            return Response(
-                status_code=304, headers={**cache_headers, "ETag": validator}
-            )
-    drawing = await drawing_of()
-    if drawing is None:
+    # Asked first, every time: the checksum query carries the same access
+    # predicate as the drawing's, reads no blob, and names the bytes.
+    checksum = await checksum_of()
+    if checksum is None:
         raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-    try:
-        payload = stored_drawing_wire_payload(
-            drawing.payload, checksum=drawing.checksum_sha256 or None
-        )
-    except UnsupportedStoredDrawingError as error:
-        # A build older than the row it is reading. Answer as though the
-        # drawing is absent rather than claiming it is broken.
-        logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
-        raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from error
-    except CorruptStoredDrawingError as error:
-        logger.error("Stored drawing %s failed its checksum", turn_id)
-        raise Refusal(
-            500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
-        ) from error
+    validator = drawing_validator(checksum)
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match is not None and validator_matches(if_none_match, validator):
+        # A copy that is still current: neither read nor decoded.
+        return Response(status_code=304, headers={**cache_headers, "ETag": validator})
+    cached = drawing_cache.get(checksum)
+    if cached is not None:
+        telemetry.drawing_cache_requests.inc(("hit",))
+        wire, gzipped = cached
+    else:
+        telemetry.drawing_cache_requests.inc(("miss",))
+        drawing = await drawing_of()
+        if drawing is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        try:
+            wire, gzipped = await asyncio.to_thread(
+                _decoded_drawing, drawing.payload, drawing.checksum_sha256 or None
+            )
+        except UnsupportedStoredDrawingError as error:
+            # A build older than the row it is reading. Answer as though the
+            # drawing is absent rather than claiming it is broken.
+            logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from error
+        except CorruptStoredDrawingError as error:
+            logger.error("Stored drawing %s failed its checksum", turn_id)
+            raise Refusal(
+                500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
+            ) from error
+        # Keyed by the checksum these bytes were verified against, which is
+        # the row's own - it may have changed since the question above.
+        drawing_cache.put(drawing.checksum_sha256, wire, gzipped)
+        validator = drawing_validator(drawing.checksum_sha256)
+    encoded = "gzip" in request.headers.get("accept-encoding", "").lower()
     return Response(
-        content=payload,
+        content=gzipped if encoded else wire,
         media_type="application/octet-stream",
         headers={
             **cache_headers,
-            "ETag": drawing_validator(drawing.checksum_sha256),
+            "ETag": validator,
+            "Vary": "Accept-Encoding",
+            # Already compressed, so the response middleware leaves it be.
+            **({"Content-Encoding": "gzip"} if encoded else {}),
         },
     )
 

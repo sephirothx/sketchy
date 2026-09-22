@@ -83,3 +83,16 @@ def pytest_collection_modifyitems(config, items):
         target.append(item)
     items[:] = selected
     config.hook.pytest_deselected(items=deselected)
+
+
+@pytest.fixture(autouse=True)
+def _empty_drawing_cache():
+    """The decoded-drawing cache is process-wide (#979); a test starts with it
+    empty, so bytes one test cached cannot answer for another's row. Looked
+    up rather than imported, so collecting a test never loads the app."""
+    import sys
+
+    profiles = sys.modules.get("app.api.profiles")
+    if profiles is not None:
+        profiles.drawing_cache.clear()
+    yield

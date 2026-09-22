@@ -25,7 +25,7 @@ from app.services.gallery_shelf import (
     GalleryShelfCache,
     shelf_reader,
 )
-from app.api.profiles import create_profile_router
+from app.api.profiles import create_profile_router, drawing_cache
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.bug_reports import create_bug_report_router
@@ -295,6 +295,7 @@ finished_game_worker.bind_outcome(handler_context.game_flow.note_history_outcome
 # it rather than keeping a second count that could drift from it.
 telemetry.sources.sockets_connected = lambda: handler_context.room_capacity.open_sockets
 telemetry.sources.socket_transports = lambda: socket_transports(sio)
+telemetry.sources.drawing_cache_bytes = lambda: drawing_cache.bytes
 telemetry.sources.lobby_watchers = lambda: len(sio.manager.rooms.get("/", {}).get(LOBBY_CHANNEL, {}))
 # Built here rather than at import so it can reach the live policy objects the
 # handlers consult: a change has to move the value the next command reads, not

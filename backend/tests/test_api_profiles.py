@@ -1067,3 +1067,77 @@ async def test_the_validator_is_the_same_gzipped_and_a_gzipped_copy_revalidates(
         assert plain.headers["etag"] == gzipped.headers["etag"]
         revalidated = await gz.get(url, headers={"Accept-Encoding": "gzip", "If-None-Match": gzipped.headers["etag"]})
         assert revalidated.status_code == 304 and revalidated.content == b""
+
+
+async def test_a_drawing_fetched_again_is_neither_read_nor_decoded_again(env, monkeypatch):
+    """#979: every fetch decoded the stored blob and gzipped it on the loop, for
+    bytes that are the same for everybody who may see them."""
+    import gzip
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _skch()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    decodes: list[int] = []
+    real_decode = profiles.stored_drawing_wire_payload
+
+    def counted(*args, **kwargs):
+        decodes.append(1)
+        return real_decode(*args, **kwargs)
+
+    monkeypatch.setattr(profiles, "stored_drawing_wire_payload", counted)
+    blob_reads: list[int] = []
+    real_read = history.get_turn_drawing
+
+    async def counted_read(*args, **kwargs):
+        blob_reads.append(1)
+        return await real_read(*args, **kwargs)
+
+    monkeypatch.setattr(history, "get_turn_drawing", counted_read)
+    url = f"/api/games/{game_id}/turns/{turn_id}/drawing"
+    for signed_in in (ann.id, bob.id):
+        await sign_in_as(http, factory, signed_in)
+        response = await http.get(url, headers={"Accept-Encoding": "gzip"})
+        assert response.status_code == 200
+        assert response.content == blob
+        assert response.headers["content-encoding"] == "gzip"
+        assert response.headers["vary"] == "Accept-Encoding"
+    assert decodes == [1] and blob_reads == [1]
+    # And a client that takes no encoding gets the bytes as they are.
+    plain = await http.get(url, headers={"Accept-Encoding": "identity"})
+    assert "content-encoding" not in plain.headers and plain.content == blob
+    assert profiles.drawing_cache.bytes == len(blob) + len(gzip.compress(blob, 6, mtime=0))
+
+
+async def test_a_warm_cache_answers_nobody_the_drawing_was_not_for(env):
+    """Only the bytes are shared: who may have them is asked every time."""
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    outsider = await users.create_anonymous(display_name="Cid")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    await sign_in_as(http, factory, ann.id)
+    assert (await http.get(url)).status_code == 200
+    await sign_in_as(http, factory, outsider.id)
+    assert (await http.get(url)).status_code == 404
+
+
+def test_the_drawing_cache_is_bounded_in_bytes_and_forgets_the_least_recent():
+    from app.api.profiles import WireDrawingCache
+
+    cache = WireDrawingCache(max_bytes=100)
+    cache.put("a", b"x" * 30, b"y" * 10)
+    cache.put("b", b"x" * 30, b"y" * 10)
+    assert cache.get("a") is not None  # a is now the most recent
+    cache.put("c", b"x" * 30, b"y" * 10)
+    assert (cache.get("a"), cache.get("b") is None, cache.get("c") is not None) == (
+        (b"x" * 30, b"y" * 10), True, True,
+    )
+    assert cache.bytes == 80
+    cache.put("huge", b"x" * 200, b"")
+    assert cache.get("huge") is None and cache.bytes == 80
