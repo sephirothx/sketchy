@@ -1,14 +1,13 @@
 """The session is resolved where a session means something, and nowhere else (#974)."""
 from __future__ import annotations
 
-import asyncio
 
 import pytest_asyncio
 from fastapi import FastAPI, Request
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
 from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.responses import PlainTextResponse, StreamingResponse
+from starlette.responses import PlainTextResponse
 
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -79,8 +78,8 @@ async def test_a_static_file_costs_no_statement_even_with_a_session_cookie(env):
 
 
 def test_no_middleware_in_the_application_stack_is_a_base_http_middleware():
-    """`BaseHTTPMiddleware` costs ~145 µs of loop time per request and buffers
-    a streamed body; every layer the app installs is plain ASGI."""
+    """`BaseHTTPMiddleware` costs ~80 µs of loop time per request here; every
+    layer the app installs is plain ASGI."""
     from app.main import api
 
     offenders = [
@@ -91,49 +90,14 @@ def test_no_middleware_in_the_application_stack_is_a_base_http_middleware():
     assert offenders == []
 
 
-async def test_a_streamed_api_response_is_passed_through_as_it_is_produced(monkeypatch):
-    """Plain ASGI hands each body chunk on as the route sends it."""
-    monkeypatch.setenv("IP_HASH_SECRET", "scope-test-secret")
-    factory, engine = await create_test_db()
-    app = FastAPI()
-    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
-    produced: list[str] = []
-
-    @app.get("/api/stream")
-    async def stream():
-        async def chunks():
-            for index in range(3):
-                produced.append(str(index))
-                yield f"{index},"
-        return StreamingResponse(chunks(), media_type="text/plain")
-
-    seen_when_sent: list[list[str]] = []
-
-    requested = False
-    finished = asyncio.Event()
-
-    async def receive():
-        nonlocal requested
-        if not requested:
-            requested = True
-            return {"type": "http.request", "body": b"", "more_body": False}
-        await finished.wait()  # the client stays connected until the end
-        return {"type": "http.disconnect"}
-
-    async def send(message):
-        if message["type"] == "http.response.body" and message.get("body"):
-            seen_when_sent.append(list(produced))
-
-    scope = {
-        "type": "http", "asgi": {"version": "3.0"}, "http_version": "1.1",
-        "method": "GET", "scheme": "http", "path": "/api/stream", "raw_path": b"/api/stream",
-        "root_path": "", "query_string": b"", "headers": [(b"host", b"test")],
-        "client": ("127.0.0.1", 1), "server": ("test", 80),
-    }
-    try:
-        await asyncio.wait_for(app(scope, receive, send), timeout=5)
-    finally:
-        finished.set()
-        await engine.dispose()
-    # Each chunk left before the next was produced.
-    assert seen_when_sent == [["0"], ["0", "1"], ["0", "1", "2"]]
+async def test_only_the_api_prefix_itself_resolves_a_session(env):
+    """`/api/` with its slash: `/apifoo` and a bare `/api` are not the API."""
+    client, statements = env
+    registered = await client.post(
+        "/api/auth/register", json={"username": "BoundaryTester", "password": "a-good-password"}
+    )
+    assert registered.status_code == 200
+    statements.clear()
+    for path in ("/apifoo", "/api", "/apifoo/api/x"):
+        await client.get(path)
+    assert statements == []

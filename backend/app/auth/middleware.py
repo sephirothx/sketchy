@@ -113,9 +113,9 @@ class SessionAuthMiddleware:
     other path gets the state of a caller with no session, without asking.
 
     Plain ASGI rather than `BaseHTTPMiddleware` (#974), which runs the rest of
-    the app in a task of its own behind a memory stream: 145 µs of event-loop
-    time on every request, measured, on the loop every room shares - and it
-    buffers a streamed body.
+    the app in a task of its own behind a memory stream: ~80 µs of event-loop
+    time on every request, measured through this app, on the loop every room
+    shares.
     """
 
     def __init__(self, app: ASGIApp, session_factory: async_sessionmaker[AsyncSession]) -> None:
@@ -126,7 +126,7 @@ class SessionAuthMiddleware:
         # hash an address that is only ever compared with another hash.
         self._ip_secret: str | None = None
         # And read once *in total*, not once per request in flight. A cold
-        # server has no key row yet, and this now runs on every request: the
+        # server has no key row yet, and this runs on every `/api/` request: the
         # first page load is a dozen of them at once, each finding nothing
         # cached, each trying to insert the same row, each losing on the
         # unique key and retrying. That pile-up lands precisely when the first

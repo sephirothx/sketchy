@@ -357,10 +357,9 @@ an account action* rather than gameplay. The session is resolved only under `/ap
 the cookie is `Path=/`, so the browser sends it with the shell and every asset, and a
 cold page load used to resolve it a dozen times for files that are the same for
 everybody. Every layer in the stack is plain ASGI — `BaseHTTPMiddleware` runs the app
-behind a task and a memory stream, ~80 µs of loop time per request here, and buffers a
-streamed body (#974). Socket.IO handshakes resolve the same
-revocable session record as HTTP requests
-([`backend/app/handlers/connection.py:22`](../backend/app/handlers/connection.py)), so
+behind a task and a memory stream, ~80 µs of loop time per request here (#974).
+Socket.IO handshakes resolve the same revocable session record as HTTP requests
+([`backend/app/handlers/connection.py:99`](../backend/app/handlers/connection.py)), so
 revocation applies uniformly without a shared signing secret.
 
 How long an idle connection is held before the server closes it is decided rather
