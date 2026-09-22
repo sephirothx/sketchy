@@ -15,14 +15,12 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from starlette.staticfiles import NotModifiedResponse
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
-from starlette.responses import FileResponse
-from starlette.middleware.gzip import GZipMiddleware, GZipResponder
+from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
-from app.content_encoding import accepts_encoding
+from app.compression import PRECOMPRESSED_SIBLINGS, SelectiveGZipMiddleware, precompressed_variant
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
     SHELF_TTL_SECONDS,
@@ -121,6 +119,17 @@ from app.services.shutdown import (
 )
 
 
+PRECOMPRESSED_SUFFIXES = tuple(suffix for _, suffix in PRECOMPRESSED_SIBLINGS)
+_VALIDATORS = {b"if-none-match", b"if-modified-since"}
+
+
+def _without_validators(scope):
+    return {
+        **scope,
+        "headers": [(name, value) for name, value in scope["headers"] if name.lower() not in _VALIDATORS],
+    }
+
+
 class SPAStaticFiles(StaticFiles):
     """Serve the SPA for extensionless client routes while preserving real 404s.
 
@@ -131,6 +140,12 @@ class SPAStaticFiles(StaticFiles):
     """
 
     async def get_response(self, path: str, scope):
+        # The build's compressed copies are served in place of the file they
+        # sit beside, never under their own names: asked for directly, one
+        # would go out as the original's type with no Content-Encoding and a
+        # compressed body (#978).
+        if path.endswith(PRECOMPRESSED_SUFFIXES):
+            raise HTTPException(status_code=404)
         try:
             response = await super().get_response(path, scope)
         except HTTPException as exc:
@@ -141,7 +156,11 @@ class SPAStaticFiles(StaticFiles):
             )
             if not serves_the_shell:
                 raise
-            response = await super().get_response("index.html", scope)
+            # Without the request's validators: those belong to the URL that
+            # was asked for, and a match against the shell would answer 304 -
+            # which the status below turns into a 404 with no body, a blank
+            # page where the not-found page should be.
+            response = await super().get_response("index.html", _without_validators(scope))
             # The shell either way, because only the client can draw the
             # not-found page - but a URL it has no page for says so in its
             # status. Otherwise every typo answers 200, and a crawler or an
@@ -152,7 +171,22 @@ class SPAStaticFiles(StaticFiles):
             if not is_client_route(scope["path"]):
                 response.status_code = 404
 
-        response = self._precompressed(response, scope)
+        # The build's own compressed copy when the client takes one, so
+        # nothing is compressed on the loop for a static file (#978).
+        variant = precompressed_variant(response, scope)
+        if response.status_code == 304:
+            # StaticFiles answered the original's validators itself, before
+            # any copy was chosen; a 304 repeats the Vary its 200 would carry
+            # (RFC 9110 §15.4.5), or a cache holding the Brotli body could
+            # hand it to a client that asked for none.
+            response.headers.add_vary_header("Accept-Encoding")
+        if variant is not None:
+            status_code = response.status_code
+            response = variant
+            response.status_code = status_code
+            if status_code == 200 and self.is_not_modified(response.headers, Headers(scope=scope)):
+                response = NotModifiedResponse(response.headers)
+
         if path.startswith("assets/"):
             response.headers["Cache-Control"] = (
                 "public, max-age=31536000, immutable"
@@ -163,95 +197,15 @@ class SPAStaticFiles(StaticFiles):
             response.headers["Cache-Control"] = "no-cache"
         return response
 
-    def _precompressed(self, response, scope):
-        """The build's Brotli or gzip copy of a file, when the browser takes it (#978).
-
-        `frontend/scripts/precompress.mjs` writes `<file>.br` and `<file>.gz`
-        beside everything worth compressing, once, at build time; without them
-        the bundle was gzipped at level 9 on the event loop for every client
-        (~22 ms per cold page load). The copy answers with the original's
-        type, its own validator, and a 304 when that validator is current.
-        """
-        if response.status_code == 304:
-            # Answered by StaticFiles itself, before any copy was chosen; a 304
-            # repeats the `Vary` its 200 would have carried (RFC 9110 §15.4.5).
-            response.headers["Vary"] = "Accept-Encoding"
-            return response
-        if not isinstance(response, FileResponse) or response.status_code != 200:
-            return response
-        request_headers = Headers(scope=scope)
-        accepted = request_headers.get("accept-encoding")
-        for encoding, suffix in (("br", ".br"), ("gzip", ".gz")):
-            if not accepts_encoding(accepted, encoding):
-                continue
-            sibling = Path(str(response.path) + suffix)
-            try:
-                sibling_stat = sibling.stat()
-            except OSError:
-                continue
-            compressed = FileResponse(
-                sibling,
-                stat_result=sibling_stat,
-                media_type=response.media_type,
-                headers={"Content-Encoding": encoding, "Vary": "Accept-Encoding"},
-            )
-            if self.is_not_modified(compressed.headers, request_headers):
-                return NotModifiedResponse(compressed.headers)
-            compressed.status_code = response.status_code
-            return compressed
-        response.headers["Vary"] = "Accept-Encoding"
-        return response
-
-
-#: Response types the middleware never compresses: they are compressed
-#: already, and a second pass costs loop time for nothing (a woff2 came out 23
-#: bytes larger). By type, not by the URL's extension: an avatar is served
-#: under a bare key.
-INCOMPRESSIBLE_CONTENT_TYPES = (
-    "image/", "font/", "audio/", "video/",
-    "application/zip", "application/gzip", "application/x-brotli",
-)
-#: For what is compressed on the fly - API JSON, mostly - a level that costs a
-#: quarter of Starlette's default 9 for a few percent more bytes (#978).
-DYNAMIC_GZIP_LEVEL = 4
-
-
-class _TypedGZipResponder(GZipResponder):
-    """Starlette's responder, told which response types to leave alone."""
-
-    async def send_with_compression(self, message) -> None:
-        if message["type"] == "http.response.start":
-            await super().send_with_compression(message)
-            content_type = Headers(raw=message["headers"]).get("content-type", "")
-            if content_type.startswith(INCOMPRESSIBLE_CONTENT_TYPES):
-                self.content_type_is_excluded = True
-            return
-        await super().send_with_compression(message)
-
-
-class DynamicGZipMiddleware(GZipMiddleware):
-    """Gzip at `DYNAMIC_GZIP_LEVEL`, only where the client accepts it, and
-    never a response that is compressed already."""
-
-    def __init__(self, app, minimum_size: int = 500) -> None:
-        super().__init__(app, minimum_size=minimum_size, compresslevel=DYNAMIC_GZIP_LEVEL)
-
-    async def __call__(self, scope, receive, send) -> None:
-        if scope["type"] == "http" and accepts_encoding(
-            Headers(scope=scope).get("accept-encoding"), "gzip"
-        ):
-            responder = _TypedGZipResponder(
-                self.app, self.minimum_size, compresslevel=self.compresslevel
-            )
-            await responder(scope, receive, send)
-            return
-        await self.app(scope, receive, send)
-
 
 def configure_frontend(app: FastAPI, directory: Path) -> None:
-    """Enable static compression and mount the production frontend when present."""
+    """Compress what is dynamic, and mount the production frontend when present.
 
-    app.add_middleware(DynamicGZipMiddleware, minimum_size=500)
+    Static files are served from the build's precompressed copies
+    (`app/compression.py`); the middleware is for everything else.
+    """
+
+    app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
     if directory.is_dir():
         app.mount(
             "/",

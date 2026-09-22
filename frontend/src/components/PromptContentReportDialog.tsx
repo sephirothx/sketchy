@@ -7,6 +7,7 @@ import {
 import type { CommunityPromptListDetail } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/prompt-lists.css";
 
 const REASONS: Array<{ value: PromptContentReportReason; label: string }> = [
   { value: "inappropriate", get label() { return ui.promptContentReportDialog.inappropriateContent; } },

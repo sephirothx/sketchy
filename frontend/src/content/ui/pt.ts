@@ -677,6 +677,8 @@ export const PT: Catalogue = {
     newRoomsArePausedMaintenanceGames: "As salas novas estão em pausa por manutenção. As partidas já a decorrer\n          seguem normalmente.",
     serverWasUpdatedBackAnyGame: "O servidor foi atualizado e já voltou. As partidas a decorrer terminaram.",
     dismiss: "Dispensar",
+    couldNotOpenThis: "Não foi possível abrir. Verifica a tua ligação e tenta outra vez.",
+    tryAgain: "Tentar outra vez",
   },
 
   appHeader: {

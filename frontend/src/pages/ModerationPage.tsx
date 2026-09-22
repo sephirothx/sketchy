@@ -51,6 +51,7 @@ import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 import { doodleNameOf, isUploadedPicture } from "../lib/avatarDoodles";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
+import "../styles/lazy/operator.css";
 
 type Filter = "open" | "players" | "content" | "held" | "gallery" | "bans" | "closed";
 type CaseKind = "incident" | "content" | "held" | "gallery" | "ban";

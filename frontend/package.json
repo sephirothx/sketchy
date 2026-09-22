@@ -9,9 +9,10 @@
   "scripts": {
     "dev": "vite",
     "test": "node --test --test-timeout=30000 --experimental-strip-types tests/*.test.mjs",
-    "build": "tsc -b && vite build && node scripts/precompress.mjs",
+    "build": "tsc -b && vite build",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "bundle:check": "node scripts/bundle-report.mjs dist --budget js=215,css=41"
   },
   "dependencies": {
     "@fontsource/fredoka": "^5.3.0",

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import type { CanvasRef } from "../components/Canvas";
 import { GameEndOverlay } from "../components/GameEndOverlay";
@@ -94,7 +94,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [roomMenuOpen, setRoomMenuOpen] = useState(false);
   const [restartBusy, setRestartBusy] = useState(false);
   const [colorSuggestionBusy, setColorSuggestionBusy] = useState(false);
-  const [restartClock, setRestartClock] = useState(() => Date.now());
   const isMobile = useMediaQuery("(max-width: 900px)");
   // The identity chip gives up its name before anything else in the bar does
   // (after the room's), and is the avatar alone from here down - the compact
@@ -109,15 +108,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   useVisualViewportCssVars();
 
-  useEffect(() => {
-    if (restartVoteCooldownUntil <= Date.now()) return;
-    const interval = window.setInterval(() => {
-      const now = Date.now();
-      setRestartClock(now);
-      if (now >= restartVoteCooldownUntil) window.clearInterval(interval);
-    }, 250);
-    return () => window.clearInterval(interval);
-  }, [restartVoteCooldownUntil]);
+  // Stable, so the memoised regions below are not re-rendered by a new
+  // function on every room render (#987).
+  const openPlayersSheet = useCallback(() => setPlayersSheetOpen(true), []);
 
   async function handleCopyLink() {
     try {
@@ -279,10 +272,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const me = playerId
     ? { playerId, connected: isConnected, isAfk, isSpectator }
     : undefined;
-  const restartCooldownSeconds = Math.max(
-    0,
-    Math.ceil((restartVoteCooldownUntil - restartClock) / 1000),
-  );
   const canProposeRestart = Boolean(
     roomState === "playing"
     && isConnected
@@ -308,9 +297,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
     isAfk,
     canProposeRestart: canProposeRestart && !restartVote,
     restartBusy,
-    restartCooldownSeconds,
+    restartCooldownUntil: restartVoteCooldownUntil,
     onCopyLink: () => void handleCopyLink(),
-    onOpenPlayers: isMobile ? () => setPlayersSheetOpen(true) : undefined,
+    onOpenPlayers: isMobile ? openPlayersSheet : undefined,
     onToggleAfk: handleToggleAfk,
     onSaveImage: () => canvasRef.current?.saveImage(),
     onOpenSettings: () => openSettings(),
@@ -538,7 +527,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             ) : (
               <GameplayRegion
                 canvasRef={canvasRef}
-                onOpenPlayers={isMobile ? () => setPlayersSheetOpen(true) : undefined}
+                onOpenPlayers={isMobile ? openPlayersSheet : undefined}
               />
             )
           }

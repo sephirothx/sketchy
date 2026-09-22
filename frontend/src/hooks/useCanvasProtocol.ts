@@ -641,7 +641,11 @@ export function useCanvasProtocol(
       }
       pendingMutationsRef.current.delete(sequence);
       watch.confirm(sequence);
-      renderer.replay(historyRef.current.actions);
+      // This client's own undo was already repainted when it was asked for
+      // (`requestUndo`), and confirming it changed nothing but the sequence:
+      // repainting again cost the drawer a second full replay, a round trip
+      // later, usually in the middle of their next stroke (#989).
+      if (pending?.kind !== "undo") renderer.replay(historyRef.current.actions);
       publishBudgets();
     };
 

@@ -1,12 +1,5 @@
-import { useId, useState, type FormEvent } from "react";
-import {
-  BrushIcon,
-  BugDoodle,
-  FillIcon,
-  RectIcon,
-  UndoIcon,
-  Wordmark,
-} from "../components/icons";
+import { useEffect, useId, useState, type FormEvent } from "react";
+import { BrushIcon, FillIcon, RectIcon, UndoIcon, Wordmark } from "../components/icons";
 import {
   collectClientContext,
   roomSummary,
@@ -42,6 +35,43 @@ interface Props {
   componentStack: string | null;
   onReload: () => void;
   onBackToLobby: () => void;
+}
+
+/** The ladybird on the crash page. Same pipeline and same rules as the 404
+    drawing: authored in scripts/brand, painted in the drawing palette, hung on
+    a white sheet.
+
+    Its paths are fetched rather than imported (#475). This page is in the
+    entry chunk because it is what shows when a chunk fails to load, and the
+    drawing is 22 KB of it that nothing else needs; if the fetch fails too -
+    the likeliest reason this page is showing - the sheet stays blank and
+    every word and button on it still works. */
+function BugDoodle() {
+  const [art, setArt] = useState<typeof import("../components/crashArt") | null>(null);
+  useEffect(() => {
+    let current = true;
+    import("../components/crashArt").then(
+      (module) => { if (current) setArt(module); },
+      () => undefined,
+    );
+    return () => {
+      current = false;
+    };
+  }, []);
+  if (!art) return null;
+  return (
+    <svg
+      viewBox={art.CRASH_VIEWBOX}
+      width="100%"
+      height="100%"
+      aria-hidden="true"
+      style={{ display: "block" }}
+    >
+      {art.CRASH_PATHS.map(({ fill, d }) => (
+        <path key={d} d={d} fill={fill} />
+      ))}
+    </svg>
+  );
 }
 
 /** What a screen shows when its own code throws.

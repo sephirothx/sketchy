@@ -8,6 +8,8 @@ import type { PromptLanguage, PromptListSummary } from "../types";
 import { CheckIcon, InfoIcon, PlusIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/prompt-lists.css";
+import "../styles/lazy/profile.css";
 
 interface PromptListPickerProps {
   /** The room's declared language. Lists answer to it; it is never read back

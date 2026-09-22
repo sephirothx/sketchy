@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { pickLine } from "../src/lib/firstRunLines.ts";
-import { CATALOGUE_LOCALES, catalogueFor } from "../src/content/ui/index.ts";
+import { CATALOGUE_LOCALES, catalogueFor, loadCatalogue } from "../src/content/ui/index.ts";
+
+await Promise.all(CATALOGUE_LOCALES.map(loadCatalogue));
 
 const POOL = ["one", "two", "three", "four", "five"];
 

@@ -10,6 +10,7 @@ the code that paints or saves the drawing fails here. */
 const DRAWING_CODE = [
   "src/components/Canvas.tsx",
   "src/components/CanvasSnapshot.tsx",
+  "src/components/DrawingThumbnail.tsx",
   "src/components/ReplayCanvas.tsx",
   "src/components/ScratchPad.tsx",
   "src/hooks/useCanvasPointerInput.ts",

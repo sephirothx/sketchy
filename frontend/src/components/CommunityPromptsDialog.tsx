@@ -8,6 +8,7 @@ import {
 import type { CommunityPromptListDetail, PublishedPromptEntry } from "../types";
 import { SearchIcon, XIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/community-lists.css";
 
 type Order = "author" | "alphabetical";
 

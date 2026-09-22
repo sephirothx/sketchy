@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
@@ -238,9 +238,9 @@ export function LobbyBrowserPage() {
   const roomLanguages = SUPPORTED_PROMPT_LANGUAGES;
 
   // Your language first, nobody hidden (R-PROMPT-11).
-  const orderedRooms = sortRoomsByLanguage(rooms, playerLanguage);
-
-  const filteredRooms = orderedRooms.filter((room) => {
+  // Memoised (#991): the room list's deltas arrive once a second, and the
+  // search box and the chat beside it re-render the page on every keystroke.
+  const filteredRooms = useMemo(() => sortRoomsByLanguage(rooms, playerLanguage).filter((room) => {
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       const nameMatch = room.name.toLowerCase().includes(q);
@@ -257,7 +257,7 @@ export function LobbyBrowserPage() {
       return false;
     }
     return true;
-  });
+  }), [rooms, playerLanguage, searchQuery, languageFilter, hideFullRooms, hideInProgressRooms]);
 
   // No gate: every visitor already has a name, generated on their first load.
   async function handleOpenCreateRoom() {
@@ -375,6 +375,17 @@ export function LobbyBrowserPage() {
       endEntry(token);
     }
   }
+
+  // One function for the page's lifetime, so a memoised card whose room did
+  // not change is not re-rendered by a new closure (#991); it reaches the
+  // current `handleJoinRoom` through a ref.
+  const handleJoinRef = useRef<typeof handleJoinRoom | null>(null);
+  useEffect(() => {
+    handleJoinRef.current = handleJoinRoom;
+  });
+  const joinRoomCard = useCallback((room: RoomSummary, asSpectator: boolean) => {
+    void handleJoinRef.current?.(room, asSpectator);
+  }, []);
 
   /**
    * A seat taken by an answer that arrived after the lobby had gone. Safe to
@@ -592,7 +603,7 @@ export function LobbyBrowserPage() {
               </div>
             )}
             {filteredRooms.map((room) => (
-              <PublicRoomCard key={room.id} room={room} busy={Boolean(pendingJoin)} pendingMode={pendingJoin?.key === room.id ? pendingJoin.mode : null} onJoin={(asSpectator) => void handleJoinRoom(room, asSpectator)} layout={isWide ? "row" : "card"} />
+              <PublicRoomCard key={room.id} room={room} busy={Boolean(pendingJoin)} pendingMode={pendingJoin?.key === room.id ? pendingJoin.mode : null} onJoin={joinRoomCard} layout={isWide ? "row" : "card"} />
             ))}
           </div>
         )}
