@@ -1,4 +1,7 @@
-"""The session is resolved where a session means something, and nowhere else (#974)."""
+"""The session is resolved where a session means something, and nowhere else.
+
+R-AUTH-25, #974.
+"""
 from __future__ import annotations
 
 
