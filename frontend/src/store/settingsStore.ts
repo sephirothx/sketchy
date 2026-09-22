@@ -293,7 +293,9 @@ interface SettingsStore {
   setColorblindSafeColors: (enabled: boolean) => void;
   setTimeFormat: (timeFormat: TimeFormat) => void;
   setPromptLanguage: (promptLanguage: PromptLanguage) => void;
-  setLocale: (locale: Locale) => void;
+  /** Settles with whether the switch took effect: a language whose words
+      could not be fetched leaves the interface as it was. */
+  setLocale: (locale: Locale) => Promise<boolean>;
   resetKeyBindings: () => void;
 }
 
@@ -316,23 +318,27 @@ here yet (#982). Applies at once when they are - the common case once a
 language has been read - and otherwise when they land, unless something
 else was chosen meanwhile. A fetch that failed changes nothing: the reader
 keeps the words they have, and their stored choice is not overwritten with
-a fallback they never asked for. */
-function switchLocale(locale: string): Promise<void> {
+a fallback they never asked for. Settles with whether `locale` is now the one
+in force.
+
+`remember` is false only for the first resolution: that is the browser's
+languages speaking, not a choice, and storing it would make it outrank the
+browser from then on - a guest who changed their browser's language would
+keep the old one for good (R-I18N-06). */
+function switchLocale(locale: string, remember = true): Promise<boolean> {
   wantedLocale = locale;
-  const commit = () => {
-    if (wantedLocale !== locale || !isCatalogueLoaded(locale)) return;
+  const commit = (): boolean => {
+    if (wantedLocale !== locale || !isCatalogueLoaded(locale)) return false;
     const inForce = setCatalogue(locale);
-    rememberLocale(inForce);
+    if (remember) rememberLocale(inForce);
     applyDocumentLocale(inForce);
     setClockLocale(inForce);
     if (useSettingsStore.getState().locale !== inForce) {
       useSettingsStore.setState({ locale: inForce });
     }
+    return true;
   };
-  if (isCatalogueLoaded(locale)) {
-    commit();
-    return Promise.resolve();
-  }
+  if (isCatalogueLoaded(locale)) return Promise.resolve(commit());
   return loadCatalogue(locale).then(commit);
 }
 
@@ -472,7 +478,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
       localStorage.setItem("sketchy_timeformat", timeFormat);
       return { timeFormat };
     }),
-  setLocale: (locale) => void switchLocale(locale),
+  setLocale: (locale) => switchLocale(locale),
   setPromptLanguage: (promptLanguage) =>
     set(() => {
       localStorage.setItem(PROMPT_LANGUAGE_KEY, promptLanguage);
@@ -488,7 +494,7 @@ export const useSettingsStore = create<SettingsStore>((set) => ({
 /** Settles once the reader's language can be read - what `main.tsx` holds
     the first paint for. Never rejects: a language that cannot be fetched
     leaves the page in English. */
-export const initialLocaleReady: Promise<void> = switchLocale(requestedLocale);
+export const initialLocaleReady: Promise<void> = switchLocale(requestedLocale, false).then(() => undefined);
 
 if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
   const media = window.matchMedia("(prefers-color-scheme: dark)");
