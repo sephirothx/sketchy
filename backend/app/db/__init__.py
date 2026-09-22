@@ -53,7 +53,9 @@ POSTGRES_POOL_RECYCLE_SECONDS = 1_800
 # its socket, which asyncpg has already seen by the next checkout, so that
 # case costs a flag read rather than a ping. What only a ping finds is a
 # connection whose peer vanished without closing it - a dropped NAT entry, a
-# failed-over host, a reset nobody has read yet - and the trade is explicit:
+# host that went away without a FIN. A reset is not in that list: it reaches
+# the idle connection and the driver has it closed by the next checkout. The
+# trade is explicit:
 # a connection that died that way less than 30 s after its last use fails the
 # next caller's first statement, where `pool_pre_ping` would have replaced it
 # unseen. SQLAlchemy invalidates it on that failure, so it fails once, not
@@ -272,9 +274,11 @@ def install_idle_ping(engine: AsyncEngine, *, idle_seconds: float, clock=monoton
     Replaces `pool_pre_ping` (#973). Every checkout asks the driver whether the
     connection is already closed, which is free; a connection unused for
     `idle_seconds` or more is also pinged. Either finding raises
-    `DisconnectionError`, on which the pool discards the connection and hands
-    out another - the same recovery `pool_pre_ping` used, without its three
-    round trips on every busy checkout.
+    `DisconnectionError`, on which the pool discards *this* connection and
+    hands out another. Narrower than `pool_pre_ping`, which raised
+    `InvalidatePoolError` and recycled the whole generation: after a failover
+    each stale connection is now found on its own checkout, one failed ping
+    apiece, rather than all at once.
     """
     dialect = engine.sync_engine.dialect
 
@@ -290,7 +294,14 @@ def install_idle_ping(engine: AsyncEngine, *, idle_seconds: float, clock=monoton
         if returned_at is None or clock() - returned_at < idle_seconds:
             return
         try:
-            dialect.do_ping(dbapi_connection)
+            # `_do_ping_w_event` is what the pool's own pre-ping called: it
+            # fires `do_ping` through the dialect's event hooks, and a handler
+            # may answer False rather than raise (SQLAlchemy reads a falsy
+            # answer as a failed ping).
+            if not dialect._do_ping_w_event(dbapi_connection):
+                raise sa_exc.DisconnectionError("pooled connection failed its ping")
+        except sa_exc.DisconnectionError:
+            raise
         except Exception as error:
             raise sa_exc.DisconnectionError("pooled connection failed its ping") from error
 

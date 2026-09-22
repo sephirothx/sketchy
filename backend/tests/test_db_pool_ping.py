@@ -196,3 +196,27 @@ async def test_a_connection_the_driver_reports_closed_is_replaced_without_a_ping
         assert pings == []
     finally:
         await engine.dispose()
+
+
+def _listener_names(engine, event_name):
+    return [listener.__name__ for listener in getattr(engine.sync_engine.pool.dispatch, event_name)]
+
+
+def test_sqlite_gets_no_checkout_check(tmp_path):
+    """The wiring, not just the listener: without a test for it the whole
+    feature can be deleted from `create_db_engine` and every test still
+    passes (#973 review). SQLite has no round trip to save, so it gets none."""
+    from app.db import create_db_engine
+
+    sqlite = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'wiring.db'}")
+    assert "check" not in _listener_names(sqlite, "checkout")
+
+
+@needs_postgresql
+def test_a_postgresql_engine_registers_the_idle_ping():
+    from app.db import create_db_engine
+
+    engine = create_db_engine(PG_URL)
+    assert "check" in _listener_names(engine, "checkout")
+    assert "stamp" in _listener_names(engine, "checkin")
+    assert "stamp" in _listener_names(engine, "connect")
