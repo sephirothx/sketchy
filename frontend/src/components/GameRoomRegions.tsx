@@ -1,4 +1,4 @@
-import { useState, type RefObject } from "react";
+import { memo, useMemo, useState, type RefObject } from "react";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { Canvas, type CanvasRef } from "./Canvas";
@@ -26,6 +26,7 @@ import type { DrawingReaction } from "../types";
 import type { RoomShellMode } from "./RoomShell";
 import { useRoomStage } from "../hooks/useServerNotices";
 import { DrainFinalCountdown } from "./RoomStageNotice";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
 
 const NO_REACTIONS: DrawingReaction[] = [];
@@ -93,7 +94,8 @@ export function ConnectedDrawingReactionControl({
   );
 }
 
-export function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
+export const ConnectedRoomPlayersPanel = memo(function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
+  useLocaleRerender();
   const players = useGameStore((state) => state.players);
   const drawerId = useGameStore((state) => state.drawerId);
   const myPlayerId = useGameStore((state) => state.playerId);
@@ -116,17 +118,18 @@ export function ConnectedRoomPlayersPanel({ mode }: { mode: RoomShellMode }) {
       turnCorrectGuesses={turnCorrectGuesses}
     />
   );
-}
+});
 
 interface ConnectedRoomChatPanelProps {
   mode: RoomShellMode;
   onFocusChange: (focused: boolean) => void;
 }
 
-export function ConnectedRoomChatPanel({
+export const ConnectedRoomChatPanel = memo(function ConnectedRoomChatPanel({
   mode,
   onFocusChange,
 }: ConnectedRoomChatPanelProps) {
+  useLocaleRerender();
   const messages = useGameStore((state) => state.messages);
   const players = useGameStore((state) => state.players);
   const phase = useGameStore((state) => state.phase);
@@ -141,6 +144,9 @@ export function ConnectedRoomChatPanel({
   const canGuess =
     phase === "drawing" && !isDrawer && !me?.isSpectator && !guessedPrompt;
 
+  // Memoised so the chat's props stay equal between renders that did not
+  // change the prompt: a fresh array here re-rendered every chat row (#987).
+  const targetPromptLengths = useMemo(() => splitMaskedPrompt(maskedPrompt).counts, [maskedPrompt]);
   return (
     <RoomChatPanel
       messages={messages}
@@ -149,7 +155,7 @@ export function ConnectedRoomChatPanel({
       isDrawer={isDrawer}
       canGuess={canGuess}
       myPlayerId={myPlayerId}
-      targetPromptLengths={splitMaskedPrompt(maskedPrompt).counts}
+      targetPromptLengths={targetPromptLengths}
       hideMaskedPrompt={hideMaskedPrompt}
       onFocusChange={onFocusChange}
       guessedPrompt={phase === "drawing" ? guessedPrompt : null}
@@ -157,7 +163,7 @@ export function ConnectedRoomChatPanel({
       guessPlace={myPlayerId ? rankGuesses(turnCorrectGuesses)[myPlayerId] ?? null : null}
     />
   );
-}
+});
 
 interface ConnectedWaitingRoomPanelProps {
   drawingCount: number;
@@ -287,7 +293,8 @@ interface GameplayRegionProps {
   onOpenPlayers?: () => void;
 }
 
-export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps) {
+export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps) {
+  useLocaleRerender();
   const clockPaused = useRoomStage().kind !== "live";
   recordRender("gameplay");
   const isMobile = useMediaQuery("(max-width: 900px)");
@@ -448,4 +455,4 @@ export function GameplayRegion({ canvasRef, onOpenPlayers }: GameplayRegionProps
       )}
     </main>
   );
-}
+});

@@ -33,6 +33,7 @@ import {
   type LiveSnapshot,
   type RuntimeEventRow,
 } from "../lib/operations";
+import "../styles/lazy/operator.css";
 
 // The live numbers are re-read this often while the overview is on screen.
 // Same period as the clock that says "checked Ns ago", so the two agree.

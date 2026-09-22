@@ -89,6 +89,23 @@ export function rasterizePath(
   }
 }
 
+/** The box a fill painted, for committing only that much of the canvas. */
+export interface FillBounds {
+  left: number;
+  top: number;
+  /** Exclusive. */
+  right: number;
+  /** Exclusive. */
+  bottom: number;
+}
+
+/** The same four bytes, read as one 32-bit word in this machine's order - so
+    comparing and writing words needs no assumption about endianness. */
+function packRgba(color: Rgba): number {
+  const bytes = new Uint8ClampedArray(color);
+  return new Uint32Array(bytes.buffer)[0];
+}
+
 export function floodFillPixels(
   data: Uint8ClampedArray,
   width: number,
@@ -96,6 +113,7 @@ export function floodFillPixels(
   startX: number,
   startY: number,
   fillColor: Rgba,
+  bounds?: FillBounds,
 ): boolean {
   if (startX < 0 || startX >= width || startY < 0 || startY >= height) {
     return false;
@@ -120,19 +138,47 @@ export function floodFillPixels(
   const stack: number[] = [startY * width + startX];
   status[startY * width + startX] = 1;
 
-  const matchesTarget = (pixelIndex: number): boolean => (
-    status[pixelIndex] !== 2
-    && colorsMatchForFill(data, pixelIndex * 4, target)
-  );
+  // The pixels as words (#990): most pixels a fill meets are exactly the
+  // colour it started on, and one word comparison settles those where four
+  // per-channel tolerance checks used to; the tolerance test runs only on a
+  // miss, and an exact match always passes it, so what is filled cannot
+  // change. A run is written as words too. Falls back to bytes when the
+  // buffer is not word-aligned, which an ImageData never is.
+  const words = data.byteOffset % 4 === 0
+    ? new Uint32Array(data.buffer, data.byteOffset, data.length >> 2)
+    : null;
+  const targetWord = words ? words[startIndex >> 2] : 0;
+  const fillWord = words ? packRgba(fillColor) : 0;
 
-  const fillPixel = (pixelIndex: number): void => {
-    const index = pixelIndex * 4;
-    status[pixelIndex] = 2;
-    data[index] = fillColor[0];
-    data[index + 1] = fillColor[1];
-    data[index + 2] = fillColor[2];
-    data[index + 3] = fillColor[3];
+  const matchesTarget = words
+    ? (pixelIndex: number): boolean => (
+      status[pixelIndex] !== 2
+      && (words[pixelIndex] === targetWord || colorsMatchForFill(data, pixelIndex * 4, target))
+    )
+    : (pixelIndex: number): boolean => (
+      status[pixelIndex] !== 2
+      && colorsMatchForFill(data, pixelIndex * 4, target)
+    );
+
+  const fillRun = (from: number, to: number): void => {
+    status.fill(2, from, to + 1);
+    if (words) {
+      words.fill(fillWord, from, to + 1);
+      return;
+    }
+    for (let pixelIndex = from; pixelIndex <= to; pixelIndex++) {
+      const index = pixelIndex * 4;
+      data[index] = fillColor[0];
+      data[index + 1] = fillColor[1];
+      data[index + 2] = fillColor[2];
+      data[index + 3] = fillColor[3];
+    }
   };
+
+  let minX = width;
+  let minY = height;
+  let maxX = -1;
+  let maxY = -1;
 
   const queueAdjacentRuns = (
     y: number,
@@ -170,12 +216,22 @@ export function floodFillPixels(
     let right = seedX;
     while (right + 1 < width && matchesTarget(rowOffset + right + 1)) right++;
 
-    for (let x = left; x <= right; x++) fillPixel(rowOffset + x);
+    fillRun(rowOffset + left, rowOffset + right);
+    if (left < minX) minX = left;
+    if (right > maxX) maxX = right;
+    if (y < minY) minY = y;
+    if (y > maxY) maxY = y;
 
     // Expand the adjacent-row scan by one pixel on both sides to preserve the
     // existing eight-connected diagonal behaviour.
     queueAdjacentRuns(y - 1, left, right);
     queueAdjacentRuns(y + 1, left, right);
+  }
+  if (bounds) {
+    bounds.left = minX;
+    bounds.top = minY;
+    bounds.right = maxX + 1;
+    bounds.bottom = maxY + 1;
   }
   return true;
 }

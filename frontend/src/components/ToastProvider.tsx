@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   ToastContext,
   keepRecentToasts,
@@ -57,8 +57,13 @@ export function ToastProvider({ children }: { children: ReactNode }) {
     timersRef.current.clear();
   }, []);
 
+  // One object for the provider's lifetime: a fresh `{ notify }` on every
+  // render re-rendered all of its consumers - the live room among them - each
+  // time a toast came or went (#987).
+  const contextValue = useMemo(() => ({ notify }), [notify]);
+
   return (
-    <ToastContext.Provider value={{ notify }}>
+    <ToastContext.Provider value={contextValue}>
       {children}
       <div className="toast-viewport" role="region" aria-label={ui.toastProvider.notifications}>
         {toasts.map((toast) => (

@@ -6,6 +6,7 @@ import { Card, SectionLabel } from "../components/ui/Card";
 import { rulesFor } from "../content/rules";
 import { ui } from "../content/ui/index.ts";
 import { useSettingsStore } from "../store/settingsStore.ts";
+import "../styles/lazy/operator.css";
 
 /** The rules, on one page.
 

@@ -1,11 +1,9 @@
-import { useEffect, useRef, useState } from "react";
-import { CanvasSnapshot } from "./CanvasSnapshot";
+import { DrawingThumbnail } from "./DrawingThumbnail";
 import { ReactionTally } from "./ReactionTally";
 import { FlagIcon } from "./icons";
-import { decodeCanvasHistory } from "../lib/canvasHistory";
-import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { fetchGalleryDrawing, galleryAge, type GalleryEntry } from "../lib/gallery";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/gallery.css";
 
 /**
  * The pieces the Gallery's feed and rail share (#524): a card that replays
@@ -117,69 +115,20 @@ export function GalleryPost({
   );
 }
 
-/**
- * One card's picture: the frame fetched and replayed at thumbnail size, but
- * only once the card has scrolled into view. A page is 24 frames and Show
- * more adds 24 more; replaying every one on arrival is a cost nobody asked
- * for. Without an `IntersectionObserver` (an old browser, a test runtime)
- * it fetches at once, as the pinned shelf does.
- */
+/** One card's picture, fetched once the card is within a screen of view and
+    drawn at the card's size (`DrawingThumbnail`). */
 export function GalleryThumbnail({ entry }: { entry: GalleryEntry }) {
-  const [actions, setActions] = useState<DecodedCanvasAction[] | null>(null);
-  const [failed, setFailed] = useState(false);
-  const [visible, setVisible] = useState(typeof IntersectionObserver === "undefined");
-  const wrapper = useRef<HTMLDivElement | null>(null);
-  const generation = useRef(0);
-
-  useEffect(() => {
-    if (visible || typeof IntersectionObserver === "undefined") return;
-    const element = wrapper.current;
-    if (!element) return;
-    const observer = new IntersectionObserver((records) => {
-      if (records.some((record) => record.isIntersecting)) setVisible(true);
-    }, { rootMargin: "200px" });
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [visible]);
-
-  // Keyed by turn id from the parent, so a different entry is a fresh
-  // thumbnail rather than one that has to reset its own state in an effect.
-  useEffect(() => {
-    if (!visible) return;
-    const mine = ++generation.current;
-    void (async () => {
-      try {
-        const bytes = await fetchGalleryDrawing(entry.turnId);
-        if (mine !== generation.current) return;
-        const decoded = decodeCanvasHistory(bytes);
-        if (!decoded) {
-          setFailed(true);
-          return;
-        }
-        setActions(decoded);
-      } catch {
-        if (mine !== generation.current) return;
-        setFailed(true);
-      }
-    })();
-    return () => {
-      generation.current += 1;
-    };
-  }, [visible, entry.turnId]);
-
   return (
-    <div ref={wrapper} className="gallery-card-canvas" aria-busy={actions === null && !failed}>
-      {failed ? (
-        <span className="gallery-card-note">{ui.galleryPage.couldNotLoadThisDrawing}</span>
-      ) : actions === null ? null : (
-        <CanvasSnapshot
-          actions={actions}
-          label={ui.drawingRecapGallery.drawingLabel({
-            prompt: entry.prompt,
-            drawer: entry.drawerDisplayName,
-          })}
-        />
-      )}
-    </div>
+    <DrawingThumbnail
+      drawingKey={entry.turnId}
+      load={() => fetchGalleryDrawing(entry.turnId)}
+      label={ui.drawingRecapGallery.drawingLabel({
+        prompt: entry.prompt,
+        drawer: entry.drawerDisplayName,
+      })}
+      className="gallery-card-canvas"
+      noteClassName="gallery-card-note"
+      failedText={ui.galleryPage.couldNotLoadThisDrawing}
+    />
   );
 }

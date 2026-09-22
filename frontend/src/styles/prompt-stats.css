@@ -1,0 +1,239 @@
+/* The prompt statistics page, whole. Its base rules used to sit in profile.css
+   and its phone overrides in prompt-lists.css, which worked only while both
+   loaded in that order; fetched with the page (#475) they can arrive in either,
+   so the page keeps its rules in one file, in the order they were written. */
+.prompt-stats-page {
+  margin: 0 auto;
+  max-width: 900px;
+  padding: 16px;
+}
+
+.prompt-stats-header h1 {
+  color: var(--ink);
+  font-size: 24px;
+  margin: 16px 0 4px;
+}
+
+.prompt-stats-intro {
+  color: var(--muted);
+  margin: 0 0 16px;
+}
+
+.prompt-stats-controls {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  margin-bottom: 12px;
+}
+
+.prompt-stats-controls label {
+  color: var(--muted);
+  font-weight: 700;
+}
+
+.prompt-stats-note {
+  color: var(--muted);
+  line-height: 1.5;
+  margin: 12px 0 0;
+}
+
+.prompt-stats-note.is-error {
+  color: var(--danger);
+}
+
+.prompt-stats-table-scroll {
+  overflow-x: auto;
+}
+
+.prompt-stats-table {
+  border-collapse: collapse;
+  min-width: 480px;
+  width: 100%;
+}
+
+.prompt-stats-table caption {
+  color: var(--muted);
+  font-size: 13px;
+  padding-bottom: 8px;
+  text-align: left;
+}
+
+.prompt-stats-table th,
+.prompt-stats-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 9px 10px;
+  text-align: right;
+}
+
+.prompt-stats-table thead th {
+  color: var(--muted);
+  font-size: 12px;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.prompt-stats-table th:first-child,
+.prompt-stats-table td:first-child,
+.prompt-stats-table tbody th {
+  text-align: left;
+}
+
+.prompt-stats-table tbody th {
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.prompt-stats-table tbody td {
+  color: var(--ink);
+}
+
+.prompt-stats-control {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.prompt-stats-search input {
+  min-width: 180px;
+}
+
+.prompt-stats-table tbody tr.is-unrated th,
+.prompt-stats-table tbody tr.is-unrated td {
+  color: var(--faint);
+}
+
+@media (min-width: 1200px) {
+.prompt-stats-page {
+    max-width: 1272px;
+  }
+
+}
+.prompt-stats-band {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  justify-content: flex-end;
+}
+
+.prompt-stats-band > span:first-child {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.prompt-stats-meter {
+  display: inline-block;
+  width: 64px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--line);
+  overflow: hidden;
+  flex: none;
+}
+
+.prompt-stats-meter > span {
+  display: block;
+  height: 100%;
+}
+
+.prompt-stats-meter > .band-low { background: var(--danger); }
+
+.prompt-stats-meter > .band-mid { background: var(--warning); }
+
+.prompt-stats-meter > .band-high { background: var(--success); }
+
+.prompt-stats-controls select,
+.prompt-stats-controls input[type="search"] {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  min-height: 38px;
+  padding: 6px 10px;
+}
+
+.prompt-stats-table-scroll {
+  overflow-x: auto;
+}
+
+.prompt-stats-more {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 16px 0 4px;
+}
+
+@media (max-width: 900px) {
+.prompt-stats-table,
+  .prompt-stats-table tbody,
+  .prompt-stats-table tr,
+  .prompt-stats-table th,
+  .prompt-stats-table td {
+    display: block;
+    width: auto;
+  }
+
+.prompt-stats-table thead {
+    display: none;
+  }
+
+.prompt-stats-table tr {
+    background: var(--card);
+    border: 1.5px solid var(--line);
+    border-radius: var(--radius);
+    margin-bottom: 10px;
+    padding: 12px 14px;
+  }
+
+.prompt-stats-table th[scope="row"] {
+    font-family: var(--font-display);
+    font-size: 18px;
+    font-weight: 600;
+    padding: 0 0 8px;
+    text-align: left;
+  }
+
+.prompt-stats-table td {
+    border: 0;
+    color: var(--muted);
+    font-size: 12.5px;
+    font-weight: 700;
+    padding: 2px 0;
+  }
+
+.prompt-stats-table td[data-label]::before {
+    color: var(--faint);
+    content: attr(data-label) " ";
+    text-transform: none;
+  }
+
+.prompt-stats-band { display: block; }
+
+.prompt-stats-meter { margin-top: 6px; width: 100%; }
+
+.prompt-stats-controls {
+    display: grid;
+    gap: 10px;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+.prompt-stats-control {
+    align-items: stretch;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+.prompt-stats-control select,
+  .prompt-stats-control input {
+    min-height: 44px;
+    width: 100%;
+  }
+
+}

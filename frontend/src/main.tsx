@@ -11,18 +11,31 @@ import { CrashBoundary } from './components/CrashBoundary.tsx'
 import { CrashPage } from './pages/CrashPage.tsx'
 import { installClientErrorLog } from './lib/clientErrorLog.ts'
 import { installCrashTestSeam } from './lib/crashTestSeam.ts'
+import { installChunkReload } from './lib/chunkReload.ts'
+import { prefetchPlayRoutes, prefetchRouteFor } from './routeModules.ts'
 import { beforeFirstPaint } from './lib/startup.ts'
 import { useAuthStore } from './store/authStore.ts'
+import { initialLocaleReady } from './store/settingsStore.ts'
 
 // Before anything renders, so an error thrown during the first paint is still
 // in the buffer if the player goes on to file a bug about it.
 installClientErrorLog()
 installCrashTestSeam()
+installChunkReload()
+
+// The page this address draws is a chunk of its own (#475): fetched now, while
+// the paint waits on the account below, rather than once it is over.
+prefetchRouteFor(window.location.pathname)
 
 // The account's language outranks the browser's (R-I18N-06), and is only
 // known once the account is: so the first paint waits for it, bounded, and
-// App's own lookup finds it already answered (lib/startup.ts).
-void beforeFirstPaint(useAuthStore.getState().fetchMe()).then(() =>
+// App's own lookup finds it already answered (lib/startup.ts). The browser's
+// own language is fetched alongside rather than after (#982), so a guest's
+// paint waits for whichever of the two is slower, not for both in turn.
+void beforeFirstPaint(
+  Promise.all([useAuthStore.getState().fetchMe(), initialLocaleReady]),
+).then(() => {
+prefetchPlayRoutes()
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     {/* Outside the router and every provider on purpose: nothing that can
@@ -47,5 +60,5 @@ createRoot(document.getElementById('root')!).render(
       <App />
     </CrashBoundary>
   </StrictMode>,
-),
 )
+})
