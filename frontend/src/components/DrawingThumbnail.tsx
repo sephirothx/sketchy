@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CANVAS_HEIGHT, CANVAS_WIDTH, decodeCanvasHistory, type DecodedCanvasAction } from "../lib/canvasHistory";
 import { renderCanvasActions } from "../lib/canvasRenderer";
@@ -29,7 +29,7 @@ let staging: Uint8ClampedArray | null = null;
     pixels are scaled and encoded in JS (`canvasThumbnail.ts`, `pngEncode.ts`).
     The replay and the scale are synchronous, so two thumbnails cannot
     interleave on the shared buffer; the scaled copy is the thumbnail's own. */
-async function thumbnailUrl(actions: DecodedCanvasAction[], cssWidth: number): Promise<string | null> {
+async function thumbnailUrl(actions: DecodedCanvasAction[], cssWidth: number): Promise<{ url: string; width: number }> {
   staging ??= new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
   // The renderer shows its work through `commit`; here the pixels are only
   // read once, at the end, so there is nothing to show along the way.
@@ -42,7 +42,7 @@ async function thumbnailUrl(actions: DecodedCanvasAction[], cssWidth: number): P
     ? staging.slice()
     : downscalePixels(staging, CANVAS_WIDTH, CANVAS_HEIGHT, width, height);
   const png = await encodePng(small, width, height);
-  return URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" }));
+  return { url: URL.createObjectURL(new Blob([png as BlobPart], { type: "image/png" })), width };
 }
 
 export function DrawingThumbnail({
@@ -82,16 +82,28 @@ export function DrawingThumbnail({
     return () => observer.disconnect();
   }, [visible]);
 
+  // The fetched bytes are kept - a few kilobytes - so the thumbnail can be
+  // drawn again at a larger size; the decoded actions and pixels are not.
+  const bytesRef = useRef<ArrayBuffer | null>(null);
+  const encodedWidthRef = useRef(0);
+
+  const encode = useCallback(async (bytes: ArrayBuffer): Promise<string | null> => {
+    const actions = decodeCanvasHistory(bytes);
+    if (!actions) return null;
+    const { url, width } = await thumbnailUrl(actions, wrapper.current?.clientWidth ?? 0);
+    encodedWidthRef.current = width;
+    return url;
+  }, []);
+
   useEffect(() => {
     if (!visible) return;
     let current = true;
-    let url: string | null = null;
     void (async () => {
       try {
         const bytes = await loadRef.current();
         if (!current) return;
-        const actions = decodeCanvasHistory(bytes);
-        url = actions ? await thumbnailUrl(actions, wrapper.current?.clientWidth ?? 0) : null;
+        bytesRef.current = bytes;
+        const url = await encode(bytes);
         if (!current) {
           if (url) URL.revokeObjectURL(url);
           return;
@@ -104,9 +116,40 @@ export function DrawingThumbnail({
     })();
     return () => {
       current = false;
-      if (url) URL.revokeObjectURL(url);
     };
-  }, [visible, drawingKey]);
+  }, [visible, drawingKey, encode]);
+
+  // Each image's URL is let go when it is replaced or the card goes.
+  useEffect(() => () => {
+    if (src) URL.revokeObjectURL(src);
+  }, [src]);
+
+  // Drawn again when the box grows well past the width it was drawn at - a
+  // window widened, a phone turned - rather than left upscaled and soft. Not
+  // when it shrinks: the browser scales a larger image down cleanly.
+  useEffect(() => {
+    const element = wrapper.current;
+    if (!src || !element || typeof ResizeObserver === "undefined") return;
+    let busy = false;
+    let disposed = false;
+    const observer = new ResizeObserver(() => {
+      const ratio = window.devicePixelRatio || 1;
+      const wanted = Math.min(CANVAS_WIDTH, Math.round(element.clientWidth * ratio));
+      const bytes = bytesRef.current;
+      if (busy || !bytes || wanted <= encodedWidthRef.current * 1.25) return;
+      busy = true;
+      void encode(bytes).then((url) => {
+        busy = false;
+        if (url && disposed) URL.revokeObjectURL(url);
+        else if (url) setSrc(url);
+      });
+    });
+    observer.observe(element);
+    return () => {
+      disposed = true;
+      observer.disconnect();
+    };
+  }, [src, encode]);
 
   // An image rather than a canvas: the browser may drop an off-screen
   // image's decoded pixels and decode them again when it scrolls back, which
