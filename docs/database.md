@@ -891,7 +891,11 @@ inserts in 2,874 transactions, and with the barrier's reads half of every statem
 the process ran. Batched, the same 60 s run wrote every line with 205 inserts, and
 the process's statements fell 16,929 → 8,643 (SQLite, counted with an engine listener;
 the shape is the same on PostgreSQL, the per-statement cost is not). A report reads its evidence from this table, so both report paths flush
-the queue first (bounded at 2 s), and a line cited the moment it was said is found.
+the queue (bounded at 2 s) immediately before that read, and a line cited the moment it
+was said is found; a report refused before the read - an erased account, a duplicate,
+a picture that is not there - never waits for the queue. The flush waits only for the
+lines queued when it was called, not for what other rooms say meanwhile, and it cuts
+the current linger short without cutting anybody else's.
 
 **No index by game or turn** (#890): `game_id` and `turn_id` are correlation columns — no read filters on them and neither is a foreign key — and the `(game_id, turn_id, created_at)` index that used to cover them was the largest on the table. Dropping it, measured on 100,000 six-recipient lines (`benchmarks/index_write_cost.py`): index bytes per row 205 → 102, WAL per insert 918 → 773 B, heap plus indexes −16%.
 

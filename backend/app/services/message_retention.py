@@ -5,6 +5,7 @@ import asyncio
 import contextlib
 from datetime import datetime, timedelta, timezone
 import logging
+import time
 from uuid import UUID
 
 from sqlalchemy import delete, select
@@ -112,7 +113,16 @@ class MessageRetentionService:
         # for whatever other rooms say while it waits (#972 review).
         self._enqueued = 0
         self._written = 0
-        self._progress = asyncio.Condition()
+        # Woken whenever a batch has been dealt with. An event rather than a
+        # condition because a worker being cancelled settles its batch too,
+        # and there is no lock to take there.
+        self._progress = asyncio.Event()
+        # How far a waiting reader needs the queue written. State the writer
+        # reads, not a signal it can clear: a flush that lands before the
+        # writer reaches its linger used to lose the cut and pay the whole
+        # window - 254 ms where the wait should have been 3 (#972 third
+        # review).
+        self._cut = 0
 
     async def record(
         self,
@@ -247,6 +257,16 @@ class MessageRetentionService:
         """Start the writer, or replace one that somehow stopped."""
 
         if self._worker is None or self._worker.done():
+            if self._worker is not None:
+                # A writer that stopped some other way took rows with it.
+                # What was taken and never settled is settled here, against
+                # what is still queued: otherwise `join` waits for ever and
+                # every later `flush` spends its whole bound on rows nobody
+                # holds any more (#972 third review).
+                lost = self._enqueued - self._written - self._queue.qsize()
+                for _ in range(max(0, lost)):
+                    self._queue.task_done()
+                self._written += max(0, lost)
             self._worker = asyncio.create_task(self._write_queued())
 
     async def _write_queued(self) -> None:
@@ -261,32 +281,48 @@ class MessageRetentionService:
         """
         while True:
             batch = [await self._queue.get()]
-            await self._linger()
-            while len(batch) < self._batch_size:
-                try:
-                    batch.append(self._queue.get_nowait())
-                except asyncio.QueueEmpty:
-                    break
             try:
-                await asyncio.wait_for(
-                    self._write(batch), timeout=WRITE_TIMEOUT_SECONDS
-                )
-            except asyncio.TimeoutError:
-                logger.error(
-                    "Timed out retaining %d messages after %ss",
-                    len(batch),
-                    WRITE_TIMEOUT_SECONDS,
-                )
-            except Exception:
-                logger.exception("Failed to retain %d messages", len(batch))
-            finally:
-                # Dropped or written, the batch is no longer outstanding -
-                # without this a failed write would hang every `drain`.
-                for _ in batch:
-                    self._queue.task_done()
-                self._written += len(batch)
-                async with self._progress:
-                    self._progress.notify_all()
+                await self._linger()
+                while len(batch) < self._batch_size:
+                    try:
+                        batch.append(self._queue.get_nowait())
+                    except asyncio.QueueEmpty:
+                        break
+                try:
+                    await asyncio.wait_for(
+                        self._write(batch), timeout=WRITE_TIMEOUT_SECONDS
+                    )
+                except asyncio.TimeoutError:
+                    logger.error(
+                        "Timed out retaining %d messages after %ss",
+                        len(batch),
+                        WRITE_TIMEOUT_SECONDS,
+                    )
+                except Exception:
+                    logger.exception("Failed to retain %d messages", len(batch))
+            except asyncio.CancelledError:
+                # Settled on the way out as well: these rows have left the
+                # queue, and a batch cancelled mid-linger that nobody accounts
+                # for hangs every later `drain` on `join()` and leaves every
+                # later `flush` waiting its whole bound for a row no one will
+                # write (#972 third review).
+                self._settle(batch)
+                raise
+            self._settle(batch)
+
+    def _settle(self, batch: list[RoomMessage]) -> None:
+        """Account for a batch that has left the queue, written or not.
+
+        Dropped, written or lost, it is no longer outstanding - without this a
+        failed write would hang every `drain`.
+        """
+        for _ in batch:
+            self._queue.task_done()
+        self._written += len(batch)
+        # Whoever is waiting is woken now; anybody arriving later reads the
+        # counters first and waits for the next batch.
+        self._progress.set()
+        self._progress.clear()
 
     async def _linger(self) -> None:
         """Give the rest of a batch a moment to arrive, unless it is already
@@ -294,6 +330,7 @@ class MessageRetentionService:
         if (
             self._linger_seconds <= 0
             or self._draining
+            or self._cut > self._written
             or self._queue.qsize() >= self._batch_size - 1
         ):
             return
@@ -356,14 +393,19 @@ class MessageRetentionService:
         target = self._enqueued
         if self._written >= target:
             return
-        self._wake.set()  # cut the batch being lingered over, once
-        try:
-            async with self._progress:
-                await asyncio.wait_for(
-                    self._progress.wait_for(lambda: self._written >= target),
-                    timeout=EVIDENCE_FLUSH_SECONDS,
-                )
-        except asyncio.TimeoutError:
+        # Both, because the writer may be either side of its linger: the cut
+        # is what it reads before waiting, the event what wakes it if it is
+        # already waiting.
+        self._cut = max(self._cut, target)
+        self._wake.set()
+        deadline = time.monotonic() + EVIDENCE_FLUSH_SECONDS
+        while self._written < target:
+            remaining = deadline - time.monotonic()
+            if remaining <= 0:
+                break
+            with contextlib.suppress(asyncio.TimeoutError):
+                await asyncio.wait_for(self._progress.wait(), timeout=remaining)
+        if self._written < target:
             logger.warning(
                 "Retention queue not flushed within %ss for a report", EVIDENCE_FLUSH_SECONDS
             )

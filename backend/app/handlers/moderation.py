@@ -181,10 +181,6 @@ async def report_player(ctx: HandlerContext, sid, data):
         drawing_from_live_room(room, target.id) if payload.include_drawing else None
     )
 
-    # The lines the report cites may still be waiting in the retention
-    # queue's linger (#972); written first, so the evidence read finds them.
-    if ctx.message_retention is not None:
-        await ctx.message_retention.flush()
     async with ctx.session_factory() as session:
         async with session.begin():
             # The erasure barrier (app.auth.erasure): the seat was
@@ -228,6 +224,15 @@ async def report_player(ctx: HandlerContext, sid, data):
                         "ok": False, "errorCode": ErrorCode.CANNOT_REPORT,
                         "error": "That player has no picture to report.",
                     }
+            # The lines the report cites may still be waiting in the
+            # retention queue's linger (#972); written first, so the read
+            # below finds them. Here rather than before the transaction: a
+            # report that is refused - an erased account, a duplicate, a
+            # picture that is not there - answers without waiting for the
+            # queue at all (#972 third review). It returns at once unless
+            # lines it needs really are unwritten.
+            if ctx.message_retention is not None:
+                await ctx.message_retention.flush()
             messages = await evidence_from_live_room(
                 session,
                 room_instance_id=UUID(room.retention_scope_id),
