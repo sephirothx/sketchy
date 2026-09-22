@@ -102,7 +102,11 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
             viewing = player_page if drawing is host_page else host_page
             viewer_frames = player_frames if viewing is player_page else host_frames
             await drawing.click('.prompt-choices button:first-child')
-            await drawing.wait_for_selector('canvas.drawing-canvas')
+            # `.drawable`, not just the canvas: the canvas is on screen before
+            # `turn_started` makes this seat the drawer, and a stroke begun in
+            # between is ignored - nothing is sent, so the viewer waits on ink
+            # that was never drawn (the flake seen on a loaded CI runner).
+            await drawing.wait_for_selector('canvas.drawing-canvas.drawable')
             await viewing.wait_for_selector('canvas.drawing-canvas')
 
             canvas = await drawing.query_selector('canvas.drawing-canvas')

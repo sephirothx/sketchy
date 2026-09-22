@@ -18,6 +18,8 @@ import { Button } from "./ui/Button";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { UsersIcon, XIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/friends.css";
+import "../styles/lazy/settings.css";
 
 /** Friends, everywhere and whether or not they are online (R-FRIEND-10).
 

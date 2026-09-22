@@ -16,6 +16,7 @@ import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/gallery.css";
 
 /**
  * One drawing's own page, `/gallery/{turnId}` (#524): the drawing replayed

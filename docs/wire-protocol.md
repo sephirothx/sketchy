@@ -2048,7 +2048,7 @@ reloaded rather than served an older contract.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/auth/me` | The caller's account, or `null` — it creates nothing, so a crawler or a link preview costs no row. `POST /api/auth/display-name` is the one path that provisions a guest (R-ACCT-00). Carries `pendingRole`: a staff role offered and waiting on this account's second factor, or `null`. It authorizes nothing — it is what makes the two-factor entry appear for the one account it means anything to (R-AUTH-20), and a lapsed offer reads as `null`. A guest's account also carries `nameInUse`: `true` when a guest who came online earlier is using the same name, so this one is asked for another before playing (R-ACCT-09) |
+| `GET` | `/api/auth/me` | The caller's account, or `null` — it creates nothing, so a crawler or a link preview costs no row. `POST /api/auth/display-name` is the one path that provisions a guest (R-ACCT-00). Carries `pendingRole`: a staff role offered and waiting on this account's second factor, or `null`. It authorizes nothing — it is what makes the two-factor entry appear for the one account it means anything to (R-AUTH-20), and a lapsed offer reads as `null`. A guest's account also carries `nameInUse`: `true` when a guest who came online earlier is using the same name, so this one is asked for another before playing (R-ACCT-09). A registered account's carries `settings`, the same object `GET /api/users/me/settings` returns: the first paint waits for this answer (R-I18N-06), and asking for them separately put a second round trip in front of it (#983). The page requests it from an inline script in `index.html` before any bundle has loaded, so it is in flight while the bundle downloads |
 | `GET` | `/api/auth/nickname-available` | Rate limited (`AUTH_LOOKUP_LIMIT`). Unavailable for a registered player's username, and for a name a guest online is using (R-ACCT-09) |
 | `POST` / `DELETE` | `/api/users/me/avatar` | Set or remove the caller's picture (R-AVA-01). `POST` takes `{ image }`, base64 of a 256×256 WebP or PNG under 128 KiB; refused `400` for anything else, `403` for a guest or while a moderator's block stands (the message names the date), `429` past 10 an hour. Answers `{ avatarKey, avatarUrl }` |
 | `PUT` | `/api/users/me/avatar/doodle` | Wear one of the deployment's doodles instead of a picture (R-AVA-09). Takes `{ name }`, a name from the sprite's list; refused `400` (`invalid_payload`) for any other, `403` for a guest. No rate limit and no moderator's block: nothing is stored but the name. Deletes an uploaded picture. Answers `{ avatarKey, avatarUrl }`, the URL a fragment of `/avatars/doodles.svg` — a static file from the frontend build, not an API route |
@@ -2296,11 +2296,17 @@ must not bury the one change an operator made.
 ### Static delivery
 
 When `frontend/dist` exists it is mounted on the same FastAPI app
-([`backend/app/deployment.py`](../backend/app/deployment.py)): gzip for eligible
-responses, Vite's fingerprinted `/assets/` served `immutable` with a one-year lifetime,
-and `index.html` (including client-route fallbacks) served `no-cache` so browsers
-discover new deployments promptly. A reverse proxy may replace the gzip layer but must
-preserve that cache distinction and send `Vary: Accept-Encoding`.
+([`backend/app/main.py`](../backend/app/main.py)). Vite's fingerprinted `/assets/` are
+served `immutable` with a one-year lifetime, and `index.html` (including client-route
+fallbacks) `no-cache`, so browsers discover new deployments promptly. Every text file
+the build emits has a Brotli (`.br`) and a gzip (`.gz`) copy beside it, and the server
+answers with the best one `Accept-Encoding` admits — a coding given `q=0` is refused —
+setting `Content-Encoding` and `Vary: Accept-Encoding`. The copy has its own `ETag`, so
+a conditional request is answered against the bytes the client would receive. Nothing
+static is compressed per request ([`backend/app/compression.py`](../backend/app/compression.py), #978).
+Dynamic responses are gzipped at level 4. Images, fonts, audio and video never are,
+because they are compressed formats already. A reverse proxy may take over compression,
+but must keep the cache distinction and `Vary: Accept-Encoding`.
 
 ---
 

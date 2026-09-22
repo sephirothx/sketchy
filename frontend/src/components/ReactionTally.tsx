@@ -1,5 +1,6 @@
 import { ReactionGlyph } from "./ReactionGlyph";
 import { compactTally, resolveTally } from "../lib/reactions";
+import "../styles/lazy/reactions.css";
 
 /**
  * The per-emoji counts of one drawing, read-only: the profile's turn table

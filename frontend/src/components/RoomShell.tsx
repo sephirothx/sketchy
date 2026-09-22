@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { recordRender } from "../lib/renderDiagnostics";
+import "../styles/lazy/toolbar.css";
 
 export type RoomShellMode = "waiting" | "playing" | "game-end";
 

@@ -152,3 +152,14 @@
   color: var(--primary-ink) !important;
   white-space: nowrap;
 }
+
+/* A lazy overlay whose chunk could not be fetched (LazyOverlay): the toast's
+   look, pinned where a toast would sit, over whatever page is open. */
+.lazy-overlay-notice {
+  bottom: max(16px, env(safe-area-inset-bottom));
+  left: 50%;
+  position: fixed;
+  transform: translateX(-50%);
+  width: min(440px, calc(100vw - 32px));
+  z-index: 1000;
+}

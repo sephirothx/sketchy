@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 
 import { apiRequest } from "../lib/api";
 import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
-import { ruleAnchorFor } from "../content/rules";
+import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { socket } from "../lib/socket";
 import { ReportedDrawing } from "./ReportedDrawing";
 import {

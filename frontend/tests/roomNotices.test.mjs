@@ -2,7 +2,9 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import { kickedText, supersededText } from "../src/lib/roomNotices.ts";
-import { catalogueFor, setCatalogue } from "../src/content/ui/index.ts";
+import { catalogueFor, loadCatalogue, setCatalogue } from "../src/content/ui/index.ts";
+
+await loadCatalogue("de");
 
 test("a removal is said from its code, never from the server's reason", () => {
   setCatalogue("en");

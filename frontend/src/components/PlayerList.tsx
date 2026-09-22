@@ -19,6 +19,7 @@ import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import { refusalText } from "../lib/refusals.ts";
+import "../styles/lazy/player-list.css";
 
 interface PlayerListProps {
   players: PlayerInfo[];

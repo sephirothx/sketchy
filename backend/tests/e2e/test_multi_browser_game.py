@@ -268,7 +268,7 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
 
             # Wait for drawing phase
             await choosing_status.wait_for(state="detached")
-            await drawer_page.wait_for_selector('canvas.drawing-canvas')
+            await drawer_page.wait_for_selector('canvas.drawing-canvas.drawable')
             await guesser_page.wait_for_selector('canvas.drawing-canvas')
             assert not await drawer_page.evaluate("window.__wordSelectionErrorSeen")
 

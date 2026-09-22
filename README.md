@@ -23,7 +23,7 @@ keyboard that takes half the screen, and one thumb.
 ## Features
 
 - Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; it is also where a room you create starts. It is the language you *play* in, not the language you *read* in — two settings, side by side in **Settings → Appearance**, because reading in Dutch while playing an English room is perfectly ordinary. The language you read in is also a flag in the lobby header, at every width, since Settings is one more screen to find in a language you cannot read.
-- The interface is written in all seven supported languages — English, German, Spanish, French, Italian, Dutch, Portuguese — and a language is offered only once its catalogue is **complete**: there is no screen that falls back to English halfway down, because offering a language and finishing it are the same act. Which one you read in comes from your account if you have one, from this browser if you have set it here, from your browser's own languages on a first visit, and English otherwise; it is applied before the first paint, and `<html lang>` follows it so a screen reader picks the right voice. Dates and numbers follow the same language, while the **Time format** setting still decides 12- or 24-hour on top of it. The six non-English catalogues are machine-drafted and awaiting a native reader; the unreviewed count is reported per locale in CI.
+- The interface is written in all seven supported languages — English, German, Spanish, French, Italian, Dutch, Portuguese — and a language is offered only once its catalogue is **complete**: there is no screen that falls back to English halfway down, because offering a language and finishing it are the same act. Which one you read in comes from your account if you have one, from this browser if you have set it here, from your browser's own languages on a first visit, and English otherwise; it is applied before the first paint — only that language's words are downloaded, alongside the account lookup rather than after it, and a language that cannot be fetched leaves the page in English rather than blank — and `<html lang>` follows it so a screen reader picks the right voice. Dates and numbers follow the same language, while the **Time format** setting still decides 12- or 24-hour on top of it. The six non-English catalogues are machine-drafted and awaiting a native reader; the unreviewed count is reported per locale in CI.
 - Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped. A list is Private until its owner publishes it, and can be duplicated into a second list of your own - one you copied from somebody else excepted, so its credit stays. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - A **Community catalogue** of prompt lists players published for anyone to play. Browse by language and tag, read every prompt in a list before choosing it, and play it straight away — no account needed to browse or play. With one, **star** a list to keep it on a shortlist the room picker offers, **make a copy** of your own to edit, or report one. Publishing is moderated after the fact, with an operator switch that holds new publications for review instead.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
@@ -1666,6 +1666,7 @@ backend/
     repositories/ Abstract repository interfaces and SQLAlchemy implementations
     api/          REST routers: player profiles, prompt lists, and prompt stats
     main.py       ASGI entrypoint - wires FastAPI + Socket.IO together, health and room endpoints
+    compression.py Serving the build's precompressed copies; cheap gzip for what stays dynamic
     handlers/
       __init__.py    Registers all handler domains and returns their lifecycle context
       context.py     Shared HandlerContext for Socket.IO, rooms, timers, and repositories
@@ -1706,13 +1707,20 @@ backend/
     e2e/          Multi-browser Playwright scenarios
     test_*.py     Domain, protocol, payload, wire-contract, timer, DB, repository, and performance unit tests
 frontend/
+  scripts/bundle-report.mjs What a first visit downloads from a build: raw, gzip and brotli per chunk,
+                  and the first-load budget CI holds it to (`npm run bundle:check`)
   src/
     components/   Canvas, Toolbar, PlayerList, PromptDisplay, Timer, GuessChat,
                   SettingsOverlay, FriendsOverlay
     pages/        LobbyBrowserPage (home), GameRoomPage (room/gameplay), ProfilePage, PromptStatsPage, RulesPage, BugReportsPage (admin triage)
-    content/rules/ The published rules, one typed module per language (all seven)
+    routeModules.ts Every page but the lobby, fetched as its own chunk when first needed
+    styles/lazy/  Stylesheets fetched with the pages that draw them, kept in the components layer
+    content/rules/ The published rules, one typed module per language (all seven);
+                  anchors.ts is the link notices use, kept apart from the documents
     content/ui/   Every word the interface says, one typed module per language
-                  (en.ts is the reference; format.ts holds the Intl formatters)
+                  (en.ts is the reference and ships in the entry chunk; every other
+                  language is its own chunk, fetched by whoever reads it;
+                  format.ts holds the Intl formatters)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
     lib/socket.ts socket.io-client singleton + REST base URL
@@ -1815,6 +1823,7 @@ Beyond lint, tests, PostgreSQL migrations, and multi-browser E2E:
 | Credential scan | A credential in the tree, or in **any commit the change adds** — a value removed a commit later is burned just the same, and the tree it leaves behind looks clean. The range is resolved with the same baseline fallback as the artifact scan, and fails closed rather than falling back to the tree, so a first push or a force-push is not a way around it. Merge diffs are requested explicitly, because `git log -p` emits no patch for a merge commit — a secret introduced only while resolving a conflict, present in neither parent, is otherwise invisible to both scans. One historical finding is carried in `.gitleaks-known.json` — an earlier revision of the artifact scanner named PEM armour in a comment — pinned to its commit, file, rule, and line, holding no secret, and unable to excuse anything else. Runs alongside the artifact scan, which catches file *shapes* by their bytes rather than secrets in source |
 | Dependency advisories | A known advisory in `requirements.txt`, `requirements-dev.txt`, or the frontend lockfile. Build and test dependencies count: they run in CI, with a checkout, before anything they touched reaches a player |
 | Wire contract baseline | `fixtures/wire_contract.json` no longer matches the tree, or (a warning until launch) the socket contract differs from the base branch under the same `PROTOCOL_VERSION`. Regenerate with `scripts/check-wire-contract.py --write`; see `docs/wire-protocol.md` §11 |
+| Bundle budget | The first-load set, meaning the entry script and stylesheet plus every chunk they import statically, going over its gzip budget (`npm run bundle:check`, [`frontend/scripts/bundle-report.mjs`](frontend/scripts/bundle-report.mjs)). A page, a language or a stylesheet that slips back into the entry chunk is caught by the change that caused it, not noticed at launch |
 | Coverage floors | A risk-critical module dropping below **either** of its two floors in [`scripts/check-coverage.py`](scripts/check-coverage.py) — statements and branches, on authentication, moderation, request limits, payload validation, drawing storage, deployment, readiness. Both, because either alone can be met without exercising the code: `auth/blocks.py` reads 82% by statements and 50% by branches, so half its conditions have only ever gone one way. Per module rather than in total, because a suite this size absorbs one module losing its tests without moving the total more than a rounding error. A report produced without `--cov-branch` is refused rather than checked against the wrong number, and a module that vanishes from the report fails too, so a rename cannot retire a floor silently |
 
 The coverage gate has its own tests in
@@ -2313,8 +2322,10 @@ locally without a PostgreSQL server, omit them all — the same `frontend/dist`
 is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
-so the whole game (UI + API + WebSocket) is served from a single port. The built-in server
-gzip-compresses eligible responses, serves Vite's fingerprinted `/assets/` files with a
+so the whole game (UI + API + WebSocket) is served from a single port. The build writes a
+Brotli and a gzip copy beside every text file it emits, and the server hands over whichever
+the browser accepts instead of compressing on the loop every room shares (what is left
+dynamic is gzipped at level 4; images and fonts never are). It serves Vite's fingerprinted `/assets/` files with a
 one-year `immutable` cache policy, and serves `index.html` (including client-route fallbacks)
 with `no-cache` so browsers discover new deployments promptly. A URL the client has no page
 for gets that same shell — it is what draws the not-found page — but with a **404** status,
@@ -2330,7 +2341,7 @@ player may send with a line about what they were doing. The two ways out appear 
 report has gone (or could not go), so a crash is heard about before it is left behind.
 Browser-stored settings are left alone; only the in-memory game state is reset.
 
-If a reverse proxy handles compression instead, it may replace the gzip layer, but it should
+If a reverse proxy handles compression instead, it may serve the build's `.br`/`.gz` copies itself or compress on its own, but it should
 preserve the same cache distinction: fingerprinted assets are immutable while the SPA HTML
 must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encoding`.
 
