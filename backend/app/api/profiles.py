@@ -26,7 +26,7 @@ from app.canvas_storage import (
     stored_drawing_wire_payload,
 )
 from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_PIN_SLOTS
-from app.content_encoding import accepts_encoding
+from app.compression import accepted_encodings
 from app.services.telemetry import telemetry
 from app.repositories.interfaces import (
     DrawingReactionResult,
@@ -248,8 +248,8 @@ async def serve_drawing(
         telemetry.drawing_cache_requests.inc(("miss",))
         wire, gzipped, stored_checksum = await _decode_once(checksum, turn_id, drawing_of)
         validator = drawing_validator(stored_checksum)
-    encoded = len(wire) >= GZIP_MINIMUM_BYTES and accepts_encoding(
-        request.headers.get("accept-encoding"), "gzip"
+    encoded = len(wire) >= GZIP_MINIMUM_BYTES and "gzip" in accepted_encodings(
+        request.headers.get("accept-encoding")
     )
     headers = {**cache_headers, "ETag": validator}
     if encoded:

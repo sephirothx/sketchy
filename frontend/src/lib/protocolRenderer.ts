@@ -18,12 +18,12 @@ import {
   fillWhite,
   rasterizePolyline,
   rasterizeSegmentSpans,
-  renderCanvasActions,
 } from "./canvasRenderer.ts";
+import { createReplayCheckpoints } from "./replayCheckpoints.ts";
 import type { LiveDrawingPacket } from "./liveDrawing.ts";
 import { finalWidth, rampedBatch } from "./pathWidths.ts";
 import { createStrokePlayback } from "./strokePlayback.ts";
-import type { CanvasSurface } from "./canvasSurface.ts";
+import { commitAll, type CanvasSurface } from "./canvasSurface.ts";
 
 export function createProtocolRenderer(
   surfaceRef: RefObject<CanvasSurface | null>,
@@ -111,6 +111,8 @@ export function createProtocolRenderer(
     return () => target?.removeEventListener("visibilitychange", onVisibilityChange);
   };
 
+  const checkpoints = createReplayCheckpoints();
+
   const clear = () => {
     playback.cancel();
     stopTicking();
@@ -188,8 +190,13 @@ export function createProtocolRenderer(
     stopTicking();
     // Straight into the drawing, shown once at the end: it overwrites every
     // pixel, so nothing stale carries over, and it never reads the canvas.
+    // From the newest snapshot still true of this history rather than from
+    // white (#989): an undo repaints only what followed it.
     const surface = surfaceRef.current;
-    if (surface) renderCanvasActions(surface, actions);
+    if (surface) {
+      checkpoints.replayInto(surface.pixels, actions);
+      commitAll(surface);
+    }
     // A replay that ends on a path may have landed mid-stroke: the live
     // batches that follow join that path's last point. If the path was in
     // fact closed, the next frame is a start and resets this anyway.
@@ -207,6 +214,7 @@ export function createProtocolRenderer(
   const dispose = () => {
     playback.cancel();
     stopTicking();
+    checkpoints.clear();
   };
 
   return { apply, clear, replay, watchHidden, dispose };

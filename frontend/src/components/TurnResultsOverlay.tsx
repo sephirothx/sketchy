@@ -8,6 +8,8 @@ import {
   rowStartOffsets,
 } from "../lib/standings";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/reactions.css";
+import "../styles/lazy/game-results.css";
 
 interface TurnResultsOverlayProps {
   prompt: string;

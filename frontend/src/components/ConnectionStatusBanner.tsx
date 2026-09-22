@@ -1,8 +1,23 @@
-import { useState } from "react";
+import { lazy, Suspense, useState, type ComponentType } from "react";
 
-import { ScratchPadDialog } from "./ScratchPad";
 import { connectionStatusText, type ConnectionStatus } from "../lib/connectionStatus";
 import { ui } from "../content/ui/index.ts";
+
+const loadScratchPad = () => import("./ScratchPad");
+
+/* The pad is the whole drawing surface - canvas, toolbar, the pixel pipeline -
+   and it sits in this banner on every page, so importing it put all of that
+   in the entry chunk (#475). It is fetched once the page has painted instead
+   (`prefetchPlayRoutes`):
+   by the time a connection drops it is here, and it has to be, because a
+   page with no connection cannot fetch it then. If it never arrived, the
+   button opens nothing rather than a crash page. */
+const ScratchPadDialog = lazy(() =>
+  loadScratchPad().then(
+    (module) => ({ default: module.ScratchPadDialog }),
+    (): { default: ComponentType<{ onClose: () => void }> } => ({ default: () => null }),
+  ),
+);
 
 /**
  * The connection banner, outside a room. When to show it is `placeNotices`'s
@@ -35,7 +50,9 @@ export function ConnectionStatusBanner({
           </button>
         </div>
       )}
-      {padOpen && <ScratchPadDialog onClose={() => setPadOpen(false)} />}
+      <Suspense fallback={null}>
+        {padOpen && <ScratchPadDialog onClose={() => setPadOpen(false)} />}
+      </Suspense>
     </>
   );
 }

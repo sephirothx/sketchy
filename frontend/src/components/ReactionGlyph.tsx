@@ -3,6 +3,7 @@ import heart from "../assets/reactions/heart.svg";
 import laugh from "../assets/reactions/laugh.svg";
 import wow from "../assets/reactions/wow.svg";
 import { reactionFor } from "../lib/reactions";
+import "../styles/lazy/reactions.css";
 
 /**
  * Bundled artwork per code (Fluent Emoji, MIT - see assets/reactions/LICENSE.md).

@@ -60,11 +60,4 @@ export function rulesLocales(): string[] {
   return Object.keys(DOCUMENTS);
 }
 
-/** Where a decision's category is explained.
-
-The link a notice uses when it says what a decision was recorded as. Every
-category is a rule's anchor by construction - the rule carries the category as
-its id - so this cannot point at a section that is not there. */
-export function ruleAnchorFor(category: string): string {
-  return `/rules#${category}`;
-}
+export { ruleAnchorFor } from "./anchors.ts";

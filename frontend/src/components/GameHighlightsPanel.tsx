@@ -6,6 +6,7 @@ import { SectionLabel } from "./ui/Card";
 import type { GameHighlight } from "../types";
 import type { ReactNode } from "react";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/reactions.css";
 
 interface GameHighlightsPanelProps {
   highlights: GameHighlight[];
