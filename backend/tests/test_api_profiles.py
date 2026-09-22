@@ -1258,35 +1258,44 @@ async def test_a_refusal_inside_a_shared_fill_is_not_handed_to_the_other_waiters
     assert profiles._fills == {}
 
 
-async def test_a_fill_survives_the_caller_that_started_it_going_away(env, monkeypatch):
-    """The fill is a task of its own: a shutdown or a timeout cancelling the
-    caller must not cancel the read everyone else is waiting on."""
+async def test_a_fill_survives_the_caller_that_started_it_going_away(env):
+    """The fill is a task of its own: the caller that started it going away -
+    a shutdown, a timeout - must not cancel the read the other waiters are
+    waiting on (#979 review).
+
+    At `_decode_once` rather than through HTTP: cancelling a request with a
+    query in flight tears down its database connection, which is a different
+    story from this one.
+    """
     import asyncio
 
+    import app.api.profiles as profiles
 
     http, users, history, factory = env
     ann = await users.create_anonymous(display_name="Ann")
     bob = await users.create_anonymous(display_name="Bob")
     blob = _large_frame()
     game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
-    await sign_in_as(http, factory, ann.id)
-    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
-    slow = asyncio.Event()
-    real_read = history.get_turn_drawing
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    release = asyncio.Event()
 
-    async def wait_first(*args, **kwargs):
-        await slow.wait()
-        return await real_read(*args, **kwargs)
+    async def slow_read():
+        await release.wait()
+        return detail
 
-    monkeypatch.setattr(history, "get_turn_drawing", wait_first)
-    owner = asyncio.create_task(http.get(url))
+    checksum = detail.checksum_sha256
+    owner = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
     await asyncio.sleep(0.02)
-    waiter = asyncio.create_task(http.get(url))
+    waiter = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
     await asyncio.sleep(0.02)
-    owner.cancel()  # the request that started the fill goes away
-    slow.set()
-    answer = await asyncio.wait_for(waiter, timeout=5)
-    assert answer.status_code == 200 and answer.content == blob
+    owner.cancel()
+    release.set()
+
+    wire, gzipped, served_checksum = await asyncio.wait_for(waiter, timeout=5)
+    assert wire == blob and served_checksum == checksum
+    assert profiles.drawing_cache.get(profiles._cache_key(checksum)) is not None
+    assert profiles._fills == {}
 
 
 async def test_the_cache_counter_says_which_it_was(env):
