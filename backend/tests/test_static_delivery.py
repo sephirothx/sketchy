@@ -77,20 +77,49 @@ def static_app(tmp_path: Path):
     return app, index, asset
 
 
-async def test_fingerprinted_assets_are_compressed_and_cached_immutably(static_app):
+async def test_a_file_the_build_left_uncompressed_is_not_compressed_per_request(static_app):
+    """The loop compresses nothing static (#978): what the build made a copy of
+    is served from the copy, and what it left alone - text too small for a copy
+    to be worth writing - goes out stored. Compressing here would also give two
+    bodies one `ETag`, since the validator is the stored file's (#1045)."""
     app, _, asset = static_app
 
     status, headers, body = await request(
         app,
         "/assets/app-AbCdEf12.js",
-        headers={"Accept-Encoding": "gzip"},
+        headers={"Accept-Encoding": "gzip, br"},
+    )
+    _, identity, _ = await request(
+        app, "/assets/app-AbCdEf12.js", headers={"Accept-Encoding": "identity"}
+    )
+
+    assert status == 200
+    assert "content-encoding" not in headers
+    assert body == asset
+    assert headers["etag"] == identity["etag"], "one ETag, one body"
+    assert "accept-encoding" in headers["vary"].lower()
+    assert headers["cache-control"] == "public, max-age=31536000, immutable"
+
+
+async def test_an_api_answer_is_still_compressed_on_the_loop(tmp_path: Path):
+    """Only the static files opt out. What has no stored copy to serve - an
+    API answer composed for this caller - is still compressed."""
+    app = FastAPI()
+
+    @app.get("/api/lots-of-json")
+    async def lots_of_json():
+        return {"values": ["compress me" for _ in range(200)]}
+
+    (tmp_path / "index.html").write_bytes(b"<!doctype html><html></html>")
+    configure_frontend(app, tmp_path)
+
+    status, headers, body = await request(
+        app, "/api/lots-of-json", headers={"Accept-Encoding": "gzip"}
     )
 
     assert status == 200
     assert headers["content-encoding"] == "gzip"
-    assert "accept-encoding" in headers["vary"].lower()
-    assert headers["cache-control"] == "public, max-age=31536000, immutable"
-    assert gzip.decompress(body) == asset
+    assert b"compress me" in gzip.decompress(body)
 
 
 async def test_assets_remain_available_without_compression(static_app):
@@ -335,7 +364,19 @@ def test_accept_encoding_is_parsed_not_substring_matched(header, expected):
     assert accepted_encodings(header) == expected
 
 
-@pytest.mark.parametrize("path", ["/index.html.gz", "/index.html.br", "/assets/app-AbCdEf12.js.gz", "/assets/app-AbCdEf12.js.br"])
+@pytest.mark.parametrize(
+    "path",
+    [
+        "/index.html.gz",
+        "/index.html.br",
+        "/assets/app-AbCdEf12.js.gz",
+        "/assets/app-AbCdEf12.js.br",
+        # A case-insensitive filesystem - APFS, NTFS - answers these with the
+        # copy, so the guard matches without case too (#978 third review).
+        "/assets/app-AbCdEf12.js.BR",
+        "/assets/app-AbCdEf12.js.Gz",
+    ],
+)
 async def test_a_precompressed_copy_is_not_served_under_its_own_name(built_app, path):
     """Asked for directly, a copy would go out as the original's type with no
     Content-Encoding and a compressed body."""
@@ -360,11 +401,13 @@ async def test_the_not_found_shell_ignores_validators_meant_for_another_url(buil
     assert body == index
 
 
-async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path):
+@pytest.mark.parametrize(("coding", "suffix"), [("br", ".br"), ("gzip", ".gz")])
+async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path, coding, suffix):
     """A `<file>.br` symlink planted in the build output pointed outside the
     tree, and was served under the original's name - bytes StaticFiles refuses
     under their own (#978 review). Reachable only with write access to the
-    build output, so this is defence in depth."""
+    build output, so this is defence in depth. Both codings are checked: the
+    guard belongs to the loop over them, not to the first one tried."""
     outside = tmp_path / "outside"
     outside.mkdir()
     (outside / "secret.txt").write_bytes(b"not part of the build" * 50)
@@ -373,15 +416,16 @@ async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path):
     _write_build(dist)
     asset = dist / "assets" / "escape-AbCdEf12.js"
     asset.write_bytes(b"export const ok = true;\n" * 100)
-    (dist / "assets" / "escape-AbCdEf12.js.br").symlink_to(outside / "secret.txt")
+    (dist / "assets" / f"escape-AbCdEf12.js{suffix}").symlink_to(outside / "secret.txt")
     # And a directory that merely looks like a copy must not raise mid-response.
     (dist / "assets" / "weird-AbCdEf12.js").write_bytes(b"export const weird = 1;\n" * 100)
-    (dist / "assets" / "weird-AbCdEf12.js.br").mkdir()
+    (dist / "assets" / f"weird-AbCdEf12.js{suffix}").mkdir()
     app = FastAPI()
     configure_frontend(app, dist)
 
-    escaped = await request(app, "/assets/escape-AbCdEf12.js", headers={"Accept-Encoding": "br"})
-    weird = await request(app, "/assets/weird-AbCdEf12.js", headers={"Accept-Encoding": "br"})
+    accept = {"Accept-Encoding": coding}
+    escaped = await request(app, "/assets/escape-AbCdEf12.js", headers=accept)
+    weird = await request(app, "/assets/weird-AbCdEf12.js", headers=accept)
 
     assert escaped[0] == 200 and escaped[2] == asset.read_bytes()
     assert "content-encoding" not in escaped[1]

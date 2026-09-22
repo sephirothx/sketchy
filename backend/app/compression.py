@@ -25,6 +25,14 @@ from starlette.types import Message, Receive, Scope, Send
 
 DYNAMIC_COMPRESSLEVEL = 4
 
+#: Set on the scope by a handler that has already settled its own encoding.
+#: The static files do: they serve the build's copies, and the few text files
+#: too small for the build to have made one are not worth loop CPU per request
+#: - which is the whole point of #978. It also keeps every static
+#: representation's `ETag` the one the bytes were stored with: compressing
+#: after the validator was chosen would give two bodies one name.
+NO_DYNAMIC_COMPRESSION = "sketchy.no_dynamic_compression"
+
 # Formats that are compressed already; compressing them again is pure cost.
 INCOMPRESSIBLE_CONTENT_TYPES = ("image/", "font/", "audio/", "video/")
 
@@ -84,15 +92,17 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
             continue
         sibling = f"{response.path}{suffix}"
         try:
-            link_stat = os.lstat(sibling)
-            if not stat.S_ISREG(link_stat.st_mode):
-                continue
-            stat_result = os.stat(sibling)
+            # `lstat` of a regular file is that file's own stat, so the check
+            # and the validators come from one call: a second `stat` would
+            # only add a syscall and a window between them.
+            sibling_stat = os.lstat(sibling)
         except OSError:
+            continue
+        if not stat.S_ISREG(sibling_stat.st_mode):
             continue
         variant = FileResponse(
             sibling,
-            stat_result=stat_result,
+            stat_result=sibling_stat,
             media_type=response.media_type,
         )
         variant.headers["Content-Encoding"] = coding
@@ -115,7 +125,12 @@ class SelectiveGZipMiddleware(GZipMiddleware):
         # `gzip;q=0` means no gzip.
         if "gzip" in accepted_encodings(Headers(scope=scope).get("accept-encoding")):
             responder = _SelectiveGZipResponder(
-                self.app, self.minimum_size, compresslevel=self.compresslevel
+                self.app,
+                self.minimum_size,
+                compresslevel=self.compresslevel,
+                # Read after the app has run, not now: the handler sets it
+                # while answering.
+                excluded=lambda: bool(scope.get(NO_DYNAMIC_COMPRESSION)),
             )
         else:
             responder = IdentityResponder(self.app, self.minimum_size)
@@ -123,9 +138,16 @@ class SelectiveGZipMiddleware(GZipMiddleware):
 
 
 class _SelectiveGZipResponder(GZipResponder):
+    def __init__(self, *args, excluded, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._excluded = excluded
+
     async def send_with_compression(self, message: Message) -> None:
         await super().send_with_compression(message)
         if message["type"] == "http.response.start":
             content_type = MutableHeaders(raw=message["headers"]).get("content-type", "")
-            if content_type.startswith(INCOMPRESSIBLE_CONTENT_TYPES):
+            if self._excluded() or content_type.startswith(INCOMPRESSIBLE_CONTENT_TYPES):
+                # Both flags the parent already honours: set before it reads
+                # them on the body message, they make it pass the response
+                # through as it arrived.
                 self.content_type_is_excluded = True
