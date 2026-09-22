@@ -4,6 +4,7 @@ import { useToast } from "../lib/toast";
 import { refusalText } from "../lib/refusals.ts";
 import type { PinEligibility } from "../lib/pinnedDrawings";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/profile.css";
 
 interface PinControlProps {
   pinned: boolean;

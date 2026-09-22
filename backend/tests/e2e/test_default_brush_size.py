@@ -64,7 +64,7 @@ async def test_a_turn_starts_at_the_players_default_size_and_the_slider_goes_bac
             await host_page.wait_for_selector('.prompt-choices, [data-testid="choosing-prompt-status"]')
             drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
             await drawing.click('.prompt-choices button:first-child')
-            await drawing.wait_for_selector('canvas.drawing-canvas')
+            await drawing.wait_for_selector('canvas.drawing-canvas.drawable')
 
             size = drawing.get_by_role("button", name="Brush size 2px")
             await size.wait_for()

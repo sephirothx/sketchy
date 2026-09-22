@@ -70,7 +70,11 @@ async def test_the_drawer_and_a_viewer_rasterize_the_same_thinned_stroke():
             drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
             viewing = player_page if drawing is host_page else host_page
             await drawing.click('.prompt-choices button:first-child')
-            await drawing.wait_for_selector('canvas.drawing-canvas')
+            # `.drawable`, not just the canvas: the canvas is on screen before
+            # `turn_started` makes this seat the drawer, and a stroke begun in
+            # between is ignored - nothing is sent, so the viewer waits on ink
+            # that was never drawn (the flake seen on a loaded CI runner).
+            await drawing.wait_for_selector('canvas.drawing-canvas.drawable')
             await viewing.wait_for_selector('canvas.drawing-canvas')
 
             canvas = await drawing.query_selector('canvas.drawing-canvas')

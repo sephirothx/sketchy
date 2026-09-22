@@ -9,6 +9,7 @@ import { rampedRuns, widthRuns } from "./pathWidths.ts";
 import {
   fillWhitePixels,
   floodFillPixels,
+  type FillBounds,
   hexToRgba,
   rasterizeSpans,
   rasterizePath as rasterizePixelPath,
@@ -140,8 +141,11 @@ export function applyFillAtPixel(
   color: string,
 ): boolean {
   if (x < 0 || x >= CANVAS_WIDTH || y < 0 || y >= CANVAS_HEIGHT) return false;
-  if (!floodFillPixels(surface.pixels, CANVAS_WIDTH, CANVAS_HEIGHT, x, y, hexToRgba(color))) return false;
-  commitAll(surface);
+  // Only the box the fill painted is shown (#990): a fill into a small
+  // enclosed shape used to upload all 1.9 MB of the drawing to the screen.
+  const bounds: FillBounds = { left: 0, top: 0, right: CANVAS_WIDTH, bottom: CANVAS_HEIGHT };
+  if (!floodFillPixels(surface.pixels, CANVAS_WIDTH, CANVAS_HEIGHT, x, y, hexToRgba(color), bounds)) return false;
+  surface.commit(bounds.left, bounds.top, bounds.right - bounds.left, bounds.bottom - bounds.top);
   return true;
 }
 

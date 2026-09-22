@@ -5,6 +5,7 @@ import { useFocusTrap } from "../hooks/useFocusTrap";
 import { reportGalleryDrawing } from "../lib/moderation";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/player-list.css";
 
 /** Report a drawing met in the Gallery (R-GAL-08).
 

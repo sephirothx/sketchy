@@ -6,6 +6,7 @@ import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
 import { socketRequestErrorMessage } from "../lib/socket";
 import { ui } from "../content/ui/index.ts";
 import { refusalText } from "../lib/refusals.ts";
+import "../styles/lazy/player-list.css";
 
 /** What went with the report, in one sentence.
 

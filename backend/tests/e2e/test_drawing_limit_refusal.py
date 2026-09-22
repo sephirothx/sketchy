@@ -37,14 +37,27 @@ INK = """
 
 
 async def _lower_the_clients_limit(context, patched: list[int]) -> None:
+    """Lower the limit wherever the bundle carries it.
+
+    Every script chunk is searched rather than the entry one: the drawing code
+    is fetched with the room since #475, and which chunk holds the constant is
+    the bundler's business. `patched` gets one total per context, counted once
+    per chunk however often the browser fetches it (a preload and the import
+    are two requests), so the assertion below still says it was found exactly
+    once."""
+    found: dict[str, int] = {}
+    patched.append(0)
+    slot = len(patched) - 1
+
     async def handle(route):
         response = await route.fetch()
         body = await response.text()
         body, count = re.subn(r"\b25e3\b", str(CLIENT_LIMIT), body)
-        patched.append(count)
+        found[route.request.url] = count
+        patched[slot] = sum(found.values())
         await route.fulfill(response=response, body=body)
 
-    await context.route(re.compile(r".*/assets/index-[^/]*\.js$"), handle)
+    await context.route(re.compile(r".*/assets/[^/]*\.js$"), handle)
 
 
 async def _start_turn(host_page, player_page):
@@ -64,7 +77,7 @@ async def _start_turn(host_page, player_page):
     drawing = host_page if await host_page.query_selector('.prompt-choices') else player_page
     viewing = player_page if drawing is host_page else host_page
     await drawing.click('.prompt-choices button:first-child')
-    await drawing.wait_for_selector('canvas.drawing-canvas')
+    await drawing.wait_for_selector('canvas.drawing-canvas.drawable')
     await viewing.wait_for_selector('canvas.drawing-canvas')
     return drawing, viewing
 

@@ -3,6 +3,7 @@ import {
   memo,
   useEffect,
   useImperativeHandle,
+  useLayoutEffect,
   useMemo,
   useRef,
 } from "react";
@@ -84,19 +85,29 @@ function createCanvas(
 
     useEffect(() => {
       const canvas = canvasRef.current;
-      const previewCanvas = previewCanvasRef.current;
-      if (!canvas || !previewCanvas) return;
+      if (!canvas) return;
       // Never read (`canvasSurface.ts`), so no `willReadFrequently`: the
       // browser may keep the canvas on the GPU, and only writes reach it.
       const context = canvas.getContext("2d");
-      const previewContext = previewCanvas.getContext("2d");
-      if (!context || !previewContext) return;
+      if (!context) return;
+      surfaceRef.current = createCanvasSurface(context);
+    }, []);
+
+    // The preview layer is painted by the drawer alone, so it is made the
+    // first time this client is the drawer (#986): a canvas nobody asks for a
+    // context has no backing store, and its 1.9 MB of pixels and 1.9 MB of
+    // buffer were being kept by every guesser in the room. Made before the
+    // browser paints, so the first stroke of the turn finds it ready; kept
+    // once made, since the next turn may be this client's again.
+    useLayoutEffect(() => {
+      if (!isDrawer || previewSurfaceRef.current) return;
+      const previewContext = previewCanvasRef.current?.getContext("2d");
+      if (!previewContext) return;
       previewContext.lineCap = "round";
       previewContext.lineJoin = "round";
-      surfaceRef.current = createCanvasSurface(context);
       previewSurfaceRef.current = createLayerSurface(previewContext);
       previewContextRef.current = previewContext;
-    }, []);
+    }, [isDrawer]);
 
     const renderer = useMemo(
       () => createProtocolRenderer(

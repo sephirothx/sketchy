@@ -80,7 +80,7 @@ async def _start_drawing_round(host_page: Page, guest_page: Page):
     guesser_page = guest_page if drawer_page is host_page else host_page
     if await drawer_page.query_selector(".prompt-choices button"):
         await drawer_page.click(".prompt-choices button:first-child")
-    await drawer_page.wait_for_selector("canvas.drawing-canvas")
+    await drawer_page.wait_for_selector("canvas.drawing-canvas.drawable")
     await guesser_page.wait_for_selector("canvas.drawing-canvas")
     return drawer_page, guesser_page
 

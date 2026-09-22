@@ -5,6 +5,7 @@ import { CheckIcon, PencilIcon, PlusIcon, XIcon } from "./icons";
 import { getFocusableElements, useEscapeLayer } from "../hooks/useFocusTrap";
 import type { PromptTag } from "../types";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/prompt-lists.css";
 
 interface TagPickerProps {
   /** The curated vocabulary, in its own order (R-LIST-18). */
