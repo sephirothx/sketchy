@@ -13,7 +13,9 @@ Two questions, priced separately:
 
 A real session cookie is sent, against a temporary SQLite database with one
 account signed in: resolving it is the work the gate skips, and measuring the
-gate without it would measure nothing.
+gate without it would measure nothing. Two figures per cell: the loop thread's
+own CPU, and the whole process's - which here also counts the client driving
+the requests, so the first is the one to compare.
 
 Usage:
   backend/.venv/bin/python benchmarks/session_middleware_cost.py --requests 2000
@@ -24,7 +26,7 @@ import argparse
 import asyncio
 import os
 import sys
-from time import process_time
+from time import process_time, thread_time
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
@@ -90,18 +92,22 @@ async def signed_in_database(path: str):
     return engine, factory, {cookie_name(): issued.token}
 
 
-async def cost(app: FastAPI, path: str, requests: int, cookies) -> float:
-    """Microseconds of loop CPU per request."""
+async def cost(app: FastAPI, path: str, requests: int, cookies) -> tuple[float, float]:
+    """Per request: microseconds of CPU on the loop's own thread, and of the
+    whole process - which here also counts the client driving it."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://bench", cookies=cookies
     ) as http:
         for _ in range(50):
             await http.get(path)
-        started = process_time()
+        started_loop, started_all = thread_time(), process_time()
         for _ in range(requests):
             answer = await http.get(path)
             assert answer.status_code == 200, answer.status_code
-        return (process_time() - started) * 1_000_000 / requests
+        return (
+            (thread_time() - started_loop) * 1_000_000 / requests,
+            (process_time() - started_all) * 1_000_000 / requests,
+        )
 
 
 async def main() -> None:
@@ -141,10 +147,16 @@ async def main() -> None:
              await cost(wrapped, static, arguments.requests, cookies))
         )
 
-        print(f"{'Stack':<30} | {'/api/whoami µs':>15} | {'/assets/… µs':>15}")
+        print(
+            f"{'Stack':<30} | {'/api/whoami µs':>15} | {'/assets/… µs':>15}"
+            "   (loop thread; process in brackets)"
+        )
         print("-" * 68)
         for name, api_cost, static_cost in rows:
-            print(f"{name:<30} | {api_cost:>15.1f} | {static_cost:>15.1f}")
+            print(
+                f"{name:<30} | {api_cost[0]:>8.1f} ({api_cost[1]:>5.0f}) | "
+                f"{static_cost[0]:>8.1f} ({static_cost[1]:>5.0f})"
+            )
     finally:
         await engine.dispose()
 

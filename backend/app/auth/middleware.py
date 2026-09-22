@@ -108,10 +108,12 @@ class SessionAuthMiddleware:
     ``GET /api/auth/me`` so that ordinary traffic - health checks, the lobby
     room-list poll - cannot create rows.
 
-    Only for `/api/` (#974). The cookie is `Path=/`, so the browser sends it
-    with the shell, the bundle, every font and icon: a cold page load resolved
-    the session a dozen times for files that are the same for everybody. Any
-    other path gets the state of a caller with no session, without asking.
+    Only for `/api/` (R-AUTH-25, #974). The cookie is `Path=/`, so the browser
+    sends it with the shell, the bundle, every font and icon: a cold page load
+    resolved the session a dozen times for files that are the same for
+    everybody. Any other path gets the state of a caller with no session -
+    including an empty token, so nothing downstream can read the cookie off a
+    request that was never resolved - without asking.
 
     Plain ASGI rather than `BaseHTTPMiddleware` (#974), which runs the rest of
     the app in a task of its own behind a memory stream: ~80 µs of event-loop

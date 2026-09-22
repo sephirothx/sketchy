@@ -49,6 +49,10 @@ async def env(monkeypatch):
             "user_id": None, "session_id": None, "auth_session": None,
             "banned_user_id": None, "client_ip_hash": None,
         }
+        # The cookie is `Path=/`, so it arrives with every asset; a request
+        # that resolves nothing must not carry it on to the route either
+        # (#974 fourth review).
+        assert request.state.session_token == ""
         return PlainTextResponse("console.log(1)")
 
     @app.get("/api/whoami")
@@ -103,6 +107,10 @@ def _layers(root) -> list[tuple[object, str]]:
         pending.append(getattr(layer, "middleware_stack", None))
         for route in getattr(layer, "routes", ()) or ():
             pending.append(getattr(route, "app", None))
+            # FastAPI attaches an included router as an `_IncludedRouter`
+            # route holding the router itself, so a layer added to one is
+            # behind `original_router` and nowhere else (#974 fourth review).
+            pending.append(getattr(route, "original_router", None))
         for middleware in getattr(layer, "user_middleware", ()) or ():
             cls = getattr(middleware, "cls", None)
             if isinstance(cls, type):
@@ -150,15 +158,33 @@ def _added_to_a_router(target):
     return outer
 
 
+def _inside_an_included_router(target):
+    from fastapi import APIRouter
+
+    inner = APIRouter()
+    inner.add_middleware = None  # a router has none; the probe rides its app
+    outer = FastAPI()
+    outer.include_router(inner)
+    included = next(
+        route for route in outer.routes if hasattr(route, "original_router")
+    )
+    included.original_router.app = _Probe(target)
+    return outer
+
+
 class _Probe(BaseHTTPMiddleware):
     pass
 
 
-@pytest.mark.parametrize("place", [_wrapped, _mounted, _added_to_a_router])
+@pytest.mark.parametrize(
+    "place", [_wrapped, _mounted, _added_to_a_router, _inside_an_included_router]
+)
 def test_the_walk_would_see_a_probe_anywhere_in_the_exported_stack(place, monkeypatch):
     """The check above is only worth having if it reaches the layers the bare
-    router does not contain: one wrapping the export, one inside a mount, and
-    one added to a router whose stack has not been built."""
+    router does not contain: one wrapping the export, one inside a mount, one
+    added to a router whose stack has not been built, and one behind an
+    included router - which is how every router in this application is
+    attached (#974 fourth review)."""
     import app.main as main_module
 
     monkeypatch.setattr(main_module, "app", place(main_module.app))
@@ -231,6 +257,12 @@ async def test_a_suspension_is_refused_on_a_path_holding_an_encoded_question_mar
     monkeypatch.setattr(middleware_module, "suspension_payload", payload)
 
     assert (await client.get("/api/whoami")).status_code == 403
-    # The hatch itself still opens, on the path that really is the hatch.
-    assert (await client.get("/api/auth/account%3Fx")).status_code == 403
+    # The hatches matched whole: cut at a decoded `?`, a path that only looks
+    # like one let a suspended caller through it.
+    for path in ("/api/auth/account", "/api/auth/logout"):
+        assert (await client.get(f"{path}%3Fx")).status_code == 403, path
+        assert (await client.get(path)).status_code != 403, path
+    # And the ones matched by prefix, which any suffix belongs to.
+    for path in ("/api/auth/data-exports", "/api/suspension/drawings/whatever"):
+        assert (await client.get(path)).status_code != 403, path
     assert (await client.delete("/api/auth/account")).status_code != 403
