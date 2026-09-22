@@ -218,8 +218,16 @@ async def _seat_colour_preference(ctx: HandlerContext, player, requested: bool) 
         return requested if player.is_anonymous else player.colorblind_safe_colors
 
 
+_activity_writes: set[asyncio.Task] = set()
+
+
 async def _record_player_activity(ctx: HandlerContext, player) -> None:
-    """Best-effort retention signal for a successfully seated player."""
+    """Best-effort retention signal for a successfully seated player.
+
+    Run on its own rather than awaited by the entry (#980): it is a retention
+    signal, nothing about the seat depends on it, and awaited it was a write
+    transaction between the seat and the acknowledgement of every join.
+    """
     if (
         ctx.user_repo is None
         or not player.user_id
@@ -260,7 +268,11 @@ async def _after_seating(ctx: HandlerContext, seated: list) -> None:
     a ban - waiting behind writes that have nothing to do with the seat.
     """
     for player in seated:
-        await _record_player_activity(ctx, player)
+        # Not awaited, so the acknowledgement does not wait for a retention
+        # signal (#980) - the same bargain `_record_last_seen` makes.
+        task = asyncio.create_task(_record_player_activity(ctx, player))
+        _activity_writes.add(task)
+        task.add_done_callback(_activity_writes.discard)
         await _warm_block_filter(ctx, player)
 
 

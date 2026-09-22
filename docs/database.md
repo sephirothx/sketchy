@@ -273,7 +273,9 @@ Notable design points:
   and no redundant schema-version column.
 - `last_active_at` changes **only** when a player takes or reconnects to a non-spectator
   room seat and when a game is persisted — deliberately not on page load, login, or an
-  ordinary profile write, because it drives retention.
+  ordinary profile write, because it drives retention. The seat's stamp is one `UPDATE`,
+  written after the join is acknowledged rather than before (#980): nothing about the
+  seat depends on it, and a lost stamp costs a retention clock a few seconds.
 
 ### `auth_sessions`
 One revocable signed-in device.

@@ -61,8 +61,12 @@ async def resolve_identity(
     user_id = session.get("user_id") if session else None
 
     user = None
+    stored_colorblind: bool | None = None
     if user_id and ctx.user_repo is not None:
-        user = await ctx.user_repo.get_by_id(user_id)
+        # The account and its colour-safe preference in one read where the
+        # repository can (#980): a registered seat needs both, and read one
+        # after the other they were two round trips before the answer.
+        user, stored_colorblind = await ctx.user_repo.get_seat_account(user_id)
 
     if user is not None and not user.is_anonymous and user.username:
         return PlayerIdentity(
@@ -71,11 +75,15 @@ async def resolve_identity(
             is_anonymous=False,
             name_color=user.name_color,
             avatar_key=None if user.is_anonymous else user.avatar_key,
-            colorblind_safe_colors=await resolve_colorblind_safe_preference(
-                ctx,
-                user_id=user.id,
-                is_anonymous=False,
-                requested=requested_colorblind_safe_colors,
+            colorblind_safe_colors=(
+                stored_colorblind
+                if stored_colorblind is not None
+                else await resolve_colorblind_safe_preference(
+                    ctx,
+                    user_id=user.id,
+                    is_anonymous=False,
+                    requested=requested_colorblind_safe_colors,
+                )
             ),
         )
 
