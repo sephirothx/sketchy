@@ -12,6 +12,7 @@ import { ChevronDownIcon, ChevronRightIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { chatLineText } from "../lib/announcements.ts";
 import { ui } from "../content/ui/index.ts";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import "../styles/lazy/toolbar.css";
 
 interface RoomChatPanelProps {
@@ -67,6 +68,7 @@ export function RoomChatPanel({
   guessBreakdown = null,
   guessPlace = null,
 }: RoomChatPanelProps) {
+  const locale = useLocaleRerender();
   recordRender("chat");
   const inputPurpose = mode === "playing" ? "guess" : "chat";
   const [previousInputPurpose, setPreviousInputPurpose] = useState(inputPurpose);
@@ -339,7 +341,7 @@ export function RoomChatPanel({
               {mode === "waiting" ? ui.roomChatPanel.sayHelloBeforeTheGame : ui.roomChatPanel.noMessagesYet}
             </p>
           ) : (
-            <ChatMessageList messages={messages} players={players} />
+            <ChatMessageList messages={messages} players={players} locale={locale} />
           )}
         </div>
         {isScrolledUp && unreadCount > 0 && (
@@ -466,9 +468,13 @@ one. */
 const ChatMessageList = memo(function ChatMessageList({
   messages,
   players,
+  locale,
 }: {
   messages: ChatMessage[];
   players: PlayerInfo[];
+  /** Compared by memo so a language switch re-renders the lines: an
+      announcement's words are read from `ui` at render. */
+  locale: string;
 }) {
   const byId = useMemo(() => new Map(players.map((player) => [player.playerId, player])), [players]);
   return messages.map((message) => {
@@ -479,6 +485,7 @@ const ChatMessageList = memo(function ChatMessageList({
         message={message}
         isAnonymous={player?.isAnonymous}
         nameColor={message.nameColor ?? player?.nameColor ?? undefined}
+        locale={locale}
       />
     );
   });
@@ -492,6 +499,8 @@ const ChatLine = memo(function ChatLine({
   message: ChatMessage;
   isAnonymous: boolean | undefined;
   nameColor: string | undefined;
+  /** Unused in the body; there so memo sees a language switch (R-I18N-03). */
+  locale: string;
 }) {
   recordRender("chatLine");
   return (
