@@ -277,8 +277,9 @@ Notable design points:
   write; the seat's is one `UPDATE`,
   written after the join is acknowledged rather than before (#980): nothing about the
   seat depends on it. A stamp that fails is logged and dropped, so `last_active_at` keeps
-  its previous value until the account's next seat — which for a player who seldom plays
-  can be weeks, bringing the retention sweep that much closer.
+  its previous value until the account's next seat or its next persisted game, whichever
+  comes first — which for a player who seldom plays can be weeks, bringing the retention
+  sweep that much closer.
 
 ### `auth_sessions`
 One revocable signed-in device.

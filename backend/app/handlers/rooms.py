@@ -797,7 +797,11 @@ async def _seat_in_room(
     # in this room, just confirm it rather than reprocessing the join.
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
-        already_joined.colorblind_safe_colors = await _seat_colour_preference(
+        # The same merged read as the rebind below (#980 third review): this
+        # branch is the one every soft rebind walks, and it asked for the
+        # settings row on its own. The seat's colour is left alone here, as it
+        # always was - a heartbeat confirms a seat, it does not re-identify it.
+        _colour, already_joined.colorblind_safe_colors = await _rebound_account(
             ctx, already_joined, payload.colorblind_safe_colors
         )
         already_joined.sid = sid
@@ -981,7 +985,12 @@ async def _rebound_account(
         )
     except EntryTimedOut:
         return None, player.colorblind_safe_colors
-    colour = normalize_name_color(account.name_color) if account else None
+    if account is None:
+        # No account row at all - erased while the seat was empty. There is
+        # nothing stored to prefer and nothing to read a second time for, so
+        # the seat keeps what it carries, as it does when the read stalls.
+        return None, player.colorblind_safe_colors
+    colour = normalize_name_color(account.name_color)
     if stored is None:
         # A repository that does not read the preference with the account.
         return colour, await _seat_colour_preference(ctx, player, requested)

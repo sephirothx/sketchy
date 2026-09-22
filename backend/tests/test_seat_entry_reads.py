@@ -98,6 +98,9 @@ async def _entry_env():
             row.username = "CarefulPlayer"
             row.password_hash = "x"
             row.state = "registered"
+            # A stored colour, so an assertion about the colour the rebind
+            # returns is about something (#980 third review).
+            row.name_color = "#4f7cff"
             session.add(UserSettings(user_id=UUID(account.id), colorblind_safe_colors=True))
     from app.auth.sessions import device_label_from_user_agent
 
@@ -154,9 +157,24 @@ async def test_a_signed_in_handshake_and_a_registered_seat_cost_what_they_should
         handshake = [s for s in statements if not s.lstrip().upper().startswith(("BEGIN", "COMMIT", "ROLLBACK"))]
         statements.clear()
 
+        # The stamp is held until the acknowledgement is in hand, so "after
+        # the answer" is a fact about this run rather than about which awaits
+        # happened not to yield (#980 third review): with a 50 ms warm-up in
+        # the handler the write used to land in the middle of it.
+        release = asyncio.Event()
+        real_stamp = users.touch_last_active
+
+        async def stalled_stamp(user_id):
+            await release.wait()
+            return await real_stamp(user_id)
+
+        users.touch_last_active = stalled_stamp
         answer = await sio.handlers["/"]["create_room"]("sid-1", {"nickname": "ignored", "name": "Room"})
         assert answer["ok"] is True
         seat_before_stamp = list(statements)
+        assert not [s for s in seat_before_stamp if s.lstrip().upper().startswith("UPDATE USERS")]
+        release.set()
+        users.touch_last_active = real_stamp
         await asyncio.gather(*list(set(rooms_handlers._activity_writes) - before_tasks["activity"]))
         stamp = statements[len(seat_before_stamp):]
 
@@ -241,21 +259,94 @@ async def test_a_guest_seat_keeps_the_preference_it_asked_for():
 async def test_a_returning_registered_seat_reads_its_account_once():
     """The rebind path asked for the settings row and the account one after
     the other - the pair the entry path merged, on the path a reconnect herd
-    walks (#980 review)."""
-    from app.handlers.rooms import _rebound_account
+    walks (#980 review).
 
+    Driven through `join_room`, not through the helper: calling the helper
+    directly proves the helper, and the call site can be put back to two
+    serial reads with every test still passing (#980 third review).
+    """
     factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
     try:
         room = room_manager.create_room(name="Back")
         player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
         player.is_anonymous = False
+        player.name_color = "#111111"
+        player.colorblind_safe_colors = False
+        player.connected = False
+        player.sid = "sid-gone"
+        await sio.save_session("sid-back", {"user_id": account.id})
+
+        statements = _count_statements(engine)
+        answer = await sio.handlers["/"]["join_room"](
+            "sid-back",
+            {"roomId": room.id, "nickname": "ignored", "colorblindSafeColors": True},
+        )
+
+        assert answer["ok"] is True
+        assert player.colorblind_safe_colors is True, "the stored preference, not the payload"
+        assert player.name_color == "#4f7cff", "the colour stored on the account"
+        reads = [s for s in statements if s.lstrip().startswith("SELECT users.")]
+        assert len(reads) == 1 and "user_settings" in reads[0], reads
+        assert not any(s.lstrip().startswith("SELECT user_settings.") for s in statements)
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_seat_confirming_itself_reads_the_account_once_too():
+    """The `already_joined` branch every soft rebind walks - a heartbeat, a
+    tab coming back to the foreground - read the settings row on its own
+    (#980 third review)."""
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        room = room_manager.create_room(name="Still here")
+        player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        player.is_anonymous = False
+        player.sid = "sid-here"
+        await sio.save_session(
+            "sid-here",
+            {"user_id": account.id, "room_id": room.id, "player_id": player.id},
+        )
+
+        statements = _count_statements(engine)
+        answer = await sio.handlers["/"]["join_room"](
+            "sid-here",
+            {"roomId": room.id, "nickname": "ignored", "colorblindSafeColors": False, "soft": True},
+        )
+
+        assert answer["ok"] is True
+        assert player.colorblind_safe_colors is True, "the stored preference, not the payload"
+        assert not any(s.lstrip().startswith("SELECT user_settings.") for s in statements)
+        reads = [s for s in statements if s.lstrip().startswith("SELECT users.")]
+        assert len(reads) <= 1 and all("user_settings" in read for read in reads), reads
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_seat_whose_account_is_gone_keeps_what_it_carries():
+    """`(None, None)` means two different things - a repository that does not
+    read the preference with the account, and an account that is not there.
+    Conflated, a rebind for an erased account opened a second session to read
+    settings that do not exist (#980 third review)."""
+    from app.handlers.rooms import _rebound_account
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        room = room_manager.create_room(name="Gone")
+        player = room_manager.add_player(room, "Vanished", user_id=account.id)
+        player.is_anonymous = False
+        player.colorblind_safe_colors = True
+
+        async def no_such_account(_user_id):
+            return None, None
+
+        ctx.user_repo.get_seat_account = no_such_account
         statements = _count_statements(engine)
         colour, colorblind = await _rebound_account(ctx, player, requested=False)
-        assert colorblind is True, "the stored preference, not the payload"
-        reads = [s for s in statements if s.lstrip().startswith("SELECT users.")]
-        assert len(reads) == 1 and "user_settings" in reads[0]
-        assert not any(s.lstrip().startswith("SELECT user_settings.") for s in statements)
-        assert colour == player.name_color or colour is None
+
+        assert (colour, colorblind) == (None, True), "what the seat carries"
+        assert statements == [], "and no second read for settings that are not there"
     finally:
         await ctx.timers.close()
         await engine.dispose()
