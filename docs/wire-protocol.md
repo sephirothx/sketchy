@@ -1972,7 +1972,9 @@ frame once, on a worker thread, into a byte-bounded in-process LRU (32 MiB,
 a later fetch asks the route's own access query — the same one the `ETag` is answered
 from — and is then served the held bytes, `Content-Encoding: gzip` with `Vary:
 Accept-Encoding` when the client accepts gzip (`q=0` refuses) and the frame is 500 bytes
-or more, as they are otherwise. Only the bytes are shared, never the answer to who may have them. The decode-only golden
+or more. A smaller frame is handed over as it is - the held copy is not worth the
+header - and what the response middleware then does with it is its own business: it has
+a 500-byte minimum of its own, which a body that arrives whole is under. Only the bytes are shared, never the answer to who may have them. The decode-only golden
 blobs live in [`fixtures/stored_drawings_v1.json`](../fixtures/stored_drawings_v1.json)
 and [`fixtures/stored_drawings_v2.json`](../fixtures/stored_drawings_v2.json), one file a
 format: entries may be added, never removed or changed. On PostgreSQL the payload columns are

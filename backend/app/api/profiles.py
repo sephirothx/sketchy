@@ -293,19 +293,28 @@ async def _decode_once(
         fill.add_done_callback(lambda task: task.cancelled() or task.exception())
         _fills[key] = fill
     try:
-        await asyncio.shield(fill)
+        # The fill's own answer, not whatever the cache ended up holding: a
+        # decode the cache declined - too large for it, or a checksum that
+        # changed while it ran - is still this caller's drawing (#979 third
+        # review). Awaited plainly: a task is not cancelled by a waiter going
+        # away, so no `shield` is needed, and shielding here logged an error
+        # for every routine disconnect whose fill then refused.
+        return await fill
+    except asyncio.CancelledError:
+        if started_it or not fill.cancelled():
+            # Our own cancellation, not the fill's: this caller is going away.
+            raise
     except Exception:
         if started_it:
             raise
-        # Somebody else's refusal says nothing about this caller's access.
-        pass
+    # Somebody else's refusal, or a fill cancelled from outside, says nothing
+    # about this caller's access - a participant may still have a drawing the
+    # Gallery may not (R-GAL-09). Read what it left, and ask again if it left
+    # nothing.
     cached = drawing_cache.get(key)
     if cached is not None:
         return cached[0], cached[1], checksum
-    if started_it:
-        raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-    # The shared fill found nothing; ask with this caller's own query.
-    return await _fill_cache(_cache_key(checksum), turn_id, drawing_of, store=False)
+    return await _fill_cache(key, turn_id, drawing_of, store=False)
 
 
 async def _fill_cache(

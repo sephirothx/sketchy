@@ -1298,6 +1298,195 @@ async def test_a_fill_survives_the_caller_that_started_it_going_away(env):
     assert profiles._fills == {}
 
 
+async def test_one_decode_serves_every_door_to_the_same_drawing(env, monkeypatch):
+    """The cache is keyed by the drawing's checksum, not by the route that
+    asked: the participant page, a pinned shelf and the Gallery all serve the
+    bytes the first of them decoded (#979 third review - no test outside the
+    participant route touched the cache)."""
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+
+    decodes: list[int] = []
+    real_decode = profiles.stored_drawing_wire_payload
+    monkeypatch.setattr(
+        profiles,
+        "stored_drawing_wire_payload",
+        lambda *args, **kwargs: (decodes.append(1), real_decode(*args, **kwargs))[1],
+    )
+
+    participant = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+    pinned = await http.get(f"/api/users/{bob.id}/pins/{turn_id}/drawing")
+    gallery = await http.get(f"/api/gallery/{turn_id}/drawing")
+
+    assert [participant.status_code, pinned.status_code, gallery.status_code] == [200, 200, 200]
+    assert participant.content == pinned.content == gallery.content == blob
+    assert decodes == [1], "decoded once, served through three doors"
+
+
+async def test_a_door_that_may_not_see_it_is_refused_while_the_others_are_served(
+    env, monkeypatch
+):
+    """Sharing bytes is not sharing access. The Gallery's own query answers
+    for the Gallery; a participant keeps a drawing the Gallery may not show
+    (R-GAL-09)."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+
+    served = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+    assert served.status_code == 200 and served.content == blob
+
+    async def hidden_from_the_gallery(*_args, **_kwargs):
+        return None
+
+    # The gate is the checksum query, which every door runs before the cache
+    # is consulted at all.
+    monkeypatch.setattr(history, "get_gallery_drawing_checksum", hidden_from_the_gallery)
+    monkeypatch.setattr(history, "get_gallery_drawing", hidden_from_the_gallery)
+    assert (await http.get(f"/api/gallery/{turn_id}/drawing")).status_code == 404
+    again = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+    assert again.status_code == 200 and again.content == blob
+
+
+async def test_the_starter_of_a_fill_the_cache_declined_still_gets_its_drawing(
+    env, monkeypatch
+):
+    """The fill's own answer, not whatever the cache ended up holding: a
+    decode the cache declined - too large for it, or a checksum that changed
+    while it ran - was answered as a missing drawing (#979 third review)."""
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    monkeypatch.setattr(profiles.drawing_cache, "put", lambda *args, **kwargs: None)
+
+    served = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+
+    assert served.status_code == 200
+    assert served.content == blob
+
+
+async def test_the_starter_of_a_refused_fill_is_refused_and_a_waiter_asks_again(env):
+    """The refusal belongs to the query it came from: the caller whose own
+    read found nothing is refused, and whoever was waiting behind it asks
+    again with its own (R-GAL-09). At the seam, so which caller started the
+    fill is not left to chance."""
+    import asyncio
+
+    import pytest
+
+    import app.api.profiles as profiles
+    from app.api.errors import Refusal
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    checksum = detail.checksum_sha256
+    release = asyncio.Event()
+
+    async def hidden_from_the_starter():
+        await release.wait()
+        return None
+
+    async def visible_to_the_waiter():
+        return detail
+
+    starter = asyncio.create_task(
+        profiles._decode_once(checksum, turn_id, hidden_from_the_starter)
+    )
+    await asyncio.sleep(0.02)
+    waiter = asyncio.create_task(
+        profiles._decode_once(checksum, turn_id, visible_to_the_waiter)
+    )
+    await asyncio.sleep(0.02)
+    release.set()
+
+    with pytest.raises(Refusal) as refused:
+        await asyncio.wait_for(starter, timeout=5)
+    assert refused.value.status_code == 404
+    wire, _gzipped, served = await asyncio.wait_for(waiter, timeout=5)
+    assert wire == blob and served == checksum
+
+
+async def test_the_cache_is_keyed_by_the_checksum_the_bytes_were_verified_against(env):
+    """The row may have changed between the access query and the read, so the
+    entry is keyed by the checksum the decode verified - not by the key the
+    caller asked under, which would serve one drawing's bytes for another's
+    checksum (#979 third review)."""
+    import app.api.profiles as profiles
+
+    _http, users, history, _factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    asked_under = "0" * 64  # what the checksum query answered a moment ago
+
+    wire, _gzipped, served = await profiles._decode_once(
+        asked_under, turn_id, lambda: _answer(detail)
+    )
+
+    assert wire == blob
+    assert served == detail.checksum_sha256
+    assert profiles.drawing_cache.get(profiles._cache_key(detail.checksum_sha256)) is not None
+    assert profiles.drawing_cache.get(profiles._cache_key(asked_under)) is None
+
+
+async def _answer(value):
+    return value
+
+
+def test_the_cached_copy_is_gzipped_at_the_documented_level():
+    """Made once, off the loop, and kept - so it is worth more than the level
+    the per-request middleware would use."""
+    import gzip
+
+    import app.api.profiles as profiles
+
+    assert profiles.DRAWING_GZIP_LEVEL == 6
+    blob = _skch()
+    wire, gzipped = profiles._decoded_drawing(blob, None)
+    assert gzipped == gzip.compress(wire, compresslevel=6, mtime=0)
+
+
+def test_the_cache_size_is_exposed_to_the_scrape():
+    """An in-memory cache with no gauge is a memory ceiling nobody can see:
+    the wiring in `main` is what puts it in the scrape (#979 third review)."""
+    import app.main  # noqa: F401 - imported for the wiring it performs
+    import app.api.profiles as profiles
+    from app.services.telemetry import telemetry
+
+    assert telemetry.sources.drawing_cache_bytes is not None
+    assert telemetry.sources.drawing_cache_bytes() == profiles.drawing_cache.bytes
+    assert any(
+        line.startswith("sketchy_drawing_cache_bytes")
+        for line in telemetry.prometheus_lines()
+    )
+
+
 async def test_the_cache_counter_says_which_it_was(env):
     from app.services.telemetry import telemetry
 
