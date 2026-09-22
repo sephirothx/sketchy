@@ -1982,7 +1982,9 @@ cd backend && .venv/bin/python -m app.services.drawing_storage
 
 Base path `/api` unless noted. `SessionAuthMiddleware`
 ([`backend/app/auth/middleware.py`](../backend/app/auth/middleware.py)) resolves the
-hashed session cookie for every request. Role-gated endpoints answer **404**, not 403,
+hashed session cookie for every request under `/api/`; any other path (the application
+shell, its assets, `/metrics`) is answered as a caller with no session, without a
+database read (#974). Role-gated endpoints answer **404**, not 403,
 to anyone without the role — the account menu decides what is *shown* and nothing more.
 
 Every response carries an `X-Request-ID`: the UUID the caller sent in the request

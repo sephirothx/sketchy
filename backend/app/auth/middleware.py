@@ -6,9 +6,9 @@ import hashlib
 import hmac
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth.bans import suspension_payload
 from app.auth.rate_limit import client_key, get_ip_hash_secret
@@ -94,16 +94,32 @@ def clear_session_cookie(response: Response, *, secure: bool) -> None:
     )
 
 
-class SessionAuthMiddleware(BaseHTTPMiddleware):
+#: Where a session means anything. Everything else this app answers - the
+#: application shell, its assets, `/metrics` with its bearer token - is the
+#: same for every caller.
+SESSION_PATH_PREFIX = "/api/"
+
+
+class SessionAuthMiddleware:
     """Resolve the caller's user id from the session cookie.
 
     Only ever reads. Guest accounts are provisioned exclusively by
     ``GET /api/auth/me`` so that ordinary traffic - health checks, the lobby
     room-list poll - cannot create rows.
+
+    Only for `/api/` (#974). The cookie is `Path=/`, so the browser sends it
+    with the shell, the bundle, every font and icon: a cold page load resolved
+    the session a dozen times for files that are the same for everybody. Any
+    other path gets the state of a caller with no session, without asking.
+
+    Plain ASGI rather than `BaseHTTPMiddleware` (#974), which runs the rest of
+    the app in a task of its own behind a memory stream: 145 µs of event-loop
+    time on every request, measured, on the loop every room shares - and it
+    buffers a streamed body.
     """
 
-    def __init__(self, app, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        super().__init__(app)
+    def __init__(self, app: ASGIApp, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self.app = app
         self._session_factory = session_factory
         # The deployment's HMAC key, read once and then held. Without the
         # cache this would be a database round trip per request purely to
@@ -142,7 +158,23 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             hashlib.sha256,
         ).hexdigest()
 
-    async def dispatch(self, request: Request, call_next):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
+        if not request.url.path.startswith(SESSION_PATH_PREFIX):
+            _set_state(request, token="", ip_hash=None, session=None, banned_user_id=None)
+            await self.app(scope, receive, send)
+            return
+        refusal = await self._resolve(request)
+        if refusal is not None:
+            await refusal(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+    async def _resolve(self, request: Request) -> Response | None:
+        """Fill the request's session state; a refusal to send instead, if any."""
         raw_token = request.cookies.get(cookie_name(), "")
         request.state.session_token = raw_token
         # Computed once here and left on the request, for every route that
@@ -188,9 +220,21 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 ),
                 status_code=403,
             )
-        auth_session = resolution.session
-        request.state.auth_session = auth_session
-        request.state.session_id = auth_session.id if auth_session else None
-        request.state.user_id = auth_session.user_id if auth_session else None
-        request.state.banned_user_id = resolution.banned_user_id
-        return await call_next(request)
+        _set_state(
+            request,
+            token=raw_token,
+            ip_hash=request.state.client_ip_hash,
+            session=resolution.session,
+            banned_user_id=resolution.banned_user_id,
+        )
+        return None
+
+
+def _set_state(request: Request, *, token: str, ip_hash: str | None, session, banned_user_id) -> None:
+    """What every route reads off the request about its caller."""
+    request.state.session_token = token
+    request.state.client_ip_hash = ip_hash
+    request.state.auth_session = session
+    request.state.session_id = session.id if session else None
+    request.state.user_id = session.user_id if session else None
+    request.state.banned_user_id = banned_user_id
