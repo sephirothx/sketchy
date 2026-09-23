@@ -67,6 +67,12 @@ def _note_door_refusal(command: str, code: ErrorCode, frame_result: str, args: t
 
 logger = logging.getLogger("sketchy.handlers.context")
 
+#: How many turns of the loop the shutdown gives the deferred tasks to reach
+#: their first await before cancelling them. Each turn can uncover one more
+#: layer - a teardown defers a staging - and a handful is far more than the
+#: two the code produces.
+CLEANUP_SETTLE_TURNS = 8
+
 #: How long the shutdown waits for the cleanups it has cancelled. A task that
 #: swallows its cancellation cannot be made to stop, and a shutdown that waits
 #: for one for ever is a shutdown that does not happen (#976 sixth review).
@@ -614,12 +620,19 @@ class HandlerContext:
                     )
         if not self.room_cleanups:
             return
-        # One turn of the loop first, so a task deferred at the deadline has
-        # reached its first await: a coroutine cancelled before it has run a
-        # line never enters its own `try`, so the staging it was going to do
-        # is lost *and* uncounted - which is the half R-HIST-03 promises
-        # (#976 seventh review).
-        await asyncio.sleep(0)
+        # Turned over until nothing new appears, so every task has reached
+        # its first await: a coroutine cancelled before it has run a line
+        # never enters its own `try`, so the staging it was going to do is
+        # lost *and* uncounted - which is the half R-HIST-03 promises (#976
+        # seventh review). One turn is not enough, because a teardown's own
+        # first step is what defers the staging, and that one would then be
+        # cancelled unstepped in its turn (#976 eighth review). Bounded, so a
+        # cleanup that defers a successor every turn cannot hold this open.
+        for _ in range(CLEANUP_SETTLE_TURNS):
+            waiting = len(self.room_cleanups)
+            await asyncio.sleep(0)
+            if len(self.room_cleanups) <= waiting:
+                break
         # Bounded in turn: a cleanup that swallows its cancellation must not
         # hold the shutdown open for ever, and one that defers *another* on
         # its way out must not keep this going round.

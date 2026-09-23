@@ -995,7 +995,7 @@ def test_the_cleanups_are_drained_before_the_handoff_worker_stops():
     # cancelled, a replay the pass below abandoned - are written before the
     # engine goes away. `stop_metrics_loop(None, ...)` returned on its first
     # line, so the flush has to be the call itself (#976 seventh review).
-    flush = source.index("await flush_events(async_session_factory)")
+    flush = source.index("await flush_runtime_events(async_session_factory)")
     assert flush > source.index("finished_game_worker.drain()")
     assert flush < source.index("await async_engine.dispose()")
 
@@ -1146,4 +1146,62 @@ async def test_the_cancel_phase_gives_up_rather_than_holding_the_shutdown(caplog
     assert "1 left" in caplog.text
     # And the bound it gave up after is the shipped one: raising it to a day
     # passed every test (#976 seventh review).
+    assert real_bound == 5
+
+
+async def test_a_staging_deferred_by_an_unstepped_teardown_counts_its_loss():
+    """One turn of the loop is not enough: a teardown that has not run either
+    defers its staging on its own first step, and that staging would then be
+    cancelled before running a line - stopped, but uncounted (#976 eighth
+    review)."""
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    steps: list[str] = []
+
+    async def staging():
+        try:
+            steps.append("started")
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            steps.append("counted the loss")
+            raise
+
+    async def teardown():
+        # Its own first step is where the staging appears, exactly as
+        # `_retire_removed_room` defers one from `record_abandoned_game`.
+        ctx.defer_cleanup(staging())
+        await asyncio.sleep(5)
+
+    ctx.defer_cleanup(teardown())  # neither task has been stepped
+    await asyncio.wait_for(ctx.drain_room_cleanups(0), timeout=5)
+
+    assert steps == ["started", "counted the loss"], steps
+    assert ctx.room_cleanups == set()
+
+
+async def test_the_last_flush_gives_up_rather_than_holding_the_shutdown(caplog):
+    """A database that accepts a connection and never answers must not hold
+    the process open, and a flush that fails must say so rather than vanish
+    into a bare `suppress` (#976 eighth review)."""
+    import logging
+
+    import app.main as main_module
+
+    async def never_answers(_factory):
+        await asyncio.sleep(3600)
+
+    real_flush = main_module.flush_events
+    real_bound = main_module.SHUTDOWN_FLUSH_SECONDS
+    main_module.flush_events = never_answers
+    main_module.SHUTDOWN_FLUSH_SECONDS = 0.05
+    try:
+        with caplog.at_level(logging.WARNING):
+            await asyncio.wait_for(main_module.flush_runtime_events(object()), timeout=5)
+    finally:
+        main_module.flush_events = real_flush
+        main_module.SHUTDOWN_FLUSH_SECONDS = real_bound
+
+    assert "left unflushed at shutdown" in caplog.text
     assert real_bound == 5

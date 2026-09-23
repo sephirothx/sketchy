@@ -3,7 +3,6 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import asyncio
-import contextlib
 import logging
 import hashlib
 import json
@@ -577,6 +576,29 @@ async def adopt_stored_settings() -> None:
     shutdown_coordinator.pause(await read_paused(async_session_factory))
 
 
+#: What the shutdown gives its last flush of runtime events. A database that
+#: accepts a connection and never answers must not hold the process open
+#: (#976 eighth review).
+SHUTDOWN_FLUSH_SECONDS = 5
+
+
+async def flush_runtime_events(session_factory) -> None:
+    """Write the buffered runtime events, bounded, saying so if it fails.
+
+    These are the observations describing the shutdown itself - a staging the
+    drain cancelled, a replay it abandoned - so losing them silently is losing
+    the record of what the shutdown cost.
+    """
+    try:
+        await asyncio.wait_for(
+            flush_events(session_factory), timeout=SHUTDOWN_FLUSH_SECONDS
+        )
+    except Exception:
+        logging.getLogger("sketchy.main").warning(
+            "runtime events left unflushed at shutdown", exc_info=True
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     # Refused at startup rather than at the first finished game.
@@ -745,8 +767,7 @@ async def lifespan(_app: FastAPI):
         # review): everything recorded since the flush above - a staging the
         # drain cancelled, a replay this shutdown abandoned - is in the buffer
         # until this runs, and `dispose()` below would throw it away.
-        with contextlib.suppress(Exception):
-            await flush_events(async_session_factory)
+        await flush_runtime_events(async_session_factory)
         await async_engine.dispose()
 
 
