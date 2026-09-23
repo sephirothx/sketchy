@@ -2008,6 +2008,9 @@ DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench \
 # The stored drawing format, frame by frame: bytes, ratio, p95 encode/decode (#547)
 backend/.venv/bin/python benchmarks/drawing_compression.py
 
+# CPU per drawing fetch - the loop's thread and the process - cold against warm (#979)
+backend/.venv/bin/python benchmarks/drawing_cache_fetch.py --fetches 40
+
 # What it saves in PostgreSQL per game: heap, TOAST, WAL, and one read (disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/drawing_store_footprint.py --games 50

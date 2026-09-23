@@ -1,6 +1,8 @@
 """The public profile endpoints: stats, history pages, and who may see detail."""
 from __future__ import annotations
 
+import contextlib
+
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -1067,3 +1069,710 @@ async def test_the_validator_is_the_same_gzipped_and_a_gzipped_copy_revalidates(
         assert plain.headers["etag"] == gzipped.headers["etag"]
         revalidated = await gz.get(url, headers={"Accept-Encoding": "gzip", "If-None-Match": gzipped.headers["etag"]})
         assert revalidated.status_code == 304 and revalidated.content == b""
+
+
+async def test_a_drawing_fetched_again_is_neither_read_nor_decoded_again(env, monkeypatch):
+    """#979: every fetch decoded the stored blob and gzipped it on the loop, for
+    bytes that are the same for everybody who may see them."""
+    import gzip
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    decodes: list[int] = []
+    real_decode = profiles.stored_drawing_wire_payload
+
+    def counted(*args, **kwargs):
+        decodes.append(1)
+        return real_decode(*args, **kwargs)
+
+    monkeypatch.setattr(profiles, "stored_drawing_wire_payload", counted)
+    blob_reads: list[int] = []
+    real_read = history.get_turn_drawing
+
+    async def counted_read(*args, **kwargs):
+        blob_reads.append(1)
+        return await real_read(*args, **kwargs)
+
+    monkeypatch.setattr(history, "get_turn_drawing", counted_read)
+    url = f"/api/games/{game_id}/turns/{turn_id}/drawing"
+    for signed_in in (ann.id, bob.id):
+        await sign_in_as(http, factory, signed_in)
+        response = await http.get(url, headers={"Accept-Encoding": "gzip"})
+        assert response.status_code == 200
+        assert response.content == blob
+        assert response.headers["content-encoding"] == "gzip"
+        assert response.headers["vary"] == "Accept-Encoding"
+    assert decodes == [1] and blob_reads == [1]
+    # And a client that takes no encoding gets the bytes as they are.
+    plain = await http.get(url, headers={"Accept-Encoding": "identity"})
+    assert "content-encoding" not in plain.headers and plain.content == blob
+    assert profiles.drawing_cache.bytes == len(blob) + len(gzip.compress(blob, 6, mtime=0))
+    # Keyed by the wire version as well as the checksum, as the ETag is.
+    [key] = list(profiles.drawing_cache._entries)
+    assert key.endswith(f"-w{profiles.CANVAS_HISTORY_VERSION}")
+
+
+async def test_a_warm_cache_answers_nobody_the_drawing_was_not_for(env):
+    """Only the bytes are shared: who may have them is asked every time."""
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    outsider = await users.create_anonymous(display_name="Cid")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_skch())
+    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    await sign_in_as(http, factory, ann.id)
+    assert (await http.get(url)).status_code == 200
+    await sign_in_as(http, factory, outsider.id)
+    assert (await http.get(url)).status_code == 404
+
+
+def test_the_drawing_cache_is_bounded_in_bytes_and_forgets_the_least_recent():
+    from app.api.profiles import WireDrawingCache
+
+    cache = WireDrawingCache(max_bytes=100)
+    cache.put("a", b"x" * 30, b"y" * 10)
+    cache.put("b", b"x" * 30, b"y" * 10)
+    assert cache.get("a") is not None  # a is now the most recent
+    cache.put("c", b"x" * 30, b"y" * 10)
+    assert (cache.get("a"), cache.get("b") is None, cache.get("c") is not None) == (
+        (b"x" * 30, b"y" * 10), True, True,
+    )
+    assert cache.bytes == 80
+    cache.put("huge", b"x" * 200, b"")
+    assert cache.get("huge") is None and cache.bytes == 80
+
+
+
+def _large_frame() -> bytes:
+    """A drawing well past the 500-byte floor under which none is gzipped."""
+    from app.canvas_history import PackedCanvasHistory
+
+    history = PackedCanvasHistory()
+    for stroke in range(6):
+        history.append_path(
+            [((step % 50) / 50, (step // 50 + stroke) / 10) for step in range(120)],
+            color=0x223344,
+            width=3,
+        )
+    return history.binary_payload()
+
+
+async def test_a_small_drawing_goes_out_as_it_is_and_vary_rides_only_the_gzip(env):
+    """Gzip framing costs more than it saves on a few hundred bytes; and a
+    `Vary` on the identity answer was repeated by the response middleware."""
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    small = _skch()
+    assert len(small) < 500
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=small)
+    await sign_in_as(http, factory, ann.id)
+    response = await http.get(
+        f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing",
+        headers={"Accept-Encoding": "gzip"},
+    )
+    assert response.content == small
+    assert "content-encoding" not in response.headers and "vary" not in response.headers
+
+
+async def test_gzip_refused_with_q_zero_is_not_sent(env):
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_large_frame())
+    await sign_in_as(http, factory, ann.id)
+    response = await http.get(
+        f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing",
+        headers={"Accept-Encoding": "gzip;q=0, identity"},
+    )
+    assert response.status_code == 200 and "content-encoding" not in response.headers
+
+
+async def test_concurrent_misses_for_one_drawing_decode_it_once(env, monkeypatch):
+    """The This week shelf right after a restart: everybody asks at once."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    decodes: list[int] = []
+    real_decode = profiles.stored_drawing_wire_payload
+
+    def slow_decode(*args, **kwargs):
+        decodes.append(1)
+        import time
+
+        time.sleep(0.05)  # on the worker thread, so the others arrive meanwhile
+        return real_decode(*args, **kwargs)
+
+    monkeypatch.setattr(profiles, "stored_drawing_wire_payload", slow_decode)
+    await sign_in_as(http, factory, ann.id)
+    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    responses = await asyncio.gather(*(http.get(url) for _ in range(5)))
+    assert [response.status_code for response in responses] == [200] * 5
+    assert all(response.content == blob for response in responses)
+    assert decodes == [1]
+    assert profiles._fills == {}
+
+
+async def test_a_refusal_inside_a_shared_fill_is_not_handed_to_the_other_waiters(env, monkeypatch):
+    """Only bytes are shared. A drawing hidden between one caller's access
+    check and its read is that caller's 404; a participant may still have it
+    (R-GAL-09, #979 review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, ann.id)
+    url = f"/api/games/{game_id}/turns/{turn_id}/drawing"
+
+    reads = []
+    real_read = history.get_turn_drawing
+
+    async def refuse_the_first_read(*args, **kwargs):
+        reads.append(1)
+        if len(reads) == 1:
+            await asyncio.sleep(0.05)  # the second request arrives meanwhile
+            return None  # as if it had just been hidden
+        return await real_read(*args, **kwargs)
+
+    monkeypatch.setattr(history, "get_turn_drawing", refuse_the_first_read)
+    first, second = await asyncio.gather(http.get(url), http.get(url))
+    assert {first.status_code, second.status_code} == {404, 200}
+    served = first if first.status_code == 200 else second
+    assert served.content == blob
+    assert profiles._fills == {}
+
+
+async def test_a_fill_survives_the_caller_that_started_it_going_away(env):
+    """The fill is a task of its own: the caller that started it going away -
+    a shutdown, a timeout - must not cancel the read the other waiters are
+    waiting on (#979 review).
+
+    The read is counted, because "a waiter got its bytes" is also true when
+    the fill was cancelled and the waiter quietly read the drawing again: the
+    invariant is one decode, and `await fill` loses it, since cancelling a
+    task cancels the future it is waiting on (#979 fourth review).
+
+    At `_decode_once` rather than through HTTP: cancelling a request with a
+    query in flight tears down its database connection, which is a different
+    story from this one.
+    """
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    release = asyncio.Event()
+    reads: list[int] = []
+
+    async def slow_read():
+        reads.append(1)
+        await release.wait()
+        return detail
+
+    checksum = detail.checksum_sha256
+    owner = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
+    await asyncio.sleep(0.02)
+    waiter = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
+    await asyncio.sleep(0.02)
+    fill = profiles._fills[profiles._cache_key(checksum)]
+    owner.cancel()
+    await asyncio.sleep(0.02)
+    assert not fill.cancelled() and not fill.done(), "the fill outlives its starter"
+    release.set()
+
+    wire, gzipped, served_checksum = await asyncio.wait_for(waiter, timeout=5)
+    assert wire == blob and served_checksum == checksum
+    assert reads == [1], "one read, not one per caller that stayed"
+    assert profiles.drawing_cache.get(profiles._cache_key(checksum)) is not None
+    assert profiles._fills == {}
+
+
+async def test_a_waiter_going_away_leaves_the_others_their_decode(env):
+    """The same, for a waiter rather than the starter: the cancellation of
+    anybody attached to a shared fill stays with them (#979 fourth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    release = asyncio.Event()
+    reads: list[int] = []
+
+    async def slow_read():
+        reads.append(1)
+        await release.wait()
+        return detail
+
+    checksum = detail.checksum_sha256
+    owner = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
+    await asyncio.sleep(0.02)
+    waiter = asyncio.create_task(profiles._decode_once(checksum, turn_id, slow_read))
+    await asyncio.sleep(0.02)
+    waiter.cancel()
+    await asyncio.sleep(0.02)
+    release.set()
+
+    wire, _gzipped, served = await asyncio.wait_for(owner, timeout=5)
+    assert wire == blob and served == checksum
+    assert reads == [1]
+
+
+async def test_one_decode_serves_every_door_to_the_same_drawing(env, monkeypatch):
+    """The cache is keyed by the drawing's checksum, not by the route that
+    asked: the participant page, a pinned shelf and the Gallery all serve the
+    bytes the first of them decoded (#979 third review - no test outside the
+    participant route touched the cache)."""
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    assert (await http.put("/api/me/pins", json={"turnIds": [turn_id]})).status_code == 200
+
+    decodes: list[int] = []
+    real_decode = profiles.stored_drawing_wire_payload
+    monkeypatch.setattr(
+        profiles,
+        "stored_drawing_wire_payload",
+        lambda *args, **kwargs: (decodes.append(1), real_decode(*args, **kwargs))[1],
+    )
+
+    participant = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+    pinned = await http.get(f"/api/users/{bob.id}/pins/{turn_id}/drawing")
+    gallery = await http.get(f"/api/gallery/{turn_id}/drawing")
+
+    assert [participant.status_code, pinned.status_code, gallery.status_code] == [200, 200, 200]
+    assert participant.content == pinned.content == gallery.content == blob
+    assert decodes == [1], "decoded once, served through three doors"
+
+
+async def test_a_door_that_may_not_see_it_is_refused_while_the_others_are_served(
+    env, monkeypatch
+):
+    """Sharing bytes is not sharing access. The Gallery's own query answers
+    for the Gallery; a participant keeps a drawing the Gallery may not show
+    (R-GAL-09)."""
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+
+    served = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+    assert served.status_code == 200 and served.content == blob
+
+    async def hidden_from_the_gallery(*_args, **_kwargs):
+        return None
+
+    # The gate is the checksum query, which every door runs before the cache
+    # is consulted at all.
+    monkeypatch.setattr(history, "get_gallery_drawing_checksum", hidden_from_the_gallery)
+    monkeypatch.setattr(history, "get_gallery_drawing", hidden_from_the_gallery)
+    assert (await http.get(f"/api/gallery/{turn_id}/drawing")).status_code == 404
+    again = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+    assert again.status_code == 200 and again.content == blob
+
+
+async def test_the_starter_of_a_fill_the_cache_declined_still_gets_its_drawing(
+    env, monkeypatch
+):
+    """The fill's own answer, not whatever the cache ended up holding: a
+    decode the cache declined - too large for it, or a checksum that changed
+    while it ran - was answered as a missing drawing (#979 third review)."""
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    monkeypatch.setattr(profiles.drawing_cache, "put", lambda *args, **kwargs: None)
+    reads: list[int] = []
+    real_read = history.get_turn_drawing
+
+    async def counted(*args, **kwargs):
+        reads.append(1)
+        return await real_read(*args, **kwargs)
+
+    monkeypatch.setattr(history, "get_turn_drawing", counted)
+
+    served = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
+
+    assert served.status_code == 200
+    assert served.content == blob
+    # And it is the fill's own answer, not a second read after finding the
+    # cache empty (#979 fifth review).
+    assert reads == [1]
+
+
+async def test_the_starter_of_a_refused_fill_is_refused_and_a_waiter_asks_again(env):
+    """The refusal belongs to the query it came from: the caller whose own
+    read found nothing is refused, and whoever was waiting behind it asks
+    again with its own (R-GAL-09). At the seam, so which caller started the
+    fill is not left to chance."""
+    import asyncio
+
+    import pytest
+
+    import app.api.profiles as profiles
+    from app.api.errors import Refusal
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    checksum = detail.checksum_sha256
+    release = asyncio.Event()
+
+    async def hidden_from_the_starter():
+        await release.wait()
+        return None
+
+    async def visible_to_the_waiter():
+        return detail
+
+    starter = asyncio.create_task(
+        profiles._decode_once(checksum, turn_id, hidden_from_the_starter)
+    )
+    await asyncio.sleep(0.02)
+    waiter = asyncio.create_task(
+        profiles._decode_once(checksum, turn_id, visible_to_the_waiter)
+    )
+    await asyncio.sleep(0.02)
+    release.set()
+
+    with pytest.raises(Refusal) as refused:
+        await asyncio.wait_for(starter, timeout=5)
+    assert refused.value.status_code == 404
+    wire, _gzipped, served = await asyncio.wait_for(waiter, timeout=5)
+    assert wire == blob and served == checksum
+
+
+async def test_the_cache_is_keyed_by_the_checksum_the_bytes_were_verified_against(env):
+    """The row may have changed between the access query and the read, so the
+    entry is keyed by the checksum the decode verified - not by the key the
+    caller asked under, which would serve one drawing's bytes for another's
+    checksum (#979 third review)."""
+    import app.api.profiles as profiles
+
+    _http, users, history, _factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    asked_under = "0" * 64  # what the checksum query answered a moment ago
+
+    wire, _gzipped, served = await profiles._decode_once(
+        asked_under, turn_id, lambda: _answer(detail)
+    )
+
+    assert wire == blob
+    assert served == detail.checksum_sha256
+    assert profiles.drawing_cache.get(profiles._cache_key(detail.checksum_sha256)) is not None
+    assert profiles.drawing_cache.get(profiles._cache_key(asked_under)) is None
+
+
+async def _answer(value):
+    return value
+
+
+def test_the_cached_copy_is_gzipped_at_the_documented_level():
+    """Made once, off the loop, and kept - so it is worth more than the level
+    the per-request middleware would use."""
+    import gzip
+
+    import app.api.profiles as profiles
+
+    assert profiles.DRAWING_GZIP_LEVEL == 6
+    blob = _skch()
+    wire, gzipped = profiles._decoded_drawing(blob, None)
+    assert gzipped == gzip.compress(wire, compresslevel=6, mtime=0)
+
+
+def test_the_cache_size_is_exposed_to_the_scrape():
+    """An in-memory cache with no gauge is a memory ceiling nobody can see:
+    the wiring in `main` is what puts it in the scrape (#979 third review)."""
+    import app.main  # noqa: F401 - imported for the wiring it performs
+    import app.api.profiles as profiles
+    from app.services.telemetry import telemetry
+
+    assert telemetry.sources.drawing_cache_bytes is not None
+    assert telemetry.sources.drawing_cache_bytes() == profiles.drawing_cache.bytes
+    assert any(
+        line.startswith("sketchy_drawing_cache_bytes")
+        for line in telemetry.prometheus_lines()
+    )
+
+
+def test_a_drawing_with_no_stored_checksum_is_not_cached_at_all():
+    """`checksum_sha256 or ""` is what the repositories hand over for a row
+    with no digest, and its key is the bare wire version - one key every such
+    drawing would share, serving one drawer's bytes for another's (#979
+    fourth review)."""
+    import app.api.profiles as profiles
+
+    cache = profiles.WireDrawingCache(max_bytes=1024)
+    cache.put(profiles._cache_key(""), b"first drawing", b"gz")
+    cache.put("", b"nameless", b"gz")
+
+    assert cache.get(profiles._cache_key("")) is None
+    assert cache.bytes == 0
+
+
+async def test_a_second_caller_asking_again_does_not_clear_the_shared_fill(env):
+    """The fallback read is not the shared one: popping `_fills` from it would
+    take out the entry a later caller is waiting on (#979 fourth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    key = profiles._cache_key(detail.checksum_sha256)
+    release = asyncio.Event()
+
+    async def held():
+        await release.wait()
+        return detail
+
+    shared = asyncio.ensure_future(profiles._fill_cache(key, turn_id, held))
+    shared.add_done_callback(lambda task: task.cancelled() or task.exception())
+    profiles._fills[key] = shared
+    await asyncio.sleep(0)
+
+    # Another caller's own read, the one `_decode_once` falls back to.
+    fallback = await profiles._fill_cache(key, turn_id, lambda: _answer(detail), store=False)
+
+    assert fallback[0] == blob
+    assert profiles._fills.get(key) is shared, "the shared fill is still there"
+    release.set()
+    await asyncio.wait_for(shared, timeout=5)
+    assert profiles._fills == {}
+
+
+async def test_a_fill_cancelled_before_it_started_leaves_no_entry_behind(env):
+    """A task cancelled before its first step never runs a line of its body,
+    so the `finally` that clears `_fills` never runs either: the key then held
+    a done, cancelled task for the life of the process and every later caller
+    fell through to its own read - single-flight defeated for that drawing
+    (#979 fifth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    checksum = detail.checksum_sha256
+
+    starter = asyncio.create_task(
+        profiles._decode_once(checksum, turn_id, lambda: _answer(detail))
+    )
+    await asyncio.sleep(0)  # the fill exists and has not been stepped
+    fill = profiles._fills[profiles._cache_key(checksum)]
+    fill.cancel()
+    starter.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await starter
+    await asyncio.sleep(0)
+
+    assert profiles._fills == {}, "the key is free for the next caller"
+
+
+async def test_a_blob_corrupted_after_its_first_serve_is_caught_at_the_next_decode(env):
+    """What R-HIST-24 now says, and nothing showed: the corruption check is
+    over the stored bytes on every *decode*, and a drawing already decoded is
+    served from memory without reading them - so a blob corrupted afterwards
+    is caught when the cache next misses, not when the next fetch arrives
+    (#979 fifth review)."""
+    from sqlalchemy import update
+
+    from app.db.models import TurnDrawing
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    url = f"/api/games/{game_id}/turns/{turn_id}/drawing"
+    assert (await http.get(url)).content == blob
+
+    corrupted = b"SKCD" + b"rubbish" * 40
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(TurnDrawing)
+                .where(TurnDrawing.turn_id == UUID(turn_id))
+                .values(payload=corrupted, byte_size=len(corrupted))
+            )
+
+    # Held bytes, no read: the drawing is still served.
+    assert (await http.get(url)).content == blob
+    # And the moment the cache no longer holds it, the checksum decides.
+    profiles.drawing_cache._entries.clear()
+    profiles.drawing_cache.bytes = 0
+    assert (await http.get(url)).status_code == 500
+
+
+def test_the_cache_counts_its_bytes_once_per_entry():
+    """`put` ignores a key it already holds. Without that the fallback read -
+    which decodes the same drawing again when a shared fill left nothing -
+    would add its bytes a second time, and the cache would forget entries it
+    still holds room for (#979 sixth review)."""
+    import app.api.profiles as profiles
+
+    cache = profiles.WireDrawingCache(max_bytes=4096)
+    cache.put("k-w3", b"wire bytes", b"gz")
+    once = cache.bytes
+    cache.put("k-w3", b"wire bytes", b"gz")
+
+    assert cache.bytes == once
+    assert once == len(b"wire bytes") + len(b"gz")
+
+
+async def test_a_refusal_inside_an_abandoned_fill_is_retrieved(env):
+    """The fill is a task, so a refusal in one nobody waits for any more is an
+    exception the loop reports when it is collected - a traceback in the log
+    for a drawing that was simply hidden. Asserted on CPython's own
+    "nobody looked at this" flag, because the message itself is emitted from
+    `__del__` and cannot be waited for (#979 sixth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    checksum = detail.checksum_sha256
+    key = profiles._cache_key(checksum)
+
+    async def hidden():
+        return None
+
+    fill = asyncio.ensure_future(profiles._fill_cache(key, turn_id, hidden))
+    fill.add_done_callback(profiles._forget_fill(key))
+    profiles._fills[key] = fill
+    with contextlib.suppress(Exception):
+        await asyncio.wait({fill})
+
+    # Read before this test retrieves anything itself, or the assertion would
+    # be what cleared the flag.
+    assert fill.done()
+    assert fill._log_traceback is False, "the refusal was retrieved"
+    assert fill.exception() is not None
+
+
+async def test_the_cache_counter_says_which_it_was(env):
+    from app.services.telemetry import telemetry
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=_large_frame())
+    await sign_in_as(http, factory, ann.id)
+    url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+    misses = telemetry.drawing_cache_requests.get(("miss",))
+    hits = telemetry.drawing_cache_requests.get(("hit",))
+    assert (await http.get(url)).status_code == 200
+    assert (await http.get(url)).status_code == 200
+    assert telemetry.drawing_cache_requests.get(("miss",)) == misses + 1
+    assert telemetry.drawing_cache_requests.get(("hit",)) == hits + 1
+
+
+async def test_behind_the_real_middleware_the_answer_is_encoded_once(monkeypatch):
+    """Mounted as production mounts it: the response middleware must leave a
+    body that already carries `Content-Encoding` alone (a second pass would
+    make the decoded bytes gzip, not the frame), and must not repeat `Vary`
+    (#979 review)."""
+    from app.compression import SelectiveGZipMiddleware
+
+    monkeypatch.setenv("IP_HASH_SECRET", "profiles-middleware-secret")
+    session_factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(session_factory)
+    history = SqlAlchemyGameHistoryRepository(session_factory)
+    app = FastAPI()
+    install_refusal_handler(app)
+    app.add_middleware(SessionAuthMiddleware, session_factory=session_factory)
+    app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
+    app.include_router(create_profile_router(users, history))
+    try:
+        async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as http:
+            ann = await users.create_anonymous(display_name="Ann")
+            bob = await users.create_anonymous(display_name="Bob")
+            blob = _large_frame()
+            game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+            await sign_in_as(http, session_factory, ann.id)
+            url = f"/api/games/{game_id}/turns/{record_game.last_turn_id}/drawing"
+            for _ in range(2):  # the miss and then the hit
+                response = await http.get(url, headers={"Accept-Encoding": "gzip"})
+                assert response.status_code == 200
+                assert response.content == blob
+                assert response.headers["content-encoding"] == "gzip"
+                assert response.headers["vary"].lower().count("accept-encoding") == 1
+            # The small-body floor is not asserted here: on `main` the session
+            # middleware is still a `BaseHTTPMiddleware`, which streams every
+            # response, and Starlette's gzip compresses a streamed body at any
+            # size. #1026 makes that layer plain ASGI and the floor applies
+            # again; `test_a_small_drawing_goes_out_as_it_is...` covers the
+            # route's own half.
+    finally:
+        await engine.dispose()
