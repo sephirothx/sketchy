@@ -26,6 +26,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const fetchMe = useAuthStore((state) => state.fetchMe);
+  const adoptFromServer = useAuthStore((state) => state.adoptFromServer);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   // Verification starts in flight: the effect below runs on arrival, and
@@ -117,7 +118,11 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     setError(null);
     try {
       await completePasswordReset(token, password);
-      await fetchMe();
+      // The reset signed this browser in as the account, whatever it was
+      // before - a guest, most often, since the link opens a tab of its own.
+      // Become it the way a sign-in does, socket included (#1006); a re-read
+      // alone left the next room entered as the guest.
+      await adoptFromServer();
       setDone(ui.accountRecoveryPage.yourPasswordIsSetAnd);
     } catch (resetError) {
       setError(

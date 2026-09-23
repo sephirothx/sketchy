@@ -64,6 +64,15 @@ interface AuthStore {
   ensureIdentity: () => Promise<AuthUser>;
   fetchMe: () => Promise<AuthUser | null>;
   /**
+   * Re-read the account and, if it is not the one this tab was, become it
+   * the way a sign-in does: seat released, socket bounced (#1006). `fetchMe`
+   * only writes the store, and the socket reads the cookie once at the
+   * handshake - so a page that changed the account on the server (a
+   * password reset completed as a guest) and then only re-read it entered
+   * the next room as the guest it had been.
+   */
+  adoptFromServer: () => Promise<AuthUser | null>;
+  /**
    * Adopt an offer the account's own socket room just announced.
    *
    * What the account UI offers, and nothing else: `pendingRole` authorizes
@@ -294,6 +303,17 @@ export const useAuthStore = create<AuthStore>((set, get) => {
       }
     })();
     return inFlightFetchMe;
+  },
+
+  adoptFromServer: async () => {
+    const before = get().user?.id ?? null;
+    const account = await get().fetchMe();
+    if ((account?.id ?? null) === before) return account;
+    if (account) return adopt(account);
+    installIdentity(set, null);
+    releaseSeatBeforeIdentityChange();
+    reconnectSocketAsNewIdentity();
+    return null;
   },
 
   setNameDraft: (nameDraft) => set({ nameDraft }),
