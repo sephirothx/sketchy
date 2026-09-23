@@ -306,14 +306,19 @@ export const useAuthStore = create<AuthStore>((set, get) => {
   },
 
   adoptFromServer: async () => {
+    // A `/me` already in the air may predate the change this is asked to
+    // notice; let it land, then read afresh.
+    if (inFlightFetchMe) await inFlightFetchMe.catch(() => null);
     const before = get().user?.id ?? null;
     const account = await get().fetchMe();
     if ((account?.id ?? null) === before) return account;
-    if (account) return adopt(account);
-    installIdentity(set, null);
+    // `fetchMe` has already installed the account, reconciled its colour and
+    // loaded its settings; what it does not do is the transition - the bump
+    // every in-flight read checks, the seat, the socket.
+    installIdentity(set, account);
     releaseSeatBeforeIdentityChange();
     reconnectSocketAsNewIdentity();
-    return null;
+    return account;
   },
 
   setNameDraft: (nameDraft) => set({ nameDraft }),
