@@ -4,7 +4,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query, Request, Response, status
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import CONTROL_CHARACTER_MESSAGE, ControlFreeModel, has_control_characters
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -84,7 +85,7 @@ PUBLISHED_EVENT = "prompt_list.published"
 UNPUBLISHED_EVENT = "prompt_list.unpublished"
 
 
-class PromptEntryRequest(BaseModel):
+class PromptEntryRequest(ControlFreeModel):
     model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
 
     concept_id: str | None = Field(default=None, alias="conceptId", max_length=36)
@@ -92,7 +93,7 @@ class PromptEntryRequest(BaseModel):
     aliases: list[str] = Field(default_factory=list, max_length=20)
 
 
-class CreateOwnedPromptListRequest(BaseModel):
+class CreateOwnedPromptListRequest(ControlFreeModel):
     model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
 
     name: str = Field(min_length=1, max_length=64)
@@ -107,7 +108,7 @@ class CreateOwnedPromptListRequest(BaseModel):
     tags: list[str] = Field(default_factory=list, max_length=MAX_LIST_TAGS)
 
 
-class DuplicateOwnedPromptListRequest(BaseModel):
+class DuplicateOwnedPromptListRequest(ControlFreeModel):
     model_config = ConfigDict(strict=True, extra="forbid")
 
     # The client names it, because "(duplicate)" is a word in the reader's
@@ -115,7 +116,7 @@ class DuplicateOwnedPromptListRequest(BaseModel):
     name: str = Field(min_length=1, max_length=64)
 
 
-class UpdateOwnedPromptListRequest(BaseModel):
+class UpdateOwnedPromptListRequest(ControlFreeModel):
     model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
 
     expected_version: int = Field(alias="expectedVersion", ge=1)
@@ -263,6 +264,8 @@ def create_prompt_list_router(
                 raise Refusal(422, ErrorCode.PROMPT_LIST_INVALID, str(error)) from error
         if sort not in COMMUNITY_SORTS:
             raise Refusal(422, ErrorCode.UNKNOWN_SORT, "Unknown sort.", field="sort")
+        if any(has_control_characters(value) for value in tag):
+            raise Refusal(422, ErrorCode.PROMPT_LIST_INVALID, CONTROL_CHARACTER_MESSAGE, field="tag")
         try:
             tags = clean_list_tags(tag)
         except UnknownListTag as error:

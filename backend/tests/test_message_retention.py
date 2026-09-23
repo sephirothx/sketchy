@@ -1016,3 +1016,50 @@ async def test_the_linger_is_skipped_while_anybody_is_draining_and_when_a_batch_
             await asyncio.wait_for(service._linger(), timeout=0.2)  # otherwise it waits
     finally:
         await engine.dispose()
+
+
+async def test_one_row_the_database_refuses_does_not_cost_the_batch():
+    """PostgreSQL refuses U+0000 in text, and a batch insert fails as one:
+    one line with a NUL used to drop the hundred lines queued beside it, and
+    those were other people's report evidence (#995). SQLite takes the byte,
+    so the refusal is staged: the first batch write fails the way a data
+    error does, and the rows are then written one at a time."""
+    factory, engine = await create_test_db()
+    room_manager = RoomManager()
+    try:
+        room = room_manager.create_room(name="One bad line")
+        talker_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=talker_id, display_name="Talker"))
+        player = room_manager.add_player(room, "Talker", user_id=str(talker_id))
+        player.sid = "sid-talker"
+        service = MessageRetentionService(factory, batch_size=3, linger_seconds=0.05)
+
+        from sqlalchemy.exc import DataError
+
+        real_write = service._write
+        refused: list[str] = []
+
+        async def write(batch):
+            if len(batch) > 1:
+                raise DataError("INSERT", {}, ValueError("invalid byte sequence"))
+            if batch[0].text == "bad":
+                refused.append(str(batch[0].id))
+                raise DataError("INSERT", {}, ValueError("invalid byte sequence"))
+            await real_write(batch)
+
+        service._write = write  # type: ignore[method-assign]
+        for text in ("good one", "bad", "good two"):
+            await service.record(
+                room=room, player=player, text=text, message_kind="chat",
+                audience="room", recipient_sids=[player.sid],
+            )
+        await service.aclose()
+
+        async with factory() as session:
+            kept = sorted((await session.scalars(select(RoomMessage.text))).all())
+        assert kept == ["good one", "good two"]
+        assert len(refused) == 1
+    finally:
+        await engine.dispose()

@@ -9,6 +9,7 @@ import time
 from uuid import UUID
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import DataError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.telemetry import database_operation_of, telemetry
@@ -307,6 +308,18 @@ class MessageRetentionService:
                         len(batch),
                         WRITE_TIMEOUT_SECONDS,
                     )
+                except (DataError, IntegrityError):
+                    # One row the database will not take - a value the
+                    # validators let through - failed the statement, and a
+                    # batch insert fails as one. The other lines are somebody
+                    # else's evidence (#995): write them one at a time and
+                    # log the row that is refused, rather than losing the
+                    # batch to it.
+                    logger.exception(
+                        "Batch of %d messages refused; retaining them singly",
+                        len(batch),
+                    )
+                    await self._write_singly(batch)
                 except Exception:
                     logger.exception("Failed to retain %d messages", len(batch))
             finally:
@@ -347,6 +360,18 @@ class MessageRetentionService:
             await asyncio.wait_for(self._wake.wait(), timeout=self._linger_seconds)
 
     @database_operation_of("message_batch")
+    async def _write_singly(self, batch: list[RoomMessage]) -> None:
+        """Write each row on its own, so one the database refuses costs one."""
+        for row in batch:
+            try:
+                await asyncio.wait_for(self._write([row]), timeout=WRITE_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Timed out retaining message %s after %ss", row.id, WRITE_TIMEOUT_SECONDS
+                )
+            except Exception:
+                logger.exception("Message %s is not kept", row.id)
+
     async def _write(self, batch: list[RoomMessage]) -> None:
         """Insert one batch. Only insert: the expiry purge is the retention
         sweep's, on its own schedule and budget, so a purge backlog can never
