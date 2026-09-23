@@ -53,7 +53,9 @@ class BlockService:
         Since #973 a failure is one more shape this covers: a pooled
         connection that died quietly less than 30 s after its last use fails
         the next caller's first statement once, and that caller may be this
-        one. It is not retried here - a retry inside the chat path is a second
+        one. (How much of the pool that failure takes with it is SQLAlchemy's
+        decision, not this module's; what #973 narrowed is the verdict of the
+        *ping*.) It is not retried here - a retry inside the chat path is a second
         wait on the same database, which is the delay this method exists to
         avoid - so the line goes out unfiltered and the pool replaces the
         connection for whoever comes next.
