@@ -1417,8 +1417,6 @@ def create_auth_router(
                 ErrorCode.RESET_LINK_INVALID,
                 "That reset link has expired or already been used.",
             )
-        # Every session was revoked, including one held by whoever is standing
-        # here. Signing them back in is the point of having reset it.
         clear_session_cookie(response, secure=is_secure_request(request))
         if outcome.role in STAFF_ROLES and staff_second_factor_required():
             # Not for a staff account: a reset proves the mailbox, and
@@ -1428,6 +1426,8 @@ def create_auth_router(
             # replace the authenticator, so the second factor was reduced
             # to mailbox control (#996). Login runs the gate; go there.
             return {"ok": True, "signedIn": False}
+        # Every session was revoked, including one held by whoever is standing
+        # here. Signing them back in is the point of having reset it.
         await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)
         return {"ok": True, "signedIn": True}
 

@@ -117,12 +117,15 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     setError(null);
     try {
       const result = await completePasswordReset(token, password);
-      if (result.signedIn) {
-        await fetchMe();
-        setDone(ui.accountRecoveryPage.yourPasswordIsSetAnd);
-      } else {
-        setDone(ui.accountRecoveryPage.yourPasswordIsSetSignIn);
-      }
+      // Re-read either way: every session was just revoked, this tab's
+      // included, and a store still saying "moderator" over a cookie that
+      // is gone would render a signed-in header with no way to sign in.
+      await fetchMe();
+      setDone(
+        result.signedIn
+          ? ui.accountRecoveryPage.yourPasswordIsSetAnd
+          : ui.accountRecoveryPage.yourPasswordIsSetSignIn,
+      );
     } catch (resetError) {
       setError(
         refusalText(resetError, ui.accountRecoveryPage.somethingWentWrongPleaseTryAgain),
