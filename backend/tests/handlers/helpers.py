@@ -1,6 +1,7 @@
 """Helpers shared by the handler test modules."""
 from __future__ import annotations
 
+import asyncio
 import random
 from unittest.mock import AsyncMock
 
@@ -157,6 +158,18 @@ async def play_to_completion(ctx, room, players, *, guessers=None):
     await replay_staged(ctx)
 
 
+async def settle_deferred(ctx):
+    """Wait for the writes an action handed to its own tasks (#879, #976).
+
+    A finished game is staged on a tracked task, not inside the action, so
+    that the room's own snapshot never waits behind an encode. A test that
+    wants to look at the staging waits for it here, as the shutdown drain
+    does in the process.
+    """
+    while ctx.room_cleanups:
+        await asyncio.gather(*list(ctx.room_cleanups), return_exceptions=True)
+
+
 async def replay_staged(ctx):
     """Run the handoff loop's work once: every staged game, replayed now.
 
@@ -165,6 +178,7 @@ async def replay_staged(ctx):
     looks. A test that wants to look between staging and replay simply does
     not call this.
     """
+    await settle_deferred(ctx)
     worker = ctx.finished_games
     if worker is None:
         return None

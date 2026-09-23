@@ -6,7 +6,7 @@ import contextlib
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 import logging
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import AsyncIterator, Iterable, Iterator, TYPE_CHECKING
 
 import socketio
@@ -66,6 +66,17 @@ def _note_door_refusal(command: str, code: ErrorCode, frame_result: str, args: t
         telemetry.note_draw_frame(*frame_kind(args[0] if args else None), frame_result)
 
 logger = logging.getLogger("sketchy.handlers.context")
+
+#: How many turns of the loop the shutdown gives the deferred tasks to reach
+#: their first await before cancelling them. Each turn can uncover one more
+#: layer - a teardown defers a staging - and a handful is far more than the
+#: two the code produces.
+CLEANUP_SETTLE_TURNS = 8
+
+#: How long the shutdown waits for the cleanups it has cancelled. A task that
+#: swallows its cancellation cannot be made to stop, and a shutdown that waits
+#: for one for ever is a shutdown that does not happen (#976 sixth review).
+CLEANUP_CANCEL_SECONDS = 5
 
 # How long retiring a torn-down room's invite code may take (#879). The same ten
 # seconds every other write on these paths is allowed.
@@ -574,6 +585,79 @@ class HandlerContext:
                 logger.exception("Failed to retire an ephemeral room code")
 
     async def drain_room_cleanups(self, within_seconds: float) -> None:
-        """Let deferred teardowns finish before the process stops."""
-        if self.room_cleanups:
-            await asyncio.wait(set(self.room_cleanups), timeout=within_seconds)
+        """Let deferred teardowns finish before the process stops.
+
+        What is still running when the budget is spent is cancelled here
+        rather than left to the loop closing under it: these tasks stage
+        finished games (#976), and a task nobody waits for and nobody cancels
+        is a game lost with no counter and a room left saying "pending"
+        (#976 fourth review). A cancelled staging records its own loss.
+        """
+        if not self.room_cleanups:
+            return
+        # Re-read every time, because one of these tasks creates another: a
+        # room teardown ends its game, and ending a game defers the staging
+        # (#976). A snapshot gives the teardown its first step and then leaves
+        # the staging it just created running - neither awaited nor cancelled,
+        # the lost game again, one layer along (#976 fifth review) - and the
+        # same is true of the set that is finally cancelled, which is why the
+        # cancellation below re-reads it as well (#976 sixth review).
+        deadline = monotonic() + within_seconds
+        while self.room_cleanups:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                break
+            done, _pending = await asyncio.wait(
+                set(self.room_cleanups), timeout=remaining
+            )
+            for task in done:
+                # Retrieved, so a cleanup that raised on the way out is not
+                # reported later as an exception nobody looked at.
+                if not task.cancelled() and task.exception() is not None:
+                    logger.warning(
+                        "A deferred room cleanup failed during the drain",
+                        exc_info=task.exception(),
+                    )
+        if not self.room_cleanups:
+            return
+        # Turned over until nothing new appears, so every task has reached
+        # its first await: a coroutine cancelled before it has run a line
+        # never enters its own `try`, so the staging it was going to do is
+        # lost *and* uncounted - which is the half R-HIST-03 promises (#976
+        # seventh review). One turn is not enough, because a teardown's own
+        # first step is what defers the staging, and that one would then be
+        # cancelled unstepped in its turn (#976 eighth review). Bounded, so a
+        # cleanup that defers a successor every turn cannot hold this open.
+        for _ in range(CLEANUP_SETTLE_TURNS):
+            waiting = len(self.room_cleanups)
+            await asyncio.sleep(0)
+            if len(self.room_cleanups) <= waiting:
+                break
+        # Bounded in turn: a cleanup that swallows its cancellation must not
+        # hold the shutdown open for ever, and one that defers *another* on
+        # its way out must not keep this going round.
+        cancelled = 0
+        cancel_deadline = monotonic() + CLEANUP_CANCEL_SECONDS
+        while self.room_cleanups and monotonic() < cancel_deadline:
+            still_running = set(self.room_cleanups)
+            cancelled += len(still_running)
+            for task in still_running:
+                task.cancel()
+            done, _pending = await asyncio.wait(
+                still_running, timeout=max(0.0, cancel_deadline - monotonic())
+            )
+            for task in done:
+                # Retrieved here too: a cleanup that turns its cancellation
+                # into another exception would otherwise be reported at
+                # collection as one nobody looked at.
+                if not task.cancelled() and task.exception() is not None:
+                    logger.warning(
+                        "A deferred room cleanup failed while being cancelled",
+                        exc_info=task.exception(),
+                    )
+        logger.warning(
+            "Cancelled %d deferred room cleanup(s) still running after %ss; %d left",
+            cancelled,
+            within_seconds,
+            len(self.room_cleanups),
+        )

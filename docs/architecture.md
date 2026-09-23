@@ -325,6 +325,8 @@ This is the table to consult before adding a feature: *where does this state liv
 | Canvas history, generation, sequence, replay budget | `CanvasSession` (memory) | No |
 | Phase/hint/restart/disconnect timers | `TimerManager` (memory) | No |
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
+| Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
+| Encoding a finished game | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `repositories/sqlalchemy.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
@@ -458,7 +460,18 @@ leaves existing rooms connected so active games can finish. `SHUTDOWN_DRAIN_SECO
 (0–300, default 30) bounds the window.
 
 A game that finishes inside the window follows the ordinary all-or-nothing history
-path. A game still live when the deadline expires is **not** misrepresented as
+path — on a task of its own (#976), which is why the shutdown drains those tasks
+(`HandlerContext.room_cleanups`) before it stops the handoff worker: the drain is what
+ends rooms and stages their games, and the bounded replay pass below it is what writes
+them. Its budget covers a queued encode as well as the write it is bounded by, computed
+from `ROOM_GLOBAL_LIMIT` and `HISTORY_ENCODE_WORKERS` rather than fixed, and it
+re-checks the set as it goes, because a teardown task defers a staging task of its own.
+Whatever is still running when the budget is spent is **cancelled and counted** as a
+lost write, rather than left for the loop to close under - the cancellation itself
+bounded by `CLEANUP_CANCEL_SECONDS` (5 s), after which a task that swallowed it is left
+behind and said so in the log. What both phases record is flushed to `runtime_events`
+after the replay pass and before the engine is disposed of, which is the last thing the
+shutdown does. A game still live when the deadline expires is **not** misrepresented as
 finished: one privacy-safe `planned_shutdown_abandonments` row is written instead
 (runtime IDs, phase, counts, timestamps — never room codes, names, prompts, chat, or
 canvas contents). A second termination signal abandons the rest of the window and
@@ -1525,6 +1538,14 @@ all-or-nothing and keyed on the game's stable UUIDv7:
   game it last held and ignores an outcome for a game the room has moved on from.
 - The ledger is *proved* against the cached scores: every participant's signed deltas
   must sum to their final score, in that transaction, or the write fails.
+- No drawing is encoded on the event loop, and none inside that transaction (#976).
+  The envelope's JSON, deflate and checksum at staging, its decode at replay, the
+  content digest and each drawing's stored form all run on the history write's own
+  small thread pools, not the default one blocking SMTP shares; the drawings are
+  prepared after a one-read check that the game is not already written and before
+  the transaction that locks the players' rows opens. The loop still shares the GIL
+  with a stroke-heavy encode while it runs, at reduced throughput, rather than
+  stalling for all of it.
 
 Full table-by-table detail is in [`database.md`](database.md).
 
