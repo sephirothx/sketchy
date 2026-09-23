@@ -2657,5 +2657,6 @@ export const EN = {
     removedByAdmin: "An administrator removed you.",
     accountDeleted: "Your account was deleted.",
     accountSuspended: "Your account was suspended.",
+    signedOut: "You were signed out on this device.",
   },
 };

@@ -1,0 +1,130 @@
+"""A revocation reaches the sockets the revoked sessions opened (#1007)."""
+from __future__ import annotations
+
+import pytest_asyncio
+from fastapi import FastAPI
+from httpx import ASGITransport, AsyncClient
+
+from app.auth.middleware import SessionAuthMiddleware
+from app.auth.routes import create_auth_router
+from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+from tests.dbfixtures import create_test_db
+from tests.test_account_socket_sweep import FakeServer
+
+PASSWORD = "marmalade-frog-lantern"
+
+
+@pytest_asyncio.fixture
+async def env(monkeypatch):
+    monkeypatch.setenv("IP_HASH_SECRET", "revocation-test-secret")
+    factory, engine = await create_test_db()
+    revoked: list[tuple[str, list[str] | None]] = []
+
+    async def record(user_id: str, session_ids: list[str] | None) -> None:
+        revoked.append((user_id, session_ids))
+
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(
+        create_auth_router(SqlAlchemyUserRepository(factory), factory, on_sessions_revoked=record)
+    )
+    clients: list[AsyncClient] = []
+
+    def new_client() -> AsyncClient:
+        client = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+        clients.append(client)
+        return client
+
+    try:
+        yield new_client, factory, revoked
+    finally:
+        for client in clients:
+            await client.aclose()
+        await engine.dispose()
+
+
+async def register(client: AsyncClient, username: str) -> dict:
+    response = await client.post(
+        "/api/auth/register", json={"username": username, "password": PASSWORD}
+    )
+    assert response.status_code == 200, response.text
+    return response.json()
+
+
+async def test_signing_out_everywhere_closes_every_socket_of_the_account(env):
+    new_client, _, revoked = env
+    browser = new_client()
+    account = await register(browser, "Everywhere")
+    assert (await browser.post("/api/auth/logout-all")).status_code == 200
+    assert revoked == [(account["id"], None)]
+
+
+async def test_signing_out_closes_the_sockets_of_that_session_alone(env):
+    """Another tab of the same browser shares the session, and its socket is
+    signed out with it; the other devices play on."""
+    new_client, _, revoked = env
+    browser = new_client()
+    account = await register(browser, "OneDevice")
+    sessions = (await browser.get("/api/auth/sessions")).json()["sessions"]
+    [current] = [row["id"] for row in sessions if row["current"]]
+    assert (await browser.post("/api/auth/logout")).status_code == 200
+    assert revoked == [(account["id"], [current])]
+
+
+async def test_revoking_a_device_closes_that_devices_sockets(env):
+    new_client, _, revoked = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "TwoDevices")
+    assert (
+        await phone.post("/api/auth/login", json={"username": "TwoDevices", "password": PASSWORD})
+    ).status_code == 200
+    sessions = (await laptop.get("/api/auth/sessions")).json()["sessions"]
+    [other] = [row["id"] for row in sessions if not row["current"]]
+    assert (await laptop.delete(f"/api/auth/sessions/{other}")).status_code == 200
+    assert revoked == [(account["id"], [other])]
+
+
+async def test_a_password_change_closes_every_socket_including_this_browsers(env):
+    new_client, _, revoked = env
+    browser = new_client()
+    account = await register(browser, "Changing")
+    changed = await browser.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": "another-good-password-42"},
+    )
+    assert changed.status_code == 200, changed.text
+    assert revoked == [(account["id"], None)]
+
+
+async def test_the_sockets_of_the_named_sessions_are_told_and_closed(monkeypatch):
+    from app import main
+
+    class Server(FakeServer):
+        def __init__(self, rooms, sessions):
+            super().__init__(rooms)
+            self._sessions = sessions
+
+        async def get_session(self, sid):
+            return self._sessions.get(sid)
+
+    server = Server(
+        {"user:u1": ["laptop-sid", "phone-sid", "laptop-tab-2"]},
+        {
+            "laptop-sid": {"user_id": "u1", "session_id": "s-laptop"},
+            "laptop-tab-2": {"user_id": "u1", "session_id": "s-laptop"},
+            "phone-sid": {"user_id": "u1", "session_id": "s-phone"},
+        },
+    )
+    monkeypatch.setattr(main, "sio", server)
+
+    await main.close_sockets_of_revoked_sessions("u1", ["s-laptop"])
+    assert server.disconnected == ["laptop-sid", "laptop-tab-2"]
+    assert [to for _, _, to in server.emitted] == ["laptop-sid", "laptop-tab-2"]
+    assert server.emitted[0][:2] == (
+        "session_superseded",
+        {"code": "signed_out", "reason": "You were signed out on this device."},
+    )
+
+    server.disconnected.clear()
+    await main.close_sockets_of_revoked_sessions("u1", None)
+    assert server.disconnected == ["laptop-sid", "phone-sid", "laptop-tab-2"]

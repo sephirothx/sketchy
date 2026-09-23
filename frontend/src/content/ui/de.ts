@@ -2650,5 +2650,6 @@ export const DE: Catalogue = {
     removedByAdmin: "Ein Administrator hat dich entfernt.",
     accountDeleted: "Dein Konto wurde gelöscht.",
     accountSuspended: "Dein Konto wurde gesperrt.",
+    signedOut: "Du wurdest auf diesem Gerät abgemeldet.",
   },
 };

@@ -2650,5 +2650,6 @@ export const NL: Catalogue = {
     removedByAdmin: "Een beheerder heeft je verwijderd.",
     accountDeleted: "Je account is verwijderd.",
     accountSuspended: "Je account is geschorst.",
+    signedOut: "Je bent op dit apparaat uitgelogd.",
   },
 };

@@ -942,7 +942,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `voted_afk` | `{message}` — English, for a log; the client says it from the event itself (R-I18N-01) | the player who was voted AFK |
 | `kicked` | `{code, reason}` — `code` is `kicked_by_vote`, `room_closed` or `removed_by_admin`, and is what the client says; `reason` is English, for a log (R-I18N-01) | one socket |
 | `colorblind_safe_suggestion` | `{active}` — sent only when the value changes or the host's socket does (#880), not beside every `room_state` | **host only**, unattributed |
-| `session_superseded` | `{code, reason}` — `opened_elsewhere`, `account_deleted` or `account_suspended`, said by the client from the code; `reason` is English, for a log — then the socket is disconnected | the superseded socket |
+| `session_superseded` | `{code, reason}` — `opened_elsewhere`, `account_deleted`, `account_suspended` or `signed_out` (the session this socket was opened with was revoked: a sign-out on this browser, a sign-out everywhere, a password change or reset, a device revoked from the list — #1007), said by the client from the code; `reason` is English, for a log — then the socket is disconnected | the superseded socket |
 | `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |

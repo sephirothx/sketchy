@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiRequest, ApiError } from "../lib/api";
+import { apiRequest, onUnexpectedSignOut } from "../lib/api";
 import { assertPasskey } from "../lib/passkeys";
 import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
@@ -418,8 +418,10 @@ export const useAuthStore = create<AuthStore>((set, get) => {
   logout: async () => {
     try {
       await apiRequest("/api/auth/logout", { method: "POST" });
-    } catch (error) {
-      if (!(error instanceof ApiError)) throw error;
+    } catch {
+      // A refusal, a proxy page, or no network: the cookie may still stand,
+      // but this browser is told it is out either way, and the read below
+      // brings the account back if the server still knows it (#1007).
     }
     installIdentity(set, null);
     releaseSeatBeforeIdentityChange();
@@ -430,4 +432,11 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     reconnectSocketAsNewIdentity();
   },
   };
+});
+
+// A request that found this tab signed out re-reads the account, so the
+// header stops claiming an account whose session another device revoked
+// (#1007). Only while the store holds one: a guest's 401 is expected.
+onUnexpectedSignOut(() => {
+  if (useAuthStore.getState().user) void useAuthStore.getState().adoptFromServer();
 });
