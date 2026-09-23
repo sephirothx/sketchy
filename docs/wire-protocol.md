@@ -2313,11 +2313,12 @@ When `frontend/dist` exists it is mounted on the same FastAPI app
 ([`backend/app/main.py`](../backend/app/main.py)). Vite's fingerprinted `/assets/` are
 served `immutable` with a one-year lifetime, and `index.html` (including client-route
 fallbacks) `no-cache`, so browsers discover new deployments promptly. Every text file
-the build emits has a Brotli (`.br`) and a gzip (`.gz`) copy beside it, and the server
-answers with the best one `Accept-Encoding` admits — a coding given `q=0` is refused —
+the build emits above 1 KiB - by extension: `js`, `css`, `html`, `svg`, `json`, `webmanifest`,
+`txt` and `map` - has a Brotli (`.br`) and a gzip (`.gz`) copy beside it, and
+the server answers with the best one `Accept-Encoding` admits — a coding given `q=0` is refused —
 setting `Content-Encoding` and `Vary: Accept-Encoding`. The copy has its own `ETag`, so
-a conditional request is answered against the bytes the client would receive. Nothing
-static is compressed per request ([`backend/app/compression.py`](../backend/app/compression.py), #978).
+a conditional request is answered against the bytes the client would receive — the copy is chosen before the validators are compared, so a 304 carries that copy's `ETag` and `Vary: Accept-Encoding`, never the identity file's (#978). A copy is served only when it is a regular file: a symlink, a directory or a FIFO wearing the `.br` name is ignored, and a copy asked for under its own name is a 404 whatever case the suffix is written in. A hard link is a regular file and is served like any other, which is why this is a shape check and not containment — write access to the build output is the boundary that matters, and a deploy that hardlinks its files keeps its compressed copies. Three things this deliberately does not do: a copy is not checked against its file's modification time (the build writes both in one step, and a mismatched pair is a broken build, not a request-time question), `Accept-Encoding: *` is read as naming no coding rather than all of them, and `identity;q=0` is not honoured - a client that refuses the stored bytes and accepts no coding is still served the stored bytes. Nothing
+static is compressed per request ([`backend/app/compression.py`](../backend/app/compression.py), #978): a text file small enough that the build wrote no copy is served as it is stored, which also leaves every static representation the `ETag` its bytes were stored with.
 Dynamic responses are gzipped at level 4. Images, fonts, audio and video never are,
 because they are compressed formats already. A reverse proxy may take over compression,
 but must keep the cache distinction and `Vary: Accept-Encoding`.

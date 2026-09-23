@@ -2343,9 +2343,11 @@ is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
 so the whole game (UI + API + WebSocket) is served from a single port. The build writes a
-Brotli and a gzip copy beside every text file it emits, and the server hands over whichever
-the browser accepts instead of compressing on the loop every room shares (what is left
-dynamic is gzipped at level 4; images and fonts never are). It serves Vite's fingerprinted `/assets/` files with a
+Brotli and a gzip copy beside every text file it emits above 1 KiB (by extension: js, css,
+html, svg, json, webmanifest, txt, map), and the server hands
+over whichever the browser accepts instead of compressing on the loop every room shares;
+a smaller text file is served as it is stored rather than compressed per request (what is
+left dynamic is gzipped at level 4; images and fonts never are). It serves Vite's fingerprinted `/assets/` files with a
 one-year `immutable` cache policy, and serves `index.html` (including client-route fallbacks)
 with `no-cache` so browsers discover new deployments promptly. A URL the client has no page
 for gets that same shell — it is what draws the not-found page — but with a **404** status,

@@ -17,11 +17,17 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
+from starlette.responses import FileResponse
 from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
 from app.auth.password import password_hash_workers
-from app.compression import PRECOMPRESSED_SIBLINGS, SelectiveGZipMiddleware, precompressed_variant
+from app.compression import (
+    NO_DYNAMIC_COMPRESSION,
+    PRECOMPRESSED_SIBLINGS,
+    SelectiveGZipMiddleware,
+    precompressed_variant,
+)
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
     SHELF_TTL_SECONDS,
@@ -148,12 +154,41 @@ class SPAStaticFiles(StaticFiles):
     missing file, and anything under /api/, stays a plain 404 with no body.
     """
 
+    def file_response(self, full_path, stat_result, scope, status_code: int = 200):
+        """Answer with the build's compressed copy when the client takes one,
+        and decide the conditional **once**, against what will be sent (#978).
+
+        Starlette evaluates `If-None-Match`/`If-Modified-Since` against the
+        identity file and answers 304 from it, before any copy is chosen: that
+        304 carried the identity `ETag` and no `Vary`, so a shared cache could
+        hand the Brotli body to a client that asked for none (#978 review).
+        """
+        response = FileResponse(full_path, status_code=status_code, stat_result=stat_result)
+        variant = precompressed_variant(response, scope)
+        if variant is not None:
+            variant.status_code = status_code
+            response = variant
+        # The representation varies by `Accept-Encoding` whether or not a copy
+        # exists here, and a 304 repeats what its 200 would have carried.
+        response.headers.add_vary_header("Accept-Encoding")
+        if status_code == 200 and self.is_not_modified(response.headers, Headers(scope=scope)):
+            return NotModifiedResponse(response.headers)
+        return response
+
     async def get_response(self, path: str, scope):
+        # Nothing here is compressed on the loop (#978): what the build made a
+        # copy of is served from that copy, and what it left alone - text too
+        # small for the copy to be worth writing - goes out as it is stored.
+        # That also leaves every representation the `ETag` its bytes were
+        # stored with; compressing after the validator was chosen would give
+        # two bodies one name.
+        scope[NO_DYNAMIC_COMPRESSION] = True
         # The build's compressed copies are served in place of the file they
         # sit beside, never under their own names: asked for directly, one
         # would go out as the original's type with no Content-Encoding and a
-        # compressed body (#978).
-        if path.endswith(PRECOMPRESSED_SUFFIXES):
+        # compressed body (#978). Matched without case, because a
+        # case-insensitive filesystem answers `app.js.BR` with the copy.
+        if path.lower().endswith(PRECOMPRESSED_SUFFIXES):
             raise HTTPException(status_code=404)
         try:
             response = await super().get_response(path, scope)
@@ -179,16 +214,6 @@ class SPAStaticFiles(StaticFiles):
             # normalizes that one, and the root arrives as "." rather than "/".
             if not is_client_route(scope["path"]):
                 response.status_code = 404
-
-        # The build's own compressed copy when the client takes one, so
-        # nothing is compressed on the loop for a static file (#978).
-        variant = precompressed_variant(response, scope)
-        if variant is not None:
-            status_code = response.status_code
-            response = variant
-            response.status_code = status_code
-            if status_code == 200 and self.is_not_modified(response.headers, Headers(scope=scope)):
-                response = NotModifiedResponse(response.headers)
 
         if path.startswith("assets/"):
             response.headers["Cache-Control"] = (
