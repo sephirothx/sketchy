@@ -792,14 +792,20 @@ async def test_a_busy_pool_refuses_every_route_whose_hash_is_the_point(client, m
         # Both of these used to verify inline rather than through the helper,
         # and neither was covered (#975 fifth review).
         ("DELETE", "/api/auth/account", {"password": "a-good-password"}),
-        (
-            "POST",
-            "/api/auth/password/change",
-            {"currentPassword": "a-good-password", "password": "a-better-password"},
-        ),
     ):
         proof = await client.request(method, path, json=body)
         assert proof.status_code == 503, f"{path}: {proof.text}"
+
+    # The password change hashes *and* verifies, so with both busy its 503
+    # says nothing about which call produced it: the hash is let through here
+    # so that only the proof can refuse (#975 seventh review).
+    monkeypatch.setattr(routes_module, "hash_password", real_hash)
+    changed = await client.post(
+        "/api/auth/password/change",
+        json={"currentPassword": "a-good-password", "password": "a-better-password"},
+    )
+    assert changed.status_code == 503, changed.text
+    monkeypatch.setattr(routes_module, "hash_password", busy)
     monkeypatch.setattr(routes_module, "verify_password", real_verify)
 
     await client.post("/api/auth/logout")
@@ -897,3 +903,26 @@ async def test_a_busy_pool_costs_the_caller_no_login_failure(client, monkeypatch
         json={"username": "BusyLockout", "password": "a-good-password"},
     )
     assert allowed.status_code == 200, "the refusals charged nothing"
+
+
+async def test_the_reset_route_spends_its_own_bucket(client, monkeypatch):
+    """Which bucket a route charges is part of what the limit means: swapping
+    in a sibling's limiter passed, because the test only asked that *some*
+    429 appeared (#975 seventh review)."""
+    from app.auth import routes as routes_module
+
+    scopes: list[str] = []
+    real_check = routes_module.PersistentRateLimiter.check
+
+    async def recorded(self, key):
+        scopes.append(self._scope)
+        return await real_check(self, key)
+
+    monkeypatch.setattr(routes_module.PersistentRateLimiter, "check", recorded)
+    answer = await client.post(
+        "/api/auth/password/reset",
+        json={"token": "not-a-real-token", "password": "a-good-password"},
+    )
+
+    assert answer.status_code == 400, answer.text
+    assert scopes == ["password_reset_perform"], scopes

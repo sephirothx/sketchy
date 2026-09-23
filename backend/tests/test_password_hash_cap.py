@@ -199,6 +199,7 @@ def test_the_check_and_the_slot_are_taken_under_one_lock(monkeypatch):
     from the check passed every test, because the race is between threads and
     not between coroutines (#975 sixth review)."""
     import asyncio
+    import inspect
     import threading
 
     class Watching:
@@ -228,6 +229,16 @@ def test_the_check_and_the_slot_are_taken_under_one_lock(monkeypatch):
 
     assert asyncio.run(one_hash()) == "done"
     assert seen == [1], "the cap was read with the lock held"
+    assert watching.depth == 0, "and given back"
+    # Both writes are under it too: the count is written from the loop and
+    # from a worker thread, so a read-under-lock with a write outside it is no
+    # better than no lock (#975 seventh review).
+    lines = inspect.getsource(password._off_loop).splitlines()
+    held = next(line for line in lines if "with _counter_lock:" in line)
+    takes = next(line for line in lines if "_outstanding += 1" in line)
+    indent = len(held) - len(held.lstrip())
+    assert len(takes) - len(takes.lstrip()) > indent, "the slot is taken inside the lock"
+    assert "with _counter_lock:" in inspect.getsource(password._release)
 
 
 async def test_a_submit_that_raises_leaves_no_slot_taken(capped, monkeypatch):
