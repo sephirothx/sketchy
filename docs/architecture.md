@@ -1062,6 +1062,13 @@ Retention is now a hand-off. `MessageRetentionService.record` composes the row o
 spot — every field on it is a snapshot of live state that a moment later is gone — and
 puts it on a bounded queue that a single worker drains in batches
 ([`backend/app/services/message_retention.py`](../backend/app/services/message_retention.py)).
+The one reader that cannot wait out that quarter second — a report citing a line said a
+moment ago — writes what is already queued first (`flush`, bounded at 2 s), so evidence
+is as available as it was before batching. A batch is what arrives within a quarter of a
+second of its first line (sooner if 100
+are waiting, or if anybody is draining the queue): rooms talk a line at a time, so a
+worker that took only what was already queued wrote one transaction per line — under
+the load gate that was half of every statement the process ran (#972).
 The caller gets the message's UUIDv7 back immediately; what it does not get is a
 promise that the row landed. That identifier is what lets a player pin the line as
 report evidence, and a report naming a message the database does not have is refused
