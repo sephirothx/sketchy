@@ -165,3 +165,30 @@ async def test_a_forced_exit_still_runs_the_lifespan_teardown():
     await server.shutdown([])
 
     assert timeline == ["drain", "lifespan"]
+
+
+async def test_a_forced_exit_during_uvicorns_own_wait_still_runs_the_teardown():
+    """The second signal can land while Uvicorn is waiting for connections to
+    close - a realistic moment, since the drain window has already gone by.
+    Uvicorn's wait returns on `force_exit` and skips the cleanup; the
+    teardown has to look at the flag afterwards, not before."""
+    timeline = []
+
+    class Coordinator:
+        async def begin_shutdown(self, sio, *, should_abort=None):
+            timeline.append("drain")
+
+        async def shutdown(self):
+            timeline.append("lifespan")
+
+    server = _server(Coordinator())
+    server.servers = []
+
+    async def signal_arrives_now():
+        server.force_exit = True
+
+    server._wait_tasks_to_complete = signal_arrives_now
+
+    await server.shutdown([])
+
+    assert timeline == ["drain", "lifespan"]

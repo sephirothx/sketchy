@@ -84,9 +84,11 @@ class DrainingServer(uvicorn.Server):
         # The listeners/sockets are already closed. Uvicorn now disconnects
         # established connections, waits its remaining tasks, and invokes the
         # lifespan cleanup; that cleanup sees the coordinator already stopped.
-        forced = self.force_exit
         await super().shutdown(sockets=[])
-        if forced:
+        # Read *after* Uvicorn's own shutdown, not before it: a second signal
+        # that lands while Uvicorn is still waiting for connections to close
+        # makes that wait return and skips the cleanup just the same.
+        if self.force_exit:
             # Uvicorn skips the lifespan cleanup on a forced exit, and that
             # cleanup is where the last chat lines are written, the games the
             # drain ended are staged and replayed, and the recorder is flushed
