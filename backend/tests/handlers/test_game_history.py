@@ -1033,6 +1033,7 @@ async def test_a_drawer_who_leaves_after_a_guess_ends_the_turn_and_the_game_is_s
 
         assert len(game.completed_turns) == 1, "a turn somebody guessed is a turn that ended"
         assert room.departed_seats[drawer.id].score == points, "the bonus follows the seat out"
+        assert room.last_game_drawings[-1].drawer_nickname == drawer.nickname
         await _play_out(ctx, room)
 
         assert room.last_game_history == "recorded"
@@ -1099,8 +1100,74 @@ async def test_an_account_that_scored_then_left_and_rejoined_is_saved_with_its_p
         scores = await _final_scores(factory, game_id)
         assert scores[guesser.nickname] == points
         assert scores[drawer.nickname] == points
+        # The standings the room was shown say the same as the row.
+        shown = {entry["nickname"]: entry["score"] for entry in room.last_game_scores}
+        assert shown[guesser.nickname] == points
     finally:
         await engine.dispose()
+
+
+async def test_a_game_abandoned_mid_turn_after_a_guess_is_saved():
+    """Everybody walks out while somebody has already guessed: the points
+    are on the seat, so the turn is closed as a fact before the record is
+    built, and the ledger has the turn they came from (#992)."""
+    factory, engine, history, accounts = await _real_history()
+    try:
+        room_manager, room, players = build_room(rounds=1, accounts=accounts)
+        ctx = build_context(room_manager, history)
+        flow = ctx.game_flow
+        await flow._start_fresh_game(room, room.player_list())
+        game = room.game
+        game_id = game.id
+        drawer, guesser = _first_turn(players, game)
+        game.force_prompt_choice()
+        game.snapshot_turn_participants(
+            {p.id: "eligible" for p in players.values() if p is not drawer}
+        )
+        game.set_phase_deadline(game.drawing_seconds)
+        correct, points = game.submit_guess(guesser.id, game.prompt)
+        assert correct and points > 0
+        guesser.score += points
+
+        assert await flow.record_abandoned_game(room)
+        await ctx.timers.close()
+        await replay_staged(ctx)
+
+        assert room.last_game_history == "recorded"
+        scores = await _final_scores(factory, game_id)
+        assert scores[guesser.nickname] == points
+        assert scores[drawer.nickname] == points
+        assert await _turn_count(factory, game_id) == 1
+    finally:
+        await engine.dispose()
+
+
+async def _turn_count(factory, game_id: str) -> int:
+    from uuid import UUID
+
+    from sqlalchemy import func, select
+
+    from app.db.models import TurnRecord
+
+    async with factory() as session:
+        return await session.scalar(
+            select(func.count()).select_from(TurnRecord).where(TurnRecord.game_id == UUID(game_id))
+        )
+
+
+async def test_a_value_the_database_refuses_is_given_up_at_once_as_invalid(signals):
+    """The asyncpg dialect reports a refused value as a bare DBAPIError; read
+    by SQLSTATE class, it is as final as the writer's own refusal."""
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository(refuses_value=True)
+    ctx = build_context(room_manager, history)
+
+    await play_to_completion(ctx, room, players)
+
+    assert history.attempts == 1
+    [row] = staged_rows(ctx).values()
+    assert (row.state, row.failure_code) == ("failed", "invalid")
+    assert signals.history_writes_abandoned.get(("replay", "invalid")) == 1
 
 
 async def test_a_game_the_writer_refuses_is_given_up_at_once_as_invalid(signals):

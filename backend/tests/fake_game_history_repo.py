@@ -59,7 +59,7 @@ class FakeGameHistoryRepository(GameHistoryRepository):
     """Captures `save_game` calls so tests can assert on what was persisted."""
 
     def __init__(
-        self, *, fail: bool = False, lost_locks: int = 0, conflict: bool = False, invalid: bool = False
+        self, *, fail: bool = False, lost_locks: int = 0, conflict: bool = False, invalid: bool = False, refuses_value: bool = False
     ) -> None:
         self.saved: list[SavedGame] = []
         self.fail = fail
@@ -67,6 +67,7 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         # the one failure a replay never retries (#541).
         self.conflict = conflict
         self.invalid = invalid
+        self.refuses_value = refuses_value
         # How many saves in a row lose their lock wait the way PostgreSQL
         # reports it (SQLSTATE 55P03), before one goes through.
         self.lost_locks = lost_locks
@@ -97,6 +98,16 @@ class FakeGameHistoryRepository(GameHistoryRepository):
             raise GameHistoryConflictError(f"Game '{game_record.id}' conflicted")
         if self.invalid:
             raise ValueError("Score event ledger does not reconcile to final participant scores")
+        if self.refuses_value:
+            # What the asyncpg dialect raises for a value PostgreSQL will not
+            # take: a bare DBAPIError around the driver's error, never
+            # SQLAlchemy's DataError.
+            from sqlalchemy.exc import DBAPIError
+
+            class _TooLong(Exception):
+                pgcode = "22001"
+
+            raise DBAPIError("INSERT", {}, _TooLong("value too long for type character varying(64)"))
         if self.lost_locks:
             self.lost_locks -= 1
             raise _lock_not_available()

@@ -1270,12 +1270,17 @@ class GameFlowService:
         """
         return await self._end_turn(room)
 
-    async def _end_turn(self, room: Room) -> bool:
-        game = room.game
-        if not game or game.phase != Phase.DRAWING:
-            return False
-        self._timers.cancel_phase_timer(room.id)
-        self._timers.cancel_hint_timers(room.id)
+    def _settle_live_turn(self, room: Room, game: Game) -> int | None:
+        """Close the drawing turn as a fact: outcomes, scores, the drawing.
+
+        Everything `_end_turn` decides about a turn, and nothing it says
+        about it - no emit, no timer - so a game recorded while a turn is
+        in progress (#992: everybody walked out, or the process is draining,
+        after somebody guessed) can fold that turn into its history and the
+        points already on the seats have the ledger events the writer
+        requires. Returns the drawer bonus, or None when there was no
+        drawing turn to close.
+        """
         active_eligible = {
             player.id
             for player in room.active_players()
@@ -1310,17 +1315,17 @@ class GameFlowService:
             all_active_guessed=all_active_guessed,
         )
         if drawer_bonus is None:
-            return False
+            return None
         drawer = room.players.get(game.current_drawer)
+        departed = room.departed_seats.get(game.current_drawer or "")
         if drawer:
             drawer.score += drawer_bonus
-        elif (departed := room.departed_seats.get(game.current_drawer or "")) is not None:
+        elif departed is not None:
             # A drawer who walked out after somebody guessed still earned the
             # bonus (R-SCORE-08), and the history writer requires the seat's
             # score to sum with the ledger's `drawer_bonus` event (#992).
-            room.departed_seats[departed.player_id] = replace(
-                departed, score=departed.score + drawer_bonus
-            )
+            departed = replace(departed, score=departed.score + drawer_bonus)
+            room.departed_seats[departed.player_id] = departed
         room.record_drawing_recap(
             DrawingRecapEntry(
                 # end_turn appended this turn a moment ago, so it is the one
@@ -1330,14 +1335,33 @@ class GameFlowService:
                 round_number=game.round_number,
                 turn_number=len(room.last_game_drawings) + 1,
                 drawer_id=game.current_drawer or "",
-                drawer_nickname=drawer.nickname if drawer else "Unknown player",
-                drawer_name_color=drawer.name_color if drawer else None,
+                drawer_nickname=(
+                    drawer.nickname
+                    if drawer
+                    else departed.nickname
+                    if departed
+                    else "Unknown player"
+                ),
+                drawer_name_color=(
+                    drawer.name_color if drawer else departed.name_color if departed else None
+                ),
                 prompt=game.prompt or "",
                 action_count=len(game.canvas.history),
                 canvas_history=game.canvas.sync_payload(),
             )
         )
 
+        return drawer_bonus
+
+    async def _end_turn(self, room: Room) -> bool:
+        game = room.game
+        if not game or game.phase != Phase.DRAWING:
+            return False
+        self._timers.cancel_phase_timer(room.id)
+        self._timers.cancel_hint_timers(room.id)
+        drawer_bonus = self._settle_live_turn(room, game)
+        if drawer_bonus is None:
+            return False
         # Before the payload is built: `seconds` on it is
         # `game.remaining_seconds()`, which without this still answers for the
         # drawing phase that just ended. A turn that ran out of clock therefore
@@ -1375,6 +1399,12 @@ class GameFlowService:
         game = room.game
         if game is None:
             return False
+        if game.phase == Phase.DRAWING and game.correct_guessers:
+            # Somebody guessed the turn in progress: their points are on
+            # their seat, and the history writer proves every seat's score
+            # against the ledger (R-HIST-12). Closed as a fact so the ledger
+            # has the turn those points came from (#992).
+            self._settle_live_turn(room, game)
         history = (
             build_game_history(
                 room,
@@ -1556,6 +1586,13 @@ class GameFlowService:
             self._note_history_write_started(room, game, history)
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
+            # An account that left and rejoined holds the points of both
+            # seats, here as in the record (R-HIST-12, #992): the standings
+            # a room is shown and the ones it is written with agree.
+            carried: dict[str, int] = {}
+            for seat in room.departed_seats.values():
+                if seat.user_id and not seat.is_spectator:
+                    carried[seat.user_id] = carried.get(seat.user_id, 0) + seat.score
             room.last_game_scores = [
                 {
                     "playerId": p.id,
@@ -1563,7 +1600,7 @@ class GameFlowService:
                     "nameColor": p.name_color,
                     "avatarUrl": avatar_url(p.avatar_key),
                     "isAnonymous": p.is_anonymous,
-                    "score": p.score,
+                    "score": p.score + (carried.get(p.user_id, 0) if p.user_id else 0),
                 }
                 for p in sorted(room.player_list(), key=lambda p: -p.score)
             ]

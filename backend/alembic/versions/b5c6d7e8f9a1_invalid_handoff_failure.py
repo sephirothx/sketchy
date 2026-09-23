@@ -37,20 +37,16 @@ def _check(values: tuple[str, ...]) -> str:
     return "failure_code IN (" + ", ".join(repr(value) for value in values) + ")"
 
 
-def _replace(values: tuple[str, ...]) -> None:
+def upgrade() -> None:
     if op.get_context().dialect.name == "postgresql":
         op.drop_constraint(_NAME, _TABLE, type_="check")
-        op.create_check_constraint(_NAME, _TABLE, _check(values), postgresql_not_valid=True)
+        op.create_check_constraint(_NAME, _TABLE, _check(_AFTER), postgresql_not_valid=True)
         op.execute(f"ALTER TABLE {_TABLE} VALIDATE CONSTRAINT {_NAME}")
     else:
         with op.batch_alter_table(_TABLE) as batch:
             batch.drop_constraint(_NAME, type_="check")
             # online-ddl: SQLite rebuilds the table in batch mode; it has no NOT VALID and holds no live deployment
-            batch.create_check_constraint(_NAME, _check(values))
-
-
-def upgrade() -> None:
-    _replace(_AFTER)
+            batch.create_check_constraint(_NAME, _check(_AFTER))
 
 
 def downgrade() -> None:
@@ -59,4 +55,12 @@ def downgrade() -> None:
     op.execute(
         sa.text(f"UPDATE {_TABLE} SET failure_code = 'exhausted' WHERE failure_code = 'invalid'")
     )
-    _replace(_BEFORE)
+    if op.get_context().dialect.name == "postgresql":
+        op.drop_constraint(_NAME, _TABLE, type_="check")
+        op.create_check_constraint(_NAME, _TABLE, _check(_BEFORE), postgresql_not_valid=True)
+        op.execute(f"ALTER TABLE {_TABLE} VALIDATE CONSTRAINT {_NAME}")
+    else:
+        with op.batch_alter_table(_TABLE) as batch:
+            batch.drop_constraint(_NAME, type_="check")
+            # online-ddl: SQLite rebuilds the table in batch mode; it has no NOT VALID and holds no live deployment
+            batch.create_check_constraint(_NAME, _check(_BEFORE))
