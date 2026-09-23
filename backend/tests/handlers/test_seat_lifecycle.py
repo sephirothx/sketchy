@@ -298,3 +298,52 @@ async def test_leaving_the_room_the_session_names_drops_its_binding():
 
     assert sessions.sessions["sid-A"] == {"user_id": sessions.account_for("sid-A")}
     assert await ctx.game_flow.require_current_player("sid-A") is None
+
+
+async def test_a_join_racing_the_last_leave_is_refused_rather_than_seated_in_a_ghost():
+    """The joiner's identity read is a database call, and the host leaves
+    inside it: the room is torn down and its code retired, but the seat used
+    to be added to the dead object and answered `ok`. Every later command
+    from that socket was `not_in_room`, and it never saw a `room_state` (#1000)."""
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    rm = RoomManager()
+    ctx, sio, sessions = build_stack(rm)
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(side_effect=["AAAAAA"]),
+        release_unpublished=AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=AsyncMock(return_value=False),
+    )
+    handlers = sio.handlers["/"]
+    created = await handlers["create_room"]("sid-host", {"nickname": "Host", "name": "R"})
+    room_id = created["roomId"]
+
+    real_get = sessions.get
+    gate = asyncio.Event()
+    calls = {"n": 0}
+
+    async def slow_get(sid, namespace=None):
+        if sid == "sid-join":
+            calls["n"] += 1
+            if calls["n"] == 2:  # after the room was resolved, before the seat
+                await gate.wait()
+        return await real_get(sid)
+
+    sio.get_session = AsyncMock(side_effect=slow_get)
+    join = asyncio.create_task(
+        handlers["join_room"]("sid-join", {"roomId": room_id, "nickname": "Late"})
+    )
+    await asyncio.sleep(0.01)
+    await handlers["leave_room"]("sid-host", None)
+    assert rm.get_room(room_id) is None
+    gate.set()
+
+    answer = await join
+
+    assert answer["ok"] is False
+    assert answer["errorCode"] == "room_ended"
+    assert rm.get_room(room_id) is None, "nothing was resurrected"
+    await ctx.timers.close()

@@ -445,6 +445,11 @@ Three distinctions worth knowing:
   here and will take the room shortly.
 - `not_friends` answers both "we are not friends" and "there is no such account", so the
   command cannot be used to test whether somebody has unfriended you.
+- `room_ended` also answers a `join_room` whose room was torn down *while the entry
+  was awaiting something* — the session read, the identity resolution, the release of a
+  seat held elsewhere. The last seated player can leave through any of those gaps, and a
+  seat added to the dead room afterwards answered `ok` to a player nothing would ever
+  address again (#1000). The room is re-checked by identity after every await.
 
 A payload that fails validation is refused by
 `PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py`](../backend/app/handlers/payloads.py))
