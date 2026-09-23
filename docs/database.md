@@ -26,8 +26,8 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 
 | Concern | Rule | Source |
 | --- | --- | --- |
-| Default engine | Embedded SQLite at `./sketchy.db`, zero configuration — **development and test only** | [`db/__init__.py:23`](../backend/app/db/__init__.py) |
-| Alternative | PostgreSQL via `DATABASE_URL` (`postgresql+asyncpg://…`) | [`db/__init__.py:47`](../backend/app/db/__init__.py) |
+| Default engine | Embedded SQLite at `./sketchy.db`, zero configuration — **development and test only** | [`db/__init__.py:41`](../backend/app/db/__init__.py) |
+| Alternative | PostgreSQL via `DATABASE_URL` (`postgresql+asyncpg://…`) | [`db/__init__.py:111`](../backend/app/db/__init__.py) |
 | Production | With `SKETCHY_ENV=production`, startup **refuses** a missing, blank, or SQLite `DATABASE_URL`. The zero-config default is a *relative* file, so a production deploy that forgot the variable would look healthy while writing accounts, moderation evidence, and history to storage the next container replacement discards. SQLite also serializes every writer, which caps such a server at one write at a time | [`deployment.py`](../backend/app/deployment.py) |
 | Indexes | **No standalone index on the leading column of a composite** on the same table — the composite already serves every lookup and scan on its own prefix. A single-column index that is *unique or partial* is exempt: it enforces an invariant rather than accelerating a lookup. Asserted by `test_no_index_duplicates_the_leading_column_of_a_composite` | [`db/models.py`](../backend/app/db/models.py) · [`tests/test_db_models.py`](../backend/tests/test_db_models.py) |
 | Lifecycle invariants | **A row shape no writer produces is refused by the row** (#553): a registered account has credentials and only it does; a curated offer names its version and nothing else does; a prompt is picked at most as often as offered and guessed by at most everyone who faced it; a reviewed report carries when; a friendship is answered iff not pending; an export that is ready has its document, failed its code, both a completion time, anything past pending a start time; a stored drawing says when it was stored and holds exactly its declared bytes, an erased one when it was erased and no bytes or object key, and a drawing belongs to a turn of its own game (`fk_turn_drawings_turn_same_game`); a failed mail says why; public visibility is the official catalogue's; a session expires after it was created; an avatar has positive dimensions within the upload ceiling; a revocation has an actor and a reason only when it happened. The checks complement the transaction ordering of #606–#609; they do not replace it. Proven positive and negative on both engines in `tests/test_lifecycle_constraints.py` | [`db/models.py`](../backend/app/db/models.py) |
@@ -35,10 +35,10 @@ cd backend && .venv/bin/python -c "from app.db.models import Base; [print(t) for
 | Read indexes | **Every non-unique index is read by something** (#890): it leads with a foreign key's column, which a delete walks, or with a column some statement in `backend/app` names. An index nothing reads is a write on every insert and update for no return, and on a table updated in place it stops the update from being heap-only — an update that changes an indexed column writes a new entry into *every* index of the table. #890 removed seven: `auth_sessions.idle_expires_at` (moved on every session touch), `room_messages (game_id, turn_id, created_at)` (the largest index on the table with the most rows), the friendship acceptance partial index, `planned_shutdown_abandonments.room_instance_id`, `turn_drawing_reactions.game_id`, and the two foreign-key indexes exempted in the row above. Asserted by `test_every_index_is_read_by_something`, with `UNREAD_INDEX_ALLOWED` for a reader the static search cannot see; `idx_scan = 0` in the monthly review (§13) is the live check | [`tests/test_db_models.py`](../backend/tests/test_db_models.py) |
 | Page fill (PostgreSQL) | **`fillfactor = 85` on tables updated in place far more often than inserted** — `auth_sessions`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_stats_daily` (#890; `runtime_stats_daily` had it too until #965 removed the table). At the default 100 an update finds its page full and has to put the new version on another page, which makes it non-heap-only even when no indexed column changed. Declared as `UPDATED_IN_PLACE` table info, set by revision `a1c2e3f4b5d6`, and held together by the migration chain test, because Alembic compares neither. Measured on 20,000 sessions, three rounds touching 12.5% each: 910 → 315 B of WAL per touch, 0 → 99.99% heap-only, and the table no longer grows under touches (`benchmarks/index_write_cost.py`) | [`db/models.py`](../backend/app/db/models.py) (`UPDATED_IN_PLACE`) |
 | JSON columns | `jsonb` on PostgreSQL (parsed form, comparable, GIN-indexable), text on SQLite. A Python `None` stores as SQL `NULL`, never the JSON token `null` | [`db/models.py`](../backend/app/db/models.py) (`PortableJSON`) |
-| SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection, test fixtures included | [`db/__init__.py:41`](../backend/app/db/__init__.py), [`tests/dbfixtures.py`](../backend/tests/dbfixtures.py) |
+| SQLite pragmas | `foreign_keys=ON`, `journal_mode=WAL`, `busy_timeout=5000` on **every** connection, test fixtures included | [`db/__init__.py:100`](../backend/app/db/__init__.py), [`tests/dbfixtures.py`](../backend/tests/dbfixtures.py) |
 | SQLite migrations | Run automatically on startup | [`db/__init__.py`](../backend/app/db/__init__.py) |
 | PostgreSQL migrations | An **explicit deploy step**, protected by an advisory lock (`POSTGRES_MIGRATION_LOCK_ID`). Startup only *verifies* the revision and fails with a direct instruction if the step was missed | [`db/migrate.py`](../backend/app/db/migrate.py) |
-| Pool (PostgreSQL) | 5 persistent + 5 overflow, pre-ping, 10 s timeout, 30 min recycle; all four tunable | [`db/__init__.py:25`](../backend/app/db/__init__.py) |
+| Pool (PostgreSQL) | 5 persistent + 5 overflow, 10 s timeout, 30 min recycle; a connection is checked for a closed socket on every checkout and pinged only after 30 s unused, `DB_POOL_PING_IDLE_SECONDS` (#973: `pool_pre_ping`'s ping was three round trips before every session). The trade is stated where it bites: a connection that died without closing its socket less than that long after its last use fails the next caller's first statement once. What the narrowing changes is the **ping's** own verdict — a connection that fails it is replaced on its own, where `pool_pre_ping` raised `InvalidatePoolError` and recycled every pooled connection. A disconnect that surfaces in the middle of a statement is a different path and is untouched by this: SQLAlchemy's `_handle_dbapi_exception` calls `Pool._invalidate`, which stamps the pool so that **every connection opened before it is recycled at its next checkout** — stock behaviour, the same before and after #973. `DB_POOL_PING_IDLE_SECONDS=0` pings every checkout again, which is the old guarantee at the old price; single-statement hot reads run under `AUTOCOMMIT` (`read_session`), one round trip instead of three; all five tunable | [`db/__init__.py:43`](../backend/app/db/__init__.py) |
 | Roles (PostgreSQL) | The web process connects as `sketchy_app`, which may read and write rows and only append to `audit_events` and `score_events`; the schema belongs to `sketchy_owner`, used only by the migration command, which grants the application its privileges. Production refuses an owner connection (#896, R-PLAT-22; §13 *Roles*) | [`db/roles.py`](../backend/app/db/roles.py) |
 | Session budgets (PostgreSQL) | Every connection carries its role's `application_name` and server-enforced `statement_timeout` / `lock_timeout` / `idle_in_transaction_session_timeout`, sent by asyncpg at connect so a recycled or re-established connection carries them too: **web** 30 s / 5 s / 60 s, **migration** 600 s / 5 s / 60 s (the lock budget covers the deploy advisory lock), **maintenance** 600 s / 5 s / 120 s for every operator command. Validated from the environment at startup beside the pool settings; SQLite is untouched. They bound one statement, one lock wait and one idle transaction — not a whole sweep, which has budgets of its own (§10) (#555) | [`db/__init__.py`](../backend/app/db/__init__.py) (`POSTGRES_ROLE_BUDGETS`) |
 
@@ -273,7 +273,13 @@ Notable design points:
   and no redundant schema-version column.
 - `last_active_at` changes **only** when a player takes or reconnects to a non-spectator
   room seat and when a game is persisted — deliberately not on page load, login, or an
-  ordinary profile write, because it drives retention.
+  ordinary profile write, because it drives retention. The game-persist stamp rides that
+  write; the seat's is one `UPDATE`, on a task of its own that the join does not wait
+  for (#980): nothing about the seat depends on it, so it may reach the database before
+  or after the acknowledgement, but never in front of it. A stamp that fails is logged and dropped, so `last_active_at` keeps
+  its previous value until the account's next seat or its next persisted game, whichever
+  comes first — which for a player who seldom plays can be weeks, bringing the retention
+  sweep that much closer.
 
 ### `auth_sessions`
 One revocable signed-in device.
@@ -881,6 +887,33 @@ pending report receives one resolution and cannot later be silently rewritten.
 ### `room_messages`
 Accepted player-authored chat, wrong guesses, and correct-guess text, kept **30 days**
 in an audience-aware store — and, since #533, the lobby's chat too.
+
+**Written in batches, never on the delivery path.** A queued writer inserts what
+arrived within `WRITE_LINGER_SECONDS` (0.25 s) of a batch's first line, up to 100,
+in one transaction that also runs the erasure barrier's two reads once for the batch
+(#972). Taking only what was already queued wrote one transaction per line, because
+rooms rarely say two lines in the same instant: under the load gate that was 2,885
+inserts in 2,874 transactions, and with the barrier's reads half of every statement
+the process ran. Batched, the same 60 s run wrote every line with 205 inserts, and
+the process's statements fell 16,929 → 8,643 (SQLite, counted with an engine listener;
+the shape is the same on PostgreSQL, the per-statement cost is not). A report reads its evidence from this table, so both report paths flush
+the queue (bounded at 2 s) before that read and **outside any transaction of their own**:
+waiting for the writer to get a connection while holding one is how concurrent reports
+starve the very writer whose rows they are waiting for. A report that is going to be refused -
+an erased account, an unknown player, game or turn, a duplicate, a picture that is not
+there - never waits for the queue at all on either path (R-MOD-21): each decides its
+refusals first, in a transaction it then closes.
+
+The flush waits only for the
+lines queued when it was called, not for what other rooms say meanwhile, and it cuts
+the current linger short without cutting anybody else's.
+
+The batching figures above are measured by the load gate (`benchmarks/run_load.sh`) with
+an `Engine` statement counter attached; the flush's own rules are checked by
+
+```bash
+cd backend && .venv/bin/pytest tests/test_message_retention.py tests/handlers/test_moderation.py -q
+```
 
 **No index by game or turn** (#890): `game_id` and `turn_id` are correlation columns — no read filters on them and neither is a foreign key — and the `(game_id, turn_id, created_at)` index that used to cover them was the largest on the table. Dropping it, measured on 100,000 six-recipient lines (`benchmarks/index_write_cost.py`): index bytes per row 205 → 102, WAL per insert 918 → 773 B, heap plus indexes −16%.
 
@@ -2487,7 +2520,7 @@ connects as `sketchy-migration` (600 s / 5 s / 60 s) and every operator command 
 as `sketchy-maintenance` (600 s / 5 s / 120 s). A statement that hits its budget fails
 with `canceling statement due to statement timeout` (or `lock timeout`) and the
 connection stays usable; an idle transaction that hits its budget has its connection
-terminated, and the pool's pre-ping replaces it on the next checkout. Override with the
+terminated, and the next checkout finds its socket closed and replaces it (#973). Override with the
 `DB_*_TIMEOUT_SECONDS` variables (README → Database & Configuration); raising one is
 not a fix for unbounded work, which the sweeps' own budgets bound.
 

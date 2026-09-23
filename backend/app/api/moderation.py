@@ -1050,6 +1050,62 @@ async def _reviewer(session: AsyncSession, request: Request) -> User:
     return user
 
 
+async def _refuse_a_report_that_cannot_be_filed(
+    session, *, body, reporter_user_id: UUID
+) -> None:
+    """Raise this report's refusal, if it has one, reading nothing else.
+
+    The same questions the writing transaction asks - is the reporter still
+    here, is there such a player, such a game, such a turn, and is one of
+    these already open - asked before the retention flush so that an answer of
+    "no" costs no wait (R-MOD-21). It decides nothing: the transaction that
+    writes asks them again.
+    """
+    try:
+        await require_live_account(session, reporter_user_id)
+    except AccountErasedError:
+        raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.") from None
+    target = await session.get(User, body.reported_user_id)
+    if target is None or target.state in {
+        AccountState.MERGED.value,
+        AccountState.DELETED.value,
+    }:
+        raise Refusal(404, ErrorCode.NO_SUCH_PLAYER, "No such player.")
+    game = await session.get(GameRecord, body.game_id) if body.game_id else None
+    if body.game_id and game is None:
+        raise Refusal(422, ErrorCode.NO_SUCH_GAME_CONTEXT, "No such game context.")
+    turn = await session.get(TurnRecord, body.turn_id) if body.turn_id else None
+    if body.turn_id and turn is None:
+        raise Refusal(422, ErrorCode.NO_SUCH_TURN_CONTEXT, "No such turn context.")
+    if turn is not None and game is not None and turn.game_id != game.id:
+        raise Refusal(
+            422, ErrorCode.TURN_NOT_IN_GAME, "The turn does not belong to that game."
+        )
+    if body.reason == ReportReason.INAPPROPRIATE_AVATAR and uploaded_avatar_key(
+        target.avatar_key
+    ) is None:
+        # A doodle is not something the player put up, so it is no picture to
+        # report (R-AVA-09). Decided here as well, so a report that cannot be
+        # filed never waits for the retention queue (R-MOD-21) - and so the
+        # key that *is* stored is read before the flush, not after it (#972
+        # seventh review).
+        raise Refusal(
+            422, ErrorCode.NO_PICTURE_TO_REPORT, "That player has no picture to report."
+        )
+    already_open = await open_report_id(
+        session, reporter_user_id=reporter_user_id, reported_user_id=target.id
+    )
+    if already_open is not None:
+        raise Refusal(
+            409,
+            ErrorCode.ALREADY_REPORTED,
+            (
+                "You have already reported this player, and a "
+                "moderator has not reviewed it yet."
+            ),
+        )
+
+
 def create_moderation_router(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -1063,6 +1119,9 @@ def create_moderation_router(
     # is written, so the cached This week shelf does not wait a minute for it.
     game_history_repo: GameHistoryRepository | None = None,
     on_gallery_decision: Callable[[], None] | None = None,
+    # Writes the chat lines still waiting in the retention queue, so a report
+    # citing one a moment after it was said finds it (#972).
+    flush_retained_messages: Callable[[], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
     report_limiter = PersistentRateLimiter(
@@ -1242,6 +1301,21 @@ def create_moderation_router(
             raise Refusal(422, ErrorCode.CANNOT_REPORT_YOURSELF, "You cannot report yourself.")
         request_id, ip_hash = await audit_coordinates(request, session_factory)
 
+        if body.message_ids and flush_retained_messages is not None:
+            # Every refusal this report can meet is decided first, in a short
+            # read-only transaction that is then closed, so a report that is
+            # going to be refused never waits for the retention queue
+            # (R-MOD-21) - and the wait itself holds no connection, which is
+            # what would starve the writer it is waiting for. The transaction
+            # below reads the same rows again; those are the reads that
+            # decide, and these only say "not this one" early (#972 sixth
+            # review).
+            async with session_factory() as pre_check:
+                async with pre_check.begin():
+                    await _refuse_a_report_that_cannot_be_filed(
+                        pre_check, body=body, reporter_user_id=db_reporter_id
+                    )
+            await flush_retained_messages()
         async with session_factory() as session:
             async with session.begin():
                 # The erasure barrier (app.auth.erasure): the reporter's

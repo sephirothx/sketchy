@@ -20,6 +20,7 @@ from starlette.exceptions import HTTPException
 from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
+from app.auth.password import password_hash_workers
 from app.compression import PRECOMPRESSED_SIBLINGS, SelectiveGZipMiddleware, precompressed_variant
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
@@ -603,6 +604,9 @@ async def flush_runtime_events(session_factory) -> None:
 async def lifespan(_app: FastAPI):
     # Refused at startup rather than at the first finished game.
     history_encode_workers()
+    # Validated here as well as in `app.server.run`, so an app started some
+    # other way still refuses a bad value at startup, not at the first login.
+    password_hash_workers()
     shutdown_coordinator.begin_startup(
         drain_seconds=shutdown_drain_seconds(),
         reconnect_spread_seconds=reconnect_spread_seconds(),
@@ -877,6 +881,11 @@ api.include_router(
         on_avatar_changed=refresh_avatar_on_live_surfaces,
         game_history_repo=game_history_repo,
         on_gallery_decision=gallery_shelf.invalidate,
+        flush_retained_messages=(
+            handler_context.message_retention.flush
+            if handler_context.message_retention is not None
+            else None
+        ),
     )
 )
 api.include_router(

@@ -218,8 +218,16 @@ async def _seat_colour_preference(ctx: HandlerContext, player, requested: bool) 
         return requested if player.is_anonymous else player.colorblind_safe_colors
 
 
+_activity_writes: set[asyncio.Task] = set()
+
+
 async def _record_player_activity(ctx: HandlerContext, player) -> None:
-    """Best-effort retention signal for a successfully seated player."""
+    """Best-effort retention signal for a successfully seated player.
+
+    Run on its own rather than awaited by the entry (#980): it is a retention
+    signal, nothing about the seat depends on it, and awaited it was a write
+    transaction between the seat and the acknowledgement of every join.
+    """
     if (
         ctx.user_repo is None
         or not player.user_id
@@ -227,16 +235,22 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     ):
         return
     try:
-        # Bounded like the rest of the entry path. It runs outside the gate,
-        # so a hang here no longer strands a seat - but it still holds up the
-        # acknowledgement the player is waiting for.
+        # Bounded so a hang cannot keep the task alive for ever, but not by
+        # the entry's deadline: the task is created with the entry's context,
+        # so `within_entry=True` would hand it whatever was left of six
+        # seconds - nothing, under exactly the load this runs after - and drop
+        # the stamp without reaching the database (#980 review). Nobody waits
+        # on it; it runs after the acknowledgement, on its own.
         await _bounded(
-            ctx.user_repo.touch_last_active(player.user_id), "recording activity"
+            ctx.user_repo.touch_last_active(player.user_id),
+            "recording activity",
+            within_entry=False,
         )
     except EntryTimedOut:
         pass
     except Exception:
         logger.exception("Failed to record activity for user %s", player.user_id)
+
 
 async def _unseat_an_ended_account(ctx: HandlerContext, room, player) -> dict:
     """Take back a seat the account lost the right to while taking it.
@@ -260,7 +274,11 @@ async def _after_seating(ctx: HandlerContext, seated: list) -> None:
     a ban - waiting behind writes that have nothing to do with the seat.
     """
     for player in seated:
-        await _record_player_activity(ctx, player)
+        # Not awaited, so the acknowledgement does not wait for a retention
+        # signal (#980) - the same bargain `_record_last_seen` makes.
+        task = asyncio.create_task(_record_player_activity(ctx, player))
+        _activity_writes.add(task)
+        task.add_done_callback(_activity_writes.discard)
         await _warm_block_filter(ctx, player)
 
 
@@ -780,7 +798,11 @@ async def _seat_in_room(
     # in this room, just confirm it rather than reprocessing the join.
     already_joined = await ctx.game_flow._existing_player_for_sid(sid, room.id)
     if already_joined:
-        already_joined.colorblind_safe_colors = await _seat_colour_preference(
+        # The same merged read as the rebind below (#980 third review): this
+        # branch is the one every soft rebind walks, and it asked for the
+        # settings row on its own. The seat's colour is left alone here, as it
+        # always was - a heartbeat confirms a seat, it does not re-identify it.
+        _colour, already_joined.colorblind_safe_colors = await _rebound_account(
             ctx, already_joined, payload.colorblind_safe_colors
         )
         already_joined.sid = sid
@@ -823,13 +845,11 @@ async def _seat_in_room(
         # the path a guest returns through after registering or logging in
         # mid-game, so the seat has to pick up the new name and status.
         await _refresh_seat_identity(ctx, player, name_color)
-        player.colorblind_safe_colors = await _seat_colour_preference(
+        stored, player.colorblind_safe_colors = await _rebound_account(
             ctx, player, payload.colorblind_safe_colors
         )
-        if not player.is_anonymous:
-            stored = await _account_name_color(ctx, player.user_id)
-            if stored or name_color:
-                player.name_color = stored or name_color
+        if not player.is_anonymous and (stored or name_color):
+            player.name_color = stored or name_color
         if not ctx.room_capacity.admits_a_takeover(player.id):
             return {
                 "ok": False, "errorCode": ErrorCode.SEAT_CHANGING_TOO_FAST,
@@ -947,17 +967,35 @@ async def _seat_in_room(
     return session_payload(room, player)
 
 
-async def _account_name_color(ctx: HandlerContext, user_id: str | None) -> str | None:
-    """The color stored on an account, if it has one."""
-    if ctx.user_repo is None or not user_id:
-        return None
+async def _rebound_account(
+    ctx: HandlerContext, player, requested: bool
+) -> tuple[str | None, bool]:
+    """A returning registered seat's colour and colour-safe preference, in one
+    read (#980): the rebind path asked for the settings row and the account
+    one after the other, which is the pair the entry path already merged - and
+    this is the path a reconnect herd walks.
+
+    A guest has nothing stored, so their payload stays the authority; a read
+    that stalls leaves the seat exactly as it was.
+    """
+    if ctx.user_repo is None or not player.user_id or player.is_anonymous:
+        return None, await _seat_colour_preference(ctx, player, requested)
     try:
-        account = await _bounded(
-            ctx.user_repo.get_by_id(user_id), "reading an account's colour"
+        account, stored = await _bounded(
+            ctx.user_repo.get_seat_account(player.user_id), "refreshing a returning seat"
         )
     except EntryTimedOut:
-        return None
-    return normalize_name_color(account.name_color) if account else None
+        return None, player.colorblind_safe_colors
+    if account is None:
+        # No account row at all - erased while the seat was empty. There is
+        # nothing stored to prefer and nothing to read a second time for, so
+        # the seat keeps what it carries, as it does when the read stalls.
+        return None, player.colorblind_safe_colors
+    colour = normalize_name_color(account.name_color)
+    if stored is None:
+        # A repository that does not read the preference with the account.
+        return colour, await _seat_colour_preference(ctx, player, requested)
+    return colour, bool(stored)
 
 
 async def _refresh_seat_identity(

@@ -53,6 +53,7 @@ class ErrorCode(StrEnum):
     # Server and account state
     SERVER_DRAINING = "server_draining"
     SERVER_PAUSED = "server_paused"
+    SERVER_BUSY = "server_busy"
     DATABASE_BUSY = "database_busy"
     ACCOUNT_ENDED = "account_ended"
     ACCOUNT_REQUIRED = "account_required"
