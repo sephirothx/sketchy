@@ -150,6 +150,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Server and account state
   server_draining: "Sketchy is restarting. Try again in a moment.",
   server_paused: "Sketchy is not taking new rooms right now.",
+  server_busy: "Sketchy is busy right now. Try again in a moment.",
   database_busy: "Sketchy is having trouble reaching its database. Please try again.",
   account_ended: "This account is no longer active.",
   account_required: accountRequired,

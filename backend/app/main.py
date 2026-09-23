@@ -20,6 +20,7 @@ from starlette.exceptions import HTTPException
 from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
+from app.auth.password import password_hash_workers
 from app.compression import PRECOMPRESSED_SIBLINGS, SelectiveGZipMiddleware, precompressed_variant
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
@@ -570,6 +571,9 @@ async def adopt_stored_settings() -> None:
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Validated here as well as in `app.server.run`, so an app started some
+    # other way still refuses a bad value at startup, not at the first login.
+    password_hash_workers()
     shutdown_coordinator.begin_startup(
         drain_seconds=shutdown_drain_seconds(),
         reconnect_spread_seconds=reconnect_spread_seconds(),
