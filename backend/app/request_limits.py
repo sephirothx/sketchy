@@ -45,11 +45,12 @@ PATH_LIMITS: Mapping[str, int] = {
 class RequestSizeLimitMiddleware:
     """Pure ASGI, deliberately.
 
-    `BaseHTTPMiddleware` runs the rest of the application in a task of its own
-    behind a pair of memory streams, and a refusal written from up there has
-    to race the body still being pushed into them. Plain ASGI refuses on the
-    `Content-Length` before anything downstream is called at all, which is the
-    one place a limit can be cheap.
+    Plain ASGI refuses on the `Content-Length` before anything downstream is
+    called at all, and before a byte of the body has been asked for, which is
+    the one place a limit can be cheap. Under `BaseHTTPMiddleware` the rest of
+    the application runs in a task of its own behind a pair of memory streams,
+    and the refusal would be written while the body is still being pushed into
+    them.
     """
 
     def __init__(

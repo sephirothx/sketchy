@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import event
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import PlainTextResponse
+from starlette.routing import Mount
 
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -159,16 +160,14 @@ def _added_to_a_router(target):
 
 
 def _inside_an_included_router(target):
+    """A layer mounted on a router that is then included - how every router in
+    this application is attached, and the shape a linear walk cannot see."""
     from fastapi import APIRouter
 
     inner = APIRouter()
-    inner.add_middleware = None  # a router has none; the probe rides its app
+    inner.routes.append(Mount("/sub", app=_Probe(target)))
     outer = FastAPI()
     outer.include_router(inner)
-    included = next(
-        route for route in outer.routes if hasattr(route, "original_router")
-    )
-    included.original_router.app = _Probe(target)
     return outer
 
 
@@ -191,6 +190,45 @@ def test_the_walk_would_see_a_probe_anywhere_in_the_exported_stack(place, monkey
     assert _base_http_middlewares(main_module.app) == ["_Probe"]
     with pytest.raises(AssertionError):
         test_nothing_in_the_exported_application_is_a_base_http_middleware()
+
+
+async def test_a_suspension_is_refused_under_a_prefix_too(monkeypatch):
+    """The refusal's own `/api/` test is the one that decides whether a
+    suspended account is stopped, and on `request.url.path` it is the raw
+    path: under a proxy prefix that reads `/sketchy/api/...`, which is not
+    `/api/`, so every suspended account was served (#974 fifth review). The
+    hatch tests run on plain paths, where the two are identical, so they
+    discriminate nothing here.
+    """
+    import app.auth.middleware as middleware_module
+    from app.auth.sessions import SessionResolution
+
+    monkeypatch.setenv("IP_HASH_SECRET", "prefix-suspension-secret")
+    factory, engine = await create_test_db()
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+
+    @app.get("/api/whoami")
+    async def whoami(request: Request):
+        return {"userId": request.state.user_id}
+
+    async def suspended(*_args, **_kwargs):
+        return SessionResolution(session=None, banned_user_id="banned-account")
+
+    async def payload(*_args, **_kwargs):
+        return {"reason": "suspended"}
+
+    monkeypatch.setattr(middleware_module, "resolve_session_status", suspended)
+    monkeypatch.setattr(middleware_module, "suspension_payload", payload)
+
+    client = AsyncClient(
+        transport=ASGITransport(app=app, root_path="/sketchy"), base_url="http://test"
+    )
+    try:
+        assert (await client.get("/sketchy/api/whoami")).status_code == 403
+    finally:
+        await client.aclose()
+        await engine.dispose()
 
 
 async def test_only_the_api_prefix_itself_resolves_a_session(env):

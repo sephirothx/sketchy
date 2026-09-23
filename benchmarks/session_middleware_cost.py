@@ -13,9 +13,13 @@ Two questions, priced separately:
 
 A real session cookie is sent, against a temporary SQLite database with one
 account signed in: resolving it is the work the gate skips, and measuring the
-gate without it would measure nothing. Two figures per cell: the loop thread's
-own CPU, and the whole process's - which here also counts the client driving
-the requests, so the first is the one to compare.
+gate without it would measure nothing. Two figures per cell: the loop
+thread's own CPU, and the whole process's - the difference is aiosqlite's
+worker thread, where the session read actually runs, so the first is the one
+to compare and the second is what the machine pays.
+
+The absolute numbers depend on the machine and on how quiet it is; what the
+table says is the *ratio* between its rows, which one run measures together.
 
 Usage:
   backend/.venv/bin/python benchmarks/session_middleware_cost.py --requests 2000
@@ -26,6 +30,7 @@ import argparse
 import asyncio
 import os
 import sys
+import tempfile
 from time import process_time, thread_time
 
 ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -113,12 +118,19 @@ async def cost(app: FastAPI, path: str, requests: int, cookies) -> tuple[float, 
 async def main() -> None:
     parser = argparse.ArgumentParser()
     parser.add_argument("--requests", type=int, default=2000)
-    parser.add_argument("--database", default="/tmp/sketchy-session-cost.db")
+    parser.add_argument(
+        "--database",
+        default="",
+        help="SQLite file to build the signed-in account in; a temporary one by default",
+    )
     arguments = parser.parse_args()
 
     import app.auth.middleware as middleware_module
 
-    engine, factory, cookies = await signed_in_database(arguments.database)
+    database = arguments.database or os.path.join(
+        tempfile.mkdtemp(prefix="sketchy-session-cost-"), "accounts.db"
+    )
+    engine, factory, cookies = await signed_in_database(database)
     try:
         api = "/api/whoami"
         static = "/assets/index-AbCdEf12.js"
