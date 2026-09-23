@@ -60,6 +60,7 @@ from typing import NamedTuple
 from uuid import UUID
 
 from sqlalchemy import delete, or_, select, update
+from sqlalchemy.exc import DataError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.deployment import history_encode_workers
@@ -869,6 +870,12 @@ async def replay_claim(
                 )
             except GameHistoryConflictError as error:
                 return await _fail(HandoffFailureCode.CONFLICT, str(error))
+            except (ValueError, DataError) as error:
+                # The writer's own proofs refused the envelope's content
+                # (R-HIST-12), or the database refused a value in it. Neither
+                # changes between attempts: retrying for two hours only hid a
+                # deterministic bug behind a transient-looking metric (#992).
+                return await _fail(HandoffFailureCode.INVALID, f"history: {error!r}")
             except (asyncio.TimeoutError, Exception) as error:
                 raise _Transient(f"history: {error!r}") from error
             # How long the write took and how late the game landed (#892):

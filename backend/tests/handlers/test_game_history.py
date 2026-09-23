@@ -944,3 +944,178 @@ async def test_a_write_that_lands_is_not_counted_as_lost(signals):
     await play_to_completion(ctx, room, players)
     assert abandoned_writes() == []
     assert signals.history_writes_abandoned.total() == 0
+
+
+# --- the ledger has to sum with the seats, whoever left (#992) -----------------
+
+
+async def _real_history():
+    """The real writer, whose ledger proofs the fake does not run."""
+    from app.repositories.sqlalchemy import (
+        SqlAlchemyGameHistoryRepository,
+        SqlAlchemyUserRepository,
+    )
+    from tests.dbfixtures import create_test_db
+
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    accounts = {}
+    for name in ("Ann", "Bob", "Cid"):
+        accounts[name] = (await users.create_anonymous(display_name=name)).id
+    return factory, engine, SqlAlchemyGameHistoryRepository(factory), accounts
+
+
+async def _final_scores(factory, game_id: str) -> dict[str, int]:
+    from uuid import UUID
+
+    from sqlalchemy import select
+
+    from app.db.models import GameParticipant
+
+    async with factory() as session:
+        rows = (
+            await session.execute(
+                select(
+                    GameParticipant.display_name_snapshot, GameParticipant.final_score
+                ).where(GameParticipant.game_id == UUID(game_id))
+            )
+        ).all()
+    return {name: score for name, score in rows}
+
+
+async def _play_out(ctx, room) -> None:
+    """Run whatever turns are left the way the timers would, then replay."""
+    flow = ctx.game_flow
+    while room.game is not None:
+        game = room.game
+        if game.phase.value == "choosing_prompt":
+            game.force_prompt_choice()
+            game.set_phase_deadline(game.drawing_seconds)
+            await flow._end_turn(room)
+        ctx.timers.cancel_phase_timer(room.id)
+        await flow._finish_or_next(room)
+    await ctx.timers.close()
+    await replay_staged(ctx)
+
+
+def _first_turn(players, game):
+    drawer = next(p for p in players.values() if p.id == game.current_drawer)
+    guesser = next(p for p in players.values() if p.id != game.current_drawer)
+    return drawer, guesser
+
+
+async def test_a_drawer_who_leaves_after_a_guess_ends_the_turn_and_the_game_is_saved():
+    """The points were on the guesser's seat the moment they guessed;
+    abandoning the turn dropped it from the record while the points stayed,
+    and the writer's ledger proof refused the whole game (#992). The turn
+    ends the way the clock ends it instead, and the departed drawer's seat
+    takes the bonus the ledger credits it with."""
+    factory, engine, history, accounts = await _real_history()
+    try:
+        room_manager, room, players = build_room(rounds=1, accounts=accounts)
+        ctx = build_context(room_manager, history)
+        flow = ctx.game_flow
+        await flow._start_fresh_game(room, room.player_list())
+        game = room.game
+        game_id = game.id
+        drawer, guesser = _first_turn(players, game)
+        game.force_prompt_choice()
+        game.snapshot_turn_participants(
+            {p.id: "eligible" for p in players.values() if p is not drawer}
+        )
+        game.set_phase_deadline(game.drawing_seconds)
+        correct, points = game.submit_guess(guesser.id, game.prompt)
+        assert correct and points > 0
+        guesser.score += points
+
+        room_manager.remove_player(room, drawer.id)
+        await flow._remove_player_from_game(room, drawer.id)
+
+        assert len(game.completed_turns) == 1, "a turn somebody guessed is a turn that ended"
+        assert room.departed_seats[drawer.id].score == points, "the bonus follows the seat out"
+        await _play_out(ctx, room)
+
+        assert room.last_game_history == "recorded"
+        scores = await _final_scores(factory, game_id)
+        assert scores[guesser.nickname] == points
+        assert scores[drawer.nickname] == points
+    finally:
+        await engine.dispose()
+
+
+async def test_a_drawer_who_leaves_before_anyone_guessed_still_skips_the_turn():
+    room_manager, room, players = build_room(rounds=2)
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    drawer_id = game.current_drawer
+    game.force_prompt_choice()
+    game.set_phase_deadline(game.drawing_seconds)
+
+    room_manager.remove_player(room, drawer_id)
+    await flow._remove_player_from_game(room, drawer_id)
+
+    assert game.completed_turns == []
+    assert game.phase.value == "choosing_prompt"
+    await ctx.timers.close()
+
+
+async def test_an_account_that_scored_then_left_and_rejoined_is_saved_with_its_points():
+    """A guesser scores on their first seat, leaves, and comes back on a
+    second one at zero. The ledger credits the award to the one row written,
+    so that row carries what both seats scored; written at the new seat's
+    zero, the writer refused the game (#992)."""
+    factory, engine, history, accounts = await _real_history()
+    try:
+        room_manager, room, players = build_room(rounds=1, accounts=accounts)
+        ctx = build_context(room_manager, history)
+        flow = ctx.game_flow
+        await flow._start_fresh_game(room, room.player_list())
+        game = room.game
+        game_id = game.id
+        drawer, guesser = _first_turn(players, game)
+        game.force_prompt_choice()
+        game.snapshot_turn_participants(
+            {p.id: "eligible" for p in players.values() if p is not drawer}
+        )
+        game.set_phase_deadline(game.drawing_seconds)
+        correct, points = game.submit_guess(guesser.id, game.prompt)
+        assert correct and points > 0
+        guesser.score += points
+
+        # Out, and back on a fresh seat that starts from nothing.
+        room_manager.remove_player(room, guesser.id)
+        await flow._remove_player_from_game(room, guesser.id)
+        rejoined = room_manager.add_player(room, guesser.nickname, user_id=guesser.user_id)
+        rejoined.sid = "sid-rejoined"
+        game.add_player_to_rotation(rejoined.id)
+        assert rejoined.score == 0
+
+        await flow._end_turn(room)
+        await _play_out(ctx, room)
+
+        assert room.last_game_history == "recorded"
+        scores = await _final_scores(factory, game_id)
+        assert scores[guesser.nickname] == points
+        assert scores[drawer.nickname] == points
+    finally:
+        await engine.dispose()
+
+
+async def test_a_game_the_writer_refuses_is_given_up_at_once_as_invalid(signals):
+    """A ledger that does not reconcile refuses the same way on every
+    attempt; two hours of backoff only hid the bug behind a metric that
+    said the database was slow (#992)."""
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository(invalid=True)
+    ctx = build_context(room_manager, history)
+
+    await play_to_completion(ctx, room, players)
+
+    assert history.attempts == 1
+    assert room.last_game_history == "failed"
+    [row] = staged_rows(ctx).values()
+    assert (row.state, row.failure_code, row.payload) == ("failed", "invalid", None)
+    assert "does not reconcile" in row.last_error
+    assert signals.history_writes_abandoned.get(("replay", "invalid")) == 1

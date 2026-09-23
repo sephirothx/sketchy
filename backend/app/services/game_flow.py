@@ -10,7 +10,7 @@ import logging
 from collections import Counter
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Mapping, Protocol
 
@@ -1314,6 +1314,13 @@ class GameFlowService:
         drawer = room.players.get(game.current_drawer)
         if drawer:
             drawer.score += drawer_bonus
+        elif (departed := room.departed_seats.get(game.current_drawer or "")) is not None:
+            # A drawer who walked out after somebody guessed still earned the
+            # bonus (R-SCORE-08), and the history writer requires the seat's
+            # score to sum with the ledger's `drawer_bonus` event (#992).
+            room.departed_seats[departed.player_id] = replace(
+                departed, score=departed.score + drawer_bonus
+            )
         room.record_drawing_recap(
             DrawingRecapEntry(
                 # end_turn appended this turn a moment ago, so it is the one
@@ -1687,6 +1694,22 @@ class GameFlowService:
         game = room.game
         if not game:
             return
+        if (
+            token == game.current_drawer
+            and game.phase == Phase.DRAWING
+            and game.correct_guessers
+        ):
+            # Somebody already guessed: the points are on their seat and the
+            # drawing exists, so this is a turn that ended, not one that never
+            # happened. Abandoning it dropped the turn from `completed_turns`
+            # while the points stayed on the seats, and the ledger the history
+            # writer proves against no longer summed to the scores - every game
+            # with a mid-turn walkout was refused (#992). Ended the way the
+            # clock ends one, the way an AFK drawer's turn already is - and
+            # before the rotation loses the seat, because removing the drawer
+            # rewinds the cursor to before the next survivor, and a turn
+            # recorded after that carries round 0.
+            await self._end_turn(room)
         was_drawer = game.remove_player_from_rotation(token)
         if not game.turn_order:
             self._timers.cancel_phase_timer(room.id)
@@ -1697,8 +1720,14 @@ class GameFlowService:
             await self.record_abandoned_game(room, defer_durable=defer_durable)
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
-        elif was_drawer:
+        elif was_drawer and game.phase != Phase.TURN_RESULTS:
             await self._abandon_current_turn(room, defer_durable=defer_durable)
+        elif was_drawer:
+            # The turn just ended - above, or by its own clock a moment ago.
+            # The results screen runs its course and its timer moves the game
+            # on from the cursor the removal left; cutting it short showed
+            # the next turn under a results screen nobody had read.
+            pass
         else:
             await self._end_turn_if_all_guessed(room)
 

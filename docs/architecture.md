@@ -1521,7 +1521,8 @@ the room waits on is one small insert: the whole game — history, drawings, pro
 supervised handoff loop ([`app/services/game_handoff.py`](../backend/app/services/game_handoff.py))
 claims that row with a lease and a fencing token, performs the history write below,
 records each of its two parts under the one row, and deletes it; a transient failure
-is retried with backoff for about two hours, a conflict fails at once, and a terminal
+is retried with backoff for about two hours; a conflict, and an envelope whose content
+the writer's own proofs refuse (`invalid`, #992), fail at once; and a terminal
 failure keeps the row without its payload as a record. A database that is down at the
 moment a game ends still loses the game, counted as before (kind `handoff`); everything
 after the insert survives crashes, restarts and lock waits. The history write itself is
