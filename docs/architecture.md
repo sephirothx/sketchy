@@ -463,7 +463,11 @@ them. Its budget covers a queued encode as well as the write it is bounded by, c
 from `ROOM_GLOBAL_LIMIT` and `HISTORY_ENCODE_WORKERS` rather than fixed, and it
 re-checks the set as it goes, because a teardown task defers a staging task of its own.
 Whatever is still running when the budget is spent is **cancelled and counted** as a
-lost write, rather than left for the loop to close under. A game still live when the deadline expires is **not** misrepresented as
+lost write, rather than left for the loop to close under - the cancellation itself
+bounded by `CLEANUP_CANCEL_SECONDS` (5 s), after which a task that swallowed it is left
+behind and said so in the log. What both phases record is flushed to `runtime_events`
+after the replay pass and before the engine is disposed of, which is the last thing the
+shutdown does. A game still live when the deadline expires is **not** misrepresented as
 finished: one privacy-safe `planned_shutdown_abandonments` row is written instead
 (runtime IDs, phase, counts, timestamps — never room codes, names, prompts, chat, or
 canvas contents). A second termination signal abandons the rest of the window and

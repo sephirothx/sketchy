@@ -991,23 +991,40 @@ def test_the_cleanups_are_drained_before_the_handoff_worker_stops():
     source = inspect.getsource(main_module.lifespan)
     drain = source.index("await handler_context.drain_room_cleanups(")
     assert drain < source.index("await stop_handoff_worker(")
+    # And the runtime events both of them record - a staging the drain
+    # cancelled, a replay the pass below abandoned - are written before the
+    # engine goes away. `stop_metrics_loop(None, ...)` returned on its first
+    # line, so the flush has to be the call itself (#976 seventh review).
+    flush = source.index("await flush_events(async_session_factory)")
+    assert flush > source.index("finished_game_worker.drain()")
+    assert flush < source.index("await async_engine.dispose()")
 
 
-async def test_a_cleanup_deferred_at_the_deadline_is_cancelled_too(caplog):
+async def test_a_cleanup_deferred_at_the_deadline_is_cancelled_and_counted(caplog):
     """The re-read fixed the waiting half; the cancelling half still worked
     from a snapshot, so a staging deferred by a teardown that was itself about
-    to be cancelled escaped the shutdown entirely (#976 sixth review)."""
+    to be cancelled escaped the shutdown entirely (#976 sixth review).
+
+    And it is *counted*: a coroutine cancelled before it has run a line never
+    enters its own `try`, so the game was lost with no record - which is the
+    half R-HIST-03 promises (#976 seventh review).
+    """
     import logging
 
     from app.handlers.context import HandlerContext
 
     ctx = object.__new__(HandlerContext)
     ctx.room_cleanups = set()
-    escaped = asyncio.Event()
+    steps: list[str] = []
 
     async def staging():
-        await asyncio.sleep(0.5)
-        escaped.set()
+        try:
+            steps.append("started")
+            await asyncio.sleep(0.5)
+            steps.append("escaped")
+        except asyncio.CancelledError:
+            steps.append("counted the loss")
+            raise
 
     async def teardown():
         await asyncio.sleep(0)
@@ -1019,5 +1036,114 @@ async def test_a_cleanup_deferred_at_the_deadline_is_cancelled_too(caplog):
         await asyncio.wait_for(ctx.drain_room_cleanups(0.1), timeout=5)
 
     assert ctx.room_cleanups == set(), "nothing is left running"
-    assert not escaped.is_set(), "the staging was cancelled, not left to the loop"
+    assert steps == ["started", "counted the loss"], steps
     assert "Cancelled 2 deferred room cleanup" in caplog.text
+
+
+async def test_a_cleanup_cancelled_before_its_first_step_still_counts_its_loss():
+    """A coroutine cancelled before it has run a line never enters its own
+    `try`, so the game it was going to stage is lost *and* uncounted - the
+    half R-HIST-03 promises. With a spent budget the drain reaches the cancel
+    phase without ever yielding, which is exactly that case (#976 seventh
+    review)."""
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    steps: list[str] = []
+
+    async def staging():
+        try:
+            steps.append("started")
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            steps.append("counted the loss")
+            raise
+
+    ctx.defer_cleanup(staging())  # created, not yet stepped
+    await asyncio.wait_for(ctx.drain_room_cleanups(0), timeout=5)
+
+    assert steps == ["started", "counted the loss"], steps
+    assert ctx.room_cleanups == set()
+
+
+async def test_a_cleanup_deferred_from_inside_a_cancellation_is_cancelled_too(caplog):
+    """The cancel phase loops for the same reason the wait phase does: a
+    teardown can defer its successor on its way out, and a single round would
+    leave that one running. Collapsing the loop to one snapshot passed (#976
+    seventh review)."""
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    escaped = asyncio.Event()
+
+    async def successor():
+        await asyncio.sleep(0.5)
+        escaped.set()
+
+    async def teardown():
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            ctx.defer_cleanup(successor())
+            raise
+
+    ctx.defer_cleanup(teardown())
+    await asyncio.sleep(0)
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(0.05), timeout=5)
+
+    assert ctx.room_cleanups == set()
+    assert not escaped.is_set(), "the successor was cancelled too"
+    assert "Cancelled 2 deferred room cleanup" in caplog.text
+
+
+async def test_the_cancel_phase_gives_up_rather_than_holding_the_shutdown(caplog):
+    """A cleanup that swallows its cancellation cannot be made to stop, and a
+    shutdown that waits for one for ever is a shutdown that does not happen.
+    It is left behind, and said so (#976 seventh review)."""
+    import logging
+
+    from app.handlers import context as context_module
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    # The test keeps a way to end it: a task that truly cannot be stopped
+    # would wedge this run rather than fail it, which is the trap this suite
+    # has met twice.
+    relent = asyncio.Event()
+
+    async def stubborn():
+        while True:
+            try:
+                await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                if relent.is_set():
+                    raise
+
+    ctx.defer_cleanup(stubborn())
+    await asyncio.sleep(0)
+    real_bound = context_module.CLEANUP_CANCEL_SECONDS
+    context_module.CLEANUP_CANCEL_SECONDS = 0.1
+    try:
+        with caplog.at_level(logging.WARNING):
+            await asyncio.wait_for(ctx.drain_room_cleanups(0.05), timeout=5)
+    finally:
+        # Whatever happened above, this task is made to end: one that cannot
+        # be stopped would wedge the whole run rather than fail this test,
+        # which is the trap this suite has met twice.
+        context_module.CLEANUP_CANCEL_SECONDS = real_bound
+        relent.set()
+        for task in list(ctx.room_cleanups):
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    assert "1 left" in caplog.text
+    # And the bound it gave up after is the shipped one: raising it to a day
+    # passed every test (#976 seventh review).
+    assert real_bound == 5

@@ -614,6 +614,12 @@ class HandlerContext:
                     )
         if not self.room_cleanups:
             return
+        # One turn of the loop first, so a task deferred at the deadline has
+        # reached its first await: a coroutine cancelled before it has run a
+        # line never enters its own `try`, so the staging it was going to do
+        # is lost *and* uncounted - which is the half R-HIST-03 promises
+        # (#976 seventh review).
+        await asyncio.sleep(0)
         # Bounded in turn: a cleanup that swallows its cancellation must not
         # hold the shutdown open for ever, and one that defers *another* on
         # its way out must not keep this going round.
@@ -624,9 +630,18 @@ class HandlerContext:
             cancelled += len(still_running)
             for task in still_running:
                 task.cancel()
-            await asyncio.wait(
+            done, _pending = await asyncio.wait(
                 still_running, timeout=max(0.0, cancel_deadline - monotonic())
             )
+            for task in done:
+                # Retrieved here too: a cleanup that turns its cancellation
+                # into another exception would otherwise be reported at
+                # collection as one nobody looked at.
+                if not task.cancelled() and task.exception() is not None:
+                    logger.warning(
+                        "A deferred room cleanup failed while being cancelled",
+                        exc_info=task.exception(),
+                    )
         logger.warning(
             "Cancelled %d deferred room cleanup(s) still running after %ss; %d left",
             cancelled,

@@ -3,6 +3,7 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 
 import asyncio
+import contextlib
 import logging
 import hashlib
 import json
@@ -94,7 +95,11 @@ from app.services.game_handoff import (
     SqlEnvelopeStore,
     stop_handoff_worker,
 )
-from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.services.runtime_metrics import (
+    flush_events,
+    start_metrics_loop,
+    stop_metrics_loop,
+)
 from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
 from app.services.lobby_chat import restore_lobby_backlog
@@ -702,9 +707,8 @@ async def lifespan(_app: FastAPI):
         # A build in flight hands its job back rather than finishing it: the
         # drain is for games, not for a document nobody is waiting on yet.
         await stop_export_worker(export_build)
-        # Stopped here, but flushed again below: the drain records abandoned
-        # writes, and a flush that runs before it leaves them in the buffer
-        # for `engine.dispose()` to throw away (#976 sixth review).
+        # Stopped here; what is recorded after this - by the drain, by the
+        # replay pass - is flushed again at the end (#976 sixth review).
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
@@ -718,9 +722,6 @@ async def lifespan(_app: FastAPI):
         # After the drain, which ends games and stages them: one bounded
         # pass replays what it can, and whatever is left is a row the next
         # process picks up on its first sweep - that is the point of #541.
-        # What the drain just recorded - a staging cancelled, a write
-        # abandoned - written down before the engine goes away.
-        await stop_metrics_loop(None, async_session_factory)
         await stop_handoff_worker(history_replay)
         # Only if the worker ran: a startup that failed before it started
         # staged nothing, and a drain against a database that would not open
@@ -739,6 +740,13 @@ async def lifespan(_app: FastAPI):
         if handler_context.message_retention is not None:
             await handler_context.message_retention.aclose()
         await handler_context.timers.close()
+        # Last, and directly rather than through `stop_metrics_loop`, whose
+        # first line returns when there is no task to stop (#976 seventh
+        # review): everything recorded since the flush above - a staging the
+        # drain cancelled, a replay this shutdown abandoned - is in the buffer
+        # until this runs, and `dispose()` below would throw it away.
+        with contextlib.suppress(Exception):
+            await flush_events(async_session_factory)
         await async_engine.dispose()
 
 
