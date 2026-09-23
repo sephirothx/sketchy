@@ -363,92 +363,36 @@
 }
 
 /* Prompt stats: how a list's prompts have actually played. */
-.prompt-stats-page {
-  margin: 0 auto;
-  max-width: 900px;
-  padding: 16px;
-}
 
-.prompt-stats-header h1 {
-  color: var(--ink);
-  font-size: 24px;
-  margin: 16px 0 4px;
-}
 
-.prompt-stats-intro {
-  color: var(--muted);
-  margin: 0 0 16px;
-}
 
-.prompt-stats-controls {
-  align-items: center;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px 16px;
-  margin-bottom: 12px;
-}
 
-.prompt-stats-controls label {
-  color: var(--muted);
-  font-weight: 700;
-}
 
-.prompt-stats-note {
-  color: var(--muted);
-  line-height: 1.5;
-  margin: 12px 0 0;
-}
 
-.prompt-stats-note.is-error {
-  color: var(--danger);
-}
+
+
+
+
+
+
+
 
 /* The table is the one thing here wide enough to push the page sideways. */
-.prompt-stats-table-scroll {
-  overflow-x: auto;
-}
 
-.prompt-stats-table {
-  border-collapse: collapse;
-  min-width: 480px;
-  width: 100%;
-}
 
-.prompt-stats-table caption {
-  color: var(--muted);
-  font-size: 13px;
-  padding-bottom: 8px;
-  text-align: left;
-}
 
-.prompt-stats-table th,
-.prompt-stats-table td {
-  border-bottom: 1px solid var(--line);
-  padding: 9px 10px;
-  text-align: right;
-}
 
-.prompt-stats-table thead th {
-  color: var(--muted);
-  font-size: 12px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
-}
 
-.prompt-stats-table th:first-child,
-.prompt-stats-table td:first-child,
-.prompt-stats-table tbody th {
-  text-align: left;
-}
 
-.prompt-stats-table tbody th {
-  color: var(--ink);
-  font-weight: 700;
-}
 
-.prompt-stats-table tbody td {
-  color: var(--ink);
-}
+
+
+
+
+
+
+
+
 
 
 /* The info link riding along with a prompt-list chip. */
@@ -496,20 +440,11 @@
 }
 
 
-.prompt-stats-control {
-  align-items: center;
-  display: flex;
-  gap: 8px;
-}
 
-.prompt-stats-search input {
-  min-width: 180px;
-}
 
-.prompt-stats-table tbody tr.is-unrated th,
-.prompt-stats-table tbody tr.is-unrated td {
-  color: var(--faint);
-}
+
+
+
 
 .profile-history-head {
   align-items: baseline;
@@ -617,19 +552,9 @@
 
 /* The picture the report is about, shown at the size the complaint is about
    rather than the row size it was clicked from. */
-.report-quoted-picture {
-  display: flex;
-  justify-content: center;
-  margin: 0 0 4px;
-}
 
-.report-quoted-picture img {
-  border: 1px solid var(--rule, rgb(0 0 0 / 12%));
-  border-radius: var(--radius-sm);
-  height: 128px;
-  object-fit: cover;
-  width: 128px;
-}
+
+
 
 /* ------------------------------------------------------- wide screens (#581)
    The profile and the prompt stats were 900px columns on every monitor. From
@@ -638,8 +563,7 @@
    columns want. Both stop at the base 1240px shell: a game-history row or a
    table of prompts read across 1960px is harder to follow, not easier. */
 @media (min-width: 1200px) {
-  .profile-page,
-  .prompt-stats-page {
+  .profile-page {
     max-width: 1272px;
   }
 

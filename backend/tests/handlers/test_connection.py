@@ -563,3 +563,46 @@ async def test_capacity_and_suspension_outcomes_stay_their_own_for_a_stale_clien
     events = [call.args[0] for call in sio.emit.await_args_list]
     assert "server_full" in events and "upgrade_required" not in events
     assert not ctx.is_stale("sid-full")
+
+
+async def test_a_signed_in_handshake_warms_its_two_caches_at_once(monkeypatch):
+    """#980: the lobby-name read and the block-list read are independent, and
+    cold - every account after a restart - each was a round trip the
+    handshake waited on in turn. Each fake here waits for the other to have
+    started, so run one after the other they never finish."""
+    import asyncio
+    from types import SimpleNamespace
+
+    import app.handlers.connection as connection_module
+
+    room_manager = RoomManager()
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sio.emit = AsyncMock()
+    sio.save_session = AsyncMock()
+    sio.enter_room = AsyncMock()
+    ctx.session_factory = object()
+
+    async def signed_in(*_args, **_kwargs):
+        return SimpleNamespace(session=SimpleNamespace(user_id="user-1"), banned_user_id=None)
+
+    monkeypatch.setattr(connection_module, "resolve_session_status", signed_in)
+    names_started, blocks_started = asyncio.Event(), asyncio.Event()
+
+    async def warm_names(user_id):
+        names_started.set()
+        await blocks_started.wait()
+
+    async def warm_blocks(user_id):
+        blocks_started.set()
+        await names_started.wait()
+
+    monkeypatch.setattr(ctx.presence_identities, "warm", warm_names)
+    ctx.block_service = SimpleNamespace(warm=warm_blocks)
+    monkeypatch.setattr(connection_module, "_record_last_seen", lambda *_: None)
+
+    await asyncio.wait_for(
+        sio.handlers["/"]["connect"]("sid-warm", {}, {"protocol": PROTOCOL_VERSION}),
+        timeout=2,
+    )
+    assert names_started.is_set() and blocks_started.is_set()

@@ -635,6 +635,8 @@ class Sources:
     socket_transports: Callable[[], dict[str, str]] | None = None
     # Sockets watching the lobby channel right now (#882).
     lobby_watchers: Callable[[], int] | None = None
+    # Bytes of decoded drawings held for re-serving (#979).
+    drawing_cache_bytes: Callable[[], int] | None = None
     pool: Callable[[], PoolGauges | None] | None = None
 
 
@@ -912,6 +914,11 @@ class Telemetry:
             "Width keyframes carried by one accepted point frame; zero is a mouse or a steady pen.",
             KEYFRAME_BUCKETS,
         )
+        self.drawing_cache_requests = LabelledCounter(
+            "sketchy_drawing_cache_requests_total",
+            "Stored-drawing fetches that got past the validator, by whether the decoded bytes were held (#979).",
+            ("result",),
+        )
         self.lobby_ticks = LabelledCounter(
             "sketchy_lobby_ticks_total",
             "Lobby channel ticks, by feed (rooms, presence) and whether anything was emitted.",
@@ -1056,7 +1063,7 @@ class Telemetry:
         )
         self.drawing_encode_seconds = Histogram(
             "sketchy_drawing_encode_seconds",
-            "Validating and encoding one drawing for storage, by format.",
+            "Validating and encoding one drawing for storage, by format: CPU time on the encoding thread, not wall time (#976).",
             ENCODE_BUCKETS,
             ("format",),
         )
@@ -1548,6 +1555,13 @@ class Telemetry:
         lines += self.draw_frame_keyframes.lines()
         lines += self.lobby_ticks.lines()
         lines += self.lobby_baseline_bytes.lines()
+        if self.sources.drawing_cache_bytes is not None:
+            lines += gauge_lines(
+                "sketchy_drawing_cache_bytes",
+                "Bytes of decoded drawings held for re-serving, both encodings (#979).",
+                self.sources.drawing_cache_bytes(),
+            )
+        lines += self.drawing_cache_requests.lines()
         if self.sources.lobby_watchers is not None:
             lines += gauge_lines(
                 "sketchy_lobby_watchers",

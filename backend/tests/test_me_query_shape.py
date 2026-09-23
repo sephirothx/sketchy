@@ -4,6 +4,10 @@
 in the steady state: the session, an alias lookup, the user, the user again
 for the throttled login touch, and a refresh after it. The counts here are
 the contract; a change that adds a round trip has to say so.
+
+Since #983 a registered account's settings ride along - one statement more
+here, and one whole request fewer, since the page asked for them separately
+before it could paint.
 """
 from __future__ import annotations
 
@@ -51,25 +55,36 @@ def _kinds(statements: list[str]) -> list[str]:
     return [s.split(" ")[0] + ":" + s.split(" ")[2 if s.startswith("SELECT") else 1].split(".")[0].strip("(") for s in statements]
 
 
-async def test_me_is_two_statements_in_the_steady_state_and_three_when_a_login_is_recorded(
+async def test_me_is_two_statements_for_a_guest_and_three_with_a_registered_accounts_settings(
     monkeypatch,
 ):
     factory, engine = await create_test_db()
     try:
         http = await _site(factory, monkeypatch)
         await http.get("/api/auth/me")
-        registered = await http.post(
-            "/api/auth/register", json={"username": "Shape", "password": "a-good-password"}
-        )
-        assert registered.status_code == 200
+        named = await http.post("/api/auth/display-name", json={"displayName": "Shapely"})
+        assert named.status_code == 200
         statements = _capture(engine)
 
         statements.clear()
         assert (await http.get("/api/auth/me")).status_code == 200
+        guest = list(statements)
+        assert len(guest) == 2, guest
+        assert guest[0].startswith("SELECT auth_sessions")
+        assert guest[1].startswith("SELECT users")
+
+        registered = await http.post(
+            "/api/auth/register", json={"username": "Shape", "password": "a-good-password"}
+        )
+        assert registered.status_code == 200
+
+        statements.clear()
+        assert (await http.get("/api/auth/me")).status_code == 200
         steady = list(statements)
-        assert len(steady) == 2, steady
+        assert len(steady) == 3, steady
         assert steady[0].startswith("SELECT auth_sessions")
         assert steady[1].startswith("SELECT users")
+        assert steady[2].startswith("SELECT user_settings")
 
         async with factory() as session:
             async with session.begin():
@@ -81,8 +96,9 @@ async def test_me_is_two_statements_in_the_steady_state_and_three_when_a_login_i
         statements.clear()
         body = (await http.get("/api/auth/me")).json()
         due = list(statements)
-        assert len(due) == 3, due
+        assert len(due) == 4, due
         assert due[2].startswith("UPDATE users") and "RETURNING" in due[2]
+        assert due[3].startswith("SELECT user_settings")
         recorded = datetime.fromisoformat(body["lastLoginAt"])
         assert datetime.now(timezone.utc) - recorded < timedelta(minutes=1)
         await http.aclose()

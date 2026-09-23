@@ -138,6 +138,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Server and account state
   server_draining: "Sketchy se está reiniciando. Inténtalo en un momento.",
   server_paused: "Sketchy no admite salas nuevas ahora mismo.",
+  server_busy: "Sketchy está saturado ahora mismo. Inténtalo de nuevo en un momento.",
   database_busy: "Sketchy no consigue llegar a su base de datos. Inténtalo de nuevo.",
   account_ended: "Esta cuenta ya no está activa.",
   account_required: accountRequired,
@@ -677,6 +678,8 @@ export const ES: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Las salas nuevas están pausadas por mantenimiento. Las partidas en curso\n          siguen con normalidad.",
     serverWasUpdatedBackAnyGame: "El servidor se actualizó y ya está de vuelta. Las partidas en curso terminaron.",
     dismiss: "Descartar",
+    couldNotOpenThis: "No se ha podido abrir. Comprueba tu conexión e inténtalo de nuevo.",
+    tryAgain: "Reintentar",
   },
 
   appHeader: {

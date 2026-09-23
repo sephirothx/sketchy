@@ -138,6 +138,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   // Server and account state
   server_draining: "Sketchy start opnieuw op. Probeer het zo nog eens.",
   server_paused: "Sketchy neemt op dit moment geen nieuwe kamers aan.",
+  server_busy: "Sketchy heeft het even te druk. Probeer het zo meteen opnieuw.",
   database_busy: "Sketchy kan zijn database niet goed bereiken. Probeer het nog eens.",
   account_ended: "Dit account is niet meer actief.",
   account_required: accountRequired,
@@ -677,6 +678,8 @@ export const NL: Catalogue = {
     newRoomsArePausedMaintenanceGames: "Nieuwe kamers zijn gepauzeerd voor onderhoud. Spellen die al lopen gaan\n          gewoon door.",
     serverWasUpdatedBackAnyGame: "De server is bijgewerkt en is terug. Lopende spellen zijn beëindigd.",
     dismiss: "Sluiten",
+    couldNotOpenThis: "Dit kon niet worden geopend. Controleer je verbinding en probeer het opnieuw.",
+    tryAgain: "Opnieuw proberen",
   },
 
   appHeader: {

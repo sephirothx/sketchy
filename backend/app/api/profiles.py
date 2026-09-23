@@ -1,8 +1,11 @@
 """Public profile endpoints: lifetime stats and browsable game history."""
 from __future__ import annotations
 
-import logging
+import asyncio
+from collections import OrderedDict
 from collections.abc import Awaitable, Callable
+import gzip
+import logging
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import BaseModel, ConfigDict, Field, field_validator
@@ -23,6 +26,8 @@ from app.canvas_storage import (
     stored_drawing_wire_payload,
 )
 from app.domain_values import OFFERED_REACTION_EMOJI_CODES, PROFILE_PIN_SLOTS
+from app.compression import accepted_encodings
+from app.services.telemetry import telemetry
 from app.repositories.interfaces import (
     DrawingReactionResult,
     GameHistoryRepository,
@@ -140,6 +145,73 @@ def validator_matches(if_none_match: str, validator: str) -> bool:
     return any(bare(tag) == bare(validator) for tag in if_none_match.split(",") if tag.strip())
 
 
+#: Bytes of decoded drawings kept in memory, both encodings counted (#979).
+DRAWING_CACHE_BYTES = 32 * 1024 * 1024
+#: The level the cached gzip copy is made at: once, off the loop, and kept.
+#: The response middleware would compress the same bytes per request (at
+#: `DYNAMIC_COMPRESSLEVEL`, 4 since #1030) on the loop instead.
+DRAWING_GZIP_LEVEL = 6
+
+
+class WireDrawingCache:
+    """Decoded drawings by stored checksum, most recently served kept (#979).
+
+    Every fetch used to decode the stored blob back to wire bytes (1 ms for an
+    ordinary drawing, 8 ms for a heavy one) and gzip the result on the loop -
+    ~2 ms and ~25 ms of event loop, back to back, for bytes that are the same
+    for everybody: the lobby's This week shelf is six drawings fetched by
+    every visitor. The checksum is the stored blob's SHA-256 and decoding is
+    deterministic, so a checksum names exactly one wire payload. Only the
+    bytes are shared: who may have them is asked on every request.
+    """
+
+    def __init__(self, max_bytes: int = DRAWING_CACHE_BYTES) -> None:
+        self.max_bytes = max_bytes
+        self.bytes = 0
+        self._entries: OrderedDict[str, tuple[bytes, bytes]] = OrderedDict()
+
+    def get(self, key: str) -> tuple[bytes, bytes] | None:
+        entry = self._entries.get(key)
+        if entry is not None:
+            self._entries.move_to_end(key)
+        return entry
+
+    def clear(self) -> None:
+        self._entries.clear()
+        self.bytes = 0
+
+    def put(self, key: str, wire: bytes, gzipped: bytes) -> None:
+        size = len(wire) + len(gzipped)
+        if not key or key.startswith("-") or key in self._entries or size > self.max_bytes:
+            return
+        self._entries[key] = (wire, gzipped)
+        self.bytes += size
+        while self.bytes > self.max_bytes:
+            _, (old_wire, old_gzipped) = self._entries.popitem(last=False)
+            self.bytes -= len(old_wire) + len(old_gzipped)
+
+
+drawing_cache = WireDrawingCache()
+#: Decodes in flight, by cache key: concurrent misses for one drawing - the
+#: This week shelf right after a restart - share one decode (#979 review).
+_fills: dict[str, asyncio.Future] = {}
+#: Below this a drawing goes out as it is: the gzip framing costs more than it
+#: saves, which is the response middleware's own floor.
+GZIP_MINIMUM_BYTES = 500
+
+
+def _cache_key(checksum: str) -> str:
+    """The stored checksum and the wire version it decodes into, as the
+    `ETag` does: a new wire version changes the bytes without the checksum."""
+    return f"{checksum}-w{CANVAS_HISTORY_VERSION}"
+
+
+def _decoded_drawing(blob: bytes, checksum: str | None) -> tuple[bytes, bytes]:
+    """The wire payload and its gzip, for a worker thread."""
+    wire = stored_drawing_wire_payload(blob, checksum=checksum)
+    return wire, gzip.compress(wire, compresslevel=DRAWING_GZIP_LEVEL, mtime=0)
+
+
 async def serve_drawing(
     request: Request,
     turn_id: str,
@@ -159,43 +231,145 @@ async def serve_drawing(
         # lifetime runs out.
         "Cache-Control": "private, no-cache",
     }
-    if_none_match = request.headers.get("if-none-match")
-    if if_none_match is not None:
-        # A validator is answered from the metadata alone: the blob is
-        # neither read nor decoded for a copy that is still current.
-        checksum = await checksum_of()
-        if checksum is None:
-            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-        validator = drawing_validator(checksum)
-        if validator_matches(if_none_match, validator):
-            return Response(
-                status_code=304, headers={**cache_headers, "ETag": validator}
-            )
-    drawing = await drawing_of()
-    if drawing is None:
+    # Asked first, every time: the checksum query carries the same access
+    # predicate as the drawing's, reads no blob, and names the bytes.
+    checksum = await checksum_of()
+    if checksum is None:
         raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
-    try:
-        payload = stored_drawing_wire_payload(
-            drawing.payload, checksum=drawing.checksum_sha256 or None
-        )
-    except UnsupportedStoredDrawingError as error:
-        # A build older than the row it is reading. Answer as though the
-        # drawing is absent rather than claiming it is broken.
-        logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
-        raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from error
-    except CorruptStoredDrawingError as error:
-        logger.error("Stored drawing %s failed its checksum", turn_id)
-        raise Refusal(
-            500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
-        ) from error
-    return Response(
-        content=payload,
-        media_type="application/octet-stream",
-        headers={
-            **cache_headers,
-            "ETag": drawing_validator(drawing.checksum_sha256),
-        },
+    validator = drawing_validator(checksum)
+    if_none_match = request.headers.get("if-none-match")
+    if if_none_match is not None and validator_matches(if_none_match, validator):
+        # A copy that is still current: neither read nor decoded.
+        return Response(status_code=304, headers={**cache_headers, "ETag": validator})
+    cached = drawing_cache.get(_cache_key(checksum))
+    if cached is not None:
+        telemetry.drawing_cache_requests.inc(("hit",))
+        wire, gzipped = cached
+    else:
+        telemetry.drawing_cache_requests.inc(("miss",))
+        wire, gzipped, stored_checksum = await _decode_once(checksum, turn_id, drawing_of)
+        validator = drawing_validator(stored_checksum)
+    encoded = len(wire) >= GZIP_MINIMUM_BYTES and "gzip" in accepted_encodings(
+        request.headers.get("accept-encoding")
     )
+    headers = {**cache_headers, "ETag": validator}
+    if encoded:
+        # Already compressed, so the response middleware leaves it be.
+        headers["Content-Encoding"] = "gzip"
+        headers["Vary"] = "Accept-Encoding"
+    return Response(
+        content=gzipped if encoded else wire,
+        media_type="application/octet-stream",
+        headers=headers,
+    )
+
+
+async def _decode_once(
+    checksum: str,
+    turn_id: str,
+    drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
+) -> tuple[bytes, bytes, str]:
+    """Read and decode a drawing the cache does not hold, once however many
+    ask at the same moment.
+
+    Only *bytes* are shared. A refusal is not: the fill runs against one
+    caller's own query, and a drawing hidden between another caller's access
+    check and this read is a 404 for that caller alone - a participant may
+    still have it when the Gallery may not (R-GAL-09). Everyone else that was
+    waiting reads the cache, and asks its own query again if the fill left
+    nothing there.
+
+    The fill is a task of its own, so the caller that started it going away -
+    a shutdown, a timeout - does not cancel the read every other waiter is
+    waiting on (#979 review).
+    """
+    key = _cache_key(checksum)
+    fill = _fills.get(key)
+    started_it = fill is None
+    if fill is None:
+        fill = asyncio.ensure_future(_fill_cache(key, turn_id, drawing_of))
+        # Retrieved even when every waiter has gone, so a refusal inside the
+        # fill is not reported as an exception nobody looked at - and the
+        # entry is dropped here as well as in the fill's own `finally`,
+        # because a task cancelled before its first step never runs a line of
+        # it, and the entry would then stand for the life of the process with
+        # every later caller finding a done, cancelled task (#979 fifth
+        # review).
+        fill.add_done_callback(_forget_fill(key))
+        _fills[key] = fill
+    # Watched rather than awaited: `await fill` hands this caller's
+    # cancellation straight to the fill, because `Task.cancel` cancels the
+    # future the task is waiting on - so one caller's disconnect would cancel
+    # the decode every other waiter is waiting on, which is the thing this
+    # single-flight exists to prevent (#979 fourth review). `asyncio.wait`
+    # watches it from the outside; our own cancellation leaves it running.
+    await asyncio.wait({fill})
+    try:
+        # The fill's own answer, not whatever the cache ended up holding: a
+        # decode the cache declined - too large for it, or a checksum that
+        # changed while it ran - is still this caller's drawing.
+        return fill.result()
+    except asyncio.CancelledError:
+        # The fill was cancelled from outside. This caller was not, and still
+        # wants its bytes - whether or not it was the one that started it.
+        pass
+    except Exception:
+        if started_it:
+            raise
+    # Somebody else's refusal, or a fill that was cancelled, says nothing
+    # about this caller's access - a participant may still have a drawing the
+    # Gallery may not (R-GAL-09). Read what it left, and ask again if it left
+    # nothing.
+    cached = drawing_cache.get(key)
+    if cached is not None:
+        return cached[0], cached[1], checksum
+    return await _fill_cache(key, turn_id, drawing_of, store=False)
+
+
+def _forget_fill(key: str):
+    """Drop this key's entry when its fill ends, if it is still the one there."""
+
+    def done(task: asyncio.Future) -> None:
+        if _fills.get(key) is task:
+            del _fills[key]
+        task.cancelled() or task.exception()
+
+    return done
+
+
+async def _fill_cache(
+    key: str,
+    turn_id: str,
+    drawing_of: Callable[[], Awaitable[TurnDrawingDetail | None]],
+    *,
+    store: bool = True,
+) -> tuple[bytes, bytes, str]:
+    """Read the blob, decode and gzip it off the loop, and hold the result."""
+    try:
+        drawing = await drawing_of()
+        if drawing is None:
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.")
+        try:
+            wire, gzipped = await asyncio.to_thread(
+                _decoded_drawing, drawing.payload, drawing.checksum_sha256 or None
+            )
+        except UnsupportedStoredDrawingError as error:
+            # A build older than the row it is reading. Answer as though the
+            # drawing is absent rather than claiming it is broken.
+            logger.error("Cannot decode stored drawing %s: %s", turn_id, error)
+            raise Refusal(404, ErrorCode.NO_SUCH_DRAWING, "No such drawing.") from error
+        except CorruptStoredDrawingError as error:
+            logger.error("Stored drawing %s failed its checksum", turn_id)
+            raise Refusal(
+                500, ErrorCode.DRAWING_UNREADABLE, "That drawing could not be read."
+            ) from error
+        # Keyed by the checksum these bytes were verified against, which is
+        # the row's own - it may have changed since the question above.
+        drawing_cache.put(_cache_key(drawing.checksum_sha256), wire, gzipped)
+        return wire, gzipped, drawing.checksum_sha256
+    finally:
+        if store:
+            _fills.pop(key, None)
 
 
 def create_profile_router(

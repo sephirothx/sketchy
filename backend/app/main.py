@@ -15,17 +15,26 @@ from fastapi import FastAPI, Request
 from fastapi.responses import Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
 from starlette.exceptions import HTTPException
-from starlette.middleware.gzip import GZipMiddleware
+from starlette.responses import FileResponse
+from starlette.staticfiles import NotModifiedResponse
 
 from app.api.errors import install_refusal_handler
+from app.auth.password import password_hash_workers
+from app.compression import (
+    NO_DYNAMIC_COMPRESSION,
+    PRECOMPRESSED_SIBLINGS,
+    SelectiveGZipMiddleware,
+    precompressed_variant,
+)
 from app.api.gallery import create_gallery_router
 from app.services.gallery_shelf import (
     SHELF_TTL_SECONDS,
     GalleryShelfCache,
     shelf_reader,
 )
-from app.api.profiles import create_profile_router
+from app.api.profiles import create_profile_router, drawing_cache
 from app.api.room_presets import create_room_preset_router
 from app.api.prompt_lists import create_prompt_list_router
 from app.api.bug_reports import create_bug_report_router
@@ -52,6 +61,7 @@ from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db, verify_least_privilege
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
+    history_encode_workers,
     is_production,
     public_base_url,
     reconnect_spread_seconds,
@@ -82,13 +92,20 @@ from app.services.integrity_audit import (
 )
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.data_export_worker import DataExportWorker, stop_export_worker
-from app.services.game_flow import HISTORY_WRITE_TIMEOUT_SECONDS
+from app.services.game_flow import (
+    HISTORY_WRITE_TIMEOUT_SECONDS,
+    shutdown_cleanup_budget_seconds,
+)
 from app.services.game_handoff import (
     FinishedGameHandoffWorker,
     SqlEnvelopeStore,
     stop_handoff_worker,
 )
-from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.services.runtime_metrics import (
+    flush_events,
+    start_metrics_loop,
+    stop_metrics_loop,
+)
 from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
 from app.services.lobby_chat import restore_lobby_backlog
@@ -117,6 +134,17 @@ from app.services.shutdown import (
 )
 
 
+PRECOMPRESSED_SUFFIXES = tuple(suffix for _, suffix in PRECOMPRESSED_SIBLINGS)
+_VALIDATORS = {b"if-none-match", b"if-modified-since"}
+
+
+def _without_validators(scope):
+    return {
+        **scope,
+        "headers": [(name, value) for name, value in scope["headers"] if name.lower() not in _VALIDATORS],
+    }
+
+
 class SPAStaticFiles(StaticFiles):
     """Serve the SPA for extensionless client routes while preserving real 404s.
 
@@ -126,7 +154,42 @@ class SPAStaticFiles(StaticFiles):
     missing file, and anything under /api/, stays a plain 404 with no body.
     """
 
+    def file_response(self, full_path, stat_result, scope, status_code: int = 200):
+        """Answer with the build's compressed copy when the client takes one,
+        and decide the conditional **once**, against what will be sent (#978).
+
+        Starlette evaluates `If-None-Match`/`If-Modified-Since` against the
+        identity file and answers 304 from it, before any copy is chosen: that
+        304 carried the identity `ETag` and no `Vary`, so a shared cache could
+        hand the Brotli body to a client that asked for none (#978 review).
+        """
+        response = FileResponse(full_path, status_code=status_code, stat_result=stat_result)
+        variant = precompressed_variant(response, scope)
+        if variant is not None:
+            variant.status_code = status_code
+            response = variant
+        # The representation varies by `Accept-Encoding` whether or not a copy
+        # exists here, and a 304 repeats what its 200 would have carried.
+        response.headers.add_vary_header("Accept-Encoding")
+        if status_code == 200 and self.is_not_modified(response.headers, Headers(scope=scope)):
+            return NotModifiedResponse(response.headers)
+        return response
+
     async def get_response(self, path: str, scope):
+        # Nothing here is compressed on the loop (#978): what the build made a
+        # copy of is served from that copy, and what it left alone - text too
+        # small for the copy to be worth writing - goes out as it is stored.
+        # That also leaves every representation the `ETag` its bytes were
+        # stored with; compressing after the validator was chosen would give
+        # two bodies one name.
+        scope[NO_DYNAMIC_COMPRESSION] = True
+        # The build's compressed copies are served in place of the file they
+        # sit beside, never under their own names: asked for directly, one
+        # would go out as the original's type with no Content-Encoding and a
+        # compressed body (#978). Matched without case, because a
+        # case-insensitive filesystem answers `app.js.BR` with the copy.
+        if path.lower().endswith(PRECOMPRESSED_SUFFIXES):
+            raise HTTPException(status_code=404)
         try:
             response = await super().get_response(path, scope)
         except HTTPException as exc:
@@ -137,7 +200,11 @@ class SPAStaticFiles(StaticFiles):
             )
             if not serves_the_shell:
                 raise
-            response = await super().get_response("index.html", scope)
+            # Without the request's validators: those belong to the URL that
+            # was asked for, and a match against the shell would answer 304 -
+            # which the status below turns into a 404 with no body, a blank
+            # page where the not-found page should be.
+            response = await super().get_response("index.html", _without_validators(scope))
             # The shell either way, because only the client can draw the
             # not-found page - but a URL it has no page for says so in its
             # status. Otherwise every typo answers 200, and a crawler or an
@@ -160,9 +227,13 @@ class SPAStaticFiles(StaticFiles):
 
 
 def configure_frontend(app: FastAPI, directory: Path) -> None:
-    """Enable static compression and mount the production frontend when present."""
+    """Compress what is dynamic, and mount the production frontend when present.
 
-    app.add_middleware(GZipMiddleware, minimum_size=500)
+    Static files are served from the build's precompressed copies
+    (`app/compression.py`); the middleware is for everything else.
+    """
+
+    app.add_middleware(SelectiveGZipMiddleware, minimum_size=500)
     if directory.is_dir():
         app.mount(
             "/",
@@ -295,6 +366,7 @@ finished_game_worker.bind_outcome(handler_context.game_flow.note_history_outcome
 # it rather than keeping a second count that could drift from it.
 telemetry.sources.sockets_connected = lambda: handler_context.room_capacity.open_sockets
 telemetry.sources.socket_transports = lambda: socket_transports(sio)
+telemetry.sources.drawing_cache_bytes = lambda: drawing_cache.bytes
 telemetry.sources.lobby_watchers = lambda: len(sio.manager.rooms.get("/", {}).get(LOBBY_CHANNEL, {}))
 # Built here rather than at import so it can reach the live policy objects the
 # handlers consult: a change has to move the value the next command reads, not
@@ -531,8 +603,36 @@ async def adopt_stored_settings() -> None:
     shutdown_coordinator.pause(await read_paused(async_session_factory))
 
 
+#: What the shutdown gives its last flush of runtime events. A database that
+#: accepts a connection and never answers must not hold the process open
+#: (#976 eighth review).
+SHUTDOWN_FLUSH_SECONDS = 5
+
+
+async def flush_runtime_events(session_factory) -> None:
+    """Write the buffered runtime events, bounded, saying so if it fails.
+
+    These are the observations describing the shutdown itself - a staging the
+    drain cancelled, a replay it abandoned - so losing them silently is losing
+    the record of what the shutdown cost.
+    """
+    try:
+        await asyncio.wait_for(
+            flush_events(session_factory), timeout=SHUTDOWN_FLUSH_SECONDS
+        )
+    except Exception:
+        logging.getLogger("sketchy.main").warning(
+            "runtime events left unflushed at shutdown", exc_info=True
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Refused at startup rather than at the first finished game.
+    history_encode_workers()
+    # Validated here as well as in `app.server.run`, so an app started some
+    # other way still refuses a bad value at startup, not at the first login.
+    password_hash_workers()
     shutdown_coordinator.begin_startup(
         drain_seconds=shutdown_drain_seconds(),
         reconnect_spread_seconds=reconnect_spread_seconds(),
@@ -659,12 +759,18 @@ async def lifespan(_app: FastAPI):
         # A build in flight hands its job back rather than finishing it: the
         # drain is for games, not for a document nobody is waiting on yet.
         await stop_export_worker(export_build)
+        # Stopped here; what is recorded after this - by the drain, by the
+        # replay pass - is flushed again at the end (#976 sixth review).
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
-        # Teardowns entries deferred (#879) stage abandoned games, so they
-        # finish before the handoff worker below is stopped.
-        await handler_context.drain_room_cleanups(HISTORY_WRITE_TIMEOUT_SECONDS)
+        # Teardowns entries deferred (#879) and every finished game's staging
+        # (#976) run here, so they finish before the handoff worker below is
+        # stopped. The budget covers an encode as well as the write it is
+        # bounded by: under the burst this is for, a queued encode is seconds
+        # on its own, and a drain that returns first would leave the staging
+        # to be cancelled by the loop closing (see `drain_room_cleanups`).
+        await handler_context.drain_room_cleanups(shutdown_cleanup_budget_seconds())
         # After the drain, which ends games and stages them: one bounded
         # pass replays what it can, and whatever is left is a row the next
         # process picks up on its first sweep - that is the point of #541.
@@ -686,6 +792,12 @@ async def lifespan(_app: FastAPI):
         if handler_context.message_retention is not None:
             await handler_context.message_retention.aclose()
         await handler_context.timers.close()
+        # Last, and directly rather than through `stop_metrics_loop`, whose
+        # first line returns when there is no task to stop (#976 seventh
+        # review): everything recorded since the flush above - a staging the
+        # drain cancelled, a replay this shutdown abandoned - is in the buffer
+        # until this runs, and `dispose()` below would throw it away.
+        await flush_runtime_events(async_session_factory)
         await async_engine.dispose()
 
 
@@ -795,6 +907,11 @@ api.include_router(
         on_avatar_changed=refresh_avatar_on_live_surfaces,
         game_history_repo=game_history_repo,
         on_gallery_decision=gallery_shelf.invalidate,
+        flush_retained_messages=(
+            handler_context.message_retention.flush
+            if handler_context.message_retention is not None
+            else None
+        ),
     )
 )
 api.include_router(

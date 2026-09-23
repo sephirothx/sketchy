@@ -15,8 +15,12 @@ export function useInterfaceLocale(): [Locale, (next: Locale) => void] {
   const setLocale = useSettingsStore((state) => state.setLocale);
   const choose = useCallback(
     (next: Locale) => {
-      setLocale(next);
-      queueSettingsSync({ locale: next });
+      // Saved to the account only once the words are here and showing: a
+      // language whose chunk could not be fetched would otherwise follow the
+      // player to every device while this one stays in the old language.
+      void setLocale(next).then((applied) => {
+        if (applied) queueSettingsSync({ locale: next });
+      });
     },
     [setLocale],
   );

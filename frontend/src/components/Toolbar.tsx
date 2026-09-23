@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
@@ -35,6 +35,8 @@ import {
 } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import { BRUSH_SIZES, DEFAULT_ERASER_SIZE, isBrushSize, stopPosition } from "../lib/brushSizes";
+import { useLocaleRerender } from "../hooks/useLocaleRerender";
+import "../styles/lazy/toolbar.css";
 
 
 type MobilePanel = "tool" | "color" | "size" | null;
@@ -99,7 +101,7 @@ interface ToolbarProps {
   onSave?: () => void;
 }
 
-export function Toolbar({
+export const Toolbar = memo(function Toolbar({
   color,
   onColorChange,
   brushWidth,
@@ -109,6 +111,7 @@ export function Toolbar({
   scratchPad = false,
   onSave,
 }: ToolbarProps) {
+  useLocaleRerender();
   recordRender("toolbar");
   const isMobile = useMediaQuery("(max-width: 900px)");
   const fillAvailable = useCanvasBudgetStore((state) => scratchPad || state.fillAvailable);
@@ -637,4 +640,4 @@ export function Toolbar({
       </div>
     </div>
   );
-}
+});

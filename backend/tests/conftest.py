@@ -83,3 +83,41 @@ def pytest_collection_modifyitems(config, items):
         target.append(item)
     items[:] = selected
     config.hook.pytest_deselected(items=deselected)
+
+
+@pytest.fixture(autouse=True)
+def _empty_drawing_cache():
+    """The decoded-drawing cache is process-wide (#979); a test starts with it
+    empty, so bytes one test cached cannot answer for another's row. Looked
+    up rather than imported, so collecting a test never loads the app."""
+    import sys
+
+    profiles = sys.modules.get("app.api.profiles")
+    if profiles is not None:
+        profiles.drawing_cache.clear()
+        profiles._fills.clear()
+    yield
+
+
+@pytest.fixture(autouse=True)
+def _empty_runtime_metrics_buffer():
+    """One process, one recorder (`services.runtime_metrics.metrics`), and no
+    fixture emptied it between tests.
+
+    A test that asserts on what was recorded reads that buffer through
+    `drain()`, so anything an earlier test left in it is counted as its own -
+    a failure with no relation to the test that reports it, and one that only
+    appears in the worker and order that produced it (#976 seventh review).
+    """
+    try:
+        from app.services.runtime_metrics import metrics
+    except ModuleNotFoundError:
+        # `tests/test_database_backed.py` runs a pytest of its own in a
+        # temporary directory, which inherits this file without the
+        # application on its path.
+        yield
+        return
+
+    metrics.drain()
+    yield
+    metrics.drain()

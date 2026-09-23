@@ -1251,55 +1251,19 @@
 
 /* Flat `a.b.c` rows. Wide values wrap rather than stretching the card, and the
    key column stays narrow so the eye can run down it. */
-.bug-context { display: grid; margin: 0; }
 
-.bug-context > div {
-  border-bottom: 1px solid var(--line);
-  display: grid;
-  gap: 10px;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr);
-  padding: 7px 2px;
-}
 
-.bug-context dt {
-  color: var(--faint);
-  font-size: 12.5px;
-  font-weight: 700;
-  overflow-wrap: anywhere;
-}
 
-.bug-context dd {
-  font-size: 12.5px;
-  font-weight: 700;
-  margin: 0;
-  overflow-wrap: anywhere;
-  text-align: right;
-}
 
-.bug-console-log {
-  background: var(--well);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  display: grid;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11.5px;
-  gap: 3px;
-  line-height: 1.5;
-  list-style: none;
-  margin: 0;
-  max-height: 260px;
-  overflow-y: auto;
-  padding: 10px 12px;
-}
 
-.bug-console-log li {
-  color: var(--muted);
-  display: flex;
-  gap: 10px;
-  overflow-wrap: anywhere;
-}
 
-.bug-console-log li > span { color: var(--faint); flex: none; }
+
+
+
+
+
+
+
 
 .bug-shot-head { align-items: center; display: flex; gap: 8px; }
 .bug-shot-head h2 { margin: 0; }
@@ -1337,24 +1301,15 @@
   color: #ffffff !important;
 }
 
-.bug-more-context {
-  border: 1px solid var(--line);
-  border-radius: var(--radius-sm);
-  padding: 10px 12px;
-}
+
 
 /* The flat lists inside can be long; bound them rather than letting one
    disclosure push the decision controls off the screen again. */
-.bug-more-context[open] { max-height: 320px; overflow-y: auto; }
 
-.bug-more-context > summary {
-  color: var(--muted);
-  cursor: pointer;
-  font-size: 12.5px;
-  font-weight: 800;
-}
 
-.bug-more-context .bug-context { margin-top: 8px; }
+
+
+
 
 /* ---------------------------------------------------------------- ops tabs */
 /* The operations page carries five surfaces now: the dashboard it always had,
@@ -1721,14 +1676,7 @@
 /* What a decision was recorded as, above the moderator's own sentence. An
    eyebrow rather than a heading: it categorises what follows and should not
    compete with it. */
-.notice-category {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
-  margin-bottom: 2px;
-  text-transform: uppercase;
-}
+
 
 /* The category sits above the note and reads as part of the same block. */
 .mod-category select {

@@ -458,6 +458,59 @@ async def test_the_game_ends_for_players_before_the_write_is_attempted():
     assert order == ["game_ended", "saved"]
 
 
+async def test_the_room_hears_the_game_ended_before_anything_is_encoded():
+    """A game ends inside a `room_state_batch`, so an awaited handoff put the
+    encode - deliberately unbounded, so that a burst of endings costs latency
+    rather than games (#976) - in front of the room's own snapshot. The
+    handoff is a tracked task now, so neither the result nor the waiting room
+    waits for it (#976 fourth review, R-HIST-03)."""
+    import asyncio
+
+    room_manager, room, players = build_room(rounds=1)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    order: list[str] = []
+    original_emit = ctx.sio.emit
+
+    async def tracking_emit(event, *args, **kwargs):
+        if event in ("game_ended", "room_state"):
+            order.append(event)
+        return await original_emit(event, *args, **kwargs)
+
+    ctx.sio.emit = tracking_emit
+    # As the phase timer runs it: the turn that ends the game is wrapped in a
+    # `room_state_batch`, which is what holds the snapshot back until the
+    # action returns. Without this the test cannot see the delay at all.
+    flow = ctx.game_flow
+    real_finish = flow._finish_or_next
+
+    async def batched(room, **kwargs):
+        async with flow.room_state_batch():
+            return await real_finish(room, **kwargs)
+
+    flow._finish_or_next = batched
+    worker = ctx.finished_games
+    real_encode = worker.encode
+
+    async def slow_encode(envelope):
+        order.append("encode start")
+        await asyncio.sleep(0.2)
+        order.append("encode end")
+        return await real_encode(envelope)
+
+    worker.encode = slow_encode
+
+    await play_to_completion(ctx, room, players)
+
+    assert "game_ended" in order and "encode end" in order
+    ended = order.index("game_ended")
+    # The snapshot that belongs to the end of the game, not an earlier turn's.
+    snapshot = next(step for step, event in enumerate(order[ended:], ended) if event == "room_state")
+    assert snapshot < order.index("encode end"), order
+    assert ended < order.index("encode start"), order
+    assert len(history.saved) == 1
+
+
 async def test_a_failing_write_does_not_break_the_end_of_the_game():
     room_manager, room, players = build_room(rounds=1)
     history = FakeGameHistoryRepository(fail=True)

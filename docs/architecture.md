@@ -203,9 +203,11 @@ budget. Details of all of this are in [`wire-protocol.md`](wire-protocol.md).
 ```
 frontend/src/
 ├── main.tsx, App.tsx      Router, identity bootstrap (the first paint waits for the account, bounded), socket connection
+├── routeModules.ts        Every page and overlay but the lobby as a chunk of its own, and what is prefetched when (#475)
 ├── pages/                 One component per route
 ├── components/            Canvas, toolbar, player list, dialogs, overlays
-├── content/ui/            The interface's words, one typed module per locale
+├── content/ui/            The interface's words, one typed module per locale; English in the entry chunk, every other locale
+│                          a chunk of its own fetched before the first paint by whoever reads it (#982)
 │   └── CrashBoundary.tsx  The class both crash boundaries use (R-UX-06); pages/CrashPage.tsx is its fallback
 ├── hooks/
 │   ├── useGameSocketListeners.ts  Every server→client listener, registered once
@@ -221,10 +223,31 @@ frontend/src/
 │   ├── crashReport.ts     Pre-fills and redacts the crash page's bug report
 │   └── crashTestSeam.ts   Diagnostics-build hook the E2E suite uses to make a screen throw
 ├── types.ts               Shared TypeScript types for every socket payload
-└── styles/                CSS, one file per surface
+└── styles/                CSS, one file per surface; styles/lazy/ wraps the surfaces fetched with their pages
 ```
 
-Routes ([`frontend/src/App.tsx:59`](../frontend/src/App.tsx)):
+**What a first visit downloads.** The entry chunk holds the lobby and what every page
+needs: the socket, the stores, the app-level listeners, English, and the crash page.
+Every other page and both overlays are chunks of their own
+([`routeModules.ts`](../frontend/src/routeModules.ts)), and so is every interface
+language but English (#982). The chunk for the address being opened is fetched while
+the first paint waits on the account, not after it. The room, Create and the offline
+banner's scratch pad are fetched once the lobby has painted, because a player is about
+to need them, and the scratch pad cannot be fetched once the connection it stands in
+for has gone. React, the router and socket.io are a separate `vendor` chunk whose hash
+changes only when a dependency does, so a deploy of the app leaves them cached. A
+surface's stylesheet travels with the components that draw it, through `styles/lazy/`,
+which keeps it in the `components` layer: a stylesheet imported from a module is
+otherwise unlayered, and unlayered rules beat every layer. A tab open across a deploy
+asks for chunk names the server no longer has.
+[`lib/chunkReload.ts`](../frontend/src/lib/chunkReload.ts) reloads it onto the new build
+once per build, and only when the failed chunk itself answers 404: a reload with the server
+down lands on the browser's error page, and one after a one-off failure throws the page away
+for nothing. The two overlays load themselves ([`LazyOverlay`](../frontend/src/components/LazyOverlay.tsx)),
+so a chunk that cannot be fetched over a live room is a notice with a reload, not the crash page. CI holds the first-load set to a
+gzip budget (`npm run bundle:check`, [`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)).
+
+Routes ([`frontend/src/App.tsx:90`](../frontend/src/App.tsx)):
 
 | Path | Page |
 | --- | --- |
@@ -264,9 +287,11 @@ refusing it (§7, *Authorization*), and keep their 200: the URL exists, the acco
 Three frontend conventions worth knowing:
 
 1. **`autoConnect` is off** ([`frontend/src/lib/socket.ts:13`](../frontend/src/lib/socket.ts)).
-   The handshake reads the session cookie exactly once, and on a first visit that
-   cookie does not exist until `GET /api/auth/me` has provisioned the account.
-   `App.tsx` connects only once identity has settled.
+   The handshake reads the session cookie exactly once, and `GET /api/auth/me` may
+   rotate it, so `App.tsx` connects only once identity has settled. That read is
+   started by `index.html` itself, before any bundle has downloaded, and adopted by
+   the first `apiRequest` for it ([`lib/api.ts`](../frontend/src/lib/api.ts), #983);
+   a registered account's settings come back in the same answer.
 2. **`emitWithAck` never hands a packet to a disconnected socket**
    ([`frontend/src/lib/socket.ts:139`](../frontend/src/lib/socket.ts)). Socket.IO would
    queue it and deliver it on reconnect, so a request reported as failed could arrive
@@ -300,7 +325,10 @@ This is the table to consult before adding a feature: *where does this state liv
 | Canvas history, generation, sequence, replay budget | `CanvasSession` (memory) | No |
 | Phase/hint/restart/disconnect timers | `TimerManager` (memory) | No |
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
+| Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
+| Encoding a finished game | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `repositories/sqlalchemy.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
+| A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
 | Quick custom prompts typed into a room | `Room` (memory) | No |
@@ -346,16 +374,20 @@ and not booleans, and unknown fields are rejected
 ### Data queries (REST)
 
 ```
-fetch ──▶ SessionAuthMiddleware  (app/auth/middleware.py: resolves the hashed cookie)
+fetch ──▶ SessionAuthMiddleware  (app/auth/middleware.py: resolves the hashed cookie, /api/ only)
       ──▶ FastAPI router          (app/api/*, app/auth/routes.py)
       ──▶ repository or session
       ──▶ serializer              (app/api/serializers.py)
 ```
 
 REST is used for health/readiness, room discovery, and everything that is a *query or
-an account action* rather than gameplay. Socket.IO handshakes resolve the same
-revocable session record as HTTP requests
-([`backend/app/handlers/connection.py:22`](../backend/app/handlers/connection.py)), so
+an account action* rather than gameplay. The session is resolved only under `/api/`:
+the cookie is `Path=/`, so the browser sends it with the shell and every asset, and a
+cold page load used to resolve it a dozen times for files that are the same for
+everybody. Every layer in the stack is plain ASGI — `BaseHTTPMiddleware` runs the app
+behind a task and a memory stream, ~80 µs of loop time per request here (#974).
+Socket.IO handshakes resolve the same revocable session record as HTTP requests
+([`backend/app/handlers/connection.py:99`](../backend/app/handlers/connection.py)), so
 revocation applies uniformly without a shared signing secret.
 
 How long an idle connection is held before the server closes it is decided rather
@@ -429,7 +461,18 @@ leaves existing rooms connected so active games can finish. `SHUTDOWN_DRAIN_SECO
 (0–300, default 30) bounds the window.
 
 A game that finishes inside the window follows the ordinary all-or-nothing history
-path. A game still live when the deadline expires is **not** misrepresented as
+path — on a task of its own (#976), which is why the shutdown drains those tasks
+(`HandlerContext.room_cleanups`) before it stops the handoff worker: the drain is what
+ends rooms and stages their games, and the bounded replay pass below it is what writes
+them. Its budget covers a queued encode as well as the write it is bounded by, computed
+from `ROOM_GLOBAL_LIMIT` and `HISTORY_ENCODE_WORKERS` rather than fixed, and it
+re-checks the set as it goes, because a teardown task defers a staging task of its own.
+Whatever is still running when the budget is spent is **cancelled and counted** as a
+lost write, rather than left for the loop to close under - the cancellation itself
+bounded by `CLEANUP_CANCEL_SECONDS` (5 s), after which a task that swallowed it is left
+behind and said so in the log. What both phases record is flushed to `runtime_events`
+after the replay pass and before the engine is disposed of, which is the last thing the
+shutdown does. A game still live when the deadline expires is **not** misrepresented as
 finished: one privacy-safe `planned_shutdown_abandonments` row is written instead
 (runtime IDs, phase, counts, timestamps — never room codes, names, prompts, chat, or
 canvas contents). A second termination signal abandons the rest of the window and
@@ -807,7 +850,12 @@ costs one walk over the channel's membership, only when the author has
 blockers. The backlog is filtered the other way round, per arrival: one bounded
 lookup per distinct author, together, and an author whose lookup fails is
 shown rather than hidden (R-BLOCK-06). There is no seat to warm the cache at,
-so the handshake warms it beside the identity it already reads.
+so the handshake warms it beside the identity it already reads — the two reads at
+once, not one after the other (#980). Taking a seat — and taking one back on a
+reconnect — reads the account and its colour-safe preference in one statement
+(`get_seat_account`), and stamps `last_active_at` on a task the join does not
+wait for, on a flat hang guard rather than the entry's deadline (which the task would
+otherwise inherit and find already spent).
 
 **Retention reuses the room table.** A lobby line is a `room_messages` row
 with audience `lobby`, no room scope, no seat, and an empty recipient list —
@@ -1037,6 +1085,13 @@ Retention is now a hand-off. `MessageRetentionService.record` composes the row o
 spot — every field on it is a snapshot of live state that a moment later is gone — and
 puts it on a bounded queue that a single worker drains in batches
 ([`backend/app/services/message_retention.py`](../backend/app/services/message_retention.py)).
+The one reader that cannot wait out that quarter second — a report citing a line said a
+moment ago — writes what is already queued first (`flush`, bounded at 2 s), so evidence
+is as available as it was before batching. A batch is what arrives within a quarter of a
+second of its first line (sooner if 100
+are waiting, or if anybody is draining the queue): rooms talk a line at a time, so a
+worker that took only what was already queued wrote one transaction per line — under
+the load gate that was half of every statement the process ran (#972).
 The caller gets the message's UUIDv7 back immediately; what it does not get is a
 promise that the row landed. That identifier is what lets a player pin the line as
 report evidence, and a report naming a message the database does not have is refused
@@ -1397,7 +1452,8 @@ that ran them - `database_operation` sets a context variable at a dozen call sit
 (session resolve, save game, message batch, gallery page, a sweep, ...), which follows
 the task into SQLAlchemy's greenlet - so a slow p95 has a name (#892). The pool is a
 `TimedQueuePool` that times each checkout, because the statement timer starts only
-once a connection is held; a failed statement is counted by SQLSTATE class; and each
+once a connection is held (and checks each checkout for a closed socket, pinging only a
+connection unused for 30 s, #973); a failed statement is counted by SQLSTATE class; and each
 operator command's engine logs one summary line when disposed, since nothing scrapes a
 process that lives for a minute.
 
@@ -1487,6 +1543,14 @@ all-or-nothing and keyed on the game's stable UUIDv7:
   game it last held and ignores an outcome for a game the room has moved on from.
 - The ledger is *proved* against the cached scores: every participant's signed deltas
   must sum to their final score, in that transaction, or the write fails.
+- No drawing is encoded on the event loop, and none inside that transaction (#976).
+  The envelope's JSON, deflate and checksum at staging, its decode at replay, the
+  content digest and each drawing's stored form all run on the history write's own
+  small thread pools, not the default one blocking SMTP shares; the drawings are
+  prepared after a one-read check that the game is not already written and before
+  the transaction that locks the players' rows opens. The loop still shares the GIL
+  with a stroke-heavy encode while it runs, at reduced throughput, rather than
+  stalling for all of it.
 
 Full table-by-table detail is in [`database.md`](database.md).
 
@@ -1689,7 +1753,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/auth/mail.py`](../backend/app/auth/mail.py) | Queueing and delivery for the few messages this game ever sends. |
 | [`app/auth/middleware.py`](../backend/app/auth/middleware.py) | Session cookie plumbing for HTTP requests and Socket.IO handshakes. |
 | [`app/auth/names.py`](../backend/app/auth/names.py) | The single naming rule shared by guest nicknames and account usernames. |
-| [`app/auth/password.py`](../backend/app/auth/password.py) | Argon2id password hashing, kept off the event loop. |
+| [`app/auth/password.py`](../backend/app/auth/password.py) | Argon2id password hashing, kept off the event loop on a capped pool of its own. |
 | [`app/auth/password_reset.py`](../backend/app/auth/password_reset.py) | Operator-run password reset, for deployments that cannot send mail. |
 | [`app/auth/passkeys.py`](../backend/app/auth/passkeys.py) | Passkeys: the staff credential a relay cannot carry away. |
 | [`app/auth/pending_role.py`](../backend/app/auth/pending_role.py) | A staff role offered, and waiting on the second factor that starts it. |
@@ -1729,6 +1793,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/identifiers.py`](../backend/app/identifiers.py) | Central generation policy for durable entity identifiers. |
 | [`app/live_drawing.py`](../backend/app/live_drawing.py) | Compact, versioned binary frames for live drawing Socket.IO events. |
 | [`app/logging_config.py`](../backend/app/logging_config.py) | Make the application's own log lines reach somebody - as JSON in production, stamped with their request or command, secrets redacted. |
+| [`app/compression.py`](../backend/app/compression.py) | What the server compresses on its own loop, and what it serves already compressed. |
 | [`app/correlation.py`](../backend/app/correlation.py) | The request id, socket id and command a log line belongs to, carried as task-local context. |
 | [`app/probe.py`](../backend/app/probe.py) | The synthetic game - two guests, a room, one stroke - over Socket.IO long-polling with the standard library; the `sketchy_probe_*` textfile series. |
 | [`app/main.py`](../backend/app/main.py) | ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app. |
@@ -1800,8 +1865,8 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).

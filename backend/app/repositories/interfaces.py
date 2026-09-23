@@ -809,6 +809,16 @@ class UserRepository(ABC):
         """Fetch user by unique ID without returning credential hashes."""
         ...
 
+    async def get_seat_account(self, user_id: str) -> tuple[UserData | None, bool | None]:
+        """The account a seat is taken as, and its colour-safe preference.
+
+        One read where a repository can make it one (#980): taking a seat
+        needs both, and asked one after the other they were two round trips
+        the acknowledgement waited on. `None` for the preference means this
+        repository did not read it, and the caller asks the settings row.
+        """
+        return await self.get_by_id(user_id), None
+
     @abstractmethod
     async def get_by_username(self, username: str) -> UserData | None:
         """Fetch user by case-insensitive unique username without returning credential hashes."""

@@ -7,6 +7,7 @@ import { DRAIN_CUE_MS, drainCue, type RoomPauseCause } from "../lib/appNotices";
 import { useDrainSecondsLeft } from "../hooks/useServerNotices";
 import { useServerNoticesStore, type RoomEndReason } from "../store/serverNoticesStore";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/reactions.css";
 
 /**
  * The card over a paused room stage (#823). `roomStage` decides when.

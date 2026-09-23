@@ -15,6 +15,7 @@ import { HeartIcon } from "./icons";
 import { ReactionGlyph } from "./ReactionGlyph";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/reactions.css";
 
 interface DrawingReactionControlProps {
   /** Every reaction on this drawing, by reactor seat. */

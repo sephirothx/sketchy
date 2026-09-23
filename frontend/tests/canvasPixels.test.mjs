@@ -343,3 +343,50 @@ test("a dot of width w is w pixels across when its edge falls on pixel centres, 
     }
   }
 });
+
+test("a thumbnail is the area average of what it covers, not a sample of it", async () => {
+  const { downscalePixels } = await import("../src/lib/canvasThumbnail.ts");
+  // A 4x2 source: left half black, right half white, halved to 2x1.
+  const source = new Uint8ClampedArray(4 * 2 * 4);
+  for (let y = 0; y < 2; y++) for (let x = 0; x < 4; x++) source.set(x < 2 ? [0, 0, 0, 255] : [255, 255, 255, 255], (y * 4 + x) * 4);
+  assert.deepEqual([...downscalePixels(source, 4, 2, 2, 1)], [0, 0, 0, 255, 255, 255, 255, 255]);
+  // A one-pixel line a sample could miss still leaves its trace.
+  const line = new Uint8ClampedArray(4 * 4 * 4).fill(255);
+  line.set([0, 0, 0, 255], (1 * 4 + 1) * 4);
+  const small = downscalePixels(line, 4, 4, 2, 2);
+  assert.ok(small[0] < 255, "the dark pixel is averaged in, not skipped");
+});
+
+test("a fill reports the box it painted, and nothing beyond it (#990)", () => {
+  // A 3x2 white hole inside a black frame on a 7x6 canvas: the fill must say
+  // it painted exactly the hole, so a commit of that box shows all of it.
+  const width = 7;
+  const height = 6;
+  const data = new Uint8ClampedArray(width * height * 4).fill(255);
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const inHole = x >= 2 && x <= 4 && y >= 2 && y <= 3;
+      const onFrame = x >= 1 && x <= 5 && y >= 1 && y <= 4 && !inHole;
+      if (onFrame) data.set([0, 0, 0, 255], (y * width + x) * 4);
+    }
+  }
+  const bounds = { left: -1, top: -1, right: -1, bottom: -1 };
+  assert.equal(floodFillPixels(data, width, height, 3, 2, RED, bounds), true);
+  assert.deepEqual(bounds, { left: 2, top: 2, right: 5, bottom: 4 });
+});
+
+test("a buffer that is not word-aligned fills exactly as an aligned one", () => {
+  // The word fast path needs a 4-byte-aligned buffer; anything else takes the
+  // byte path, which must paint the same pixels.
+  const width = 9;
+  const height = 7;
+  const aligned = new Uint8ClampedArray(width * height * 4).fill(255);
+  for (let x = 0; x < width; x++) aligned.set([250, 251, 255, 255], (3 * width + x) * 4);
+  aligned.set([0, 0, 0, 255], (3 * width + 4) * 4);
+  const backing = new Uint8ClampedArray(aligned.length + 1);
+  const unaligned = backing.subarray(1);
+  unaligned.set(aligned);
+  assert.equal(floodFillPixels(aligned, width, height, 0, 0, RED), true);
+  assert.equal(floodFillPixels(unaligned, width, height, 0, 0, RED), true);
+  assert.deepEqual([...unaligned], [...aligned]);
+});

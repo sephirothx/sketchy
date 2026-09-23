@@ -52,6 +52,7 @@ from app.auth.password import (
     DUMMY_HASH,
     MAX_PASSWORD_LENGTH,
     PasswordPolicyError,
+    PasswordHashingBusy,
     hash_password,
     password_needs_rehash,
     validate_password,
@@ -75,6 +76,7 @@ from app.auth.recovery import (
     reset_password,
 )
 from app.api.serializers import user_payload
+from app.api.user_settings import settings_of_registered_account
 from app.services.guest_names import online_guest_holding
 from app.services.presence import PresenceIdentityCache, PresenceRegistry
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
@@ -371,6 +373,15 @@ def create_auth_router(
     )
     # Looser than requesting a reset: this costs a lookup rather than somebody
     # else's inbox, and one page load with a reload or two must not exhaust it.
+    # The POST that finishes a reset gets a bucket of its own: sharing the
+    # preflight's would let a page opened a few times behind one address spend
+    # the allowance the user needs for the last step (#975 third review).
+    reset_perform_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset_perform",
+        limit=_limit("AUTH_RESET_PERFORM_LIMIT", 10),
+        window_seconds=3600,
+    )
     reset_check_limiter = PersistentRateLimiter(
         session_factory,
         scope="password_reset_check",
@@ -630,7 +641,9 @@ def create_auth_router(
 
     @router.get("/me")
     async def me(request: Request, response: Response):
-        """Return the caller's account, or nothing if they do not have one.
+        """Return the caller's account, or nothing if they do not have one -
+        with a registered account's settings, which the page needs before it
+        paints.
 
         Deliberately creates nothing. This runs on every page load, including
         ones nobody is behind - a crawler, a link preview, an uptime check -
@@ -697,6 +710,23 @@ def create_auth_router(
                 )
                 is not None
             )
+        if user.state == AccountState.REGISTERED.value:
+            # A registered account's settings ride along (#983): the page
+            # holds its first paint for this answer anyway (R-I18N-06), and
+            # asking for them separately put a second round trip - and a
+            # second session - in front of every registered player's lobby.
+            #
+            # Never at the cost of the answer: the session may have just been
+            # rotated above, and a 500 here would drop the new cookie while the
+            # old token is already revoked - past the grace window that reads
+            # as a replay and signs the player out everywhere. Left out, the
+            # page asks for the settings on their own, as it did before.
+            try:
+                payload["settings"] = await settings_of_registered_account(
+                    session_factory, user_id=str(user.id)
+                )
+            except Exception:
+                logger.warning("auth_me_settings_unavailable", exc_info=True)
         return payload
 
     @router.get("/nickname-available")
@@ -984,12 +1014,20 @@ def create_auth_router(
         await login_guard.note_success(username=body.username)
 
         if await password_needs_rehash(credentials.password_hash):
-            replacement_hash = await hash_password(body.password)
-            await user_repo.replace_password_hash(
-                credentials.user.id,
-                credentials.password_hash,
-                replacement_hash,
-            )
+            try:
+                replacement_hash = await hash_password(body.password)
+            except PasswordHashingBusy:
+                # The password was right and the sign-in stands; raising the
+                # cap's refusal here would turn a correct password into a 503,
+                # and refuse exactly the accounts whose hash is out of date
+                # (#975 review). The next login rehashes instead.
+                logger.info("skipped the login rehash: the hashing pool is busy")
+            else:
+                await user_repo.replace_password_hash(
+                    credentials.user.id,
+                    credentials.password_hash,
+                    replacement_hash,
+                )
 
         account, _ = await _sign_this_browser_in(response, request, credentials.user)
         return user_payload(account)
@@ -1184,17 +1222,10 @@ def create_auth_router(
                     ErrorCode.PASSWORD_REQUIRED_TO_DELETE,
                     "Enter your password to delete the account.",
                 )
-            credentials = (
-                await user_repo.get_credentials_by_username(user.username)
-                if user.username
-                else None
-            )
-            if (
-                credentials is None
-                or credentials.user.id != user.id
-                or not await verify_password(credentials.password_hash, body.password)
-            ):
-                raise Refusal(401, ErrorCode.PASSWORD_INCORRECT, "Password is incorrect.")
+            # Through the one helper, like every other proof: a second copy
+            # of it is a second place for the hashing pool's refusal to be
+            # swallowed (#975 fifth review).
+            await _prove_password(user, body.password)
         try:
             result = await anonymize_account(session_factory, user_id=user.id)
         except AccountDataError as error:
@@ -1343,11 +1374,23 @@ def create_auth_router(
     async def perform_password_reset(
         body: ResetPasswordBody, request: Request, response: Response
     ):
+        # Limited like its siblings: this route hashes, and the hashing pool
+        # is shared with every sign-in, so an unlimited one is a way to hold
+        # that queue full from outside (#975 review).
+        await throttle(reset_perform_limiter, request)
         # Read without consuming, so a password refused below leaves the link
         # unspent (R-AUTH-08, R-AUTH-10).
         reset_username, reset_email = await password_reset_identity(
             session_factory, token=body.token
         )
+        if reset_username is None and reset_email is None:
+            # A link that names nothing is refused before anything is hashed;
+            # `reset_password` below checks it again under its own lock.
+            raise Refusal(
+                400,
+                ErrorCode.RESET_LINK_INVALID,
+                "That reset link has expired or already been used.",
+            )
         try:
             password = validate_password(
                 body.password, username=reset_username, email=reset_email
@@ -1418,17 +1461,7 @@ def create_auth_router(
                 field="password",
                 params={"reason": error.reason, "detail": error.detail},
             ) from error
-        credentials = (
-            await user_repo.get_credentials_by_username(user.username)
-            if user.username
-            else None
-        )
-        if (
-            credentials is None
-            or credentials.user.id != user.id
-            or not await verify_password(credentials.password_hash, body.current_password)
-        ):
-            raise Refusal(401, ErrorCode.PASSWORD_INCORRECT, "Password is incorrect.")
+        await _prove_password(user, body.current_password)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         changed = await change_password(
             session_factory,

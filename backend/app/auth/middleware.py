@@ -6,9 +6,10 @@ import hashlib
 import hmac
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.responses import JSONResponse, Response
+from starlette.routing import get_route_path
+from starlette.types import ASGIApp, Receive, Scope, Send
 
 from app.auth.bans import suspension_payload
 from app.auth.rate_limit import client_key, get_ip_hash_secret
@@ -94,23 +95,41 @@ def clear_session_cookie(response: Response, *, secure: bool) -> None:
     )
 
 
-class SessionAuthMiddleware(BaseHTTPMiddleware):
+#: Where a session means anything. Everything else this app answers - the
+#: application shell, its assets, `/metrics` with its bearer token - is the
+#: same for every caller.
+SESSION_PATH_PREFIX = "/api/"
+
+
+class SessionAuthMiddleware:
     """Resolve the caller's user id from the session cookie.
 
     Only ever reads. Guest accounts are provisioned exclusively by
     ``GET /api/auth/me`` so that ordinary traffic - health checks, the lobby
     room-list poll - cannot create rows.
+
+    Only for `/api/` (R-AUTH-25, #974). The cookie is `Path=/`, so the browser
+    sends it with the shell, the bundle, every font and icon: a cold page load
+    resolved the session a dozen times for files that are the same for
+    everybody. Any other path gets the state of a caller with no session -
+    including an empty token, so nothing downstream can read the cookie off a
+    request that was never resolved - without asking.
+
+    Plain ASGI rather than `BaseHTTPMiddleware` (#974), which runs the rest of
+    the app in a task of its own behind a memory stream: ~80 µs of event-loop
+    time on every request, measured through this app, on the loop every room
+    shares.
     """
 
-    def __init__(self, app, session_factory: async_sessionmaker[AsyncSession]) -> None:
-        super().__init__(app)
+    def __init__(self, app: ASGIApp, session_factory: async_sessionmaker[AsyncSession]) -> None:
+        self.app = app
         self._session_factory = session_factory
         # The deployment's HMAC key, read once and then held. Without the
         # cache this would be a database round trip per request purely to
         # hash an address that is only ever compared with another hash.
         self._ip_secret: str | None = None
         # And read once *in total*, not once per request in flight. A cold
-        # server has no key row yet, and this now runs on every request: the
+        # server has no key row yet, and this runs on every `/api/` request: the
         # first page load is a dozen of them at once, each finding nothing
         # cached, each trying to insert the same row, each losing on the
         # unique key and retrying. That pile-up lands precisely when the first
@@ -142,9 +161,42 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             hashlib.sha256,
         ).hexdigest()
 
-    async def dispatch(self, request: Request, call_next):
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":
+            await self.app(scope, receive, send)
+            return
+        # Read off the scope rather than built into a `Request` first: the
+        # gate runs on every request including static files, and parsing a URL
+        # to answer it costs more than the answer (#974 review).
+        #
+        # The route path, not `scope["path"]`: behind a proxy that serves this
+        # app under a prefix, uvicorn's `--root-path` leaves that prefix on
+        # the raw path, and every `/api/` request would arrive as
+        # `/prefix/api/...` - past the gate, with no session resolved and no
+        # suspension refused. Starlette's own routing answers the same
+        # question the same way, so the gate and the routes cannot disagree.
+        path = get_route_path(scope)
+        if not path.startswith(SESSION_PATH_PREFIX):
+            _set_state(Request(scope), token="", ip_hash=None, session=None, banned_user_id=None)
+            await self.app(scope, receive, send)
+            return
+        request = Request(scope)
+        refusal = await self._resolve(request, path)
+        if refusal is not None:
+            await refusal(scope, receive, send)
+            return
+        await self.app(scope, receive, send)
+
+    async def _resolve(self, request: Request, path: str) -> Response | None:
+        """Fill the request's session state; a refusal to send instead, if any.
+
+        Decided on the path the gate already resolved, not on
+        `request.url.path`: that one is re-parsed out of a rebuilt URL, so a
+        path holding an encoded `?` comes back cut short at it - and a cut
+        path is how `/api/anything%3F` would read as neither the API nor an
+        escape hatch.
+        """
         raw_token = request.cookies.get(cookie_name(), "")
-        request.state.session_token = raw_token
         # Computed once here and left on the request, for every route that
         # wants it. Issuing a cookie needs the caller's address digest too,
         # and reaching for it separately meant a database round trip per
@@ -162,19 +214,19 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
             ),
         )
         privacy_escape_hatch = (
-            request.url.path.startswith("/api/auth/data-exports")
-            or request.url.path == "/api/auth/account"
-            or request.url.path == "/api/auth/logout"
+            path.startswith("/api/auth/data-exports")
+            or path == "/api/auth/account"
+            or path == "/api/auth/logout"
             # The drawings the suspension notice is about: the refusal below
             # names them, and this is the one path that can hand them over.
             # One per report the decision covered (#620), so the path names
             # which; the route checks it against that decision group.
-            or request.url.path.startswith("/api/suspension/drawings/")
+            or path.startswith("/api/suspension/drawings/")
         )
         if (
             resolution.banned_user_id is not None
-            and request.url.path.startswith("/api/")
-            and request.url.path != "/api/health"
+            and path.startswith("/api/")
+            and path != "/api/health"
             and not privacy_escape_hatch
         ):
             # Say why, and until when. A player told only that they are
@@ -188,9 +240,21 @@ class SessionAuthMiddleware(BaseHTTPMiddleware):
                 ),
                 status_code=403,
             )
-        auth_session = resolution.session
-        request.state.auth_session = auth_session
-        request.state.session_id = auth_session.id if auth_session else None
-        request.state.user_id = auth_session.user_id if auth_session else None
-        request.state.banned_user_id = resolution.banned_user_id
-        return await call_next(request)
+        _set_state(
+            request,
+            token=raw_token,
+            ip_hash=request.state.client_ip_hash,
+            session=resolution.session,
+            banned_user_id=resolution.banned_user_id,
+        )
+        return None
+
+
+def _set_state(request: Request, *, token: str, ip_hash: str | None, session, banned_user_id) -> None:
+    """What every route reads off the request about its caller."""
+    request.state.session_token = token
+    request.state.client_ip_hash = ip_hash
+    request.state.auth_session = session
+    request.state.session_id = session.id if session else None
+    request.state.user_id = session.user_id if session else None
+    request.state.banned_user_id = banned_user_id

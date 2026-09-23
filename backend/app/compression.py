@@ -1,0 +1,192 @@
+"""What the server compresses on its own loop, and what it serves already compressed.
+
+The frontend build writes a Brotli and a gzip copy beside every text asset
+(`frontend/vite.config.ts`), so a script or stylesheet is compressed once, at
+build time, at the highest settings - not again for every client on the loop
+every room shares. Compressing the 1.7 MB bundle at gzip level 9 cost ~40 ms of
+loop CPU per cold page load, in chunks long enough to show up as stroke jitter,
+and a deploy is exactly when every client cold-loads at once (#978).
+
+What is left to compress on the fly - API responses, and a stored drawing
+frame - is compressed at level 4: about four times cheaper than 9 for a few
+per cent more bytes. Images and fonts are never compressed at all: they are
+compressed formats already, and a second pass only spends the time to make
+them slightly larger.
+"""
+from __future__ import annotations
+
+import os
+import stat
+
+from starlette.datastructures import Headers, MutableHeaders
+from starlette.middleware.gzip import GZipMiddleware, GZipResponder, IdentityResponder
+from starlette.responses import FileResponse, Response
+from starlette.types import Message, Receive, Scope, Send
+
+DYNAMIC_COMPRESSLEVEL = 4
+
+#: Set on the scope by a handler that has already settled its own encoding.
+#: The static files do: they serve the build's copies, and the few text files
+#: too small for the build to have made one are not worth loop CPU per request
+#: - which is the whole point of #978. It also keeps every static
+#: representation's `ETag` the one the bytes were stored with: compressing
+#: after the validator was chosen would give two bodies one name.
+NO_DYNAMIC_COMPRESSION = "sketchy.no_dynamic_compression"
+
+# Formats that are compressed already; compressing them again is pure cost.
+INCOMPRESSIBLE_CONTENT_TYPES = ("image/", "font/", "audio/", "video/")
+
+# Best first. A sibling is `<file><suffix>`, written by the frontend build.
+PRECOMPRESSED_SIBLINGS = (("br", ".br"), ("gzip", ".gz"))
+
+
+def accepted_encodings(header: str | None) -> set[str]:
+    """The content codings an `Accept-Encoding` header admits.
+
+    A coding named with `q=0` is refused rather than accepted - the one case
+    where naive substring matching gets the answer backwards.
+    """
+    accepted: set[str] = set()
+    for part in (header or "").split(","):
+        coding, _, params = part.strip().partition(";")
+        coding = coding.strip().lower()
+        if not coding:
+            continue
+        quality = 1.0
+        for param in params.split(";"):
+            name, _, value = param.strip().partition("=")
+            if name.strip().lower() == "q":
+                try:
+                    quality = float(value)
+                except ValueError:
+                    quality = 0.0
+        if quality > 0:
+            accepted.add(coding)
+    return accepted
+
+
+def precompressed_variant(response: Response, scope: Scope) -> FileResponse | None:
+    """The build's compressed copy of `response`'s file, if the client takes one.
+
+    Returns a response for the sibling carrying the original's media type and
+    caching headers, with `Content-Encoding` set - which is also what makes the
+    compression middleware pass it through untouched. The sibling's own size
+    and modification time give it its own validators, so a conditional request
+    is answered against the bytes it would actually receive.
+
+    A sibling is only served when `lstat` says it is a **regular file**, which
+    is the check the suffix trick needs (#978 review): a `<file>.br` symlink
+    planted in the build output would otherwise serve a file from outside the
+    tree - bytes `StaticFiles` refuses under their own name - and a directory
+    or a FIFO called `<file>.br` would raise, or hang, after the response had
+    started.
+
+    What it is not is containment. A hard link is a regular file by every test
+    an `lstat` can make, and no path leads back to where else it is named, so
+    nothing here can tell one from the copy it claims to be. That is accepted
+    rather than guessed at: anybody who can plant a file in the build output
+    can equally replace the bundle itself, so the boundary that matters is
+    write access to `dist`, not this check. Refusing a file with more than one
+    name was tried and reverted - it silently turned precompression off for
+    every deploy that lands its build with `cp -al` or `rsync --link-dest`,
+    which is a regression #978 exists to prevent, in exchange for nothing
+    (#978 fourth review). A symlinked
+    parent inside the build needs no check here: `StaticFiles` refuses the
+    original under that path first, so there is no response to attach a copy
+    to.
+    """
+    if not isinstance(response, FileResponse):
+        return None
+    accepted = accepted_encodings(Headers(scope=scope).get("accept-encoding"))
+    for coding, suffix in PRECOMPRESSED_SIBLINGS:
+        if coding not in accepted:
+            continue
+        sibling = f"{response.path}{suffix}"
+        try:
+            # `lstat` of a regular file is that file's own stat, so the check
+            # and the validators come from one call: a second `stat` would
+            # only add a syscall and a window between them.
+            sibling_stat = os.lstat(sibling)
+        except OSError:
+            continue
+        if not stat.S_ISREG(sibling_stat.st_mode):
+            continue
+        variant = FileResponse(
+            sibling,
+            stat_result=sibling_stat,
+            media_type=response.media_type,
+        )
+        variant.headers["Content-Encoding"] = coding
+        # No `Vary` here: the caller adds it to every static answer, copy or
+        # not (`SPAStaticFiles.file_response`), and a second one only puts the
+        # same word in the field twice (#978 sixth review).
+        return variant
+    return None
+
+
+class SelectiveGZipMiddleware(GZipMiddleware):
+    """Starlette's gzip at a cheaper level, and never for compressed formats."""
+
+    def __init__(self, app, minimum_size: int = 500) -> None:
+        super().__init__(app, minimum_size=minimum_size, compresslevel=DYNAMIC_COMPRESSLEVEL)
+
+    async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
+        if scope["type"] != "http":  # pragma: no cover - websockets pass through
+            await self.app(scope, receive, send)
+            return
+        # Parsed rather than substring-matched, as the parent does, so that
+        # `gzip;q=0` means no gzip.
+        if "gzip" in accepted_encodings(Headers(scope=scope).get("accept-encoding")):
+            responder = _SelectiveGZipResponder(
+                self.app,
+                self.minimum_size,
+                compresslevel=self.compresslevel,
+                # Read after the app has run, not now: the handler sets it
+                # while answering.
+                excluded=lambda: bool(scope.get(NO_DYNAMIC_COMPRESSION)),
+            )
+        else:
+            responder = _SelectiveIdentityResponder(
+                self.app,
+                self.minimum_size,
+                excluded=lambda: bool(scope.get(NO_DYNAMIC_COMPRESSION)),
+            )
+        await responder(scope, receive, send)
+
+
+class _SelectiveIdentityResponder(IdentityResponder):
+    """Starlette's identity path, minus its `Vary` for a handler that owns it.
+
+    A client that takes no coding still comes through here, and the parent
+    adds `Vary: Accept-Encoding` to anything over the minimum size - which the
+    static files have already added themselves, so the field went out twice
+    for every identity request (#978 seventh review). The header is right
+    either way; a duplicate is a cache parsing the same word twice.
+    """
+
+    def __init__(self, *args, excluded, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._excluded = excluded
+
+    async def send_with_compression(self, message: Message) -> None:
+        await super().send_with_compression(message)
+        if message["type"] == "http.response.start" and self._excluded():
+            # The flag the parent already honours: set before it reads it on
+            # the body message, the response goes out exactly as it arrived.
+            self.content_type_is_excluded = True
+
+
+class _SelectiveGZipResponder(GZipResponder):
+    def __init__(self, *args, excluded, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._excluded = excluded
+
+    async def send_with_compression(self, message: Message) -> None:
+        await super().send_with_compression(message)
+        if message["type"] == "http.response.start":
+            content_type = MutableHeaders(raw=message["headers"]).get("content-type", "")
+            if self._excluded() or content_type.startswith(INCOMPRESSIBLE_CONTENT_TYPES):
+                # Both flags the parent already honours: set before it reads
+                # them on the body message, they make it pass the response
+                # through as it arrived.
+                self.content_type_is_excluded = True
