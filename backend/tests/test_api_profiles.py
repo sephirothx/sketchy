@@ -1,6 +1,8 @@
 """The public profile endpoints: stats, history pages, and who may see detail."""
 from __future__ import annotations
 
+import contextlib
+
 from datetime import datetime, timedelta, timezone
 import json
 from pathlib import Path
@@ -1423,11 +1425,22 @@ async def test_the_starter_of_a_fill_the_cache_declined_still_gets_its_drawing(
     turn_id = record_game.last_turn_id
     await sign_in_as(http, factory, bob.id)
     monkeypatch.setattr(profiles.drawing_cache, "put", lambda *args, **kwargs: None)
+    reads: list[int] = []
+    real_read = history.get_turn_drawing
+
+    async def counted(*args, **kwargs):
+        reads.append(1)
+        return await real_read(*args, **kwargs)
+
+    monkeypatch.setattr(history, "get_turn_drawing", counted)
 
     served = await http.get(f"/api/games/{game_id}/turns/{turn_id}/drawing")
 
     assert served.status_code == 200
     assert served.content == blob
+    # And it is the fill's own answer, not a second read after finding the
+    # cache empty (#979 fifth review).
+    assert reads == [1]
 
 
 async def test_the_starter_of_a_refused_fill_is_refused_and_a_waiter_asks_again(env):
@@ -1583,6 +1596,77 @@ async def test_a_second_caller_asking_again_does_not_clear_the_shared_fill(env):
     release.set()
     await asyncio.wait_for(shared, timeout=5)
     assert profiles._fills == {}
+
+
+async def test_a_fill_cancelled_before_it_started_leaves_no_entry_behind(env):
+    """A task cancelled before its first step never runs a line of its body,
+    so the `finally` that clears `_fills` never runs either: the key then held
+    a done, cancelled task for the life of the process and every later caller
+    fell through to its own read - single-flight defeated for that drawing
+    (#979 fifth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    checksum = detail.checksum_sha256
+
+    starter = asyncio.create_task(
+        profiles._decode_once(checksum, turn_id, lambda: _answer(detail))
+    )
+    await asyncio.sleep(0)  # the fill exists and has not been stepped
+    fill = profiles._fills[profiles._cache_key(checksum)]
+    fill.cancel()
+    starter.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await starter
+    await asyncio.sleep(0)
+
+    assert profiles._fills == {}, "the key is free for the next caller"
+
+
+async def test_a_blob_corrupted_after_its_first_serve_is_caught_at_the_next_decode(env):
+    """What R-HIST-24 now says, and nothing showed: the corruption check is
+    over the stored bytes on every *decode*, and a drawing already decoded is
+    served from memory without reading them - so a blob corrupted afterwards
+    is caught when the cache next misses, not when the next fetch arrives
+    (#979 fifth review)."""
+    from sqlalchemy import update
+
+    from app.db.models import TurnDrawing
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await _registered(users, "Ann")
+    bob = await _registered(users, "Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    await sign_in_as(http, factory, bob.id)
+    url = f"/api/games/{game_id}/turns/{turn_id}/drawing"
+    assert (await http.get(url)).content == blob
+
+    corrupted = b"SKCD" + b"rubbish" * 40
+    async with factory() as session:
+        async with session.begin():
+            await session.execute(
+                update(TurnDrawing)
+                .where(TurnDrawing.turn_id == UUID(turn_id))
+                .values(payload=corrupted, byte_size=len(corrupted))
+            )
+
+    # Held bytes, no read: the drawing is still served.
+    assert (await http.get(url)).content == blob
+    # And the moment the cache no longer holds it, the checksum decides.
+    profiles.drawing_cache._entries.clear()
+    profiles.drawing_cache.bytes = 0
+    assert (await http.get(url)).status_code == 500
 
 
 async def test_the_cache_counter_says_which_it_was(env):

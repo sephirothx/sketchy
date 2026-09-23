@@ -289,8 +289,13 @@ async def _decode_once(
     if fill is None:
         fill = asyncio.ensure_future(_fill_cache(key, turn_id, drawing_of))
         # Retrieved even when every waiter has gone, so a refusal inside the
-        # fill is not reported as an exception nobody looked at.
-        fill.add_done_callback(lambda task: task.cancelled() or task.exception())
+        # fill is not reported as an exception nobody looked at - and the
+        # entry is dropped here as well as in the fill's own `finally`,
+        # because a task cancelled before its first step never runs a line of
+        # it, and the entry would then stand for the life of the process with
+        # every later caller finding a done, cancelled task (#979 fifth
+        # review).
+        fill.add_done_callback(_forget_fill(key))
         _fills[key] = fill
     # Watched rather than awaited: `await fill` hands this caller's
     # cancellation straight to the fill, because `Task.cancel` cancels the
@@ -319,6 +324,17 @@ async def _decode_once(
     if cached is not None:
         return cached[0], cached[1], checksum
     return await _fill_cache(key, turn_id, drawing_of, store=False)
+
+
+def _forget_fill(key: str):
+    """Drop this key's entry when its fill ends, if it is still the one there."""
+
+    def done(task: asyncio.Future) -> None:
+        if _fills.get(key) is task:
+            del _fills[key]
+        task.cancelled() or task.exception()
+
+    return done
 
 
 async def _fill_cache(
