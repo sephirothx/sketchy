@@ -2074,7 +2074,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
 | `GET` | `/api/auth/sessions` | Signed-in device list: `id`, `deviceLabel`, `createdAt`, `lastUsedAt`, `expiresAt`, `idleExpiresAt` (when silence alone ends it — usually far sooner than `expiresAt`), `anomalyAt` (last used from a browser it was not issued to, or `null`), `current` (R-AUTH-03, R-AUTH-22) |
 | `DELETE` | `/api/auth/sessions/{session_id}` | Revoke one device |
-| `GET`/`PUT` | `/api/auth/email` | `PUT` is rate limited (`AUTH_VERIFY_LIMIT`) |
+| `GET`/`PUT` | `/api/auth/email` | `PUT` `{email, password}` — the current password is proved (`401 password_incorrect`), and a staff account must be stepped up (`403`, `X-Sketchy-Step-Up: required`), because the address is the way back in when the password is lost (R-AUTH-26, #997). Rate limited (`AUTH_VERIFY_LIMIT`) |
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
@@ -2096,7 +2096,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/second-factor/recovery-codes` | `{ password }` → a fresh set, invalidating every previous code |
 | `DELETE` | `/api/auth/second-factor` | `{ password }`. Refused `409` when the account's role requires one: giving up the role is what removes the requirement |
 | `POST` | `/api/auth/step-up` | `{ code }` → `{ ok, expiresInSeconds }`. Opens the 15-minute window every destructive staff action needs (R-AUTH-21). Recorded on the session, so revoking the device revokes the proof. An authenticator app whose owner was never proved is refused here with **403**, though it may still sign in beside a password: a step-up costs an attacker only the session they stole (R-AUTH-21) |
-| `DELETE` | `/api/auth/account` | Password required for a registered account |
+| `DELETE` | `/api/auth/account` | Password required for a registered account, behind `AUTH_PASSWORD_CHANGE_LIMIT` like every other password proof (R-AUTH-21, #997) |
 
 ### Profiles and history — [`backend/app/api/profiles.py`](../backend/app/api/profiles.py)
 
@@ -2345,7 +2345,7 @@ account key is an HMAC of the lowercased username rather than of an address
 | `AUTH_RESET_LIMIT` | 5 / hour | `POST /api/auth/password/forgot` |
 | `AUTH_RESET_CHECK_LIMIT` | 30 / hour | `POST /api/auth/password/reset/check` |
 | `AUTH_RESET_PERFORM_LIMIT` | 10 / hour | `POST /api/auth/password/reset` — the leg that hashes, so a stolen or guessed link cannot be used to keep the hashing pool busy (#975) |
-| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change` |
+| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change`, `DELETE /api/auth/account` |
 | `AUTH_VERIFY_LIMIT` | 10 / hour | `PUT /api/auth/email` |
 
 Lower-risk profile and prompt-statistics throttles remain process-local.

@@ -24,7 +24,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.email import EmailAddressError, normalize_email
@@ -36,7 +36,7 @@ from app.auth.tokens import (
     issue_token,
     token_is_usable,
 )
-from app.db.models import AuditEvent, User, UserSettings, generate_uuid
+from app.db.models import AuditEvent, AuthToken, User, UserSettings, generate_uuid
 from app.domain_values import AccountState, AuditTargetType, EmailTemplate
 
 
@@ -381,6 +381,24 @@ async def password_reset_identity(
         return (user.username, user.email) if user is not None else (None, None)
 
 
+async def _retire_pending_verifications(session: AsyncSession, user_id: UUID) -> None:
+    """Drop every unspent address verification the account has out.
+
+    A new password ends every session (R-AUTH-10), but a verification link
+    queued before it was still good for a day, and confirming it needs no
+    session at all: a thief who asked for one before the owner changed the
+    password could still point recovery at their own mailbox afterwards and
+    reset their way back in (#997). Retired with the sessions, in the same
+    transaction.
+    """
+    await session.execute(
+        delete(AuthToken).where(
+            AuthToken.user_id == user_id,
+            AuthToken.purpose == AuthTokenPurpose.EMAIL_VERIFY.value,
+        )
+    )
+
+
 async def change_password(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -434,6 +452,7 @@ async def change_password(
             # effect while every session stood is the one failure worth
             # avoiding, and only one commit can rule it out.
             await revoke_sessions(session, user_id=user_id, now=changed_at)
+            await _retire_pending_verifications(session, user_id)
     return True
 
 
@@ -492,5 +511,6 @@ async def reset_password(
             # one commit, so a crash anywhere leaves all of it undone rather
             # than a new password with every old session still standing.
             await revoke_sessions(session, user_id=user.id, now=changed_at)
+            await _retire_pending_verifications(session, user.id)
             reset_user_id = user.id
     return reset_user_id

@@ -30,6 +30,7 @@ from app.auth.middleware import (
     is_secure_request,
     set_session_cookie,
 )
+from app.auth.step_up import require_step_up
 from app.auth.sessions import (
     STAFF_ROLES,
     STEP_UP_WINDOW,
@@ -188,6 +189,11 @@ class EmailBody(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(max_length=MAX_EMAIL_LENGTH)
+    # The recovery address is the one credential that can replace the
+    # password (forgot, reset), so setting it proves the password: with a
+    # cookie alone, a thief pointed recovery at a mailbox of their own and
+    # evicted the owner (#997).
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
 class TokenBody(BaseModel):
@@ -1215,6 +1221,10 @@ def create_auth_router(
     ):
         """Anonymize this identity without deleting shared game results."""
         user = await require_user(request)
+        # Every password proof on the account surface sits behind a bucket
+        # (R-AUTH-21); this was the one that did not, and a stolen cookie
+        # could guess at Argon2 speed (#997).
+        await throttle(password_change_limiter, request)
         if not user.is_anonymous:
             if not body.password:
                 raise Refusal(
@@ -1282,9 +1292,20 @@ def create_auth_router(
 
     @router.put("/email")
     async def set_email(body: EmailBody, request: Request):
-        """Ask to use an address. It is recorded only once it is proved."""
+        """Ask to use an address. It is recorded only once it is proved.
+
+        Behind the password (R-AUTH-26): the address is the way back into
+        the account when the password is lost, so pointing it somewhere new
+        is worth as much to somebody holding a stolen cookie as the password
+        itself - and a staff account steps up as well, for the reason every
+        destructive staff act does (R-AUTH-21). The bucket is charged first,
+        so the proof cannot be ground at (#997).
+        """
         user = await require_user(request)
         await throttle(verify_limiter, request)
+        await _prove_password(user, body.password)
+        if user.role in STAFF_ROLES:
+            require_step_up(request)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
             address = await request_email_verification(
