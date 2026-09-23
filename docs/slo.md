@@ -133,7 +133,7 @@ shipping features and look at what spent it.
 
 ## How to read the numbers
 
-- Every rate and ratio is over a **5-minute** window because that is what the
+- Every rate and ratio in the rules is over a **5-minute** window because that is what the
   operations overview shows (`windowMinutes`), so the page and the rule agree.
 - Percentiles are `histogram_quantile` estimates over fixed buckets
   (`backend/app/services/telemetry.py`), so a p95 reads as "at most the bucket bound
@@ -148,6 +148,22 @@ shipping features and look at what spent it.
   scrape example carries the node_exporter job for this reason.
 - Counters reset on restart; `rate()` and `increase()` handle that, plain comparisons
   do not.
+- The dashboards ([`ops/grafana/`](../ops/grafana/), #968) read the recording rule for
+  any number an alert is built on, so a panel and the page beside it cannot disagree
+  about a p95, a cache hit ratio or a connection ratio. A panel that computes its own
+  number keeps the rules' `datname` scope, and where it deliberately widens one - the
+  dead-tuple survey looks at every table, not the six the sweeps write - its
+  description says why. A board that opens on a week rates over an hour, and a
+  board of five-minute rates opens on a day, because Grafana's step is the range over
+  about 800 points - tens of minutes at a week - and a window narrower than the step
+  draws a fraction of the range and never looks at the rest. Zooming the overview out
+  to a week - a month at the outside - is still sound for its counts: their window is
+  a rolling hour, and the step stays under an hour that far out. A quarter or a year
+  is not: the step outgrows the window, and each point becomes one hour in three or
+  twelve rather than a gap that looks like one. A trend older than
+  Prometheus's retention is gone: the default is 15 days, and since #965 no daily
+  roll-up in the database keeps one, so run Prometheus with
+  `--storage.tsdb.retention.time=1y` or longer.
 
 ## Where the probe runs
 

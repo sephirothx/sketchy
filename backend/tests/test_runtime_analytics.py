@@ -526,6 +526,20 @@ async def test_a_supervised_loop_that_stopped_is_reported_as_such(env):
     assert body["loops"]["mail_delivery"]["secondsSinceSuccess"] is None
 
 
+async def test_every_event_kind_is_scraped_before_it_first_happens(env, monkeypatch):
+    """A counter that first appears at 1 gives `increase()` no earlier sample,
+    so the dashboards' first hour of rooms would read as none (#968)."""
+    new_client, _ = env
+    monkeypatch.setenv("METRICS_TOKEN", "scrape-me")
+    # A recorder of its own: the process's outlives every test, so whatever an
+    # earlier one recorded would count these kinds in and pass the assertion
+    # for the wrong reason - the value has to be exactly zero.
+    monkeypatch.setattr("app.api.operations.metrics", RuntimeMetrics())
+    body = (await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})).text
+    for event_type in RuntimeEventType:
+        assert f'sketchy_events_total{{event="{event_type.value}"}} 0' in body, event_type
+
+
 async def test_the_scrape_carries_every_new_family(env, monkeypatch):
     new_client, factory = env
     monkeypatch.setenv("METRICS_TOKEN", "scrape-me")

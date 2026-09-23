@@ -33,7 +33,7 @@ from app.db.models import (
     User,
     generate_uuid,
 )
-from app.domain_values import AuditTargetType, GameOutcome
+from app.domain_values import AuditTargetType, GameOutcome, RuntimeEventType
 from app.services.mail_delivery import sweep_interval_seconds
 from app.services.game_handoff import sweep_interval_seconds as handoff_sweep_interval_seconds
 from app.services.drawing_storage import DrawingStoreFootprint, DrawingStoreSize
@@ -428,7 +428,11 @@ def _prometheus_lines() -> list[str]:
         "# HELP sketchy_events_total Observations recorded since start, by kind.",
         "# TYPE sketchy_events_total counter",
     ]
-    for event_type, count in sorted(metrics.totals().items()):
+    # Every kind from the first scrape, at zero until it happens: a series
+    # that first appears at 1 has no earlier sample for `increase()` to count
+    # from, so the first hour of rooms would read as none on the dashboards.
+    totals = {event_type.value: 0 for event_type in RuntimeEventType} | metrics.totals()
+    for event_type, count in sorted(totals.items()):
         lines.append(f'sketchy_events_total{{event="{event_type}"}} {count}')
     return lines
 
