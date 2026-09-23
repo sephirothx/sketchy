@@ -1997,6 +1997,9 @@ backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
 
+# What a request pays for the session middleware: the gate, and the wrapper (#974)
+backend/.venv/bin/python benchmarks/session_middleware_cost.py --requests 1000
+
 # What a pooled connection pays before its first statement, pre-ping against idle-ping (#973)
 DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench \
   backend/.venv/bin/python benchmarks/pool_checkout_ping.py --sessions 300

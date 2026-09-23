@@ -371,16 +371,20 @@ and not booleans, and unknown fields are rejected
 ### Data queries (REST)
 
 ```
-fetch ──▶ SessionAuthMiddleware  (app/auth/middleware.py: resolves the hashed cookie)
+fetch ──▶ SessionAuthMiddleware  (app/auth/middleware.py: resolves the hashed cookie, /api/ only)
       ──▶ FastAPI router          (app/api/*, app/auth/routes.py)
       ──▶ repository or session
       ──▶ serializer              (app/api/serializers.py)
 ```
 
 REST is used for health/readiness, room discovery, and everything that is a *query or
-an account action* rather than gameplay. Socket.IO handshakes resolve the same
-revocable session record as HTTP requests
-([`backend/app/handlers/connection.py:22`](../backend/app/handlers/connection.py)), so
+an account action* rather than gameplay. The session is resolved only under `/api/`:
+the cookie is `Path=/`, so the browser sends it with the shell and every asset, and a
+cold page load used to resolve it a dozen times for files that are the same for
+everybody. Every layer in the stack is plain ASGI — `BaseHTTPMiddleware` runs the app
+behind a task and a memory stream, ~80 µs of loop time per request here (#974).
+Socket.IO handshakes resolve the same revocable session record as HTTP requests
+([`backend/app/handlers/connection.py:99`](../backend/app/handlers/connection.py)), so
 revocation applies uniformly without a shared signing secret.
 
 How long an idle connection is held before the server closes it is decided rather
