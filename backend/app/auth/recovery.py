@@ -388,8 +388,9 @@ async def _retire_pending_verifications(session: AsyncSession, user_id: UUID) ->
     queued before it was still good for a day, and confirming it needs no
     session at all: a thief who asked for one before the owner changed the
     password could still point recovery at their own mailbox afterwards and
-    reset their way back in (#997). Retired with the sessions, in the same
-    transaction.
+    reset their way back in (#997). Retired in the same transaction as the
+    sessions, and before the account row is locked: every writer here goes
+    token rows, then account row, so none can wait on another.
     """
     await session.execute(
         delete(AuthToken).where(
@@ -419,6 +420,11 @@ async def change_password(
     changed_at = now or datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
+            # Token rows first, then the account row - the order every writer
+            # keeps (`confirm_email` consumes its token, then updates the
+            # account), so an owner changing their password while a thief
+            # clicks a verification link cannot deadlock the two (#997).
+            await _retire_pending_verifications(session, user_id)
             # Locked so a reset and a change racing for the same account apply
             # one after the other, each revoking what the other issued.
             user = await session.get(User, user_id, with_for_update=True)
@@ -452,7 +458,6 @@ async def change_password(
             # effect while every session stood is the one failure worth
             # avoiding, and only one commit can rule it out.
             await revoke_sessions(session, user_id=user_id, now=changed_at)
-            await _retire_pending_verifications(session, user_id)
     return True
 
 
@@ -477,9 +482,12 @@ async def reset_password(
             )
             if record is None:
                 return None
+            # Still among the token rows: the verifications this reset
+            # retires go before the account row is locked (#997).
+            await _retire_pending_verifications(session, record.user_id)
             # The claim above locked the token row; the account row comes
-            # second, always, so a concurrent change (which locks only the
-            # account) cannot deadlock with a reset.
+            # second, always, so a concurrent change (which touches token rows
+            # first too) cannot deadlock with a reset.
             user = await session.get(User, record.user_id, with_for_update=True)
             if user is None or user.state != AccountState.REGISTERED.value:
                 return None
@@ -511,6 +519,5 @@ async def reset_password(
             # one commit, so a crash anywhere leaves all of it undone rather
             # than a new password with every old session still standing.
             await revoke_sessions(session, user_id=user.id, now=changed_at)
-            await _retire_pending_verifications(session, user.id)
             reset_user_id = user.id
     return reset_user_id

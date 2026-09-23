@@ -1231,3 +1231,11 @@ async def test_deleting_the_account_is_a_throttled_password_proof(env):
         answers.append(response.status_code)
     assert answers[:10] == [401] * 10
     assert answers[10] == 429
+
+
+async def test_a_guest_is_told_to_create_an_account_not_that_a_password_is_wrong(env):
+    new_client, _factory = env
+    guest = new_client()
+    assert (await guest.post("/api/auth/display-name", json={"displayName": "Drifter"})).status_code == 200
+    refused = await guest.put("/api/auth/email", json={"email": "d@example.com", "password": "anything"})
+    assert refused.status_code == 403

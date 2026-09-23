@@ -1302,6 +1302,11 @@ def create_auth_router(
         so the proof cannot be ground at (#997).
         """
         user = await require_user(request)
+        if user.is_anonymous:
+            # Before the proof: a guest has no password to be wrong about.
+            raise Refusal(
+                403, ErrorCode.EMAIL_CHANGE_REFUSED, "Create an account before adding an email."
+            )
         await throttle(verify_limiter, request)
         await _prove_password(user, body.password)
         if user.role in STAFF_ROLES:
