@@ -52,8 +52,15 @@ async def test_a_merged_guest_is_seated_as_the_account_it_became():
         async with factory() as session:
             async with session.begin():
                 session.add(IdentityAlias(source_user_id=UUID(guest.id), target_user_id=UUID(account.id)))
-        seated, _ = await users.get_seat_account(guest.id)
+        # The account's own stored preference, not the guest row's absence of
+        # one: the settings are joined to the account the guest resolves to
+        # (#980 fifth review).
+        async with factory() as session:
+            async with session.begin():
+                session.add(UserSettings(user_id=UUID(account.id), colorblind_safe_colors=True))
+        seated, colorblind = await users.get_seat_account(guest.id)
         assert seated.id == account.id == (await users.get_by_id(guest.id)).id
+        assert colorblind is True
     finally:
         await engine.dispose()
 
@@ -413,6 +420,54 @@ async def test_a_merged_read_that_stalls_leaves_the_seat_as_it_was():
 
         assert (colour, colorblind) == (None, True), "the seat keeps what it carries"
         assert player.name_color == "#111111"
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_spectator_seat_leaves_last_active_alone():
+    """`last_active_at` drives retention, and a spectator is not playing: it
+    changes only for a non-spectator seat (R-PRIV-10, database.md). Dropping
+    the check passed every test (#980 fifth review)."""
+    from app.handlers import rooms as rooms_handlers
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        before = (await users.get_by_id(account.id)).last_active_at
+        room = room_manager.create_room(name="Watching")
+        watcher = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        watcher.is_spectator = True
+
+        statements = _count_statements(engine)
+        await rooms_handlers._record_player_activity(ctx, watcher)
+
+        assert [s for s in statements if "UPDATE users" in s] == []
+        assert (await users.get_by_id(account.id)).last_active_at == before
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_guest_rebind_keeps_the_payload_and_reads_nothing():
+    """A guest has nothing stored, so the payload is the authority and the
+    merged read has no reason to run. Dropping the guest branch passed, and a
+    guest rebind then lost its own preference and paid a round trip for it
+    (#980 fifth review)."""
+    from app.handlers.rooms import _rebound_account
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        guest = await users.create_anonymous("GuestSeat")
+        room = room_manager.create_room(name="Guest rebind")
+        player = room_manager.add_player(room, "GuestSeat", user_id=guest.id)
+        player.is_anonymous = True
+        player.colorblind_safe_colors = False
+
+        statements = _count_statements(engine)
+        colour, colorblind = await _rebound_account(ctx, player, requested=True)
+
+        assert (colour, colorblind) == (None, True), "the guest's payload decides"
+        assert not any(s.lstrip().startswith("SELECT users.") for s in statements)
     finally:
         await ctx.timers.close()
         await engine.dispose()

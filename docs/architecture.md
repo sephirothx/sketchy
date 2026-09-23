@@ -835,8 +835,8 @@ shown rather than hidden (R-BLOCK-06). There is no seat to warm the cache at,
 so the handshake warms it beside the identity it already reads — the two reads at
 once, not one after the other (#980). Taking a seat — and taking one back on a
 reconnect — reads the account and its colour-safe preference in one statement
-(`get_seat_account`), and stamps `last_active_at` after the acknowledgement instead of
-before it, on a flat hang guard rather than the entry's deadline (which the task would
+(`get_seat_account`), and stamps `last_active_at` on a task the join does not
+wait for, on a flat hang guard rather than the entry's deadline (which the task would
 otherwise inherit and find already spent).
 
 **Retention reuses the room table.** A lobby line is a `room_messages` row

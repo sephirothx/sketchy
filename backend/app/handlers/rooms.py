@@ -251,6 +251,7 @@ async def _record_player_activity(ctx: HandlerContext, player) -> None:
     except Exception:
         logger.exception("Failed to record activity for user %s", player.user_id)
 
+
 async def _unseat_an_ended_account(ctx: HandlerContext, room, player) -> dict:
     """Take back a seat the account lost the right to while taking it.
 
