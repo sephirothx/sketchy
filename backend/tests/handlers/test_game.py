@@ -148,8 +148,9 @@ async def test_a_drawer_released_during_turn_started_leaves_the_next_turn_its_ow
     """Every per-seat emit is an await the game can move through. The seat
     released there abandoned the turn and the nested `_start_turn` armed the
     next turn's choosing timer - which the outer call then replaced with the
-    drawing timer it was about to arm: a 15 s choice against a 90-300 s clock
-    (#1004)."""
+    drawing timer it was about to arm: a 15 s choice (R-GAME-01) against a
+    90-300 s clock (#1004). And the seats not yet reached were still told the
+    departed drawer's turn had started."""
     from unittest.mock import AsyncMock
 
     from app.flow_timing import timing
@@ -184,6 +185,11 @@ async def test_a_drawer_released_during_turn_started_leaves_the_next_turn_its_ow
 
     assert game.current_turn_id != first_turn and game.phase == Phase.CHOOSING_PROMPT
     assert scheduled == [("choosing_prompt", timing.choose_prompt_seconds)]
+    stale = [
+        call for call in real_emit.await_args_list
+        if call.args[0] == "turn_started" and call.args[1]["turnId"] == first_turn
+    ]
+    assert len(stale) == 1, "only the seat reached before the release heard the old turn"
     assert game.remaining_seconds() <= timing.choose_prompt_seconds + 1
     assert not ctx.timers.hint_timers.get(room.id)
     await ctx.timers.close()

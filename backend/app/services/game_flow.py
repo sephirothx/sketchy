@@ -1211,6 +1211,8 @@ class GameFlowService:
             starting["gameStarted"] = True
         turn_id = game.current_turn_id
         await self._sio.emit("turn_starting", starting, room=room.id)
+        if self._turn_moved_on(room, game, turn_id, Phase.CHOOSING_PROMPT):
+            return
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",
@@ -1252,6 +1254,12 @@ class GameFlowService:
         for p in room.player_list():
             if not p.sid:
                 continue
+            if self._turn_moved_on(room, game, turn_id, Phase.DRAWING):
+                # The seats not yet reached would be told a turn that has
+                # already gone - the departed drawer's, with the drawing
+                # countdown - and the client takes `turn_started` as the
+                # phase it is in.
+                return
             await self._sio.emit(
                 "turn_started",
                 {

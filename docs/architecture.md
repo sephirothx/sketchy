@@ -1276,6 +1276,15 @@ expiry, and the per-player reconnect grace. Application-owned rather than scatte
 `create_task` calls, so teardown is a single `close()` and a room removal cannot leak
 a task that fires into a room that no longer exists.
 
+A phase timer is armed only for the phase it was computed for (#1004). Every turn
+transition fans out per seat, and each emit is an await the game can move through: a
+seat released mid-fan-out abandons the turn, and the nested `_start_turn` has already
+armed the next turn's timer. So each fan-out records the turn and phase it was about
+(`_turn_moved_on`), stops emitting and arms nothing once either has moved on — the
+outer call used to replace the 15 s choosing timer with the 90–300 s drawing timer it
+was about to arm, and tell the seats not yet reached that the departed drawer's turn
+had started.
+
 The AFK check is deliberately **not** one of them. It is a supervised sweep
 ([`services/afk.py`](../backend/app/services/afk.py)) on the shape the presence
 loop uses, not a task per seat: at a five-minute window the granularity of a
