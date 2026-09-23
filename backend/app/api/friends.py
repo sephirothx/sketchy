@@ -164,7 +164,10 @@ def create_friends_router(
 
         Answers 200 whatever happened, unless the caller hit a ceiling of their
         own. That is the point: a 404 for an unknown id, or a 403 for a block,
-        would each be a fact about somebody who is not in this conversation.
+        would each be a fact about somebody who is not in this conversation -
+        and so would a 201 for a request that landed beside a 200 for one that
+        was dropped, which is what this answered until #1002: the status code
+        was the disclosure channel R-FRIEND-04 forbids. One code, one body.
         """
         me = await current_account(request)
         try:
@@ -175,7 +178,6 @@ def create_friends_router(
             raise Refusal(429, ErrorCode.FRIENDS_THROTTLED, str(throttled)) from throttled
         except FriendshipRefused as refused:
             raise Refusal(409, ErrorCode.FRIEND_REFUSED, str(refused)) from refused
-        response.status_code = 201 if outcome == FriendshipOutcome.CREATED else 200
         return {"status": _reported_status(outcome)}
 
     @router.post("/{user_id}/accept")
