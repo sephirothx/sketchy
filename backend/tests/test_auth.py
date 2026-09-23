@@ -651,3 +651,278 @@ def test_in_production_the_cookie_is_host_prefixed_and_secure_whatever_the_reque
     assert session_token_from_cookie_header("sketchy_session=abc") is None, "the plain name is not production's"
     monkeypatch.delenv("SKETCHY_ENV")
     assert session_token_from_cookie_header("sketchy_session=abc") == "abc"
+
+
+async def test_a_busy_hashing_pool_never_refuses_a_correct_password(client, monkeypatch):
+    """The rehash after a successful login is an optimisation (R-AUTH-01); the
+    cap's refusal must not turn a right password into a 503 - and refuse
+    exactly the accounts whose hash is out of date (#975 review)."""
+    from unittest.mock import AsyncMock
+
+    from app.auth import routes as routes_module
+    from app.auth.password import PasswordHashingBusy
+
+    await become_guest(client, "RehashVisitor")
+    await client.post(
+        "/api/auth/register",
+        json={"username": "BusyRehash", "password": "a-good-password"},
+    )
+    await client.post("/api/auth/logout")
+    monkeypatch.setattr(
+        routes_module, "password_needs_rehash", AsyncMock(return_value=True)
+    )
+    monkeypatch.setattr(
+        routes_module, "hash_password", AsyncMock(side_effect=PasswordHashingBusy())
+    )
+
+    response = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRehash", "password": "a-good-password"},
+    )
+
+    assert response.status_code == 200, response.text
+    assert response.cookies or response.headers.get("set-cookie"), "signed in all the same"
+
+
+async def test_a_reset_link_that_names_nothing_is_refused_before_anything_is_hashed(
+    client, monkeypatch
+):
+    """The route hashes, and the hashing pool is shared with every sign-in, so
+    an unlimited one is a way to hold that queue full from outside (#975
+    review). It is limited like its siblings, and hashes only for a link that
+    still names an account."""
+    from app.auth import routes as routes_module
+
+    hashes = []
+    real_hash = routes_module.hash_password
+
+    async def counted(password):
+        hashes.append(1)
+        return await real_hash(password)
+
+    monkeypatch.setattr(routes_module, "hash_password", counted)
+
+    refused = await client.post(
+        "/api/auth/password/reset",
+        json={"token": "not-a-real-token", "password": "another-good-password"},
+    )
+
+    assert refused.status_code == 400
+    assert "expired or already been used" in refused.text
+    assert hashes == [], "no hash is spent on a link that names nothing"
+    # And the route is on a limiter, unlike before.
+    codes = set()
+    for _ in range(32):  # the check limiter's default is 30 an hour
+        answer = await client.post(
+            "/api/auth/password/reset",
+            json={"token": "not-a-real-token", "password": "another-good-password"},
+        )
+        codes.add(answer.status_code)
+    assert 429 in codes, "the route is rate limited"
+    assert hashes == []
+
+
+async def test_a_busy_pool_refuses_every_route_whose_hash_is_the_point(client, monkeypatch):
+    """The whole security argument of the cap is an asymmetry: the rehash after
+    a successful login is skipped, and every other hash is fatal. Suppressing
+    the refusal in one of those would report a password change that never
+    happened (#975 third review)."""
+    from app.auth import routes as routes_module
+    from app.auth.password import PasswordHashingBusy
+
+    await become_guest(client, "BusyVisitor")
+    registered = await client.post(
+        "/api/auth/register",
+        json={"username": "BusyRoutes", "password": "a-good-password"},
+    )
+    assert registered.status_code == 200
+    real_hash = routes_module.hash_password
+
+    async def busy(_password):
+        raise PasswordHashingBusy()
+
+    monkeypatch.setattr(routes_module, "hash_password", busy)
+
+    change = await client.post(
+        "/api/auth/password/change",
+        json={"currentPassword": "a-good-password", "password": "a-better-password"},
+    )
+    assert change.status_code == 503, change.text
+
+    # The reset route with a token that names nobody is refused before any
+    # hashing, so it says nothing about the pool; the leg that does reach the
+    # hash is driven with a real token in `tests/test_account_recovery.py`.
+    reset = await client.post(
+        "/api/auth/password/reset",
+        json={"token": "whatever", "password": "a-better-password"},
+    )
+    assert reset.status_code == 400, reset.text
+
+    # Every proof of a password runs on the same pool: turning a second factor
+    # off, replacing the codes that bypass it, and stepping up to a staff
+    # action. A busy pool that answered "yes" there would hand a stolen cookie
+    # the one thing it does not carry (#975 fourth review).
+    real_verify = routes_module.verify_password
+
+    async def busy_verify(_hash, _password):
+        raise PasswordHashingBusy()
+
+    monkeypatch.setattr(routes_module, "verify_password", busy_verify)
+    # Login's own verify is the call this whole cap exists for, and it was the
+    # one hashing site absent from this table: a busy pool that answered "yes"
+    # there would admit any password for any account that exists (#975 sixth
+    # review).
+    admitted = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRoutes", "password": "the-wrong-password"},
+    )
+    assert admitted.status_code == 503, admitted.text
+    # The client is told when to come back - a refusal with no `retryAfterMs`
+    # is one the frontend cannot act on.
+    assert admitted.headers["Retry-After"] == "1", admitted.headers
+
+    for method, path, body in (
+        ("DELETE", "/api/auth/second-factor", {"password": "a-good-password"}),
+        ("POST", "/api/auth/second-factor/recovery-codes", {"password": "a-good-password"}),
+        (
+            "POST",
+            "/api/auth/second-factor/confirm-owner",
+            {"password": "a-good-password", "code": "000000"},
+        ),
+        # Both of these used to verify inline rather than through the helper,
+        # and neither was covered (#975 fifth review).
+        ("DELETE", "/api/auth/account", {"password": "a-good-password"}),
+    ):
+        proof = await client.request(method, path, json=body)
+        assert proof.status_code == 503, f"{path}: {proof.text}"
+
+    # The password change hashes *and* verifies, so with both busy its 503
+    # says nothing about which call produced it: the hash is let through here
+    # so that only the proof can refuse (#975 seventh review).
+    monkeypatch.setattr(routes_module, "hash_password", real_hash)
+    changed = await client.post(
+        "/api/auth/password/change",
+        json={"currentPassword": "a-good-password", "password": "a-better-password"},
+    )
+    assert changed.status_code == 503, changed.text
+    monkeypatch.setattr(routes_module, "hash_password", busy)
+    monkeypatch.setattr(routes_module, "verify_password", real_verify)
+
+    await client.post("/api/auth/logout")
+    await become_guest(client, "BusyNewcomer")
+    fresh = await client.post(
+        "/api/auth/register",
+        json={"username": "BusyRegister", "password": "a-good-password"},
+    )
+    assert fresh.status_code == 503, fresh.text
+
+    # The password did not change under any of them.
+    monkeypatch.setattr(routes_module, "hash_password", real_hash)
+    still_the_old_one = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRoutes", "password": "a-good-password"},
+    )
+    assert still_the_old_one.status_code == 200
+    with_the_new_one = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRoutes", "password": "a-better-password"},
+    )
+    assert with_the_new_one.status_code == 401
+
+
+def test_only_two_places_in_the_router_verify_a_password():
+    """One helper for every proof, and login's own - which hashes a dummy for
+    an unknown name. A third copy is a third place for the hashing pool's
+    refusal to be swallowed, which is how account deletion came to have one
+    (#975 fifth review)."""
+    import inspect
+
+    from app.auth import routes as routes_module
+
+    source = inspect.getsource(routes_module)
+    assert source.count("await verify_password(") == 2, (
+        "verify through `_prove_password`, or state why this call is its own"
+    )
+
+
+async def test_an_unknown_username_still_pays_for_a_real_hash(client, monkeypatch):
+    """R-AUTH-09: skipping the hash for a name that does not exist answers
+    noticeably faster and turns response time into a username oracle. Nothing
+    pinned it - returning 401 before verifying passed the whole suite (#975
+    fifth review)."""
+    from app.auth import routes as routes_module
+    from app.auth.password import DUMMY_HASH
+
+    hashed: list[str] = []
+    real_verify = routes_module.verify_password
+
+    async def counted(stored_hash, password):
+        hashed.append(stored_hash)
+        return await real_verify(stored_hash, password)
+
+    monkeypatch.setattr(routes_module, "verify_password", counted)
+    answer = await client.post(
+        "/api/auth/login",
+        json={"username": "NobodyAtAll", "password": "a-good-password"},
+    )
+
+    assert answer.status_code == 401
+    assert hashed == [DUMMY_HASH], "the unknown name was verified against the dummy"
+
+
+async def test_a_busy_pool_costs_the_caller_no_login_failure(client, monkeypatch):
+    """A 503 is the server saying "not now", so it must not be counted against
+    the account the way a wrong password is: a burst of them would otherwise
+    lock somebody out of their own account (#975 sixth review)."""
+    from app.auth import routes as routes_module
+    from app.auth.password import PasswordHashingBusy
+
+    await become_guest(client, "BusyLockout")
+    registered = await client.post(
+        "/api/auth/register",
+        json={"username": "BusyLockout", "password": "a-good-password"},
+    )
+    assert registered.status_code == 200
+    await client.post("/api/auth/logout")
+    real_verify = routes_module.verify_password
+
+    async def busy(_hash, _password):
+        raise PasswordHashingBusy()
+
+    monkeypatch.setattr(routes_module, "verify_password", busy)
+    for _ in range(12):
+        refused = await client.post(
+            "/api/auth/login",
+            json={"username": "BusyLockout", "password": "a-good-password"},
+        )
+        assert refused.status_code == 503
+
+    monkeypatch.setattr(routes_module, "verify_password", real_verify)
+    allowed = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyLockout", "password": "a-good-password"},
+    )
+    assert allowed.status_code == 200, "the refusals charged nothing"
+
+
+async def test_the_reset_route_spends_its_own_bucket(client, monkeypatch):
+    """Which bucket a route charges is part of what the limit means: swapping
+    in a sibling's limiter passed, because the test only asked that *some*
+    429 appeared (#975 seventh review)."""
+    from app.auth import routes as routes_module
+
+    scopes: list[str] = []
+    real_check = routes_module.PersistentRateLimiter.check
+
+    async def recorded(self, key):
+        scopes.append(self._scope)
+        return await real_check(self, key)
+
+    monkeypatch.setattr(routes_module.PersistentRateLimiter, "check", recorded)
+    answer = await client.post(
+        "/api/auth/password/reset",
+        json={"token": "not-a-real-token", "password": "a-good-password"},
+    )
+
+    assert answer.status_code == 400, answer.text
+    assert scopes == ["password_reset_perform"], scopes

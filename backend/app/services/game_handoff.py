@@ -50,6 +50,7 @@ import logging
 import os
 import time
 import zlib
+from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -61,6 +62,7 @@ from uuid import UUID
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.deployment import history_encode_workers
 from app.db.models import FinishedGameEnvelope as EnvelopeRow
 from app.db.models import generate_uuid
 from app.domain_values import (
@@ -464,6 +466,41 @@ def envelope_checksum(payload: bytes) -> str:
     return hashlib.sha256(payload).hexdigest()
 
 
+# The envelope's own threads (#976 review), never the default pool that
+# blocking SMTP can fill. Built on first use, so the value that sizes it is
+# one startup has validated.
+#
+# The queue in front of them is what a synchronised burst of endings waits in:
+# one stroke-heavy envelope measures ~143 ms, so the documented ceiling of 50
+# rooms ending in the same instant is ~7.4 s of encode at 1 thread, ~3.7 s at
+# the default 2 and ~2.1 s at 4 - on this machine, and longer on a smaller
+# host. Staging no longer waits inside the ten-second bound for that queue
+# (`game_flow` bounds the insert, not the encode), so a burst costs latency
+# rather than games; raise the setting on a host that ends more at once.
+_ENVELOPE_POOL: ThreadPoolExecutor | None = None
+
+
+def _envelope_pool() -> ThreadPoolExecutor:
+    global _ENVELOPE_POOL
+    if _ENVELOPE_POOL is None:
+        _ENVELOPE_POOL = ThreadPoolExecutor(
+            max_workers=history_encode_workers(), thread_name_prefix="history-envelope"
+        )
+    return _ENVELOPE_POOL
+
+
+def _encode_with_checksum(envelope: FinishedGameEnvelope) -> tuple[bytes, str]:
+    payload = encode_envelope(envelope)
+    return payload, envelope_checksum(payload)
+
+
+def _verified_decode(payload: bytes, version: int, checksum: str) -> FinishedGameEnvelope | None:
+    """The envelope, or None when the bytes fail their checksum."""
+    if envelope_checksum(payload) != checksum:
+        return None
+    return decode_envelope(payload, version)
+
+
 # --- the store -----------------------------------------------------------------
 
 
@@ -804,12 +841,15 @@ async def replay_claim(
     def _lost() -> ReplayResult:
         return ReplayResult(ReplayOutcome.LOST_CLAIM, None, history_recorded())
 
-    if envelope_checksum(claim.payload) != claim.checksum:
-        return await _fail(HandoffFailureCode.UNREADABLE, "stored bytes fail their checksum")
     try:
-        envelope = decode_envelope(claim.payload, claim.version)
+        # Off the loop, like the encode at staging (#976).
+        envelope = await asyncio.get_running_loop().run_in_executor(
+            _envelope_pool(), _verified_decode, claim.payload, claim.version, claim.checksum
+        )
     except EnvelopeUnreadable as error:
         return await _fail(HandoffFailureCode.UNREADABLE, str(error))
+    if envelope is None:
+        return await _fail(HandoffFailureCode.UNREADABLE, "stored bytes fail their checksum")
 
     try:
         if history_state == HandoffPartState.PENDING.value:
@@ -947,26 +987,38 @@ class FinishedGameHandoffWorker:
         """Ask for a sweep now. Safe from any coroutine on the loop."""
         self._wake.set()
 
-    async def stage(self, envelope: FinishedGameEnvelope) -> StageOutcome:
-        """The one write a room waits on. Raises on a database that will
-        not take it, or an envelope past the ceiling; the caller records
-        either as a lost game."""
-        payload = encode_envelope(envelope)
+    async def encode(self, envelope: FinishedGameEnvelope) -> StagedEnvelope:
+        """The bytes to stage, made on the envelope pool.
+
+        Kept out of the room's ten-second write bound (#976 third review):
+        the bound exists for a database that will not answer, and spending it
+        in a queue of encodes - 50 rooms ending together is seconds of pure
+        CPU - would lose games to a burst rather than to an outage.
+        """
+        payload, checksum = await asyncio.get_running_loop().run_in_executor(
+            _envelope_pool(), _encode_with_checksum, envelope
+        )
         if len(payload) > self._max_bytes:
             raise EnvelopeTooLarge(len(payload), self._max_bytes)
-        outcome = await self._store.stage(
-            StagedEnvelope(
-                game_id=envelope.game_id,
-                version=ENVELOPE_VERSION,
-                payload=payload,
-                checksum=envelope_checksum(payload),
-                has_usage=envelope.usage is not None,
-            ),
-            now=self._clock(),
+        return StagedEnvelope(
+            game_id=envelope.game_id,
+            version=ENVELOPE_VERSION,
+            payload=payload,
+            checksum=checksum,
+            has_usage=envelope.usage is not None,
         )
+
+    async def stage_encoded(self, staged: StagedEnvelope) -> StageOutcome:
+        """The one write a room waits on. Raises on a database that will not
+        take it; the caller records that as a lost game."""
+        outcome = await self._store.stage(staged, now=self._clock())
         telemetry.history_handoff(outcome.value)
         self.wake()
         return outcome
+
+    async def stage(self, envelope: FinishedGameEnvelope) -> StageOutcome:
+        """Encode and write, for callers with nothing to bound separately."""
+        return await self.stage_encoded(await self.encode(envelope))
 
     async def replay_one(self) -> ReplayResult | None:
         """Claim and replay the next due envelope; None when nothing is due."""

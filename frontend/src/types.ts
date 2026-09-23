@@ -545,6 +545,7 @@ export type ErrorCode =
   | "player_slots_full"
   | "server_draining"
   | "server_paused"
+  | "server_busy"
   | "database_busy"
   | "account_ended"
   | "account_required"

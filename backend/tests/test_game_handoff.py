@@ -10,6 +10,7 @@ repositories, on SQLite by default and on PostgreSQL under
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -570,3 +571,637 @@ async def test_a_usage_batch_is_a_fact_of_its_own(env):
         facts = (await session.scalars(select(PromptUsageFact))).all()
     assert batches == {batch_id: 1, empty_id: 0}
     assert len(facts) == 1
+
+
+async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypatch):
+    """The envelope's deflate, its decode, and each drawing's storage encoding
+    run on worker threads (#976): on the loop they were ~27 ms for an ordinary
+    game and ~325 ms for a stroke-heavy one, every room waiting - part of it
+    inside the transaction holding each player's `users` row. What is stored
+    is unchanged, byte for byte."""
+    import threading
+
+    import app.repositories.sqlalchemy as repository_module
+    from app.canvas_storage import prepare_stored_drawing
+
+    on_loop: list[str] = []
+
+    ran_on: dict[str, set[str]] = {}
+
+    def watched(name, function):
+        def call(*args, **kwargs):
+            thread = threading.current_thread()
+            if thread is threading.main_thread():
+                on_loop.append(name)
+            ran_on.setdefault(name, set()).add(thread.name)
+            return function(*args, **kwargs)
+        return call
+
+    monkeypatch.setattr(handoff_module, "encode_envelope", watched("encode", handoff_module.encode_envelope))
+    monkeypatch.setattr(handoff_module, "decode_envelope", watched("decode", handoff_module.decode_envelope))
+    monkeypatch.setattr(handoff_module, "envelope_checksum", watched("checksum", handoff_module.envelope_checksum))
+    monkeypatch.setattr(repository_module, "prepare_stored_drawing", watched("prepare", prepare_stored_drawing))
+    monkeypatch.setattr(
+        repository_module.SqlAlchemyGameHistoryRepository,
+        "_payload_hash",
+        staticmethod(watched("digest", repository_module.SqlAlchemyGameHistoryRepository._payload_hash)),
+    )
+    session_factory, users, history, store = env
+    # In order, every statement and every drawing prepared: the drawings must
+    # all be ready before the write transaction's first statement, never
+    # inside the transaction that locks the players' rows.
+    from sqlalchemy import event
+
+    order: list[str] = []
+    event.listen(
+        session_factory.kw["bind"].sync_engine,
+        "before_cursor_execute",
+        lambda _c, _cur, statement, *_a: order.append(statement),
+    )
+    real_prepare = repository_module.prepare_stored_drawing
+    monkeypatch.setattr(
+        repository_module,
+        "prepare_stored_drawing",
+        watched("prepare", lambda payload: (order.append("<prepare>"), real_prepare(payload))[1]),
+    )
+    ann, bob = await two_players(users)
+    worker = worker_for(store, history)
+    frame = _path_heavy_frame()
+    await worker.stage(FinishedGameEnvelope(history_for(str(generate_uuid()), ann, bob, drawing=frame)))
+    report = await worker.drain()
+
+    assert report.recorded == 1
+    assert on_loop == []
+    # On the history write's own pools, not the default one `asyncio.to_thread`
+    # shares with blocking SMTP: a staging that waits there for a thread can
+    # spend its ten-second bound and lose the game (#976 review).
+    assert all(name.startswith("history-envelope") for name in ran_on["encode"]), ran_on
+    assert all(name.startswith("history-envelope") for name in ran_on["decode"]), ran_on
+    assert all(name.startswith("history-encode") for name in ran_on["prepare"]), ran_on
+    assert all(name.startswith("history-encode") for name in ran_on["digest"]), ran_on
+    write_opens = next(
+        index for index, statement in enumerate(order) if statement.startswith("SELECT game_records.id AS")
+    )
+    assert "<prepare>" in order and order.index("<prepare>") < write_opens
+    expected_blob, magic, version, checksum = prepare_stored_drawing(frame)
+    async with session_factory() as session:
+        [drawing] = (await session.scalars(select(TurnDrawing))).all()
+    assert magic == b"SKCD", "the delta encoding, not a frame stored as it travels"
+    assert (drawing.payload, drawing.format_magic, drawing.format_version, drawing.checksum_sha256) == (
+        expected_blob, magic.decode("ascii"), version, checksum,
+    )
+
+
+def _path_heavy_frame() -> bytes:
+    """A frame big enough that the stored form is the delta encoding."""
+    import math
+
+    from app.canvas_history import PackedCanvasHistory
+
+    history = PackedCanvasHistory()
+    for stroke in range(20):
+        history.append_path(
+            [(0.5 + 0.4 * math.cos(step / 30 + stroke), 0.5 + 0.4 * math.sin(step / 25)) for step in range(200)],
+            color=0x112233,
+            width=4,
+        )
+    return history.binary_payload()
+
+
+async def test_an_erased_drawers_unreadable_drawing_is_a_tombstone_and_anyone_elses_fails(env):
+    """Preparing moved before the transaction, where the erased set is not yet
+    known; a drawing that cannot be prepared still fails the write only if it
+    is going to be written (#976 review)."""
+    from uuid import UUID
+
+    from app.db.models import User
+    from app.domain_values import AccountState
+
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    async with session_factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(ann))).state = AccountState.DELETED.value
+    erased_game = history_for(str(generate_uuid()), ann, bob, drawing=b"not a frame")
+    await history.save_game(
+        erased_game.record, erased_game.participants, erased_game.turns,
+        erased_game.score_events, erased_game.drawings, erased_game.reactions,
+    )
+    async with session_factory() as session:
+        [row] = (await session.scalars(select(TurnDrawing))).all()
+    assert row.status != "ready" and row.payload is None
+
+    carol = (await users.create_anonymous(display_name="Carol")).id
+    live_game = history_for(str(generate_uuid()), carol, bob, drawing=b"not a frame")
+    with pytest.raises(ValueError):
+        await history.save_game(
+            live_game.record, live_game.participants, live_game.turns,
+            live_game.score_events, live_game.drawings, live_game.reactions,
+        )
+
+
+async def test_a_replay_of_a_written_game_encodes_nothing(env, monkeypatch):
+    """Answered by one read before any drawing is prepared (#976 review)."""
+    import app.repositories.sqlalchemy as repository_module
+
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    game = history_for(str(generate_uuid()), ann, bob, drawing=_frame(2))
+    arguments = (game.record, game.participants, game.turns, game.score_events, game.drawings, game.reactions)
+    first = await history.save_game(*arguments)
+    prepared: list[int] = []
+    real = repository_module.prepare_stored_drawing
+    monkeypatch.setattr(repository_module, "prepare_stored_drawing", lambda payload: (prepared.append(1), real(payload))[1])
+    assert await history.save_game(*arguments) == first
+    assert prepared == []
+
+
+def test_a_drawing_row_cannot_be_built_without_its_prepared_bytes():
+    """`prepared` is required, so no caller can quietly put the encode back on
+    the thread it is called from (#976 review)."""
+    import inspect
+
+    from app.repositories.sqlalchemy import _turn_drawing
+
+    prepared = inspect.signature(_turn_drawing).parameters["prepared"]
+    assert prepared.default is inspect.Parameter.empty
+    assert inspect.signature(_turn_drawing).parameters["sizing"].default is inspect.Parameter.empty
+
+
+def test_both_encode_pools_are_as_wide_as_the_setting(monkeypatch):
+    """The setting is only worth having if it reaches both pools: replacing
+    each `max_workers` with a literal passed every test (#976 third review)."""
+    import app.repositories.sqlalchemy as repository_module
+    import app.services.game_handoff as handoff
+
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "3")
+    monkeypatch.setattr(repository_module, "_ENCODE_POOL", None)
+    monkeypatch.setattr(handoff, "_ENVELOPE_POOL", None)
+    try:
+        assert repository_module._encode_pool()._max_workers == 3
+        assert handoff._envelope_pool()._max_workers == 3
+        assert repository_module._encode_pool()._thread_name_prefix == "history-encode"
+        assert handoff._envelope_pool()._thread_name_prefix == "history-envelope"
+    finally:
+        for module, name in ((repository_module, "_ENCODE_POOL"), (handoff, "_ENVELOPE_POOL")):
+            pool = getattr(module, name)
+            if pool is not None:
+                pool.shutdown(wait=False)
+            setattr(module, name, None)
+
+
+async def test_the_encode_is_not_inside_the_write_bound(monkeypatch):
+    """A room's ten-second bound is for the write. A burst of endings queueing
+    on the envelope pool must cost latency, not games, so an encode that takes
+    longer than the bound still ends with the game staged (#976 third review)."""
+    from types import SimpleNamespace
+
+    import app.services.game_flow as flow_module
+
+    monkeypatch.setattr(flow_module, "HISTORY_WRITE_TIMEOUT_SECONDS", 0.05)
+
+    class SlowEncode:
+        def __init__(self) -> None:
+            self.written: list[str] = []
+
+        async def encode(self, envelope):
+            await asyncio.sleep(0.2)
+            return envelope
+
+        async def stage_encoded(self, staged):
+            self.written.append(staged.game_id)
+            return StageOutcome.STAGED
+
+    worker = SlowEncode()
+    flow = object.__new__(flow_module.GameFlowService)
+    flow._ctx = SimpleNamespace(finished_games=worker)
+    outcomes: list[tuple[str, str]] = []
+    flow.note_history_outcome = lambda game_id, state, room=None: outcomes.append(
+        (game_id, state)
+    )
+    flow._note_abandoned_write = lambda room, kind, reason, started: outcomes.append(
+        (kind, reason)
+    )
+
+    await flow._hand_off_finished_game(
+        SimpleNamespace(id="room"), SimpleNamespace(game_id="game")
+    )
+
+    assert worker.written == ["game"], "the slow encode cost latency, not the game"
+    assert outcomes == []
+
+
+async def test_the_shutdown_drain_cancels_and_counts_what_it_cannot_wait_for(caplog):
+    """A deferred staging left running when the budget is spent used to be
+    neither awaited nor cancelled: the loop closed under it, the game was lost
+    with no counter, and the room kept saying "pending" (#976 fourth review).
+    """
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    started = asyncio.Event()
+
+    async def never_finishes():
+        started.set()
+        await asyncio.sleep(3600)
+
+    ctx.defer_cleanup(never_finishes())
+    await asyncio.wait_for(started.wait(), timeout=2)
+    [task] = list(ctx.room_cleanups)
+
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(0.05), timeout=5)
+
+    assert task.cancelled(), "the drain does not leave it to the loop closing"
+    assert "Cancelled 1 deferred room cleanup" in caplog.text
+
+
+async def test_a_staging_cancelled_by_the_drain_is_counted_as_a_lost_write(monkeypatch):
+    """Counted like every other lost write before it goes, rather than
+    disappearing with the process (#976 fourth review)."""
+    from types import SimpleNamespace
+
+    import app.services.game_flow as flow_module
+
+    class Stuck:
+        async def encode(self, envelope):
+            await asyncio.sleep(3600)
+
+        async def stage_encoded(self, staged):  # pragma: no cover - never reached
+            raise AssertionError("the encode never finished")
+
+    flow = object.__new__(flow_module.GameFlowService)
+    flow._ctx = SimpleNamespace(finished_games=Stuck())
+    abandoned: list[tuple[str, str]] = []
+    outcomes: list[tuple[str, str]] = []
+    flow._note_abandoned_write = lambda room, kind, reason, start: abandoned.append((kind, reason))
+    flow.note_history_outcome = lambda game_id, state, room=None: outcomes.append((game_id, state))
+
+    handoff = asyncio.create_task(
+        flow._hand_off_finished_game(
+            SimpleNamespace(id="room"), SimpleNamespace(game_id="game")
+        )
+    )
+    await asyncio.sleep(0.02)
+    handoff.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await handoff
+
+    assert abandoned == [("handoff", "cancelled")]
+    assert outcomes == [("game", "failed")]
+    # And it is still cancelled: swallowing the cancellation would report a
+    # task that never finished as one that did (#976 fifth review).
+    assert handoff.cancelled()
+
+
+async def test_staging_wakes_the_loop_rather_than_waiting_for_its_sweep(env):
+    """Without the wake a staged game sits until the sweep comes round - up to
+    a minute of a room saying "pending" for a write that is ready (#976 fourth
+    review)."""
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    worker = worker_for(store, history)
+    woken: list[int] = []
+    worker.wake = lambda: woken.append(1)
+
+    envelope = FinishedGameEnvelope(history_for(str(generate_uuid()), ann, bob))
+    assert await worker.stage_encoded(await worker.encode(envelope)) is StageOutcome.STAGED
+
+    assert woken == [1]
+
+
+async def test_the_lifespan_refuses_a_width_the_process_cannot_use(monkeypatch):
+    """Validated in the lifespan, so a typo is heard at startup rather than at
+    the first finished game - and driven through the lifespan itself, because
+    making that call unreachable passed every test (#976 fourth review)."""
+    import app.main as main_module
+
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "nonsense")
+    with pytest.raises(ValueError, match="HISTORY_ENCODE_WORKERS"):
+        async with main_module.lifespan(None):
+            raise AssertionError("the process started with a width it cannot use")
+
+
+async def test_the_drain_waits_for_a_cleanup_another_cleanup_created(caplog):
+    """A room teardown ends its game, and ending a game defers the staging: a
+    drain that snapshots once gives the teardown its first step and then
+    returns while the staging it just created runs on - neither awaited,
+    cancelled nor counted (#976 fifth review)."""
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    staged = asyncio.Event()
+
+    async def staging():
+        await asyncio.sleep(0.05)
+        staged.set()
+
+    async def teardown():
+        await asyncio.sleep(0)
+        ctx.defer_cleanup(staging())
+
+    ctx.defer_cleanup(teardown())
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(5), timeout=5)
+
+    assert staged.is_set(), "the drain returned while the staging was still running"
+    assert ctx.room_cleanups == set()
+    assert "Cancelled" not in caplog.text
+
+
+def test_the_shutdown_budget_covers_the_encodes_the_process_can_hold(monkeypatch):
+    """The allowance is the whole fix for the shutdown finding, and a fixed
+    ten seconds was pinned by nothing: setting it to 0 restored the pre-fix
+    budget with 593 tests passing. It is computed now, from every room this
+    process will hold ending at once at the configured width (#976 fifth
+    review)."""
+    from app.services.game_flow import (
+        ENVELOPE_ENCODE_SECONDS,
+        history_encode_drain_seconds,
+    )
+
+    monkeypatch.setenv("ROOM_GLOBAL_LIMIT", "200")
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "2")
+    assert history_encode_drain_seconds() >= 200 * ENVELOPE_ENCODE_SECONDS / 2
+
+    # A host that gives the encode one thread waits twice as long for it.
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "1")
+    assert history_encode_drain_seconds() >= 200 * ENVELOPE_ENCODE_SECONDS
+
+    # And a smaller ceiling costs a shorter shutdown.
+    monkeypatch.setenv("ROOM_GLOBAL_LIMIT", "20")
+    assert history_encode_drain_seconds() < 200 * ENVELOPE_ENCODE_SECONDS
+
+
+def test_the_shutdown_hands_the_drain_that_budget():
+    """The allowance is only worth computing if the process uses it: the drain
+    tests pass their own budget, so nothing exercised the one the shutdown
+    hands over (#976 fifth review)."""
+
+    from app.services.game_flow import (
+        ENVELOPE_ENCODE_SECONDS,
+        HISTORY_WRITE_TIMEOUT_SECONDS,
+        history_encode_drain_seconds,
+        shutdown_cleanup_budget_seconds,
+    )
+
+    budget = shutdown_cleanup_budget_seconds()
+    assert budget == history_encode_drain_seconds() + HISTORY_WRITE_TIMEOUT_SECONDS
+    assert budget > HISTORY_WRITE_TIMEOUT_SECONDS, "the write bound alone is the old budget"
+    # The measurement the budget is computed from: one stroke-heavy envelope
+    # on the machine #976 measured. Shrinking it shrinks the budget with every
+    # test still green (#976 sixth review).
+    assert ENVELOPE_ENCODE_SECONDS == 0.15
+
+
+def test_each_encode_pool_is_built_once():
+    """Lazily, not per call: a fresh executor on every finished game would be
+    two new pools of N threads per game, which passed every test (#976 fifth
+    review)."""
+    import app.repositories.sqlalchemy as repository_module
+    import app.services.game_handoff as handoff
+
+    try:
+        assert repository_module._encode_pool() is repository_module._encode_pool()
+        assert handoff._envelope_pool() is handoff._envelope_pool()
+    finally:
+        for module, name in ((repository_module, "_ENCODE_POOL"), (handoff, "_ENVELOPE_POOL")):
+            pool = getattr(module, name)
+            if pool is not None:
+                pool.shutdown(wait=False)
+            setattr(module, name, None)
+
+
+def test_the_cleanups_are_drained_before_the_handoff_worker_stops():
+    """The drain ends rooms and stages their games; the bounded replay pass
+    below it is what writes them. In the other order every game the drain
+    stages misses that pass and waits for the next process (#976 fifth
+    review). Compared on the calls, because the prose around them mentions
+    both (#976 sixth review)."""
+    import inspect
+
+    import app.main as main_module
+
+    source = inspect.getsource(main_module.lifespan)
+    drain = source.index("await handler_context.drain_room_cleanups(")
+    assert drain < source.index("await stop_handoff_worker(")
+    # And the runtime events both of them record - a staging the drain
+    # cancelled, a replay the pass below abandoned - are written before the
+    # engine goes away. `stop_metrics_loop(None, ...)` returned on its first
+    # line, so the flush has to be the call itself (#976 seventh review).
+    flush = source.index("await flush_runtime_events(async_session_factory)")
+    assert flush > source.index("finished_game_worker.drain()")
+    assert flush < source.index("await async_engine.dispose()")
+
+
+async def test_a_cleanup_deferred_at_the_deadline_is_cancelled_and_counted(caplog):
+    """The re-read fixed the waiting half; the cancelling half still worked
+    from a snapshot, so a staging deferred by a teardown that was itself about
+    to be cancelled escaped the shutdown entirely (#976 sixth review).
+
+    And it is *counted*: a coroutine cancelled before it has run a line never
+    enters its own `try`, so the game was lost with no record - which is the
+    half R-HIST-03 promises (#976 seventh review).
+    """
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    steps: list[str] = []
+
+    async def staging():
+        try:
+            steps.append("started")
+            await asyncio.sleep(0.5)
+            steps.append("escaped")
+        except asyncio.CancelledError:
+            steps.append("counted the loss")
+            raise
+
+    async def teardown():
+        await asyncio.sleep(0)
+        ctx.defer_cleanup(staging())
+        await asyncio.sleep(5)  # still running when the budget is spent
+
+    ctx.defer_cleanup(teardown())
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(0.1), timeout=5)
+
+    assert ctx.room_cleanups == set(), "nothing is left running"
+    assert steps == ["started", "counted the loss"], steps
+    assert "Cancelled 2 deferred room cleanup" in caplog.text
+
+
+async def test_a_cleanup_cancelled_before_its_first_step_still_counts_its_loss():
+    """A coroutine cancelled before it has run a line never enters its own
+    `try`, so the game it was going to stage is lost *and* uncounted - the
+    half R-HIST-03 promises. With a spent budget the drain reaches the cancel
+    phase without ever yielding, which is exactly that case (#976 seventh
+    review)."""
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    steps: list[str] = []
+
+    async def staging():
+        try:
+            steps.append("started")
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            steps.append("counted the loss")
+            raise
+
+    ctx.defer_cleanup(staging())  # created, not yet stepped
+    await asyncio.wait_for(ctx.drain_room_cleanups(0), timeout=5)
+
+    assert steps == ["started", "counted the loss"], steps
+    assert ctx.room_cleanups == set()
+
+
+async def test_a_cleanup_deferred_from_inside_a_cancellation_is_cancelled_too(caplog):
+    """The cancel phase loops for the same reason the wait phase does: a
+    teardown can defer its successor on its way out, and a single round would
+    leave that one running. Collapsing the loop to one snapshot passed (#976
+    seventh review)."""
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    escaped = asyncio.Event()
+
+    async def successor():
+        await asyncio.sleep(0.5)
+        escaped.set()
+
+    async def teardown():
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            ctx.defer_cleanup(successor())
+            raise
+
+    ctx.defer_cleanup(teardown())
+    await asyncio.sleep(0)
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(0.05), timeout=5)
+
+    assert ctx.room_cleanups == set()
+    assert not escaped.is_set(), "the successor was cancelled too"
+    assert "Cancelled 2 deferred room cleanup" in caplog.text
+
+
+async def test_the_cancel_phase_gives_up_rather_than_holding_the_shutdown(caplog):
+    """A cleanup that swallows its cancellation cannot be made to stop, and a
+    shutdown that waits for one for ever is a shutdown that does not happen.
+    It is left behind, and said so (#976 seventh review)."""
+    import logging
+
+    from app.handlers import context as context_module
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    # The test keeps a way to end it: a task that truly cannot be stopped
+    # would wedge this run rather than fail it, which is the trap this suite
+    # has met twice.
+    relent = asyncio.Event()
+
+    async def stubborn():
+        while True:
+            try:
+                await asyncio.sleep(0.01)
+            except asyncio.CancelledError:
+                if relent.is_set():
+                    raise
+
+    ctx.defer_cleanup(stubborn())
+    await asyncio.sleep(0)
+    real_bound = context_module.CLEANUP_CANCEL_SECONDS
+    context_module.CLEANUP_CANCEL_SECONDS = 0.1
+    try:
+        with caplog.at_level(logging.WARNING):
+            await asyncio.wait_for(ctx.drain_room_cleanups(0.05), timeout=5)
+    finally:
+        # Whatever happened above, this task is made to end: one that cannot
+        # be stopped would wedge the whole run rather than fail this test,
+        # which is the trap this suite has met twice.
+        context_module.CLEANUP_CANCEL_SECONDS = real_bound
+        relent.set()
+        for task in list(ctx.room_cleanups):
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+
+    assert "1 left" in caplog.text
+    # And the bound it gave up after is the shipped one: raising it to a day
+    # passed every test (#976 seventh review).
+    assert real_bound == 5
+
+
+async def test_a_staging_deferred_by_an_unstepped_teardown_counts_its_loss():
+    """One turn of the loop is not enough: a teardown that has not run either
+    defers its staging on its own first step, and that staging would then be
+    cancelled before running a line - stopped, but uncounted (#976 eighth
+    review)."""
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    steps: list[str] = []
+
+    async def staging():
+        try:
+            steps.append("started")
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            steps.append("counted the loss")
+            raise
+
+    async def teardown():
+        # Its own first step is where the staging appears, exactly as
+        # `_retire_removed_room` defers one from `record_abandoned_game`.
+        ctx.defer_cleanup(staging())
+        await asyncio.sleep(5)
+
+    ctx.defer_cleanup(teardown())  # neither task has been stepped
+    await asyncio.wait_for(ctx.drain_room_cleanups(0), timeout=5)
+
+    assert steps == ["started", "counted the loss"], steps
+    assert ctx.room_cleanups == set()
+
+
+async def test_the_last_flush_gives_up_rather_than_holding_the_shutdown(caplog):
+    """A database that accepts a connection and never answers must not hold
+    the process open, and a flush that fails must say so rather than vanish
+    into a bare `suppress` (#976 eighth review)."""
+    import logging
+
+    import app.main as main_module
+
+    async def never_answers(_factory):
+        await asyncio.sleep(3600)
+
+    real_flush = main_module.flush_events
+    real_bound = main_module.SHUTDOWN_FLUSH_SECONDS
+    main_module.flush_events = never_answers
+    main_module.SHUTDOWN_FLUSH_SECONDS = 0.05
+    try:
+        with caplog.at_level(logging.WARNING):
+            await asyncio.wait_for(main_module.flush_runtime_events(object()), timeout=5)
+    finally:
+        main_module.flush_events = real_flush
+        main_module.SHUTDOWN_FLUSH_SECONDS = real_bound
+
+    assert "left unflushed at shutdown" in caplog.text
+    assert real_bound == 5

@@ -1,11 +1,17 @@
-"""Argon2id password hashing, kept off the event loop."""
+"""Argon2id password hashing, kept off the event loop on a capped pool of its own."""
 from __future__ import annotations
+
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
+import os
+import threading
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError, VerificationError
-from starlette.concurrency import run_in_threadpool
 
+from app.api.errors import Refusal
 from app.auth.breached_passwords import screening_failure
+from app.refusals import ErrorCode
 
 # Twelve rather than eight (#468). Eight characters of anything a person
 # actually chooses is inside the reach of an offline guess against a stolen
@@ -24,6 +30,124 @@ MAX_PASSWORD_LENGTH = 128
 # stroke for every room, so the memory and latency of a login matter here in a
 # way they would not in a request-per-process deployment.
 _hasher = PasswordHasher(time_cost=2, memory_cost=19456, parallelism=1)
+
+# How many hashes may run at once (#975). Each is ~15 ms of CPU and 19 MiB,
+# and they used to run in anyio's shared 40-thread pool with nothing counting
+# them: login only *peeks* its limiters before verifying, so a burst reaches
+# argon2 all at once. Measured, 200 concurrent verifies there held the event
+# loop - every room's strokes and timers - at a p99 lag of ~30 ms and a worst
+# of ~70 ms, and peaked ~600 MiB above idle; capped at 4 the same burst left
+# the loop at 0.2 ms and took ~58 MiB. Past the
+# cap a login waits in this pool's queue, which costs the loop nothing, and
+# static files no longer queue behind logins in the shared pool. One core is
+# left to the loop by default, since argon2 releases the GIL and keeps a core
+# busy per worker.
+#
+# The cores this process may run on (`process_cpu_count` honours CPU
+# affinity). A container quota is not visible here: a 1-vCPU container on a
+# large host should set `PASSWORD_HASH_WORKERS=1`.
+PASSWORD_HASH_WORKERS_DEFAULT = max(1, min(4, (os.process_cpu_count() or 2) - 1))
+# How many hashes may be waiting or running at once before the next is refused
+# (#975 review). Login charges a failure only after verifying, so a burst of
+# unknown usernames passes its limiters whole; queued without a bound, every
+# real login behind it waited N x ~4 ms. Past this depth - about a quarter of
+# a second of work at four workers - the caller is told to retry instead.
+QUEUED_PER_WORKER = 16
+RETRY_AFTER_SECONDS = 1
+_executor: ThreadPoolExecutor | None = None
+_workers = 0
+_outstanding = 0
+#: Every read and write of `_outstanding` is under this: the loop takes a
+#: slot, a worker thread gives it back.
+_counter_lock = threading.Lock()
+
+
+class PasswordHashingBusy(Refusal):
+    """More hashing is waiting than the pool gets through in a moment.
+
+    A server-state refusal rather than `too_fast`, which would tell a player
+    who did nothing wrong to slow down (#975 review).
+    """
+
+    def __init__(self) -> None:
+        super().__init__(
+            503,
+            ErrorCode.SERVER_BUSY,
+            "The server is busy signing people in. Try again in a moment.",
+            retry_after_ms=RETRY_AFTER_SECONDS * 1000,
+            headers={"Retry-After": str(RETRY_AFTER_SECONDS)},
+        )
+
+
+def password_hash_workers() -> int:
+    """The configured cap, validated; `PASSWORD_HASH_WORKERS` overrides it."""
+    raw = os.environ.get("PASSWORD_HASH_WORKERS", "").strip()
+    if not raw:
+        return PASSWORD_HASH_WORKERS_DEFAULT
+    try:
+        value = int(raw)
+    except ValueError as error:
+        raise ValueError("PASSWORD_HASH_WORKERS must be an integer") from error
+    if not 1 <= value <= 32:
+        raise ValueError("PASSWORD_HASH_WORKERS must be between 1 and 32")
+    return value
+
+
+def _pool() -> ThreadPoolExecutor:
+    global _executor, _workers
+    if _executor is None:
+        _workers = password_hash_workers()
+        _executor = ThreadPoolExecutor(max_workers=_workers, thread_name_prefix="argon2")
+    return _executor
+
+
+def max_queued() -> int:
+    """Hashes that may be running or waiting before the next is refused.
+
+    Running ones count: the cap is about how much work the pool is holding,
+    not about the queue in front of it.
+    """
+    _pool()
+    return _workers * QUEUED_PER_WORKER
+
+
+async def _off_loop(function, *args):
+    """Run one hashing call on the capped pool, or refuse if it is backed up.
+
+    The count is written from two kinds of thread - the loop takes a slot, a
+    worker gives it back - so every read and write of it is under one lock.
+    It used to be posted back to the loop instead, on the argument that the
+    count then stayed single-threaded; but a loop that is *stopped* still
+    accepts a `call_soon_threadsafe` callback and never runs it, which is
+    exactly the shape a shutdown and a pytest teardown produce, and the slot
+    was gone for the life of the process (#975 fifth review).
+    """
+    global _outstanding
+    pool = _pool()
+    with _counter_lock:
+        if _outstanding >= max_queued():
+            raise PasswordHashingBusy()
+        # Submitted inside the check: between reading the count and taking the
+        # slot, nothing else may take it. A `submit` that raises leaves the
+        # count untouched, because it is raised before the increment (#975
+        # third review).
+        job = pool.submit(function, *args)
+        _outstanding += 1
+    # Counted out when the job itself ends, not when the caller stops waiting:
+    # a cancelled caller leaves queued work behind, and releasing its slot
+    # there would let the queue grow past the cap unseen (#975 review). The
+    # callback runs on the worker thread, or inline **on this thread** if the
+    # job has already finished - which is why it is attached outside the lock:
+    # `_counter_lock` is not reentrant, and attaching it inside deadlocks the
+    # process on a job that was quick (#975 sixth review).
+    job.add_done_callback(_release)
+    return await asyncio.wrap_future(job)
+
+
+def _release(_job=None) -> None:
+    global _outstanding
+    with _counter_lock:
+        _outstanding -= 1
 
 
 # Verified against when no account matches the given username, so that path
@@ -96,7 +220,7 @@ def validate_password(
 
 async def hash_password(password: str) -> str:
     """Hash a password without blocking the event loop."""
-    return await run_in_threadpool(_hasher.hash, password)
+    return await _off_loop(_hasher.hash, password)
 
 
 async def verify_password(password_hash: str, password: str) -> bool:
@@ -110,7 +234,7 @@ async def verify_password(password_hash: str, password: str) -> bool:
         except (VerifyMismatchError, VerificationError, InvalidHashError):
             return False
 
-    return await run_in_threadpool(_verify)
+    return await _off_loop(_verify)
 
 
 async def password_needs_rehash(password_hash: str) -> bool:
@@ -118,10 +242,10 @@ async def password_needs_rehash(password_hash: str) -> bool:
     if not password_hash:
         return False
 
-    def _check() -> bool:
-        try:
-            return _hasher.check_needs_rehash(password_hash)
-        except (InvalidHashError, VerificationError):
-            return False
-
-    return await run_in_threadpool(_check)
+    # Inline, not on the pool: it only parses the parameters out of the
+    # encoded hash, microseconds, and queued behind the burst a successful
+    # login would wait through the backlog twice (#975 review).
+    try:
+        return _hasher.check_needs_rehash(password_hash)
+    except (InvalidHashError, VerificationError):
+        return False

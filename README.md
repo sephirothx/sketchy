@@ -736,10 +736,12 @@ process. These deployment settings can be tuned without code changes:
 | --- | --- | --- |
 | `MIGRATION_DATABASE_URL` | `DATABASE_URL` outside production | The schema owner's URL, used only by `python -m app.db.migrate`, which also grants the application role its privileges. Production requires it: there `DATABASE_URL` is the application role, which cannot run DDL (#896) |
 | `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL`, and a missing `SMTP_HOST` |
+| `PASSWORD_HASH_WORKERS` | cores − 1, at most 4 | Argon2 hashes run at once, on a pool of their own, 1-32 and refused at startup outside that; 16 per worker may be running or waiting, and past that a login is answered 503 with `Retry-After` (#975). The default counts the cores the process may run on, not a container's CPU quota: set it to `1` in a 1-vCPU container |
 | `DB_POOL_SIZE` | `5` | Persistent connections per process |
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
 | `DB_POOL_RECYCLE_SECONDS` | `1800` | Maximum age before a connection is replaced |
+| `DB_POOL_PING_IDLE_SECONDS` | `30` | A pooled connection unused this long is pinged before it is handed out; one used more recently is only checked for a closed socket, which costs no round trip |
 | `DB_STATEMENT_TIMEOUT_SECONDS` | `30` | PostgreSQL `statement_timeout` for the application's connections (`application_name` `sketchy-web`) |
 | `DB_LOCK_TIMEOUT_SECONDS` | `5` | PostgreSQL `lock_timeout` for the application's connections |
 | `DB_IDLE_TRANSACTION_TIMEOUT_SECONDS` | `60` | PostgreSQL `idle_in_transaction_session_timeout` for the application's connections |
@@ -775,6 +777,7 @@ process. These deployment settings can be tuned without code changes:
 | `EXPORT_MAX_BYTES` | `67108864` | Ceiling on one export document, in JSON bytes before compression; past it the job fails as `too_large` |
 | `HISTORY_HANDOFF_SWEEP_SECONDS` | `60` | How often the finished-game handoff loop looks for staged games nobody woke it for, retries the ones that are due, and reclaims a claim a crash left behind |
 | `HISTORY_HANDOFF_MAX_BYTES` | `16777216` | Ceiling on one staged finished game (deflated); past it the game is lost and counted as `too_large` |
+| `HISTORY_ENCODE_WORKERS` | `2` | Threads that encode a finished game, in each of the two pools that do it (the envelope's and the drawings'), 1-16. The encode is CPU off the event loop, so this is how many endings can be encoded at once before the rest queue; a host that ends many games at once can widen it, and a wrong value is refused at startup rather than served as the default |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |
@@ -1440,6 +1443,15 @@ raising the configured Argon2 cost therefore upgrades active accounts without
 a bulk plaintext migration. The encoded hash carries its algorithm and cost
 parameters, so a redundant schema version column is not used.
 
+Hashing runs on a thread pool of its own, `PASSWORD_HASH_WORKERS` at a time (default:
+one fewer than the machine's cores, at most 4). Each hash is ~15 ms of CPU and 19 MiB;
+uncapped, a burst of 200 logins held the event loop every room shares at a p99 lag of
+~30 ms and took ~600 MiB above idle, where capped it leaves the loop at 0.2 ms and takes
+~58 MiB. Past 16 running or waiting per worker a hash is refused with **503** `server_busy` and
+`Retry-After`, so a flood is answered instead of queued.
+The burst as a whole finishes later (0.9 s against 0.4 s); a single login is unchanged
+(#975).
+
 The authentication endpoints are rate limited per client address in shared
 database buckets. Login, registration, and account/name lookup limits survive
 restarts and apply once across every replica.
@@ -1473,6 +1485,7 @@ your players share one address:
 | `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
 | `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
+| `AUTH_RESET_PERFORM_LIMIT` | 10 per hour | `POST /api/auth/password/reset`, per address — its own bucket, so opening the page does not spend what finishing the reset needs (#975) |
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 per hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
@@ -1985,6 +1998,13 @@ backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
 
+# What a request pays for the session middleware: the gate, and the wrapper (#974)
+backend/.venv/bin/python benchmarks/session_middleware_cost.py --requests 1000
+
+# What a pooled connection pays before its first statement, pre-ping against idle-ping (#973)
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench \
+  backend/.venv/bin/python benchmarks/pool_checkout_ping.py --sessions 300
+
 # The stored drawing format, frame by frame: bytes, ratio, p95 encode/decode (#547)
 backend/.venv/bin/python benchmarks/drawing_compression.py
 
@@ -1993,6 +2013,11 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
   backend/.venv/bin/python benchmarks/drawing_store_footprint.py --games 50
 # Read its live sizes, never a backup taken from it: every turn it seeds carries the same
 # frame, so a `pg_dump` of its output compresses ~50x and says nothing about a real store.
+
+# How long finishing a game holds the event loop: stage and replay 8-turn games, ordinary and
+# stroke-heavy drawings, with a 1 ms ticker on the loop (#976; disposable database only)
+TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
+  backend/.venv/bin/python benchmarks/finish_game_stall.py --games 4
 # Which permessage-deflate window and memLevel the server should use (bytes, CPU, memory)
 backend/.venv/bin/python benchmarks/deflate_windows.py
 
