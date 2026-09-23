@@ -26,6 +26,7 @@ BENCHMARKS = Path(__file__).resolve().parents[2] / "benchmarks"
 SMOKE_ARGS: dict[str, tuple[str, ...]] = {
     "catalogue_star_page": ("--lists", "50", "--owners", "5", "--stars", "200", "--samples", "3"),
     "drawing_store_footprint": ("--games", "2"),
+    "finish_game_stall": ("--games", "1"),
     "fk_delete_paths": ("--rows", "200"),
     "guest_name_check": ("--online", "20", "--samples", "3"),
     "history_row_footprint": ("--games", "2"),
@@ -36,6 +37,7 @@ SMOKE_ARGS: dict[str, tuple[str, ...]] = {
     "recipient_array_sizes": (),
     "retention_churn": ("--rows", "500", "--row-budget", "100", "--batch", "50", "--insert-batch", "100"),
     "score_ledger_footprint": ("--games", "2"),
+    "session_middleware_cost": ("--requests", "20"),
     "user_stats": ("--games", "20", "--reads", "2"),
 }
 

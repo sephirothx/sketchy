@@ -1063,7 +1063,7 @@ class Telemetry:
         )
         self.drawing_encode_seconds = Histogram(
             "sketchy_drawing_encode_seconds",
-            "Validating and encoding one drawing for storage, by format.",
+            "Validating and encoding one drawing for storage, by format: CPU time on the encoding thread, not wall time (#976).",
             ENCODE_BUCKETS,
             ("format",),
         )

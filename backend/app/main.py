@@ -55,6 +55,7 @@ from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db, verify_least_privilege
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
+    history_encode_workers,
     is_production,
     public_base_url,
     reconnect_spread_seconds,
@@ -85,13 +86,20 @@ from app.services.integrity_audit import (
 )
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.data_export_worker import DataExportWorker, stop_export_worker
-from app.services.game_flow import HISTORY_WRITE_TIMEOUT_SECONDS
+from app.services.game_flow import (
+    HISTORY_WRITE_TIMEOUT_SECONDS,
+    shutdown_cleanup_budget_seconds,
+)
 from app.services.game_handoff import (
     FinishedGameHandoffWorker,
     SqlEnvelopeStore,
     stop_handoff_worker,
 )
-from app.services.runtime_metrics import start_metrics_loop, stop_metrics_loop
+from app.services.runtime_metrics import (
+    flush_events,
+    start_metrics_loop,
+    stop_metrics_loop,
+)
 from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
 from app.services.lobby_chat import restore_lobby_backlog
@@ -570,8 +578,33 @@ async def adopt_stored_settings() -> None:
     shutdown_coordinator.pause(await read_paused(async_session_factory))
 
 
+#: What the shutdown gives its last flush of runtime events. A database that
+#: accepts a connection and never answers must not hold the process open
+#: (#976 eighth review).
+SHUTDOWN_FLUSH_SECONDS = 5
+
+
+async def flush_runtime_events(session_factory) -> None:
+    """Write the buffered runtime events, bounded, saying so if it fails.
+
+    These are the observations describing the shutdown itself - a staging the
+    drain cancelled, a replay it abandoned - so losing them silently is losing
+    the record of what the shutdown cost.
+    """
+    try:
+        await asyncio.wait_for(
+            flush_events(session_factory), timeout=SHUTDOWN_FLUSH_SECONDS
+        )
+    except Exception:
+        logging.getLogger("sketchy.main").warning(
+            "runtime events left unflushed at shutdown", exc_info=True
+        )
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
+    # Refused at startup rather than at the first finished game.
+    history_encode_workers()
     # Validated here as well as in `app.server.run`, so an app started some
     # other way still refuses a bad value at startup, not at the first login.
     password_hash_workers()
@@ -701,12 +734,18 @@ async def lifespan(_app: FastAPI):
         # A build in flight hands its job back rather than finishing it: the
         # drain is for games, not for a document nobody is waiting on yet.
         await stop_export_worker(export_build)
+        # Stopped here; what is recorded after this - by the drain, by the
+        # replay pass - is flushed again at the end (#976 sixth review).
         await stop_metrics_loop(metrics_flush, async_session_factory)
         await stop_delivery_loop(mail_delivery)
         await shutdown_coordinator.begin_shutdown(sio)
-        # Teardowns entries deferred (#879) stage abandoned games, so they
-        # finish before the handoff worker below is stopped.
-        await handler_context.drain_room_cleanups(HISTORY_WRITE_TIMEOUT_SECONDS)
+        # Teardowns entries deferred (#879) and every finished game's staging
+        # (#976) run here, so they finish before the handoff worker below is
+        # stopped. The budget covers an encode as well as the write it is
+        # bounded by: under the burst this is for, a queued encode is seconds
+        # on its own, and a drain that returns first would leave the staging
+        # to be cancelled by the loop closing (see `drain_room_cleanups`).
+        await handler_context.drain_room_cleanups(shutdown_cleanup_budget_seconds())
         # After the drain, which ends games and stages them: one bounded
         # pass replays what it can, and whatever is left is a row the next
         # process picks up on its first sweep - that is the point of #541.
@@ -728,6 +767,12 @@ async def lifespan(_app: FastAPI):
         if handler_context.message_retention is not None:
             await handler_context.message_retention.aclose()
         await handler_context.timers.close()
+        # Last, and directly rather than through `stop_metrics_loop`, whose
+        # first line returns when there is no task to stop (#976 seventh
+        # review): everything recorded since the flush above - a staging the
+        # drain cancelled, a replay this shutdown abandoned - is in the buffer
+        # until this runs, and `dispose()` below would throw it away.
+        await flush_runtime_events(async_session_factory)
         await async_engine.dispose()
 
 
