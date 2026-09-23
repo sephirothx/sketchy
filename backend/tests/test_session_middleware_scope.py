@@ -226,6 +226,16 @@ async def test_a_suspension_is_refused_under_a_prefix_too(monkeypatch):
     )
     try:
         assert (await client.get("/sketchy/api/whoami")).status_code == 403
+        # And the hatches under the same prefix: on the raw path a suspended
+        # account is refused its own data export, which is the one thing the
+        # hatch exists to leave open (#974 sixth review).
+        for path in (
+            "/sketchy/api/auth/account",
+            "/sketchy/api/auth/logout",
+            "/sketchy/api/auth/data-exports",
+            "/sketchy/api/suspension/drawings/whatever",
+        ):
+            assert (await client.get(path)).status_code != 403, path
     finally:
         await client.aclose()
         await engine.dispose()
@@ -304,3 +314,30 @@ async def test_a_suspension_is_refused_on_a_path_holding_an_encoded_question_mar
     for path in ("/api/auth/data-exports", "/api/suspension/drawings/whatever"):
         assert (await client.get(path)).status_code != 403, path
     assert (await client.delete("/api/auth/account")).status_code != 403
+
+
+def test_the_walk_reaches_the_static_mount(tmp_path):
+    """The exported application only mounts the frontend when `frontend/dist`
+    exists, and CI never builds it - so on CI the walk over `app.main.app`
+    passes without ever seeing the mount every static request goes through.
+    Asked of a configured application instead (#974 sixth review)."""
+    from app.main import configure_frontend
+
+    (tmp_path / "index.html").write_bytes(b"<!doctype html><html></html>")
+    app = FastAPI()
+    configure_frontend(app, tmp_path)
+
+    seen = [name for _layer, name in _layers(app)]
+    assert "SPAStaticFiles" in seen, seen
+    assert _base_http_middlewares(app) == [], seen
+
+    # And it would see a layer hidden behind that mount.
+    wrapped = FastAPI()
+    configure_frontend(wrapped, tmp_path)
+    for route in wrapped.routes:
+        if type(route).__name__ == "Mount" and type(route.app).__name__ == "SPAStaticFiles":
+            route.app = _Probe(route.app)
+            break
+    else:  # pragma: no cover - the mount is there or the assertion above failed
+        raise AssertionError("no static mount to wrap")
+    assert _base_http_middlewares(wrapped) == ["_Probe"]

@@ -197,7 +197,6 @@ class SessionAuthMiddleware:
         escape hatch.
         """
         raw_token = request.cookies.get(cookie_name(), "")
-        request.state.session_token = raw_token
         # Computed once here and left on the request, for every route that
         # wants it. Issuing a cookie needs the caller's address digest too,
         # and reaching for it separately meant a database round trip per

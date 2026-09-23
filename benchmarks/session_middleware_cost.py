@@ -29,6 +29,7 @@ from __future__ import annotations
 import argparse
 import asyncio
 import os
+import shutil
 import sys
 import tempfile
 from time import process_time, thread_time
@@ -99,7 +100,8 @@ async def signed_in_database(path: str):
 
 async def cost(app: FastAPI, path: str, requests: int, cookies) -> tuple[float, float]:
     """Per request: microseconds of CPU on the loop's own thread, and of the
-    whole process - which here also counts the client driving it."""
+    whole process - the difference being aiosqlite's worker thread, where the
+    session read runs."""
     async with AsyncClient(
         transport=ASGITransport(app=app), base_url="http://bench", cookies=cookies
     ) as http:
@@ -127,9 +129,8 @@ async def main() -> None:
 
     import app.auth.middleware as middleware_module
 
-    database = arguments.database or os.path.join(
-        tempfile.mkdtemp(prefix="sketchy-session-cost-"), "accounts.db"
-    )
+    scratch = tempfile.mkdtemp(prefix="sketchy-session-cost-")
+    database = arguments.database or os.path.join(scratch, "accounts.db")
     engine, factory, cookies = await signed_in_database(database)
     try:
         api = "/api/whoami"
@@ -171,6 +172,7 @@ async def main() -> None:
             )
     finally:
         await engine.dispose()
+        shutil.rmtree(scratch, ignore_errors=True)
 
 
 if __name__ == "__main__":
