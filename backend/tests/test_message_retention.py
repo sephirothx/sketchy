@@ -849,10 +849,11 @@ async def test_a_flush_that_finishes_first_leaves_the_others_their_cut():
         await engine.dispose()
 
 
-async def test_a_line_said_while_closing_is_not_kept(caplog):
-    """`aclose` stops the writer; a line taken meanwhile would start a second
-    one that nothing cancels and that the counters do not describe (#972 fifth
-    review)."""
+async def test_a_line_said_after_the_shutdown_is_not_kept(caplog):
+    """Once `aclose` has stopped the writer, taking a line would start another
+    that nothing cancels (#972 fifth review). While the drain is still
+    running the line is taken as usual, because the drain exists so the last
+    thing anybody said is written."""
     import logging
 
     factory, engine = await create_test_db()
@@ -866,6 +867,53 @@ async def test_a_line_said_while_closing_is_not_kept(caplog):
             assert await _say(service, room, player, "after the shutdown") is None
         assert "closing" in caplog.text
         assert service._worker is None
+    finally:
+        await engine.dispose()
+
+
+async def test_a_line_said_during_the_drain_is_still_written():
+    """The drain's whole purpose: what somebody said as the server was going
+    down is written rather than abandoned (architecture.md). The guard that
+    stops a second writer must not refuse it (#972 sixth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        await _say(service, room, player, "before the shutdown")
+
+        closing = asyncio.create_task(service.aclose())
+        await asyncio.sleep(0)
+        said = await _say(service, room, player, "said during the drain")
+        await asyncio.wait_for(closing, timeout=5)
+
+        assert said is not None, "the line was taken"
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert "said during the drain" in kept
+    finally:
+        await engine.dispose()
+
+
+async def test_a_service_with_no_linger_writes_without_waiting():
+    """`linger_seconds = 0` is the one exit from the linger with no test: it
+    returns before touching the event at all (#972 sixth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        service._wake.set()  # left set, so a linger that waited would clear it
+        started = time.monotonic()
+        await _say(service, room, player, "no linger")
+        # Waited for without `drain`, which sets the event itself.
+        for _ in range(200):
+            if service._written == 1:
+                break
+            await asyncio.sleep(0.005)
+
+        assert service._written == 1
+        assert time.monotonic() - started < 0.5
+        assert service._wake.is_set(), "the linger never touched the event"
+        await asyncio.wait_for(service.aclose(), timeout=5)
     finally:
         await engine.dispose()
 

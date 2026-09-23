@@ -238,10 +238,13 @@ class MessageRetentionService:
 
     def _enqueue(self, row: RoomMessage, described: str) -> str | None:
         """Hand one composed row to the writer, or say why it will not be kept."""
-        if self._closing:
-            # The writer is being stopped. Taking the row would start a second
-            # one that outlives the shutdown, and the count it kept would be
-            # wrong for the one that did the work (#972 fifth review).
+        if self._closing and (self._worker is None or self._worker.done()):
+            # The writer has stopped and this is a shutdown: starting another
+            # would outlive it, and the count it kept would be wrong for the
+            # one that did the work (#972 fifth review). While the writer is
+            # still draining, a line is taken as it always was - the drain
+            # exists so that the last thing anybody said is written rather
+            # than abandoned (#972 sixth review).
             logger.warning("Retention is closing; message %s %s is not kept", row.id, described)
             return None
         self._ensure_worker()
@@ -267,16 +270,12 @@ class MessageRetentionService:
         """Start the writer, or replace one that somehow stopped."""
 
         if self._worker is None or self._worker.done():
-            if self._worker is not None:
-                # A writer that stopped some other way took rows with it.
-                # What was taken and never settled is settled here, against
-                # what is still queued: otherwise `join` waits for ever and
-                # every later `flush` spends its whole bound on rows nobody
-                # holds any more (#972 third review).
-                lost = self._enqueued - self._written - self._queue.qsize()
-                for _ in range(max(0, lost)):
-                    self._queue.task_done()
-                self._written += max(0, lost)
+            # No reconciliation here: `_write_queued` settles its batch in a
+            # `finally`, so every way a writer can end - a bad batch, a
+            # cancellation, an exception out of the linger - has already
+            # accounted for the rows it held (#972 sixth review). The count
+            # this used to repair is always zero, and a block that can only
+            # ever subtract nothing is worse than no block.
             self._worker = asyncio.create_task(self._write_queued())
 
     async def _write_queued(self) -> None:

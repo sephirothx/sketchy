@@ -893,16 +893,21 @@ the process's statements fell 16,929 → 8,643 (SQLite, counted with an engine l
 the shape is the same on PostgreSQL, the per-statement cost is not). A report reads its evidence from this table, so both report paths flush
 the queue (bounded at 2 s) before that read and **outside any transaction of their own**:
 waiting for the writer to get a connection while holding one is how concurrent reports
-starve the very writer whose rows they are waiting for. A report refused before the
-flush - an erased account, a duplicate, a picture that is not there on the socket path;
-an unknown player, game or turn on the REST one - never waits for the queue at all
-(R-MOD-21). Run one by hand with:
+starve the very writer whose rows they are waiting for. A report that is going to be refused -
+an erased account, an unknown player, game or turn, a duplicate, a picture that is not
+there - never waits for the queue at all on either path (R-MOD-21): each decides its
+refusals first, in a transaction it then closes. Run one by hand with:
 
-```bash
-cd backend && .venv/bin/pytest tests/test_message_retention.py -q
-``` The flush waits only for the
+The flush waits only for the
 lines queued when it was called, not for what other rooms say meanwhile, and it cuts
 the current linger short without cutting anybody else's.
+
+The batching figures above are measured by the load gate (`benchmarks/run_load.sh`) with
+an `Engine` statement counter attached; the flush's own rules are checked by
+
+```bash
+cd backend && .venv/bin/pytest tests/test_message_retention.py tests/handlers/test_moderation.py -q
+```
 
 **No index by game or turn** (#890): `game_id` and `turn_id` are correlation columns — no read filters on them and neither is a foreign key — and the `(game_id, turn_id, created_at)` index that used to cover them was the largest on the table. Dropping it, measured on 100,000 six-recipient lines (`benchmarks/index_write_cost.py`): index bytes per row 205 → 102, WAL per insert 918 → 773 B, heap plus indexes −16%.
 

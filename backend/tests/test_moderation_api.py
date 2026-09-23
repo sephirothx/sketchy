@@ -3303,6 +3303,72 @@ async def test_an_acknowledgement_cannot_name_somebody_elses_report(env):
     assert (await theirs_http.get("/api/reports/reviewed")).json()["count"] == 1
 
 
+async def test_a_rest_report_that_will_be_refused_never_waits_for_the_queue(monkeypatch):
+    """R-MOD-21 is a rule about both paths: a refused report must not pay the
+    flush. On this one the flush ran before every database-side refusal, so an
+    unknown player or a duplicate cost the whole bound (#972 sixth review)."""
+    from app.services.message_retention import MessageRetentionService
+
+    monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
+    factory, engine = await create_test_db()
+    retention = MessageRetentionService(factory)
+    users = SqlAlchemyUserRepository(factory)
+    flushes: list[int] = []
+
+    async def counted_flush():
+        flushes.append(1)
+        await retention.flush()
+
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(users, factory))
+    app.include_router(create_moderation_router(factory, flush_retained_messages=counted_flush))
+    reporter_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    target_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    try:
+        await register(reporter_http, "RefusedReporter")
+        target = await register(target_http, "RefusedTarget")
+        line = await retention.record_lobby(
+            user_id=target["id"], display_name="RefusedTarget", name_color=None,
+            is_anonymous=False, text="said just now", sent_at=datetime.now(timezone.utc),
+        )
+
+        nobody = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": "01920000-0000-7000-8000-00000000dead",
+                "reason": "harassment", "details": "Nobody.", "messageIds": [line],
+            },
+        )
+        assert nobody.status_code == 404, nobody.text
+        assert flushes == [], "a report nobody can receive waits for nothing"
+
+        filed = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"], "reason": "harassment",
+                "details": "Just now.", "messageIds": [line],
+            },
+        )
+        assert filed.status_code == 201, filed.text
+        assert flushes == [1], "the one that is filed does wait"
+
+        again = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"], "reason": "harassment",
+                "details": "Again.", "messageIds": [line],
+            },
+        )
+        assert again.status_code == 409, again.text
+        assert flushes == [1], "and a duplicate does not"
+    finally:
+        await retention.aclose()
+        await reporter_http.aclose()
+        await target_http.aclose()
+        await engine.dispose()
+
+
 async def test_a_lobby_line_cited_the_moment_it_was_said_is_found(monkeypatch):
     """The line's id is handed out when it is queued, and the writer lingers
     a quarter of a second for the rest of a batch (#972): a report citing it
