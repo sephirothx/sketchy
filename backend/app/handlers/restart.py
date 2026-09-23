@@ -87,6 +87,10 @@ async def _cancel_restart(
     room.restart_vote_cooldown_until = (
         time.time() + timing.restart_vote_cooldown_seconds
     )
+    # The game the vote gave up on stopped when the vote passed; a cancelled
+    # restart does not bring it back, and a game that stops is recorded
+    # (R-HIST-05, #993). Clears `room.game` itself.
+    await ctx.game_flow.record_abandoned_game(room)
     room.state = "waiting"
     room.game = None
     await ctx.game_flow.announce(

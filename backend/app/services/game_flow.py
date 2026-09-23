@@ -763,6 +763,14 @@ class GameFlowService:
             raise RoomNoLongerStartableError(
                 "Need at least 2 active non-AFK players to start"
             )
+        if room.game is not None:
+            # A restart replaces a game that never ended. Its turns were drawn
+            # and guessed, and R-HIST-05 says a game that stops is recorded;
+            # the first version of this simply overwrote it, and a restart
+            # vote was the one way to lose a game without a trace (#993).
+            # Recorded before anything below is reset, since the scores, the
+            # departed seats and the recap it is made of are about to go.
+            await self.record_abandoned_game(room)
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0
         room.last_game_scores = []
