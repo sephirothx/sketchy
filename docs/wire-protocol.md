@@ -2032,9 +2032,10 @@ provoked one sent a payload no screen can produce.
 Every body model descends from `ControlFreeModel`
 ([`backend/app/request_text.py`](../backend/app/request_text.py)), so a string carrying a
 control character (§3) is one of those failures — 422, naming the field — rather than
-the 500 PostgreSQL's refusal of a NUL used to become; the two query strings that reach a
-statement (`GET /api/admin/players?q=`, `GET /api/prompt-lists/community?tag=`) are
-checked the same way by hand.
+the 500 PostgreSQL's refusal of a NUL used to become. The few strings that reach a
+statement without a body model are checked by hand: the community catalogue's `tag`
+and the prompt-stats route's `{slug}` (answered as not found), and the operators' own
+filters (`GET /api/admin/players?q=`, `/api/admin/metrics/events`, `/api/admin/audit`).
 
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
 a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only

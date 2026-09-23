@@ -5,6 +5,7 @@ R-MOD-21 for the flush a report waits on, #972 for the batching.
 from __future__ import annotations
 
 import asyncio
+import os
 import contextlib
 import time
 from datetime import datetime, timedelta, timezone
@@ -1022,8 +1023,8 @@ async def test_one_row_the_database_refuses_does_not_cost_the_batch():
     """PostgreSQL refuses U+0000 in text, and a batch insert fails as one:
     one line with a NUL used to drop the hundred lines queued beside it, and
     those were other people's report evidence (#995). SQLite takes the byte,
-    so the refusal is staged: the first batch write fails the way a data
-    error does, and the rows are then written one at a time."""
+    so the refusal is staged: the first batch write fails the way the asyncpg
+    dialect reports one, and the rows are then written one at a time."""
     factory, engine = await create_test_db()
     room_manager = RoomManager()
     try:
@@ -1036,17 +1037,27 @@ async def test_one_row_the_database_refuses_does_not_cost_the_batch():
         player.sid = "sid-talker"
         service = MessageRetentionService(factory, batch_size=3, linger_seconds=0.05)
 
-        from sqlalchemy.exc import DataError
+        from sqlalchemy.exc import DBAPIError
+
+        class _NulRefused(Exception):
+            """What asyncpg raises for a NUL in text, as the dialect wraps it:
+            a bare DBAPIError around an error carrying the SQLSTATE - never
+            SQLAlchemy's DataError, which is why the fallback reads the code."""
+
+            pgcode = "22021"
+
+        def refusal() -> DBAPIError:
+            return DBAPIError("INSERT", {}, _NulRefused("invalid byte sequence for encoding UTF8"))
 
         real_write = service._write
         refused: list[str] = []
 
         async def write(batch):
             if len(batch) > 1:
-                raise DataError("INSERT", {}, ValueError("invalid byte sequence"))
+                raise refusal()
             if batch[0].text == "bad":
                 refused.append(str(batch[0].id))
-                raise DataError("INSERT", {}, ValueError("invalid byte sequence"))
+                raise refusal()
             await real_write(batch)
 
         service._write = write  # type: ignore[method-assign]
@@ -1061,5 +1072,77 @@ async def test_one_row_the_database_refuses_does_not_cost_the_batch():
             kept = sorted((await session.scalars(select(RoomMessage.text))).all())
         assert kept == ["good one", "good two"]
         assert len(refused) == 1
+    finally:
+        await engine.dispose()
+
+
+async def test_a_lost_connection_is_not_retried_row_by_row():
+    """The fallback is for a row the database refuses; an outage would only
+    be waited out a hundred times."""
+    factory, engine = await create_test_db()
+    room_manager = RoomManager()
+    try:
+        room = room_manager.create_room(name="Outage")
+        talker_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=talker_id, display_name="Talker"))
+        player = room_manager.add_player(room, "Talker", user_id=str(talker_id))
+        player.sid = "sid-talker"
+        service = MessageRetentionService(factory, batch_size=2, linger_seconds=0.05)
+
+        from sqlalchemy.exc import DBAPIError
+
+        class _Gone(Exception):
+            pgcode = "08006"
+
+        calls: list[int] = []
+
+        async def write(batch):
+            calls.append(len(batch))
+            raise DBAPIError("INSERT", {}, _Gone("connection failure"))
+
+        service._write = write  # type: ignore[method-assign]
+        for text in ("one", "two"):
+            await service.record(
+                room=room, player=player, text=text, message_kind="chat",
+                audience="room", recipient_sids=[player.sid],
+            )
+        await service.aclose()
+
+        assert calls == [2], "the batch failed once and was not retried singly"
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"),
+    reason="PostgreSQL refuses the NUL; SQLite stores it",
+)
+async def test_on_postgresql_a_real_nul_costs_only_its_own_row():
+    """The bug as it happened, not as staged: the line reaches the writer
+    with the byte in it (the validators are the other half of #995), the
+    batch insert fails on it, and the other lines are still kept."""
+    factory, engine = await create_test_db()
+    room_manager = RoomManager()
+    try:
+        room = room_manager.create_room(name="Real NUL")
+        talker_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=talker_id, display_name="Talker"))
+        player = room_manager.add_player(room, "Talker", user_id=str(talker_id))
+        player.sid = "sid-talker"
+        service = MessageRetentionService(factory, batch_size=3, linger_seconds=0.05)
+        for text in ("before", "nul\x00here", "after"):
+            await service.record(
+                room=room, player=player, text=text, message_kind="chat",
+                audience="room", recipient_sids=[player.sid],
+            )
+        await service.aclose()
+
+        async with factory() as session:
+            kept = sorted((await session.scalars(select(RoomMessage.text))).all())
+        assert kept == ["after", "before"]
     finally:
         await engine.dispose()

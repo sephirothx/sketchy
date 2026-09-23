@@ -617,6 +617,10 @@ def create_prompt_list_router(
         of data, and ranking on that would fill "hardest" with prompts nobody
         has drawn yet.
         """
+        if has_control_characters(slug):
+            # A slug is a path segment; one carrying a NUL names no list, and
+            # PostgreSQL would refuse the comparison rather than answer it.
+            raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
         if not stats_limiter.check(client_key(request)):
             raise Refusal(
                 429,

@@ -667,3 +667,20 @@ async def test_the_scrape_reports_database_readiness_without_anyone_asking_ready
     monkeypatch.setattr(probe, "cache_seconds", 0.0)
     text = (await new_client().get("/metrics", headers={"authorization": "Bearer scrape-me"})).text
     assert "sketchy_db_ready 0" in text
+
+
+async def test_a_filter_with_a_control_character_is_refused_before_the_statement(env):
+    """The filter reaches the statement as it is, and PostgreSQL refuses a
+    NUL in it: a 500 with a traceback, where 422 says what was wrong (#995)."""
+    new_client, factory = env
+    admin = new_client()
+    operator = await register(admin, "FilterReader")
+    await promote(factory, operator["id"])
+
+    for path in (
+        "/api/admin/audit?eventType=ban%00created",
+        "/api/admin/audit?targetId=x%00",
+        "/api/admin/metrics/events?roomId=r%00",
+    ):
+        response = await admin.get(path)
+        assert response.status_code == 422, (path, response.text)
