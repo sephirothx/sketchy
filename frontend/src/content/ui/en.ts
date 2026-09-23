@@ -1427,7 +1427,6 @@ export const EN = {
     requestCouldNotBeSent: "That request could not be sent.",
     nowFriends: (p: { name: string }) => `You and ${p.name} are now friends.`,
     friendRequestSent: (p: { name: string }) => `Friend request sent to ${p.name}.`,
-    nothingToDoAbout: (p: { name: string }) => `Nothing to do about ${p.name} right now.`,
     rank: (p: { rank: number }) => `Rank ${p.rank}`,
     moderationFor: (p: { name: string }) => `Moderation for ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Moderation actions for ${p.name}`,

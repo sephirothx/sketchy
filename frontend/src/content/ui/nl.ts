@@ -1419,7 +1419,6 @@ export const NL: Catalogue = {
     requestCouldNotBeSent: "Dit verzoek kon niet verstuurd worden.",
     nowFriends: (p: { name: string }) => `Jij en ${p.name} zijn nu vrienden.`,
     friendRequestSent: (p: { name: string }) => `Vriendschapsverzoek gestuurd naar ${p.name}.`,
-    nothingToDoAbout: (p: { name: string }) => `Er valt nu niets te doen met ${p.name}.`,
     rank: (p: { rank: number }) => `Plek ${p.rank}`,
     moderationFor: (p: { name: string }) => `Moderatie voor ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Moderatieacties voor ${p.name}`,

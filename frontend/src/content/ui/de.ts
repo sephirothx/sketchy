@@ -1419,7 +1419,6 @@ export const DE: Catalogue = {
     requestCouldNotBeSent: "Diese Anfrage konnte nicht gesendet werden.",
     nowFriends: (p: { name: string }) => `Du und ${p.name} seid jetzt Freunde.`,
     friendRequestSent: (p: { name: string }) => `Freundschaftsanfrage an ${p.name} gesendet.`,
-    nothingToDoAbout: (p: { name: string }) => `Mit ${p.name} ist gerade nichts zu tun.`,
     rank: (p: { rank: number }) => `Platz ${p.rank}`,
     moderationFor: (p: { name: string }) => `Moderation für ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Moderationsaktionen für ${p.name}`,
