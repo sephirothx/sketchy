@@ -816,7 +816,7 @@ async def test_the_shutdown_drain_cancels_and_counts_what_it_cannot_wait_for(cap
         await asyncio.wait_for(ctx.drain_room_cleanups(0.05), timeout=5)
 
     assert task.cancelled(), "the drain does not leave it to the loop closing"
-    assert "Cancelling 1 deferred room cleanup" in caplog.text
+    assert "Cancelled 1 deferred room cleanup" in caplog.text
 
 
 async def test_a_staging_cancelled_by_the_drain_is_counted_as_a_lost_write(monkeypatch):
@@ -912,7 +912,7 @@ async def test_the_drain_waits_for_a_cleanup_another_cleanup_created(caplog):
 
     assert staged.is_set(), "the drain returned while the staging was still running"
     assert ctx.room_cleanups == set()
-    assert "Cancelling" not in caplog.text
+    assert "Cancelled" not in caplog.text
 
 
 def test_the_shutdown_budget_covers_the_encodes_the_process_can_hold(monkeypatch):
@@ -943,10 +943,9 @@ def test_the_shutdown_hands_the_drain_that_budget():
     """The allowance is only worth computing if the process uses it: the drain
     tests pass their own budget, so nothing exercised the one the shutdown
     hands over (#976 fifth review)."""
-    import inspect
 
-    import app.main as main_module
     from app.services.game_flow import (
+        ENVELOPE_ENCODE_SECONDS,
         HISTORY_WRITE_TIMEOUT_SECONDS,
         history_encode_drain_seconds,
         shutdown_cleanup_budget_seconds,
@@ -955,7 +954,10 @@ def test_the_shutdown_hands_the_drain_that_budget():
     budget = shutdown_cleanup_budget_seconds()
     assert budget == history_encode_drain_seconds() + HISTORY_WRITE_TIMEOUT_SECONDS
     assert budget > HISTORY_WRITE_TIMEOUT_SECONDS, "the write bound alone is the old budget"
-    assert "shutdown_cleanup_budget_seconds()" in inspect.getsource(main_module.lifespan)
+    # The measurement the budget is computed from: one stroke-heavy envelope
+    # on the machine #976 measured. Shrinking it shrinks the budget with every
+    # test still green (#976 sixth review).
+    assert ENVELOPE_ENCODE_SECONDS == 0.15
 
 
 def test_each_encode_pool_is_built_once():
@@ -980,10 +982,42 @@ def test_the_cleanups_are_drained_before_the_handoff_worker_stops():
     """The drain ends rooms and stages their games; the bounded replay pass
     below it is what writes them. In the other order every game the drain
     stages misses that pass and waits for the next process (#976 fifth
-    review)."""
+    review). Compared on the calls, because the prose around them mentions
+    both (#976 sixth review)."""
     import inspect
 
     import app.main as main_module
 
     source = inspect.getsource(main_module.lifespan)
-    assert source.index("drain_room_cleanups") < source.index("stop_handoff_worker")
+    drain = source.index("await handler_context.drain_room_cleanups(")
+    assert drain < source.index("await stop_handoff_worker(")
+
+
+async def test_a_cleanup_deferred_at_the_deadline_is_cancelled_too(caplog):
+    """The re-read fixed the waiting half; the cancelling half still worked
+    from a snapshot, so a staging deferred by a teardown that was itself about
+    to be cancelled escaped the shutdown entirely (#976 sixth review)."""
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    escaped = asyncio.Event()
+
+    async def staging():
+        await asyncio.sleep(0.5)
+        escaped.set()
+
+    async def teardown():
+        await asyncio.sleep(0)
+        ctx.defer_cleanup(staging())
+        await asyncio.sleep(5)  # still running when the budget is spent
+
+    ctx.defer_cleanup(teardown())
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(0.1), timeout=5)
+
+    assert ctx.room_cleanups == set(), "nothing is left running"
+    assert not escaped.is_set(), "the staging was cancelled, not left to the loop"
+    assert "Cancelled 2 deferred room cleanup" in caplog.text
