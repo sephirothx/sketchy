@@ -2586,8 +2586,11 @@ committed as JSON, with provisioning for the Prometheus datasource and the dashb
 Grafana reads two variables: `SKETCHY_PROMETHEUS_URL` and `SKETCHY_GRAFANA_DASHBOARDS`
 (the absolute path of `ops/grafana/dashboards`). They are provisioned read-only - change
 a panel in `generate.py`, run `python3 ops/grafana/generate.py`, commit both - and CI
-refuses a committed dashboard that differs from its source, or a query naming a series
-nothing exposes. The trends they draw past a fortnight depend on Prometheus's retention,
+refuses a committed dashboard that differs from its source, a query naming a series
+nothing exposes, a legend naming a label its query aggregated away, or a panel whose
+type or unit Grafana would not know. Deleting a dashboard's file deletes it from
+Grafana on the next reload, which is the point of the repository holding the whole
+list. The trends they draw past a fortnight depend on Prometheus's retention,
 15 days by default: run it with `--storage.tsdb.retention.time=1y` (or longer). Grafana 12
 and later install the Prometheus datasource plugin from grafana.com on first start; a
 Grafana without internet access needs `grafana cli plugins install prometheus` first.

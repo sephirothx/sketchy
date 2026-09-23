@@ -172,7 +172,7 @@ jobs:
           .venv/bin/pip install -q -r requirements-dev.txt
 
       - name: Lint
-        run: .venv/bin/ruff check app tests ../scripts/check_tracked_artifacts.py
+        run: .venv/bin/ruff check app tests ../scripts/check_tracked_artifacts.py ../ops/grafana/generate.py
 
       # --cov-branch, because "unexecuted branches" is the finding: a statement
       # measure marks an `if` covered the moment it is reached, whatever the

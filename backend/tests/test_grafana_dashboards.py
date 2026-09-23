@@ -15,14 +15,13 @@ from __future__ import annotations
 import importlib.util
 import json
 from pathlib import Path
+import re
 import sys
 
 import yaml
 
 from tests.test_alert_rules import (
-    EXTERNAL_METRIC,
     EXTERNAL_SERIES,
-    METRIC,
     RULE_FILES,
     exposed_names,
     load,
@@ -54,15 +53,116 @@ def test_the_committed_dashboards_are_the_generators_output():
     assert stale == [], f"regenerate with `python3 ops/grafana/generate.py`: {stale}"
 
 
+# What a query may name besides a series: PromQL's own vocabulary. Anything
+# else an expression mentions has to be a series something exposes - checking
+# only the `sketchy_`/`pg_` namespaces let `process_resident_memory_bytes`,
+# the name a panel gets wrong by forgetting our prefix, through unread.
+PROMQL_WORDS = frozenset(
+    """
+    and by bool group_left group_right ignoring offset on or unless without le quantile
+    inf nan start end
+    """.split()
+)
+LABEL_BLOCK = re.compile(r"\{[^{}]*\}")
+GROUPING = re.compile(r"\b(?:by|without|ignoring|on|group_left|group_right)\s*\([^()]*\)")
+DURATION = re.compile(r"\[[^\[\]]*\]")
+CALL = re.compile(r"\b[a-zA-Z_:][a-zA-Z0-9_:]*\s*\(")
+IDENTIFIER = re.compile(r"[a-zA-Z_:][a-zA-Z0-9_:]*")
+
+
+def series_named(expr: str) -> set[str]:
+    """Every series an expression reads, with labels, groupings, durations and
+    function calls taken out first."""
+    stripped = DURATION.sub(" ", GROUPING.sub(" ", LABEL_BLOCK.sub(" ", expr)))
+    stripped = CALL.sub(" ", stripped)
+    return {name for name in IDENTIFIER.findall(stripped) if name not in PROMQL_WORDS}
+
+
 def test_every_series_a_panel_queries_is_one_something_exposes():
-    known = exposed_names() | {name for path in RULE_FILES for name in rule_names(load(path))}
+    known = exposed_names() | {name for path in RULE_FILES for name in rule_names(load(path))} | set(EXTERNAL_SERIES)
     unknown: dict[str, set[str]] = {}
     for dashboard, panel, expr in generator().expressions():
-        missing = {metric for metric in METRIC.findall(expr) if metric not in known}
-        missing |= {metric for metric in EXTERNAL_METRIC.findall(expr) if metric not in EXTERNAL_SERIES}
+        missing = series_named(expr) - known
         if missing:
             unknown[f"{dashboard} / {panel}"] = missing
     assert unknown == {}, unknown
+
+
+def test_no_query_reaches_grafana_with_its_window_unresolved():
+    """Queries are written with a placeholder for the rate window, and each
+    dashboard's own window replaces it; one left behind is a broken panel."""
+    placeholder = generator().WINDOW
+    for _, panel, expr in generator().expressions():
+        assert placeholder not in expr, panel
+    for name, dashboard in dashboards().items():
+        assert placeholder not in json.dumps(dashboard), name
+
+
+def test_a_windows_rates_fit_inside_the_range_the_dashboard_opens_on():
+    """Grafana's step at 7 d is tens of minutes: a 5 m window inside it samples
+    a fraction of the range, and a spike between two steps is never drawn."""
+    hours = {"now-6h": 6, "now-24h": 24, "now-7d": 168}
+    for dashboard in generator().DASHBOARDS:
+        window = dashboard.rate
+        minutes = int(window[:-1]) * (60 if window.endswith("h") else 1)
+        # Grafana asks for ~800 points, so the step is the range over 800.
+        step_minutes = hours[dashboard.time_from] * 60 / 800
+        assert minutes >= step_minutes, (dashboard.uid, window, dashboard.time_from)
+
+
+def test_every_panel_is_a_kind_and_a_unit_grafana_knows():
+    """A typo in either is silent: an unknown type renders "Panel plugin not
+    found", an unknown unit quietly drops the formatting."""
+    kinds = {"timeseries", "stat", "row"}
+    units = {"short", "s", "bytes", "Bps", "reqps", "percentunit", "none"}
+    for name, dashboard in dashboards().items():
+        for panel in dashboard["panels"]:
+            assert panel["type"] in kinds, (name, panel["title"], panel["type"])
+            if panel["type"] == "row":
+                continue
+            unit = panel["fieldConfig"]["defaults"]["unit"]
+            assert unit in units, (name, panel["title"], unit)
+
+
+def test_every_legend_names_a_label_its_query_still_has():
+    """`{{transport}}` on a query that summed the label away renders as the
+    literal text, on every line of the panel."""
+    for name, dashboard in dashboards().items():
+        for panel in dashboard["panels"]:
+            if panel["type"] == "row":
+                continue
+            for target in panel["targets"]:
+                wanted = set(re.findall(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}", target["legendFormat"]))
+                if not wanted:
+                    continue
+                kept = set(re.findall(r"\bby\s*\(([^()]*)\)", target["expr"]))
+                kept = {label.strip() for group in kept for label in group.split(",")}
+                # An expression that never aggregates keeps every label it
+                # read, and so does topk, which selects series rather than
+                # combining them.
+                if not re.search(r"\b(?:sum|avg|min|max|count|stddev|stdvar|quantile)\s*\(", target["expr"]):
+                    continue
+                assert wanted <= kept, (name, panel["title"], wanted - kept)
+
+
+def test_every_expression_is_balanced():
+    """The series check reads names, not syntax; Grafana would reject the
+    query at load and draw nothing."""
+    for _, panel, expr in generator().expressions():
+        for opening, closing in ("()", "[]", "{}"):
+            assert expr.count(opening) == expr.count(closing), (panel, expr)
+
+
+def test_a_row_of_any_size_lays_out(): 
+    """The layout is computed per row, and a shape no dashboard uses yet - a
+    single full-width graph - used to raise `zip()` instead of laying out."""
+    module = generator()
+    panel = module.graph("One", module.Query("sketchy_rooms_live", "rooms"))
+    for count in range(1, 10):
+        row = module.Row("Row", (panel,) * count)
+        widths = module._widths(row)
+        assert len(widths) == count
+        assert all(0 < width <= 24 for width in widths)
 
 
 def test_every_panel_has_a_place_of_its_own():

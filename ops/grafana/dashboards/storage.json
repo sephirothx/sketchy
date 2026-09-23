@@ -134,7 +134,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le, format) (rate(sketchy_drawing_stored_bytes_bucket[5m])))",
+          "expr": "histogram_quantile(0.5, sum by (le, format) (rate(sketchy_drawing_stored_bytes_bucket[1h])))",
           "legendFormat": "p50 {{format}}",
           "range": true,
           "refId": "A"
@@ -144,7 +144,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le, format) (rate(sketchy_drawing_stored_bytes_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le, format) (rate(sketchy_drawing_stored_bytes_bucket[1h])))",
           "legendFormat": "p95 {{format}}",
           "range": true,
           "refId": "B"
@@ -158,7 +158,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Stored bytes over the wire frame's, whether a second encoding (#899) would earn a permanent decoder.",
+      "description": "Stored bytes over the wire frame's, whether a second encoding (#899) would earn a permanent decoder. Undivided rather than clamped: a window with no drawing in it is a gap, not perfect compression.",
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
@@ -202,7 +202,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(sketchy_drawing_stored_bytes_sum[5m])) / clamp_min(sum(rate(sketchy_drawing_raw_bytes_sum[5m])), 1)",
+          "expr": "sum(rate(sketchy_drawing_stored_bytes_sum[1h])) / sum(rate(sketchy_drawing_raw_bytes_sum[1h]))",
           "legendFormat": "stored / wire",
           "range": true,
           "refId": "A"
@@ -216,7 +216,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "The mean is exact; p95 is the bucket boundary above it.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -258,8 +258,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(sketchy_drawing_actions_bucket[5m])))",
-          "legendFormat": "p50",
+          "expr": "sum (rate(sketchy_drawing_actions_sum[1h])) / sum (rate(sketchy_drawing_actions_count[1h]))",
+          "legendFormat": "mean",
           "range": true,
           "refId": "A"
         },
@@ -268,7 +268,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(sketchy_drawing_actions_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sketchy_drawing_actions_bucket[1h])))",
           "legendFormat": "p95",
           "range": true,
           "refId": "B"
@@ -295,7 +295,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Median rows one finished game wrote, per table.",
+      "description": "Rows one finished game wrote, per table, averaged over the window: the tables that write one row a game read exactly 1, which a bucketed median cannot say.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -337,7 +337,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le, table) (rate(sketchy_history_rows_per_game_bucket[5m])))",
+          "expr": "sum by (table) (rate(sketchy_history_rows_per_game_sum[1h])) / sum by (table) (rate(sketchy_history_rows_per_game_count[1h]))",
           "legendFormat": "{{table}}",
           "range": true,
           "refId": "A"
@@ -393,7 +393,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(sketchy_handoff_envelope_bytes_bucket[5m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(sketchy_handoff_envelope_bytes_bucket[1h])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -403,7 +403,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(sketchy_handoff_envelope_bytes_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sketchy_handoff_envelope_bytes_bucket[1h])))",
           "legendFormat": "p95",
           "range": true,
           "refId": "B"
@@ -486,7 +486,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "How many sockets one retained line went to, by audience, averaged over the window.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -528,20 +528,10 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le, audience) (rate(sketchy_message_recipients_bucket[5m])))",
-          "legendFormat": "p50 {{audience}}",
+          "expr": "sum by (audience) (rate(sketchy_message_recipients_sum[1h])) / sum by (audience) (rate(sketchy_message_recipients_count[1h]))",
+          "legendFormat": "{{audience}}",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le, audience) (rate(sketchy_message_recipients_bucket[5m])))",
-          "legendFormat": "p95 {{audience}}",
-          "range": true,
-          "refId": "B"
         }
       ],
       "title": "Recipients per line",
@@ -594,7 +584,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.5, sum by (le) (rate(sketchy_export_artifact_bytes_bucket[5m])))",
+          "expr": "histogram_quantile(0.5, sum by (le) (rate(sketchy_export_artifact_bytes_bucket[1h])))",
           "legendFormat": "p50",
           "range": true,
           "refId": "A"
@@ -604,7 +594,7 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(sketchy_export_artifact_bytes_bucket[5m])))",
+          "expr": "histogram_quantile(0.95, sum by (le) (rate(sketchy_export_artifact_bytes_bucket[1h])))",
           "legendFormat": "p95",
           "range": true,
           "refId": "B"

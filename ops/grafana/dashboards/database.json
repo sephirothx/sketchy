@@ -782,10 +782,11 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Open connections over max_connections, as SketchyPostgresConnectionsHigh reads it.",
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "percentunit",
+          "min": 0,
           "custom": {
             "drawStyle": "line",
             "fillOpacity": 10,
@@ -795,7 +796,8 @@
             "stacking": {
               "mode": "none",
               "group": "A"
-            }
+            },
+            "axisSoftMax": 1
           }
         },
         "overrides": []
@@ -824,20 +826,10 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(pg_stat_activity_count)",
-          "legendFormat": "open",
+          "expr": "sketchy:pg_connection_ratio",
+          "legendFormat": "in use",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "max(pg_settings_max_connections)",
-          "legendFormat": "max_connections",
-          "range": true,
-          "refId": "B"
         }
       ],
       "title": "Connections",
@@ -848,7 +840,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "The rule SketchyPostgresCacheMisses reads, per database - computing it here instead would count the template databases and disagree with the page.",
       "fieldConfig": {
         "defaults": {
           "unit": "percentunit",
@@ -892,8 +884,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(rate(pg_stat_database_blks_hit[5m])) / clamp_min(sum(rate(pg_stat_database_blks_hit[5m])) + sum(rate(pg_stat_database_blks_read[5m])), 1e-9)",
-          "legendFormat": "hit",
+          "expr": "sketchy:pg_cache_hit_ratio:1h",
+          "legendFormat": "{{datname}}",
           "range": true,
           "refId": "A"
         }
@@ -962,7 +954,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Ours only: the maintenance and template databases are not what storage_report or the growth rule measure.",
       "fieldConfig": {
         "defaults": {
           "unit": "bytes",
@@ -1004,8 +996,8 @@
             "type": "prometheus",
             "uid": "${datasource}"
           },
-          "expr": "sum(pg_database_size_bytes)",
-          "legendFormat": "size",
+          "expr": "sum by (datname) (pg_database_size_bytes{datname!~\"postgres|template0|template1\"})",
+          "legendFormat": "{{datname}}",
           "range": true,
           "refId": "A"
         }

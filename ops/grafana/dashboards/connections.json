@@ -682,7 +682,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "Whether a reconnect's prefix claim was answered with a tail. hash is a claim made mid-stroke (#963).",
+      "description": "Whether a reconnect's prefix claim was answered with a tail. open_path is a claim made mid-stroke, by design; hash is client and server disagreeing about the history they share (#963).",
       "fieldConfig": {
         "defaults": {
           "unit": "short",

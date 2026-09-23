@@ -16,10 +16,14 @@ under it shows an empty graph, and nobody notices until the day it matters.
 
 Panels read the recording rules wherever an alert already defines the number,
 so a graph and the alert beside it cannot disagree about what "p95" means, and
-every rate is over the same **5 minutes** they are (`docs/slo.md`, *How to read
-the numbers*) - not Grafana's `$__rate_interval`, which at a 15 s scrape is a
+a rate is over the same **5 minutes** they are (`docs/slo.md`, *How to read the
+numbers*) - not Grafana's `$__rate_interval`, which at a 15 s scrape is a
 minute and left the sparse histograms, a phase timer's lateness above all, in
-gaps. Counts of events are a rolling hour at every step, never "per step":
+gaps. A dashboard whose default range is days uses an hour instead
+(`SLOW_RATE`): Grafana's step at 7 d is 10-15 minutes, and a 5 m window inside
+a 15 m step is a third of the range drawn and the rest not looked at. That is
+why the overview opens on a day - the spikes it exists for are the ones a
+week-wide step steps over. Counts of events are a rolling hour at every step, never "per step":
 a step-sized bucket had no points at all on a range shorter than its step,
 so every count read "No data" exactly when zoomed in on an incident.
 
@@ -35,8 +39,18 @@ from pathlib import Path
 
 OUT = Path(__file__).resolve().parent / "dashboards"
 DATASOURCE = {"type": "prometheus", "uid": "${datasource}"}
-# The window of every rate, as the recording rules and the overview use it.
+# The window of every rate, as the recording rules and the alerts use it.
 RATE = "5m"
+# What a dashboard whose default range is days uses instead: Grafana's step at
+# 7 d is 10-15 minutes, and a 5 m window inside a 15 m step samples a third of
+# the range - a burst between two steps is simply not drawn (#968).
+SLOW_RATE = "1h"
+# What the helpers write in place of a window, since a query is built before it
+# knows which dashboard holds it; `render` puts that dashboard's window in.
+WINDOW = "<window>"
+# The databases `ops/prometheus/rules/sketchy-postgres.yml` leaves out, so a
+# panel and the alert beside it are counting the same rows.
+PG_OWN = 'datname!~"postgres|template0|template1"'
 GRID_WIDTH = 24
 
 
@@ -72,6 +86,7 @@ class Dashboard:
     description: str
     rows: tuple[Row, ...]
     time_from: str = "now-6h"
+    rate: str = RATE
     tags: tuple[str, ...] = field(default=("sketchy",))
 
 
@@ -92,7 +107,7 @@ def quantiles(metric: str, *, by: str = "", qs=(0.5, 0.95, 0.99)) -> tuple[Query
     suffix = " {{" + by + "}}" if by else ""
     return tuple(
         Query(
-            f"histogram_quantile({q}, sum by ({grouping}) (rate({metric}_bucket[{RATE}])))",
+            f"histogram_quantile({q}, sum by ({grouping}) (rate({metric}_bucket[{WINDOW}])))",
             f"p{round(q * 100)}{suffix}",
         )
         for q in qs
@@ -116,11 +131,27 @@ def ratio_or_zero(recorded: str, traffic: str) -> Query:
     traffic and nothing failed. The rule is empty until an error series first
     exists - fine for an alert, misleading on a graph - and multiplying the
     traffic by zero keeps a server that is down from reading as healthy."""
-    return Query(f"{recorded} or (sum(rate({traffic}[{RATE}])) * 0)")
+    return Query(f"{recorded} or (sum(rate({traffic}[{WINDOW}])) * 0)")
 
 
-def by_label(metric: str, label: str, *, window: str = RATE) -> Query:
-    return Query(f"sum by ({label}) (rate({metric}[{window}]))", "{{" + label + "}}")
+def mean(metric: str, *, by: str = "") -> Query:
+    """The average observation, from a histogram's own sum and count.
+
+    `histogram_quantile` interpolates inside a bucket, and these histograms
+    count small integers whose first bucket is `le="1"`: a table that writes
+    exactly one row per game has every observation in that bucket, and the
+    median comes back as 0.5 rows - half of an answer that is never anything
+    but 1. The mean of the same observations is exact for them."""
+    grouping = f"sum by ({by})" if by else "sum"
+    legend = "{{" + by + "}}" if by else "mean"
+    return Query(
+        f"{grouping} (rate({metric}_sum[{WINDOW}])) / {grouping} (rate({metric}_count[{WINDOW}]))",
+        legend,
+    )
+
+
+def by_label(metric: str, label: str) -> Query:
+    return Query(f"sum by ({label}) (rate({metric}[{WINDOW}]))", "{{" + label + "}}")
 
 
 # --------------------------------------------------------------- dashboards
@@ -129,7 +160,10 @@ OVERVIEW = Dashboard(
     uid="sketchy-overview",
     title="Sketchy · Overview",
     description="Is the game being played, and is the one worker keeping up with it.",
-    time_from="now-7d",
+    # A day, not a week: at 7 d Grafana steps past a 5 m window and stops
+    # drawing the spikes this board exists for. The counts are a rolling
+    # hour, so a day still reads as a trend.
+    time_from="now-24h",
     rows=(
         Row("Now", (
             stat("Players online", "sketchy_players_live", description="Seats taken in a room right now."),
@@ -191,7 +225,7 @@ OVERVIEW = Dashboard(
                 unit="percentunit",
             ),
             graph("Memory", Query("sketchy_process_resident_memory_bytes", "resident"), unit="bytes"),
-            graph("CPU", Query(f"rate(sketchy_process_cpu_seconds_total[{RATE}])", "cores"), unit="short", decimals=2),
+            graph("CPU", Query(f"rate(sketchy_process_cpu_seconds_total[{WINDOW}])", "cores"), unit="short", decimals=2),
         )),
     ),
 )
@@ -206,7 +240,7 @@ CONNECTIONS = Dashboard(
             graph(
                 "Handshakes and upgrades",
                 by_label("sketchy_socket_handshake_transport_total", "transport"),
-                Query(f"sum(rate(sketchy_socket_upgrades_total[{RATE}]))", "upgraded to websocket"),
+                Query(f"sum(rate(sketchy_socket_upgrades_total[{WINDOW}]))", "upgraded to websocket"),
                 description="Per second. A polling share that stays high is a proxy dropping upgrades (SketchyPollingShareHigh).",
                 unit="reqps",
             ),
@@ -253,14 +287,14 @@ CONNECTIONS = Dashboard(
             graph(
                 "Canvas tail claims, per hour",
                 hourly_by("sketchy_canvas_tail_claims_total", "result"),
-                description="Whether a reconnect's prefix claim was answered with a tail. hash is a claim made mid-stroke (#963).",
+                description="Whether a reconnect's prefix claim was answered with a tail. open_path is a claim made mid-stroke, by design; hash is client and server disagreeing about the history they share (#963).",
                 stack=True,
             ),
             graph("Canvas recovery notices", by_label("sketchy_canvas_recovery_notices_total", "reason"), unit="reqps", stack=True),
             graph(
                 "Bytes out",
-                Query(f"sum(rate(sketchy_socket_bytes_out_total[{RATE}]))", "packets, before compression"),
-                Query(f"sum(rate(sketchy_ws_wire_bytes_out_total[{RATE}]))", "WebSocket wire, after compression"),
+                Query(f"sum(rate(sketchy_socket_bytes_out_total[{WINDOW}]))", "packets, before compression"),
+                Query(f"sum(rate(sketchy_ws_wire_bytes_out_total[{WINDOW}]))", "WebSocket wire, after compression"),
                 unit="Bps",
             ),
         )),
@@ -275,18 +309,18 @@ DATABASE = Dashboard(
         Row("Pool", (
             graph("Pool in use", Query("sketchy:db_pool_fill_ratio", "in use"), unit="percentunit"),
             graph("Pool wait p95", Query("sketchy:db_pool_wait_p95_seconds:5m", "p95"), unit="s"),
-            graph("Pool timeouts", Query(f"sum(rate(sketchy_db_pool_timeouts_total[{RATE}]))", "timeouts"), unit="reqps"),
+            graph("Pool timeouts", Query(f"sum(rate(sketchy_db_pool_timeouts_total[{WINDOW}]))", "timeouts"), unit="reqps"),
         )),
         Row("Statements", (
             graph(
                 "Statement p95 by operation",
                 Query(
-                    f"histogram_quantile(0.95, sum by (le, operation) (rate(sketchy_db_query_duration_seconds_bucket[{RATE}])))",
+                    f"histogram_quantile(0.95, sum by (le, operation) (rate(sketchy_db_query_duration_seconds_bucket[{WINDOW}])))",
                     "{{operation}}",
                 ),
                 unit="s",
             ),
-            graph("Statements", Query(f"sum(rate(sketchy_db_queries_total[{RATE}]))", "statements"), unit="reqps"),
+            graph("Statements", Query(f"sum(rate(sketchy_db_queries_total[{WINDOW}]))", "statements"), unit="reqps"),
             graph("Errors by cause", by_label("sketchy_db_query_errors_total", "cause"), unit="reqps", stack=True),
         )),
         Row("Finished games", (
@@ -318,20 +352,23 @@ DATABASE = Dashboard(
         Row("PostgreSQL", (
             graph(
                 "Connections",
-                Query("sum(pg_stat_activity_count)", "open"),
-                Query("max(pg_settings_max_connections)", "max_connections"),
+                Query("sketchy:pg_connection_ratio", "in use"),
+                description="Open connections over max_connections, as SketchyPostgresConnectionsHigh reads it.",
+                unit="percentunit",
             ),
             graph(
                 "Cache hit ratio",
-                Query(
-                    f"sum(rate(pg_stat_database_blks_hit[{RATE}]))"
-                    f" / clamp_min(sum(rate(pg_stat_database_blks_hit[{RATE}])) + sum(rate(pg_stat_database_blks_read[{RATE}])), 1e-9)",
-                    "hit",
-                ),
+                Query("sketchy:pg_cache_hit_ratio:1h", "{{datname}}"),
+                description="The rule SketchyPostgresCacheMisses reads, per database - computing it here instead would count the template databases and disagree with the page.",
                 unit="percentunit",
             ),
             graph("Dead tuples, top 10", Query("topk(10, pg_stat_user_tables_n_dead_tup)", "{{relname}}")),
-            graph("Database size", Query("sum(pg_database_size_bytes)", "size"), unit="bytes"),
+            graph(
+                "Database size",
+                Query(f'sum by (datname) (pg_database_size_bytes{{{PG_OWN}}})', "{{datname}}"),
+                description="Ours only: the maintenance and template databases are not what storage_report or the growth rule measure.",
+                unit="bytes",
+            ),
             graph("Data volume free", Query("sketchy:disk_free_ratio", "free"), unit="percentunit"),
         )),
     ),
@@ -342,6 +379,9 @@ STORAGE = Dashboard(
     title="Sketchy · Storage",
     description="What a finished game and a drawing really cost (#895): the numbers every storage decision turns on.",
     time_from="now-7d",
+    # Sizes are observed once per finished game or stored drawing, and a week
+    # steps in tens of minutes: an hour's window is what keeps them on screen.
+    rate=SLOW_RATE,
     rows=(
         Row("Drawings", (
             graph("Drawing store", Query("sketchy_drawing_store_bytes", "bytes"), unit="bytes"),
@@ -354,23 +394,25 @@ STORAGE = Dashboard(
             graph(
                 "Encoding ratio",
                 Query(
-                    f"sum(rate(sketchy_drawing_stored_bytes_sum[{RATE}]))"
-                    f" / clamp_min(sum(rate(sketchy_drawing_raw_bytes_sum[{RATE}])), 1)",
+                    f"sum(rate(sketchy_drawing_stored_bytes_sum[{WINDOW}]))"
+                    f" / sum(rate(sketchy_drawing_raw_bytes_sum[{WINDOW}]))",
                     "stored / wire",
                 ),
-                description="Stored bytes over the wire frame's, whether a second encoding (#899) would earn a permanent decoder.",
+                description="Stored bytes over the wire frame's, whether a second encoding (#899) would earn a permanent decoder. Undivided rather than clamped: a window with no drawing in it is a gap, not perfect compression.",
                 unit="percentunit",
             ),
-            graph("Actions per drawing", *quantiles("sketchy_drawing_actions", qs=(0.5, 0.95))),
+            graph(
+                "Actions per drawing",
+                mean("sketchy_drawing_actions"),
+                *quantiles("sketchy_drawing_actions", qs=(0.95,)),
+                description="The mean is exact; p95 is the bucket boundary above it.",
+            ),
         )),
         Row("A finished game", (
             graph(
                 "Rows per game by table",
-                Query(
-                    f"histogram_quantile(0.5, sum by (le, table) (rate(sketchy_history_rows_per_game_bucket[{RATE}])))",
-                    "{{table}}",
-                ),
-                description="Median rows one finished game wrote, per table.",
+                mean("sketchy_history_rows_per_game", by="table"),
+                description="Rows one finished game wrote, per table, averaged over the window: the tables that write one row a game read exactly 1, which a bucketed median cannot say.",
             ),
             graph("Handoff envelope", *quantiles("sketchy_handoff_envelope_bytes", qs=(0.5, 0.95)), unit="bytes"),
         )),
@@ -380,7 +422,11 @@ STORAGE = Dashboard(
                 hourly_by("sketchy_messages_retained_total", "kind, audience"),
                 stack=True,
             ),
-            graph("Recipients per line", *quantiles("sketchy_message_recipients", by="audience", qs=(0.5, 0.95))),
+            graph(
+                "Recipients per line",
+                mean("sketchy_message_recipients", by="audience"),
+                description="How many sockets one retained line went to, by audience, averaged over the window.",
+            ),
             graph("Export artifact", *quantiles("sketchy_export_artifact_bytes", qs=(0.5, 0.95)), unit="bytes"),
         )),
     ),
@@ -397,7 +443,7 @@ def _widths(row: Row) -> list[int]:
     line, so no graph is left alone beside an empty half: five are three
     and two."""
     widths = [panel.width for panel in row.panels]
-    if len(row.panels) % 2 == 1 and all(panel.kind == "timeseries" and panel.width == 12 for panel in row.panels):
+    if len(row.panels) >= 3 and len(row.panels) % 2 == 1 and all(panel.kind == "timeseries" and panel.width == 12 for panel in row.panels):
         widths = [8] * 3 + [12] * (len(widths) - 3)
     return widths
 
@@ -473,7 +519,7 @@ def render(dashboard: Dashboard) -> dict:
                 "targets": [
                     {
                         "datasource": DATASOURCE,
-                        "expr": query.expr,
+                        "expr": query.expr.replace(WINDOW, dashboard.rate),
                         "legendFormat": query.legend,
                         "range": True,
                         "refId": chr(ord("A") + index),
@@ -523,16 +569,22 @@ def render(dashboard: Dashboard) -> dict:
 
 
 def outputs() -> dict[Path, str]:
-    return {
+    """One file per dashboard, named for its uid. Two dashboards sharing a uid
+    would write one file and lose the other silently, and Grafana would
+    provision whichever it read last, so it stops here instead."""
+    written = {
         OUT / f"{dashboard.uid.removeprefix('sketchy-')}.json": json.dumps(render(dashboard), indent=2) + "\n"
         for dashboard in DASHBOARDS
     }
+    if len(written) != len(DASHBOARDS):
+        raise SystemExit(f"two dashboards share a uid: {sorted(d.uid for d in DASHBOARDS)}")
+    return written
 
 
 def expressions() -> list[tuple[str, str, str]]:
     """(dashboard, panel, expr) for every query, for the series check."""
     return [
-        (dashboard.uid, panel.title, query.expr)
+        (dashboard.uid, panel.title, query.expr.replace(WINDOW, dashboard.rate))
         for dashboard in DASHBOARDS
         for row in dashboard.rows
         for panel in row.panels
@@ -550,7 +602,10 @@ def stale() -> list[Path]:
 
 
 def main(argv: list[str]) -> int:
-    if "--check" in argv:
+    if argv not in ([], ["--check"]):
+        print(__doc__.rstrip().rsplit("\n\n", 1)[-1], file=sys.stderr)
+        return 2
+    if argv == ["--check"]:
         problems = stale()
         for path in problems:
             print(f"stale: {path.relative_to(OUT.parent.parent.parent)}", file=sys.stderr)
@@ -563,7 +618,7 @@ def main(argv: list[str]) -> int:
             path.unlink()
     for path, text in outputs().items():
         path.write_text(text)
-    print(f"wrote {len(DASHBOARDS)} dashboards to {OUT}")
+    print(f"wrote {len(outputs())} dashboards to {OUT}")
     return 0
 
 

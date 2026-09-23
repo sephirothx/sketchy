@@ -148,10 +148,15 @@ shipping features and look at what spent it.
   scrape example carries the node_exporter job for this reason.
 - Counters reset on restart; `rate()` and `increase()` handle that, plain comparisons
   do not.
-- The dashboards ([`ops/grafana/`](../ops/grafana/), #968) read the same recording
-  rules the alerts do, so a panel and the alert beside it cannot disagree about what a
-  p95 is. A trend older than Prometheus's retention is gone: the default is 15 days, and
-  since #965 no daily roll-up in the database keeps one, so run Prometheus with
+- The dashboards ([`ops/grafana/`](../ops/grafana/), #968) read the recording rule
+  wherever one exists, so a panel and the alert beside it cannot disagree about what a
+  p95, a cache hit ratio or a connection ratio is. Where a panel computes its own
+  number it uses the same window and the same `datname`/`relname` filters the rules
+  use; rates on a board whose default range is days are over an hour instead of five
+  minutes, because Grafana's step at that range is tens of minutes and a five-minute
+  window inside it would draw a fraction of the range. A trend older than
+  Prometheus's retention is gone: the default is 15 days, and since #965 no daily
+  roll-up in the database keeps one, so run Prometheus with
   `--storage.tsdb.retention.time=1y` or longer.
 
 ## Where the probe runs
