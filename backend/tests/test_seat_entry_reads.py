@@ -471,3 +471,87 @@ async def test_a_guest_rebind_keeps_the_payload_and_reads_nothing():
     finally:
         await ctx.timers.close()
         await engine.dispose()
+
+
+async def test_a_stored_preference_of_false_is_still_an_answer():
+    """`stored is None` means "this repository did not read it"; `False` is a
+    preference somebody set. A truthiness test conflates them, and every seat
+    whose preference is off pays a second `SELECT user_settings` - which
+    passed, because every fixture account stores `True` (#980 sixth review)."""
+    from app.handlers.rooms import _rebound_account
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                settings = await session.get(UserSettings, UUID(account.id))
+                settings.colorblind_safe_colors = False
+
+        room = room_manager.create_room(name="Plain")
+        player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        player.is_anonymous = False
+        player.colorblind_safe_colors = True
+
+        statements = _count_statements(engine)
+        _colour, colorblind = await _rebound_account(ctx, player, requested=True)
+
+        assert colorblind is False, "the stored answer, not the payload"
+        assert not any(s.lstrip().startswith("SELECT user_settings.") for s in statements)
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_a_rebind_normalises_the_colour_it_stored():
+    """A colour read back from an account goes through the same normaliser as
+    one off the wire - the column holds whatever an older build wrote, and the
+    rule about which colours are readable lives in the normaliser, not in the
+    schema (#980 sixth review)."""
+    from app.handlers.rooms import _rebound_account
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                from app.db.models import User
+
+                row = await session.get(User, UUID(account.id))
+                row.name_color = "#4F7CFF"
+
+        room = room_manager.create_room(name="Shouty")
+        player = room_manager.add_player(room, "CarefulPlayer", user_id=account.id)
+        player.is_anonymous = False
+
+        colour, _colorblind = await _rebound_account(ctx, player, requested=False)
+
+        assert colour == "#4f7cff"
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
+
+
+async def test_the_entry_path_also_reads_false_as_an_answer():
+    """The same sentinel, on the path a first join walks: `False` is a
+    preference, `None` is "not read". A truthiness test there costs the same
+    second `SELECT user_settings` for every seat whose preference is off
+    (#980 sixth review)."""
+    from app.handlers.identity import resolve_identity
+
+    factory, engine, users, account, token, sio, ctx, room_manager = await _entry_env()
+    try:
+        async with factory() as session:
+            async with session.begin():
+                settings = await session.get(UserSettings, UUID(account.id))
+                settings.colorblind_safe_colors = False
+        await sio.save_session("sid-entry", {"user_id": account.id})
+
+        statements = _count_statements(engine)
+        identity = await resolve_identity(
+            ctx, "sid-entry", "ignored", requested_colorblind_safe_colors=True
+        )
+
+        assert identity.colorblind_safe_colors is False, "the stored answer"
+        assert not any(s.lstrip().startswith("SELECT user_settings.") for s in statements)
+    finally:
+        await ctx.timers.close()
+        await engine.dispose()
