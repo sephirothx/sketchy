@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import signal
 import socket
@@ -32,6 +33,14 @@ _TERMINATION_SIGNALS = frozenset({signal.SIGINT, signal.SIGTERM})
 # that closes first, which it can do without a request in flight (#735).
 KEEP_ALIVE_SECONDS = 75
 
+
+logger = logging.getLogger("sketchy.server")
+
+# How long a forced exit still gives the lifespan teardown (#994): the drain
+# window is already forfeited, and everything inside the teardown carries a
+# budget of its own; this is the ceiling over all of them, so a second signal
+# still means "soon" without meaning "lose the last game".
+FORCED_EXIT_TEARDOWN_SECONDS = 20.0
 
 class DrainingServer(uvicorn.Server):
     """Stop listeners, drain existing games, then run normal Uvicorn shutdown."""
@@ -75,7 +84,27 @@ class DrainingServer(uvicorn.Server):
         # The listeners/sockets are already closed. Uvicorn now disconnects
         # established connections, waits its remaining tasks, and invokes the
         # lifespan cleanup; that cleanup sees the coordinator already stopped.
+        forced = self.force_exit
         await super().shutdown(sockets=[])
+        if forced:
+            # Uvicorn skips the lifespan cleanup on a forced exit, and that
+            # cleanup is where the last chat lines are written, the games the
+            # drain ended are staged and replayed, and the recorder is flushed
+            # (#994). A second signal forfeits the drain *window* (R-SHUT-03);
+            # it does not mean losing what the drain already decided. Run it
+            # anyway, under one bound on top of the budgets inside it.
+            try:
+                await asyncio.wait_for(
+                    self.lifespan.shutdown(), timeout=FORCED_EXIT_TEARDOWN_SECONDS
+                )
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Teardown after a forced exit gave up after %ss; whatever "
+                    "was still being written is lost",
+                    FORCED_EXIT_TEARDOWN_SECONDS,
+                )
+            except Exception:
+                logger.exception("Teardown after a forced exit failed")
 
 
 def _boolean_environment(name: str, default: bool) -> bool:

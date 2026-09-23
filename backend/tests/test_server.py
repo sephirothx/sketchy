@@ -143,3 +143,25 @@ def test_the_keep_alive_timeout_is_decided_rather_than_inherited():
     config = draining.call_args.args[0]
     assert config.timeout_keep_alive == server.KEEP_ALIVE_SECONDS
     assert config.timeout_keep_alive > uvicorn.Config("app.main:app").timeout_keep_alive
+
+
+async def test_a_forced_exit_still_runs_the_lifespan_teardown():
+    """Uvicorn skips the lifespan cleanup on a forced exit, and that cleanup
+    is where the last chat lines are written and the drained games are
+    staged and replayed (#994). The window is forfeited; the writes are not."""
+    timeline = []
+
+    class Coordinator:
+        async def begin_shutdown(self, sio, *, should_abort=None):
+            timeline.append("drain")
+
+        async def shutdown(self):
+            timeline.append("lifespan")
+
+    server = _server(Coordinator())
+    server.servers = []
+    server.force_exit = True
+
+    await server.shutdown([])
+
+    assert timeline == ["drain", "lifespan"]
