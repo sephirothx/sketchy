@@ -1048,7 +1048,7 @@ async def test_a_reset_and_a_change_racing_for_one_account_apply_in_turn(
     let_the_reset_commit.set()
     reset_user, changed = await asyncio.gather(reset, change)
 
-    assert reset_user == UUID(account["id"]) and changed is True
+    assert reset_user.user_id == UUID(account["id"]) and changed is True
     async with factory() as session:
         user = await session.get(User, UUID(account["id"]))
         assert user.password_hash == "from-the-change"
