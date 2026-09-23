@@ -93,8 +93,7 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
     (#978 fourth review). A symlinked
     parent inside the build needs no check here: `StaticFiles` refuses the
     original under that path first, so there is no response to attach a copy
-    to. `directory` is accepted for callers that want to say where the build
-    is; it is not used to decide.
+    to.
     """
     if not isinstance(response, FileResponse):
         return None
@@ -118,7 +117,9 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
             media_type=response.media_type,
         )
         variant.headers["Content-Encoding"] = coding
-        variant.headers.add_vary_header("Accept-Encoding")
+        # No `Vary` here: the caller adds it to every static answer, copy or
+        # not, and adding it twice put the field in the response twice (#978
+        # sixth review).
         return variant
     return None
 

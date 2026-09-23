@@ -2,7 +2,6 @@
 
 R-PLAT-09, #978.
 """
-import asyncio
 import gzip
 import os
 from pathlib import Path
@@ -109,7 +108,9 @@ async def test_a_file_the_build_left_uncompressed_is_not_compressed_per_request(
     assert "content-encoding" not in headers
     assert body == asset
     assert headers["etag"] == identity["etag"], "one ETag, one body"
-    assert "accept-encoding" in headers["vary"].lower()
+    # Exactly once: two layers used to add it, and a doubled `Vary` is a
+    # header a cache has to parse twice to learn nothing (#978 sixth review).
+    assert headers["vary"] == "Accept-Encoding"
     assert headers["cache-control"] == "public, max-age=31536000, immutable"
 
 
@@ -281,7 +282,9 @@ async def test_an_asset_is_served_from_the_builds_brotli_copy(built_app):
     assert body == b"BROTLI:" + asset
     assert headers["content-encoding"] == "br"
     assert headers["content-type"].startswith("text/javascript")
-    assert "accept-encoding" in headers["vary"].lower()
+    # Once, not twice: the copy and the caller both used to add it (#978
+    # sixth review).
+    assert headers["vary"] == "Accept-Encoding"
     assert headers["cache-control"] == "public, max-age=31536000, immutable"
     assert int(headers["content-length"]) == len(body)
 
@@ -440,12 +443,7 @@ async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path, cod
     # And a directory that merely looks like a copy must not raise mid-response.
     (dist / "assets" / "weird-AbCdEf12.js").write_bytes(b"export const weird = 1;\n" * 100)
     (dist / "assets" / f"weird-AbCdEf12.js{suffix}").mkdir()
-    # Nor a FIFO: opening one blocks until somebody writes to it, on a worker
-    # thread that nothing can cancel, and the request never answers. The
-    # regular-file check is all that stands between this and a wedged
-    # process, and nothing tested it (#978 fifth review).
-    (dist / "assets" / "pipe-AbCdEf12.js").write_bytes(b"export const piped = 1;\n" * 100)
-    os.mkfifo(dist / "assets" / f"pipe-AbCdEf12.js{suffix}")
+
     app = FastAPI()
     configure_frontend(app, dist)
 
@@ -454,14 +452,10 @@ async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path, cod
     weird = await request(app, "/assets/weird-AbCdEf12.js", headers=accept)
 
     hardlinked = await request(app, "/assets/linked-AbCdEf12.js", headers=accept)
-    piped = await asyncio.wait_for(
-        request(app, "/assets/pipe-AbCdEf12.js", headers=accept), timeout=10
-    )
 
     assert escaped[0] == 200 and escaped[2] == asset.read_bytes()
     assert "content-encoding" not in escaped[1]
     assert weird[0] == 200 and "content-encoding" not in weird[1]
-    assert piped[0] == 200 and "content-encoding" not in piped[1]
     assert hardlinked[0] == 200 and hardlinked[1]["content-encoding"] == coding, (
         "a deploy that hardlinks its build still serves the build's copies"
     )
@@ -519,3 +513,49 @@ async def test_a_304_answers_for_the_representation_it_would_have_sent(built_app
     )
     assert by_time == 304
     assert "accept-encoding" in time_headers.get("vary", "").lower()
+
+
+@pytest.mark.parametrize("suffix", [".br", ".gz"])
+def test_a_fifo_wearing_a_copy_s_name_is_refused_without_opening_it(tmp_path: Path, suffix):
+    """Opening a FIFO blocks until somebody writes to it, on a worker thread
+    no timeout can cancel: the request never answers and the process needs
+    killing. The regular-file check is the only thing that prevents it, and
+    nothing tested it (#978 fifth review).
+
+    Asked of `precompressed_variant` directly rather than through a request,
+    because a test that proves this by hanging is one CI reports as a timeout
+    six hours later rather than as a failure (#978 sixth review).
+    """
+    from starlette.responses import FileResponse
+
+    from app.compression import precompressed_variant
+
+    asset = tmp_path / "app-AbCdEf12.js"
+    asset.write_bytes(b"export const ok = true;\n" * 100)
+    os.mkfifo(tmp_path / f"app-AbCdEf12.js{suffix}")
+    scope = {
+        "type": "http",
+        "headers": [(b"accept-encoding", b"br, gzip")],
+    }
+
+    assert precompressed_variant(FileResponse(asset), scope) is None
+
+
+async def test_a_copy_is_refused_under_its_own_name_on_a_case_sensitive_volume(tmp_path: Path):
+    """The guard lower-cases the path because APFS and NTFS answer
+    `app.js.BR` with the copy. On a case-sensitive volume - which CI uses -
+    the request 404s for the ordinary reason, so the guard itself is asked
+    here instead (#978 sixth review)."""
+    from starlette.exceptions import HTTPException
+
+    from app.main import SPAStaticFiles
+
+    dist = tmp_path / "dist"
+    dist.mkdir()
+    _write_build(dist)
+    files = SPAStaticFiles(directory=dist, html=True)
+
+    for path in ("assets/app-AbCdEf12.js.BR", "assets/app-AbCdEf12.js.Gz"):
+        with pytest.raises(HTTPException) as refused:
+            await files.get_response(path, {"type": "http", "path": f"/{path}", "headers": []})
+        assert refused.value.status_code == 404, path

@@ -2315,7 +2315,8 @@ is served either way, just in development mode.
 
 When `frontend/dist` exists, `app/main.py` mounts it as static files on the same FastAPI app,
 so the whole game (UI + API + WebSocket) is served from a single port. The build writes a
-Brotli and a gzip copy beside every text file it emits above 1 KiB, and the server hands
+Brotli and a gzip copy beside every text file it emits above 1 KiB (by extension: js, css,
+html, svg, json, webmanifest, txt, map), and the server hands
 over whichever the browser accepts instead of compressing on the loop every room shares;
 a smaller text file is served as it is stored rather than compressed per request (what is
 left dynamic is gzipped at level 4; images and fonts never are). It serves Vite's fingerprinted `/assets/` files with a
