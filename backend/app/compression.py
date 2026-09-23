@@ -118,8 +118,8 @@ def precompressed_variant(response: Response, scope: Scope) -> FileResponse | No
         )
         variant.headers["Content-Encoding"] = coding
         # No `Vary` here: the caller adds it to every static answer, copy or
-        # not, and adding it twice put the field in the response twice (#978
-        # sixth review).
+        # not (`SPAStaticFiles.file_response`), and a second one only puts the
+        # same word in the field twice (#978 sixth review).
         return variant
     return None
 
@@ -146,8 +146,34 @@ class SelectiveGZipMiddleware(GZipMiddleware):
                 excluded=lambda: bool(scope.get(NO_DYNAMIC_COMPRESSION)),
             )
         else:
-            responder = IdentityResponder(self.app, self.minimum_size)
+            responder = _SelectiveIdentityResponder(
+                self.app,
+                self.minimum_size,
+                excluded=lambda: bool(scope.get(NO_DYNAMIC_COMPRESSION)),
+            )
         await responder(scope, receive, send)
+
+
+class _SelectiveIdentityResponder(IdentityResponder):
+    """Starlette's identity path, minus its `Vary` for a handler that owns it.
+
+    A client that takes no coding still comes through here, and the parent
+    adds `Vary: Accept-Encoding` to anything over the minimum size - which the
+    static files have already added themselves, so the field went out twice
+    for every identity request (#978 seventh review). The header is right
+    either way; a duplicate is a cache parsing the same word twice.
+    """
+
+    def __init__(self, *args, excluded, **kwargs) -> None:
+        super().__init__(*args, **kwargs)
+        self._excluded = excluded
+
+    async def send_with_compression(self, message: Message) -> None:
+        await super().send_with_compression(message)
+        if message["type"] == "http.response.start" and self._excluded():
+            # The flag the parent already honours: set before it reads it on
+            # the body message, the response goes out exactly as it arrived.
+            self.content_type_is_excluded = True
 
 
 class _SelectiveGZipResponder(GZipResponder):

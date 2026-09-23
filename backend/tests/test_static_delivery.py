@@ -541,12 +541,14 @@ def test_a_fifo_wearing_a_copy_s_name_is_refused_without_opening_it(tmp_path: Pa
     assert precompressed_variant(FileResponse(asset), scope) is None
 
 
-async def test_a_copy_is_refused_under_its_own_name_on_a_case_sensitive_volume(tmp_path: Path):
+async def test_a_copy_is_refused_under_its_own_name_whatever_the_volume(tmp_path: Path, monkeypatch):
     """The guard lower-cases the path because APFS and NTFS answer
     `app.js.BR` with the copy. On a case-sensitive volume - which CI uses -
-    the request 404s for the ordinary reason, so the guard itself is asked
-    here instead (#978 sixth review)."""
+    the request 404s for the ordinary reason, so the refusal alone proves
+    nothing: what is asserted is that the name never reaches the filesystem
+    at all (#978 seventh review)."""
     from starlette.exceptions import HTTPException
+    from starlette.staticfiles import StaticFiles
 
     from app.main import SPAStaticFiles
 
@@ -555,7 +557,33 @@ async def test_a_copy_is_refused_under_its_own_name_on_a_case_sensitive_volume(t
     _write_build(dist)
     files = SPAStaticFiles(directory=dist, html=True)
 
-    for path in ("assets/app-AbCdEf12.js.BR", "assets/app-AbCdEf12.js.Gz"):
+    async def must_not_be_reached(*_args, **_kwargs):
+        raise AssertionError("the guard let a copy's own name through")
+
+    monkeypatch.setattr(StaticFiles, "get_response", must_not_be_reached)
+    for path in ("assets/app-AbCdEf12.js.BR", "assets/app-AbCdEf12.js.Gz", "index.html.br"):
         with pytest.raises(HTTPException) as refused:
-            await files.get_response(path, {"type": "http", "path": f"/{path}", "headers": []})
+            await files.get_response(
+                path, {"type": "http", "method": "GET", "path": f"/{path}", "headers": []}
+            )
         assert refused.value.status_code == 404, path
+
+
+@pytest.mark.parametrize(
+    "accept",
+    [None, "identity", "*", "gzip;q=0", "br"],
+)
+@pytest.mark.parametrize("path", ["/assets/app-AbCdEf12.js", "/"])
+async def test_vary_is_sent_once_whatever_the_client_accepts(built_app, accept, path):
+    """`Vary: Accept-Encoding` belongs on every static answer, copy or not -
+    once. The identity path went through Starlette's own responder, which adds
+    the field again for any body over its minimum, so a client taking no
+    coding (or none this build has a copy for, or none at all) got it twice
+    (#978 seventh review)."""
+    app, _index, _asset = built_app
+
+    _status, headers, _body = await request(
+        app, path, headers={"Accept-Encoding": accept} if accept else None
+    )
+
+    assert headers["vary"] == "Accept-Encoding", accept
