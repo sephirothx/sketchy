@@ -458,9 +458,11 @@ class MessageRetentionService:
         finally:
             self._draining -= 1
         worker.cancel()
+        # Cleared on the next line, with no await in between, and it must stay
+        # that way: `_enqueue` takes a line while a worker is alive, so any
+        # suspension point between the cancel and this clear is a window where
+        # a line is given an identifier - which a report may later cite - and
+        # written by nobody (#972 seventh review).
+        self._worker = None
         with contextlib.suppress(asyncio.CancelledError):
             await worker
-        # Cleared only once it has really stopped: a line recorded while this
-        # was awaited used to find `_worker` already `None` and start a
-        # replacement nothing cancels.
-        self._worker = None

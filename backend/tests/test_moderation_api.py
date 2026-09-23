@@ -3369,6 +3369,54 @@ async def test_a_rest_report_that_will_be_refused_never_waits_for_the_queue(monk
         await engine.dispose()
 
 
+async def test_a_picture_report_with_no_picture_never_waits_for_the_queue(monkeypatch):
+    """The last refusal the pre-check was missing. Left behind it, a report
+    about a picture that is not there paid the whole bound, and - worse - the
+    key it would have stored was read after the flush rather than before it,
+    which is the defect the socket path was fixed for (#972 seventh review)."""
+    from app.services.message_retention import MessageRetentionService
+
+    monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
+    factory, engine = await create_test_db()
+    retention = MessageRetentionService(factory)
+    users = SqlAlchemyUserRepository(factory)
+    flushes: list[int] = []
+
+    async def counted_flush():
+        flushes.append(1)
+        await retention.flush()
+
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(users, factory))
+    app.include_router(create_moderation_router(factory, flush_retained_messages=counted_flush))
+    reporter_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    target_http = AsyncClient(transport=ASGITransport(app=app), base_url="http://test")
+    try:
+        await register(reporter_http, "PictureReporter")
+        target = await register(target_http, "PictureTarget")
+        line = await retention.record_lobby(
+            user_id=target["id"], display_name="PictureTarget", name_color=None,
+            is_anonymous=False, text="said just now", sent_at=datetime.now(timezone.utc),
+        )
+
+        refused = await reporter_http.post(
+            "/api/reports",
+            json={
+                "reportedUserId": target["id"], "reason": "inappropriate_avatar",
+                "details": "That picture.", "messageIds": [line],
+            },
+        )
+
+        assert refused.status_code == 422, refused.text
+        assert flushes == [], "a report that cannot be filed waits for nothing"
+    finally:
+        await retention.aclose()
+        await reporter_http.aclose()
+        await target_http.aclose()
+        await engine.dispose()
+
+
 async def test_a_lobby_line_cited_the_moment_it_was_said_is_found(monkeypatch):
     """The line's id is handed out when it is queued, and the writer lingers
     a quarter of a second for the rest of a batch (#972): a report citing it

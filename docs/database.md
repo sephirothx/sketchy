@@ -896,7 +896,7 @@ waiting for the writer to get a connection while holding one is how concurrent r
 starve the very writer whose rows they are waiting for. A report that is going to be refused -
 an erased account, an unknown player, game or turn, a duplicate, a picture that is not
 there - never waits for the queue at all on either path (R-MOD-21): each decides its
-refusals first, in a transaction it then closes. Run one by hand with:
+refusals first, in a transaction it then closes.
 
 The flush waits only for the
 lines queued when it was called, not for what other rooms say meanwhile, and it cuts

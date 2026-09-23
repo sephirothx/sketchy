@@ -1097,3 +1097,68 @@ async def test_an_account_merged_during_the_flush_is_reported_as_the_account_it_
         await ctx.timers.close()
     finally:
         await engine.dispose()
+
+
+async def test_a_picture_cleared_during_the_flush_is_reported_as_removed():
+    """The other direction of the same rule: the key stored is the one the
+    complaint was about, so a picture *taken down* during the flush window is
+    still reported - as "removed", which is what a reviewer needs to see. Only
+    the "replaced" direction shipped (#972 seventh review)."""
+    from sqlalchemy import select, update
+
+    from app.db.models import PlayerReport, User
+
+    factory, engine = await create_test_db()
+    try:
+        sio, ctx, room, reporter, target, _reporter_id, target_id = await _reporting_room(factory)
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(User).where(User.id == target_id).values(avatar_key="c" * 64 + ".png")
+                )
+
+        real_flush = ctx.message_retention.flush
+
+        async def clear_the_picture_meanwhile():
+            await real_flush()
+            async with factory() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(User).where(User.id == target_id).values(avatar_key=None)
+                    )
+
+        ctx.message_retention.flush = clear_the_picture_meanwhile
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "inappropriate_avatar", "details": "That."},
+        )
+
+        assert result["ok"] is True, result
+        async with factory() as session:
+            stored = await session.scalar(select(PlayerReport.reported_avatar_key))
+        assert stored == "c" * 64 + ".png", "the picture complained about, now gone"
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()
+
+
+async def test_a_seat_with_no_picture_cannot_be_reported_for_one():
+    """R-AVA-09: a doodle is this deployment's drawing, not something the
+    player put up, so there is nothing to report - and the refusal had no test
+    (#972 seventh review)."""
+    factory, engine = await create_test_db()
+    try:
+        sio, ctx, room, reporter, target, _reporter_id, _target_id = await _reporting_room(factory)
+
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "inappropriate_avatar", "details": "That."},
+        )
+
+        assert result["ok"] is False
+        assert result["error"] == "That player has no picture to report."
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()

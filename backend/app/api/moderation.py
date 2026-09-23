@@ -1081,6 +1081,17 @@ async def _refuse_a_report_that_cannot_be_filed(
         raise Refusal(
             422, ErrorCode.TURN_NOT_IN_GAME, "The turn does not belong to that game."
         )
+    if body.reason == ReportReason.INAPPROPRIATE_AVATAR and uploaded_avatar_key(
+        target.avatar_key
+    ) is None:
+        # A doodle is not something the player put up, so it is no picture to
+        # report (R-AVA-09). Decided here as well, so a report that cannot be
+        # filed never waits for the retention queue (R-MOD-21) - and so the
+        # key that *is* stored is read before the flush, not after it (#972
+        # seventh review).
+        raise Refusal(
+            422, ErrorCode.NO_PICTURE_TO_REPORT, "That player has no picture to report."
+        )
     already_open = await open_report_id(
         session, reporter_user_id=reporter_user_id, reported_user_id=target.id
     )
