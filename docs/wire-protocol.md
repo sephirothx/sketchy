@@ -291,6 +291,16 @@ used to be all of that from every client inside a second, against a pool of ten.
 - **The REST refetches** a reconnect triggers (friends, recovery address) run
   a random 0–3 s behind it, so they queue behind the seat rebind rather than
   beside it. A first connection does not wait.
+- **A close the server made** (`io server disconnect`: another tab took the
+  seat, a kick, the capacity ceiling, a stale socket that never reloaded) is
+  one socket.io-client treats as final — the manager does not retry it, and
+  nothing else reopened the socket, so the tab sat on the lobby with a
+  "reconnecting" banner that meant nothing (#998). The client now reopens it
+  itself: 1 s, doubling to 30 s, ±50%, reset by a successful handshake; 30 s
+  first when it was told the server was full, since the notice said a few
+  minutes. Not after a stuck update (R-CONN-10), which the server would only
+  close again. A close the server means for good is a refused *handshake*, which
+  the manager never retries.
 - **Missed `session_ping`s** (three in a row) no longer tear the transport
   down by default. While Engine.IO's own pings keep arriving the connection is
   alive and the server is only slow, so the seat gets a soft `join_room`, which

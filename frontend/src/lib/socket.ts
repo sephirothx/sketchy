@@ -20,6 +20,7 @@ import {
   attemptIsInFlight,
   createRestartLatch,
   postReconnectDelayMs,
+  serverCloseRetryDelayMs,
   shouldReconnectImmediately,
   transportAlive,
 } from "./reconnectPolicy.ts";
@@ -424,7 +425,7 @@ socket.on("client_config", (payload: unknown) => {
 });
 
 let serverFullReason: string | null = null;
-const serverFullListeners = new Set<(reason: string) => void>();
+const serverFullListeners = new Set<(reason: string | null) => void>();
 
 // Same reasoning as the upgrade notice above: being turned away for capacity
 // is not scoped to a screen, and the socket is closed immediately afterwards,
@@ -435,7 +436,47 @@ const serverFullListeners = new Set<(reason: string) => void>();
 socket.on("server_full", () => {
   recordClientError("socket", "server_full");
   serverFullReason = ui.socket.sketchyIsFullRightNow;
-  serverFullListeners.forEach((listener) => listener(serverFullReason!));
+  serverFullListeners.forEach((listener) => listener(serverFullReason));
+});
+
+// --- a socket the server closed comes back (#998) ---------------------------
+//
+// The manager treats `io server disconnect` as final, and every server-side
+// close that is not a refusal - another tab taking the seat, a kick, the
+// capacity ceiling, a stale socket that never reloaded - left this tab with
+// a socket nothing reopened. The policy decides whether and when; the
+// wrapped `connect` below still honours a planned restart's hold and a stuck
+// update.
+let serverCloseAttempts = 0;
+let serverCloseTimer: number | null = null;
+socket.on("connect", () => {
+  serverCloseAttempts = 0;
+  if (serverCloseTimer !== null) {
+    window.clearTimeout(serverCloseTimer);
+    serverCloseTimer = null;
+  }
+  if (serverFullReason !== null) {
+    // Back in: the banner that said the server was full is stale.
+    serverFullReason = null;
+    serverFullListeners.forEach((listener) => listener(null));
+  }
+});
+socket.on("disconnect", (reason) => {
+  const wait = serverCloseRetryDelayMs({
+    reason,
+    attempt: serverCloseAttempts,
+    updateRequired: isUpdateRequired(),
+    turnedAwayForCapacity: serverFullReason !== null,
+    random: Math.random(),
+  });
+  if (wait === null) return;
+  serverCloseAttempts += 1;
+  if (serverCloseTimer !== null) window.clearTimeout(serverCloseTimer);
+  serverCloseTimer = window.setTimeout(() => {
+    serverCloseTimer = null;
+    if (socket.connected || attemptIsInFlight(managerReadyState())) return;
+    socket.connect();
+  }, wait);
 });
 
 /** The transport this session is on, or null before one is open. Read by the
@@ -467,8 +508,9 @@ export function currentServerFullReason(): string | null {
   return serverFullReason;
 }
 
-/** Subscribe to being turned away. Called immediately if it already happened. */
-export function onServerFull(listener: (reason: string) => void): () => void {
+/** Subscribe to being turned away - and, with null, to getting back in.
+Called immediately if it already happened. */
+export function onServerFull(listener: (reason: string | null) => void): () => void {
   serverFullListeners.add(listener);
   if (serverFullReason !== null) listener(serverFullReason);
   return () => {

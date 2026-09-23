@@ -178,6 +178,13 @@ async def test_opening_the_same_room_twice_moves_the_seat_and_tells_the_old_tab(
             # Exactly one seat survives, held by the newer tab.
             seats = second.locator(".player-name .colored-player-name")
             await expect(seats).to_have_count(1)
+
+            # The server closed the old tab's socket, and socket.io-client
+            # treats that as final: the tab used to sit on the lobby with a
+            # socket nothing reopened (#998). It comes back on its own.
+            await first.wait_for_function(
+                "() => window.__SKETCHY_SOCKET__?.connected === true", timeout=15000
+            )
         finally:
             await context.close()
             await browser.close()
