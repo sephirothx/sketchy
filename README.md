@@ -736,7 +736,7 @@ process. These deployment settings can be tuned without code changes:
 | --- | --- | --- |
 | `MIGRATION_DATABASE_URL` | `DATABASE_URL` outside production | The schema owner's URL, used only by `python -m app.db.migrate`, which also grants the application role its privileges. Production requires it: there `DATABASE_URL` is the application role, which cannot run DDL (#896) |
 | `SKETCHY_ENV` | `development` | `development`, `test`, or `production`. Production refuses a missing, blank, or SQLite `DATABASE_URL`, and a missing `SMTP_HOST` |
-| `PASSWORD_HASH_WORKERS` | cores − 1, at most 4 | Argon2 hashes run at once, on a pool of their own; up to 16 per worker may wait, and past that a login is answered 503 with `Retry-After` (#975). The default counts the cores the process may run on, not a container's CPU quota: set it to `1` in a 1-vCPU container |
+| `PASSWORD_HASH_WORKERS` | cores − 1, at most 4 | Argon2 hashes run at once, on a pool of their own, 1-32 and refused at startup outside that; 16 per worker may be running or waiting, and past that a login is answered 503 with `Retry-After` (#975). The default counts the cores the process may run on, not a container's CPU quota: set it to `1` in a 1-vCPU container |
 | `DB_POOL_SIZE` | `5` | Persistent connections per process |
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |

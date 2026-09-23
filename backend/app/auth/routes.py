@@ -1222,17 +1222,10 @@ def create_auth_router(
                     ErrorCode.PASSWORD_REQUIRED_TO_DELETE,
                     "Enter your password to delete the account.",
                 )
-            credentials = (
-                await user_repo.get_credentials_by_username(user.username)
-                if user.username
-                else None
-            )
-            if (
-                credentials is None
-                or credentials.user.id != user.id
-                or not await verify_password(credentials.password_hash, body.password)
-            ):
-                raise Refusal(401, ErrorCode.PASSWORD_INCORRECT, "Password is incorrect.")
+            # Through the one helper, like every other proof: a second copy
+            # of it is a second place for the hashing pool's refusal to be
+            # swallowed (#975 fifth review).
+            await _prove_password(user, body.password)
         try:
             result = await anonymize_account(session_factory, user_id=user.id)
         except AccountDataError as error:
@@ -1468,17 +1461,7 @@ def create_auth_router(
                 field="password",
                 params={"reason": error.reason, "detail": error.detail},
             ) from error
-        credentials = (
-            await user_repo.get_credentials_by_username(user.username)
-            if user.username
-            else None
-        )
-        if (
-            credentials is None
-            or credentials.user.id != user.id
-            or not await verify_password(credentials.password_hash, body.current_password)
-        ):
-            raise Refusal(401, ErrorCode.PASSWORD_INCORRECT, "Password is incorrect.")
+        await _prove_password(user, body.current_password)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         changed = await change_password(
             session_factory,

@@ -57,9 +57,9 @@ RETRY_AFTER_SECONDS = 1
 _executor: ThreadPoolExecutor | None = None
 _workers = 0
 _outstanding = 0
-#: Held only on the path where a closed loop leaves the release to the worker
-#: thread; the loop's own releases stay single-threaded.
-_release_lock = threading.Lock()
+#: Every read and write of `_outstanding` is under this: the loop takes a
+#: slot, a worker thread gives it back.
+_counter_lock = threading.Lock()
 
 
 class PasswordHashingBusy(Refusal):
@@ -102,7 +102,11 @@ def _pool() -> ThreadPoolExecutor:
 
 
 def max_queued() -> int:
-    """Hashes that may be waiting or running before the next is refused."""
+    """Hashes that may be running or waiting before the next is refused.
+
+    Running ones count: the cap is about how much work the pool is holding,
+    not about the queue in front of it.
+    """
     _pool()
     return _workers * QUEUED_PER_WORKER
 
@@ -110,47 +114,38 @@ def max_queued() -> int:
 async def _off_loop(function, *args):
     """Run one hashing call on the capped pool, or refuse if it is backed up.
 
-    The count is only ever written on the event loop - the worker thread posts
-    its release back - so it needs no lock.
+    The count is written from two kinds of thread - the loop takes a slot, a
+    worker gives it back - so every read and write of it is under one lock.
+    It used to be posted back to the loop instead, on the argument that the
+    count then stayed single-threaded; but a loop that is *stopped* still
+    accepts a `call_soon_threadsafe` callback and never runs it, which is
+    exactly the shape a shutdown and a pytest teardown produce, and the slot
+    was gone for the life of the process (#975 fifth review).
     """
     global _outstanding
     pool = _pool()
-    if _outstanding >= max_queued():
-        raise PasswordHashingBusy()
-    loop = asyncio.get_running_loop()
-    # Submitted first: a `submit` that raises must not leave a slot taken for
-    # the life of the process (#975 third review).
-    job = pool.submit(function, *args)
-    _outstanding += 1
+    with _counter_lock:
+        if _outstanding >= max_queued():
+            raise PasswordHashingBusy()
+        # Submitted inside the check: between reading the count and taking the
+        # slot, nothing else may take it. A `submit` that raises leaves the
+        # count untouched, because it is raised before the increment (#975
+        # third review).
+        job = pool.submit(function, *args)
+        _outstanding += 1
     # Counted out when the job itself ends, not when the caller stops waiting:
     # a cancelled caller leaves queued work behind, and releasing its slot
     # there would let the queue grow past the cap unseen (#975 review). The
-    # callback runs on the worker thread, so the count is put back on the loop
-    # rather than written from there.
-    job.add_done_callback(lambda _job: _release_on(loop))
+    # callback runs on the worker thread, or inline here if the job is already
+    # done; either way it takes the lock.
+    job.add_done_callback(_release)
     return await asyncio.wrap_future(job)
 
 
-def _release_on(loop: asyncio.AbstractEventLoop) -> None:
-    """Put one slot back, from whichever thread the job ended on.
-
-    Normally the loop does it, so the count stays single-threaded. A loop that
-    has already closed - a process shutting down, or a test whose loop ended
-    while a hash was still running - refuses the callback, and a slot dropped
-    there is one the process never gets back: the refusal floor creeps down
-    until everything is answered "busy" (#975 fourth review). So that case is
-    counted here instead, under the lock the other threads take.
-    """
-    try:
-        loop.call_soon_threadsafe(_release)
-    except RuntimeError:
-        with _release_lock:
-            _release()
-
-
-def _release() -> None:
+def _release(_job=None) -> None:
     global _outstanding
-    _outstanding -= 1
+    with _counter_lock:
+        _outstanding -= 1
 
 
 # Verified against when no account matches the given username, so that path

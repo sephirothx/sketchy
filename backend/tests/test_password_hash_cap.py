@@ -144,21 +144,43 @@ def test_the_shipped_bound_is_the_documented_one():
     assert 1 <= password.PASSWORD_HASH_WORKERS_DEFAULT <= 4
 
 
-def test_a_slot_is_not_lost_when_the_loop_closed_under_the_hash():
-    """The release is posted to the loop, and a loop that has already closed
-    refuses it. Dropped there, the slot never comes back: the process answers
-    "busy" a little sooner for ever after, and pytest gives every async test a
-    loop of its own, so one such test lowers the floor for the whole worker
-    (#975 fourth review)."""
+def test_a_slot_comes_back_when_the_loop_stops_under_the_hash():
+    """The release used to be posted to the loop. A loop that is *stopped* -
+    the shape a shutdown and a pytest teardown both produce - still accepts
+    the callback and never runs it, so the slot was gone for the life of the
+    process and the refusal floor crept down (#975 fifth review).
+
+    Driven through `_off_loop` itself, with the job still running when the
+    loop stops: that is the only arrangement where the two implementations
+    differ.
+    """
     import asyncio
+    import threading
+    import time
 
     from app.auth import password as password_module
 
-    released = asyncio.new_event_loop()
-    released.close()
-    before = password_module._outstanding
-    password_module._outstanding = before + 1
+    async def slow_job():
+        return await password_module._off_loop(time.sleep, 0.5)
 
-    password_module._release_on(released)
+    loop = asyncio.new_event_loop()
+    runner = threading.Thread(target=loop.run_forever, daemon=True)
+    runner.start()
+    try:
+        before = password_module._outstanding
+        asyncio.run_coroutine_threadsafe(slow_job(), loop)
+        time.sleep(0.1)  # the job is on a worker thread, its slot taken
+        assert password_module._outstanding == before + 1
 
-    assert password_module._outstanding == before
+        loop.call_soon_threadsafe(loop.stop)
+        runner.join(timeout=5)
+        assert not loop.is_closed() and not loop.is_running()
+
+        for _ in range(100):  # the job ends on its worker thread meanwhile
+            if password_module._outstanding == before:
+                break
+            time.sleep(0.02)
+
+        assert password_module._outstanding == before, "the slot came back"
+    finally:
+        loop.close()

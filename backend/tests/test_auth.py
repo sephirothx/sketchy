@@ -776,6 +776,14 @@ async def test_a_busy_pool_refuses_every_route_whose_hash_is_the_point(client, m
             "/api/auth/second-factor/confirm-owner",
             {"password": "a-good-password", "code": "000000"},
         ),
+        # Both of these used to verify inline rather than through the helper,
+        # and neither was covered (#975 fifth review).
+        ("DELETE", "/api/auth/account", {"password": "a-good-password"}),
+        (
+            "POST",
+            "/api/auth/password/change",
+            {"currentPassword": "a-good-password", "password": "a-better-password"},
+        ),
     ):
         proof = await client.request(method, path, json=body)
         assert proof.status_code == 503, f"{path}: {proof.text}"
@@ -801,3 +809,43 @@ async def test_a_busy_pool_refuses_every_route_whose_hash_is_the_point(client, m
         json={"username": "BusyRoutes", "password": "a-better-password"},
     )
     assert with_the_new_one.status_code == 401
+
+
+def test_only_two_places_in_the_router_verify_a_password():
+    """One helper for every proof, and login's own - which hashes a dummy for
+    an unknown name. A third copy is a third place for the hashing pool's
+    refusal to be swallowed, which is how account deletion came to have one
+    (#975 fifth review)."""
+    import inspect
+
+    from app.auth import routes as routes_module
+
+    source = inspect.getsource(routes_module)
+    assert source.count("await verify_password(") == 2, (
+        "verify through `_prove_password`, or state why this call is its own"
+    )
+
+
+async def test_an_unknown_username_still_pays_for_a_real_hash(client, monkeypatch):
+    """R-AUTH-09: skipping the hash for a name that does not exist answers
+    noticeably faster and turns response time into a username oracle. Nothing
+    pinned it - returning 401 before verifying passed the whole suite (#975
+    fifth review)."""
+    from app.auth import routes as routes_module
+    from app.auth.password import DUMMY_HASH
+
+    hashed: list[str] = []
+    real_verify = routes_module.verify_password
+
+    async def counted(stored_hash, password):
+        hashed.append(stored_hash)
+        return await real_verify(stored_hash, password)
+
+    monkeypatch.setattr(routes_module, "verify_password", counted)
+    answer = await client.post(
+        "/api/auth/login",
+        json={"username": "NobodyAtAll", "password": "a-good-password"},
+    )
+
+    assert answer.status_code == 401
+    assert hashed == [DUMMY_HASH], "the unknown name was verified against the dummy"
