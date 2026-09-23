@@ -1,4 +1,7 @@
-"""Audience-aware chat persistence and bounded cleanup."""
+"""Audience-aware chat persistence and bounded cleanup.
+
+R-MOD-21 for the flush a report waits on, #972 for the batching.
+"""
 from __future__ import annotations
 
 import asyncio
@@ -779,6 +782,90 @@ async def test_a_line_said_during_shutdown_leaves_no_writer_behind():
             if not task.done() and "_write_queued" in repr(task.get_coro())
         ]
         assert writers == [], "no second writer outlives the shutdown"
+    finally:
+        await engine.dispose()
+
+
+async def test_the_counters_follow_the_whole_batch_not_one_row():
+    """`_written` counts rows, not batches: counting one per batch leaves it
+    permanently behind `_enqueued`, and a cut that stays above it suppresses
+    every linger in the process with nothing logged (#972 fifth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, batch_size=10, linger_seconds=0.02)
+        for index in range(5):
+            await _say(service, room, player, f"line {index}")
+        await asyncio.wait_for(service.drain(), timeout=5)
+
+        assert service._enqueued == 5
+        assert service._written == 5
+        assert service._queue._unfinished_tasks == 0
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_flush_that_finishes_first_leaves_the_others_their_cut():
+    """The cut is shared. Lowering it when *a* reader is done, rather than
+    when the last one is, drops the cut the others are still waiting on and
+    they pay the whole linger - the 254 ms regression, one layer along. It
+    passed every test (#972 fifth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, batch_size=1, linger_seconds=30)
+        gates: list[asyncio.Event] = []
+        real_write = service._write
+
+        async def one_gate_per_batch(batch):
+            gate = asyncio.Event()
+            gates.append(gate)
+            await gate.wait()
+            await real_write(batch)
+
+        service._write = one_gate_per_batch
+        await _say(service, room, player, "first")
+        await asyncio.sleep(0.02)
+        early = asyncio.create_task(service.flush())  # needs one row
+        await asyncio.sleep(0.02)
+        await _say(service, room, player, "second")
+        later = asyncio.create_task(service.flush())  # needs both
+        await asyncio.sleep(0.02)
+
+        gates[0].set()  # the first batch lands; the early reader is satisfied
+        await asyncio.wait_for(early, timeout=5)
+        assert not later.done()
+        assert service._cut == 2, "the reader still waiting keeps its cut"
+
+        for gate in gates[1:]:
+            gate.set()
+        await asyncio.wait_for(later, timeout=5)
+        assert service._flushing == 0
+        assert service._cut == service._written, "and nothing is left holding it"
+        service._write = real_write
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_line_said_while_closing_is_not_kept(caplog):
+    """`aclose` stops the writer; a line taken meanwhile would start a second
+    one that nothing cancels and that the counters do not describe (#972 fifth
+    review)."""
+    import logging
+
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        await _say(service, room, player, "before the shutdown")
+        await asyncio.wait_for(service.aclose(), timeout=5)
+
+        with caplog.at_level(logging.WARNING):
+            assert await _say(service, room, player, "after the shutdown") is None
+        assert "closing" in caplog.text
+        assert service._worker is None
     finally:
         await engine.dispose()
 

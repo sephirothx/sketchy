@@ -894,8 +894,13 @@ the shape is the same on PostgreSQL, the per-statement cost is not). A report re
 the queue (bounded at 2 s) before that read and **outside any transaction of their own**:
 waiting for the writer to get a connection while holding one is how concurrent reports
 starve the very writer whose rows they are waiting for. A report refused before the
-flush - an erased account, a duplicate, a picture that is not there - never waits for
-the queue at all. The flush waits only for the
+flush - an erased account, a duplicate, a picture that is not there on the socket path;
+an unknown player, game or turn on the REST one - never waits for the queue at all
+(R-MOD-21). Run one by hand with:
+
+```bash
+cd backend && .venv/bin/pytest tests/test_message_retention.py -q
+``` The flush waits only for the
 lines queued when it was called, not for what other rooms say meanwhile, and it cuts
 the current linger short without cutting anybody else's.
 

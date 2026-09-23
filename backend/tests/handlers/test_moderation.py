@@ -906,3 +906,71 @@ async def test_a_report_holds_no_connection_while_it_waits_for_the_queue(tmp_pat
         await ctx.timers.close()
     finally:
         await engine.dispose()
+
+
+async def test_an_account_erased_during_the_flush_files_no_report():
+    """The re-lock in the writing transaction is the whole reason that
+    transaction is separate: the first one has ended by the time the flush
+    returns, so what is written must be written under a lock that still holds
+    (R-PRIV-15). Deleting it left 2823 tests passing (#972 fifth review)."""
+    from uuid import uuid4
+
+    from sqlalchemy import func, select
+
+    from app.api.errors import ErrorCode
+    from app.db.models import PlayerReport, User
+
+    factory, engine = await create_test_db()
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(room, "Reporter", user_id=str(reporter_id), is_anonymous=False)
+    target = room_manager.add_player(room, "Target", user_id=str(target_id), is_anonymous=False)
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all([
+                    User(id=account, username=name, password_hash="hash", display_name=name, state="registered")
+                    for account, name in ((reporter_id, "Reporter"), (target_id, "Target"))
+                ])
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager, session_factory=factory)
+        sessions = {
+            "reporter-sid": {"room_id": room.id, "player_id": reporter.id},
+            "target-sid": {"room_id": room.id, "player_id": target.id},
+        }
+        sio.get_session = AsyncMock(side_effect=lambda sid, namespace=None: sessions[sid])
+        sio.emit = AsyncMock()
+        await sio.handlers["/"]["send_chat"]("target-sid", {"text": "something worth reporting"})
+
+        # The reporter's account is erased while the report waits for the
+        # retention queue - the window the two transactions open.
+        real_flush = ctx.message_retention.flush
+
+        async def erase_meanwhile():
+            await real_flush()
+            async with factory() as session:
+                async with session.begin():
+                    reporter_row = await session.get(User, reporter_id)
+                    # As erasure leaves it: deleted, with the credentials gone
+                    # (the row's own CHECK insists the two go together).
+                    reporter_row.state = "deleted"
+                    reporter_row.username = None
+                    reporter_row.password_hash = None
+
+        ctx.message_retention.flush = erase_meanwhile
+
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "harassment", "details": "Just now."},
+        )
+
+        assert result["ok"] is False
+        assert result["errorCode"] == ErrorCode.ACCOUNT_REQUIRED
+        async with factory() as session:
+            assert await session.scalar(select(func.count(PlayerReport.id))) == 0
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()

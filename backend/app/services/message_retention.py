@@ -125,6 +125,8 @@ class MessageRetentionService:
         self._cut = 0
         # How many readers are waiting on that cut right now.
         self._flushing = 0
+        # Set once `aclose` starts: no new line, and so no new writer.
+        self._closing = False
 
     async def record(
         self,
@@ -236,6 +238,12 @@ class MessageRetentionService:
 
     def _enqueue(self, row: RoomMessage, described: str) -> str | None:
         """Hand one composed row to the writer, or say why it will not be kept."""
+        if self._closing:
+            # The writer is being stopped. Taking the row would start a second
+            # one that outlives the shutdown, and the count it kept would be
+            # wrong for the one that did the work (#972 fifth review).
+            logger.warning("Retention is closing; message %s %s is not kept", row.id, described)
+            return None
         self._ensure_worker()
         try:
             self._queue.put_nowait(row)
@@ -396,8 +404,11 @@ class MessageRetentionService:
             return
         # Both, because the writer may be either side of its linger: the cut
         # is what it reads before waiting, the event what wakes it if it is
-        # already waiting.
-        self._cut = max(self._cut, target)
+        # already waiting. Assigned rather than raised to the maximum: a later
+        # reader's target is never lower than an earlier one's, since it is
+        # `_enqueued` and that only grows, and the only thing that lowers the
+        # cut is the reset below, which runs when nobody is waiting.
+        self._cut = target
         self._wake.set()
         self._flushing += 1
         deadline = time.monotonic() + EVIDENCE_FLUSH_SECONDS
@@ -429,6 +440,7 @@ class MessageRetentionService:
         few seconds and the rest is lost knowingly.
         """
         worker = self._worker
+        self._closing = True
         if worker is None:
             return
         # Still `self._worker` while the drain runs: cleared any earlier and a
@@ -446,7 +458,10 @@ class MessageRetentionService:
             )
         finally:
             self._draining -= 1
-        self._worker = None
         worker.cancel()
         with contextlib.suppress(asyncio.CancelledError):
             await worker
+        # Cleared only once it has really stopped: a line recorded while this
+        # was awaited used to find `_worker` already `None` and start a
+        # replacement nothing cancels.
+        self._worker = None

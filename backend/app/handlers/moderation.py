@@ -247,6 +247,23 @@ async def report_player(ctx: HandlerContext, sid, data):
                 await require_live_account(session, reporter.user_id)
             except AccountErasedError:
                 return {"ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED, "error": "Sign in first."}
+            # Read again here, not carried across the flush: what is written
+            # has to describe the account and the picture as they are when the
+            # row is written, and between the two transactions there is a wait
+            # of up to two seconds (#972 fifth review). The refusals above
+            # decided on the state a moment ago; these decide what is stored.
+            reported_id = await canonical_user_id(session, UUID(target.user_id))
+            if about_picture:
+                reported_avatar_key = uploaded_avatar_key(
+                    await session.scalar(
+                        select(User.avatar_key).where(User.id == UUID(target.user_id))
+                    )
+                )
+                if reported_avatar_key is None:
+                    return {
+                        "ok": False, "errorCode": ErrorCode.CANNOT_REPORT,
+                        "error": "That player has no picture to report.",
+                    }
             messages = await evidence_from_live_room(
                 session,
                 room_instance_id=UUID(room.retention_scope_id),
