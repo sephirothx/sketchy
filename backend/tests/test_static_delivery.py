@@ -2,6 +2,7 @@
 
 R-PLAT-09, #978.
 """
+import asyncio
 import gzip
 import os
 from pathlib import Path
@@ -439,6 +440,12 @@ async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path, cod
     # And a directory that merely looks like a copy must not raise mid-response.
     (dist / "assets" / "weird-AbCdEf12.js").write_bytes(b"export const weird = 1;\n" * 100)
     (dist / "assets" / f"weird-AbCdEf12.js{suffix}").mkdir()
+    # Nor a FIFO: opening one blocks until somebody writes to it, on a worker
+    # thread that nothing can cancel, and the request never answers. The
+    # regular-file check is all that stands between this and a wedged
+    # process, and nothing tested it (#978 fifth review).
+    (dist / "assets" / "pipe-AbCdEf12.js").write_bytes(b"export const piped = 1;\n" * 100)
+    os.mkfifo(dist / "assets" / f"pipe-AbCdEf12.js{suffix}")
     app = FastAPI()
     configure_frontend(app, dist)
 
@@ -447,10 +454,14 @@ async def test_a_sibling_that_leaves_the_build_is_not_served(tmp_path: Path, cod
     weird = await request(app, "/assets/weird-AbCdEf12.js", headers=accept)
 
     hardlinked = await request(app, "/assets/linked-AbCdEf12.js", headers=accept)
+    piped = await asyncio.wait_for(
+        request(app, "/assets/pipe-AbCdEf12.js", headers=accept), timeout=10
+    )
 
     assert escaped[0] == 200 and escaped[2] == asset.read_bytes()
     assert "content-encoding" not in escaped[1]
     assert weird[0] == 200 and "content-encoding" not in weird[1]
+    assert piped[0] == 200 and "content-encoding" not in piped[1]
     assert hardlinked[0] == 200 and hardlinked[1]["content-encoding"] == coding, (
         "a deploy that hardlinks its build still serves the build's copies"
     )
