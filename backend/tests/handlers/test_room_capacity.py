@@ -5,7 +5,10 @@ spectators, and every one of them was another recipient of every broadcast.
 """
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
+
+from app.protocol import SERVER_FULL_CLOSE_SECONDS
 
 import pytest
 import socketio
@@ -114,6 +117,10 @@ async def test_the_server_stops_accepting_sockets_past_its_ceiling():
         if call.args and call.args[0] == "server_full"
     ]
     assert len(refusals) == 1
+    # Told inside the handshake, closed after it: the CONNECT has to go out
+    # before the close or the client never sees the notice (#998).
+    assert sio.disconnect.await_args_list == []
+    await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
     assert sio.disconnect.await_args_list[-1].args[0] == "third"
 
     # A socket that leaves gives its place back.

@@ -185,6 +185,11 @@ async def test_opening_the_same_room_twice_moves_the_seat_and_tells_the_old_tab(
             await first.wait_for_function(
                 "() => window.__SKETCHY_SOCKET__?.connected === true", timeout=15000
             )
+            # And comes back as nobody in particular: the seat stays where it
+            # went, and the old tab stays on the lobby.
+            await expect(seats).to_have_count(1)
+            assert await second.locator('[data-testid="waiting-room"]').count() == 1
+            assert first.url == f"{BASE_URL}/"
         finally:
             await context.close()
             await browser.close()

@@ -91,7 +91,10 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
                 {"reason": "Sketchy is full right now. Try again in a few minutes."},
                 to=sid,
             )
-            await ctx.sio.disconnect(sid)
+            # Not awaited here: the CONNECT this handshake ends with has to
+            # reach the client before the close does, or the notice is
+            # buffered against a namespace that never connected and lost.
+            ctx.close_after_handshake(sid)
             return
         user_id = None
         if ctx.session_factory is not None:
