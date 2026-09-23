@@ -587,3 +587,27 @@ async def test_vary_is_sent_once_whatever_the_client_accepts(built_app, accept, 
     )
 
     assert headers["vary"] == "Accept-Encoding", accept
+
+
+async def test_a_dynamic_identity_answer_still_carries_vary(tmp_path: Path):
+    """The static files ask for no compression, and that flag is the only
+    reason their identity answers stop adding `Vary`. Everything else still
+    needs it: a cache that does not know an API answer varies by
+    `Accept-Encoding` can hand a gzip body to a client that takes none
+    (#978 eighth review)."""
+    app = FastAPI()
+
+    @app.get("/api/plain")
+    async def plain():
+        return {"values": ["long enough to be worth compressing" for _ in range(50)]}
+
+    (tmp_path / "index.html").write_bytes(b"<!doctype html><html></html>")
+    configure_frontend(app, tmp_path)
+
+    _status, headers, body = await request(
+        app, "/api/plain", headers={"Accept-Encoding": "identity"}
+    )
+
+    assert len(body) >= 500, "below the middleware's minimum nothing is added at all"
+    assert "content-encoding" not in headers
+    assert headers["vary"] == "Accept-Encoding"
