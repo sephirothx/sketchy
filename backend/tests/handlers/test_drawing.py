@@ -1226,8 +1226,8 @@ async def test_an_action_after_a_torn_path_closes_it_rather_than_asking_for_ever
     """The drawer's `draw_end` went with the connection; the sync after the
     rebind restarted its numbering at the committed history, so its next
     action carried the open path's own number. The server asked for that
-    number, the client had nothing under it, and the two looped for the rest
-    of the turn (#999)."""
+    number, the client re-sent the very action it held under it, and the two
+    looped for the rest of the turn (#999)."""
     room, sio = _drawing_room()
     await _open_a_path(room, sio)
     canvas = room.game.canvas
