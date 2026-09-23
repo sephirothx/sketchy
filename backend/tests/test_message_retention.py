@@ -1,11 +1,17 @@
-"""Audience-aware chat persistence and bounded cleanup."""
+"""Audience-aware chat persistence and bounded cleanup.
+
+R-MOD-21 for the flush a report waits on, #972 for the batching.
+"""
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import time
 from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock, patch
 from uuid import UUID
 
+import pytest
 import socketio
 from sqlalchemy import select
 
@@ -508,3 +514,505 @@ async def test_a_lobby_line_with_no_account_behind_it_is_not_kept():
         is None
     )
     await service.aclose()
+
+
+async def _talking_room(factory):
+    """A room with one account-backed seat that can be retained."""
+    room = RoomManager().create_room(name="Chatty")
+    talker_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(User(id=talker_id, display_name="Talker"))
+    player = RoomManager().add_player(room, "Talker", user_id=str(talker_id))
+    player.sid = "sid-talker"
+    return room, player
+
+
+def _counting_writes(service) -> list[int]:
+    """Record the size of every batch the service writes."""
+    sizes: list[int] = []
+    write = service._write
+
+    async def counted(batch):
+        sizes.append(len(batch))
+        await write(batch)
+
+    service._write = counted
+    return sizes
+
+
+async def _say(service, room, player, text):
+    return await service.record(
+        room=room, player=player, text=text, message_kind="chat",
+        audience="room", recipient_sids=[player.sid],
+    )
+
+
+async def test_lines_said_a_moment_apart_are_written_in_one_batch():
+    """Rooms talk a line at a time, never two in one instant, so taking only
+    what was already queued wrote a transaction per line (#972). The writer
+    waits a moment after the first line for the rest of its batch."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0.5)
+        sizes = _counting_writes(service)
+        for index in range(5):
+            await _say(service, room, player, f"line {index}")
+            await asyncio.sleep(0.02)
+        # Not `drain`, which cuts the linger short: this waits the way the
+        # production writer does between two ordinary lines.
+        await asyncio.wait_for(service._queue.join(), timeout=5)
+        assert sizes == [5]
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert sorted(kept) == [f"line {index}" for index in range(5)]
+        await service.aclose()
+    finally:
+        await engine.dispose()
+
+
+async def test_drain_does_not_wait_out_the_linger():
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=60)
+        await _say(service, room, player, "now, please")
+        await asyncio.sleep(0)  # the writer holds the line and starts to linger
+        await asyncio.wait_for(service.drain(), timeout=5)
+        async with factory() as session:
+            assert await session.scalar(select(RoomMessage.text)) == "now, please"
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_full_batch_is_written_without_waiting_out_the_linger():
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, batch_size=3, linger_seconds=60)
+        sizes = _counting_writes(service)
+        await _say(service, room, player, "one")
+        await asyncio.sleep(0)
+        await _say(service, room, player, "two")
+        await _say(service, room, player, "three")
+        await asyncio.wait_for(service._queue.join(), timeout=5)
+        assert sizes == [3]
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_flush_waits_for_what_was_queued_and_no_longer():
+    """Not `queue.join()`: that waits for lines other rooms enqueue while the
+    report is waiting, and on a busy server a report could wait a long time
+    for messages it never cited (#972 review).
+
+    The first write is stalled, so the flush is genuinely in flight while the
+    rest of the server talks: against a `join()`-based flush the chatter's
+    rows are part of what it waits for, and it does not return here.
+    """
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0.01)
+        held = asyncio.Event()
+        released = asyncio.Event()
+        real_write = service._write
+
+        async def stalled_write(batch):
+            held.set()
+            await released.wait()
+            await real_write(batch)
+
+        service._write = stalled_write
+        await _say(service, room, player, "cited line")
+        await asyncio.wait_for(held.wait(), timeout=2)
+        service._write = real_write
+        target = service._enqueued
+        assert target == 1
+
+        keep_talking = True
+        said = 0
+
+        async def another_room_keeps_talking():
+            nonlocal said
+            while keep_talking:
+                await _say(service, room, player, "somebody else")
+                said += 1
+                await asyncio.sleep(0.005)
+
+        chatter = asyncio.create_task(another_room_keeps_talking())
+        flushing = asyncio.create_task(service.flush())
+        await asyncio.sleep(0.05)
+        # A flush is not a drain: everyone else keeps lingering while it waits.
+        assert service._draining == 0
+        assert not flushing.done() and said > 0
+        released.set()
+        await asyncio.wait_for(flushing, timeout=2)
+        # It returned on its own row, with the chatter's still outstanding.
+        assert service._written >= target
+        assert service._enqueued > target
+        keep_talking = False
+        await chatter
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert "cited line" in kept
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_flush_that_lands_before_the_linger_still_cuts_it():
+    """The cut is state the writer reads, not a signal it can clear: a flush
+    arriving between the line and the writer's linger used to be swallowed by
+    the `clear()` at the top of it, and paid the whole window (#972 third
+    review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=30)
+        await _say(service, room, player, "cited line")
+        # No `await` in between: the writer has not run at all yet, so it
+        # reaches its linger after the flush has asked for the cut.
+        started = time.monotonic()
+        await asyncio.wait_for(service.flush(), timeout=5)
+        assert time.monotonic() - started < 1
+        async with factory() as session:
+            assert await session.scalar(select(RoomMessage.text)) == "cited line"
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_flush_lands_on_a_writer_already_inside_its_linger():
+    """The other half of the cut. Once the writer is suspended in the linger
+    it has already read `_cut`, so only the event reaches it: deleting
+    `_wake.set()` from `flush` left every test green (#972 fourth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=30)
+        await _say(service, room, player, "cited line")
+        # Long enough for the writer to take the row and suspend itself inside
+        # `wait_for(self._wake.wait())`, which is the case `_cut` cannot cut.
+        for _ in range(50):
+            await asyncio.sleep(0.005)
+            if not service._wake.is_set() and service._queue.qsize() == 0:
+                break
+        started = time.monotonic()
+        await asyncio.wait_for(service.flush(), timeout=5)
+        assert time.monotonic() - started < 1
+        async with factory() as session:
+            assert await session.scalar(select(RoomMessage.text)) == "cited line"
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_cancelled_writer_settles_the_batch_it_was_holding():
+    """Counted where it happens, not repaired later: `_ensure_worker`'s
+    reconciliation rescued the observable behaviour, so the settle on the way
+    out was dead to every test (#972 fourth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=30)
+        await _say(service, room, player, "lost to the cancellation")
+        await asyncio.sleep(0)
+        service._worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await service._worker
+
+        assert service._written == service._enqueued == 1
+        assert service._queue._unfinished_tasks == 0, "join would wait for ever"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_flush_that_gave_up_stops_holding_the_linger_open():
+    """The cut is process-wide: left standing by a flush that timed out on a
+    stalled database, it would go on cutting every room's linger short - the
+    batching this exists for - until the writer caught up (#972 fourth
+    review)."""
+    factory, engine = await create_test_db()
+    monkey = MessageRetentionService(factory, linger_seconds=30)
+    try:
+        room, player = await _talking_room(factory)
+        held = asyncio.Event()
+
+        async def never(_batch):
+            await held.wait()
+
+        monkey._write = never
+        await _say(monkey, room, player, "unwritable")
+        with patch("app.services.message_retention.EVIDENCE_FLUSH_SECONDS", 0.05):
+            await asyncio.wait_for(monkey.flush(), timeout=5)
+
+        assert monkey._cut == monkey._written, "the cut is not left standing"
+        held.set()
+        await asyncio.wait_for(monkey.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_line_said_during_shutdown_leaves_no_writer_behind():
+    """`aclose` used to let go of the writer before draining, so a line
+    recorded while it drained started a second one - which nothing cancelled,
+    and which the lost-row reconciliation, written for a single writer, could
+    not account for (#972 fourth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        await _say(service, room, player, "before the shutdown")
+        worker = service._worker
+
+        closing = asyncio.create_task(service.aclose())
+        await asyncio.sleep(0)
+        await _say(service, room, player, "said during the shutdown")
+        await asyncio.wait_for(closing, timeout=5)
+
+        assert service._worker is None
+        assert worker.done(), "the writer aclose held is the one it stopped"
+        writers = [
+            task
+            for task in asyncio.all_tasks()
+            if not task.done() and "_write_queued" in repr(task.get_coro())
+        ]
+        assert writers == [], "no second writer outlives the shutdown"
+    finally:
+        await engine.dispose()
+
+
+async def test_the_counters_follow_the_whole_batch_not_one_row():
+    """`_written` counts rows, not batches: counting one per batch leaves it
+    permanently behind `_enqueued`, and a cut that stays above it suppresses
+    every linger in the process with nothing logged (#972 fifth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, batch_size=10, linger_seconds=0.02)
+        for index in range(5):
+            await _say(service, room, player, f"line {index}")
+        await asyncio.wait_for(service.drain(), timeout=5)
+
+        assert service._enqueued == 5
+        assert service._written == 5
+        assert service._queue._unfinished_tasks == 0
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_flush_that_finishes_first_leaves_the_others_their_cut():
+    """The cut is shared. Lowering it when *a* reader is done, rather than
+    when the last one is, drops the cut the others are still waiting on and
+    they pay the whole linger - the 254 ms regression, one layer along. It
+    passed every test (#972 fifth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, batch_size=1, linger_seconds=30)
+        gates: list[asyncio.Event] = []
+        real_write = service._write
+
+        async def one_gate_per_batch(batch):
+            gate = asyncio.Event()
+            gates.append(gate)
+            await gate.wait()
+            await real_write(batch)
+
+        service._write = one_gate_per_batch
+        await _say(service, room, player, "first")
+        await asyncio.sleep(0.02)
+        early = asyncio.create_task(service.flush())  # needs one row
+        await asyncio.sleep(0.02)
+        await _say(service, room, player, "second")
+        later = asyncio.create_task(service.flush())  # needs both
+        await asyncio.sleep(0.02)
+
+        gates[0].set()  # the first batch lands; the early reader is satisfied
+        await asyncio.wait_for(early, timeout=5)
+        assert not later.done()
+        assert service._cut == 2, "the reader still waiting keeps its cut"
+
+        for gate in gates[1:]:
+            gate.set()
+        await asyncio.wait_for(later, timeout=5)
+        assert service._flushing == 0
+        assert service._cut == service._written, "and nothing is left holding it"
+        service._write = real_write
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_line_said_after_the_shutdown_is_not_kept(caplog):
+    """Once `aclose` has stopped the writer, taking a line would start another
+    that nothing cancels (#972 fifth review). While the drain is still
+    running the line is taken as usual, because the drain exists so the last
+    thing anybody said is written."""
+    import logging
+
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        await _say(service, room, player, "before the shutdown")
+        await asyncio.wait_for(service.aclose(), timeout=5)
+
+        with caplog.at_level(logging.WARNING):
+            assert await _say(service, room, player, "after the shutdown") is None
+        assert "closing" in caplog.text
+        assert service._worker is None
+    finally:
+        await engine.dispose()
+
+
+async def test_a_line_said_during_the_drain_is_still_written():
+    """The drain's whole purpose: what somebody said as the server was going
+    down is written rather than abandoned (architecture.md). The guard that
+    stops a second writer must not refuse it (#972 sixth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        await _say(service, room, player, "before the shutdown")
+
+        closing = asyncio.create_task(service.aclose())
+        await asyncio.sleep(0)
+        said = await _say(service, room, player, "said during the drain")
+        await asyncio.wait_for(closing, timeout=5)
+
+        assert said is not None, "the line was taken"
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert "said during the drain" in kept
+    finally:
+        await engine.dispose()
+
+
+async def test_a_service_with_no_linger_writes_without_waiting():
+    """`linger_seconds = 0` is the one exit from the linger with no test: it
+    returns before touching the event at all (#972 sixth review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=0)
+        service._wake.set()  # left set, so a linger that waited would clear it
+        started = time.monotonic()
+        await _say(service, room, player, "no linger")
+        # Waited for without `drain`, which sets the event itself.
+        for _ in range(200):
+            if service._written == 1:
+                break
+            await asyncio.sleep(0.005)
+
+        assert service._written == 1
+        assert time.monotonic() - started < 0.5
+        assert service._wake.is_set(), "the linger never touched the event"
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_flush_after_a_writer_was_lost_does_not_wait_out_its_bound(caplog):
+    """A writer cancelled while lingering takes its batch with it. Unaccounted,
+    those rows leave `flush` waiting its whole bound - and `drain` waiting for
+    ever - on rows nobody holds any more (#972 third review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=30)
+        await _say(service, room, player, "lost to the cancellation")
+        await asyncio.sleep(0)  # the writer holds the line and starts to linger
+        service._worker.cancel()
+        with contextlib.suppress(asyncio.CancelledError):
+            await service._worker
+
+        await _say(service, room, player, "cited line")
+        started = time.monotonic()
+        await asyncio.wait_for(service.flush(), timeout=5)
+        assert time.monotonic() - started < 1
+        await asyncio.wait_for(service.drain(), timeout=5)
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert "cited line" in kept
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_writer_that_died_another_way_is_reconciled_too(caplog):
+    """Not only cancellation: a writer that ends any other way took rows with
+    it, and the replacement counts them against what is still queued rather
+    than leaving every later flush short (#972 third review)."""
+    factory, engine = await create_test_db()
+    try:
+        room, player = await _talking_room(factory)
+        service = MessageRetentionService(factory, linger_seconds=30)
+        failing = asyncio.Event()
+
+        async def die(self=service):
+            failing.set()
+            raise RuntimeError("the writer stopped")
+
+        service._linger = die
+        await _say(service, room, player, "lost to the failure")
+        await asyncio.wait_for(failing.wait(), timeout=2)
+        with contextlib.suppress(RuntimeError):
+            await service._worker
+        del service._linger
+
+        await _say(service, room, player, "cited line")
+        started = time.monotonic()
+        await asyncio.wait_for(service.flush(), timeout=5)
+        assert time.monotonic() - started < 1
+        async with factory() as session:
+            kept = (await session.scalars(select(RoomMessage.text))).all()
+        assert "cited line" in kept
+        await asyncio.wait_for(service.aclose(), timeout=5)
+    finally:
+        await engine.dispose()
+
+
+async def test_flush_gives_up_on_a_database_that_has_stopped_answering(monkeypatch, caplog):
+    """Bounded: a report reads what is there rather than waiting for ever."""
+    import logging
+
+    from app.services.message_retention import EVIDENCE_FLUSH_SECONDS
+
+    assert EVIDENCE_FLUSH_SECONDS == 2
+    monkeypatch.setattr(
+        "app.services.message_retention.EVIDENCE_FLUSH_SECONDS", 0.05
+    )
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Hung")
+    player = room_manager.add_player(room, "Talker", user_id=str(generate_uuid()))
+    player.sid = "sid-talker"
+    service = MessageRetentionService(HangingFactory())
+    caplog.set_level(logging.WARNING)
+    await _say(service, room, player, "never written")
+    await asyncio.wait_for(service.flush(), timeout=2)
+    assert "not flushed" in caplog.text
+    await close_hanging_service(service, monkeypatch)
+
+
+async def test_the_linger_is_skipped_while_anybody_is_draining_and_when_a_batch_is_full():
+    """The two early exits, directly: without them a drain waits out the
+    linger, and a full batch sits still while more arrives (#972 review)."""
+    factory, engine = await create_test_db()
+    try:
+        service = MessageRetentionService(factory, batch_size=2, linger_seconds=60)
+        service._draining = 1
+        await asyncio.wait_for(service._linger(), timeout=1)  # draining: no wait
+        service._draining = 0
+        service._queue.put_nowait(object())  # qsize 1 >= batch_size - 1
+        await asyncio.wait_for(service._linger(), timeout=1)  # full: no wait
+        service._queue.get_nowait()
+        with pytest.raises(asyncio.TimeoutError):
+            await asyncio.wait_for(service._linger(), timeout=0.2)  # otherwise it waits
+    finally:
+        await engine.dispose()

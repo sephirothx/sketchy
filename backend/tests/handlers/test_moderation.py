@@ -794,3 +794,371 @@ async def test_a_room_report_needs_no_words_of_its_own():
             assert report.details == ""
     finally:
         await engine.dispose()
+
+
+async def test_a_line_reported_the_moment_it_was_said_is_in_the_evidence():
+    """The retention writer lingers a quarter of a second for the rest of a
+    batch (#972), and report evidence reads `room_messages` directly: a
+    report filed at once found nothing to cite until the queue is flushed."""
+    from uuid import uuid4
+
+    from app.db.models import User
+
+    factory, engine = await create_test_db()
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(room, "Reporter", user_id=str(reporter_id), is_anonymous=False)
+    target = room_manager.add_player(room, "Target", user_id=str(target_id), is_anonymous=False)
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all([
+                    User(id=account, username=name, password_hash="hash", display_name=name, state="registered")
+                    for account, name in ((reporter_id, "Reporter"), (target_id, "Target"))
+                ])
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager, session_factory=factory)
+        sessions = {
+            "reporter-sid": {"room_id": room.id, "player_id": reporter.id},
+            "target-sid": {"room_id": room.id, "player_id": target.id},
+        }
+        sio.get_session = AsyncMock(side_effect=lambda sid, namespace=None: sessions[sid])
+        sio.emit = AsyncMock()
+
+        said = await sio.handlers["/"]["send_chat"]("target-sid", {"text": "something worth reporting"})
+        assert said == {"ok": True}
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "harassment", "details": "Just now."},
+        )
+        assert result["ok"] is True
+        assert result["evidenceCount"] == 1
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()
+
+
+async def test_a_report_holds_no_connection_while_it_waits_for_the_queue(tmp_path, caplog):
+    """The flush waits for the retention writer to get a connection, so a
+    report that waits for it *while holding one* deadlocks against its own
+    evidence - and the lines the report is about are exactly what goes
+    missing (#972 fourth review). It held the erasure barrier's lock across
+    that wait, too.
+
+    On a pool of one, which is what the production pool becomes under enough
+    concurrent reports; the suite's usual fixture is a `StaticPool`, where
+    writer and report share one connection and the deadlock cannot appear.
+    """
+    import logging
+    from uuid import uuid4
+
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+    from sqlalchemy.pool import AsyncAdaptedQueuePool
+
+    from app.db.models import Base, User
+
+    engine = create_async_engine(
+        f"sqlite+aiosqlite:///{tmp_path / 'one-connection.db'}",
+        poolclass=AsyncAdaptedQueuePool,
+        pool_size=1,
+        max_overflow=0,
+        pool_timeout=5,
+    )
+    factory = async_sessionmaker(engine, expire_on_commit=False)
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(room, "Reporter", user_id=str(reporter_id), is_anonymous=False)
+    target = room_manager.add_player(room, "Target", user_id=str(target_id), is_anonymous=False)
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+    try:
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        async with factory() as session:
+            async with session.begin():
+                session.add_all([
+                    User(id=account, username=name, password_hash="hash", display_name=name, state="registered")
+                    for account, name in ((reporter_id, "Reporter"), (target_id, "Target"))
+                ])
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager, session_factory=factory)
+        sessions = {
+            "reporter-sid": {"room_id": room.id, "player_id": reporter.id},
+            "target-sid": {"room_id": room.id, "player_id": target.id},
+        }
+        sio.get_session = AsyncMock(side_effect=lambda sid, namespace=None: sessions[sid])
+        sio.emit = AsyncMock()
+
+        await sio.handlers["/"]["send_chat"]("target-sid", {"text": "something worth reporting"})
+        with caplog.at_level(logging.WARNING):
+            result = await sio.handlers["/"]["report_player"](
+                "reporter-sid",
+                {"targetPlayerId": target.id, "reason": "harassment", "details": "Just now."},
+            )
+
+        assert result["ok"] is True
+        assert result["evidenceCount"] == 1, "the cited line was written before the read"
+        assert "not flushed" not in caplog.text
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()
+
+
+async def test_an_account_erased_during_the_flush_files_no_report():
+    """The re-lock in the writing transaction is the whole reason that
+    transaction is separate: the first one has ended by the time the flush
+    returns, so what is written must be written under a lock that still holds
+    (R-PRIV-15). Deleting it left 2823 tests passing (#972 fifth review)."""
+    from uuid import uuid4
+
+    from sqlalchemy import func, select
+
+    from app.api.errors import ErrorCode
+    from app.db.models import PlayerReport, User
+
+    factory, engine = await create_test_db()
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(room, "Reporter", user_id=str(reporter_id), is_anonymous=False)
+    target = room_manager.add_player(room, "Target", user_id=str(target_id), is_anonymous=False)
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+    try:
+        async with factory() as session:
+            async with session.begin():
+                session.add_all([
+                    User(id=account, username=name, password_hash="hash", display_name=name, state="registered")
+                    for account, name in ((reporter_id, "Reporter"), (target_id, "Target"))
+                ])
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager, session_factory=factory)
+        sessions = {
+            "reporter-sid": {"room_id": room.id, "player_id": reporter.id},
+            "target-sid": {"room_id": room.id, "player_id": target.id},
+        }
+        sio.get_session = AsyncMock(side_effect=lambda sid, namespace=None: sessions[sid])
+        sio.emit = AsyncMock()
+        await sio.handlers["/"]["send_chat"]("target-sid", {"text": "something worth reporting"})
+
+        # The reporter's account is erased while the report waits for the
+        # retention queue - the window the two transactions open.
+        real_flush = ctx.message_retention.flush
+
+        async def erase_meanwhile():
+            await real_flush()
+            async with factory() as session:
+                async with session.begin():
+                    reporter_row = await session.get(User, reporter_id)
+                    # As erasure leaves it: deleted, with the credentials gone
+                    # (the row's own CHECK insists the two go together).
+                    reporter_row.state = "deleted"
+                    reporter_row.username = None
+                    reporter_row.password_hash = None
+
+        ctx.message_retention.flush = erase_meanwhile
+
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "harassment", "details": "Just now."},
+        )
+
+        assert result["ok"] is False
+        assert result["errorCode"] == ErrorCode.ACCOUNT_REQUIRED
+        async with factory() as session:
+            assert await session.scalar(select(func.count(PlayerReport.id))) == 0
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()
+
+
+async def _reporting_room(factory):
+    """A room with a reporter and a target, both registered, and their rows."""
+    from uuid import uuid4
+
+    from app.db.models import User
+
+    reporter_id, target_id = uuid4(), uuid4()
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    reporter = room_manager.add_player(room, "Reporter", user_id=str(reporter_id), is_anonymous=False)
+    target = room_manager.add_player(room, "Target", user_id=str(target_id), is_anonymous=False)
+    reporter.sid, target.sid = "reporter-sid", "target-sid"
+    async with factory() as session:
+        async with session.begin():
+            session.add_all([
+                User(id=account, username=name, password_hash="hash", display_name=name, state="registered")
+                for account, name in ((reporter_id, "Reporter"), (target_id, "Target"))
+            ])
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager, session_factory=factory)
+    sessions = {
+        "reporter-sid": {"room_id": room.id, "player_id": reporter.id},
+        "target-sid": {"room_id": room.id, "player_id": target.id},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid, namespace=None: sessions[sid])
+    sio.emit = AsyncMock()
+    return sio, ctx, room, reporter, target, reporter_id, target_id
+
+
+async def test_the_picture_stored_is_the_one_the_complaint_was_about():
+    """`reported_avatar_key` is evidence about a past moment: a reviewer is
+    told "replaced" or "removed" by comparing it with the live picture
+    (R-AVA-04). Read again after the flush it would store whatever the account
+    put up during that window and read as unchanged, with the complained-of
+    bytes already deleted (#972 sixth review)."""
+    from sqlalchemy import select, update
+
+    from app.db.models import PlayerReport, User
+
+    factory, engine = await create_test_db()
+    try:
+        sio, ctx, room, reporter, target, _reporter_id, target_id = await _reporting_room(factory)
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(User).where(User.id == target_id).values(avatar_key="a" * 64 + ".png")
+                )
+
+        real_flush = ctx.message_retention.flush
+
+        async def replace_the_picture_meanwhile():
+            await real_flush()
+            async with factory() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(User).where(User.id == target_id).values(avatar_key="b" * 64 + ".png")
+                    )
+
+        ctx.message_retention.flush = replace_the_picture_meanwhile
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "inappropriate_avatar", "details": "That."},
+        )
+
+        assert result["ok"] is True, result
+        async with factory() as session:
+            stored = await session.scalar(select(PlayerReport.reported_avatar_key))
+        assert stored == "a" * 64 + ".png", "the picture complained about"
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()
+
+
+async def test_an_account_merged_during_the_flush_is_reported_as_the_account_it_became():
+    """The opposite rule for the identity: that one has to be current, because
+    it is what the partial unique index sees - one open report per reporter
+    per reported account (#972 sixth review)."""
+    from uuid import uuid4
+
+    from sqlalchemy import select
+
+    from app.db.models import IdentityAlias, PlayerReport, User
+
+    factory, engine = await create_test_db()
+    try:
+        sio, ctx, room, reporter, target, _reporter_id, target_id = await _reporting_room(factory)
+        claimed_id = uuid4()
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    User(
+                        id=claimed_id, username="Claimed", password_hash="hash",
+                        display_name="Claimed", state="registered",
+                    )
+                )
+
+        real_flush = ctx.message_retention.flush
+
+        async def claim_the_account_meanwhile():
+            await real_flush()
+            async with factory() as session:
+                async with session.begin():
+                    session.add(
+                        IdentityAlias(source_user_id=target_id, target_user_id=claimed_id)
+                    )
+
+        ctx.message_retention.flush = claim_the_account_meanwhile
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "harassment", "details": "That."},
+        )
+
+        assert result["ok"] is True, result
+        async with factory() as session:
+            stored = await session.scalar(select(PlayerReport.reported_user_id))
+        assert stored == claimed_id, "the account the seat resolves to now"
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()
+
+
+async def test_a_picture_cleared_during_the_flush_is_reported_as_removed():
+    """The other direction of the same rule: the key stored is the one the
+    complaint was about, so a picture *taken down* during the flush window is
+    still reported - as "removed", which is what a reviewer needs to see. Only
+    the "replaced" direction shipped (#972 seventh review)."""
+    from sqlalchemy import select, update
+
+    from app.db.models import PlayerReport, User
+
+    factory, engine = await create_test_db()
+    try:
+        sio, ctx, room, reporter, target, _reporter_id, target_id = await _reporting_room(factory)
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(User).where(User.id == target_id).values(avatar_key="c" * 64 + ".png")
+                )
+
+        real_flush = ctx.message_retention.flush
+
+        async def clear_the_picture_meanwhile():
+            await real_flush()
+            async with factory() as session:
+                async with session.begin():
+                    await session.execute(
+                        update(User).where(User.id == target_id).values(avatar_key=None)
+                    )
+
+        ctx.message_retention.flush = clear_the_picture_meanwhile
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "inappropriate_avatar", "details": "That."},
+        )
+
+        assert result["ok"] is True, result
+        async with factory() as session:
+            stored = await session.scalar(select(PlayerReport.reported_avatar_key))
+        assert stored == "c" * 64 + ".png", "the picture complained about, now gone"
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()
+
+
+async def test_a_seat_with_no_picture_cannot_be_reported_for_one():
+    """R-AVA-09: a doodle is this deployment's drawing, not something the
+    player put up, so there is nothing to report - and the refusal had no test
+    (#972 seventh review)."""
+    factory, engine = await create_test_db()
+    try:
+        sio, ctx, room, reporter, target, _reporter_id, _target_id = await _reporting_room(factory)
+
+        result = await sio.handlers["/"]["report_player"](
+            "reporter-sid",
+            {"targetPlayerId": target.id, "reason": "inappropriate_avatar", "details": "That."},
+        )
+
+        assert result["ok"] is False
+        assert result["error"] == "That player has no picture to report."
+        await ctx.message_retention.aclose()
+        await ctx.timers.close()
+    finally:
+        await engine.dispose()

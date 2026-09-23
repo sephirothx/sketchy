@@ -181,6 +181,12 @@ async def report_player(ctx: HandlerContext, sid, data):
         drawing_from_live_room(room, target.id) if payload.include_drawing else None
     )
 
+    # Two transactions with the flush between them (#972 fourth review). The
+    # first answers everything that can refuse the report, cheaply; then the
+    # connection goes back to the pool while the retention writer is waited
+    # for, because waiting for that writer to get a connection *while holding
+    # one* is how a handful of concurrent reports starve it - and the lines
+    # the report is about are what goes missing. The second writes.
     async with ctx.session_factory() as session:
         async with session.begin():
             # The erasure barrier (app.auth.erasure): the seat was
@@ -224,6 +230,35 @@ async def report_player(ctx: HandlerContext, sid, data):
                         "ok": False, "errorCode": ErrorCode.CANNOT_REPORT,
                         "error": "That player has no picture to report.",
                     }
+    # The lines the report cites may still be waiting in the retention queue's
+    # linger (#972); written first, so the read below finds them. After the
+    # refusals, so an erased account, a duplicate or a picture that is not
+    # there answers without waiting for the queue at all - and outside any
+    # transaction, holding no connection and no lock.
+    if ctx.message_retention is not None:
+        await ctx.message_retention.flush()
+
+    async with ctx.session_factory() as session:
+        async with session.begin():
+            # The barrier again, because the one above belonged to a
+            # transaction that has ended: what is written must be written
+            # under a lock that still holds (R-PRIV-15).
+            try:
+                await require_live_account(session, reporter.user_id)
+            except AccountErasedError:
+                return {"ok": False, "errorCode": ErrorCode.ACCOUNT_REQUIRED, "error": "Sign in first."}
+            # Read again across the flush, because this one has to be current:
+            # it is what the partial unique index sees, so a merge landing in
+            # the window must not leave two open reports for one pair.
+            #
+            # `reported_avatar_key` is deliberately *not* re-read. It is
+            # evidence about a past moment - the picture the complaint was
+            # about - and a reviewer is told "replaced" or "removed" by
+            # comparing it with the live one (R-AVA-04). Reading it here would
+            # store whatever the account put up during the flush and report it
+            # as unchanged, with the complained-of bytes already deleted
+            # (#972 sixth review).
+            reported_id = await canonical_user_id(session, UUID(target.user_id))
             messages = await evidence_from_live_room(
                 session,
                 room_instance_id=UUID(room.retention_scope_id),

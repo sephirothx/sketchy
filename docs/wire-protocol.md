@@ -425,7 +425,7 @@ moderation - are the rest of the same enum, and are listed at
 | --- | --- |
 | Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `max_players_below_seated`, `empty_message` |
 | Rate and capacity | `too_fast`, `seat_changing_too_fast`, `joining_too_fast`, `room_quota`, `room_full`, `spectators_full`, `player_slots_full` |
-| Server and account state | `server_draining`, `server_paused`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
+| Server and account state | `server_draining`, `server_paused`, `server_busy`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
 | Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
 | Games and turns | `not_in_game`, `game_in_progress`, `game_starting`, `need_two_players`, `room_not_startable`, `prompt_not_ready`, `prompt_unavailable`, `hints_disabled`, `hint_spend_limit`, `hint_unavailable` |
 | Canvas | `drawer_only`, `canvas_stale_generation`, `canvas_sequence_committed`, `canvas_out_of_sequence`, `canvas_out_of_sync`, `nothing_to_undo` |
@@ -2067,7 +2067,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/moderation/reports/{report_id}/remove-avatar` | Moderator. Takes down the reported account's picture, audits it, tells its owner, and blocks re-upload for a while that grows with how many a moderator has taken down from this account — none, 7, 30, then 90 days (R-AVA-08); `{ ok, removed, blockedUntil }`, the last null when this one cost no wait (R-AVA-04) |
 | `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits — and `display-name` is what **provisions a guest** on a first visit (R-ACCT-00): choosing a name is the first act only a person about to play performs. A name colour that does not read on both themes' player list is refused with 400 (R-ACCT-08); the same rule the seat applies. A display name another online guest is using is refused with 409 `name_in_use` (R-ACCT-09), including keeping your own when a guest who came online first holds it |
 | `POST` | `/api/auth/register` | Claims the current account (`AUTH_REGISTER_LIMIT`) |
-| `POST` | `/api/auth/login` | `{ username, password, code? }`. Argon2id; rehashes stale-cost hashes on success. Throttled on three keys at once — account, address, deployment — all counting **failures only**, plus a per-account backoff (R-RATE-12). A staff account must also produce its second factor (R-AUTH-20): with no `code` it answers `401` carrying `X-Sketchy-Second-Factor: required` — or `X-Sketchy-Second-Factor: passkey` when the account holds a passkey and no authenticator app, where the password route cannot finish at all and the form has to offer the passkey rather than a field (R-AUTH-23), which is how the client knows to ask rather than to report a wrong password; a staff account that has not enrolled is `403`. A recovery code is accepted in the same field |
+| `POST` | `/api/auth/login` | `{ username, password, code? }`. Argon2id; rehashes stale-cost hashes on success. Throttled on three keys at once — account, address, deployment — all counting **failures only**, plus a per-account backoff (R-RATE-12). A staff account must also produce its second factor (R-AUTH-20): with no `code` it answers `401` carrying `X-Sketchy-Second-Factor: required` — or `X-Sketchy-Second-Factor: passkey` when the account holds a passkey and no authenticator app, where the password route cannot finish at all and the form has to offer the passkey rather than a field (R-AUTH-23), which is how the client knows to ask rather than to report a wrong password; a staff account that has not enrolled is `403`. A recovery code is accepted in the same field. Every route that hashes **or verifies** a password — this one, register, password change, reset, account deletion, and every proof of a password (turning a second factor off, replacing recovery codes, stepping up) — answers **503** `server_busy` with `Retry-After` once `PASSWORD_HASH_WORKERS` × 16 hashes are already running or waiting, so a burst is refused rather than queued behind the loop (#975); the rehash after a successful login is skipped instead, never refused |
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
 | `GET` | `/api/auth/sessions` | Signed-in device list: `id`, `deviceLabel`, `createdAt`, `lastUsedAt`, `expiresAt`, `idleExpiresAt` (when silence alone ends it — usually far sooner than `expiresAt`), `anomalyAt` (last used from a browser it was not issued to, or `null`), `current` (R-AUTH-03, R-AUTH-22) |
 | `DELETE` | `/api/auth/sessions/{session_id}` | Revoke one device |
@@ -2075,7 +2075,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
-| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in |
+| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in (`AUTH_RESET_PERFORM_LIMIT`) |
 | `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
 | `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status. On a `failed` job `failureCode` is `too_large` (the deployment's ceiling, R-PRIV-13) or `generation_failed`; otherwise `null` |
@@ -2340,6 +2340,7 @@ account key is an HMAC of the lowercased username rather than of an address
 | `AUTH_LOOKUP_LIMIT` | 60 / min | Name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 / hour | `POST /api/auth/password/forgot` |
 | `AUTH_RESET_CHECK_LIMIT` | 30 / hour | `POST /api/auth/password/reset/check` |
+| `AUTH_RESET_PERFORM_LIMIT` | 10 / hour | `POST /api/auth/password/reset` — the leg that hashes, so a stolen or guessed link cannot be used to keep the hashing pool busy (#975) |
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 / hour | `PUT /api/auth/email` |
 
