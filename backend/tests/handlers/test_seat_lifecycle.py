@@ -328,7 +328,11 @@ async def test_a_join_racing_the_last_leave_is_refused_rather_than_seated_in_a_g
     async def slow_get(sid, namespace=None):
         if sid == "sid-join":
             calls["n"] += 1
-            if calls["n"] == 2:  # after the room was resolved, before the seat
+            # The third read of this socket's session is the identity
+            # resolution (`_existing_player_for_sid`, `_seat_in_room`'s own
+            # read, then `resolve_identity`): the room is resolved, the seat
+            # is not yet taken.
+            if calls["n"] == 3:
                 await gate.wait()
         return await real_get(sid)
 

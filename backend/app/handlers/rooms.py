@@ -873,6 +873,14 @@ async def _seat_in_room(
         )
         if not player.is_anonymous and (stored or name_color):
             player.name_color = stored or name_color
+        # Released here, as the new-seat path does, rather than inside
+        # `_join_socket_room`: that release awaits before the seat is marked
+        # live, and while a disconnected seat is being rebound the room may
+        # hold no connected player at all - the last one can leave through
+        # that await, and the rebind used to carry on into the dead room
+        # (#1000 review). With nothing left to release there, the seat is
+        # marked live with no await in between.
+        await ctx.game_flow.release_other_seats(sid, keep=(room.id, player.id))
         if _room_is_gone(ctx, room):
             return ROOM_GONE_ACKNOWLEDGEMENT
         if not ctx.room_capacity.admits_a_takeover(player.id):
