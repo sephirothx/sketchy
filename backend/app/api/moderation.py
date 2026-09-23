@@ -1585,13 +1585,20 @@ def create_moderation_router(
         answers with, which is the order the queue is worked in.
         """
         async with session_factory() as session:
-            await _reviewer(session, request)
+            reviewer = await _reviewer(session, request)
             plan = select(
                 PlayerReport.id,
                 PlayerReport.reported_user_id,
                 PlayerReport.scope,
                 PlayerReport.room_instance_id,
                 PlayerReport.created_at,
+            ).where(
+                # Reports about the reader are another moderator's to see and
+                # decide (#1003); a standalone report names no account.
+                or_(
+                    PlayerReport.reported_user_id.is_(None),
+                    PlayerReport.reported_user_id != reviewer.id,
+                )
             )
             if status is not None:
                 plan = plan.where(PlayerReport.status == status.value)
@@ -1663,6 +1670,11 @@ def create_moderation_router(
             report = await session.get(PlayerReport, report_id)
         if report is None or report.reported_user_id is None:
             raise HTTPException(status_code=404, detail="No such report.")
+        if report.reported_user_id == actor.id:
+            raise HTTPException(
+                status_code=403,
+                detail="A report about you is for another moderator to decide.",
+            )
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         outcome = await remove_avatar(
             session_factory,
@@ -1943,9 +1955,15 @@ def create_moderation_router(
         )
 
     async def _lock_pending_incident(
-        session: AsyncSession, report_id: UUID
+        session: AsyncSession, report_id: UUID, *, reviewer_id: UUID
     ) -> Incident:
         """Every pending report of the named report's incident, locked.
+
+        Refused when the incident is about the reviewer: a moderator could
+        open the queue and dismiss the reports filed about themselves, with
+        the ledger naming them as the reviewer and nobody else ever asked
+        (#1003). The ban and warning routes already refuse a self-target; a
+        decision reached through a report is the same act.
 
         Locked in id order and **not** starting from the named report, which
         is what makes this deadlock-free: two moderators reaching the same
@@ -1991,6 +2009,11 @@ def create_moderation_router(
             raise HTTPException(
                 status_code=409, detail="This report was already reviewed."
             )
+        if any(report.reported_user_id == reviewer_id for report in reports):
+            raise HTTPException(
+                status_code=403,
+                detail="A report about you is for another moderator to decide.",
+            )
         for report in reports:
             await session.refresh(
                 report, attribute_names=["message_evidence", "drawing_evidence"]
@@ -2010,7 +2033,7 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                incident = await _lock_pending_incident(session, report_id)
+                incident = await _lock_pending_incident(session, report_id, reviewer_id=reviewer.id)
                 # One decision, one group id, however many reports it covers
                 # (#620). Each report keeps its own reviewer, moment and audit
                 # entry: review stays one-way per row, and what changed is how
@@ -2219,7 +2242,7 @@ def create_moderation_router(
         about somebody else must be refused" true of the group as well as the
         row.
         """
-        incident = await _lock_pending_incident(session, report_id)
+        incident = await _lock_pending_incident(session, report_id, reviewer_id=reviewer.id)
         named = next(
             report for report in incident.reports if report.id == report_id
         )

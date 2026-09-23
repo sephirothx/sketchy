@@ -3453,3 +3453,44 @@ async def test_a_lobby_line_cited_the_moment_it_was_said_is_found(monkeypatch):
         await reporter_http.aclose()
         await target_http.aclose()
         await engine.dispose()
+
+
+async def test_a_moderator_neither_sees_nor_decides_reports_about_themselves(env):
+    """A reported moderator could open the queue and dismiss the reports
+    filed about them, with the ledger naming them as the reviewer and nobody
+    else ever asked (#1003). The queue leaves those out for them, the
+    decision and the picture removal refuse, and another moderator can
+    still do both."""
+    new_client, factory, _ = env
+    reporter_http, target_http, other_http = new_client(), new_client(), new_client()
+    await register(reporter_http, "SelfReporter")
+    target = await register(target_http, "ReportedMod")
+    other = await register(other_http, "OtherMod")
+    await set_role(factory, target["id"], UserRole.MODERATOR)
+    await set_role(factory, other["id"], UserRole.MODERATOR)
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={"reportedUserId": target["id"], "reason": "harassment", "details": "Rude."},
+    )
+    assert submitted.status_code == 201, submitted.text
+    report_id = submitted.json()["id"]
+
+    own_queue = await target_http.get("/api/moderation/reports", params={"status": "pending"})
+    assert own_queue.status_code == 200
+    assert own_queue.json()["incidents"] == [], "not theirs to see"
+    refused = await target_http.patch(
+        f"/api/moderation/reports/{report_id}", json={"status": "dismissed", "note": "Nothing to see."}
+    )
+    assert refused.status_code == 403
+    assert (
+        await target_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+    ).status_code == 403
+
+    others_queue = await other_http.get("/api/moderation/reports", params={"status": "pending"})
+    assert [r["id"] for i in others_queue.json()["incidents"] for r in i["reports"]] == [report_id]
+    decided = await other_http.patch(
+        f"/api/moderation/reports/{report_id}", json={"status": "resolved", "note": "Confirmed."}
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["reviewedByUserId"] == other["id"]
