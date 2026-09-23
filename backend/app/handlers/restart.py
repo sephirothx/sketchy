@@ -79,20 +79,18 @@ async def _cancel_restart(
 ) -> None:
     """Give up an approved restart, and say why.
 
-    The game it would have replaced is already gone by the time these run, so
-    the room has to be put back to waiting explicitly - leaving it "playing"
-    with no game refuses every later start as one already in progress.
+    The game the vote gave up stopped when the vote passed; a cancelled
+    restart does not bring it back, and a game that stops is recorded
+    (R-HIST-05, #993), which also clears it from the room. The room is then
+    put back to waiting explicitly - leaving it "playing" with no game
+    refuses every later start as one already in progress.
     """
     room.restart_vote = None
     room.restart_vote_cooldown_until = (
         time.time() + timing.restart_vote_cooldown_seconds
     )
-    # The game the vote gave up on stopped when the vote passed; a cancelled
-    # restart does not bring it back, and a game that stops is recorded
-    # (R-HIST-05, #993). Clears `room.game` itself.
     await ctx.game_flow.record_abandoned_game(room)
     room.state = "waiting"
-    room.game = None
     await ctx.game_flow.announce(
         room, Announcement.RESTART_CANCELLED, {"reason": str(reason)}
     )
@@ -249,6 +247,14 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
             "error": "Need at least two active players to restart",
         }
 
+    if room.game.phase == Phase.DRAWING and room.game.correct_guessers:
+        # Somebody already guessed this turn: their points are on their seat,
+        # and the game the vote gives up is recorded (R-HIST-05) by a writer
+        # that proves every seat's score against the ledger (R-HIST-12). A
+        # turn that never reached `completed_turns` while its points stayed
+        # was a record the writer refused. Ended the way the clock ends it -
+        # the results show for the moment the countdown takes to arrive.
+        await ctx.game_flow._end_turn(room)
     ctx.timers.cancel_restart_timer(room.id)
     ctx.timers.cancel_phase_timer(room.id)
     ctx.timers.cancel_hint_timers(room.id)

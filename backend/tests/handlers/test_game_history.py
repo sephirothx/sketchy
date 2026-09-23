@@ -1044,3 +1044,37 @@ async def test_a_cancelled_restart_still_records_the_game_the_vote_gave_up():
     [saved] = history.saved
     assert (saved.record.id, saved.record.outcome, len(saved.turns)) == (replaced_id, "abandoned", 1)
     await ctx.timers.close()
+
+
+async def test_a_vote_passed_after_a_correct_guess_keeps_the_turn_and_its_points():
+    """The most common restart - "someone got it, restart anyway" - leaves
+    points on the guesser's seat. The turn is ended before the game is given
+    up, so the record has the turn those points came from and the ledger
+    the writer proves against sums to the seats."""
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    replaced_id = game.id
+    guesser = next(p for p in players.values() if p.id != game.current_drawer)
+    game.force_prompt_choice()
+    game.snapshot_turn_participants({guesser.id: "eligible"})
+    game.set_phase_deadline(game.drawing_seconds)
+    correct, points = game.submit_guess(guesser.id, game.prompt)
+    assert correct and points > 0
+    guesser.score += points
+
+    await _vote_to_restart(ctx, room, players)
+
+    await replay_staged(ctx)
+    [saved] = history.saved
+    assert (saved.record.id, saved.record.outcome, len(saved.turns)) == (replaced_id, "abandoned", 1)
+    ledger = {}
+    for event in saved.score_events:
+        ledger[event.participant_seat_id] = ledger.get(event.participant_seat_id, 0) + event.points_delta
+    by_seat = {p.seat_id: p.final_score for p in saved.participants}
+    assert by_seat == {seat: ledger.get(seat, 0) for seat in by_seat}, "what the writer proves"
+    assert set(by_seat.values()) == {points}, "the guesser's award and the drawer's bonus"
+    await ctx.timers.close()
