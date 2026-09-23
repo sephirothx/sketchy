@@ -45,10 +45,14 @@ def capped(monkeypatch):
     hasher = CountingHasher()
     monkeypatch.setattr(password, "_hasher", hasher)
     monkeypatch.setattr(password, "_executor", None)
+    outstanding = password._outstanding
     yield hasher
     if password._executor is not None:
         password._executor.shutdown(wait=True)
     password._executor = None
+    # The count belongs to the process, not to this pool: a test that leaves
+    # it high lowers the refusal floor for every test after it in this worker.
+    assert password._outstanding == outstanding, "a slot was left taken"
 
 
 async def test_a_burst_of_logins_runs_at_most_the_cap_at_once(capped, monkeypatch):
