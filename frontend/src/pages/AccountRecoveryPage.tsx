@@ -116,9 +116,13 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     setBusy(true);
     setError(null);
     try {
-      await completePasswordReset(token, password);
-      await fetchMe();
-      setDone(ui.accountRecoveryPage.yourPasswordIsSetAnd);
+      const result = await completePasswordReset(token, password);
+      if (result.signedIn) {
+        await fetchMe();
+        setDone(ui.accountRecoveryPage.yourPasswordIsSetAnd);
+      } else {
+        setDone(ui.accountRecoveryPage.yourPasswordIsSetSignIn);
+      }
     } catch (resetError) {
       setError(
         refusalText(resetError, ui.accountRecoveryPage.somethingWentWrongPleaseTryAgain),

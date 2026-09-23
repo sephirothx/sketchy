@@ -584,6 +584,7 @@ export const IT: Catalogue = {
     addressIsConfirmedYouCan: (p: { address: string }) =>
       `${p.address} è confermato. Ora puoi recuperare questo account.`,
     yourPasswordIsSetAnd: "La tua password è impostata e hai di nuovo effettuato l’accesso.",
+    yourPasswordIsSetSignIn: "La tua password è impostata. Accedi con questa e con il codice della tua app di autenticazione.",
     resetYourPassword: "Reimposta la password",
     thatLinkNoLongerWorks: "Questo link non funziona più",
     chooseANewPassword: "Scegli una nuova password",

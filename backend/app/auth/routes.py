@@ -1404,14 +1404,14 @@ def create_auth_router(
                 params={"reason": error.reason, "detail": error.detail},
             ) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        user_id = await reset_password(
+        outcome = await reset_password(
             session_factory,
             token=body.token,
             password_hash=await hash_password(password),
             ip_hash=ip_hash,
             request_id=request_id,
         )
-        if user_id is None:
+        if outcome is None:
             raise Refusal(
                 400,
                 ErrorCode.RESET_LINK_INVALID,
@@ -1420,8 +1420,16 @@ def create_auth_router(
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
         clear_session_cookie(response, secure=is_secure_request(request))
-        await issue_cookie(response, request, str(user_id))
-        return {"ok": True}
+        if outcome.role in STAFF_ROLES and staff_second_factor_required():
+            # Not for a staff account: a reset proves the mailbox, and
+            # R-AUTH-20 says a moderator MUST NOT sign in without producing
+            # a code. Issued here, the session was a staff sign-in that
+            # asked for no code - and the password just set is enough to
+            # replace the authenticator, so the second factor was reduced
+            # to mailbox control (#996). Login runs the gate; go there.
+            return {"ok": True, "signedIn": False}
+        await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)
+        return {"ok": True, "signedIn": True}
 
     @router.post("/password/change")
     async def change_own_password(
