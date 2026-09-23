@@ -1475,7 +1475,7 @@ your players share one address:
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
-| `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login`, per address; failed attempts only |
+| `AUTH_LOGIN_LIMIT` | 10 per 5 minutes | `POST /api/auth/login`, per address; failed attempts only. At most 2 verifications per account and 4 per address run at once; a lockout binds the addresses that failed and lets a clean one try |
 | `AUTH_LOGIN_ACCOUNT_LIMIT` | 10 per 15 minutes | The same route per account - the key a distributed attack cannot dodge; failed attempts only |
 | `AUTH_LOGIN_GLOBAL_LIMIT` | 500 per 5 minutes | The same route for the whole deployment; failed attempts only. Once full it holds back only callers who have been failing themselves, so filling it costs an attacker their own attempts rather than everybody's logins. Set `0` to switch it off |
 | `AUTH_SECOND_FACTOR_LIMIT` | 20 per 15 minutes | Two-factor setup, code checks, and step-up |

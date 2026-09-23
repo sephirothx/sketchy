@@ -57,6 +57,15 @@ from app.services.sweeps import (
 # each further failure costs. Three is chosen so an ordinary person mistyping
 # a password twice notices nothing at all.
 LOCKOUT_AFTER_FAILURES = 3
+# How many password verifications may be in flight at once for one account,
+# and for one address (#1001). The windows count failures, and a failure is
+# charged after the hash - so a burst that passed every peek together was
+# verified in full: sixty concurrent wrong passwords against one account
+# were sixty Argon2 runs, against a ceiling of ten. These bound what a peek
+# cannot: what is admitted before anything has been charged. Two per
+# account is a household signing in at once; four per address is a NAT.
+MAX_INFLIGHT_PER_ACCOUNT = 2
+MAX_INFLIGHT_PER_ADDRESS = 4
 LOCKOUT_BACKOFF = (
     timedelta(minutes=1),
     timedelta(minutes=5),
@@ -140,6 +149,10 @@ class LoginGuard:
             window_seconds=300,
             clock=clock,
         )
+        # Verifications in flight, by key. Process memory is the right place:
+        # a slot lasts one hash, and the one worker (R-PLAT-01) sees them all.
+        self._inflight_accounts: dict[str, int] = {}
+        self._inflight_addresses: dict[str, int] = {}
 
     async def _account_key(self, username: str) -> str:
         return await keyed_client_hash(
@@ -157,7 +170,16 @@ class LoginGuard:
         now = self._clock()
         account_key = await self._account_key(username)
         locked_for = await self._lockout_remaining(username, now=now)
-        if locked_for > 0:
+        if locked_for > 0 and await self._address.recent_hits(address):
+            # The lockout is keyed by the account, and usernames are on every
+            # player list: three wrong guesses from anywhere used to lock the
+            # owner out, and one wrong guess an hour kept them out (#1001).
+            # So it binds the addresses that have been failing - the guesser,
+            # or the owner mistyping from the same device, who waits the
+            # minute it was always meant to cost - and lets a clean address
+            # try, where a correct password gets in and clears it (R-RATE-12).
+            # A guesser rotating addresses gets one verified try per address,
+            # inside the account window that bounds the total.
             return LoginVerdict(allowed=False, retry_after_seconds=locked_for)
         if not await self._account.peek(account_key):
             return LoginVerdict(allowed=False, retry_after_seconds=900)
@@ -177,6 +199,16 @@ class LoginGuard:
             ):
                 return LoginVerdict(allowed=False, retry_after_seconds=300)
         return LoginVerdict(allowed=True)
+
+    def attempt(self, *, username: str, address: str) -> "_Attempt":
+        """Hold a verification slot for this account and address (#1001).
+
+        `async with guard.attempt(...) as admitted:` - `admitted` is False
+        when either key already has its share of verifications in flight,
+        and the caller refuses without hashing. Released on exit, so a slot
+        is held for exactly as long as the verification takes.
+        """
+        return _Attempt(self, username=username, address=address)
 
     async def note_failure(self, *, username: str, address: str) -> None:
         """Charge every counter, and lengthen this account's backoff."""
@@ -246,6 +278,45 @@ class LoginGuard:
                     record.updated_at = now
                     record.locked_until = _locked_until(failures, now)
                     return
+
+class _Attempt:
+    """One verification's hold on the in-flight counters."""
+
+    def __init__(self, guard: LoginGuard, *, username: str, address: str) -> None:
+        self._guard = guard
+        self._username = username
+        self._address = address
+        self._account_key: str | None = None
+        self.admitted = False
+
+    async def __aenter__(self) -> bool:
+        guard = self._guard
+        self._account_key = (self._username or "").strip().lower()
+        accounts, addresses = guard._inflight_accounts, guard._inflight_addresses
+        if (
+            accounts.get(self._account_key, 0) >= MAX_INFLIGHT_PER_ACCOUNT
+            or addresses.get(self._address, 0) >= MAX_INFLIGHT_PER_ADDRESS
+        ):
+            return False
+        accounts[self._account_key] = accounts.get(self._account_key, 0) + 1
+        addresses[self._address] = addresses.get(self._address, 0) + 1
+        self.admitted = True
+        return True
+
+    async def __aexit__(self, *_exc) -> None:
+        if not self.admitted:
+            return
+        guard = self._guard
+        for table, key in (
+            (guard._inflight_accounts, self._account_key),
+            (guard._inflight_addresses, self._address),
+        ):
+            left = table.get(key, 0) - 1
+            if left > 0:
+                table[key] = left
+            else:
+                table.pop(key, None)
+
 
 def _locked_until(failures: int, now: datetime) -> datetime | None:
     """How long this many consecutive failures buys, or nothing yet."""

@@ -203,11 +203,11 @@ async def test_consecutive_failures_buy_an_increasing_wait(env):
     guard = LoginGuard(factory)
     for _ in range(LOCKOUT_AFTER_FAILURES):
         await guard.note_failure(username="Slowly", address="10.0.0.1")
-    first = await guard.check(username="Slowly", address="10.0.0.2")
+    first = await guard.check(username="Slowly", address="10.0.0.1")
     assert not first.allowed
 
-    await guard.note_failure(username="Slowly", address="10.0.0.3")
-    second = await guard.check(username="Slowly", address="10.0.0.4")
+    await guard.note_failure(username="Slowly", address="10.0.0.1")
+    second = await guard.check(username="Slowly", address="10.0.0.1")
     assert second.retry_after_seconds > first.retry_after_seconds
 
 
@@ -1317,3 +1317,77 @@ async def test_a_spray_is_still_bounded_once_the_deployment_bucket_is_full(env, 
     await guard.note_failure(username="Spread99", address="10.3.3.99")
     # ...and no more while the deployment bucket stays full.
     assert not (await guard.check(username="Spread99", address="10.3.3.99")).allowed
+
+
+async def test_a_lockout_binds_the_addresses_that_failed_and_lets_a_clean_one_try(env):
+    """The lockout is keyed by the account and usernames are public, so three
+    wrong guesses from anywhere used to lock the owner out - and one wrong
+    guess an hour kept them out (#1001). It now binds the failing addresses
+    and lets a clean one try; a correct password from there clears it."""
+    _, factory, _ = env
+    guard = LoginGuard(factory)
+    for _ in range(LOCKOUT_AFTER_FAILURES):
+        await guard.note_failure(username="Targeted", address="10.0.0.1")
+
+    assert not (await guard.check(username="Targeted", address="10.0.0.1")).allowed
+    assert (await guard.check(username="Targeted", address="10.0.0.2")).allowed, "the owner's own device"
+    # A guesser moving to a fresh address gets one try there, then that
+    # address is a failing one too.
+    await guard.note_failure(username="Targeted", address="10.0.0.2")
+    assert not (await guard.check(username="Targeted", address="10.0.0.2")).allowed
+
+
+async def test_the_owner_signs_in_while_a_stranger_holds_the_lockout(env):
+    from httpx import ASGITransport, AsyncClient
+
+    new_client, _, _ = env
+    owner_setup = new_client()
+    await register(owner_setup, "Besieged2")
+    attacker = new_client()  # the test transport's default address
+    assert (await attacker.get("/api/auth/me")).status_code == 200
+    for _ in range(LOCKOUT_AFTER_FAILURES):
+        response = await attacker.post(
+            "/api/auth/login", json={"username": "Besieged2", "password": "not-it"}
+        )
+        assert response.status_code == 401
+    locked = await attacker.post(
+        "/api/auth/login", json={"username": "Besieged2", "password": GOOD_PASSWORD}
+    )
+    assert locked.status_code == 429, "the failing address waits, right password or not"
+
+    app = attacker._transport.app  # type: ignore[attr-defined]
+    owner = AsyncClient(
+        transport=ASGITransport(app=app, client=("203.0.113.7", 40000)),
+        base_url="http://test",
+    )
+    try:
+        signed_in = await owner.post(
+            "/api/auth/login", json={"username": "Besieged2", "password": GOOD_PASSWORD}
+        )
+        assert signed_in.status_code == 200, signed_in.text
+    finally:
+        await owner.aclose()
+
+
+async def test_a_burst_of_guesses_is_verified_only_as_far_as_the_slots_allow(env):
+    """Every counter is charged after the hash, so a burst that passed the
+    peeks together was verified in full: sixty concurrent wrong passwords
+    were sixty Argon2 runs against a ceiling of ten (#1001)."""
+    import asyncio
+
+    from app.auth.login_guard import MAX_INFLIGHT_PER_ACCOUNT
+
+    new_client, _, _ = env
+    http = new_client()
+    await register(http, "Bursted")
+    attacker = new_client()
+    assert (await attacker.get("/api/auth/me")).status_code == 200
+
+    responses = await asyncio.gather(*(
+        attacker.post("/api/auth/login", json={"username": "Bursted", "password": "not-it"})
+        for _ in range(12)
+    ))
+    statuses = [response.status_code for response in responses]
+    assert statuses.count(401) <= MAX_INFLIGHT_PER_ACCOUNT, statuses
+    assert statuses.count(429) >= 12 - MAX_INFLIGHT_PER_ACCOUNT
+    assert all(response.headers.get("Retry-After") for response in responses if response.status_code == 429)
