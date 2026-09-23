@@ -1669,6 +1669,58 @@ async def test_a_blob_corrupted_after_its_first_serve_is_caught_at_the_next_deco
     assert (await http.get(url)).status_code == 500
 
 
+def test_the_cache_counts_its_bytes_once_per_entry():
+    """`put` ignores a key it already holds. Without that the fallback read -
+    which decodes the same drawing again when a shared fill left nothing -
+    would add its bytes a second time, and the cache would forget entries it
+    still holds room for (#979 sixth review)."""
+    import app.api.profiles as profiles
+
+    cache = profiles.WireDrawingCache(max_bytes=4096)
+    cache.put("k-w3", b"wire bytes", b"gz")
+    once = cache.bytes
+    cache.put("k-w3", b"wire bytes", b"gz")
+
+    assert cache.bytes == once
+    assert once == len(b"wire bytes") + len(b"gz")
+
+
+async def test_a_refusal_inside_an_abandoned_fill_is_retrieved(env):
+    """The fill is a task, so a refusal in one nobody waits for any more is an
+    exception the loop reports when it is collected - a traceback in the log
+    for a drawing that was simply hidden. Asserted on CPython's own
+    "nobody looked at this" flag, because the message itself is emitted from
+    `__del__` and cannot be waited for (#979 sixth review)."""
+    import asyncio
+
+    import app.api.profiles as profiles
+
+    http, users, history, factory = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    blob = _large_frame()
+    game_id = await record_game(history, users, winner=ann.id, loser=bob.id, drawing=blob)
+    turn_id = record_game.last_turn_id
+    detail = await history.get_turn_drawing(game_id, turn_id, requesting_user_id=ann.id)
+    checksum = detail.checksum_sha256
+    key = profiles._cache_key(checksum)
+
+    async def hidden():
+        return None
+
+    fill = asyncio.ensure_future(profiles._fill_cache(key, turn_id, hidden))
+    fill.add_done_callback(profiles._forget_fill(key))
+    profiles._fills[key] = fill
+    with contextlib.suppress(Exception):
+        await asyncio.wait({fill})
+
+    # Read before this test retrieves anything itself, or the assertion would
+    # be what cleared the flag.
+    assert fill.done()
+    assert fill._log_traceback is False, "the refusal was retrieved"
+    assert fill.exception() is not None
+
+
 async def test_the_cache_counter_says_which_it_was(env):
     from app.services.telemetry import telemetry
 
