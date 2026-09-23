@@ -147,7 +147,8 @@ async def test_an_abandoned_transaction_is_ended_by_the_server_and_the_pool_reco
             await asyncio.sleep(1.5)
             with pytest.raises(DBAPIError):
                 await session.execute(text("SELECT 1"))
-        # pool_pre_ping notices the terminated connection and replaces it.
+        # The terminated connection is invalidated by the failure above, or
+        # found closed at the next checkout, and replaced (#973).
         async with budgeted() as session:
             assert (await session.execute(text("SELECT 1"))).scalar_one() == 1
     finally:

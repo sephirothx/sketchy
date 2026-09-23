@@ -836,7 +836,12 @@ costs one walk over the channel's membership, only when the author has
 blockers. The backlog is filtered the other way round, per arrival: one bounded
 lookup per distinct author, together, and an author whose lookup fails is
 shown rather than hidden (R-BLOCK-06). There is no seat to warm the cache at,
-so the handshake warms it beside the identity it already reads.
+so the handshake warms it beside the identity it already reads — the two reads at
+once, not one after the other (#980). Taking a seat — and taking one back on a
+reconnect — reads the account and its colour-safe preference in one statement
+(`get_seat_account`), and stamps `last_active_at` on a task the join does not
+wait for, on a flat hang guard rather than the entry's deadline (which the task would
+otherwise inherit and find already spent).
 
 **Retention reuses the room table.** A lobby line is a `room_messages` row
 with audience `lobby`, no room scope, no seat, and an empty recipient list —
@@ -1066,6 +1071,13 @@ Retention is now a hand-off. `MessageRetentionService.record` composes the row o
 spot — every field on it is a snapshot of live state that a moment later is gone — and
 puts it on a bounded queue that a single worker drains in batches
 ([`backend/app/services/message_retention.py`](../backend/app/services/message_retention.py)).
+The one reader that cannot wait out that quarter second — a report citing a line said a
+moment ago — writes what is already queued first (`flush`, bounded at 2 s), so evidence
+is as available as it was before batching. A batch is what arrives within a quarter of a
+second of its first line (sooner if 100
+are waiting, or if anybody is draining the queue): rooms talk a line at a time, so a
+worker that took only what was already queued wrote one transaction per line — under
+the load gate that was half of every statement the process ran (#972).
 The caller gets the message's UUIDv7 back immediately; what it does not get is a
 promise that the row landed. That identifier is what lets a player pin the line as
 report evidence, and a report naming a message the database does not have is refused
@@ -1422,7 +1434,8 @@ that ran them - `database_operation` sets a context variable at a dozen call sit
 (session resolve, save game, message batch, gallery page, a sweep, ...), which follows
 the task into SQLAlchemy's greenlet - so a slow p95 has a name (#892). The pool is a
 `TimedQueuePool` that times each checkout, because the statement timer starts only
-once a connection is held; a failed statement is counted by SQLSTATE class; and each
+once a connection is held (and checks each checkout for a closed socket, pinging only a
+connection unused for 30 s, #973); a failed statement is counted by SQLSTATE class; and each
 operator command's engine logs one summary line when disposed, since nothing scrapes a
 process that lives for a minute.
 
@@ -1714,7 +1727,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/auth/mail.py`](../backend/app/auth/mail.py) | Queueing and delivery for the few messages this game ever sends. |
 | [`app/auth/middleware.py`](../backend/app/auth/middleware.py) | Session cookie plumbing for HTTP requests and Socket.IO handshakes. |
 | [`app/auth/names.py`](../backend/app/auth/names.py) | The single naming rule shared by guest nicknames and account usernames. |
-| [`app/auth/password.py`](../backend/app/auth/password.py) | Argon2id password hashing, kept off the event loop. |
+| [`app/auth/password.py`](../backend/app/auth/password.py) | Argon2id password hashing, kept off the event loop on a capped pool of its own. |
 | [`app/auth/password_reset.py`](../backend/app/auth/password_reset.py) | Operator-run password reset, for deployments that cannot send mail. |
 | [`app/auth/passkeys.py`](../backend/app/auth/passkeys.py) | Passkeys: the staff credential a relay cannot carry away. |
 | [`app/auth/pending_role.py`](../backend/app/auth/pending_role.py) | A staff role offered, and waiting on the second factor that starts it. |

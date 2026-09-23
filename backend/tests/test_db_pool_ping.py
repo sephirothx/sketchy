@@ -1,0 +1,403 @@
+"""A pooled connection is checked for free, and pinged only after a quiet spell (#973)."""
+from __future__ import annotations
+
+import asyncio
+import os
+from time import monotonic
+
+import pytest
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+from app.db import (
+    POSTGRES_POOL_PING_IDLE_SECONDS,
+    get_engine_connect_args,
+    get_engine_pool_options,
+    install_idle_ping,
+    pool_ping_idle_seconds,
+)
+
+
+PG_URL = os.environ.get("TEST_DATABASE_URL", "")
+ON_POSTGRESQL = PG_URL.startswith("postgresql")
+needs_postgresql = pytest.mark.skipif(
+    not ON_POSTGRESQL, reason="the checkout ping is configured for PostgreSQL only"
+)
+
+
+class Clock:
+    def __init__(self) -> None:
+        self.now = 1000.0
+
+    def __call__(self) -> float:
+        return self.now
+
+
+def test_the_idle_threshold_defaults_and_is_overridable(monkeypatch):
+    monkeypatch.delenv("DB_POOL_PING_IDLE_SECONDS", raising=False)
+    assert pool_ping_idle_seconds() == POSTGRES_POOL_PING_IDLE_SECONDS == 30
+    monkeypatch.setenv("DB_POOL_PING_IDLE_SECONDS", "5")
+    assert pool_ping_idle_seconds() == 5
+    assert "pool_pre_ping" not in get_engine_pool_options("postgresql+asyncpg://db/x")
+
+
+async def _pinged_engine(clock, tmp_path):
+    """One pooled connection with the checkout listener, on the suite's engine:
+    the listener is the same code on both, and only PostgreSQL installs it."""
+    url = PG_URL if ON_POSTGRESQL else f"sqlite+aiosqlite:///{tmp_path / 'ping.db'}"
+    engine = create_async_engine(
+        url,
+        connect_args=get_engine_connect_args(url),
+        **{**get_engine_pool_options(url), "pool_size": 1, "max_overflow": 0},
+    )
+    install_idle_ping(engine, idle_seconds=30, clock=clock)
+    pings: list[int] = []
+    dialect = engine.sync_engine.dialect
+    real_ping = dialect.do_ping
+
+    def counted(dbapi_connection):
+        pings.append(1)
+        return real_ping(dbapi_connection)
+
+    dialect.do_ping = counted
+    return engine, async_sessionmaker(engine), pings, dialect
+
+
+#: SQLite has no backend pid, so the driver object's identity stands in - and
+#: a reference to each is kept, because CPython reuses addresses and a freed
+#: connection's id can come back as a "match" (#973 fifth review).
+_seen_connections: list[object] = []
+
+
+async def _backend_pid(factory) -> int:
+    """Which pooled connection answered: the backend pid, or the driver
+    object's identity on SQLite."""
+    async with factory() as session:
+        if ON_POSTGRESQL:
+            return (await session.execute(text("SELECT pg_backend_pid()"))).scalar_one()
+        connection = await session.connection()
+        raw = await connection.get_raw_connection()
+        _seen_connections.append(raw.driver_connection)
+        return id(raw.driver_connection)
+
+
+async def test_a_busy_connection_is_not_pinged(tmp_path):
+    """The ping `pool_pre_ping` sent on every checkout was three round trips
+    before a session's own work; a connection in steady use needs none."""
+    engine, factory, pings, _ = await _pinged_engine(Clock(), tmp_path)
+    try:
+        for _ in range(5):
+            await _backend_pid(factory)
+        assert pings == []
+    finally:
+        await engine.dispose()
+
+
+async def test_a_connection_quiet_for_the_threshold_is_pinged_once(tmp_path):
+    clock = Clock()
+    engine, factory, pings, _ = await _pinged_engine(clock, tmp_path)
+    try:
+        first = await _backend_pid(factory)
+        clock.now += 31
+        assert await _backend_pid(factory) == first
+        assert pings == [1]
+        await _backend_pid(factory)  # just returned again: no second ping
+        assert pings == [1]
+    finally:
+        await engine.dispose()
+
+
+@needs_postgresql
+async def test_a_connection_the_server_ended_is_replaced_without_a_ping(tmp_path):
+    """A terminated backend closes its socket, which the driver has seen by
+    the next checkout: the caller gets a fresh connection, not the error."""
+    engine, factory, pings, _ = await _pinged_engine(Clock(), tmp_path)
+    other = create_async_engine(PG_URL)
+    try:
+        victim = await _backend_pid(factory)
+        async with other.connect() as connection:
+            await connection.execute(text("SELECT pg_terminate_backend(:pid)"), {"pid": victim})
+        await asyncio.sleep(0.2)  # the close reaches the idle connection's protocol
+        assert await _backend_pid(factory) != victim
+        assert pings == []
+    finally:
+        await other.dispose()
+        await engine.dispose()
+
+
+async def test_a_quiet_connection_that_fails_its_ping_is_replaced(tmp_path):
+    """What only a ping finds: a peer that vanished without closing anything.
+    Simulated by a failing ping, since a half-open socket cannot be made on
+    loopback."""
+    clock = Clock()
+    engine, factory, pings, dialect = await _pinged_engine(clock, tmp_path)
+    try:
+        first = await _backend_pid(factory)
+        clock.now += 31
+
+        def failing(_dbapi_connection):
+            pings.append(1)
+            raise OSError("peer vanished")
+
+        dialect.do_ping = failing
+        assert await _backend_pid(factory) != first
+        assert pings == [1]
+    finally:
+        await engine.dispose()
+
+
+@needs_postgresql
+async def test_one_statement_reads_open_no_transaction(monkeypatch):
+    """A lone SELECT is its own snapshot; BEGIN and ROLLBACK around it were two
+    of its three round trips. Counted at the driver adapter, which starts a
+    server transaction before any statement not run under AUTOCOMMIT."""
+    from sqlalchemy.dialects.postgresql.asyncpg import AsyncAdapt_asyncpg_connection
+
+    from app.auth.blocks import BlockService
+    from app.db.models import User, generate_uuid
+    from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+    from tests.dbfixtures import create_test_db
+
+    factory, engine = await create_test_db()
+    try:
+        user_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=user_id, username="Reader", display_name="Reader"))
+        started: list[int] = []
+        real_start = AsyncAdapt_asyncpg_connection._start_transaction
+
+        async def counted(self):
+            if self.isolation_level != "autocommit":  # the adapter's own early return
+                started.append(1)
+            return await real_start(self)
+
+        monkeypatch.setattr(AsyncAdapt_asyncpg_connection, "_start_transaction", counted)
+        repo = SqlAlchemyUserRepository(factory)
+        assert (await repo.get_by_id(str(user_id))).display_name == "Reader"
+        assert (await repo.get_by_username("reader")) is not None
+        assert await BlockService(factory).blockers_of(str(user_id)) == frozenset()
+        assert started == []
+        # And an ordinary session still gets its transaction.
+        async with factory() as session:
+            await session.execute(text("SELECT 1"))
+        assert started == [1]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    ON_POSTGRESQL, reason="asyncpg's flag is read-only; the terminated-backend test covers it there"
+)
+async def test_a_connection_the_driver_reports_closed_is_replaced_without_a_ping(tmp_path, monkeypatch):
+    """The free check: whatever the driver already knows is closed is never
+    handed out, and costs no ping to find."""
+    engine, factory, pings, _ = await _pinged_engine(Clock(), tmp_path)
+    try:
+        async with factory() as session:
+            connection = await session.connection()
+            raw = await connection.get_raw_connection()
+            driver = raw.driver_connection
+        first = id(driver)
+        monkeypatch.setattr(driver, "is_closed", lambda: True, raising=False)
+        assert await _backend_pid(factory) != first
+        assert pings == []
+    finally:
+        await engine.dispose()
+
+
+def _listener_names(engine, event_name):
+    return [listener.__name__ for listener in getattr(engine.sync_engine.pool.dispatch, event_name)]
+
+
+def test_sqlite_gets_no_checkout_check(tmp_path):
+    """The wiring, not just the listener: without a test for it the whole
+    feature can be deleted from `create_db_engine` and every test still
+    passes (#973 review). SQLite has no round trip to save, so it gets none."""
+    from app.db import create_db_engine
+
+    sqlite = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'wiring.db'}")
+    assert "check" not in _listener_names(sqlite, "checkout")
+
+
+@needs_postgresql
+def test_a_postgresql_engine_registers_the_idle_ping():
+    from app.db import create_db_engine
+
+    engine = create_db_engine(PG_URL)
+    assert "check" in _listener_names(engine, "checkout")
+    assert "stamp" in _listener_names(engine, "checkin")
+    assert "stamp" in _listener_names(engine, "connect")
+
+
+def test_the_installed_ping_honours_the_configured_threshold(monkeypatch):
+    """The wiring test above pins *which* listeners are registered, not where
+    their threshold comes from: hardcoding 30 seconds left
+    `DB_POOL_PING_IDLE_SECONDS` dead with the whole suite green, while the
+    README still documented it (#973 third review).
+
+    No connection is made - creating an engine opens nothing - so this runs
+    wherever the suite runs.
+    """
+    from types import SimpleNamespace
+
+    from app.db import _RETURNED_AT, create_db_engine
+
+    monkeypatch.setenv("DB_POOL_PING_IDLE_SECONDS", "900")
+    engine = create_db_engine("postgresql+asyncpg://sketchy@127.0.0.1/never-connected")
+    check = next(
+        listener
+        for listener in engine.sync_engine.pool.dispatch.checkout
+        if listener.__name__ == "check"
+    )
+    pings: list[int] = []
+    monkeypatch.setattr(
+        engine.sync_engine.dialect,
+        "_do_ping_w_event",
+        lambda _connection: (pings.append(1), True)[1],
+    )
+
+    quiet_for = lambda seconds: SimpleNamespace(info={_RETURNED_AT: monotonic() - seconds})
+    check(object(), quiet_for(100), None)
+    assert pings == [], "100 s is not quiet when the threshold is 900"
+    check(object(), quiet_for(901), None)
+    assert pings == [1]
+
+
+async def test_a_quiet_connection_whose_ping_answers_falsely_is_replaced(tmp_path):
+    """The production shape of a failed ping on asyncpg: the dialect funnels
+    the driver's error through its own handling and *returns False* rather
+    than raising, so a guard that only catches exceptions lets a dead
+    connection through. Deleting the falsy check passed both suites (#973
+    fourth review)."""
+    clock = Clock()
+    engine, factory, pings, dialect = await _pinged_engine(clock, tmp_path)
+    try:
+        first = await _backend_pid(factory)
+
+        def answers_falsely(_dbapi_connection):
+            pings.append(1)
+            return False
+
+        dialect._do_ping_w_event = answers_falsely
+        clock.now += 31
+        assert await _backend_pid(factory) != first, "the pooled connection was kept"
+        assert pings == [1]
+    finally:
+        await engine.dispose()
+
+
+async def test_a_sqlite_read_session_is_left_in_its_own_transaction(tmp_path):
+    """`read_session` is a PostgreSQL optimisation: SQLite's transaction is a
+    call into this process, and putting it under `AUTOCOMMIT` costs more than
+    it saves. Removing the dialect guard ran SQLite that way with both suites
+    green (#973 fourth review)."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from app.db import read_session
+
+    url = f"sqlite+aiosqlite:///{tmp_path / 'read.db'}"
+    engine = create_async_engine(url, connect_args=get_engine_connect_args(url))
+    factory = async_sessionmaker(engine)
+    try:
+        async with read_session(factory) as session:
+            connection = await session.connection()
+            options = connection.sync_connection.get_execution_options()
+            assert options.get("isolation_level") is None, options
+            assert (await session.execute(text("SELECT 1"))).scalar_one() == 1
+            assert session.in_transaction()
+    finally:
+        await engine.dispose()
+
+
+async def test_the_threshold_is_the_boundary_it_says(tmp_path):
+    """Quiet *for* the threshold, not longer: only +31 s was ever probed, so
+    turning the comparison round passed (#973 fourth review)."""
+    clock = Clock()
+    engine, factory, pings, _ = await _pinged_engine(clock, tmp_path)
+    try:
+        await _backend_pid(factory)
+        clock.now += 29.9
+        await _backend_pid(factory)
+        assert pings == [], "a connection inside the window is not pinged"
+        clock.now += 30
+        await _backend_pid(factory)
+        assert pings == [1], "one that has reached it is"
+    finally:
+        await engine.dispose()
+
+
+async def test_zero_pings_every_checkout_again(tmp_path, monkeypatch):
+    """The documented way back to `pool_pre_ping`'s guarantee for a deployment
+    that wants it. Raising the minimum to 1 would take it away with every test
+    still green (#973 fourth review)."""
+    monkeypatch.setenv("DB_POOL_PING_IDLE_SECONDS", "0")
+    assert pool_ping_idle_seconds() == 0
+
+    clock = Clock()
+    url = PG_URL if ON_POSTGRESQL else f"sqlite+aiosqlite:///{tmp_path / 'always.db'}"
+    engine = create_async_engine(
+        url,
+        connect_args=get_engine_connect_args(url),
+        **{**get_engine_pool_options(url), "pool_size": 1, "max_overflow": 0},
+    )
+    install_idle_ping(engine, idle_seconds=pool_ping_idle_seconds(), clock=clock)
+    pings: list[int] = []
+    dialect = engine.sync_engine.dialect
+    real_ping = dialect.do_ping
+    dialect.do_ping = lambda connection: (pings.append(1), real_ping(connection))[1]
+    factory = async_sessionmaker(engine)
+    try:
+        for _ in range(3):
+            async with factory() as session:
+                await session.execute(text("SELECT 1"))
+        assert len(pings) >= 2, "every checkout after the first is pinged"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_failed_ping_replaces_one_connection_not_the_generation(tmp_path):
+    """The narrowing this change is about: `pool_pre_ping` raised
+    `InvalidatePoolError`, which recycles every pooled connection, so one dead
+    connection after a failover cost every other caller theirs. Every other
+    test here runs a pool of one, where the two are indistinguishable (#973
+    fifth review)."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    clock = Clock()
+    url = PG_URL if ON_POSTGRESQL else f"sqlite+aiosqlite:///{tmp_path / 'generation.db'}"
+    engine = create_async_engine(
+        url,
+        connect_args=get_engine_connect_args(url),
+        **{**get_engine_pool_options(url), "pool_size": 2, "max_overflow": 0},
+    )
+    install_idle_ping(engine, idle_seconds=30, clock=clock)
+    factory = async_sessionmaker(engine)
+    try:
+        # Two pooled connections, both in use at once so both are real.
+        async with factory() as first, factory() as second:
+            await first.execute(text("SELECT 1"))
+            await second.execute(text("SELECT 1"))
+
+        failing = {"count": 0}
+
+        def ping_fails_once(_dbapi_connection):
+            failing["count"] += 1
+            return failing["count"] > 1
+
+        engine.sync_engine.dialect._do_ping_w_event = ping_fails_once
+        clock.now += 31
+        async with factory() as session:
+            await session.execute(text("SELECT 1"))
+        clock.now += 31
+        async with factory() as session:
+            await session.execute(text("SELECT 1"))
+            survivor = (await session.connection()).sync_connection.connection
+
+        # Each is checked on its own checkout, and the one that passed its
+        # ping was kept: under `InvalidatePoolError` the second checkout gets
+        # a connection from a new generation and never pings at all.
+        assert failing["count"] == 2
+        assert survivor is not None
+    finally:
+        await engine.dispose()
