@@ -63,9 +63,12 @@ PROMQL_WORDS = frozenset(
     inf nan start end
     """.split()
 )
-# The functions and operators a query may call. A name stripped as a call is
-# held to this too: `histogram_quantil(...)` is a panel Grafana refuses, and
-# removing every `identifier(` would have taken it out unread.
+# The functions and operators a query may call - Prometheus 2's set, which is
+# what the deployment runs. A name stripped as a call is held to this too:
+# `histogram_quantil(...)` is a panel Grafana refuses, and removing every
+# `identifier(` would have taken it out unread. A panel reaching for a function
+# that is genuinely missing here adds it; the failure reads as an unknown
+# series, which is the one misleading thing about this check.
 PROMQL_CALLS = frozenset(
     """
     abs absent absent_over_time avg avg_over_time bottomk ceil changes clamp clamp_max
@@ -76,6 +79,10 @@ PROMQL_CALLS = frozenset(
     present_over_time quantile quantile_over_time rate resets round scalar sgn sort
     sort_desc sqrt stddev stddev_over_time stdvar stdvar_over_time sum sum_over_time
     time timestamp topk vector year
+    histogram_avg histogram_fraction histogram_stddev histogram_stdvar
+    mad_over_time sort_by_label sort_by_label_desc limitk limit_ratio info pi
+    acos acosh asin asinh atan atanh cos cosh sin sinh tan tanh deg rad
+    double_exponential_smoothing
     """.split()
 )
 # Operators that combine series, and so drop every label they were not told to
@@ -107,37 +114,56 @@ def series_named(expr: str) -> set[str]:
     return {name for name in IDENTIFIER.findall(stripped) if name not in PROMQL_WORDS}
 
 
-def labels_kept(expr: str) -> set[str] | None:
-    """The labels an expression still carries, or None when it keeps them all.
+def labels_kept(expr: str) -> tuple[set[str] | None, set[str]]:
+    """What a legend may name: the labels the expression still carries, and the
+    ones it provably dropped.
 
-    An aggregation combines series, so it keeps only what its `by` names -
-    and the generator writes the prefix form, `sum by (transport) (...)`,
-    which is why this cannot look for `sum(` alone."""
+    An aggregation combines series and keeps only what its `by` names - and the
+    generator writes the prefix form, `sum by (transport) (...)`, which is why
+    this cannot look for `sum(` alone. Nested, the outermost governs, so the
+    `by` sets intersect rather than union: an inner clause cannot give back a
+    label the outer one dropped. `without` names what goes instead, and what
+    remains cannot be enumerated - a legend naming one of those still fails.
+    None for the kept set means every label survived."""
     kept: set[str] | None = None
-    for clause, labels in AGGREGATION.findall(expr):
+    dropped: set[str] = set()
+    for clause, labels in AGGREGATION.findall(LABEL_BLOCK.sub(" ", expr)):
         named = {label.strip() for label in labels.split(",") if label.strip()}
         if clause == "by":
-            kept = named if kept is None else kept | named
+            kept = named if kept is None else kept & named
         elif clause == "without":
-            continue  # keeps everything but `named`; no panel writes one yet
+            dropped |= named
         else:
             # An aggregation with no grouping at all: one series out, no labels.
-            return set() if kept is None else kept
-    return kept
+            return set(), dropped
+    return kept, dropped
 
 
 def windows_in(expr: str) -> set[str]:
-    """Every range window the expression actually asks Prometheus for."""
-    return {literal.strip("[]") for literal in WINDOW_LITERAL.findall(expr)}
+    """Every range an expression asks Prometheus for, a subquery's `[range:step]`
+    counted as its range."""
+    return {literal.strip("[]").split(":")[0] for literal in WINDOW_LITERAL.findall(expr)}
+
+
+COMPONENT = re.compile(r"(\d+)(ms|[smhdwy]|M)")
+# PromQL's units, plus the `M` (month) Grafana writes in a range but PromQL
+# does not accept in a window. A month is what Grafana means by it: 30 days.
+UNITS = {"ms": 1 / 60000, "s": 1 / 60, "m": 1, "h": 60, "d": 1440, "w": 10080, "M": 43200, "y": 525600}
 
 
 def minutes(duration: str) -> float:
-    """A PromQL duration in minutes, so windows and steps compare."""
-    units = {"ms": 1 / 60000, "s": 1 / 60, "m": 1, "h": 60, "d": 1440, "w": 10080, "y": 525600}
-    for unit in ("ms", "s", "m", "h", "d", "w", "y"):
-        if duration.endswith(unit) and duration[: -len(unit)].isdigit():
-            return int(duration[: -len(unit)]) * units[unit]
-    raise AssertionError(f"not a duration: {duration}")
+    """A duration in minutes, so windows and steps compare. Compound durations
+    (`1h30m`) are the sum of their parts, as PromQL reads them."""
+    components = COMPONENT.findall(duration)
+    assert components and "".join(count + unit for count, unit in components) == duration, duration
+    return sum(int(count) * UNITS[unit] for count, unit in components)
+
+
+def opens_on_minutes(relative: str) -> float:
+    """A Grafana relative range as minutes. `now-1d/d` snaps to the day it
+    names, which is no shorter than the range itself."""
+    assert relative.startswith("now-"), relative
+    return minutes(relative.removeprefix("now-").split("/")[0])
 
 
 def test_every_series_a_panel_queries_is_one_something_exposes():
@@ -170,8 +196,7 @@ def test_every_window_fits_inside_the_step_its_dashboard_opens_on():
     opens_on = {dashboard.uid: dashboard.time_from for dashboard in module.DASHBOARDS}
     for uid, panel, expr in module.expressions():
         relative = opens_on[uid]
-        assert relative.startswith("now-"), (uid, relative)
-        step = minutes(relative.removeprefix("now-")) / 800
+        step = opens_on_minutes(relative) / 800
         for window in windows_in(expr):
             assert minutes(window) >= step, (uid, panel, window, relative)
 
@@ -213,7 +238,8 @@ def test_every_legend_names_a_label_its_query_still_has():
                 continue
             for target in panel["targets"]:
                 wanted = set(re.findall(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}", target["legendFormat"]))
-                kept = labels_kept(target["expr"])
+                kept, dropped = labels_kept(target["expr"])
+                assert not (wanted & dropped), (name, panel["title"], wanted & dropped)
                 if not wanted or kept is None:
                     continue
                 assert wanted <= kept, (name, panel["title"], wanted - kept)
@@ -296,6 +322,21 @@ def test_the_dashboards_are_provisioned_read_only():
 
 
 def test_every_uid_is_unique_and_stable():
+    """Grafana refuses a uid over 40 characters: the board is simply never
+    provisioned, and the only trace is a line in its log."""
     uids = [dashboard["uid"] for dashboard in dashboards().values()]
     assert len(uids) == len(set(uids))
-    assert all(uid.startswith("sketchy-") for uid in uids), uids
+    for uid in uids:
+        assert uid.startswith("sketchy-"), uid
+        assert len(uid) <= 40, (uid, len(uid))
+        assert re.fullmatch(r"[A-Za-z0-9_-]+", uid), uid
+
+
+def test_every_panel_has_something_to_draw():
+    """A panel that lost its last query keeps its title and its description,
+    and draws nothing for as long as nobody opens it."""
+    for name, dashboard in dashboards().items():
+        for panel in dashboard["panels"]:
+            if panel["type"] == "row":
+                continue
+            assert panel["targets"], (name, panel["title"])

@@ -157,7 +157,10 @@ shipping features and look at what spent it.
   board of five-minute rates opens on a day, because Grafana's step is the range over
   about 800 points - tens of minutes at a week - and a window narrower than the step
   draws a fraction of the range and never looks at the rest. Zooming the overview out
-  to a week is still sound for its counts: their window is a rolling hour. A trend older than
+  to a week - a month at the outside - is still sound for its counts: their window is
+  a rolling hour, and the step stays under an hour that far out. A quarter or a year
+  is not: the step outgrows the window, and each point becomes one hour in three or
+  twelve rather than a gap that looks like one. A trend older than
   Prometheus's retention is gone: the default is 15 days, and since #965 no daily
   roll-up in the database keeps one, so run Prometheus with
   `--storage.tsdb.retention.time=1y` or longer.

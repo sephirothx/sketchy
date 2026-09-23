@@ -164,9 +164,11 @@ OVERVIEW = Dashboard(
     description="Is the game being played, and is the one worker keeping up with it.",
     # A day. Its rates are over 5 minutes, and Grafana's step at a week is
     # 10-15 minutes, so a week-wide default would step over the spikes this
-    # board exists for. Zooming out to a week is a deliberate act, and the
-    # counts stay true when it happens: their window is a rolling hour, wider
-    # than the step at any range.
+    # board exists for. Zooming out to a week keeps the counts true - their
+    # window is a rolling hour, and the step stays under an hour out to about
+    # a month. Past that the step outgrows the window and each point is one
+    # hour in three or twelve, plausible-looking and wrong: read a quarter or
+    # a year from a range query of your own, not from here.
     time_from="now-24h",
     rows=(
         Row("Now", (
