@@ -351,3 +351,59 @@ async def test_a_join_racing_the_last_leave_is_refused_rather_than_seated_in_a_g
     assert answer["errorCode"] == "room_ended"
     assert rm.get_room(room_id) is None, "nothing was resurrected"
     await ctx.timers.close()
+
+
+async def test_a_rebind_racing_the_last_leave_is_refused_too():
+    """The other half of #1000: a disconnected seat being rebound holds the
+    room open for nobody, and releasing the socket's seat elsewhere awaited
+    before the seat was marked live. The host could leave through that
+    await, and the rebind carried on into the dead room."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    codes = iter(["AAAAAA", "BBBBBB"])
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(side_effect=lambda *a, **k: next(codes)),
+        release_unpublished=AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=AsyncMock(return_value=False),
+    )
+    handlers = sio.handlers["/"]
+    await sessions.save("sid-pat", {"user_id": "user-pat"})
+    await sessions.save("sid-pat2", {"user_id": "user-pat"})
+    created = await handlers["create_room"]("sid-host", {"nickname": "Host", "name": "X"})
+    x_id = created["roomId"]
+    joined = await handlers["join_room"]("sid-pat", {"roomId": x_id, "nickname": "Pat"})
+    assert joined["ok"], joined
+    # Pat's socket drops: the seat stays, disconnected, inside its grace.
+    await handlers["disconnect"]("sid-pat")
+    # Pat's next socket opens a room of its own, then comes back for X.
+    other = await handlers["create_room"]("sid-pat2", {"nickname": "Pat", "name": "Y"})
+    assert other["ok"], other
+
+    gate = asyncio.Event()
+    armed = {"held": False}
+    real_save = sessions.save
+
+    async def slow_save(sid, session, namespace=None):
+        # Releasing the seat in Y saves this socket's session: the await the
+        # host leaves through.
+        if sid == "sid-pat2" and not armed["held"]:
+            armed["held"] = True
+            await gate.wait()
+        return await real_save(sid, session)
+
+    sio.save_session = AsyncMock(side_effect=slow_save)
+    rebind = asyncio.create_task(
+        handlers["join_room"]("sid-pat2", {"roomId": x_id, "nickname": "Pat"})
+    )
+    await asyncio.sleep(0.01)
+    assert armed["held"], "the rebind is inside the release"
+    await handlers["leave_room"]("sid-host", None)
+    assert room_manager.get_room(x_id) is None
+    gate.set()
+
+    answer = await rebind
+
+    assert answer["ok"] is False and answer["errorCode"] == "room_ended", answer
+    assert room_manager.get_room(x_id) is None
+    await ctx.timers.close()
