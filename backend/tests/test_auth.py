@@ -768,6 +768,19 @@ async def test_a_busy_pool_refuses_every_route_whose_hash_is_the_point(client, m
         raise PasswordHashingBusy()
 
     monkeypatch.setattr(routes_module, "verify_password", busy_verify)
+    # Login's own verify is the call this whole cap exists for, and it was the
+    # one hashing site absent from this table: a busy pool that answered "yes"
+    # there would admit any password for any account that exists (#975 sixth
+    # review).
+    admitted = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyRoutes", "password": "the-wrong-password"},
+    )
+    assert admitted.status_code == 503, admitted.text
+    # The client is told when to come back - a refusal with no `retryAfterMs`
+    # is one the frontend cannot act on.
+    assert admitted.headers["Retry-After"] == "1", admitted.headers
+
     for method, path, body in (
         ("DELETE", "/api/auth/second-factor", {"password": "a-good-password"}),
         ("POST", "/api/auth/second-factor/recovery-codes", {"password": "a-good-password"}),
@@ -849,3 +862,38 @@ async def test_an_unknown_username_still_pays_for_a_real_hash(client, monkeypatc
 
     assert answer.status_code == 401
     assert hashed == [DUMMY_HASH], "the unknown name was verified against the dummy"
+
+
+async def test_a_busy_pool_costs_the_caller_no_login_failure(client, monkeypatch):
+    """A 503 is the server saying "not now", so it must not be counted against
+    the account the way a wrong password is: a burst of them would otherwise
+    lock somebody out of their own account (#975 sixth review)."""
+    from app.auth import routes as routes_module
+    from app.auth.password import PasswordHashingBusy
+
+    await become_guest(client, "BusyLockout")
+    registered = await client.post(
+        "/api/auth/register",
+        json={"username": "BusyLockout", "password": "a-good-password"},
+    )
+    assert registered.status_code == 200
+    await client.post("/api/auth/logout")
+    real_verify = routes_module.verify_password
+
+    async def busy(_hash, _password):
+        raise PasswordHashingBusy()
+
+    monkeypatch.setattr(routes_module, "verify_password", busy)
+    for _ in range(12):
+        refused = await client.post(
+            "/api/auth/login",
+            json={"username": "BusyLockout", "password": "a-good-password"},
+        )
+        assert refused.status_code == 503
+
+    monkeypatch.setattr(routes_module, "verify_password", real_verify)
+    allowed = await client.post(
+        "/api/auth/login",
+        json={"username": "BusyLockout", "password": "a-good-password"},
+    )
+    assert allowed.status_code == 200, "the refusals charged nothing"

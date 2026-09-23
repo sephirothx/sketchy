@@ -1445,7 +1445,7 @@ Hashing runs on a thread pool of its own, `PASSWORD_HASH_WORKERS` at a time (def
 one fewer than the machine's cores, at most 4). Each hash is ~15 ms of CPU and 19 MiB;
 uncapped, a burst of 200 logins held the event loop every room shares at a p99 lag of
 ~30 ms and took ~600 MiB above idle, where capped it leaves the loop at 0.2 ms and takes
-~58 MiB. Past 16 waiting per worker a hash is refused with **503** `server_busy` and
+~58 MiB. Past 16 running or waiting per worker a hash is refused with **503** `server_busy` and
 `Retry-After`, so a flood is answered instead of queued.
 The burst as a whole finishes later (0.9 s against 0.4 s); a single login is unchanged
 (#975).

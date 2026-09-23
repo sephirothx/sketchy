@@ -100,6 +100,9 @@ async def test_past_the_queue_depth_a_hash_is_refused_not_queued(capped, monkeyp
     refused = [result for result in results if isinstance(result, password.PasswordHashingBusy)]
     assert len(refused) == 4 and capped.calls == 10
     assert refused[0].status_code == 503 and refused[0].headers["Retry-After"] == "1"
+    # And in the body, which is what the client reads: a refusal with no
+    # `retryAfterMs` is one the frontend cannot act on (#975 sixth review).
+    assert refused[0].body()["retryAfterMs"] == 1000
     assert refused[0].code == ErrorCode.SERVER_BUSY, "a server-state refusal, not the caller's fault"
     # A refusal costs no slot: the counter is back where it started.
     assert password._outstanding == 0
@@ -188,3 +191,57 @@ def test_a_slot_comes_back_when_the_loop_stops_under_the_hash():
         assert password_module._outstanding == before, "the slot came back"
     finally:
         loop.close()
+
+
+def test_the_check_and_the_slot_are_taken_under_one_lock(monkeypatch):
+    """Two threads write this count - the loop takes a slot, a worker gives it
+    back - so reading it and taking it must be one step. Removing the lock
+    from the check passed every test, because the race is between threads and
+    not between coroutines (#975 sixth review)."""
+    import asyncio
+    import threading
+
+    class Watching:
+        def __init__(self) -> None:
+            self._lock = threading.Lock()
+            self.depth = 0
+
+        def __enter__(self):
+            self._lock.acquire()
+            self.depth += 1
+            return self
+
+        def __exit__(self, *_exc):
+            self.depth -= 1
+            self._lock.release()
+
+    watching = Watching()
+    monkeypatch.setattr(password, "_counter_lock", watching)
+    seen: list[int] = []
+    real_max_queued = password.max_queued
+    monkeypatch.setattr(
+        password, "max_queued", lambda: (seen.append(watching.depth), real_max_queued())[1]
+    )
+
+    async def one_hash():
+        return await password._off_loop(lambda: "done")
+
+    assert asyncio.run(one_hash()) == "done"
+    assert seen == [1], "the cap was read with the lock held"
+
+
+async def test_a_submit_that_raises_leaves_no_slot_taken(capped, monkeypatch):
+    """The slot is taken after the pool has accepted the work: counting first
+    and failing to submit would hold a slot for the life of the process, and
+    the order was never pinned (#975 sixth review)."""
+    class RefusingPool:
+        def submit(self, *_args, **_kwargs):
+            raise RuntimeError("this pool is shutting down")
+
+    monkeypatch.setattr(password, "_pool", lambda: RefusingPool())
+    before = password._outstanding
+
+    with pytest.raises(RuntimeError):
+        await password._off_loop(lambda: "never")
+
+    assert password._outstanding == before

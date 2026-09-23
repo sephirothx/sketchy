@@ -136,8 +136,10 @@ async def _off_loop(function, *args):
     # Counted out when the job itself ends, not when the caller stops waiting:
     # a cancelled caller leaves queued work behind, and releasing its slot
     # there would let the queue grow past the cap unseen (#975 review). The
-    # callback runs on the worker thread, or inline here if the job is already
-    # done; either way it takes the lock.
+    # callback runs on the worker thread, or inline **on this thread** if the
+    # job has already finished - which is why it is attached outside the lock:
+    # `_counter_lock` is not reentrant, and attaching it inside deadlocks the
+    # process on a job that was quick (#975 sixth review).
     job.add_done_callback(_release)
     return await asyncio.wrap_future(job)
 
