@@ -149,8 +149,24 @@ class LoginGuard:
             window_seconds=300,
             clock=clock,
         )
+        # One verified try per (account, address) while the account is locked
+        # (#1001 review): the lockout binds the addresses that failed against
+        # *this* account, for the lockout's own horizon rather than the
+        # address window's five minutes - or the 15 m and 1 h tiers were dead,
+        # and one address's failures against somebody else's name bound the
+        # owner on the same NAT.
+        self._locked_probe = PersistentRateLimiter(
+            session_factory,
+            scope="login_lockout_probe",
+            limit=1,
+            window_seconds=int(LOCKOUT_BACKOFF[-1].total_seconds()),
+            clock=clock,
+        )
         # Verifications in flight, by key. Process memory is the right place:
-        # a slot lasts one hash, and the one worker (R-PLAT-01) sees them all.
+        # a slot lasts one hash, and the one worker (R-PLAT-05) sees them all -
+        # the one login limit that is not a database bucket (R-RATE-01),
+        # because a slot is work in this process, and a row would outlive a
+        # crash that never released it.
         self._inflight_accounts: dict[str, int] = {}
         self._inflight_addresses: dict[str, int] = {}
 
@@ -170,16 +186,18 @@ class LoginGuard:
         now = self._clock()
         account_key = await self._account_key(username)
         locked_for = await self._lockout_remaining(username, now=now)
-        if locked_for > 0 and await self._address.recent_hits(address):
+        if locked_for > 0 and not await self._locked_probe.peek(
+            _pair_key(account_key, address)
+        ):
             # The lockout is keyed by the account, and usernames are on every
             # player list: three wrong guesses from anywhere used to lock the
             # owner out, and one wrong guess an hour kept them out (#1001).
-            # So it binds the addresses that have been failing - the guesser,
-            # or the owner mistyping from the same device, who waits the
-            # minute it was always meant to cost - and lets a clean address
-            # try, where a correct password gets in and clears it (R-RATE-12).
-            # A guesser rotating addresses gets one verified try per address,
-            # inside the account window that bounds the total.
+            # So it binds the addresses that have failed against this account
+            # - the guesser, or the owner mistyping from the same device, who
+            # waits the minute it was always meant to cost - and lets a clean
+            # address try once, where a correct password gets in and clears it
+            # (R-RATE-12). A guesser rotating addresses gets one verified try
+            # per address, inside the account window that bounds the total.
             return LoginVerdict(allowed=False, retry_after_seconds=locked_for)
         if not await self._account.peek(account_key):
             return LoginVerdict(allowed=False, retry_after_seconds=900)
@@ -212,8 +230,10 @@ class LoginGuard:
 
     async def note_failure(self, *, username: str, address: str) -> None:
         """Charge every counter, and lengthen this account's backoff."""
-        await self._account.check(await self._account_key(username))
+        account_key = await self._account_key(username)
+        await self._account.check(account_key)
         await self._address.check(address)
+        await self._locked_probe.check(_pair_key(account_key, address))
         if self._global_limit:
             await self._deployment.check(GLOBAL_LOGIN_KEY)
         await self._record_lockout_failure(username)
@@ -278,6 +298,10 @@ class LoginGuard:
                     record.updated_at = now
                     record.locked_until = _locked_until(failures, now)
                     return
+
+def _pair_key(account_key: str, address: str) -> str:
+    return f"{account_key}:{address}"
+
 
 class _Attempt:
     """One verification's hold on the in-flight counters."""

@@ -1391,3 +1391,26 @@ async def test_a_burst_of_guesses_is_verified_only_as_far_as_the_slots_allow(env
     assert statuses.count(401) <= MAX_INFLIGHT_PER_ACCOUNT, statuses
     assert statuses.count(429) >= 12 - MAX_INFLIGHT_PER_ACCOUNT
     assert all(response.headers.get("Retry-After") for response in responses if response.status_code == 429)
+
+
+async def test_a_lockout_binds_a_pair_for_its_own_horizon_not_the_address_window(env):
+    """The bind is keyed by (account, address) and lasts the lockout's own
+    horizon: the address window rolling after five minutes must not hand a
+    guesser a fresh try inside an hour's lockout, and a failure against
+    somebody else's name from the same address must not bind this owner."""
+    from datetime import timedelta
+
+    _, factory, _ = env
+    now = {"at": datetime.now(timezone.utc)}
+    guard = LoginGuard(factory, clock=lambda: now["at"])
+    for _ in range(LOCKOUT_AFTER_FAILURES + 3):
+        await guard.note_failure(username="Sieged", address="1.1.1.1")
+    locked = await guard.check(username="Sieged", address="1.1.1.1")
+    assert not locked.allowed and locked.retry_after_seconds > 600, "an hour's tier"
+
+    now["at"] += timedelta(minutes=6)  # the address window has rolled
+    assert not (await guard.check(username="Sieged", address="1.1.1.1")).allowed
+
+    # Somebody else mistyping their own password from the owner's NAT.
+    await guard.note_failure(username="SomeoneElse", address="2.2.2.2")
+    assert (await guard.check(username="Sieged", address="2.2.2.2")).allowed

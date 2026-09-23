@@ -989,10 +989,11 @@ def create_auth_router(
         # passed the peeks together used to be verified in full.
         async with login_guard.attempt(username=body.username, address=address) as admitted:
             if not admitted:
+                # The same words as every other refusal here (R-RATE-12).
                 raise Refusal(
                     429,
                     ErrorCode.TOO_MANY_ATTEMPTS,
-                    "Too many sign-in attempts at once. Try again in a moment.",
+                    verdict.message,
                     retry_after_ms=1000,
                     headers={"Retry-After": "1"},
                 )
