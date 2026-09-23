@@ -53,6 +53,7 @@ from app.db.models import (
     TurnRecord,
     User,
     UserBlock,
+    UserSettings,
     UserStatsDaily,
     generate_uuid,
 )
@@ -873,6 +874,29 @@ class SqlAlchemyUserRepository(UserRepository):
             user = await session.scalar(select(User).where(User.id == canonical))
             return _to_user_data(user) if user else None
 
+    async def get_seat_account(self, user_id: str) -> tuple[UserData | None, bool | None]:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return None, None
+        async with self._session_factory() as session:
+            canonical = func.coalesce(
+                select(IdentityAlias.target_user_id)
+                .where(IdentityAlias.source_user_id == db_user_id)
+                .scalar_subquery(),
+                db_user_id,
+            )
+            row = (
+                await session.execute(
+                    select(User, UserSettings.colorblind_safe_colors)
+                    .outerjoin(UserSettings, UserSettings.user_id == User.id)
+                    .where(User.id == canonical)
+                )
+            ).one_or_none()
+        if row is None:
+            return None, None
+        user, colorblind = row
+        return _to_user_data(user), bool(colorblind)
+
     async def get_by_username(self, username: str) -> UserData | None:
         clean = username.strip()
         if not clean:
@@ -1184,11 +1208,15 @@ class SqlAlchemyUserRepository(UserRepository):
             return None
         async with self._session_factory() as session:
             async with session.begin():
-                user = await session.get(User, db_user_id)
-                if user is None:
-                    return None
-                user.last_active_at = datetime.now(timezone.utc)
-            return _to_user_data(user)
+                # One statement (#980): reading the row and then writing it
+                # through the ORM was a SELECT and an UPDATE on every seat.
+                user = await session.scalar(
+                    update(User)
+                    .where(User.id == db_user_id)
+                    .values(last_active_at=datetime.now(timezone.utc))
+                    .returning(User)
+                )
+            return _to_user_data(user) if user is not None else None
 
     async def touch_last_seen(self, user_id: str) -> None:
         db_user_id = _optional_entity_id(user_id)
