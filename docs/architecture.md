@@ -1425,7 +1425,8 @@ that ran them - `database_operation` sets a context variable at a dozen call sit
 (session resolve, save game, message batch, gallery page, a sweep, ...), which follows
 the task into SQLAlchemy's greenlet - so a slow p95 has a name (#892). The pool is a
 `TimedQueuePool` that times each checkout, because the statement timer starts only
-once a connection is held; a failed statement is counted by SQLSTATE class; and each
+once a connection is held (and checks each checkout for a closed socket, pinging only a
+connection unused for 30 s, #973); a failed statement is counted by SQLSTATE class; and each
 operator command's engine logs one summary line when disposed, since nothing scrapes a
 process that lives for a minute.
 

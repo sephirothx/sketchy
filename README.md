@@ -740,6 +740,7 @@ process. These deployment settings can be tuned without code changes:
 | `DB_MAX_OVERFLOW` | `5` | Temporary connections above the pool size |
 | `DB_POOL_TIMEOUT_SECONDS` | `10` | Maximum wait for an available connection |
 | `DB_POOL_RECYCLE_SECONDS` | `1800` | Maximum age before a connection is replaced |
+| `DB_POOL_PING_IDLE_SECONDS` | `30` | A pooled connection unused this long is pinged before it is handed out; one used more recently is only checked for a closed socket, which costs no round trip |
 | `DB_STATEMENT_TIMEOUT_SECONDS` | `30` | PostgreSQL `statement_timeout` for the application's connections (`application_name` `sketchy-web`) |
 | `DB_LOCK_TIMEOUT_SECONDS` | `5` | PostgreSQL `lock_timeout` for the application's connections |
 | `DB_IDLE_TRANSACTION_TIMEOUT_SECONDS` | `60` | PostgreSQL `idle_in_transaction_session_timeout` for the application's connections |
@@ -1984,6 +1985,10 @@ backend/.venv/bin/python benchmarks/catalogue_star_page.py --lists 5000 --stars 
 # The score-event ledger's bytes, write time and read cost per game (#552)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
+
+# What a pooled connection pays before its first statement, pre-ping against idle-ping (#973)
+DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_bench \
+  backend/.venv/bin/python benchmarks/pool_checkout_ping.py --sessions 300
 
 # The stored drawing format, frame by frame: bytes, ratio, p95 encode/decode (#547)
 backend/.venv/bin/python benchmarks/drawing_compression.py

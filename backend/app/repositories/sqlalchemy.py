@@ -20,6 +20,7 @@ from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.services.runtime_metrics import metrics
 from app.services.telemetry import database_operation_of, telemetry
+from app.db import read_session
 from app.db.models import (
     GalleryShelfReview,
     AuditEvent,
@@ -860,7 +861,7 @@ class SqlAlchemyUserRepository(UserRepository):
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
             return None
-        async with self._session_factory() as session:
+        async with read_session(self._session_factory) as session:
             # One statement: the canonical id is the alias target if the id
             # is a merged guest's, else the id itself (#556).
             canonical = func.coalesce(
@@ -876,7 +877,7 @@ class SqlAlchemyUserRepository(UserRepository):
         clean = username.strip()
         if not clean:
             return None
-        async with self._session_factory() as session:
+        async with read_session(self._session_factory) as session:
             stmt = select(User).where(func.lower(User.username) == clean.lower())
             result = await session.execute(stmt)
             user = result.scalar_one_or_none()

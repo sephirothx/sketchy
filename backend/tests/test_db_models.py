@@ -427,7 +427,6 @@ async def test_postgresql_pool_configuration_is_bounded_and_overridable(monkeypa
 
     assert get_engine_pool_options("postgresql+asyncpg://db/sketchy") == {
         "poolclass": TimedQueuePool,
-        "pool_pre_ping": True,
         "pool_size": 5,
         "max_overflow": 5,
         "pool_timeout": 10,
@@ -442,7 +441,6 @@ async def test_postgresql_pool_configuration_is_bounded_and_overridable(monkeypa
     configured = get_engine_pool_options("postgresql+asyncpg://db/sketchy")
     assert configured == {
         "poolclass": TimedQueuePool,
-        "pool_pre_ping": True,
         "pool_size": 8,
         "max_overflow": 3,
         "pool_timeout": 7,
