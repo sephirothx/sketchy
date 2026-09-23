@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import asyncio
+import os
+from math import ceil
 import random
 import time
 import logging
@@ -59,12 +61,33 @@ TIMER_OVERRUN_REPORT_MS = 250
 # history itself is written by the handoff loop with its own budget and
 # retries. The reaction path and the entry path share this bound.
 HISTORY_WRITE_TIMEOUT_SECONDS = WRITE_TIMEOUT_SECONDS
-#: What a shutdown allows for encodes still queued on the envelope pool, on
-#: top of the write's own bound. One stroke-heavy envelope is ~143 ms, and the
-#: documented ceiling of 50 rooms ending at once is a few seconds of queue at
-#: the default width (#976): the drain has to outlast that, or it returns
-#: while a staging is still being encoded.
-HISTORY_ENCODE_DRAIN_SECONDS = 10
+#: What one stroke-heavy envelope costs a thread, measured (#976).
+ENVELOPE_ENCODE_SECONDS = 0.15
+
+
+def history_encode_drain_seconds() -> float:
+    """What a shutdown allows for encodes still queued, on top of the write's
+    own bound.
+
+    Sized from the two things that decide it rather than guessed: every room
+    this process will hold (`ROOM_GLOBAL_LIMIT`) ending in the same instant,
+    at the configured pool width. A fixed ten seconds was sized for the
+    ceiling the issue documented, not for the one the process enforces, and on
+    a single-worker host it was less than half of what the burst needs (#976
+    fifth review).
+    """
+    from app.deployment import history_encode_workers
+    from app.services.room_quotas import DEFAULT_GLOBAL_ROOMS, _ceiling
+
+    rooms = _ceiling(os.environ, "ROOM_GLOBAL_LIMIT", DEFAULT_GLOBAL_ROOMS)
+    return ceil(rooms * ENVELOPE_ENCODE_SECONDS / max(1, history_encode_workers()))
+
+
+def shutdown_cleanup_budget_seconds() -> float:
+    """What a planned shutdown gives the deferred teardowns: a queued encode
+    and then the write it is bounded by. Past it they are cancelled, and a
+    cancelled staging counts itself as a lost game."""
+    return history_encode_drain_seconds() + HISTORY_WRITE_TIMEOUT_SECONDS
 # The same ten seconds the entry path and the finished-game write allow. A
 # game start that cannot read its prompts must refuse rather than hang the
 # host, and an unbounded database call on a request path is its own finding.

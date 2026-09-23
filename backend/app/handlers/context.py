@@ -6,7 +6,7 @@ import contextlib
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
 import logging
-from time import perf_counter
+from time import monotonic, perf_counter
 from typing import AsyncIterator, Iterable, Iterator, TYPE_CHECKING
 
 import socketio
@@ -584,8 +584,24 @@ class HandlerContext:
         """
         if not self.room_cleanups:
             return
-        pending = set(self.room_cleanups)
-        _done, still_running = await asyncio.wait(pending, timeout=within_seconds)
+        # Re-snapshotted, because one of these tasks creates another: a room
+        # teardown ends its game, and ending a game defers the staging (#976).
+        # A single snapshot gives the teardown its first step and then returns
+        # while the staging it just created runs on, neither awaited nor
+        # cancelled - the lost game again, one layer along (#976 fifth
+        # review).
+        deadline = monotonic() + within_seconds
+        still_running: set[asyncio.Task] = set()
+        while self.room_cleanups:
+            remaining = deadline - monotonic()
+            if remaining <= 0:
+                still_running = set(self.room_cleanups)
+                break
+            _done, still_running = await asyncio.wait(
+                set(self.room_cleanups), timeout=remaining
+            )
+            if still_running:
+                break
         if not still_running:
             return
         logger.warning(

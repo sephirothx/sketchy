@@ -86,8 +86,8 @@ from app.services.integrity_audit import (
 from app.services.mail_delivery import start_delivery_loop, stop_delivery_loop
 from app.services.data_export_worker import DataExportWorker, stop_export_worker
 from app.services.game_flow import (
-    HISTORY_ENCODE_DRAIN_SECONDS,
     HISTORY_WRITE_TIMEOUT_SECONDS,
+    shutdown_cleanup_budget_seconds,
 )
 from app.services.game_handoff import (
     FinishedGameHandoffWorker,
@@ -711,9 +711,7 @@ async def lifespan(_app: FastAPI):
         # bounded by: under the burst this is for, a queued encode is seconds
         # on its own, and a drain that returns first would leave the staging
         # to be cancelled by the loop closing (see `drain_room_cleanups`).
-        await handler_context.drain_room_cleanups(
-            HISTORY_ENCODE_DRAIN_SECONDS + HISTORY_WRITE_TIMEOUT_SECONDS
-        )
+        await handler_context.drain_room_cleanups(shutdown_cleanup_budget_seconds())
         # After the drain, which ends games and stages them: one bounded
         # pass replays what it can, and whatever is left is a row the next
         # process picks up on its first sweep - that is the point of #541.

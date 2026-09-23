@@ -852,6 +852,9 @@ async def test_a_staging_cancelled_by_the_drain_is_counted_as_a_lost_write(monke
 
     assert abandoned == [("handoff", "cancelled")]
     assert outcomes == [("game", "failed")]
+    # And it is still cancelled: swallowing the cancellation would report a
+    # task that never finished as one that did (#976 fifth review).
+    assert handoff.cancelled()
 
 
 async def test_staging_wakes_the_loop_rather_than_waiting_for_its_sweep(env):
@@ -880,3 +883,107 @@ async def test_the_lifespan_refuses_a_width_the_process_cannot_use(monkeypatch):
     with pytest.raises(ValueError, match="HISTORY_ENCODE_WORKERS"):
         async with main_module.lifespan(None):
             raise AssertionError("the process started with a width it cannot use")
+
+
+async def test_the_drain_waits_for_a_cleanup_another_cleanup_created(caplog):
+    """A room teardown ends its game, and ending a game defers the staging: a
+    drain that snapshots once gives the teardown its first step and then
+    returns while the staging it just created runs on - neither awaited,
+    cancelled nor counted (#976 fifth review)."""
+    import logging
+
+    from app.handlers.context import HandlerContext
+
+    ctx = object.__new__(HandlerContext)
+    ctx.room_cleanups = set()
+    staged = asyncio.Event()
+
+    async def staging():
+        await asyncio.sleep(0.05)
+        staged.set()
+
+    async def teardown():
+        await asyncio.sleep(0)
+        ctx.defer_cleanup(staging())
+
+    ctx.defer_cleanup(teardown())
+    with caplog.at_level(logging.WARNING):
+        await asyncio.wait_for(ctx.drain_room_cleanups(5), timeout=5)
+
+    assert staged.is_set(), "the drain returned while the staging was still running"
+    assert ctx.room_cleanups == set()
+    assert "Cancelling" not in caplog.text
+
+
+def test_the_shutdown_budget_covers_the_encodes_the_process_can_hold(monkeypatch):
+    """The allowance is the whole fix for the shutdown finding, and a fixed
+    ten seconds was pinned by nothing: setting it to 0 restored the pre-fix
+    budget with 593 tests passing. It is computed now, from every room this
+    process will hold ending at once at the configured width (#976 fifth
+    review)."""
+    from app.services.game_flow import (
+        ENVELOPE_ENCODE_SECONDS,
+        history_encode_drain_seconds,
+    )
+
+    monkeypatch.setenv("ROOM_GLOBAL_LIMIT", "200")
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "2")
+    assert history_encode_drain_seconds() >= 200 * ENVELOPE_ENCODE_SECONDS / 2
+
+    # A host that gives the encode one thread waits twice as long for it.
+    monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "1")
+    assert history_encode_drain_seconds() >= 200 * ENVELOPE_ENCODE_SECONDS
+
+    # And a smaller ceiling costs a shorter shutdown.
+    monkeypatch.setenv("ROOM_GLOBAL_LIMIT", "20")
+    assert history_encode_drain_seconds() < 200 * ENVELOPE_ENCODE_SECONDS
+
+
+def test_the_shutdown_hands_the_drain_that_budget():
+    """The allowance is only worth computing if the process uses it: the drain
+    tests pass their own budget, so nothing exercised the one the shutdown
+    hands over (#976 fifth review)."""
+    import inspect
+
+    import app.main as main_module
+    from app.services.game_flow import (
+        HISTORY_WRITE_TIMEOUT_SECONDS,
+        history_encode_drain_seconds,
+        shutdown_cleanup_budget_seconds,
+    )
+
+    budget = shutdown_cleanup_budget_seconds()
+    assert budget == history_encode_drain_seconds() + HISTORY_WRITE_TIMEOUT_SECONDS
+    assert budget > HISTORY_WRITE_TIMEOUT_SECONDS, "the write bound alone is the old budget"
+    assert "shutdown_cleanup_budget_seconds()" in inspect.getsource(main_module.lifespan)
+
+
+def test_each_encode_pool_is_built_once():
+    """Lazily, not per call: a fresh executor on every finished game would be
+    two new pools of N threads per game, which passed every test (#976 fifth
+    review)."""
+    import app.repositories.sqlalchemy as repository_module
+    import app.services.game_handoff as handoff
+
+    try:
+        assert repository_module._encode_pool() is repository_module._encode_pool()
+        assert handoff._envelope_pool() is handoff._envelope_pool()
+    finally:
+        for module, name in ((repository_module, "_ENCODE_POOL"), (handoff, "_ENVELOPE_POOL")):
+            pool = getattr(module, name)
+            if pool is not None:
+                pool.shutdown(wait=False)
+            setattr(module, name, None)
+
+
+def test_the_cleanups_are_drained_before_the_handoff_worker_stops():
+    """The drain ends rooms and stages their games; the bounded replay pass
+    below it is what writes them. In the other order every game the drain
+    stages misses that pass and waits for the next process (#976 fifth
+    review)."""
+    import inspect
+
+    import app.main as main_module
+
+    source = inspect.getsource(main_module.lifespan)
+    assert source.index("drain_room_cleanups") < source.index("stop_handoff_worker")
