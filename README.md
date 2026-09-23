@@ -2683,7 +2683,9 @@ A seated client checks with the server every five seconds that it still holds th
   socket, so the superseded socket can no longer issue commands.
 - If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
   the rotation.
-- If everyone disconnects, the room is cleaned up.
+- If everyone disconnects, the room is cleaned up. If fewer than two players remain in the
+  rotation, the game ends as abandoned and the room returns to waiting. A turn that begins
+  with nobody able to guess ends at once instead of running its clock.
 - A seat that comes back mid-turn - a reload, a reconnect, or just returning to the tab -
   still sees who has guessed, in the order they did, and a player who had already guessed
   keeps the answer, their points and a closed guess field.

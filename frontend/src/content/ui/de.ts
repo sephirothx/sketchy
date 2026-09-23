@@ -402,6 +402,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "Die Neustart-Abstimmung wurde abgebrochen, weil weniger als zwei aktive Spieler übrig sind.",
   restart_cancelled: (p) => `Der Neustart wurde abgebrochen, weil ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "Das Spiel wurde per Spielerabstimmung neu gestartet.",
+  game_ended_too_few_players: () => "Das Spiel ist beendet: weniger als zwei Spieler sind übrig.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} Pkt. – ${counted(count(p.count, 1), {

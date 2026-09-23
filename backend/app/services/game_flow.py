@@ -1221,6 +1221,16 @@ class GameFlowService:
                 if player.id != game.current_drawer
             }
         )
+        if not any(
+            reason == TurnEligibilityReason.ELIGIBLE.value
+            for reason in (game.turn_eligibility_reasons or {}).values()
+        ):
+            # Nobody can guess this turn - every other seat is AFK or away,
+            # and eligibility is frozen for the turn - so the clock would
+            # only run out on an empty room (#1005). Ended the way it would
+            # have ended then, so the results show and the game moves on.
+            await self._end_turn(room)
+            return
         game.set_phase_deadline(game.drawing_seconds)
         # Read once for the whole fan-out: one drawer, one transport.
         drawer_transport = self._drawer_transport(room)
@@ -1688,7 +1698,12 @@ class GameFlowService:
         if not game:
             return
         was_drawer = game.remove_player_from_rotation(token)
-        if not game.turn_order:
+        if len(game.turn_order) < MIN_PLAYERS_TO_START:
+            # Too few to go on - nobody, or one player who would draw every
+            # remaining turn to an empty room for the full clock each time
+            # (#1005). The game stops the way one everybody walked out of
+            # does: recorded as abandoned, the room back to waiting, where
+            # whoever is left can be joined again.
             self._timers.cancel_phase_timer(room.id)
             self._timers.cancel_hint_timers(room.id)
             self._timers.cancel_restart_timer(room.id)
@@ -1697,6 +1712,8 @@ class GameFlowService:
             await self.record_abandoned_game(room, defer_durable=defer_durable)
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
+            if game.turn_order:
+                await self.announce(room, Announcement.GAME_ENDED_TOO_FEW_PLAYERS)
         elif was_drawer:
             await self._abandon_current_turn(room, defer_durable=defer_durable)
         else:

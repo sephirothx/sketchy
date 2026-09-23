@@ -49,6 +49,9 @@ class Announcement(StrEnum):
     RESTART_CANCELLED = "restart_cancelled"  # reason
     GAME_RESTARTED_BY_VOTE = "game_restarted_by_vote"
 
+    # Games
+    GAME_ENDED_TOO_FEW_PLAYERS = "game_ended_too_few_players"
+
     # Hints and near misses, said to one player rather than to the room
     HINT_LETTER_FOUND = "hint_letter_found"  # letter, cost, count
     HINT_LETTER_MISSING = "hint_letter_missing"  # letter, cost

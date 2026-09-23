@@ -402,6 +402,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "De herstartstemming is afgebroken omdat er minder dan twee actieve spelers over zijn.",
   restart_cancelled: (p) => `De herstart is afgebroken omdat ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "Het spel is opnieuw gestart door een stemming van de spelers.",
+  game_ended_too_few_players: () => "Het spel is afgelopen: er zijn minder dan twee spelers over.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} ptn - ${counted(count(p.count, 1), {
