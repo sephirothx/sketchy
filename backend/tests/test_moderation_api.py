@@ -3487,6 +3487,14 @@ async def test_a_moderator_neither_sees_nor_decides_reports_about_themselves(env
         await target_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
     ).status_code == 403
 
+    # Nor through a ban or a warning that names the report.
+    reporter = (await reporter_http.get("/api/auth/me")).json()
+    sideways = await target_http.post(
+        "/api/moderation/bans",
+        json={"userId": reporter["id"], "reason": "Retaliation", "reportId": report_id},
+    )
+    assert sideways.status_code == 403
+
     others_queue = await other_http.get("/api/moderation/reports", params={"status": "pending"})
     assert [r["id"] for i in others_queue.json()["incidents"] for r in i["reports"]] == [report_id]
     decided = await other_http.patch(
@@ -3494,3 +3502,12 @@ async def test_a_moderator_neither_sees_nor_decides_reports_about_themselves(env
     )
     assert decided.status_code == 200, decided.text
     assert decided.json()["reviewedByUserId"] == other["id"]
+    # Decided, it is everybody's to see - the subject included, as a closed
+    # case is - and "about you" is still the answer, not "already reviewed".
+    closed = await target_http.get("/api/moderation/reports", params={"status": "resolved"})
+    assert [r["id"] for i in closed.json()["incidents"] for r in i["reports"]] == [report_id]
+    assert (
+        await target_http.patch(
+            f"/api/moderation/reports/{report_id}", json={"status": "dismissed", "note": "Mine."}
+        )
+    ).status_code == 403

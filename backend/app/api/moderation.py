@@ -1593,11 +1593,14 @@ def create_moderation_router(
                 PlayerReport.room_instance_id,
                 PlayerReport.created_at,
             ).where(
-                # Reports about the reader are another moderator's to see and
-                # decide (#1003); a standalone report names no account.
+                # Open reports about the reader are another moderator's to see
+                # and decide (#1003); a standalone report names no account,
+                # and a decided one is somebody else's decision, shown here
+                # as the closed-cases stream shows it.
                 or_(
                     PlayerReport.reported_user_id.is_(None),
                     PlayerReport.reported_user_id != reviewer.id,
+                    PlayerReport.status != ReportStatus.PENDING.value,
                 )
             )
             if status is not None:
@@ -1979,6 +1982,15 @@ def create_moderation_router(
         named = await session.get(PlayerReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
+        if named.reported_user_id == reviewer_id:
+            # Before the lock and before the 409: the target never changes,
+            # and "about you" is the answer whatever state the report is in,
+            # so a reported moderator cannot learn from a 409 that their case
+            # was decided.
+            raise HTTPException(
+                status_code=403,
+                detail="A report about you is for another moderator to decide.",
+            )
         key = incident_key(named)
         if key.standalone is not None:
             criteria = [PlayerReport.id == key.standalone]
@@ -2008,11 +2020,6 @@ def create_moderation_router(
             # request waited on the lock. Same answer either way.
             raise HTTPException(
                 status_code=409, detail="This report was already reviewed."
-            )
-        if any(report.reported_user_id == reviewer_id for report in reports):
-            raise HTTPException(
-                status_code=403,
-                detail="A report about you is for another moderator to decide.",
             )
         for report in reports:
             await session.refresh(
