@@ -898,7 +898,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "",
+      "description": "Every table, unlike SketchyPostgresDeadTuples, which watches the six the sweeps write: the point here is to see a table nobody thought to name.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",

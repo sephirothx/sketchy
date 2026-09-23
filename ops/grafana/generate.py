@@ -19,11 +19,13 @@ so a graph and the alert beside it cannot disagree about what "p95" means, and
 a rate is over the same **5 minutes** they are (`docs/slo.md`, *How to read the
 numbers*) - not Grafana's `$__rate_interval`, which at a 15 s scrape is a
 minute and left the sparse histograms, a phase timer's lateness above all, in
-gaps. A dashboard whose default range is days uses an hour instead
-(`SLOW_RATE`): Grafana's step at 7 d is 10-15 minutes, and a 5 m window inside
-a 15 m step is a third of the range drawn and the rest not looked at. That is
-why the overview opens on a day - the spikes it exists for are the ones a
-week-wide step steps over. Counts of events are a rolling hour at every step, never "per step":
+gaps. A window has to fit inside Grafana's step, which is the range over about
+800 points: at 7 d that is 10-15 minutes, and a 5 m window inside it draws a
+third of the range and never looks at the rest. So a board that opens on a week
+rates over an hour (`SLOW_RATE`), and a board of 5 m rates opens on a day. Per
+panel, Grafana's relative time would express this better than per board, and it
+is an override rather than a floor: the panel would then ignore the operator
+zooming in on the minute an alert fired for. Counts of events are a rolling hour at every step, never "per step":
 a step-sized bucket had no points at all on a range shorter than its step,
 so every count read "No data" exactly when zoomed in on an incident.
 
@@ -160,9 +162,11 @@ OVERVIEW = Dashboard(
     uid="sketchy-overview",
     title="Sketchy · Overview",
     description="Is the game being played, and is the one worker keeping up with it.",
-    # A day, not a week: at 7 d Grafana steps past a 5 m window and stops
-    # drawing the spikes this board exists for. The counts are a rolling
-    # hour, so a day still reads as a trend.
+    # A day. Its rates are over 5 minutes, and Grafana's step at a week is
+    # 10-15 minutes, so a week-wide default would step over the spikes this
+    # board exists for. Zooming out to a week is a deliberate act, and the
+    # counts stay true when it happens: their window is a rolling hour, wider
+    # than the step at any range.
     time_from="now-24h",
     rows=(
         Row("Now", (
@@ -362,7 +366,11 @@ DATABASE = Dashboard(
                 description="The rule SketchyPostgresCacheMisses reads, per database - computing it here instead would count the template databases and disagree with the page.",
                 unit="percentunit",
             ),
-            graph("Dead tuples, top 10", Query("topk(10, pg_stat_user_tables_n_dead_tup)", "{{relname}}")),
+            graph(
+                "Dead tuples, top 10",
+                Query("topk(10, pg_stat_user_tables_n_dead_tup)", "{{relname}}"),
+                description="Every table, unlike SketchyPostgresDeadTuples, which watches the six the sweeps write: the point here is to see a table nobody thought to name.",
+            ),
             graph(
                 "Database size",
                 Query(f'sum by (datname) (pg_database_size_bytes{{{PG_OWN}}})', "{{datname}}"),
@@ -404,8 +412,7 @@ STORAGE = Dashboard(
             graph(
                 "Actions per drawing",
                 mean("sketchy_drawing_actions"),
-                *quantiles("sketchy_drawing_actions", qs=(0.95,)),
-                description="The mean is exact; p95 is the bucket boundary above it.",
+                description="The mean only: a quantile of these buckets interpolates from the bound below, so a drawing of exactly one action reads as a p95 of 0.95.",
             ),
         )),
         Row("A finished game", (
@@ -577,7 +584,7 @@ def outputs() -> dict[Path, str]:
         for dashboard in DASHBOARDS
     }
     if len(written) != len(DASHBOARDS):
-        raise SystemExit(f"two dashboards share a uid: {sorted(d.uid for d in DASHBOARDS)}")
+        raise ValueError(f"two dashboards share a uid: {sorted(d.uid for d in DASHBOARDS)}")
     return written
 
 
@@ -613,12 +620,13 @@ def main(argv: list[str]) -> int:
             print("run: python3 ops/grafana/generate.py", file=sys.stderr)
         return 1 if problems else 0
     OUT.mkdir(parents=True, exist_ok=True)
+    written = outputs()
     for path in OUT.glob("*.json"):
-        if path not in outputs():
+        if path not in written:
             path.unlink()
-    for path, text in outputs().items():
+    for path, text in written.items():
         path.write_text(text)
-    print(f"wrote {len(outputs())} dashboards to {OUT}")
+    print(f"wrote {len(written)} dashboards to {OUT}")
     return 0
 
 

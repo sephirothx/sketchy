@@ -63,19 +63,81 @@ PROMQL_WORDS = frozenset(
     inf nan start end
     """.split()
 )
+# The functions and operators a query may call. A name stripped as a call is
+# held to this too: `histogram_quantil(...)` is a panel Grafana refuses, and
+# removing every `identifier(` would have taken it out unread.
+PROMQL_CALLS = frozenset(
+    """
+    abs absent absent_over_time avg avg_over_time bottomk ceil changes clamp clamp_max
+    clamp_min count count_over_time count_values day_of_month day_of_week day_of_year
+    days_in_month delta deriv exp floor group histogram_count histogram_quantile
+    histogram_sum holt_winters hour idelta increase irate label_join label_replace last_over_time
+    ln log10 log2 max max_over_time min min_over_time minute month predict_linear
+    present_over_time quantile quantile_over_time rate resets round scalar sgn sort
+    sort_desc sqrt stddev stddev_over_time stdvar stdvar_over_time sum sum_over_time
+    time timestamp topk vector year
+    """.split()
+)
+# Operators that combine series, and so drop every label they were not told to
+# keep. `topk` and `bottomk` select whole series and keep their labels.
+AGGREGATIONS = "sum|avg|min|max|count|count_values|group|stddev|stdvar|quantile"
+AGGREGATION = re.compile(rf"\b(?:{AGGREGATIONS})\b\s*(?:(by|without)\s*\(([^()]*)\))?")
 LABEL_BLOCK = re.compile(r"\{[^{}]*\}")
 GROUPING = re.compile(r"\b(?:by|without|ignoring|on|group_left|group_right)\s*\([^()]*\)")
-DURATION = re.compile(r"\[[^\[\]]*\]")
-CALL = re.compile(r"\b[a-zA-Z_:][a-zA-Z0-9_:]*\s*\(")
+WINDOW_LITERAL = re.compile(r"\[[^\[\]]*\]")
+# Not inside a name: `sketchy:socket_p95_seconds:5m` is a rule, not a number.
+NUMBER = re.compile(r"(?<![\w:])\d+(?:\.\d+)?(?:e[+-]?\d+)?(?:ms|[smhdwy])?\b", re.IGNORECASE)
+CALL = re.compile(r"\b([a-zA-Z_:][a-zA-Z0-9_:]*)\s*\(")
 IDENTIFIER = re.compile(r"[a-zA-Z_:][a-zA-Z0-9_:]*")
 
 
+def _without_calls(expr: str) -> tuple[str, set[str]]:
+    """The expression with its function calls removed, and their names."""
+    # `sum by (transport) (...)` reads as a call to `by`; the vocabulary is
+    # not what this is checking.
+    called = set(CALL.findall(expr)) - PROMQL_WORDS
+    return CALL.sub(" ", expr), called
+
+
 def series_named(expr: str) -> set[str]:
-    """Every series an expression reads, with labels, groupings, durations and
-    function calls taken out first."""
-    stripped = DURATION.sub(" ", GROUPING.sub(" ", LABEL_BLOCK.sub(" ", expr)))
-    stripped = CALL.sub(" ", stripped)
+    """Every series an expression reads, with labels, groupings, windows,
+    numbers and function calls taken out first."""
+    stripped = WINDOW_LITERAL.sub(" ", GROUPING.sub(" ", LABEL_BLOCK.sub(" ", expr)))
+    stripped = NUMBER.sub(" ", _without_calls(stripped)[0])
     return {name for name in IDENTIFIER.findall(stripped) if name not in PROMQL_WORDS}
+
+
+def labels_kept(expr: str) -> set[str] | None:
+    """The labels an expression still carries, or None when it keeps them all.
+
+    An aggregation combines series, so it keeps only what its `by` names -
+    and the generator writes the prefix form, `sum by (transport) (...)`,
+    which is why this cannot look for `sum(` alone."""
+    kept: set[str] | None = None
+    for clause, labels in AGGREGATION.findall(expr):
+        named = {label.strip() for label in labels.split(",") if label.strip()}
+        if clause == "by":
+            kept = named if kept is None else kept | named
+        elif clause == "without":
+            continue  # keeps everything but `named`; no panel writes one yet
+        else:
+            # An aggregation with no grouping at all: one series out, no labels.
+            return set() if kept is None else kept
+    return kept
+
+
+def windows_in(expr: str) -> set[str]:
+    """Every range window the expression actually asks Prometheus for."""
+    return {literal.strip("[]") for literal in WINDOW_LITERAL.findall(expr)}
+
+
+def minutes(duration: str) -> float:
+    """A PromQL duration in minutes, so windows and steps compare."""
+    units = {"ms": 1 / 60000, "s": 1 / 60, "m": 1, "h": 60, "d": 1440, "w": 10080, "y": 525600}
+    for unit in ("ms", "s", "m", "h", "d", "w", "y"):
+        if duration.endswith(unit) and duration[: -len(unit)].isdigit():
+            return int(duration[: -len(unit)]) * units[unit]
+    raise AssertionError(f"not a duration: {duration}")
 
 
 def test_every_series_a_panel_queries_is_one_something_exposes():
@@ -83,6 +145,7 @@ def test_every_series_a_panel_queries_is_one_something_exposes():
     unknown: dict[str, set[str]] = {}
     for dashboard, panel, expr in generator().expressions():
         missing = series_named(expr) - known
+        missing |= _without_calls(expr)[1] - PROMQL_CALLS
         if missing:
             unknown[f"{dashboard} / {panel}"] = missing
     assert unknown == {}, unknown
@@ -98,16 +161,33 @@ def test_no_query_reaches_grafana_with_its_window_unresolved():
         assert placeholder not in json.dumps(dashboard), name
 
 
-def test_a_windows_rates_fit_inside_the_range_the_dashboard_opens_on():
-    """Grafana's step at 7 d is tens of minutes: a 5 m window inside it samples
-    a fraction of the range, and a spike between two steps is never drawn."""
-    hours = {"now-6h": 6, "now-24h": 24, "now-7d": 168}
-    for dashboard in generator().DASHBOARDS:
-        window = dashboard.rate
-        minutes = int(window[:-1]) * (60 if window.endswith("h") else 1)
-        # Grafana asks for ~800 points, so the step is the range over 800.
-        step_minutes = hours[dashboard.time_from] * 60 / 800
-        assert minutes >= step_minutes, (dashboard.uid, window, dashboard.time_from)
+def test_every_window_fits_inside_the_step_its_dashboard_opens_on():
+    """Grafana's step is the range over about 800 points: at 7 d that is 10-15
+    minutes, and a 5 m window inside it draws a third of the range and never
+    looks at the rest. Read off the queries Grafana is actually sent, so a
+    window written by hand is held to this too."""
+    module = generator()
+    opens_on = {dashboard.uid: dashboard.time_from for dashboard in module.DASHBOARDS}
+    for uid, panel, expr in module.expressions():
+        relative = opens_on[uid]
+        assert relative.startswith("now-"), (uid, relative)
+        step = minutes(relative.removeprefix("now-")) / 800
+        for window in windows_in(expr):
+            assert minutes(window) >= step, (uid, panel, window, relative)
+
+
+def test_every_expression_nests_its_brackets():
+    """The series check reads names, not syntax. `[5m)]` counts one of each
+    and is still a query Grafana rejects at load."""
+    closing = {")": "(", "]": "[", "}": "{"}
+    for _, panel, expr in generator().expressions():
+        stack: list[str] = []
+        for character in expr:
+            if character in "([{":
+                stack.append(character)
+            elif character in closing:
+                assert stack and stack.pop() == closing[character], (panel, expr)
+        assert not stack, (panel, expr)
 
 
 def test_every_panel_is_a_kind_and_a_unit_grafana_knows():
@@ -133,36 +213,37 @@ def test_every_legend_names_a_label_its_query_still_has():
                 continue
             for target in panel["targets"]:
                 wanted = set(re.findall(r"\{\{\s*([a-zA-Z_][a-zA-Z0-9_]*)\s*\}\}", target["legendFormat"]))
-                if not wanted:
-                    continue
-                kept = set(re.findall(r"\bby\s*\(([^()]*)\)", target["expr"]))
-                kept = {label.strip() for group in kept for label in group.split(",")}
-                # An expression that never aggregates keeps every label it
-                # read, and so does topk, which selects series rather than
-                # combining them.
-                if not re.search(r"\b(?:sum|avg|min|max|count|stddev|stdvar|quantile)\s*\(", target["expr"]):
+                kept = labels_kept(target["expr"])
+                if not wanted or kept is None:
                     continue
                 assert wanted <= kept, (name, panel["title"], wanted - kept)
 
 
-def test_every_expression_is_balanced():
-    """The series check reads names, not syntax; Grafana would reject the
-    query at load and draw nothing."""
-    for _, panel, expr in generator().expressions():
-        for opening, closing in ("()", "[]", "{}"):
-            assert expr.count(opening) == expr.count(closing), (panel, expr)
-
-
-def test_a_row_of_any_size_lays_out(): 
-    """The layout is computed per row, and a shape no dashboard uses yet - a
-    single full-width graph - used to raise `zip()` instead of laying out."""
+def test_a_row_of_any_size_lays_out():
+    """Rendered, not just measured: the crash this covers came from `render`
+    zipping a row against widths computed for a different number of panels."""
     module = generator()
     panel = module.graph("One", module.Query("sketchy_rooms_live", "rooms"))
     for count in range(1, 10):
-        row = module.Row("Row", (panel,) * count)
-        widths = module._widths(row)
-        assert len(widths) == count
-        assert all(0 < width <= 24 for width in widths)
+        board = module.Dashboard(
+            uid="sketchy-shape",
+            title="Shape",
+            description="",
+            rows=(module.Row("Row", (panel,) * count),),
+        )
+        drawn = [entry for entry in module.render(board)["panels"] if entry["type"] != "row"]
+        assert len(drawn) == count
+        cells: set[tuple[int, int]] = set()
+        for entry in drawn:
+            place = entry["gridPos"]
+            assert 0 <= place["x"] and place["x"] + place["w"] <= 24, (count, place)
+            covered = {
+                (x, y)
+                for x in range(place["x"], place["x"] + place["w"])
+                for y in range(place["y"], place["y"] + place["h"])
+            }
+            assert not covered & cells, (count, place)
+            cells |= covered
 
 
 def test_every_panel_has_a_place_of_its_own():

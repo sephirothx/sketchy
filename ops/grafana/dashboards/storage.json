@@ -216,7 +216,7 @@
         "type": "prometheus",
         "uid": "${datasource}"
       },
-      "description": "The mean is exact; p95 is the bucket boundary above it.",
+      "description": "The mean only: a quantile of these buckets interpolates from the bound below, so a drawing of exactly one action reads as a p95 of 0.95.",
       "fieldConfig": {
         "defaults": {
           "unit": "short",
@@ -262,16 +262,6 @@
           "legendFormat": "mean",
           "range": true,
           "refId": "A"
-        },
-        {
-          "datasource": {
-            "type": "prometheus",
-            "uid": "${datasource}"
-          },
-          "expr": "histogram_quantile(0.95, sum by (le) (rate(sketchy_drawing_actions_bucket[1h])))",
-          "legendFormat": "p95",
-          "range": true,
-          "refId": "B"
         }
       ],
       "title": "Actions per drawing",
