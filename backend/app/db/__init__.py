@@ -290,6 +290,9 @@ def install_idle_ping(engine: AsyncEngine, *, idle_seconds: float, clock=monoton
         is_closed = getattr(driver, "is_closed", None)
         if is_closed is not None and is_closed():
             raise sa_exc.DisconnectionError("connection closed while pooled")
+        # `connect` and `checkin` both stamp, so a checkout always finds one;
+        # the `None` is for a pool that somehow hands out a connection neither
+        # fired for, which is treated as "not idle" rather than pinged.
         returned_at = record.info.get(_RETURNED_AT)
         if returned_at is None or clock() - returned_at < idle_seconds:
             return
@@ -301,6 +304,7 @@ def install_idle_ping(engine: AsyncEngine, *, idle_seconds: float, clock=monoton
             if not dialect._do_ping_w_event(dbapi_connection):
                 raise sa_exc.DisconnectionError("pooled connection failed its ping")
         except sa_exc.DisconnectionError:
+            # The raise above, on its way out untouched.
             raise
         except Exception as error:
             raise sa_exc.DisconnectionError("pooled connection failed its ping") from error

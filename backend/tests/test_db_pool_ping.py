@@ -63,6 +63,12 @@ async def _pinged_engine(clock, tmp_path):
     return engine, async_sessionmaker(engine), pings, dialect
 
 
+#: SQLite has no backend pid, so the driver object's identity stands in - and
+#: a reference to each is kept, because CPython reuses addresses and a freed
+#: connection's id can come back as a "match" (#973 fifth review).
+_seen_connections: list[object] = []
+
+
 async def _backend_pid(factory) -> int:
     """Which pooled connection answered: the backend pid, or the driver
     object's identity on SQLite."""
@@ -71,6 +77,7 @@ async def _backend_pid(factory) -> int:
             return (await session.execute(text("SELECT pg_backend_pid()"))).scalar_one()
         connection = await session.connection()
         raw = await connection.get_raw_connection()
+        _seen_connections.append(raw.driver_connection)
         return id(raw.driver_connection)
 
 
@@ -345,5 +352,54 @@ async def test_zero_pings_every_checkout_again(tmp_path, monkeypatch):
             async with factory() as session:
                 await session.execute(text("SELECT 1"))
         assert len(pings) >= 2, "every checkout after the first is pinged"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_failed_ping_replaces_one_connection_not_the_generation(tmp_path):
+    """The narrowing this change is about: `pool_pre_ping` raised
+    `InvalidatePoolError`, which recycles every pooled connection, so one dead
+    connection after a failover cost every other caller theirs. Every other
+    test here runs a pool of one, where the two are indistinguishable (#973
+    fifth review)."""
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    clock = Clock()
+    url = PG_URL if ON_POSTGRESQL else f"sqlite+aiosqlite:///{tmp_path / 'generation.db'}"
+    engine = create_async_engine(
+        url,
+        connect_args=get_engine_connect_args(url),
+        **{**get_engine_pool_options(url), "pool_size": 2, "max_overflow": 0},
+    )
+    install_idle_ping(engine, idle_seconds=30, clock=clock)
+    factory = async_sessionmaker(engine)
+    try:
+        # Two pooled connections, both in use at once so both are real.
+        async with factory() as first, factory() as second:
+            await first.execute(text("SELECT 1"))
+            await second.execute(text("SELECT 1"))
+            first_connection = (await first.connection()).sync_connection.connection
+            second_connection = (await second.connection()).sync_connection.connection
+        held = {id(first_connection.dbapi_connection), id(second_connection.dbapi_connection)}
+
+        failing = {"count": 0}
+
+        def ping_fails_once(_dbapi_connection):
+            failing["count"] += 1
+            return failing["count"] > 1
+
+        engine.sync_engine.dialect._do_ping_w_event = ping_fails_once
+        clock.now += 31
+        async with factory() as session:
+            await session.execute(text("SELECT 1"))
+        clock.now += 31
+        async with factory() as session:
+            await session.execute(text("SELECT 1"))
+            survivor = (await session.connection()).sync_connection.connection
+
+        assert failing["count"] == 2, "each connection is checked on its own checkout"
+        assert id(survivor.dbapi_connection) in held, (
+            "the connection that passed its ping was kept, not recycled with the other"
+        )
     finally:
         await engine.dispose()

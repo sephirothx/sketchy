@@ -32,7 +32,12 @@ if BACKEND_DIR not in sys.path:
 from sqlalchemy import text  # noqa: E402
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # noqa: E402
 
-from app.db import get_engine_connect_args, get_engine_pool_options, install_idle_ping  # noqa: E402
+from app.db import (  # noqa: E402
+    get_engine_connect_args,
+    get_engine_pool_options,
+    install_idle_ping,
+    pool_ping_idle_seconds,
+)
 
 
 async def timed(url: str, *, pre_ping: bool, idle_ping: bool, sessions: int) -> list[float]:
@@ -43,7 +48,7 @@ async def timed(url: str, *, pre_ping: bool, idle_ping: bool, sessions: int) -> 
         url, connect_args=get_engine_connect_args(url), pool_pre_ping=pre_ping, **options
     )
     if idle_ping:
-        install_idle_ping(engine, idle_seconds=30)
+        install_idle_ping(engine, idle_seconds=pool_ping_idle_seconds())
     factory = async_sessionmaker(engine)
     samples: list[float] = []
     try:
@@ -73,7 +78,10 @@ async def main() -> None:
     )
     arguments = parser.parse_args()
     if not arguments.url.startswith("postgresql"):
-        raise SystemExit("Set DATABASE_URL to a PostgreSQL database; SQLite has no round trip to save.")
+        raise SystemExit(
+            "Set TEST_DATABASE_URL or DATABASE_URL to a PostgreSQL database; "
+            "SQLite has no round trip to save."
+        )
 
     print(f"{'Checkout':<34} | {'median ms':>9} | {'p95 ms':>9} | {'max ms':>9}")
     print("-" * 68)
