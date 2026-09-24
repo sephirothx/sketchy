@@ -194,3 +194,43 @@ async def test_a_plain_websocket_handshake_is_closed_before_it_is_accepted():
     assert sent == [{"type": "websocket.close"}]
     await app({"type": "websocket", "scheme": "wss", "path": "/socket.io/"}, receive, send)
     assert accepted == ["websocket"] and sent[-1] == {"type": "websocket.accept"}
+
+
+async def test_a_raw_non_ascii_byte_is_redirected_not_a_500():
+    """#1015: a bot or scanner may send a raw UTF-8 byte a browser would have
+    percent-encoded. The Location was encoded as strict ASCII, which raised
+    inside the outermost middleware: a 500 with no security headers and a
+    traceback per request. The byte is escaped instead; so are a space and a
+    CR/LF, which would otherwise split the header."""
+
+    async def never(scope, receive, send):  # pragma: no cover - not reached
+        raise AssertionError("a plain request must not reach the app")
+
+    app = HttpsOnlyMiddleware(
+        never, rule=HttpsOnly(enabled=True, public_origin="https://sketchy.example")
+    )
+    sent: list[dict] = []
+
+    async def send(message):
+        sent.append(message)
+
+    async def receive():
+        return {"type": "http.request", "body": b""}
+
+    await app(
+        {
+            "type": "http",
+            "scheme": "http",
+            "method": "GET",
+            "path": "/café x",
+            "raw_path": b"/caf\xc3\xa9 x/%41",
+            "query_string": b"q=\xe9&r=a\r\nb",
+            "headers": [],
+        },
+        receive,
+        send,
+    )
+    start = sent[0]
+    assert start["status"] == 308
+    location = dict(start["headers"])[b"location"]
+    assert location == b"https://sketchy.example/caf%C3%A9%20x/%41?q=%E9&r=a%0D%0Ab"

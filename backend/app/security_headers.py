@@ -231,13 +231,31 @@ class HttpsOnly:
     def location(self, scope) -> str:
         # The raw path is still percent-encoded, which is what a Location
         # header wants; the decoded one is quoted back only in its absence.
+        # A browser percent-encodes everything else, but a bot or a scanner
+        # need not: a raw byte outside printable ASCII used to reach the
+        # header's ASCII encode and raise - a 500 from the outermost
+        # middleware, with no security headers and a traceback per request
+        # (#1015). Such bytes are escaped here; existing escapes are kept.
         raw_path = scope.get("raw_path")
-        path = raw_path.decode("latin-1") if raw_path else quote(scope.get("path", "/"))
+        path = (
+            _escape_unprintable(raw_path)
+            if raw_path
+            else quote(scope.get("path", "/"))
+        )
         target = self.public_origin + path
         query = scope.get("query_string", b"")
         if query:
-            target += "?" + query.decode("latin-1")
+            target += "?" + _escape_unprintable(query)
         return target
+
+
+def _escape_unprintable(raw: bytes) -> str:
+    """Printable ASCII as it came; every other byte - space, controls, a
+    CR or LF that would otherwise split the header, anything above 0x7E - as
+    a `%XX` escape."""
+    return "".join(
+        chr(byte) if 0x21 <= byte <= 0x7E else f"%{byte:02X}" for byte in raw
+    )
 
 
 class HttpsOnlyMiddleware:
