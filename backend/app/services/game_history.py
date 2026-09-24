@@ -125,9 +125,12 @@ def _participants(
     """Rank every factual seat, coalescing only duplicate tokens for one account.
 
     An account that left and rejoined mid-game holds two tokens; the seat it
-    still occupies wins, since that is the one whose score kept moving. Ties
-    share a rank (1, 1, 3) so that two players who genuinely drew for the lead
-    both count as wins in `UserRepository.get_stats`, which filters on rank 1.
+    still occupies is the one recorded, and it carries the points of both.
+    The ledger attributes every award to the one seat written (R-HIST-12), so
+    a rejoined seat written at its own score alone - zero, most days - was a
+    row the writer refused, and the game with it (#992). Ties share a rank
+    (1, 1, 3) so that two players who genuinely drew for the lead both count
+    as wins in `UserRepository.get_stats`, which filters on rank 1.
     """
     by_identity: dict[str, _Seat] = {}
     for seat in seats.values():
@@ -140,14 +143,17 @@ def _participants(
         ):
             by_identity[identity_key] = seat
 
-    # An account that held two seats played the turns of both.
+    # An account that held two seats played the turns of both, and scored
+    # the points of both.
     for identity_key, winner in by_identity.items():
         winner.participant_id = winner.seat_id
-        winner.turns_played = sum(
-            seat.turns_played
+        own = [
+            seat
             for seat in seats.values()
             if (seat.user_id or f"seat:{seat.seat_id}") == identity_key
-        )
+        ]
+        winner.turns_played = sum(seat.turns_played for seat in own)
+        winner.score = sum(seat.score for seat in own)
         for seat in seats.values():
             if (seat.user_id or f"seat:{seat.seat_id}") == identity_key:
                 seat.participant_id = winner.seat_id

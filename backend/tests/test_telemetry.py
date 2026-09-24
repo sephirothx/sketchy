@@ -235,6 +235,7 @@ def test_history_write_losses_are_counted_by_reason_and_over_the_last_hour():
             "conflict": 0,
             "exhausted": 0,
             "unreadable": 0,
+            "invalid": 0,
         },
     }
     assert (

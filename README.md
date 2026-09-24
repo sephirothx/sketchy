@@ -2681,8 +2681,10 @@ A seated client checks with the server every five seconds that it still holds th
 - On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
   their score and place in the turn order. A successful reconnect replaces the player's active
   socket, so the superseded socket can no longer issue commands.
-- If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
-  the rotation.
+- If the drawer disconnects and doesn't return in time, or leaves, they are evicted from the
+  rotation. A turn nobody had guessed yet is skipped; one somebody had already guessed ends
+  the way the clock ends it - the guesses and the drawing stand, the results show, and the
+  departed drawer's seat still receives the drawer bonus.
 - If everyone disconnects, the room is cleaned up.
 - A seat that comes back mid-turn - a reload, a reconnect, or just returning to the tab -
   still sees who has guessed, in the order they did, and a player who had already guessed
