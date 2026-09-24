@@ -2706,7 +2706,8 @@ def create_moderation_router(
                 )
             bans = (
                 await session.scalars(
-                    statement.order_by(UserBan.created_at.desc())
+                    # The id breaks a tie, as a player's games do (#1077).
+                    statement.order_by(UserBan.created_at.desc(), UserBan.id.desc())
                     .limit(limit)
                     .offset(offset)
                 )
