@@ -2122,7 +2122,7 @@ reloaded rather than served an older contract.
 | --- | --- | --- |
 | `GET` | `/api/auth/me` | The caller's account, or `null` — it creates nothing, so a crawler or a link preview costs no row. `POST /api/auth/display-name` is the one path that provisions a guest (R-ACCT-00). Carries `pendingRole`: a staff role offered and waiting on this account's second factor, or `null`. It authorizes nothing — it is what makes the two-factor entry appear for the one account it means anything to (R-AUTH-20), and a lapsed offer reads as `null`. A guest's account also carries `nameInUse`: `true` when a guest who came online earlier is using the same name, so this one is asked for another before playing (R-ACCT-09). A registered account's carries `settings`, the same object `GET /api/users/me/settings` returns: the first paint waits for this answer (R-I18N-06), and asking for them separately put a second round trip in front of it (#983). The page requests it from an inline script in `index.html` before any bundle has loaded, so it is in flight while the bundle downloads |
 | `GET` | `/api/auth/nickname-available` | Rate limited (`AUTH_LOOKUP_LIMIT`). Unavailable for a registered player's username, and for a name a guest online is using (R-ACCT-09) |
-| `POST` / `DELETE` | `/api/users/me/avatar` | Set or remove the caller's picture (R-AVA-01). `POST` takes `{ image }`, base64 of a 256×256 WebP or PNG under 128 KiB; refused `400` for anything else, `403` for a guest or while a moderator's block stands (the message names the date), `429` past 10 an hour. Answers `{ avatarKey, avatarUrl }` |
+| `POST` / `DELETE` | `/api/users/me/avatar` | Set or remove the caller's picture (R-AVA-01). `POST` takes `{ image }`, base64 of a 256×256 WebP or PNG under 128 KiB; refused `400` for anything else, `403` for a guest or while a moderator's block stands (the message names the date), `429` past 10 an hour **per account** — counted only once the caller is known to be registered, so refused guest posts never spend the bucket of the players sharing their address (#1074). Answers `{ avatarKey, avatarUrl }` |
 | `PUT` | `/api/users/me/avatar/doodle` | Wear one of the deployment's doodles instead of a picture (R-AVA-09). Takes `{ name }`, a name from the sprite's list; refused `400` (`invalid_payload`) for any other, `403` for a guest. No rate limit and no moderator's block: nothing is stored but the name. Deletes an uploaded picture. Answers `{ avatarKey, avatarUrl }`, the URL a fragment of `/avatars/doodles.svg` — a static file from the frontend build, not an API route |
 | `GET` | `/api/avatars/{key}` | The picture behind a content address, for anybody: `image/webp` or `image/png` as the key's extension says, `nosniff`, `Cache-Control: public, max-age=31536000, immutable`. `404` for a key that is not a content address or not stored |
 | `POST` | `/api/moderation/reports/{report_id}/remove-avatar` | Moderator; `403` when the report is about the caller (#1003). Takes down the reported account's picture, audits it, tells its owner, and blocks re-upload for a while that grows with how many a moderator has taken down from this account — none, 7, 30, then 90 days (R-AVA-08); `{ ok, removed, blockedUntil }`, the last null when this one cost no wait (R-AVA-04) |
@@ -2390,7 +2390,11 @@ address under `IP_HASH_SECRET` — **raw IP addresses are never stored**
 ([`backend/app/auth/rate_limit.py`](../backend/app/auth/rate_limit.py)). Login is the
 exception to "keyed on the address": it is counted against three keys at once, and the
 account key is an HMAC of the lowercased username rather than of an address
-([`backend/app/auth/login_guard.py`](../backend/app/auth/login_guard.py), R-RATE-12).
+([`backend/app/auth/login_guard.py`](../backend/app/auth/login_guard.py), R-RATE-12). Actions
+only a signed-in account can take — creating a room (R-RATE-05), sending friend requests,
+uploading a picture — are keyed on the **account** instead, and counted only once the
+caller is known, so a refused guest cannot spend the bucket of everyone behind its
+address (#1074).
 
 | Variable | Default | Applies to |
 | --- | --- | --- |

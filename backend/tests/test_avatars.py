@@ -14,7 +14,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
-from app.api.avatars import create_avatar_router
+from app.api.avatars import AVATAR_UPLOAD_LIMIT, create_avatar_router
 from app.api.moderation import create_moderation_router
 from app.auth.avatar_doodles import DOODLES
 from app.auth.avatars import (
@@ -176,6 +176,49 @@ async def test_a_guest_has_no_picture_to_set(env):
     refused = await http.post("/api/users/me/avatar", json=encoded(png_bytes()))
     assert refused.status_code == 403
     assert (await http.delete("/api/users/me/avatar")).status_code == 403
+
+
+async def test_a_guest_cannot_spend_the_upload_limit_of_its_address(env):
+    """#1074: the bucket used to be charged before the guest was refused, and
+    keyed on the address, so ten refused guest posts locked every registered
+    player behind the same address out for an hour."""
+    new_client, _ = env
+    guest, player = new_client(), new_client()
+    await guest.post("/api/auth/display-name", json={"displayName": "Spender"})
+    for _ in range(AVATAR_UPLOAD_LIMIT + 2):
+        refused = await guest.post("/api/users/me/avatar", json=encoded(png_bytes()))
+        assert refused.status_code == 403
+    await register(player, "SameRouter")
+    uploaded = await player.post("/api/users/me/avatar", json=encoded(png_bytes(seed=3)))
+    assert uploaded.status_code == 200, uploaded.text
+
+
+async def test_the_upload_limit_is_each_accounts_own(env):
+    new_client, _ = env
+    busy, neighbour = new_client(), new_client()
+    await register(busy, "Recropper")
+    await register(neighbour, "Neighbour")
+    for index in range(AVATAR_UPLOAD_LIMIT):
+        answer = await busy.post(
+            "/api/users/me/avatar", json=encoded(png_bytes(seed=10 + index))
+        )
+        assert answer.status_code == 200, answer.text
+    over = await busy.post("/api/users/me/avatar", json=encoded(png_bytes(seed=99)))
+    assert over.status_code == 429
+    # Same address, another account: its own ten.
+    own = await neighbour.post("/api/users/me/avatar", json=encoded(png_bytes(seed=100)))
+    assert own.status_code == 200, own.text
+    # And the account's ten follow it to another address.
+    elsewhere = AsyncClient(
+        transport=ASGITransport(app=busy._transport.app, client=("203.0.113.9", 4000)),
+        base_url="http://test",
+        cookies=busy.cookies,
+    )
+    async with elsewhere:
+        moved = await elsewhere.post(
+            "/api/users/me/avatar", json=encoded(png_bytes(seed=101))
+        )
+    assert moved.status_code == 429
 
 
 @pytest.mark.parametrize("layout", ["VP8L", "VP8 ", "VP8X"])
