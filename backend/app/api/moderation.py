@@ -224,9 +224,6 @@ class GalleryDecisionBody(ControlFreeModel):
 # How many undecided Top-week drawings the shelf's review queue shows: the
 # six the shelf would take, and a second six behind them.
 REVIEW_CANDIDATES = 12
-# Pages of the Top-week order read to fill a moderator's queue past their own
-# drawings (#1063 review).
-REVIEW_PAGES_MAX = 4
 
 
 class PublicationReviewBody(ControlFreeModel):
@@ -3190,9 +3187,10 @@ def create_moderation_router(
             # #1063; "drawn by me" resolves a claimed guest), and they are left
             # out *before* the queue is counted: filtering one page of twelve
             # let each own drawing take the place of one the reader could
-            # decide. Pages are read until the queue is full; a moderator's own
-            # drawings are few, so this is one page nearly always, and bounded.
-            for _ in range(REVIEW_PAGES_MAX):
+            # decide. Pages are read until the queue is full or the week's
+            # undecided drawings run out - one page nearly always, since a
+            # moderator's own drawings are few, and never past the week.
+            while True:
                 page = await game_history_repo.list_gallery(
                     sort="top",
                     window="week",

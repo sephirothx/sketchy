@@ -638,7 +638,9 @@ async def test_a_moderators_own_drawings_do_not_take_the_places_of_others(env):
     mod = await _moderator(users, factory, "BusyMod")
     fan = await _registered(users, "Fan")
     other = await _registered(users, "OtherArtist")
-    for index in range(REVIEW_CANDIDATES):
+    # More than any fixed number of pages would cover: the queue reads on
+    # until it is full or the week runs out.
+    for index in range(REVIEW_CANDIDATES * 5):
         await record_game(
             history, drawer=mod.id, reactor=fan.id, reactions="default",
             visibility="public", finished_at=NOW - timedelta(hours=1, minutes=index),
