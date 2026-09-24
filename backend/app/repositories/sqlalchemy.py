@@ -5115,9 +5115,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
                     if prompt_version.id in seen_versions:
                         continue
+                    # Keyed from the text under the fold in force now, not
+                    # from the keys the rows were written with: a fold that
+                    # widened since (#1011's apostrophes) makes two stored
+                    # keys one answer, and the game matches under the new
+                    # fold, so the check that keeps a game's answers apart
+                    # has to see what the game will see (review of #1070).
                     accepted_keys = {
-                        prompt_version.match_key,
-                        *(link.alias.match_key for link in prompt_version.version_aliases),
+                        prompt_match_key(prompt_version.canonical_answer, language),
+                        *(
+                            prompt_match_key(link.alias.answer, language)
+                            for link in prompt_version.version_aliases
+                        ),
                     }
                     if any(key in seen_match_versions for key in accepted_keys):
                         raise PromptListSelectionError(
@@ -5195,12 +5204,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
 
             # `resolve_selection` catches colliding answers by walking every
-            # prompt it loads. Pinning loads none, so the same question is asked
-            # of the database instead: does any match key - an answer's own or
-            # one of its aliases - reach two different prompt versions?
-            own_keys = select(
+            # prompt it loads. Pinning loads none, so the same question is
+            # asked of the database instead: does any answer - a prompt's
+            # own or one of its aliases - reach two different prompt
+            # versions? Asked of the *text*, keyed here under the fold in
+            # force now, rather than of the stored keys (review of #1070): a
+            # fold that widened since the rows were written makes two stored
+            # keys one answer, and the game matches under the new fold.
+            own_answers = select(
                 PromptListRevisionItem.prompt_version_id.label("version_id"),
-                PromptVersion.match_key.label("match_key"),
+                PromptVersion.canonical_answer.label("answer"),
             ).join(
                 PromptVersion,
                 PromptVersion.id == PromptListRevisionItem.prompt_version_id,
@@ -5209,9 +5222,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 PromptVersion.moderation_state
                 == PromptContentModerationState.ACTIVE.value,
             )
-            alias_keys = select(
+            alias_answers = select(
                 PromptListRevisionItem.prompt_version_id.label("version_id"),
-                PromptAlias.match_key.label("match_key"),
+                PromptAlias.answer.label("answer"),
             ).join(
                 PromptVersion,
                 PromptVersion.id == PromptListRevisionItem.prompt_version_id,
@@ -5225,17 +5238,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 PromptVersion.moderation_state
                 == PromptContentModerationState.ACTIVE.value,
             )
-            keys = own_keys.union(alias_keys).subquery()
-            collision = await session.scalar(
-                select(keys.c.match_key)
-                .group_by(keys.c.match_key)
-                .having(func.count(func.distinct(keys.c.version_id)) > 1)
-                .limit(1)
-            )
-            if collision is not None:
-                raise PromptListSelectionError(
-                    "Selected prompt lists contain ambiguous answers or aliases"
-                )
+            reached_by: dict[str, UUID] = {}
+            for version_id, answer in (
+                await session.execute(own_answers.union(alias_answers))
+            ).all():
+                key = prompt_match_key(answer, language)
+                if reached_by.setdefault(key, version_id) != version_id:
+                    raise PromptListSelectionError(
+                        "Selected prompt lists contain ambiguous answers or aliases"
+                    )
 
             letter_counts: Counter[str] = Counter()
             letter_total = 0

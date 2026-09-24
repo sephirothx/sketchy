@@ -911,3 +911,41 @@ async def test_usage_reads_only_the_memberships_the_game_touched():
         assert sum(f.offer_count for f in facts) == 3 and sum(f.pick_count for f in facts) == 1
     finally:
         await engine.dispose()
+
+
+async def test_a_collision_the_fold_created_since_the_rows_were_written_is_caught():
+    """Two lists, one with `feu d'artifice` and one with the typographic
+    apostrophe. Rows written before #1011 carry keys that differ, while the
+    game matches under the fold in force now, so both the walk and the
+    pinning query key the *text* afresh rather than trusting the stored key
+    (review of #1070)."""
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        plain = await repo.create_owned(
+            owner_id, name="Plain", description="", language="fr",
+            prompts=(PromptListEntryInput(answer="feu d'artifice"),),
+        )
+        curly = await repo.create_owned(
+            owner_id, name="Curly", description="", language="fr",
+            prompts=(PromptListEntryInput(answer="feu d\u2019artifice"),),
+        )
+        # What a row written under the old fold carries: the apostrophe kept.
+        async with factory() as session:
+            async with session.begin():
+                version = await session.scalar(
+                    select(PromptVersion).where(
+                        PromptVersion.canonical_answer == "feu d\u2019artifice"
+                    )
+                )
+                version.match_key = "feu d\u2019artifice"
+        slugs = [plain.slug, curly.slug]
+
+        with pytest.raises(PromptListSelectionError, match="ambiguous"):
+            await repo.resolve_selection(slugs, requesting_user_id=owner_id)
+        with pytest.raises(PromptListSelectionError, match="ambiguous"):
+            await repo.authorize_selection(slugs, requesting_user_id=owner_id)
+        for slug in slugs:
+            assert (await repo.authorize_selection([slug], requesting_user_id=owner_id)).prompt_count == 1
+    finally:
+        await engine.dispose()

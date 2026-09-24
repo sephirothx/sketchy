@@ -1736,8 +1736,10 @@ An immutable, language-specific wording.
 `uq_prompt_version_concept_language_version`.
 
 Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
-registry, which case-folds, collapses whitespace, and folds canonically decomposable
-accents ([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
+registry, which case-folds, collapses whitespace, folds canonically decomposable
+accents, and reads every apostrophe a keyboard writes as the plain one (#1011; the
+bundled lists are written with the plain one, so no stored key changed)
+([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
 BCP-47 tags are **rejected until their matching semantics are implemented.**
 
 `match_key` is that fold for the row's own language, with the language's
