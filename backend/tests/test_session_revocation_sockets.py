@@ -107,6 +107,29 @@ async def test_revoking_a_device_closes_that_devices_sockets(env):
     assert revoked == [(account["id"], [other], None)]
 
 
+async def test_revoking_a_device_by_its_retired_id_closes_the_successors_sockets(env):
+    """A device list loaded before a rotation names the row the rotation
+    retired; revoking it reaches the successor and its sockets (#1075)."""
+    from app.auth.sessions import resolve_session, rotate_session
+
+    new_client, factory, revoked = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "StaleList")
+    assert (
+        await phone.post("/api/auth/login", json={"username": "StaleList", "password": PASSWORD})
+    ).status_code == 200
+    sessions = (await laptop.get("/api/auth/sessions")).json()["sessions"]
+    [other] = [row["id"] for row in sessions if not row["current"]]
+    successor = await rotate_session(
+        factory, session_id=other, user_id=account["id"], device_label="Phone"
+    )
+    assert successor is not None
+
+    assert (await laptop.delete(f"/api/auth/sessions/{other}")).status_code == 200
+    assert revoked == [(account["id"], [other, successor.session.id], None)]
+    assert await resolve_session(factory, successor.token) is None
+
+
 async def test_a_password_change_closes_every_other_browsers_sockets(env):
     """This browser's session is revoked with the rest, but its sockets are
     kept: the notice would beat the response carrying the new cookie, and

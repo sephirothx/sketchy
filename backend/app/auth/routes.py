@@ -1123,7 +1123,11 @@ def create_auth_router(
             raise Refusal(404, ErrorCode.SESSION_NOT_FOUND, "Active session not found.")
         if session_id == getattr(request.state, "session_id", None):
             clear_session_cookie(response, secure=is_secure_request(request))
-        await _sockets_signed_out(user_id, [str(session_id)])
+        # The named session and whatever replaced it: a list loaded before a
+        # rotation names the row the rotation retired (#1075).
+        await _sockets_signed_out(
+            user_id, list(dict.fromkeys([str(session_id), *revoked]))
+        )
         return {"ok": True}
 
     @router.post("/logout-all")
