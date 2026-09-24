@@ -4,6 +4,7 @@ from datetime import datetime, timedelta, timezone
 from unittest.mock import AsyncMock
 
 import socketio
+from uuid import uuid4
 
 from app.handlers import register_all_handlers as register_handlers
 from app.game import Game, Phase
@@ -1162,3 +1163,52 @@ async def test_a_seat_with_no_picture_cannot_be_reported_for_one():
         await ctx.timers.close()
     finally:
         await engine.dispose()
+
+
+class _UnreachableSessions:
+    """A session factory whose database is down, or never answers."""
+
+    def __init__(self, *, hang: bool = False) -> None:
+        self.hang = hang
+
+    def __call__(self):
+        return self
+
+    async def __aenter__(self):
+        if self.hang:
+            await asyncio.Event().wait()
+        raise RuntimeError("database unreachable")
+
+    async def __aexit__(self, *exc):
+        return False
+
+
+async def test_a_report_answers_a_refusal_when_the_database_fails_or_hangs(monkeypatch):
+    """Any database error used to escape the handler, and a hung one held it:
+    no acknowledgement either way, and the reporter's dialog waited out its
+    timeout with nothing to say (#1012)."""
+    from app.handlers import rooms as rooms_handlers
+
+    monkeypatch.setattr(rooms_handlers, "ENTRY_DB_TIMEOUT_SECONDS", 0.05)
+    for factory in (_UnreachableSessions(), _UnreachableSessions(hang=True)):
+        room_manager = RoomManager()
+        room = room_manager.create_room(name="Room", is_public=True)
+        reporter = room_manager.add_player(room, "Reporter", user_id=str(uuid4()), is_anonymous=False)
+        target = room_manager.add_player(room, "Target", user_id=str(uuid4()), is_anonymous=False)
+        reporter.sid, target.sid = "reporter-sid", "target-sid"
+        sio = socketio.AsyncServer(async_mode="asgi")
+        ctx = register_handlers(sio, room_manager)
+        ctx.session_factory = factory
+        ctx.message_retention = None
+        sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": reporter.id})
+        sio.emit = AsyncMock()
+
+        answer = await asyncio.wait_for(
+            sio.handlers["/"]["report_player"](
+                "reporter-sid",
+                {"targetPlayerId": target.id, "reason": "harassment", "details": "x"},
+            ),
+            timeout=2,
+        )
+        assert answer["ok"] is False
+        assert answer["errorCode"] == "database_busy"

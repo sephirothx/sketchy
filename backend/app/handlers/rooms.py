@@ -1068,12 +1068,24 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
         return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
     if payload.colorblind_safe_colors is not None:
-        player.colorblind_safe_colors = await resolve_colorblind_safe_preference(
-            ctx,
-            user_id=player.user_id,
-            is_anonymous=player.is_anonymous,
-            requested=payload.colorblind_safe_colors,
-        )
+        # Bounded and answered (#1012): a hung or failed read here used to
+        # leave the client without an acknowledgement.
+        try:
+            player.colorblind_safe_colors = await _bounded(
+                resolve_colorblind_safe_preference(
+                    ctx,
+                    user_id=player.user_id,
+                    is_anonymous=player.is_anonymous,
+                    requested=payload.colorblind_safe_colors,
+                ),
+                "storing the colour preference",
+                within_entry=False,
+            )
+        except EntryTimedOut:
+            return BUSY_ACKNOWLEDGEMENT
+        except Exception:
+            logger.exception("Could not store the colour preference for user %s", player.user_id)
+            return BUSY_ACKNOWLEDGEMENT
     if player.is_anonymous:
         # Grey italics is what marks a name as unclaimed; letting guests recolour
         # would erase the only cue distinguishing them from registered players.
@@ -1097,8 +1109,14 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
     # skipping the broadcast would leave everyone else looking at the old one.
     if payload.name_color is not None and ctx.user_repo is not None and player.user_id:
         try:
-            await ctx.user_repo.update_profile(
-                player.user_id, name_color=player.name_color
+            # Bounded (#1012): the broadcast below must not wait on a hung
+            # database either.
+            await _bounded(
+                ctx.user_repo.update_profile(
+                    player.user_id, name_color=player.name_color
+                ),
+                "storing the name colour",
+                within_entry=False,
             )
             # The lobby shows this colour too, from a cache warmed at the
             # handshake - and nothing re-handshakes after a colour change.
@@ -1183,41 +1201,64 @@ async def rename_player(ctx: HandlerContext, sid, data):
         }
 
     nickname = payload.nickname
-    if ctx.user_repo is not None:
-        owner = await ctx.user_repo.get_by_username(nickname)
-        if owner is not None and not owner.is_anonymous:
+    previous = player.nickname
+    # Every database call bounded, and none escaping (#1012): python-socketio
+    # sends no acknowledgement for a handler that raises, so a failed or hung
+    # write used to leave the client waiting out its timeout - with the seat
+    # already renamed in memory, nothing announced, and the account still on
+    # the old name. The account is written first and the seat only after, so
+    # a refusal leaves both as they were.
+    try:
+        if ctx.user_repo is not None:
+            owner = await _bounded(
+                ctx.user_repo.get_by_username(nickname), "checking the name",
+                within_entry=False,
+            )
+            if owner is not None and not owner.is_anonymous:
+                return {
+                    "ok": False, "errorCode": ErrorCode.NAME_TAKEN_BY_ACCOUNT,
+                    "error": "That name belongs to a registered player.",
+                    "field": "nickname",
+                }
+        # One guest name per person online (R-ACCT-09). Keeping the name, or
+        # only its case, is a standing claim rather than a new choice.
+        if await _bounded(
+            online_guest_holding(
+                nickname,
+                claimant_id=player.user_id,
+                registry=ctx.presence,
+                user_repo=ctx.user_repo,
+                choosing=nickname.lower() != previous.lower(),
+                identities=ctx.presence_identities,
+            ),
+            "checking who holds the name",
+            within_entry=False,
+        ):
             return {
-                "ok": False, "errorCode": ErrorCode.NAME_TAKEN_BY_ACCOUNT,
-                "error": "That name belongs to a registered player.",
+                "ok": False, "errorCode": ErrorCode.NAME_IN_USE,
+                "error": NAME_IN_USE_MESSAGE,
                 "field": "nickname",
             }
-    # One guest name per person online (R-ACCT-09). Keeping the name, or only
-    # its case, is a standing claim rather than a new choice.
-    if await online_guest_holding(
-        nickname,
-        claimant_id=player.user_id,
-        registry=ctx.presence,
-        user_repo=ctx.user_repo,
-        choosing=nickname.lower() != player.nickname.lower(),
-        identities=ctx.presence_identities,
-    ):
-        return {
-            "ok": False, "errorCode": ErrorCode.NAME_IN_USE,
-            "error": NAME_IN_USE_MESSAGE,
-            "field": "nickname",
-        }
 
-    previous = player.nickname
-    if previous == nickname:
-        return {"ok": True, "nickname": nickname}
+        if previous == nickname:
+            return {"ok": True, "nickname": nickname}
+
+        if ctx.user_repo is not None and player.user_id:
+            await _bounded(
+                ctx.user_repo.update_profile(player.user_id, display_name=nickname),
+                "storing the new name",
+                within_entry=False,
+            )
+            # The name is stored on the account, so the lobby's cached copy
+            # of it is now stale for every other tab this player has open.
+            ctx.presence_identities.invalidate(player.user_id)
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+    except Exception:
+        logger.exception("Could not rename user %s", player.user_id)
+        return BUSY_ACKNOWLEDGEMENT
 
     player.nickname = nickname
-    if ctx.user_repo is not None and player.user_id:
-        await ctx.user_repo.update_profile(player.user_id, display_name=nickname)
-        # The name is stored on the account, so the lobby's cached copy of it
-        # is now stale for every other tab this player has open.
-        ctx.presence_identities.invalidate(player.user_id)
-
     await ctx.game_flow.announce(
         room,
         Announcement.NICKNAME_CHANGED,

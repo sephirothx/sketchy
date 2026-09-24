@@ -868,6 +868,9 @@ the server resolves the seat against the live room and selects the evidence itse
 { "targetPlayerId": "…", "reason": "harassment", "details": "…", "includeDrawing": false }
 ```
 
+The database work is bounded by the entry timeout and answers `database_busy` when it
+fails or expires (#1012), as `rename_player` and `update_player_settings` do: a handler
+that raised sent no acknowledgement at all, and the dialog waited out its timeout.
 `reason` ∈ `harassment | offensive_drawing | inappropriate_name | cheating | spam |
 inappropriate_avatar`; `details` is optional and at most 1000 characters (stripped, so
 blank is empty) — the server attaches the evidence itself, and from a room that is

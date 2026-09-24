@@ -1204,3 +1204,53 @@ async def test_a_custom_only_room_still_opens_when_the_prompt_store_is_down():
     # starts plays its own prompts and never asks the store it could not reach.
     assert room.draws_from_prompt_lists() is False
     assert room.prompt_source_mode() == "custom"
+
+
+class _FailingProfileWrites(FakeUserRepository):
+    """A store whose profile writes fail, or never answer."""
+
+    def __init__(self, *, hang: bool = False) -> None:
+        super().__init__()
+        self.hang = hang
+
+    async def update_profile(self, user_id, **fields):
+        if self.hang:
+            await asyncio.Event().wait()
+        raise RuntimeError("profile write refused")
+
+
+async def _guest_seated(user_repo):
+    room_manager = RoomManager()
+    user_repo.add_guest("guest-1", "BriskOtter")
+    room = room_manager.create_room(name="Room")
+    player = room_manager.add_player(room, "BriskOtter", user_id="guest-1")
+    player.sid = "guest-sid"
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": player.id, "user_id": "guest-1"}
+    )
+    sio.emit = AsyncMock()
+    return sio, player
+
+
+async def test_a_failing_profile_write_leaves_the_seat_unchanged_and_answers(monkeypatch):
+    """The seat used to be renamed before the write, and the write's
+    exception escaped the handler: no acknowledgement, a seat carrying a name
+    nobody was told about, an account still on the old one (#1012)."""
+    from app.handlers import rooms as rooms_handlers
+
+    monkeypatch.setattr(rooms_handlers, "ENTRY_DB_TIMEOUT_SECONDS", 0.05)
+    for repo in (_FailingProfileWrites(), _FailingProfileWrites(hang=True)):
+        sio, player = await _guest_seated(repo)
+        answer = await asyncio.wait_for(
+            sio.handlers["/"]["rename_player"]("guest-sid", {"nickname": "Marta"}),
+            timeout=2,
+        )
+        assert answer["ok"] is False
+        assert answer["errorCode"] == "database_busy"
+        assert player.nickname == "BriskOtter"
+        assert (await repo.get_by_id("guest-1")).display_name == "BriskOtter"
+        assert not any(
+            line.get("code") == "nickname_changed" for line in room_lines(sio.emit)
+        )
