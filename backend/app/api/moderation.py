@@ -1051,6 +1051,23 @@ async def _reviewer(session: AsyncSession, request: Request) -> User:
     return user
 
 
+def _is_about_themselves(reviewer: User, subject_user_id: UUID | None) -> bool:
+    """Whether this decision is a moderator's about themselves or their own
+    content, which is another moderator's to make (#1003, #1063).
+
+    An administrator is exempt outright: a deployment's one admin with no
+    moderators beside them would otherwise have no way to decide a report
+    about themselves at all - it would wait, hidden from every queue, for
+    ever. Administrators are also the role nobody can ban, so an admin
+    deciding their own case changes nothing a moderator could have.
+    """
+    return (
+        subject_user_id is not None
+        and subject_user_id == reviewer.id
+        and reviewer.role != UserRole.ADMIN.value
+    )
+
+
 async def _refuse_a_report_that_cannot_be_filed(
     session, *, body, reporter_user_id: UUID
 ) -> None:
@@ -1593,17 +1610,20 @@ def create_moderation_router(
                 PlayerReport.scope,
                 PlayerReport.room_instance_id,
                 PlayerReport.created_at,
-            ).where(
+            )
+            if reviewer.role != UserRole.ADMIN.value:
                 # Open reports about the reader are another moderator's to see
                 # and decide (#1003); a standalone report names no account,
                 # and a decided one is somebody else's decision, shown here
-                # as the closed-cases stream shows it.
-                or_(
-                    PlayerReport.reported_user_id.is_(None),
-                    PlayerReport.reported_user_id != reviewer.id,
-                    PlayerReport.status != ReportStatus.PENDING.value,
+                # as the closed-cases stream shows it. An administrator sees
+                # and decides their own (#1063, `_is_about_themselves`).
+                plan = plan.where(
+                    or_(
+                        PlayerReport.reported_user_id.is_(None),
+                        PlayerReport.reported_user_id != reviewer.id,
+                        PlayerReport.status != ReportStatus.PENDING.value,
+                    )
                 )
-            )
             if status is not None:
                 plan = plan.where(PlayerReport.status == status.value)
             keys = (
@@ -1864,7 +1884,7 @@ def create_moderation_router(
         (R-MOD-16), so a page taken before grouping would cut one in half.
         """
         async with session_factory() as session:
-            await _reviewer(session, request)
+            reviewer = await _reviewer(session, request)
             plan = select(
                 PromptContentReport.id,
                 PromptContentReport.target_type,
@@ -1872,6 +1892,16 @@ def create_moderation_router(
                 PromptContentReport.prompt_version_id,
                 PromptContentReport.created_at,
             )
+            if reviewer.role != UserRole.ADMIN.value:
+                # As the player queue: reports pending about the reader's own
+                # lists are another moderator's to see and decide (#1063).
+                plan = plan.where(
+                    or_(
+                        PromptContentReport.reported_owner_user_id.is_(None),
+                        PromptContentReport.reported_owner_user_id != reviewer.id,
+                        PromptContentReport.status != ReportStatus.PENDING.value,
+                    )
+                )
             if status is not None:
                 plan = plan.where(PromptContentReport.status == status.value)
             keys = (
@@ -1919,7 +1949,7 @@ def create_moderation_router(
             }
 
     async def _lock_pending_content_incident(
-        session: AsyncSession, report_id: UUID
+        session: AsyncSession, report_id: UUID, *, reviewer: User
     ) -> ContentIncident:
         """Every pending report about the named report's target, locked.
 
@@ -1932,6 +1962,13 @@ def create_moderation_router(
         named = await session.get(PromptContentReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
+        if _is_about_themselves(reviewer, named.reported_owner_user_id):
+            # The player queue's rule, on the account that owns the list:
+            # before the lock and whatever state the report is in (#1063).
+            raise HTTPException(
+                status_code=403,
+                detail="A report about your own list is for another moderator to decide.",
+            )
         key = content_incident_key(named)
         column = (
             PromptContentReport.prompt_version_id
@@ -1959,7 +1996,7 @@ def create_moderation_router(
         )
 
     async def _lock_pending_incident(
-        session: AsyncSession, report_id: UUID, *, reviewer_id: UUID
+        session: AsyncSession, report_id: UUID, *, reviewer: User
     ) -> Incident:
         """Every pending report of the named report's incident, locked.
 
@@ -1967,7 +2004,8 @@ def create_moderation_router(
         open the queue and dismiss the reports filed about themselves, with
         the ledger naming them as the reviewer and nobody else ever asked
         (#1003). The ban and warning routes already refuse a self-target; a
-        decision reached through a report is the same act.
+        decision reached through a report is the same act. An administrator
+        is exempt (`_is_about_themselves`).
 
         Locked in id order and **not** starting from the named report, which
         is what makes this deadlock-free: two moderators reaching the same
@@ -1983,7 +2021,7 @@ def create_moderation_router(
         named = await session.get(PlayerReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if named.reported_user_id == reviewer_id:
+        if _is_about_themselves(reviewer, named.reported_user_id):
             # Before the lock and before the 409: the target never changes,
             # and "about you" is the answer whatever state the report is in,
             # so a reported moderator cannot learn from a 409 that their case
@@ -2041,7 +2079,7 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                incident = await _lock_pending_incident(session, report_id, reviewer_id=reviewer.id)
+                incident = await _lock_pending_incident(session, report_id, reviewer=reviewer)
                 # One decision, one group id, however many reports it covers
                 # (#620). Each report keeps its own reviewer, moment and audit
                 # entry: review stays one-way per row, and what changed is how
@@ -2108,7 +2146,9 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                incident = await _lock_pending_content_incident(session, report_id)
+                incident = await _lock_pending_content_incident(
+                    session, report_id, reviewer=reviewer
+                )
                 report = incident.reports[0]
 
                 if body.status == ReportStatus.RESOLVED.value:
@@ -2250,7 +2290,7 @@ def create_moderation_router(
         about somebody else must be refused" true of the group as well as the
         row.
         """
-        incident = await _lock_pending_incident(session, report_id, reviewer_id=reviewer.id)
+        incident = await _lock_pending_incident(session, report_id, reviewer=reviewer)
         named = next(
             report for report in incident.reports if report.id == report_id
         )
@@ -2464,6 +2504,13 @@ def create_moderation_router(
                 if prompt_list is None:
                     raise HTTPException(
                         status_code=404, detail="No such prompt list."
+                    )
+                if _is_about_themselves(reviewer, prompt_list.owner_user_id):
+                    # Releasing one's own held list is the same act as
+                    # dismissing a report about it (#1063).
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Your own list is for another moderator to review.",
                     )
                 if not (
                     prompt_list.moderation_state
@@ -3156,6 +3203,16 @@ def create_moderation_router(
             async with session.begin():
                 reviewer = await _reviewer(session, request)
                 require_step_up(request)
+                turn = await session.get(TurnRecord, db_turn_id)
+                if turn is not None and _is_about_themselves(
+                    reviewer, turn.drawer_user_id
+                ):
+                    # Releasing or hiding one's own drawing is another
+                    # moderator's call (#1063).
+                    raise HTTPException(
+                        status_code=403,
+                        detail="Your own drawing is for another moderator to decide.",
+                    )
                 # The decision and its audit record are one transaction: a
                 # drawing hidden with no ledger entry, or an entry for a
                 # decision that never landed, would each be a lie.

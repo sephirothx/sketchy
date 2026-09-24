@@ -551,3 +551,33 @@ async def test_the_staff_bytes_route_serves_public_games_only(env):
     assert (
         await http.get(f"/api/moderation/gallery/{private.turn_id}/drawing", headers={"If-None-Match": 'W/"x"'})
     ).status_code == 404
+
+
+async def test_a_moderator_cannot_decide_their_own_drawing(env):
+    """#1063: releasing or hiding one's own drawing is another moderator's
+    call; an administrator is exempt, as they are for every report."""
+    http, users, history, factory = env
+    mod = await _moderator(users, factory, "DrawingMod")
+    other = await _moderator(users, factory, "OtherMod")
+    reactor = await _registered(users, "Watcher")
+    game = await record_game(
+        history, drawer=mod.id, reactor=reactor.id, visibility="public",
+        finished_at=NOW - timedelta(hours=1),
+    )
+    decision = {"decision": "released", "note": "fine by me"}
+
+    await _as_moderator(http, factory, mod.id)
+    refused = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json=decision)
+    assert refused.status_code == 403
+
+    await _as_moderator(http, factory, other.id)
+    decided = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json=decision)
+    assert decided.status_code == 200, decided.text
+
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(mod.id))
+            row.role = UserRole.ADMIN.value
+    await _as_moderator(http, factory, mod.id)
+    own = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json=decision)
+    assert own.status_code == 200, own.text
