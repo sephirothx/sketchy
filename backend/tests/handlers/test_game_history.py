@@ -1016,7 +1016,9 @@ async def test_a_passed_restart_vote_records_the_game_it_gave_up_as_abandoned():
     [saved] = history.saved
     assert saved.record.id == replaced_id
     assert saved.record.outcome == "abandoned"
-    assert len(saved.turns) == 1
+    # The finished turn, and the one the vote interrupted mid-drawing: ended
+    # the way the clock ends it, so its drawing is in the record too.
+    assert len(saved.turns) == 2
     await ctx.timers.close()
 
 
@@ -1042,7 +1044,34 @@ async def test_a_cancelled_restart_still_records_the_game_the_vote_gave_up():
     assert room.state == "waiting" and room.game is None
     await replay_staged(ctx)
     [saved] = history.saved
+    assert (saved.record.id, saved.record.outcome, len(saved.turns)) == (replaced_id, "abandoned", 2)
+    await ctx.timers.close()
+
+
+async def test_a_vote_passed_after_only_wrong_guesses_still_keeps_the_turn():
+    """Nobody got it, but the drawing was drawn and guessed at: the record
+    has only completed turns, so the interrupted one is closed like the
+    clock closes it rather than dropped (review of #1048)."""
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    replaced_id = game.id
+    guesser = next(p for p in players.values() if p.id != game.current_drawer)
+    game.force_prompt_choice()
+    game.snapshot_turn_participants({guesser.id: "eligible"})
+    game.set_phase_deadline(game.drawing_seconds)
+    correct, _ = game.submit_guess(guesser.id, "not the prompt")
+    assert not correct
+
+    await _vote_to_restart(ctx, room, players)
+
+    await replay_staged(ctx)
+    [saved] = history.saved
     assert (saved.record.id, saved.record.outcome, len(saved.turns)) == (replaced_id, "abandoned", 1)
+    assert all(p.final_score == 0 for p in saved.participants)
     await ctx.timers.close()
 
 

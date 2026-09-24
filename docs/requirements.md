@@ -217,7 +217,7 @@ result is recorded here so the target is a measurement rather than a sentence:
 
 | # | Requirement |
 | --- | --- |
-| **R-VOTE-01** | Active players MUST be able to propose and carry a **restart vote** by strict majority, without interrupting live gameplay. Window 20 s, cooldown 60 s, 3 s delay before the restart. The game the vote gives up MUST be recorded as abandoned (R-HIST-05) whether the restart then happens or is cancelled: a game with turns drawn and guessed does not stop being a game because the room voted to start over (#993). [`handlers/restart.py:18`](../backend/app/handlers/restart.py) |
+| **R-VOTE-01** | Active players MUST be able to propose and carry a **restart vote** by strict majority, without interrupting live gameplay. Window 20 s, cooldown 60 s, 3 s delay before the restart. The game the vote gives up MUST be recorded as abandoned (R-HIST-05) whether the restart then happens or is cancelled: a game with turns drawn and guessed does not stop being a game because the room voted to start over (#993). The turn the vote interrupts mid-drawing MUST be closed the way the clock closes it, whatever was guessed, because the record holds completed turns only and its drawing and attempts would otherwise vanish from the abandoned game. [`handlers/restart.py`](../backend/app/handlers/restart.py) |
 | **R-VOTE-02** | Room players MUST be able to vote to **kick** or **mark AFK** another player by strict majority (`majority_of(n) = n//2 + 1`). |
 | **R-VOTE-03** | The voting population MUST be connected non-spectators. AFK players and the vote target **do** count toward it; disconnected players and spectators do **not**. [`rooms.py:371`](../backend/app/rooms.py) |
 

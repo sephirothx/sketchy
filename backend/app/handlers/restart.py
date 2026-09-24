@@ -247,13 +247,15 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
             "error": "Need at least two active players to restart",
         }
 
-    if room.game.phase == Phase.DRAWING and room.game.correct_guessers:
-        # Somebody already guessed this turn: their points are on their seat,
-        # and the game the vote gives up is recorded (R-HIST-05) by a writer
-        # that proves every seat's score against the ledger (R-HIST-12). A
-        # turn that never reached `completed_turns` while its points stayed
-        # was a record the writer refused. Ended the way the clock ends it -
-        # the results show for the moment the countdown takes to arrive.
+    if room.game.phase == Phase.DRAWING:
+        # The turn in progress is ended the way the clock ends it, whatever
+        # was guessed: the record has only completed turns, so a drawing and
+        # the wrong guesses at it would otherwise vanish from the abandoned
+        # game (review of #1048). Where somebody had guessed, the points are
+        # on their seat, and the writer proves every seat's score against
+        # the ledger (R-HIST-12): a turn that never reached
+        # `completed_turns` while its points stayed was a record the writer
+        # refused. The results show for the moment the countdown takes.
         await ctx.game_flow._end_turn(room)
     ctx.timers.cancel_restart_timer(room.id)
     ctx.timers.cancel_phase_timer(room.id)
