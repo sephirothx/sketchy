@@ -728,17 +728,19 @@ export function emitTransient(event: string, ...args: unknown[]): void {
   // mid-reconnect, or with its ping expired - replaying it on the next socket
   // before anything else runs (#966). Decided here instead, and counted as
   // dropped (#876), since that is what it is.
-  if (
-    !transientSendable({
-      connected: socket.connected,
-      transportWritable: Boolean(socket.io.engine?.transport?.writable),
-      transportAlive: transportIsAlive(),
-    })
-  ) {
+  if (!transientSendableNow()) {
     noteHealth("droppedEmits");
     return;
   }
   socket.volatile.emit(event, ...args);
+}
+
+function transientSendableNow(): boolean {
+  return transientSendable({
+    connected: socket.connected,
+    transportWritable: Boolean(socket.io.engine?.transport?.writable),
+    transportAlive: transportIsAlive(),
+  });
 }
 
 // The connection-health report (#876, `connectionHealth.ts`): at most once a
@@ -905,6 +907,13 @@ export const sharedGuessTarget: TransientAckTarget = {
     return socket.connected;
   },
   emitTransient(event, data, timeoutMs, ack) {
+    // The same rule as `emitTransient` (#966): connected with its ping
+    // expired, socket.io would buffer the guess for the next socket.
+    if (!transientSendableNow()) {
+      noteHealth("droppedEmits");
+      ack(new Error("not sent: the connection is not live"));
+      return;
+    }
     socket.volatile.timeout(timeoutMs).emit(event, data, ack);
   },
   scope() {

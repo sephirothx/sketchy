@@ -71,9 +71,10 @@ socket.io discards a volatile packet only when the transport is not writable;
 when the transport is writable but the socket is not connected - the round
 trip between the engine opening and the namespace CONNECT being acknowledged,
 or a connection whose ping has expired - it **buffers** it, and replays it on
-the new socket before any rebind runs (#966). That is the replay R-CONN-06
-forbids: a `leave_room` or a vote landing in whatever the room has become. So
-all three must hold, and anything else is a drop. */
+the new socket (#966). The server refuses what arrives that way - a new
+socket id no seat is bound to - but R-CONN-06 says such an action is dropped,
+and the client should say so rather than leave it to a buffer: all three must
+hold, and anything else is a drop, counted as one. */
 export function transientSendable(state: {
   connected: boolean;
   transportWritable: boolean;
