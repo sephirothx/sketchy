@@ -587,6 +587,7 @@ export const NL: Catalogue = {
       `${p.address} is bevestigd. Je kunt dit account nu herstellen.`,
     yourPasswordIsSetAnd: "Je wachtwoord is ingesteld en je bent weer ingelogd.",
     yourPasswordIsSetSignIn: "Je wachtwoord is ingesteld. Log opnieuw in met je tweede factor.",
+    yourPasswordIsSetSuspended: "Je wachtwoord is ingesteld, maar dit account is geschorst en kan niet inloggen.",
     resetYourPassword: "Wachtwoord opnieuw instellen",
     thatLinkNoLongerWorks: "Die link werkt niet meer",
     chooseANewPassword: "Kies een nieuw wachtwoord",

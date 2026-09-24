@@ -968,7 +968,9 @@ than somebody else's inbox.
 `POST /api/auth/password/forgot` answers identically whether or not the account
 exists: the response is not a place to learn which usernames are real. A
 completed reset revokes every session on the account, including one held by
-whoever forced the recovery, and signs the person performing it back in.
+whoever forced the recovery, and signs the person performing it back in -
+unless the account is staff, which signs in with its code, or suspended, which
+login refuses; the new password takes either way.
 
 Mail is queued in `email_outbox` in the same transaction as the action that
 causes it, and delivered by a sweeper. A suspension is never undone by an
