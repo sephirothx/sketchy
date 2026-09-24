@@ -587,7 +587,7 @@ export const DE: Catalogue = {
       `${p.address} ist bestätigt. Du kannst dieses Konto jetzt wiederherstellen.`,
     yourPasswordIsSetAnd: "Dein Passwort ist gesetzt und du bist wieder angemeldet.",
     yourPasswordIsSetSignIn: "Dein Passwort ist gesetzt. Melde dich erneut mit deinem zweiten Faktor an.",
-    yourPasswordIsSetSuspended: "Dein Passwort ist gesetzt, aber dieses Konto ist gesperrt und kann sich noch nicht anmelden.",
+    yourPasswordIsSetSuspended: "Dein Passwort ist gesetzt, aber dieses Konto ist gesperrt und kann sich nicht anmelden.",
     resetYourPassword: "Passwort zurücksetzen",
     thatLinkNoLongerWorks: "Dieser Link funktioniert nicht mehr",
     chooseANewPassword: "Wähle ein neues Passwort",
