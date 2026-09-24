@@ -208,6 +208,17 @@ async def test_the_upload_limit_is_each_accounts_own(env):
     # Same address, another account: its own ten.
     own = await neighbour.post("/api/users/me/avatar", json=encoded(png_bytes(seed=100)))
     assert own.status_code == 200, own.text
+    # And the account's ten follow it to another address.
+    elsewhere = AsyncClient(
+        transport=ASGITransport(app=busy._transport.app, client=("203.0.113.9", 4000)),
+        base_url="http://test",
+        cookies=busy.cookies,
+    )
+    async with elsewhere:
+        moved = await elsewhere.post(
+            "/api/users/me/avatar", json=encoded(png_bytes(seed=101))
+        )
+    assert moved.status_code == 429
 
 
 @pytest.mark.parametrize("layout", ["VP8L", "VP8 ", "VP8X"])

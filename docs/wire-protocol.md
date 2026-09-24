@@ -2390,7 +2390,11 @@ address under `IP_HASH_SECRET` — **raw IP addresses are never stored**
 ([`backend/app/auth/rate_limit.py`](../backend/app/auth/rate_limit.py)). Login is the
 exception to "keyed on the address": it is counted against three keys at once, and the
 account key is an HMAC of the lowercased username rather than of an address
-([`backend/app/auth/login_guard.py`](../backend/app/auth/login_guard.py), R-RATE-12).
+([`backend/app/auth/login_guard.py`](../backend/app/auth/login_guard.py), R-RATE-12). Actions
+only a signed-in account can take — creating a room (R-RATE-05), sending friend requests,
+uploading a picture — are keyed on the **account** instead, and counted only once the
+caller is known, so a refused guest cannot spend the bucket of everyone behind its
+address (#1074).
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
