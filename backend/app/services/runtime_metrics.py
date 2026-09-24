@@ -40,7 +40,7 @@ import contextlib
 import logging
 import os
 
-from sqlalchemy import delete, func, insert, select
+from sqlalchemy import delete, func, insert, select, text
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.telemetry import database_operation_of
@@ -456,7 +456,26 @@ async def recent_events(
 async def stored_event_count(
     session_factory: async_sessionmaker[AsyncSession],
 ) -> int:
+    """How many events are kept, to within the last analyze.
+
+    On PostgreSQL the planner's estimate (`pg_class.reltuples`), not a
+    count: `runtime_events` holds thirty days, and an exact `count(*)` on
+    every load of the ops page was a full scan with no timeout (#1076) - the
+    same trade `DrawingStoreFootprint` makes for the drawing store. SQLite,
+    which never holds a deployment's worth, is counted exactly.
+    """
     async with session_factory() as session:
+        if session.get_bind().dialect.name == "postgresql":
+            return int(
+                await session.scalar(
+                    text(
+                        # -1 until the table is first analyzed (PostgreSQL 14+).
+                        "SELECT GREATEST(reltuples, 0)::bigint FROM pg_class "
+                        "WHERE oid = 'runtime_events'::regclass"
+                    )
+                )
+                or 0
+            )
         return int(
             await session.scalar(select(func.count(RuntimeEvent.id))) or 0
         )

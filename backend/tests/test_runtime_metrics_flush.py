@@ -229,3 +229,29 @@ async def test_a_flush_takes_at_most_its_batch_and_the_overflow_is_still_counted
         assert raw == 50
     finally:
         await engine.dispose()
+
+
+async def test_the_stored_count_does_not_scan_the_table_on_postgresql():
+    """#1076: the ops page asked for an exact `count(*)` of a thirty-day
+    table on every load. PostgreSQL answers from the planner's estimate
+    instead - exact after an ANALYZE - and SQLite still counts."""
+    from sqlalchemy import text
+
+    from app.services.runtime_metrics import stored_event_count
+
+    factory, engine = await create_test_db()
+    try:
+        recorder = RuntimeMetrics(max_buffered=10_000)
+        _record(recorder, 120)
+        assert await flush_events(factory, recorder=recorder) == 120
+        postgresql = engine.dialect.name == "postgresql"
+        if postgresql:
+            async with engine.connect() as connection:
+                await connection.execute(text("ANALYZE runtime_events"))
+        statements = _capture(engine)
+
+        assert await stored_event_count(factory) == 120
+        counted = [s for s in statements if "count(" in s.lower() and "runtime_events" in s]
+        assert (counted == []) if postgresql else (len(counted) == 1)
+    finally:
+        await engine.dispose()
