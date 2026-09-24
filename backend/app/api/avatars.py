@@ -14,7 +14,8 @@ import binascii
 from typing import Awaitable, Callable
 
 from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
@@ -41,13 +42,13 @@ MAX_AVATAR_BASE64 = ((MAX_AVATAR_BYTES + 2) // 3) * 4 + 8
 AVATAR_UPLOAD_LIMIT = 10
 
 
-class AvatarUploadBody(BaseModel):
+class AvatarUploadBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     image: str = Field(min_length=1, max_length=MAX_AVATAR_BASE64)
 
 
-class DoodleBody(BaseModel):
+class DoodleBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     name: str = Field(min_length=1, max_length=32)

@@ -20,6 +20,7 @@ the operator command - not by recovery codes, which are one more thing to lose.
 """
 from __future__ import annotations
 
+from typing import NamedTuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
@@ -461,6 +462,13 @@ async def change_password(
     return True
 
 
+class PasswordResetOutcome(NamedTuple):
+    """What a completed reset leaves the route to decide on."""
+
+    user_id: UUID
+    role: str
+
+
 async def reset_password(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -469,8 +477,12 @@ async def reset_password(
     ip_hash: str | None = None,
     request_id: str | None = None,
     now: datetime | None = None,
-) -> UUID | None:
-    """Set a new password and sign every device out. Returns the account id."""
+) -> PasswordResetOutcome | None:
+    """Set a new password and sign every device out.
+
+    Returns the account id and its role, because the route decides on the
+    role whether the browser that reset is signed in (#996).
+    """
     changed_at = now or datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
@@ -519,5 +531,5 @@ async def reset_password(
             # one commit, so a crash anywhere leaves all of it undone rather
             # than a new password with every old session still standing.
             await revoke_sessions(session, user_id=user.id, now=changed_at)
-            reset_user_id = user.id
-    return reset_user_id
+            outcome = PasswordResetOutcome(user_id=user.id, role=user.role)
+    return outcome

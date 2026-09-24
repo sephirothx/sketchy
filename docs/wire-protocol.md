@@ -616,6 +616,19 @@ Defined and enforced in
   integers must be integers and must not be booleans.
 - **Unknown fields are rejected** (`extra="forbid"`).
 - All strings and integers are **bounded here**, before a handler authorizes or mutates.
+- **No string carries a control character** — U+0000–U+001F other than tab, newline and
+  carriage return, or U+007F — however deep it sits in the payload. PostgreSQL refuses a
+  NUL in `text`, and a value that passed every length check and reached a statement
+  failed that statement together with everything batched beside it: one chat line with a
+  NUL dropped the retention batch of up to a hundred other lines, a room name with one
+  made the finished game unsaveable (#995). The rule is one validator on the raw value of
+  every field ([`backend/app/request_text.py`](../backend/app/request_text.py)), shared by
+  every REST body model too, so a field that strips or parses its text never meets the
+  character and the refusal names the field it arrived in. A **password** is the one
+  exception: an opaque secret, hashed on arrival and never stored or compared as text,
+  so the database never sees a byte of it — and it is checked at every proof an account
+  makes, so refusing a byte the policy accepted would lock its owner out of every door,
+  the recovery link included.
 - Camel-case wire names are declared as pydantic `Field(alias=…)`; the alias is what the
   client sends.
 
@@ -2020,6 +2033,13 @@ operators in one language, and the split is written down as an allowlist in
 fails on a player-facing route that refuses with prose and on a stale exemption.
 FastAPI's own validation failures keep their `{"detail": [...]}` shape; a client that
 provoked one sent a payload no screen can produce.
+Every body model descends from `ControlFreeModel`
+([`backend/app/request_text.py`](../backend/app/request_text.py)), so a string carrying a
+control character (§3) is one of those failures — 422, naming the field — rather than
+the 500 PostgreSQL's refusal of a NUL used to become. The few strings that reach a
+statement without a body model are checked by hand: the community catalogue's `tag`
+and the prompt-stats route's `{slug}` (answered as not found), and the operators' own
+filters (`GET /api/admin/players?q=`, `/api/admin/metrics/events`, `/api/admin/audit`).
 
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
 a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only
@@ -2078,7 +2098,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
-| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in (`AUTH_RESET_PERFORM_LIMIT`) |
+| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in — `{ok, signedIn}`. A **staff** account is not signed in (`signedIn: false`): a reset proves the mailbox and R-AUTH-20 wants the code too, so it goes through login (#996). (`AUTH_RESET_PERFORM_LIMIT`) |
 | `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
 | `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status. On a `failed` job `failureCode` is `too_large` (the deployment's ceiling, R-PRIV-13) or `generation_failed`; otherwise `null` |
@@ -2243,7 +2263,7 @@ which is the one thing the 404 exists to refuse.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/admin/metrics`, `/api/admin/metrics/events` | The first carries the live counts and recorder state, then the process signals: `windowMinutes`, `http`, `socket` (rates, outcomes, p95, bytes in and out per minute before compression, and the eight heaviest commands and emitted events with their payload-size p50/p95/p99 since start), `process`, `database` (pool, statement latency, `errorsByCause` by SQLSTATE class, `poolWaitP95Ms`, `poolTimeouts` and `poolTimeoutsInWindow`, `topOperations` — the labelled operations with the most statement time and their p95 — `retries` keyed `operation:outcome`, `historyWriteP95Ms` and `historyPersistLagP95Seconds` (#892), `historyWritesAbandoned` by reason — `timeout` and `error` are staging losses, `conflict`, `exhausted` and `unreadable` are replay losses — `historyHandoff` with games staged and replay outcomes since start, last readiness probe), `drawingStore` (`totalBytes` and `rows` — what the stored drawings occupy, and the planner's row estimate rather than a count, the whole relation including TOAST and indexes, and `null` off PostgreSQL rather than a zero that would read as an empty store; R-OBS-14), `queues` (`mailOutbox` with `sweepSeconds`, `dataExports`, `finishedGames` with `failed` and `sweepSeconds` — the staged finished games of #541), `loops`, `retention` (one row per retained table: `overdueSeconds` against the `slaSeconds` it is held to, `backlogRows`, `sweepSeconds`, `exhausted`, `failed`, `removedTotal`, `failuresTotal` and the server's own `breached` verdict — decided once, so the page and the alert rule cannot disagree; empty until the retention loop has finished a pass, R-PRIV-17), and `series` — eight sixty-point per-minute arrays, oldest first, `null` where a minute recorded nothing. Rates and percentiles are over the trailing window |
+| `GET` | `/api/admin/metrics`, `/api/admin/metrics/events` | The first carries the live counts and recorder state, then the process signals: `windowMinutes`, `http`, `socket` (rates, outcomes, p95, bytes in and out per minute before compression, and the eight heaviest commands and emitted events with their payload-size p50/p95/p99 since start), `process`, `database` (pool, statement latency, `errorsByCause` by SQLSTATE class, `poolWaitP95Ms`, `poolTimeouts` and `poolTimeoutsInWindow`, `topOperations` — the labelled operations with the most statement time and their p95 — `retries` keyed `operation:outcome`, `historyWriteP95Ms` and `historyPersistLagP95Seconds` (#892), `historyWritesAbandoned` by reason — `timeout` and `error` are staging losses, `conflict`, `exhausted`, `unreadable` and `invalid` are replay losses — `historyHandoff` with games staged and replay outcomes since start, last readiness probe), `drawingStore` (`totalBytes` and `rows` — what the stored drawings occupy, and the planner's row estimate rather than a count, the whole relation including TOAST and indexes, and `null` off PostgreSQL rather than a zero that would read as an empty store; R-OBS-14), `queues` (`mailOutbox` with `sweepSeconds`, `dataExports`, `finishedGames` with `failed` and `sweepSeconds` — the staged finished games of #541), `loops`, `retention` (one row per retained table: `overdueSeconds` against the `slaSeconds` it is held to, `backlogRows`, `sweepSeconds`, `exhausted`, `failed`, `removedTotal`, `failuresTotal` and the server's own `breached` verdict — decided once, so the page and the alert rule cannot disagree; empty until the retention loop has finished a pass, R-PRIV-17), and `series` — eight sixty-point per-minute arrays, oldest first, `null` where a minute recorded nothing. Rates and percentiles are over the trailing window |
 | `GET` | `/api/admin/players/{user_id}/activity` | **Writes an audit event on every use** |
 | `GET` | `/api/admin/audit` | |
 | `GET` | `/api/admin/tunables` | Every runtime tunable with its value, default, bounds, unit, whether its values are whole, origin and purpose |

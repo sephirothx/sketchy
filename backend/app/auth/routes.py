@@ -9,7 +9,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
@@ -166,7 +167,7 @@ GLOBAL_PROVISION_KEY = "all"
 
 
 
-class CredentialsBody(BaseModel):
+class CredentialsBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(max_length=MAX_NAME_LENGTH)
@@ -185,7 +186,7 @@ class RegistrationBody(CredentialsBody):
     email: str | None = Field(default=None, max_length=MAX_EMAIL_LENGTH)
 
 
-class EmailBody(BaseModel):
+class EmailBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(max_length=MAX_EMAIL_LENGTH)
@@ -196,38 +197,38 @@ class EmailBody(BaseModel):
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class TokenBody(BaseModel):
+class TokenBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(max_length=256)
 
 
-class ForgotPasswordBody(BaseModel):
+class ForgotPasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     identifier: str = Field(max_length=MAX_EMAIL_LENGTH)
 
 
-class ResetPasswordBody(BaseModel):
+class ResetPasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(max_length=256)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class DisplayNameBody(BaseModel):
+class DisplayNameBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str = Field(max_length=MAX_NAME_LENGTH, alias="displayName")
 
 
-class NameColorBody(BaseModel):
+class NameColorBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     name_color: str = Field(max_length=16, alias="nameColor")
 
 
-class ChangePasswordBody(BaseModel):
+class ChangePasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     current_password: str = Field(
@@ -236,7 +237,7 @@ class ChangePasswordBody(BaseModel):
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class SecondFactorConfirmBody(BaseModel):
+class SecondFactorConfirmBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     # Echoed back from the enrolment offer, because nothing was stored: the
@@ -249,13 +250,13 @@ class SecondFactorConfirmBody(BaseModel):
     password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
 
 
-class StepUpBody(BaseModel):
+class StepUpBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(max_length=64)
 
 
-class PasskeyRegistrationBody(BaseModel):
+class PasskeyRegistrationBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     # The browser's own object, passed through to the verifier rather than
@@ -269,19 +270,19 @@ class PasskeyRegistrationBody(BaseModel):
     label: str | None = Field(default=None, max_length=64)
 
 
-class PasskeyAssertionBody(BaseModel):
+class PasskeyAssertionBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     credential: dict
 
 
-class PasswordProofBody(BaseModel):
+class PasswordProofBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class SecondFactorOwnerBody(BaseModel):
+class SecondFactorOwnerBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
@@ -291,7 +292,7 @@ class SecondFactorOwnerBody(BaseModel):
     code: str = Field(max_length=16)
 
 
-class DeleteAccountBody(BaseModel):
+class DeleteAccountBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
@@ -1430,24 +1431,32 @@ def create_auth_router(
                 params={"reason": error.reason, "detail": error.detail},
             ) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        user_id = await reset_password(
+        outcome = await reset_password(
             session_factory,
             token=body.token,
             password_hash=await hash_password(password),
             ip_hash=ip_hash,
             request_id=request_id,
         )
-        if user_id is None:
+        if outcome is None:
             raise Refusal(
                 400,
                 ErrorCode.RESET_LINK_INVALID,
                 "That reset link has expired or already been used.",
             )
+        clear_session_cookie(response, secure=is_secure_request(request))
+        if outcome.role in STAFF_ROLES and staff_second_factor_required():
+            # Not for a staff account: a reset proves the mailbox, and
+            # R-AUTH-20 says a moderator MUST NOT sign in without producing
+            # a code. Issued here, the session was a staff sign-in that
+            # asked for no code - and the password just set is enough to
+            # replace the authenticator, so the second factor was reduced
+            # to mailbox control (#996). Login runs the gate; go there.
+            return {"ok": True, "signedIn": False}
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
-        clear_session_cookie(response, secure=is_secure_request(request))
-        await issue_cookie(response, request, str(user_id))
-        return {"ok": True}
+        await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)
+        return {"ok": True, "signedIn": True}
 
     @router.post("/password/change")
     async def change_own_password(
