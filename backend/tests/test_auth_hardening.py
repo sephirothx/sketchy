@@ -54,6 +54,7 @@ from app.auth.sessions import (
     resolve_session,
     list_active_sessions,
     revoke_all_sessions,
+    revoke_session,
     rotate_session,
     should_rotate,
 )
@@ -368,6 +369,65 @@ async def test_two_requests_racing_a_rotation_do_not_sign_anybody_out(env):
     inside = datetime.now(timezone.utc) + ROTATION_GRACE - timedelta(seconds=5)
     assert await resolve_session(factory, issued.token, now=inside) is not None
     assert await resolve_session(factory, successor.token, now=inside) is not None
+
+
+@pytest.mark.parametrize("how", ["one device", "everywhere"])
+async def test_the_grace_ends_with_the_successor(env, how):
+    """#1075: the grace lends the predecessor its successor's standing. A
+    sign-out (or a password change) inside the window revokes the successor,
+    and a copy of the pre-rotation token must not keep working after it."""
+    _, factory, repo = env
+    user = await repo.create_anonymous("SignedOut")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
+    successor = await rotate_session(
+        factory,
+        session_id=issued.session.id,
+        user_id=user.id,
+        device_label="Chrome on Windows",
+    )
+    assert successor is not None
+    if how == "everywhere":
+        assert await revoke_all_sessions(factory, user_id=user.id) == 1
+    else:
+        assert await revoke_session(
+            factory, session_id=successor.session.id, user_id=user.id
+        )
+
+    inside = datetime.now(timezone.utc) + ROTATION_GRACE - timedelta(seconds=5)
+    assert await resolve_session(factory, issued.token, now=inside) is None
+    # A plain revocation, not a replay: nothing to take down, nothing audited.
+    async with factory() as session:
+        replayed = (
+            await session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.event_type == "session.token_replayed"
+                )
+            )
+        ).all()
+    assert replayed == []
+
+
+async def test_signing_out_with_the_rotated_away_cookie_reaches_the_successor(env):
+    """A browser that lost the race sends its sign-out with the old cookie,
+    which the grace still resolves. Revoking only that row - already revoked
+    by the rotation - left the successor live, and the browser signed in
+    again the moment the rotated cookie landed (#1075)."""
+    _, factory, repo = env
+    user = await repo.create_anonymous("RacedOut")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
+    successor = await rotate_session(
+        factory,
+        session_id=issued.session.id,
+        user_id=user.id,
+        device_label="Chrome on Windows",
+    )
+    assert successor is not None
+
+    revoked = await revoke_session(factory, session_id=issued.session.id, user_id=user.id)
+    assert revoked == [successor.session.id]
+    assert await resolve_session(factory, successor.token) is None
+    inside = datetime.now(timezone.utc) + ROTATION_GRACE - timedelta(seconds=5)
+    assert await resolve_session(factory, issued.token, now=inside) is None
 
 
 async def test_a_session_used_from_another_browser_is_flagged(env):

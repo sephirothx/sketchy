@@ -523,13 +523,14 @@ def create_auth_router(
         )
         return refreshed or account, session_id
 
-    async def revoke_current(request: Request) -> None:
+    async def revoke_current(request: Request) -> list[str]:
         session_id = getattr(request.state, "session_id", None)
         user_id = getattr(request.state, "user_id", None)
         if session_id and user_id:
-            await revoke_session(
+            return await revoke_session(
                 session_factory, session_id=session_id, user_id=user_id
             )
+        return []
 
     async def throttle(limiter: PersistentRateLimiter, request: Request) -> None:
         if not await limiter.check(client_key(request)):
@@ -1122,7 +1123,11 @@ def create_auth_router(
             raise Refusal(404, ErrorCode.SESSION_NOT_FOUND, "Active session not found.")
         if session_id == getattr(request.state, "session_id", None):
             clear_session_cookie(response, secure=is_secure_request(request))
-        await _sockets_signed_out(user_id, [str(session_id)])
+        # The named session and whatever replaced it: a list loaded before a
+        # rotation names the row the rotation retired (#1075).
+        await _sockets_signed_out(
+            user_id, list(dict.fromkeys([str(session_id), *revoked]))
+        )
         return {"ok": True}
 
     @router.post("/logout-all")
@@ -2089,12 +2094,15 @@ def create_auth_router(
         """Revoke this session. The next /me call provisions a fresh guest."""
         user_id = getattr(request.state, "user_id", None)
         session_id = getattr(request.state, "session_id", None)
-        await revoke_current(request)
+        revoked = await revoke_current(request)
         clear_session_cookie(response, secure=is_secure_request(request))
         if user_id and session_id:
             # Another tab of this browser shares the session: its socket is
-            # signed out with it.
-            await _sockets_signed_out(user_id, [str(session_id)])
+            # signed out with it - and so is one opened on the session that
+            # replaced it, when this sign-out carried the rotated-away cookie.
+            await _sockets_signed_out(
+                user_id, list(dict.fromkeys([str(session_id), *revoked]))
+            )
         return {"ok": True}
 
     return router
