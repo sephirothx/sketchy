@@ -211,7 +211,8 @@ told the room has ended.
 A private, named, versioned copy of typed settings for a future *ordinary* room. Same
 columns and `CHECK` set as a room's typed settings, with no code, plus `name_key` with
 `uq_room_presets_owner_name (owner_user_id, name_key)`. `ON DELETE CASCADE` from
-`users`.
+`users`. `name_key` is the case-folded name, bounded to its 64 characters *after* folding
+(`ß` folds to "ss"), since a longer one was a 500 on PostgreSQL (#1017).
 
 A preset has **no room code, members, host identity, game, scores, timers, chat, or
 canvas.** Applying one fills the create form but does not enable *Keep this room for

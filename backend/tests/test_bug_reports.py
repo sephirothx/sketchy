@@ -560,3 +560,26 @@ async def test_a_control_character_is_refused_rather_than_stored(env, body):
     assert response.status_code == 422, response.text
     async with factory() as session:
         assert await session.scalar(select(BugReport)) is None
+
+
+async def test_a_webp_screenshot_is_measured_from_its_header(env):
+    """The VP8X layout keeps the canvas size at a fixed offset; the report
+    records it rather than the sender's claim (#1017 review)."""
+    new_client, factory, _ = env
+    http = new_client()
+    await guest(http)
+    webp = (
+        b"RIFF" + struct.pack("<I", 30) + b"WEBP" + b"VP8X" + struct.pack("<I", 10)
+        + b"\x00" * 4 + (800 - 1).to_bytes(3, "little") + (600 - 1).to_bytes(3, "little")
+    )
+    response = await http.post(
+        "/api/bug-reports",
+        json=a_report(
+            screenshot=encoded(webp),
+            clientContext={"screenshotWidth": 1, "screenshotHeight": 1},
+        ),
+    )
+    assert response.status_code == 201, response.text
+    async with factory() as session:
+        report = await session.get(BugReport, UUID(response.json()["id"]))
+        assert (report.screenshot_width, report.screenshot_height) == (800, 600)
