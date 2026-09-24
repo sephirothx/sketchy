@@ -1278,12 +1278,13 @@ async def test_a_fresh_stroke_reusing_the_open_number_closes_the_torn_path():
     assert canvas.active_draw_sequence is None
     assert canvas.sequence == 1, "the torn path is committed where the server's copy ends"
     assert len(canvas.history) == 1 and canvas.history[0].points == [(0.1, 0.1), (0.2, 0.2)]
-    room_frames = [
-        call for call in sio.emit.await_args_list
-        if call.args[0] == "draw" and call.kwargs.get("skip_sid") == "drawer-sid"
-    ]
-    assert room_frames, "the room is sent the draw_end closing the torn path"
-    assert "canvas_stale" in _emitted_events(sio), "the drawer is told to resync"
+    # The room gets the torn path's draw_end with its commit - the frame the
+    # viewers already expect for the path they hold, so none of them resyncs.
+    [(end_call,)] = [call.args[1:] for call in _emitted(sio, "draw")]
+    assert end_call[0] == encode_live_drawing("draw_end")
+    assert end_call[1] is not None and end_call[1][1] == 1, "committed under the open number"
+    [(notice,)] = [call.args[1:] for call in _emitted(sio, "canvas_stale")]
+    assert notice[2] == "dropped_frame", "the drawer is told to resync"
     # The fresh stroke's trailing points are not glued onto anything.
     await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.8, "y": 0.8}]}))
     assert canvas.history[0].points == [(0.1, 0.1), (0.2, 0.2)]
