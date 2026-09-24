@@ -211,10 +211,49 @@ async def test_pages_are_a_cursor_that_stops_480_deep(repos):
     assert _ids(third) == [games[4].turn_id] and third.next_cursor is None
     # A mangled cursor is page one; a page past the ceiling is empty.
     assert _ids(await history.list_gallery(sort="new", limit=2, cursor="???")) == _ids(first)
-    deep = await history.list_gallery(sort="new", cursor=str(MAX_GALLERY_OFFSET))
+    from app.repositories.sqlalchemy import _encode_gallery_cursor
+
+    deep = await history.list_gallery(
+        sort="new",
+        cursor=_encode_gallery_cursor(None, NOW, UUID(int=0), MAX_GALLERY_OFFSET),
+    )
     assert deep.entries == () and deep.next_cursor is None
     # The page size is clamped, never trusted.
     assert len(_ids(await history.list_gallery(sort="new", limit=999))) == 5
+
+
+async def test_a_game_finishing_between_two_pages_repeats_nothing(repos):
+    """Pages are keyed on where the last row stood, not counted (#1072): a
+    game finishing between two reads ranks above the cut in every order,
+    and an offset served the row at the cut twice - the second `lantern`
+    card the gallery E2E kept meeting on a busy shard."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    games = [
+        await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(minutes=10 + i))
+        for i in range(4)
+    ]
+    for sort in ("hot", "new", "top"):
+        first = await history.list_gallery(sort=sort, limit=2)
+        assert len(first.entries) == 2 and first.next_cursor
+        # A fresh finish ranks first in every order: newest, and with no
+        # reactions anywhere the Hot and Top orders fall through to the
+        # earlier finish first... which is the *older* games. Give it a
+        # reaction so it lands on top of Hot and Top too.
+        newcomer = await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(minutes=1))
+        await history.set_drawing_reaction(None, newcomer.turn_id, requesting_user_id=bob.id, emoji="fire", from_gallery=True)
+        rest = []
+        cursor = first.next_cursor
+        while cursor:
+            page = await history.list_gallery(sort=sort, limit=2, cursor=cursor)
+            rest.extend(_ids(page))
+            cursor = page.next_cursor
+        seen = _ids(first) + rest
+        assert len(seen) == len(set(seen)), (sort, seen)
+        # Everything that was there before the first page is served once.
+        assert {g.turn_id for g in games} <= set(seen), (sort, seen)
+        games.append(newcomer)
 
 
 async def test_a_reaction_the_room_gave_counts_beside_an_outsiders(repos):

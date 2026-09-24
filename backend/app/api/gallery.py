@@ -115,7 +115,7 @@ def create_gallery_router(
         sort: str = Query(default="hot"),
         window: str = Query(default="all"),
         limit: int = Query(default=MAX_GALLERY_PAGE, ge=1, le=MAX_GALLERY_PAGE),
-        cursor: str | None = Query(default=None, max_length=32),
+        cursor: str | None = Query(default=None, max_length=200),
     ):
         """One page of the **Gallery** (R-GAL-01..04): every kept drawing from
         a public game, for anyone with a session.

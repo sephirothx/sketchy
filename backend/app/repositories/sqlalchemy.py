@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 from collections import Counter, OrderedDict, defaultdict
 from collections.abc import Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field
@@ -215,6 +216,46 @@ def _published_by_a_player():
 
 def _encode_catalogue_cursor(offset: int) -> str:
     return str(offset)
+
+
+def _encode_gallery_cursor(
+    sort_key: float | int | None, finished_at: datetime, turn_id: UUID, served: int
+) -> str:
+    """Where the last row of a page stood, so the next page starts after it.
+
+    Keyset rather than an offset (#1072): a game finishing between two page
+    reads ranks above the cut in every order, and an offset then served the
+    row at the cut twice - a drawing shown two times on one screen - or
+    skipped one on the way down. `served` keeps the depth ceiling: the
+    cursor knows how many rows came before it, which an offset used to be.
+    """
+    token = json.dumps(
+        [sort_key, finished_at.isoformat(), str(turn_id), served], separators=(",", ":")
+    )
+    return base64.urlsafe_b64encode(token.encode()).decode().rstrip("=")
+
+
+def _decode_gallery_cursor(
+    cursor: str | None,
+) -> tuple[float | int | None, datetime, UUID, int] | None:
+    """A malformed cursor reads as the first page, as the catalogue's does."""
+    if not cursor:
+        return None
+    try:
+        padded = cursor + "=" * (-len(cursor) % 4)
+        sort_key, finished_at, turn_id, served = json.loads(
+            base64.urlsafe_b64decode(padded.encode()).decode()
+        )
+        if sort_key is not None and not isinstance(sort_key, (int, float)):
+            return None
+        return (
+            sort_key,
+            datetime.fromisoformat(finished_at),
+            UUID(turn_id),
+            max(0, int(served)),
+        )
+    except (ValueError, TypeError, AttributeError):
+        return None
 
 
 def _decode_catalogue_cursor(cursor: str | None) -> int:
@@ -2540,18 +2581,31 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         agreeing to it. The orders read the projections kept on the row
         (R-GAL-05) rather than counting reactions, and every order breaks
         ties by the game's finish and then the turn id, so two reads agree.
+
+        Pages are keyed on where the last row stood, not counted (#1072): a
+        game finishing between two reads ranks above the cut in every order,
+        and an offset served the row at the cut twice. A Hot score that the
+        rebuild moved between two reads can still shift a row across the
+        cut - a ranked feed has no fixed page boundary - which is the one
+        drift left, and a reload's to settle.
         """
         if sort not in ("hot", "new", "top") or window not in TOP_WINDOWS:
             return GalleryPage(entries=(), next_cursor=None)
         requester_id = _optional_entity_id(requesting_user_id)
         limit = max(1, min(int(limit), MAX_GALLERY_PAGE))
-        offset = _decode_catalogue_cursor(cursor)
+        after = _decode_gallery_cursor(cursor)
+        served = after[3] if after else 0
         # The community catalogue's rule, for the same reason: nobody reaches
         # this deep by looking, so a deeper page is a scrape.
-        if offset >= MAX_GALLERY_OFFSET:
+        if served >= MAX_GALLERY_OFFSET:
             return GalleryPage(entries=(), next_cursor=None)
         stmt = (
-            select(TurnRecord, GameRecord.finished_at, TurnDrawing.reaction_count)
+            select(
+                TurnRecord,
+                GameRecord.finished_at,
+                TurnDrawing.reaction_count,
+                TurnDrawing.hot_score,
+            )
             .join(GameRecord, GameRecord.id == TurnRecord.game_id)
             .join(TurnDrawing, TurnDrawing.turn_id == TurnRecord.id)
             .where(*_gallery_predicate())
@@ -2576,6 +2630,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         now = datetime.now(timezone.utc)
         if sort == "new":
             order = (GameRecord.finished_at.desc(), TurnRecord.id.desc())
+            sort_column = None
         elif sort == "top":
             since = TOP_WINDOWS[window]
             if since is not None:
@@ -2585,6 +2640,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 GameRecord.finished_at.asc(),
                 TurnRecord.id.asc(),
             )
+            sort_column = TurnDrawing.reaction_count
         else:
             stmt = stmt.where(GameRecord.finished_at >= now - HOT_HORIZON)
             order = (
@@ -2592,18 +2648,41 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 GameRecord.finished_at.asc(),
                 TurnRecord.id.asc(),
             )
-        stmt = stmt.order_by(*order).offset(offset).limit(limit + 1)
+            sort_column = TurnDrawing.hot_score
+        if after is not None:
+            after_key, after_finished, after_id, _ = after
+            if sort_column is None:
+                # New: strictly later in the order means an earlier finish,
+                # or the same finish and a smaller id.
+                stmt = stmt.where(
+                    or_(
+                        GameRecord.finished_at < after_finished,
+                        and_(GameRecord.finished_at == after_finished, TurnRecord.id < after_id),
+                    )
+                )
+            elif after_key is not None:
+                later_in_tie = or_(
+                    GameRecord.finished_at > after_finished,
+                    and_(GameRecord.finished_at == after_finished, TurnRecord.id > after_id),
+                )
+                stmt = stmt.where(
+                    or_(sort_column < after_key, and_(sort_column == after_key, later_in_tie))
+                )
+        stmt = stmt.order_by(*order).limit(limit + 1)
         async with self._session_factory() as session:
             viewer_ids: tuple[UUID, ...] = (
                 await _identity_ids(session, requester_id) if requester_id else ()
             )
-            rows = (await session.execute(stmt)).all()
-            has_more = len(rows) > limit
-            rows = rows[:limit]
+            fetched = (await session.execute(stmt)).all()
+            has_more = len(fetched) > limit
+            fetched = fetched[:limit]
+            rows = [(turn, finished_at, count) for turn, finished_at, count, _ in fetched]
+            last_hot_score = fetched[-1][3] if fetched else None
             summaries = await _reaction_summaries(
                 session, [turn.id for turn, _, _ in rows], viewer_ids
             )
         entries = []
+        last_key: float | int | None = None
         for turn, finished_at, _count in rows:
             summary = summaries.get(turn.id, _NO_REACTIONS)
             entries.append(
@@ -2622,10 +2701,17 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     drawn_by_me=turn.drawer_user_id in viewer_ids,
                 )
             )
-        return GalleryPage(
-            entries=tuple(entries),
-            next_cursor=_encode_catalogue_cursor(offset + limit) if has_more else None,
-        )
+        next_cursor = None
+        if has_more:
+            last_turn, last_finished, last_count = rows[-1]
+            if sort == "top":
+                last_key = last_count
+            elif sort == "hot":
+                last_key = last_hot_score
+            next_cursor = _encode_gallery_cursor(
+                last_key, last_finished, last_turn.id, served + len(rows)
+            )
+        return GalleryPage(entries=tuple(entries), next_cursor=next_cursor)
 
     async def get_gallery_entry(
         self, turn_id: str, *, requesting_user_id: str | None = None
