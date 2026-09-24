@@ -4994,7 +4994,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 match_key=normalize_prompt_answer(entry.answer, prompt_list.language),
             )
             decided_by = existing
-            if hidden_by_key and not (
+            # A moderator who ruled this entry's word active has the last say
+            # on that word: a hidden copy elsewhere must not re-hide it the
+            # next time an alias is added (#1091 review). Respelled into a
+            # different word, it is that word's decision that counts.
+            ruled_active_as_is = (
+                existing is not None
+                and existing.moderation_state == PromptContentModerationState.ACTIVE.value
+                and existing.moderated_at is not None
+                and existing.match_key == prompt_version.match_key
+            )
+            if hidden_by_key and not ruled_active_as_is and not (
                 existing is not None
                 and existing.moderation_state
                 == PromptContentModerationState.HIDDEN.value

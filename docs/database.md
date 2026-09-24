@@ -1814,7 +1814,9 @@ revision before the deletion to finish and write its game (R-LIST-07): the unpin
 revisions and their items, then the list row itself once no revision is left, then the
 prompt versions and concepts that no revision, list, turn, offer, usage fact or content
 report names any more, aliases cascading with them. A list a game pinned stays as a
-non-discoverable, private tombstone (`deleted_at` set).
+non-discoverable, private tombstone (`deleted_at` set). A revision holding a prompt a moderator hid counts as
+pinned too: it is where an owner's saves look for the takedown, so reclaiming it would
+let the word into a new list a day after its list was deleted (#1091).
 
 That tombstone is **permanent, and the sweep no longer selects it**. A pin is a finished
 game's provenance and never lapses, so a list whose every remaining revision is pinned
