@@ -464,7 +464,10 @@ A game that finishes inside the window follows the ordinary all-or-nothing histo
 path — on a task of its own (#976), which is why the shutdown drains those tasks
 (`HandlerContext.room_cleanups`) before it stops the handoff worker: the drain is what
 ends rooms and stages their games, and the bounded replay pass below it is what writes
-them. Its budget covers a queued encode as well as the write it is bounded by, computed
+them. That task is created **before** the coordinator is told the game is over (#994):
+the drain counts a room with no game as drained, and the cleanup drain returns at once
+when nothing is tracked, so a staging created after either look ran on a task nobody
+waited for, and a deploy landing on the last turn's results screen lost the game. Its budget covers a queued encode as well as the write it is bounded by, computed
 from `ROOM_GLOBAL_LIMIT` and `HISTORY_ENCODE_WORKERS` rather than fixed, and it
 re-checks the set as it goes, because a teardown task defers a staging task of its own.
 Whatever is still running when the budget is spent is **cancelled and counted** as a
@@ -476,7 +479,10 @@ shutdown does. A game still live when the deadline expires is **not** misreprese
 finished: one privacy-safe `planned_shutdown_abandonments` row is written instead
 (runtime IDs, phase, counts, timestamps — never room codes, names, prompts, chat, or
 canvas contents). A second termination signal abandons the rest of the window and
-skips even that diagnostic. A hard crash cannot run this hook at all.
+skips even that diagnostic — but not the teardown: Uvicorn skips the lifespan cleanup
+on a forced exit, so [`backend/app/server.py`](../backend/app/server.py) runs it itself,
+under `FORCED_EXIT_TEARDOWN_SECONDS` (20 s) on top of the budgets inside it (#994). A
+hard crash cannot run this hook at all.
 
 The notice also names `reconnectSpreadMs` (`SHUTDOWN_RECONNECT_SPREAD_SECONDS`, default
 10 s): each client holds its first attempt a random part of it, so the replacement
@@ -1100,6 +1106,14 @@ retention window. When the queue is full the identifier is withheld instead, exa
 it was when a failed write returned nothing — the line still goes out, it simply
 cannot be cited. The queue is drained on the way out of a planned shutdown, after the
 sockets, so the last thing anybody said is written rather than abandoned.
+A batch insert fails as one statement, so a row the database refuses — a value the
+validators let through, which PostgreSQL's refusal of a NUL in `text` was until #995 —
+would have cost every line queued beside it, and those were other people's evidence.
+A `DataError` or `IntegrityError` on the batch therefore re-tries its rows one at a
+time, keeping the rest and logging the one refused; a timeout or a lost connection
+is still the whole batch's, because retrying each row would only wait out the same
+outage a hundred times — and the row-by-row pass stops at the first failure that is
+not a row's, for the same reason.
 
 A lobby line takes the same hand-off through `record_lobby`, which shares the queue,
 the worker and the queue-full rule with `record` and composes a row with no room and
@@ -1275,6 +1289,15 @@ owns every asyncio timer task: phase deadlines, hint checkpoints, restart-vote
 expiry, and the per-player reconnect grace. Application-owned rather than scattered
 `create_task` calls, so teardown is a single `close()` and a room removal cannot leak
 a task that fires into a room that no longer exists.
+
+A phase timer is armed only for the phase it was computed for (#1004). Every turn
+transition fans out per seat, and each emit is an await the game can move through: a
+seat released mid-fan-out abandons the turn, and the nested `_start_turn` has already
+armed the next turn's timer. So each fan-out records the turn and phase it was about
+(`_turn_moved_on`), stops emitting and arms nothing once either has moved on — the
+outer call used to replace the 15 s choosing timer with the 90–300 s drawing timer it
+was about to arm, and tell the seats not yet reached that the departed drawer's turn
+had started.
 
 The AFK check is deliberately **not** one of them. It is a supervised sweep
 ([`services/afk.py`](../backend/app/services/afk.py)) on the shape the presence
@@ -1521,7 +1544,8 @@ the room waits on is one small insert: the whole game — history, drawings, pro
 supervised handoff loop ([`app/services/game_handoff.py`](../backend/app/services/game_handoff.py))
 claims that row with a lease and a fencing token, performs the history write below,
 records each of its two parts under the one row, and deletes it; a transient failure
-is retried with backoff for about two hours, a conflict fails at once, and a terminal
+is retried with backoff for about two hours; a conflict, and an envelope whose content
+the writer's own proofs refuse (`invalid`, #992), fail at once; and a terminal
 failure keeps the row without its payload as a record. A database that is down at the
 moment a game ends still loses the game, counted as before (kind `handoff`); everything
 after the insert survives crashes, restarts and lock waits. The history write itself is
@@ -1799,6 +1823,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/probe.py`](../backend/app/probe.py) | The synthetic game - two guests, a room, one stroke - over Socket.IO long-polling with the standard library; the `sketchy_probe_*` textfile series. |
 | [`app/main.py`](../backend/app/main.py) | ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app. |
 | [`app/message_limits.py`](../backend/app/message_limits.py) | Shared backend limits for player-authored chat and guess text. |
+| [`app/request_text.py`](../backend/app/request_text.py) | The one rule every player-authored string obeys before anything reads it. |
 | [`app/presenters.py`](../backend/app/presenters.py) | Pure construction of Socket.IO response and broadcast payloads. |
 | [`app/prompt_content.py`](../backend/app/prompt_content.py) | Language-aware normalization and bounded metadata for prompt content. |
 | [`app/refusals.py`](../backend/app/refusals.py) | Every reason the server refuses something, named once for both surfaces. |

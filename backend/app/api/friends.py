@@ -17,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
@@ -84,7 +85,7 @@ async def _current_account(
 MAX_ANNOUNCED_AT_ONCE = 50
 
 
-class FriendBody(BaseModel):
+class FriendBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_id: UUID = Field(alias="userId")
@@ -110,7 +111,7 @@ def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
     }
 
 
-class AnnouncedBody(BaseModel):
+class AnnouncedBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_ids: list[UUID] = Field(
@@ -164,7 +165,10 @@ def create_friends_router(
 
         Answers 200 whatever happened, unless the caller hit a ceiling of their
         own. That is the point: a 404 for an unknown id, or a 403 for a block,
-        would each be a fact about somebody who is not in this conversation.
+        would each be a fact about somebody who is not in this conversation -
+        and so would a 201 for a request that landed beside a 200 for one that
+        was dropped, which is what this answered until #1002: the status code
+        was the disclosure channel R-FRIEND-04 forbids. One code, one body.
         """
         me = await current_account(request)
         try:
@@ -175,7 +179,6 @@ def create_friends_router(
             raise Refusal(429, ErrorCode.FRIENDS_THROTTLED, str(throttled)) from throttled
         except FriendshipRefused as refused:
             raise Refusal(409, ErrorCode.FRIEND_REFUSED, str(refused)) from refused
-        response.status_code = 201 if outcome == FriendshipOutcome.CREATED else 200
         return {"status": _reported_status(outcome)}
 
     @router.post("/{user_id}/accept")

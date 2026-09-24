@@ -110,7 +110,27 @@ async def _draw(ctx: HandlerContext, sid, payload) -> str:
                 and sequence == room.game.canvas.active_draw_sequence
             ):
                 room.game.canvas.restart_active_path()
+            elif sequence == room.game.canvas.sequence + 1:
+                # The drawer has moved on from a path this server still holds
+                # open: its `draw_end` was dropped with the connection, and
+                # the sync that followed the rebind gave it back a numbering
+                # that starts where the committed history ends (#999). Asking
+                # for the open sequence again looped for ever: the client
+                # re-sent the very action it held under that number, and was
+                # asked again. So the path is closed where the server's copy
+                # ends, exactly as a frame dropped at the door is, and this
+                # action goes the way that path's trailing frames do: the
+                # drawer resyncs and does it again - the number is spent by
+                # the path's commit, and committing the action under the
+                # next one would reach a client holding it under this one.
+                await _close_torn_path(ctx, room, sid)
+                return "discarded"
             else:
+                if packet.event == "draw_start":
+                    # The points that follow this opener belong to a path
+                    # the server refused; without the flag they were glued
+                    # onto the open one, in its colour, for every viewer.
+                    room.game.canvas.discarding_draw_sequence = True
                 expected_sequence = room.game.canvas.sequence + 1
                 await ctx.game_flow._request_canvas_actions(
                     room,
@@ -201,8 +221,10 @@ async def _close_torn_path(ctx: HandlerContext, room, sid: str) -> None:
     """
     canvas = room.game.canvas
     active_sequence = canvas.active_draw_sequence
+    # Forgotten whether or not there was a record to close: a flag that
+    # outlived the path it named is what #999 was.
+    canvas.active_draw_sequence = None
     if active_sequence is not None and canvas.record_stroke("draw_end", {}):
-        canvas.active_draw_sequence = None
         canvas.commit_sequence(active_sequence)
         await _rebroadcast(
             ctx, room, sid, encode_live_drawing("draw_end"), committed=active_sequence

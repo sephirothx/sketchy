@@ -5,6 +5,7 @@ import asyncio
 from functools import partial
 
 from app.announcements import Announcement
+from app.game import Phase
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     GuessPayload,
@@ -108,14 +109,39 @@ async def send_chat(ctx: HandlerContext, sid, data):
     if not current:
         return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in a room"}
     room, player = current
-    if room.state != "waiting":
-        return {"ok": False, "errorCode": ErrorCode.WAITING_ROOM_ONLY, "error": "Waiting-room chat is unavailable during a game"}
     text = payload.text.strip()
     if not text:
         return {"ok": False, "errorCode": ErrorCode.EMPTY_MESSAGE, "error": "Message cannot be empty"}
-    if player.is_afk and not player.is_spectator:
-        player.is_afk = False
-        await ctx.game_flow._emit_room_state(room)
+    game = room.game
+    if game is not None and game.phase == Phase.DRAWING:
+        # While something is being drawn, what a seat may say depends on
+        # whether it may still guess (#1008). A seat that may is scored and
+        # delivered as a guess whatever event carried the line: letting it
+        # broadcast chat instead would put the prompt in front of every
+        # guesser with no guess check in the way. Everybody else - the
+        # drawer, spectators, correct guessers, seats the turn froze out -
+        # talks to the prompt-aware audience only (R-SPEC-04).
+        if not _prompt_aware(game, player):
+            answer = await _accepted_guess(ctx, sid, room, player, text)
+            return {"ok": True, **(answer or {})}
+        await _wake(ctx, room, player)
+        recipients = ctx.game_flow._privileged_sids(room, game)
+        if player.sid not in recipients:
+            recipients = [*recipients, player.sid]
+        await _emit_player_chat(
+            ctx,
+            room,
+            player,
+            _chat_line(
+                player, text, restricted=True, isSpectator=player.is_spectator
+            ),
+            recipients=recipients,
+            audience="prompt_aware",
+        )
+        return {"ok": True}
+    # The waiting room, a drawer choosing a prompt, the turn's results, the
+    # end of a game: nothing to spoil, so the whole room hears it.
+    await _wake(ctx, room, player)
     await _emit_player_chat(
         ctx,
         room,
@@ -123,6 +149,22 @@ async def send_chat(ctx: HandlerContext, sid, data):
         _chat_line(player, text, isSpectator=player.is_spectator),
     )
     return {"ok": True}
+
+
+def _prompt_aware(game, player) -> bool:
+    """Whether this seat already knows, or may not guess, this turn's prompt."""
+    return (
+        player.is_spectator
+        or player.id in game.correct_guessers
+        or not game.is_turn_eligible(player.id)
+    )
+
+
+async def _wake(ctx: HandlerContext, room, player) -> None:
+    """Saying something is activity; a seat marked AFK is back."""
+    if player.is_afk and not player.is_spectator:
+        player.is_afk = False
+        await ctx.game_flow._emit_room_state(room)
 
 
 async def guess(ctx: HandlerContext, sid, data):
@@ -207,11 +249,7 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
     # Spectators, seats the turn froze out (AFK or disconnected when drawing
     # began), and players who already guessed can chat, but only the
     # prompt-aware audience may see those messages.
-    if (
-        player.is_spectator
-        or player.id in game.correct_guessers
-        or not game.is_turn_eligible(player.id)
-    ):
+    if _prompt_aware(game, player):
         recipients = ctx.game_flow._privileged_sids(room, game)
         if player.sid not in recipients:
             recipients = [*recipients, player.sid]

@@ -751,6 +751,27 @@ QUICK_PLAY_SKIPS = frozenset(
 )
 
 
+ROOM_GONE_ACKNOWLEDGEMENT = {
+    "ok": False,
+    "errorCode": ErrorCode.ROOM_ENDED,
+    "error": "This room has ended",
+}
+
+
+def _room_is_gone(ctx: HandlerContext, room) -> bool:
+    """Whether the room this entry resolved has been torn down since.
+
+    Every await in `_seat_in_room` - the session read, the identity
+    resolution, releasing the seat held elsewhere - is a gap the last seated
+    player can leave through, and leaving tears the room down and retires
+    its code. A seat added to that object afterwards answered `ok`, held a
+    player nothing would ever address again, and every later command was
+    `not_in_room` (#1000). Compared by identity, not by id: a room that was
+    recreated under the same id is still not the one this entry was for.
+    """
+    return ctx.room_manager.get_room(room.id) is not room
+
+
 def _open_for_quick_play(room) -> bool:
     """Public and waiting, with no game running (R-UX-14).
 
@@ -846,6 +867,8 @@ async def _seat_in_room(
 
     session = await ctx.sio.get_session(sid) if sid else None
     user_id = session.get("user_id") if session else None
+    if _room_is_gone(ctx, room):
+        return ROOM_GONE_ACKNOWLEDGEMENT
 
     # One seat per account per room. A second tab - or a reconnect after the
     # transport dropped - takes over the existing seat instead of adding
@@ -861,6 +884,16 @@ async def _seat_in_room(
         )
         if not player.is_anonymous and (stored or name_color):
             player.name_color = stored or name_color
+        # Released here, as the new-seat path does, rather than inside
+        # `_join_socket_room`: that release awaits before the seat is marked
+        # live, and while a disconnected seat is being rebound the room may
+        # hold no connected player at all - the last one can leave through
+        # that await, and the rebind used to carry on into the dead room
+        # (#1000 review). With nothing left to release there, the seat is
+        # marked live with no await in between.
+        await ctx.game_flow.release_other_seats(sid, keep=(room.id, player.id))
+        if _room_is_gone(ctx, room):
+            return ROOM_GONE_ACKNOWLEDGEMENT
         if room.players.get(player.id) is not player:
             # The seat went while the account was being read - a kick vote
             # passing in that window (#1010). Binding this socket to a seat
@@ -891,8 +924,20 @@ async def _seat_in_room(
             user_id=metrics_user_id(player.user_id),
         )
         if ctx.is_ending(sid):
+            ctx.room_capacity.refund_takeover(player.id)
             return ENDED_ACCOUNT_ACKNOWLEDGEMENT
-        await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        try:
+            await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        except Exception:
+            # Not a takeover either, when the seat was never rebound (#1009).
+            # Seating names this socket on the seat before it awaits
+            # anything; past that point the seat has changed hands, whatever
+            # failed after, and the charge stands - refunded, a rebind that
+            # failed late could be repeated past the ceiling (review of
+            # #1068).
+            if player.sid != sid:
+                ctx.room_capacity.refund_takeover(player.id)
+            raise
         if ctx.is_ending(sid):
             return await _unseat_an_ended_account(ctx, room, player)
         if empty_for is not None:
@@ -920,6 +965,8 @@ async def _seat_in_room(
             return {"ok": False, "errorCode": error.error_code, "error": str(error), "field": "nickname"}
         except EntryTimedOut:
             return BUSY_ACKNOWLEDGEMENT
+        if _room_is_gone(ctx, room):
+            return ROOM_GONE_ACKNOWLEDGEMENT
 
     if identity.user_id and identity.user_id in room.kicked_user_ids:
         # Voted out, and barred while the room lives (#1010) - as a spectator
@@ -955,6 +1002,10 @@ async def _seat_in_room(
         # exist (#879).
         ctx.room_capacity.refund_join(sid)
         return BUSY_ACKNOWLEDGEMENT
+    if _room_is_gone(ctx, room):
+        # Nothing awaited between here and the seat: this is the last look.
+        ctx.room_capacity.refund_join(sid)
+        return ROOM_GONE_ACKNOWLEDGEMENT
     try:
         player = ctx.room_manager.add_player(
             room,

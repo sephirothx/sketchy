@@ -2253,6 +2253,7 @@
    "reminderDue",
    "roleGranted",
    "sessionsRevoked",
+   "signedIn",
    "stepUpWindowSeconds",
    "steppedUp"
   ],
@@ -2262,6 +2263,9 @@
   "auth.routes:delete_account": [
    "identitiesAnonymized",
    "sessionsRevoked"
+  ],
+  "auth.routes:perform_password_reset": [
+   "signedIn"
   ],
   "auth.routes:read_email": [
    "deliveryConfigured",

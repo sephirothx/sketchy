@@ -291,6 +291,16 @@ used to be all of that from every client inside a second, against a pool of ten.
 - **The REST refetches** a reconnect triggers (friends, recovery address) run
   a random 0–3 s behind it, so they queue behind the seat rebind rather than
   beside it. A first connection does not wait.
+- **A close the server made** (`io server disconnect`: another tab took the
+  seat, a kick, the capacity ceiling, a stale socket that never reloaded) is
+  one socket.io-client treats as final — the manager does not retry it, and
+  nothing else reopened the socket, so the tab sat on the lobby with a
+  "reconnecting" banner that meant nothing (#998). The client now reopens it
+  itself: 1 s, doubling to 30 s, ±50%, reset by a successful handshake; 30 s
+  first when it was told the server was full, since the notice said a few
+  minutes. Not after a stuck update (R-CONN-10), which the server would only
+  close again. A close the server means for good is a refused *handshake*, which
+  the manager never retries.
 - **Missed `session_ping`s** (three in a row) no longer tear the transport
   down by default. While Engine.IO's own pings keep arriving the connection is
   alive and the server is only slow, so the seat gets a soft `join_room`, which
@@ -445,6 +455,14 @@ Three distinctions worth knowing:
   here and will take the room shortly.
 - `not_friends` answers both "we are not friends" and "there is no such account", so the
   command cannot be used to test whether somebody has unfriended you.
+- `room_ended` also answers an entry — `join_room`, `quick_play`, `join_friend_room`, a
+  `create_room` retry — whose room was torn down *while the entry was awaiting
+  something*: the session read, the identity resolution, the release of a seat held
+  elsewhere. The last seated player can leave through any of those gaps, and a seat
+  added to the dead room afterwards answered `ok` to a player nothing would ever address
+  again (#1000). The room is re-checked by identity before the seat is taken, on the
+  new-seat path and the rebind path alike; a seat this socket already holds and is
+  connected on needs no check, since its own presence keeps the room alive.
 - `kicked_from_room` is final for as long as that room lives (#1010): Quick play skips the
   room on the server side, and a client rebinding a seat it held when the vote passed
   treats it like `room_ended` — the stage says so and offers the lobby — rather than
@@ -574,6 +592,19 @@ these paths that means a second room, or a game started twice. Instead:
   `id`. A retry is abandoned rather than sent while disconnected — after a reconnect it
   would be exactly the replay volatile delivery exists to prevent. Two unacknowledged
   attempts are reported to the player instead of vanishing.
+  A line is sent as a `guess` only while the seat may guess — the drawing phase, not
+  the drawer, not a spectator, not yet correct; everything else, a line typed while the
+  drawer is choosing a prompt included, is `send_chat`. The panel used to send a guess
+  whenever the room was playing, scoped to the turn it last saw, and while the drawer
+  chose that was the previous turn: the server dropped it as out of scope (#1008).
+  `send_chat` is accepted in every room state, and the server decides the audience
+  from the seat rather than from the event: outside the drawing phase — the waiting
+  room, a drawer choosing, a turn's results, a game's end — the whole room hears it;
+  while something is being drawn, a seat that already knows or may not guess the prompt
+  (the drawer, a spectator, a correct guesser, a seat the turn froze out) reaches the
+  prompt-aware audience only (R-SPEC-04), and a seat that may still guess has its line
+  scored and delivered as a guess whichever event carried it, so chat is never a way
+  to put the prompt in front of the other guessers.
 
   The retry is sent only inside the **scope** the first attempt captured — the same
   connection (`socket.id`), the same room and the same turn — and abandoned otherwise
@@ -620,6 +651,19 @@ Defined and enforced in
   integers must be integers and must not be booleans.
 - **Unknown fields are rejected** (`extra="forbid"`).
 - All strings and integers are **bounded here**, before a handler authorizes or mutates.
+- **No string carries a control character** — U+0000–U+001F other than tab, newline and
+  carriage return, or U+007F — however deep it sits in the payload. PostgreSQL refuses a
+  NUL in `text`, and a value that passed every length check and reached a statement
+  failed that statement together with everything batched beside it: one chat line with a
+  NUL dropped the retention batch of up to a hundred other lines, a room name with one
+  made the finished game unsaveable (#995). The rule is one validator on the raw value of
+  every field ([`backend/app/request_text.py`](../backend/app/request_text.py)), shared by
+  every REST body model too, so a field that strips or parses its text never meets the
+  character and the refusal names the field it arrived in. A **password** is the one
+  exception: an opaque secret, hashed on arrival and never stored or compared as text,
+  so the database never sees a byte of it — and it is checked at every proof an account
+  makes, so refusing a byte the policy accepted would lock its owner out of every door,
+  the recovery link included.
 - Camel-case wire names are declared as pydantic `Field(alias=…)`; the alias is what the
   client sends.
 
@@ -946,14 +990,14 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `voted_afk` | `{message}` — English, for a log; the client says it from the event itself (R-I18N-01) | the player who was voted AFK |
 | `kicked` | `{code, reason}` — `code` is `kicked_by_vote`, `room_closed` or `removed_by_admin`, and is what the client says; `reason` is English, for a log (R-I18N-01) | one socket |
 | `colorblind_safe_suggestion` | `{active}` — sent only when the value changes or the host's socket does (#880), not beside every `room_state` | **host only**, unattributed |
-| `session_superseded` | `{code, reason}` — `opened_elsewhere`, `account_deleted` or `account_suspended`, said by the client from the code; `reason` is English, for a log — then the socket is disconnected | the superseded socket |
+| `session_superseded` | `{code, reason}` — `opened_elsewhere`, `account_deleted`, `account_suspended` or `signed_out` (the session this socket was opened with was revoked: a sign-out on this browser, a sign-out everywhere, a password change or reset, a device revoked from the list — #1007), said by the client from the code; `reason` is English, for a log — then the socket is disconnected | the superseded socket |
 | `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
 | `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account |
 | `role_changed` | `{notice: {id, role, pending, createdAt} | null, pendingRole}` — the same body `GET /api/role-notices/pending` returns. Emitted whether or not there is a notice: `pendingRole` says what is still outstanding on the account, and **withdrawing an offer** is the case with nothing to say and a change worth hearing — it settles the notice and ends the offer together, and a browser that missed it would go on offering an enrolment that would now grant nothing. The role and nothing else: the reason the administrator recorded is ledger text written for other administrators and can name a report or a second account. `pending` distinguishes a role the account **holds** from one it has been **offered** and takes up by enrolling a second factor (R-AUTH-20) — the second asks something of the reader, so it cannot be worded like the first, and it revokes nothing | every socket of the account whose role changed |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
-| `server_full` | `{reason}` — English, for a log; the client says it from the event itself (R-I18N-01). The socket is closed immediately afterwards | one socket, at handshake |
+| `server_full` | `{reason}` — English, for a log; the client says it from the event itself (R-I18N-01). The socket is closed a moment **after** the handshake completes (`SERVER_FULL_CLOSE_SECONDS`): the namespace CONNECT goes out only when the connect handler returns, and a close awaited inside it reached the client first, so the notice was buffered against a namespace that never connected and nobody was told (#998). For that moment the socket is connected but **still counted** against the ceiling, and every command it sends is refused at the door with `server_busy` — it is past the ceiling, and a seat taken in that window would be one the ceiling never allowed. The client keeps its notice through the `connect` event that follows it, since that event is the turned-away socket's own, not an admission | one socket, at handshake |
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
@@ -1678,7 +1722,7 @@ drawer                                     server                       everyone
 | `generation` is stale | `canvas_stale … stale_generation` |
 | `sequence` ≤ committed | replay the stored `canvas_commit` to that socket if the recorded mutation matches, else `canvas_stale … unknown_sequence` |
 | `sequence` > expected (a gap) | `request_canvas_actions [generation, expected, received]` |
-| A new action arrives while a path is still open | `request_canvas_actions`, unless it is a `draw_start` repeating the open sequence, which restarts that path |
+| A new action arrives while a path is still open | a `draw_start` repeating the open sequence restarts that path; an action carrying the **next committed** sequence — the drawer's `draw_end` went with its connection, and the sync after the rebind restarted its numbering where the committed history ends (#999) — closes the open path for the room with a `draw_end` carrying its commit, discards the action and sends `canvas_stale … dropped_frame`, so the drawer resyncs and does it again (asking for the open sequence looped: the client re-sent the very action it held under it; the number is spent by the path's commit, and a commit under the next one would reach a client holding the action under this one); anything else is `request_canvas_actions`, and a refused `draw_start`'s trailing frames are dropped rather than appended to the open path |
 | A refused tool or color | `canvas_stale … refused_tool` |
 | A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
 | A final batch (tag 8) past the point budget | dropped whole, nothing committed, the path stays open; the drawer's one-byte `draw_end` that follows closes it, and its completion watch covers the case where nothing does |
@@ -2024,6 +2068,13 @@ operators in one language, and the split is written down as an allowlist in
 fails on a player-facing route that refuses with prose and on a stale exemption.
 FastAPI's own validation failures keep their `{"detail": [...]}` shape; a client that
 provoked one sent a payload no screen can produce.
+Every body model descends from `ControlFreeModel`
+([`backend/app/request_text.py`](../backend/app/request_text.py)), so a string carrying a
+control character (§3) is one of those failures — 422, naming the field — rather than
+the 500 PostgreSQL's refusal of a NUL used to become. The few strings that reach a
+statement without a body model are checked by hand: the community catalogue's `tag`
+and the prompt-stats route's `{slug}` (answered as not found), and the operators' own
+filters (`GET /api/admin/players?q=`, `/api/admin/metrics/events`, `/api/admin/audit`).
 
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
 a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only
@@ -2071,18 +2122,18 @@ reloaded rather than served an older contract.
 | `POST` / `DELETE` | `/api/users/me/avatar` | Set or remove the caller's picture (R-AVA-01). `POST` takes `{ image }`, base64 of a 256×256 WebP or PNG under 128 KiB; refused `400` for anything else, `403` for a guest or while a moderator's block stands (the message names the date), `429` past 10 an hour. Answers `{ avatarKey, avatarUrl }` |
 | `PUT` | `/api/users/me/avatar/doodle` | Wear one of the deployment's doodles instead of a picture (R-AVA-09). Takes `{ name }`, a name from the sprite's list; refused `400` (`invalid_payload`) for any other, `403` for a guest. No rate limit and no moderator's block: nothing is stored but the name. Deletes an uploaded picture. Answers `{ avatarKey, avatarUrl }`, the URL a fragment of `/avatars/doodles.svg` — a static file from the frontend build, not an API route |
 | `GET` | `/api/avatars/{key}` | The picture behind a content address, for anybody: `image/webp` or `image/png` as the key's extension says, `nosniff`, `Cache-Control: public, max-age=31536000, immutable`. `404` for a key that is not a content address or not stored |
-| `POST` | `/api/moderation/reports/{report_id}/remove-avatar` | Moderator. Takes down the reported account's picture, audits it, tells its owner, and blocks re-upload for a while that grows with how many a moderator has taken down from this account — none, 7, 30, then 90 days (R-AVA-08); `{ ok, removed, blockedUntil }`, the last null when this one cost no wait (R-AVA-04) |
+| `POST` | `/api/moderation/reports/{report_id}/remove-avatar` | Moderator; `403` when the report is about the caller (#1003). Takes down the reported account's picture, audits it, tells its owner, and blocks re-upload for a while that grows with how many a moderator has taken down from this account — none, 7, 30, then 90 days (R-AVA-08); `{ ok, removed, blockedUntil }`, the last null when this one cost no wait (R-AVA-04) |
 | `POST` | `/api/auth/display-name`, `/api/auth/name-color` | Profile edits — and `display-name` is what **provisions a guest** on a first visit (R-ACCT-00): choosing a name is the first act only a person about to play performs. A name colour that does not read on both themes' player list is refused with 400 (R-ACCT-08); the same rule the seat applies. A display name another online guest is using is refused with 409 `name_in_use` (R-ACCT-09), including keeping your own when a guest who came online first holds it |
 | `POST` | `/api/auth/register` | Claims the current account (`AUTH_REGISTER_LIMIT`) |
 | `POST` | `/api/auth/login` | `{ username, password, code? }`. Argon2id; rehashes stale-cost hashes on success. Throttled on three keys at once — account, address, deployment — all counting **failures only**, plus a per-account backoff (R-RATE-12). A staff account must also produce its second factor (R-AUTH-20): with no `code` it answers `401` carrying `X-Sketchy-Second-Factor: required` — or `X-Sketchy-Second-Factor: passkey` when the account holds a passkey and no authenticator app, where the password route cannot finish at all and the form has to offer the passkey rather than a field (R-AUTH-23), which is how the client knows to ask rather than to report a wrong password; a staff account that has not enrolled is `403`. A recovery code is accepted in the same field. Every route that hashes **or verifies** a password — this one, register, password change, reset, account deletion, and every proof of a password (turning a second factor off, replacing recovery codes, stepping up) — answers **503** `server_busy` with `Retry-After` once `PASSWORD_HASH_WORKERS` × 16 hashes are already running or waiting, so a burst is refused rather than queued behind the loop (#975); the rehash after a successful login is skipped instead, never refused |
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
 | `GET` | `/api/auth/sessions` | Signed-in device list: `id`, `deviceLabel`, `createdAt`, `lastUsedAt`, `expiresAt`, `idleExpiresAt` (when silence alone ends it — usually far sooner than `expiresAt`), `anomalyAt` (last used from a browser it was not issued to, or `null`), `current` (R-AUTH-03, R-AUTH-22) |
 | `DELETE` | `/api/auth/sessions/{session_id}` | Revoke one device |
-| `GET`/`PUT` | `/api/auth/email` | `PUT` is rate limited (`AUTH_VERIFY_LIMIT`) |
+| `GET`/`PUT` | `/api/auth/email` | `PUT` `{email, password}` — the current password is proved (`401 password_incorrect`), and a staff account must be stepped up (`403`, `X-Sketchy-Step-Up: required`), because the address is the way back in when the password is lost (R-AUTH-26, #997). Rate limited (`AUTH_VERIFY_LIMIT`) |
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
-| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in (`AUTH_RESET_PERFORM_LIMIT`) |
+| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in — `{ok, signedIn}`. A **staff** account is not signed in (`signedIn: false`): a reset proves the mailbox and R-AUTH-20 wants the code too, so it goes through login (#996). (`AUTH_RESET_PERFORM_LIMIT`) |
 | `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
 | `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status. On a `failed` job `failureCode` is `too_large` (the deployment's ceiling, R-PRIV-13) or `generation_failed`; otherwise `null` |
@@ -2100,7 +2151,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/second-factor/recovery-codes` | `{ password }` → a fresh set, invalidating every previous code |
 | `DELETE` | `/api/auth/second-factor` | `{ password }`. Refused `409` when the account's role requires one: giving up the role is what removes the requirement |
 | `POST` | `/api/auth/step-up` | `{ code }` → `{ ok, expiresInSeconds }`. Opens the 15-minute window every destructive staff action needs (R-AUTH-21). Recorded on the session, so revoking the device revokes the proof. An authenticator app whose owner was never proved is refused here with **403**, though it may still sign in beside a password: a step-up costs an attacker only the session they stole (R-AUTH-21) |
-| `DELETE` | `/api/auth/account` | Password required for a registered account |
+| `DELETE` | `/api/auth/account` | Password required for a registered account, behind `AUTH_PASSWORD_CHANGE_LIMIT` like every other password proof (R-AUTH-21, #997) |
 
 ### Profiles and history — [`backend/app/api/profiles.py`](../backend/app/api/profiles.py)
 
@@ -2167,7 +2218,7 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | `GET`/`POST` | `/api/users/me/blocks` | Directional; self-blocks rejected |
 | `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing, announce}`. Refusals are in none of them. A guest is refused **403 with `X-Sketchy-Account-Required`** — the header names the reason, because a status cannot: the middleware answers 403 for a suspended account before this route runs, and a client that reads any 403 as *this caller is a guest* shows an empty friends list for a real account. Same pattern as `X-Sketchy-Step-Up`. The client does not ask for a guest at all — a guest provably has no list (R-FRIEND-03), so asking only logs a refusal on every anonymous load; the refusal still answers a session that lapses mid-read. Also `announce`: the requests this account **sent** that were accepted and that nobody has told them about yet — a fact on the row rather than a difference between two reads, so a client that was reloading when the answer came still learns it (R-FRIEND-14) |
 | `POST` | `/api/users/me/friends/announced` | `{ userIds }` → `{ ok, announced }`. Records that the asker was told, for exactly the friendships the message named, re-checking on the write that each is their own request, accepted, and still unannounced. Sent **after** the message is shown: recording first loses the news whenever the render does not happen |
-| `POST` | `/api/users/me/friends` | `{userId}`. **Answers the same whether it landed, hit a block, hit an earlier refusal, or named nobody** (R-FRIEND-04); 409 only for a ceiling the caller reached (`FRIEND_REQUEST_LIMIT`) |
+| `POST` | `/api/users/me/friends` | `{userId}`. **Answers the same — `200 {status: "pending"}` — whether it landed, hit a block, hit an earlier refusal, or named nobody** (R-FRIEND-04); the same status code too, since a `201` for one that landed was the disclosure (#1002). `{status: "accepted"}` only when the caller answered a request already waiting for them. `429 friends_throttled` for the hourly `FRIEND_REQUEST_LIMIT`, `409 friend_refused` for a list ceiling — both the caller's own |
 | `POST` | `/api/users/me/friends/{user_id}/accept` | Re-checks blocks: one placed since the request has to win. Answers `accepted`, `declined` or `unchanged` — the caller is answering a request on their own list, so unlike `POST /` there is no third party to be vague about |
 | `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
 | `GET` | `/api/users/me/recent-players` | `{players}` — registered accounts the caller **finished a game with** in the last 30 days, most recent first, capped at 20. Not a search and not a directory (N-06): it answers only about games the caller sat in, so it can never name a stranger. Deliberately **unfiltered by friendship or block** — an absence from it would be readable, and "absent because they declined you" is the fact R-FRIEND-04 refuses to disclose, so the client drops the rows it can already see for itself and leaves a refusal in place |
@@ -2181,10 +2232,10 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | --- | --- | --- | --- |
 | `POST` | `/api/reports` | any signed-in | ≤ 2000 chars of optional detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
 | `POST` | `/api/prompt-content-reports` | any signed-in | Targets a **published** list or an exact `promptVersionId` in one; anything else is **404** `no_reportable_prompt_list`, since nobody but its owner can see a private list. Official content and self-reports rejected |
-| `GET` | `/api/moderation/reports` | moderator+ | The queue as **incidents**, oldest first: `{ incidents, total, hasMore }`, where `limit` and `offset` page incidents rather than reports (R-MOD-16). Each incident carries `id` (its oldest report's, which every decision route accepts), `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension), `scope` (`room`, `lobby`, `profile`, `unscoped`), `reporterCount`, the distinct `reasons` in the order first given, `openedAt`/`latestReportedAt`, `reports` — each complaint's own `reason`, `details`, reporter and `drawing`, and no evidence of its own — `evidence`, every report's lines merged into one thread in the order they were said, each line once, with a `role` of `cited` or `context` (R-MOD-13) and `citedBy`, the reports that complained about it, `drawings`, every attached canvas by its metadata (`reportId`, `turnId`, `roundNumber`, `prompt`, `actionCount`, `byteSize`, `capturedAt`), and how it was closed: `outcome` (`pending`, `dismissed`, `resolved`, `warned`, `suspended`; a content report closes as `dismissed`, `hidden`, `left_up` or `resolved`) read from the warning or suspension that names the report rather than from its status, `reviewedBy`, the reviewer's name resolved when read (R-MOD-15), and `decisionGroupId`, the moderator action that decided it. Two more facts a moderator needs before deciding: `picture` says what became of the picture the incident is about (null when it is about none): `status` of `same`, `replaced` or `removed`, and for a removal `removedByModerator`, `removedAt` and `removedFromThisIncident` — because a picture a moderator has already taken down must not read as merely a different one, and the reviewer seeing it is often the one who removed it from that case; each report carries its own `pictureStatus` beside this (R-AVA-07); and `priorDecision`, null on a first complaint, carries `outcome`, `decidedAt`, `decidedBy`, `note` and `priorDecisions` for the last decision taken about this same incident key, so a repeat of something already dealt with does not arrive looking untouched (R-MOD-18) |
+| `GET` | `/api/moderation/reports` | moderator+ | The queue as **incidents**, oldest first, leaving out the **pending** incidents about the caller (R-MOD-07, #1003; decided ones are shown as closed cases are): `{ incidents, total, hasMore }`, where `limit` and `offset` page incidents rather than reports (R-MOD-16). Each incident carries `id` (its oldest report's, which every decision route accepts), `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension), `scope` (`room`, `lobby`, `profile`, `unscoped`), `reporterCount`, the distinct `reasons` in the order first given, `openedAt`/`latestReportedAt`, `reports` — each complaint's own `reason`, `details`, reporter and `drawing`, and no evidence of its own — `evidence`, every report's lines merged into one thread in the order they were said, each line once, with a `role` of `cited` or `context` (R-MOD-13) and `citedBy`, the reports that complained about it, `drawings`, every attached canvas by its metadata (`reportId`, `turnId`, `roundNumber`, `prompt`, `actionCount`, `byteSize`, `capturedAt`), and how it was closed: `outcome` (`pending`, `dismissed`, `resolved`, `warned`, `suspended`; a content report closes as `dismissed`, `hidden`, `left_up` or `resolved`) read from the warning or suspension that names the report rather than from its status, `reviewedBy`, the reviewer's name resolved when read (R-MOD-15), and `decisionGroupId`, the moderator action that decided it. Two more facts a moderator needs before deciding: `picture` says what became of the picture the incident is about (null when it is about none): `status` of `same`, `replaced` or `removed`, and for a removal `removedByModerator`, `removedAt` and `removedFromThisIncident` — because a picture a moderator has already taken down must not read as merely a different one, and the reviewer seeing it is often the one who removed it from that case; each report carries its own `pictureStatus` beside this (R-AVA-07); and `priorDecision`, null on a first complaint, carries `outcome`, `decidedAt`, `decidedBy`, `note` and `priorDecisions` for the last decision taken about this same incident key, so a repeat of something already dealt with does not arrive looking untouched (R-MOD-18) |
 | `GET` | `/api/moderation/reports/{report_id}/drawing` | moderator+ | The attached drawing's bytes in the **current wire format** (`application/octet-stream`, `Cache-Control: private, no-store`), checksum verified on every read; `404` when the report has none |
 | `GET` | `/api/moderation/closed-cases` | moderator+ | Decided **incidents**, player and content as one stream, **newest decision first**, under `limit` (≤ 100) and `offset` (≤ 1000): `{ players, content, hasMore }`, each list already in that order and carrying what its open queue does. The page counts **decisions**, so an incident five people reported takes one slot rather than five; grouping keys on `decisionGroupId`, never on the open incident key, since two incidents in one room instance decided a week apart are two entries. `hasMore` is `false` at the offset cap even when older rows exist, so the client is never pointed at a page it would be refused (R-MOD-15) |
-| `PATCH` | `/api/moderation/reports/{report_id}` | moderator+ | Decides the **whole incident** the named report belongs to and answers with it: one note, one step-up, one action, every report of it resolved with its own reviewer, moment and audit entry (R-MOD-17). Any report of the incident reaches it. Review is one-way, so a report another moderator already decided answers `409` and nothing is written |
+| `PATCH` | `/api/moderation/reports/{report_id}` | moderator+ | `403` when the incident is about the caller (R-MOD-07, #1003). Decides the **whole incident** the named report belongs to and answers with it: one note, one step-up, one action, every report of it resolved with its own reviewer, moment and audit entry (R-MOD-17). Any report of the incident reaches it. Review is one-way, so a report another moderator already decided answers `409` and nothing is written |
 | `GET` | `/api/moderation/prompt-lists` | `{lists, waiting}` — publications the review switch is holding (R-LIST-13): under review **and public**, oldest first. **Not a report queue**: nothing was complained about, so a row carries the list, its owner, its `version` and how long it has waited, and no reporter, reason or evidence |
 | `GET` | `/api/moderation/prompt-lists/{prompt_list_id}` | Every prompt in a held list — text, aliases, and each version's own `moderationState` — at the `version` being decided on. The queue carries a name and a count, and no other route can show a held list's words: the owner's route is the owner's, and the catalogue and room resolution exclude anything not active. **404** for a list that is not held, so this stays a reading surface for the queue rather than a staff window into private lists |
 | `PATCH` | `/api/moderation/prompt-lists/{prompt_list_id}` | `{state: active \| hidden, note, expectedVersion}`. Releases a held list into the catalogue or takes it down. **409** for a list nobody held (or one its owner withdrew), and **409** when the list's version is no longer `expectedVersion`: an owner can edit a held list, every save is a new revision (R-LIST-05), and without the check a moderator could read one revision and release the next. Hiding tells the owner, as a takedown from a report does. Writes `prompt_list.review_active` / `prompt_list.review_hidden`, with the version decided on |
@@ -2247,7 +2298,7 @@ which is the one thing the 404 exists to refuse.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/admin/metrics`, `/api/admin/metrics/events` | The first carries the live counts and recorder state, then the process signals: `windowMinutes`, `http`, `socket` (rates, outcomes, p95, bytes in and out per minute before compression, and the eight heaviest commands and emitted events with their payload-size p50/p95/p99 since start), `process`, `database` (pool, statement latency, `errorsByCause` by SQLSTATE class, `poolWaitP95Ms`, `poolTimeouts` and `poolTimeoutsInWindow`, `topOperations` — the labelled operations with the most statement time and their p95 — `retries` keyed `operation:outcome`, `historyWriteP95Ms` and `historyPersistLagP95Seconds` (#892), `historyWritesAbandoned` by reason — `timeout` and `error` are staging losses, `conflict`, `exhausted` and `unreadable` are replay losses — `historyHandoff` with games staged and replay outcomes since start, last readiness probe), `drawingStore` (`totalBytes` and `rows` — what the stored drawings occupy, and the planner's row estimate rather than a count, the whole relation including TOAST and indexes, and `null` off PostgreSQL rather than a zero that would read as an empty store; R-OBS-14), `queues` (`mailOutbox` with `sweepSeconds`, `dataExports`, `finishedGames` with `failed` and `sweepSeconds` — the staged finished games of #541), `loops`, `retention` (one row per retained table: `overdueSeconds` against the `slaSeconds` it is held to, `backlogRows`, `sweepSeconds`, `exhausted`, `failed`, `removedTotal`, `failuresTotal` and the server's own `breached` verdict — decided once, so the page and the alert rule cannot disagree; empty until the retention loop has finished a pass, R-PRIV-17), and `series` — eight sixty-point per-minute arrays, oldest first, `null` where a minute recorded nothing. Rates and percentiles are over the trailing window |
+| `GET` | `/api/admin/metrics`, `/api/admin/metrics/events` | The first carries the live counts and recorder state, then the process signals: `windowMinutes`, `http`, `socket` (rates, outcomes, p95, bytes in and out per minute before compression, and the eight heaviest commands and emitted events with their payload-size p50/p95/p99 since start), `process`, `database` (pool, statement latency, `errorsByCause` by SQLSTATE class, `poolWaitP95Ms`, `poolTimeouts` and `poolTimeoutsInWindow`, `topOperations` — the labelled operations with the most statement time and their p95 — `retries` keyed `operation:outcome`, `historyWriteP95Ms` and `historyPersistLagP95Seconds` (#892), `historyWritesAbandoned` by reason — `timeout` and `error` are staging losses, `conflict`, `exhausted`, `unreadable` and `invalid` are replay losses — `historyHandoff` with games staged and replay outcomes since start, last readiness probe), `drawingStore` (`totalBytes` and `rows` — what the stored drawings occupy, and the planner's row estimate rather than a count, the whole relation including TOAST and indexes, and `null` off PostgreSQL rather than a zero that would read as an empty store; R-OBS-14), `queues` (`mailOutbox` with `sweepSeconds`, `dataExports`, `finishedGames` with `failed` and `sweepSeconds` — the staged finished games of #541), `loops`, `retention` (one row per retained table: `overdueSeconds` against the `slaSeconds` it is held to, `backlogRows`, `sweepSeconds`, `exhausted`, `failed`, `removedTotal`, `failuresTotal` and the server's own `breached` verdict — decided once, so the page and the alert rule cannot disagree; empty until the retention loop has finished a pass, R-PRIV-17), and `series` — eight sixty-point per-minute arrays, oldest first, `null` where a minute recorded nothing. Rates and percentiles are over the trailing window |
 | `GET` | `/api/admin/players/{user_id}/activity` | **Writes an audit event on every use** |
 | `GET` | `/api/admin/audit` | |
 | `GET` | `/api/admin/tunables` | Every runtime tunable with its value, default, bounds, unit, whether its values are whole, origin and purpose |
@@ -2340,7 +2391,7 @@ account key is an HMAC of the lowercased username rather than of an address
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
-| `AUTH_LOGIN_LIMIT` | 10 / 5 min | `POST /api/auth/login`, keyed on the **address**; failures only |
+| `AUTH_LOGIN_LIMIT` | 10 / 5 min | `POST /api/auth/login`, keyed on the **address**; failures only. Beside the windows, at most 2 verifications per account and 4 per address are in flight at once — a burst past that is `429` with `Retry-After: 1` before anything is hashed (R-RATE-12, #1001) |
 | `AUTH_LOGIN_ACCOUNT_LIMIT` | 10 / 15 min | The same route keyed on the **account** — the key a distributed attack cannot dodge (R-RATE-12); failures only |
 | `AUTH_LOGIN_GLOBAL_LIMIT` | 500 / 5 min | The same route for the whole deployment; failures only. `0` switches it off — it is the one bucket an attacker can saturate on purpose (N-17) |
 | `AUTH_SECOND_FACTOR_LIMIT` | 20 / 15 min | The `/api/auth/second-factor/*` and `/api/auth/step-up` routes |
@@ -2349,7 +2400,7 @@ account key is an HMAC of the lowercased username rather than of an address
 | `AUTH_RESET_LIMIT` | 5 / hour | `POST /api/auth/password/forgot` |
 | `AUTH_RESET_CHECK_LIMIT` | 30 / hour | `POST /api/auth/password/reset/check` |
 | `AUTH_RESET_PERFORM_LIMIT` | 10 / hour | `POST /api/auth/password/reset` — the leg that hashes, so a stolen or guessed link cannot be used to keep the hashing pool busy (#975) |
-| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change` |
+| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change`, `DELETE /api/auth/account` |
 | `AUTH_VERIFY_LIMIT` | 10 / hour | `PUT /api/auth/email` |
 
 Lower-risk profile and prompt-statistics throttles remain process-local.

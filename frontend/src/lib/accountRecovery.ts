@@ -107,8 +107,13 @@ export function readEmailState(): Promise<EmailState> {
   return apiRequest<EmailState>("/api/auth/email");
 }
 
-export function setEmailAddress(email: string): Promise<{ pendingAddress: string }> {
-  return apiRequest("/api/auth/email", { method: "PUT", body: { email } });
+/** Proves the password with it: the address is the way back in when the
+ * password is lost, so it is set like a credential (R-AUTH-26). */
+export function setEmailAddress(
+  email: string,
+  password: string,
+): Promise<{ pendingAddress: string }> {
+  return apiRequest("/api/auth/email", { method: "PUT", body: { email, password } });
 }
 
 export function confirmEmailToken(token: string): Promise<{ address: string }> {
@@ -136,10 +141,12 @@ export function passwordResetLinkIsUsable(token: string): Promise<{ valid: boole
   });
 }
 
+/** Sets the password. `signedIn` is false for a staff account, which the
+ * server sends through login for its second factor (R-AUTH-20). */
 export function completePasswordReset(
   token: string,
   password: string,
-): Promise<unknown> {
+): Promise<{ ok: boolean; signedIn: boolean }> {
   return apiRequest("/api/auth/password/reset", {
     method: "POST",
     body: { token, password },

@@ -26,6 +26,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
   const [params] = useSearchParams();
   const token = params.get("token") ?? "";
   const fetchMe = useAuthStore((state) => state.fetchMe);
+  const adoptFromServer = useAuthStore((state) => state.adoptFromServer);
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   // Verification starts in flight: the effect below runs on arrival, and
@@ -116,9 +117,20 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     setBusy(true);
     setError(null);
     try {
-      await completePasswordReset(token, password);
-      await fetchMe();
-      setDone(ui.accountRecoveryPage.yourPasswordIsSetAnd);
+      const result = await completePasswordReset(token, password);
+      // Every session was just revoked, this tab's included, and the reset
+      // signed this browser in as the account - or, for a staff account,
+      // left it signed out. Become whatever the server left it as, the way
+      // a sign-in does, socket included (#1006): a re-read alone left the
+      // next room entered as the guest the tab had been, and a store still
+      // saying "moderator" over a cookie that is gone would render a
+      // signed-in header with no way to sign in.
+      await adoptFromServer({ rebindSocket: true });
+      setDone(
+        result.signedIn
+          ? ui.accountRecoveryPage.yourPasswordIsSetAnd
+          : ui.accountRecoveryPage.yourPasswordIsSetSignIn,
+      );
     } catch (resetError) {
       setError(
         refusalText(resetError, ui.accountRecoveryPage.somethingWentWrongPleaseTryAgain),

@@ -1,5 +1,5 @@
 import { create } from "zustand";
-import { apiRequest, ApiError } from "../lib/api";
+import { apiRequest, onUnexpectedSignOut } from "../lib/api";
 import { assertPasskey } from "../lib/passkeys";
 import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
 import { useGameStore } from "./gameStore";
@@ -63,6 +63,15 @@ interface AuthStore {
    */
   ensureIdentity: () => Promise<AuthUser>;
   fetchMe: () => Promise<AuthUser | null>;
+  /**
+   * Re-read the account and, if it is not the one this tab was, become it
+   * the way a sign-in does: seat released, socket bounced (#1006). `fetchMe`
+   * only writes the store, and the socket reads the cookie once at the
+   * handshake - so a page that changed the account on the server (a
+   * password reset completed as a guest) and then only re-read it entered
+   * the next room as the guest it had been.
+   */
+  adoptFromServer: (options?: { rebindSocket?: boolean }) => Promise<AuthUser | null>;
   /**
    * Adopt an offer the account's own socket room just announced.
    *
@@ -202,6 +211,10 @@ let inFlightProvision: Promise<AuthUser> | null = null;
 // in during it would be erased by its result.
 let identityVersion = 0;
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
+// Whether the last `/me` read failed to reach the server, as opposed to the
+// server answering that nobody is signed in (review of #1065): the two are
+// both `null` to a caller, and only the second is a sign-out.
+let lastReadFailed = false;
 
 /**
  * Whether this visitor still has to choose a name before they can play.
@@ -270,6 +283,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
 
     set({ isLoading: true });
     const startedAt = identityVersion;
+    lastReadFailed = false;
     inFlightFetchMe = (async () => {
       try {
         const { settings, ...user } = (await apiRequest<MeResponse | null>("/api/auth/me")) ?? {};
@@ -286,14 +300,45 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         return account;
       } catch {
         // Offline or the server is down. The app still works: play continues
-        // without a durable identity rather than blocking on the account.
-        set({ user: null, isLoading: false, hasResolved: true });
-        return null;
+        // without a durable identity rather than blocking on the account -
+        // and with the one it already held, if any: a read that never
+        // arrived says nothing about the account.
+        lastReadFailed = true;
+        const held = get().user;
+        set({ user: held, isLoading: false, hasResolved: true });
+        return held;
       } finally {
         inFlightFetchMe = null;
       }
     })();
     return inFlightFetchMe;
+  },
+
+  adoptFromServer: async (options) => {
+    // A `/me` already in the air may predate the change this is asked to
+    // notice; let it land, then read afresh.
+    if (inFlightFetchMe) await inFlightFetchMe.catch(() => null);
+    const before = get().user?.id ?? null;
+    const account = await get().fetchMe();
+    // A read that failed is not an answer: the identity, the seat and the
+    // socket stay as they were rather than being given up as nobody's
+    // (review of #1065). The next read settles it.
+    if (lastReadFailed) return account;
+    if ((account?.id ?? null) === before) {
+      // The same account under a new session - a password change or reset
+      // by this very browser - keeps its seat, but the socket handshook with
+      // the session just revoked and remembers it: handshake again with the
+      // cookie now in hand, so a later revocation of this session finds it.
+      if (options?.rebindSocket) reconnectWithCurrentIdentity();
+      return account;
+    }
+    // `fetchMe` has already installed the account, reconciled its colour and
+    // loaded its settings; what it does not do is the transition - the bump
+    // every in-flight read checks, the seat, the socket.
+    installIdentity(set, account);
+    releaseSeatBeforeIdentityChange();
+    reconnectSocketAsNewIdentity();
+    return account;
   },
 
   setNameDraft: (nameDraft) => set({ nameDraft }),
@@ -391,10 +436,15 @@ export const useAuthStore = create<AuthStore>((set, get) => {
   },
 
   logout: async () => {
+    // This tab's own sign-out closes its socket from the server side too
+    // (#1007), and that notice must not read as "signed out elsewhere".
+    signingOut = true;
     try {
       await apiRequest("/api/auth/logout", { method: "POST" });
-    } catch (error) {
-      if (!(error instanceof ApiError)) throw error;
+    } catch {
+      // A refusal, a proxy page, or no network: the cookie may still stand,
+      // but this browser is told it is out either way, and the read below
+      // brings the account back if the server still knows it (#1007).
     }
     installIdentity(set, null);
     releaseSeatBeforeIdentityChange();
@@ -403,6 +453,23 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     // account and it would never see the cookie that arrives moments later.
     await useAuthStore.getState().fetchMe();
     reconnectSocketAsNewIdentity();
+    signingOut = false;
   },
   };
+});
+
+let signingOut = false;
+
+/** Whether this tab is in the middle of its own sign-out (#1007): the server
+closes its socket with a `session_superseded` notice like any revoked
+session's, and only a notice this tab did not ask for is news. */
+export function isSigningOut(): boolean {
+  return signingOut;
+}
+
+// A request that found this tab signed out re-reads the account, so the
+// header stops claiming an account whose session another device revoked
+// (#1007). Only while the store holds one: a guest's 401 is expected.
+onUnexpectedSignOut(() => {
+  if (useAuthStore.getState().user) void useAuthStore.getState().adoptFromServer();
 });

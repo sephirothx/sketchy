@@ -6,6 +6,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sendGuess } from "../lib/guessSender";
+import { inputPurposeFor } from "../lib/chatPurpose";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
@@ -70,8 +71,11 @@ export function RoomChatPanel({
 }: RoomChatPanelProps) {
   const locale = useLocaleRerender();
   recordRender("chat");
-  const inputPurpose = mode === "playing" ? "guess" : "chat";
-  const [previousInputPurpose, setPreviousInputPurpose] = useState(inputPurpose);
+  const inputPurpose = inputPurposeFor(mode, canGuess);
+  // A draft outlives the purpose flipping under it: a correct guess, or a
+  // turn's results giving way to the next drawing, is not a reason to lose a
+  // half-typed line. Only entering or leaving a game clears the input.
+  const [previousMode, setPreviousMode] = useState(mode);
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
@@ -150,8 +154,8 @@ export function RoomChatPanel({
     return () => window.clearTimeout(timeout);
   }, [deliveryError]);
 
-  if (previousInputPurpose !== inputPurpose) {
-    setPreviousInputPurpose(inputPurpose);
+  if (previousMode !== mode) {
+    setPreviousMode(mode);
     setText("");
     setHistoryIndex(null);
     setError(null);
@@ -219,7 +223,6 @@ export function RoomChatPanel({
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (inputPurpose !== "guess") return;
     if (event.key === "ArrowUp") {
       if (history.length === 0) return;
       const targetInput = event.currentTarget;
