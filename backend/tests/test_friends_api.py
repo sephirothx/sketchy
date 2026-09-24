@@ -78,7 +78,7 @@ async def test_a_request_and_its_acceptance_show_on_both_sides(env):
     bob = await register(bob_http, "Bob")
 
     sent = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
-    assert sent.status_code == 201
+    assert sent.status_code == 200
     assert sent.json()["status"] == FriendshipState.PENDING.value
 
     # Waiting at the right end, and named as such at each.
@@ -202,7 +202,7 @@ async def test_unfriending_leaves_nothing_and_lets_either_ask_again(env):
     assert await service.get(UUID(ada["id"]), UUID(bob["id"])) is None
 
     resent = await bob_http.post("/api/users/me/friends", json={"userId": ada["id"]})
-    assert resent.status_code == 201
+    assert resent.status_code == 200
 
 
 async def test_you_cannot_friend_or_unfriend_yourself(env):
@@ -240,7 +240,7 @@ async def test_the_request_limit_is_only_spent_on_a_request_that_landed(env, mon
         assert answer.status_code == 200, answer.text
 
     landed = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
-    assert landed.status_code == 201
+    assert landed.status_code == 200
     assert ada["id"] and bob["id"]
 
 
@@ -565,3 +565,26 @@ async def test_an_acknowledgement_naming_nothing_records_nothing(env):
     assert empty.json() == {"ok": True, "announced": 0}
     # Still owed, because nobody was told.
     assert len((await ada_http.get("/api/users/me/friends")).json()["announce"]) == 1
+
+
+async def test_a_request_answers_alike_whether_it_landed_was_blocked_or_named_nobody(env):
+    """R-FRIEND-04: the status code was the disclosure channel - 201 when a
+    request landed, 200 when it was dropped by a block, an earlier refusal or
+    an id that was never an account (#1002). Now the whole response is one.
+    """
+    from uuid import uuid4
+
+    new_client = env[0]
+    ada, bob, cid = new_client(), new_client(), new_client()
+    ada_account = await register(ada, "Ada2")
+    bob_account = await register(bob, "Bob2")
+    await register(cid, "Cid2")
+    # Bob blocks Ada; Cid declines her.
+    assert (await bob.post("/api/users/me/blocks", json={"userId": ada_account["id"]})).status_code == 201
+
+    landed = await ada.post("/api/users/me/friends", json={"userId": (await cid.get("/api/auth/me")).json()["id"]})
+    blocked = await ada.post("/api/users/me/friends", json={"userId": bob_account["id"]})
+    nobody = await ada.post("/api/users/me/friends", json={"userId": str(uuid4())})
+
+    answers = [(r.status_code, r.json()) for r in (landed, blocked, nobody)]
+    assert answers == [(200, {"status": "pending"})] * 3, answers

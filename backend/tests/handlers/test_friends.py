@@ -424,10 +424,11 @@ async def test_add_friend_names_only_the_outcomes_that_changed_something():
             return self._outcome
 
     for outcome, expected in (
-        (FriendshipOutcome.CREATED, "created"),
+        # Landed and dropped answer alike (R-FRIEND-04, #1002).
+        (FriendshipOutcome.CREATED, "pending"),
         (FriendshipOutcome.ACCEPTED, "accepted"),
-        (FriendshipOutcome.UNCHANGED, "unchanged"),
-        (FriendshipOutcome.IGNORED, "unchanged"),
+        (FriendshipOutcome.UNCHANGED, "pending"),
+        (FriendshipOutcome.IGNORED, "pending"),
     ):
         room_manager = RoomManager()
         ctx, sio, sessions = build_stack(
