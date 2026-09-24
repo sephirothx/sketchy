@@ -24,6 +24,7 @@ import type {
 } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { providePrivateResultHandler } from "../lib/privateResults.ts";
+import { isTurnAlreadyShown } from "../lib/turnResults";
 
 let messageSeq = 0;
 const nextMessageId = () => `${Date.now()}-${messageSeq++}`;
@@ -210,7 +211,9 @@ export function useGameSocketListeners() {
     };
 
     const onTurnEnded = (payload: TurnEndedPayload) => {
+      const repeated = isTurnAlreadyShown(store.getState(), payload);
       store.getState().endTurn(payload);
+      if (repeated) return;
       store.getState().addMessage({
         id: nextMessageId(),
         nickname: "",
