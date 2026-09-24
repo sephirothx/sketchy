@@ -455,6 +455,11 @@ class HandoffFailureCode(StrEnum):
     # An envelope version this build cannot decode, or bytes that fail
     # their own checksum.
     UNREADABLE = "unreadable"
+    # The envelope decodes but the writer refuses its content: a ledger that
+    # does not reconcile, a reaction naming a seat the game never had. The
+    # second attempt would refuse the same bytes, so it fails at once and is
+    # counted as what it is, not as a slow database (#992).
+    INVALID = "invalid"
 
 
 class GameVisibility(StrEnum):

@@ -1604,3 +1604,11 @@ async def test_a_deployment_that_cannot_stop_itself_says_so(env):
         client.cookies.update(admin.cookies)
         response = await client.post("/api/admin/shutdown", json={"reason": "no signal"})
     assert response.status_code == 503
+
+
+async def test_a_search_term_with_a_control_character_is_refused(env):
+    """The term reaches an ILIKE; PostgreSQL refuses a NUL in it (#995)."""
+    admin = await an_admin(env)
+    response = await admin.get("/api/admin/players", params={"q": "ad\x00a"})
+    assert response.status_code == 422, response.text
+    assert response.json()["detail"] == "Text must not contain control characters"
