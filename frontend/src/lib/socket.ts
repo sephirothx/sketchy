@@ -23,6 +23,7 @@ import {
   serverCloseRetryDelayMs,
   shouldReconnectImmediately,
   transportAlive,
+  transientSendable,
 } from "./reconnectPolicy.ts";
 
 // No URL: connect to the origin that served the page. The backend serves the
@@ -722,12 +723,24 @@ just rejoined. Live drawing is deliberately not routed through here - its
 frames carry a generation and sequence the server checks, and it has an
 explicit resync path, so replay is already answered there. */
 export function emitTransient(event: string, ...args: unknown[]): void {
-  // socket.io discards a volatile packet, without a word, exactly when the
-  // transport is not writable: a socket that is down, and on long-polling
-  // any moment a POST is in flight. The same test here, so what is counted
-  // is what was dropped rather than a guess at it (#876).
-  if (!socket.io.engine?.transport?.writable) noteHealth("droppedEmits");
+  // socket.io drops a volatile packet only when the transport is not
+  // writable, and *buffers* it when the socket is merely not connected -
+  // mid-reconnect, or with its ping expired - replaying it on the next socket
+  // before anything else runs (#966). Decided here instead, and counted as
+  // dropped (#876), since that is what it is.
+  if (!transientSendableNow()) {
+    noteHealth("droppedEmits");
+    return;
+  }
   socket.volatile.emit(event, ...args);
+}
+
+function transientSendableNow(): boolean {
+  return transientSendable({
+    connected: socket.connected,
+    transportWritable: Boolean(socket.io.engine?.transport?.writable),
+    transportAlive: transportIsAlive(),
+  });
 }
 
 // The connection-health report (#876, `connectionHealth.ts`): at most once a
@@ -894,6 +907,13 @@ export const sharedGuessTarget: TransientAckTarget = {
     return socket.connected;
   },
   emitTransient(event, data, timeoutMs, ack) {
+    // The same rule as `emitTransient` (#966): connected with its ping
+    // expired, socket.io would buffer the guess for the next socket.
+    if (!transientSendableNow()) {
+      noteHealth("droppedEmits");
+      ack(new Error("not sent: the connection is not live"));
+      return;
+    }
     socket.volatile.timeout(timeoutMs).emit(event, data, ack);
   },
   scope() {
