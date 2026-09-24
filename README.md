@@ -762,9 +762,9 @@ process. These deployment settings can be tuned without code changes:
 | `AFK_INACTIVITY_SECONDS` | `300` | How long a seat may send nothing a person sent before the room asks whether anybody is there. Only somebody who has touched nothing at all reaches it: a browser that has seen input answers the check by itself |
 | `AFK_CHECK_SECONDS` | `25` | How long that question stays open before the seat is marked AFK |
 | `SMTP_HOST` | unset | Mail relay. Unset means messages are logged, not sent — which production refuses to start without, since that would put live reset links in the log and send nothing (#466) |
-| `SMTP_PORT` | `587` | Relay port |
+| `SMTP_PORT` | `587`, or `465` with `SMTP_SECURITY=tls` | Relay port |
 | `SMTP_USERNAME` / `SMTP_PASSWORD` | unset | Relay credentials, if it wants them |
-| `SMTP_STARTTLS` | `1` | Upgrade the connection before sending |
+| `SMTP_SECURITY` | `starttls` | `starttls` upgrades the connection before anything is sent (port 587), `tls` encrypts from the first byte (port 465), `none` sends in the clear. Both encrypted modes verify the relay's certificate against the system trust store, so any public mail provider works with no further setup and a relay that fails verification fails the send. A relay signed by a private authority is trusted by pointing `SSL_CERT_FILE` (or `SSL_CERT_DIR`) at a bundle that includes it. Production refuses `none` together with `SMTP_PASSWORD`; an unknown value, or the retired `SMTP_STARTTLS`, fails startup |
 | `SMTP_FROM` | `sketchy@localhost` | Envelope sender |
 | `PUBLIC_BASE_URL` | `http://localhost:8000` | The origin players reach this deployment at: where confirmation and reset links point, and where a plain-HTTP request is redirected in production. Production requires an `https` origin that is not a loopback name, with no path (#467) |
 | `EMAIL_SWEEP_SECONDS` | `30` | How often the outbox is emptied |
