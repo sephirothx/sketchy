@@ -523,13 +523,14 @@ def create_auth_router(
         )
         return refreshed or account, session_id
 
-    async def revoke_current(request: Request) -> None:
+    async def revoke_current(request: Request) -> list[str]:
         session_id = getattr(request.state, "session_id", None)
         user_id = getattr(request.state, "user_id", None)
         if session_id and user_id:
-            await revoke_session(
+            return await revoke_session(
                 session_factory, session_id=session_id, user_id=user_id
             )
+        return []
 
     async def throttle(limiter: PersistentRateLimiter, request: Request) -> None:
         if not await limiter.check(client_key(request)):
@@ -1122,7 +1123,11 @@ def create_auth_router(
             raise Refusal(404, ErrorCode.SESSION_NOT_FOUND, "Active session not found.")
         if session_id == getattr(request.state, "session_id", None):
             clear_session_cookie(response, secure=is_secure_request(request))
-        await _sockets_signed_out(user_id, [str(session_id)])
+        # The named session and whatever replaced it: a list loaded before a
+        # rotation names the row the rotation retired (#1075).
+        await _sockets_signed_out(
+            user_id, list(dict.fromkeys([str(session_id), *revoked]))
+        )
         return {"ok": True}
 
     @router.post("/logout-all")
@@ -1482,8 +1487,23 @@ def create_auth_router(
                 "That reset link has expired or already been used.",
             )
         clear_session_cookie(response, secure=is_secure_request(request))
+        if await is_user_banned(session_factory, str(outcome.user_id)):
+            # Not for a suspended account: the front door refuses it on the
+            # password and on a passkey, and a reset is a third front door,
+            # not a way round the other two (#1052). The password still
+            # takes - the mailbox was proved, and the suspension ends one day
+            # - and the page says why nothing was issued here, rather than
+            # sending the person to a sign-in that only refuses them. Checked
+            # before the staff path for the same reason: a suspended
+            # moderator sent to a second factor would only be refused there.
+            # The reset proved the mailbox, so this discloses nothing new.
+            # Nor does it reopen export or deletion: a suspended account
+            # keeps those only on the session it held when the ban landed
+            # (R-BAN-04), and one that lost every device asks an operator.
+            await _sockets_signed_out(str(outcome.user_id), None)
+            return {"ok": True, "signedIn": False, "reason": "suspended"}
         if outcome.role in STAFF_ROLES and staff_second_factor_required():
-            # Not for a staff account: a reset proves the mailbox, and
+            # Nor for a staff account: a reset proves the mailbox, and
             # R-AUTH-20 says a moderator MUST NOT sign in without producing
             # a code. Issued here, the session was a staff sign-in that
             # asked for no code - and the password just set is enough to
@@ -1492,7 +1512,7 @@ def create_auth_router(
             # sockets of every revoked session go too, this browser's
             # included: it holds no cookie now, and re-reads as nobody.
             await _sockets_signed_out(str(outcome.user_id), None)
-            return {"ok": True, "signedIn": False}
+            return {"ok": True, "signedIn": False, "reason": "second_factor"}
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
         await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)
@@ -2074,12 +2094,15 @@ def create_auth_router(
         """Revoke this session. The next /me call provisions a fresh guest."""
         user_id = getattr(request.state, "user_id", None)
         session_id = getattr(request.state, "session_id", None)
-        await revoke_current(request)
+        revoked = await revoke_current(request)
         clear_session_cookie(response, secure=is_secure_request(request))
         if user_id and session_id:
             # Another tab of this browser shares the session: its socket is
-            # signed out with it.
-            await _sockets_signed_out(user_id, [str(session_id)])
+            # signed out with it - and so is one opened on the session that
+            # replaced it, when this sign-out carried the rotated-away cookie.
+            await _sockets_signed_out(
+                user_id, list(dict.fromkeys([str(session_id), *revoked]))
+            )
         return {"ok": True}
 
     return router
