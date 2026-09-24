@@ -473,8 +473,9 @@ to each version so changing an alias later cannot rewrite how an older game
 matched guesses. The initial supported Latin-language registry—English,
 German, Spanish, French, Italian, Dutch, and Portuguese—case-folds, collapses
 whitespace, folds canonically decomposable accents, and reads every apostrophe a
-keyboard writes (`’ ʼ ‘ ´ \``) as the plain one, since an iPhone with Smart
-Punctuation types `d’artifice` for **feu d'artifice**. Beyond that shared
+keyboard writes (typographic quotes, the prime, the acute accent, the backtick, the
+fullwidth form) as the plain one, since an iPhone with Smart Punctuation types
+`d’artifice` for **feu d'artifice**. Beyond that shared
 rule, a language folds the way it is written: German accepts `Maedchen` for
 **Mädchen** (`ä→ae`, `ö→oe`, `ü→ue`, expanded before the accents are folded,
 because `madchen` is nobody's spelling), French reads the `œ` ligature as `oe`, since

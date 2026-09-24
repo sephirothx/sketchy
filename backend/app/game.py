@@ -143,7 +143,8 @@ class Phase(str, Enum):
 def _normalize(text: str, language: str = "en") -> str:
     """The canonical key: one string, for provenance and near-miss distance.
 
-    Whitespace and case differences are ignored. Canonically decomposable
+    Whitespace and case differences are ignored, and every apostrophe a
+    keyboard writes reads as the plain one (#1011). Canonically decomposable
     diacritics are stripped so, for example, "è" matches "e"; letters such as
     "ø" and "ł" remain distinct because Unicode NFD does not decompose them
     into ASCII letters. A language that transliterates (German "ä" as "ae")

@@ -134,12 +134,16 @@ def default_prompt_list_slug(language: str) -> str:
 # Every mark a keyboard writes for the apostrophe in "feu d'artifice" (#1011):
 # the typographic right quote iOS Smart Punctuation substitutes on its own
 # (and Word, and most phones), the modifier letter, the left quote a
-# smart-quote engine picks at the start of a word, the spacing acute accent
-# and the backtick some layouts put on the key. NFC leaves all of them alone
-# - none is canonically equivalent to U+0027 - so without this fold eleven
-# bundled French and Italian answers were unguessable from an iPhone, and
+# smart-quote engine picks at the start of a word, the reversed one, the
+# prime, the spacing acute accent, the backtick some layouts put on the key,
+# and the fullwidth form a CJK input method emits. NFC leaves all of them
+# alone - none is canonically equivalent to U+0027, and only NFKC would fold
+# the fullwidth one - so without this fold the bundled French and Italian
+# answers written with an apostrophe were unguessable from an iPhone, and
 # the player was told "very close" for the rest of the turn.
-_APOSTROPHES = str.maketrans({mark: "'" for mark in "\u2019\u02bc\u2018\u00b4\u0060"})
+_APOSTROPHES = str.maketrans(
+    {mark: "'" for mark in "\u2019\u02bc\u2018\u201b\u2032\u00b4\u0060\uff07"}
+)
 
 
 def _collapsed(answer: str) -> str:

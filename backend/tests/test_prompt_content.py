@@ -248,8 +248,11 @@ async def test_prompt_concepts_do_not_merge_by_equal_text_and_links_are_explicit
         "feu d\u2019artifice",  # U+2019, what iOS Smart Punctuation writes
         "feu d\u02bcartifice",  # U+02BC modifier letter apostrophe
         "feu d\u2018artifice",  # U+2018, a smart-quote engine at a word start
+        "feu d\u201bartifice",  # U+201B reversed
+        "feu d\u2032artifice",  # U+2032 prime
         "feu d\u00b4artifice",  # U+00B4 spacing acute accent
         "feu d`artifice",  # backtick, on the apostrophe key of some layouts
+        "feu d\uff07artifice",  # U+FF07 fullwidth, from a CJK input method
     ],
 )
 def test_every_apostrophe_a_keyboard_writes_matches_the_bundled_answer(written):
