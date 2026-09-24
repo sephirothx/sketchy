@@ -158,3 +158,36 @@ async def test_a_socket_gone_mid_sweep_does_not_stop_the_rest(monkeypatch):
 
     await main.close_sockets_of_revoked_sessions("u1", ["s-phone"])
     assert server.disconnected == ["phone-sid"]
+
+
+async def test_a_seated_socket_still_names_the_session_that_opened_it():
+    """Room entry and exit rewrite the socket session; the session id has to
+    survive both, or a targeted revocation skips every seated socket and the
+    acting browser's own change closes its seat (review of #1066)."""
+    from unittest.mock import AsyncMock
+
+    import socketio
+
+    from app.handlers import register_all_handlers as register_handlers
+    from app.rooms import RoomManager
+    from tests.handlers.helpers import SessionStore
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, RoomManager())
+    sessions = SessionStore()
+    sio.get_session = AsyncMock(side_effect=sessions.get)
+    sio.save_session = AsyncMock(side_effect=sessions.save)
+    sio.enter_room = AsyncMock()
+    sio.leave_room = AsyncMock()
+    sio.disconnect = AsyncMock()
+    sio.emit = AsyncMock()
+
+    await sessions.save("laptop-sid", {"user_id": "u1", "session_id": "s-laptop"})
+    created = await sio.handlers["/"]["create_room"]("laptop-sid", {"nickname": "Host"})
+    assert created["ok"], created
+    seated = await sessions.get("laptop-sid")
+    assert seated["room_id"] == created["roomId"]
+    assert seated["session_id"] == "s-laptop"
+
+    await sio.handlers["/"]["leave_room"]("laptop-sid", {})
+    assert await sessions.get("laptop-sid") == {"user_id": "u1", "session_id": "s-laptop"}
