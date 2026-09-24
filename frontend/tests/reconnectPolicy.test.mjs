@@ -243,3 +243,15 @@ test("a socket the server closed is reopened, on a backoff, unless the close was
   assert.equal(closed(0, { reason: "transport close" }), null);
   assert.equal(closed(0, { reason: "ping timeout" }), null);
 });
+
+test("a server close is not retried while this page reloads onto a new build (#1056)", () => {
+  const closed = {
+    reason: "io server disconnect",
+    attempt: 0,
+    updateRequired: false,
+    turnedAwayForCapacity: false,
+    random: 0.5,
+  };
+  assert.notEqual(serverCloseRetryDelayMs(closed), null);
+  assert.equal(serverCloseRetryDelayMs({ ...closed, reloadPending: true }), null);
+});

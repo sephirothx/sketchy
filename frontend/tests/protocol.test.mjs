@@ -136,3 +136,26 @@ test("reloading on request forgets the automatic reload already spent", () => {
   assert.equal(reloads, 2);
   assert.equal(stuck, 0);
 });
+
+test("a repeat heard while this page's own reload is under way is waited out (#1056)", () => {
+  // A reload slower than the server's five-second close reconnected from the
+  // unloading page, heard the notice again, found the marker it had just
+  // written and reported a stuck update that was only a slow one.
+  const storage = fakeStorage();
+  let reloads = 0;
+  let stuck = 0;
+  const reloadInFlight = { pending: false };
+  const environment = {
+    storage,
+    reload: () => { reloads += 1; },
+    onStuck: () => { stuck += 1; },
+    reloadInFlight,
+  };
+
+  handleUpgradeRequired({ expected: 2, received: 1 }, environment);
+  assert.equal(reloadInFlight.pending, true);
+  handleUpgradeRequired({ expected: 2, received: 1 }, environment);
+
+  assert.equal(reloads, 1);
+  assert.equal(stuck, 0, "the same page load is still reloading, not stuck");
+});

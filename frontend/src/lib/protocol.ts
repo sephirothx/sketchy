@@ -38,8 +38,16 @@ export function handleUpgradeRequired(
     storage?: Pick<Storage, "getItem" | "setItem"> | null;
     reload: () => void;
     onStuck?: (notice: UpgradeRequiredNotice | undefined) => void;
+    /** This page load's own reload, once asked for. A reload can take longer
+     * than the server's five seconds before it closes the stale socket; a
+     * handshake from the unloading page then heard `upgrade_required` again,
+     * found the marker it had just written, and reported a stuck update that
+     * was only a slow one (#1056). While it is pending, a repeat is waited
+     * out, not reported. */
+    reloadInFlight?: { pending: boolean };
   },
 ): boolean {
+  if (environment.reloadInFlight?.pending) return true;
   const expected = String(notice?.expected ?? "unknown");
   let alreadyReloaded: boolean;
   try {
@@ -60,6 +68,7 @@ export function handleUpgradeRequired(
   } catch {
     // Ignored for the same reason.
   }
+  if (environment.reloadInFlight) environment.reloadInFlight.pending = true;
   environment.reload();
   return true;
 }

@@ -353,6 +353,9 @@ socket.on("connect_error", (error) => {
 // Registered here rather than in a component because a version skew is not
 // scoped to any screen: the socket can be told to upgrade while the player is
 // in the lobby, mid-game, or on the invite page.
+// This page load's upgrade reload, once asked for (#1056).
+const upgradeReload = { pending: false };
+
 socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
   recordClientError(
     "socket",
@@ -361,6 +364,7 @@ socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
   handleUpgradeRequired(notice, {
     storage: typeof sessionStorage === "undefined" ? null : sessionStorage,
     reload: () => window.location.reload(),
+    reloadInFlight: upgradeReload,
     onStuck: () => {
       recordClientError(
         "socket",
@@ -480,6 +484,7 @@ socket.on("disconnect", (reason) => {
     updateRequired: isUpdateRequired(),
     turnedAwayForCapacity: serverFullReason !== null,
     random: Math.random(),
+    reloadPending: upgradeReload.pending,
   });
   if (wait === null) return;
   serverCloseAttempts += 1;
