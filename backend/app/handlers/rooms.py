@@ -874,7 +874,12 @@ async def _seat_in_room(
         if ctx.is_ending(sid):
             ctx.room_capacity.refund_takeover(player.id)
             return ENDED_ACCOUNT_ACKNOWLEDGEMENT
-        await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        try:
+            await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        except Exception:
+            # Not a takeover either: the seat was never rebound (#1009).
+            ctx.room_capacity.refund_takeover(player.id)
+            raise
         if ctx.is_ending(sid):
             return await _unseat_an_ended_account(ctx, room, player)
         if empty_for is not None:

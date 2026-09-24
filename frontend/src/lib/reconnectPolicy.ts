@@ -138,19 +138,40 @@ export function afterFailedRebind(options: {
 /** What a phase that has overrun its clock should cost (#1009).
 
 The stall check used to force a full transport restart whenever the local
-phase ran 2.5 s past its deadline. A server that is merely late runs every
-room's phase late at once, so every seated client tore its transport down
-every ten seconds, and each restart was a seat takeover the server counts;
-past the takeover ceiling the rebind was refused and a healthy game was
-shown as "Couldn't reconnect". While the transport is alive the server is
-slow, not gone, and a soft rebind reconciles the phase without a teardown;
-during an approved restart the game has no phase to be late in. */
+phase ran 2.5 s past its deadline, every ten seconds. A server that is merely
+late runs every room's phase late at once, so every seated client tore its
+transport down every ten seconds, and each restart was a seat takeover the
+server counts; past the takeover ceiling the rebind was refused and a healthy
+game was shown as "Couldn't reconnect". While the transport is alive the
+server is slow, not gone, and a soft rebind reconciles the phase without a
+teardown; during an approved restart the game has no phase to be late in.
+Each recovery pushes the next one out, doubling from `STALL_INTERVAL_MS` to
+a minute with the heartbeat's ±50% jitter (#872), so a server slow enough to
+miss the soft rebind too is asked less often the slower it gets rather than
+by every seat on a fixed ten-second cadence. The hook resets the run once
+the phase is on time again. */
+export const STALL_INTERVAL_MS = 10_000;
+
 export function stallRecovery(state: {
   transportAlive: boolean;
   restartApproved: boolean;
-}): "none" | "soft" | "restart" {
-  if (state.restartApproved) return "none";
-  return state.transportAlive ? "soft" : "restart";
+  escalations: number;
+  notBefore: number;
+  now: number;
+  random: number;
+}): { action: "none" | "soft" | "restart"; escalations: number; notBefore: number } {
+  const { escalations, notBefore, now, random } = state;
+  if (state.restartApproved || now < notBefore) {
+    return { action: "none", escalations, notBefore };
+  }
+  const next = escalations + 1;
+  const base = Math.min(STALL_INTERVAL_MS * 2 ** (next - 1), ESCALATION_MAX_MS);
+  const jitter = 0.5 + Math.min(Math.max(random, 0), 1);
+  return {
+    action: state.transportAlive ? "soft" : "restart",
+    escalations: next,
+    notBefore: now + Math.floor(base * jitter),
+  };
 }
 
 /** What this client knows about a planned restart, from the notice to the

@@ -309,9 +309,10 @@ class RoomCapacityService:
     def refund_takeover(self, player_id: str) -> None:
         """Give back a takeover that rebound nobody (#1009).
 
-        Charged before the refusals that follow it, so a rebind refused - an
-        account being ended, a room torn down meanwhile - used to cost the
-        seat an attempt, and a phone flapping between networks was locked
-        out of its own seat while the grace ran out.
+        Charged before the seat is rebound, so a rebind refused or failed
+        before that point - an account being ended, seating raising - used
+        to cost the seat an attempt and, once the ceiling was reached, to
+        change the reason it was given. A rebind that did supersede the old
+        socket is kept: the broadcast it cost the room has happened.
         """
         self._takeovers.refund(player_id)

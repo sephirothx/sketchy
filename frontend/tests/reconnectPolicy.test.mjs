@@ -14,6 +14,7 @@ import {
   pingWindowMs,
   attemptIsInFlight,
   shouldReconnectImmediately,
+  STALL_INTERVAL_MS,
   shutdownHoldMs,
   stallRecovery,
   transportAlive,
@@ -180,9 +181,33 @@ test("a flapping interface does not interrupt the handshake it keeps asking for"
 });
 
 test("a phase that overran its clock costs a soft rebind while the server is only slow (#1009)", () => {
-  assert.equal(stallRecovery({ transportAlive: true, restartApproved: false }), "soft");
-  assert.equal(stallRecovery({ transportAlive: false, restartApproved: false }), "restart");
-  // A passed restart vote leaves the game with no phase to be late in.
-  assert.equal(stallRecovery({ transportAlive: true, restartApproved: true }), "none");
-  assert.equal(stallRecovery({ transportAlive: false, restartApproved: true }), "none");
+  const first = { escalations: 0, notBefore: 0, now: 1000, random: 0.5 };
+  assert.equal(stallRecovery({ ...first, transportAlive: true, restartApproved: false }).action, "soft");
+  assert.equal(stallRecovery({ ...first, transportAlive: false, restartApproved: false }).action, "restart");
+  // A passed restart vote leaves the game with no phase to be late in, and
+  // does not count as a recovery.
+  assert.deepEqual(stallRecovery({ ...first, transportAlive: true, restartApproved: true }), {
+    action: "none", escalations: 0, notBefore: 0,
+  });
+});
+
+test("stall recoveries back off like the heartbeat's escalations (#1009)", () => {
+  let state = { escalations: 0, notBefore: 0 };
+  const gaps = [];
+  let now = 0;
+  for (let i = 0; i < 5; i += 1) {
+    const next = stallRecovery({ ...state, now, random: 0.5, transportAlive: true, restartApproved: false });
+    assert.equal(next.action, "soft");
+    gaps.push(next.notBefore - now);
+    state = { escalations: next.escalations, notBefore: next.notBefore };
+    // Asking again before its time is nothing, and does not escalate further.
+    const early = stallRecovery({ ...state, now: now + 1, random: 0.5, transportAlive: true, restartApproved: false });
+    assert.equal(early.action, "none");
+    assert.equal(early.escalations, next.escalations);
+    now = next.notBefore;
+  }
+  assert.deepEqual(gaps, [STALL_INTERVAL_MS, 20_000, 40_000, 60_000, 60_000]);
+  // ±50% jitter around the base.
+  assert.equal(stallRecovery({ escalations: 0, notBefore: 0, now: 0, random: 0, transportAlive: true, restartApproved: false }).notBefore, STALL_INTERVAL_MS / 2);
+  assert.equal(stallRecovery({ escalations: 0, notBefore: 0, now: 0, random: 1, transportAlive: true, restartApproved: false }).notBefore, STALL_INTERVAL_MS * 1.5);
 });
