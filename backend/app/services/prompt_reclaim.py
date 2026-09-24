@@ -48,7 +48,7 @@ from app.db.models import (
     TurnPromptOfferSource,
     TurnRecord,
 )
-from app.domain_values import PromptListVisibility
+from app.domain_values import PromptContentModerationState, PromptListVisibility
 
 logger = logging.getLogger(__name__)
 
@@ -100,6 +100,20 @@ def _revision_is_pinned(revision_id):
         exists().where(GamePromptSource.prompt_list_revision_id == revision_id)
         | exists().where(TurnPromptOfferSource.prompt_list_revision_id == revision_id)
         | exists().where(PromptUsageFact.prompt_list_revision_id == revision_id)
+        # A revision holding a word a moderator hid is the record of that
+        # takedown: an owner's save looks there for hidden words, so reclaiming
+        # it would let the word be typed into a new list a day after its list
+        # was deleted (#1091 review).
+        # Only while the list has an owner: an erased account's lists are
+        # looked up by nobody's saves, so there it would keep the text alone.
+        | exists().where(
+            PromptListRevisionItem.revision_id == revision_id,
+            PromptListRevisionItem.prompt_version_id == PromptVersion.id,
+            PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
+            PromptListRevision.id == revision_id,
+            PromptList.id == PromptListRevision.prompt_list_id,
+            PromptList.owner_user_id.is_not(None),
+        )
     )
 
 

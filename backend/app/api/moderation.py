@@ -1051,6 +1051,63 @@ async def _reviewer(session: AsyncSession, request: Request) -> User:
     return user
 
 
+async def _carry_decision_to_copies(
+    session: AsyncSession,
+    *,
+    prior: tuple[str, UUID | None, datetime | None],
+    decision: str,
+    owner_user_id: UUID | None,
+    language: str,
+    reviewer_id: UUID,
+    now: datetime,
+) -> None:
+    """A new decision on a hidden word reaches the copies the old one was
+    carried to.
+
+    A hidden word typed into another of the owner's lists is born hidden
+    with the decision's byline copied onto it (#1091). Restoring the original
+    left those copies hidden with no report of their own to decide - and, as
+    hidden words, re-hiding the original the next time its entry was edited.
+    A second "hidden" is carried too, or the copies keep the first byline and
+    a later restore, matching on the second, misses them. The byline says
+    which versions carry that decision and not another.
+    """
+    state, decided_by, decided_at = prior
+    if (
+        state != PromptContentModerationState.HIDDEN.value
+        or decided_at is None
+        or owner_user_id is None
+    ):
+        return
+    await session.execute(
+        update(PromptVersion)
+        .where(
+            PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
+            PromptVersion.language == language,
+            PromptVersion.moderated_at == decided_at,
+            (
+                PromptVersion.moderated_by_user_id == decided_by
+                if decided_by is not None
+                else PromptVersion.moderated_by_user_id.is_(None)
+            ),
+            select(PromptListRevisionItem.revision_id)
+            .join(PromptListRevision, PromptListRevision.id == PromptListRevisionItem.revision_id)
+            .join(PromptList, PromptList.id == PromptListRevision.prompt_list_id)
+            .where(
+                PromptListRevisionItem.prompt_version_id == PromptVersion.id,
+                PromptList.owner_user_id == owner_user_id,
+            )
+            .exists(),
+        )
+        .values(
+            moderation_state=decision,
+            moderated_by_user_id=reviewer_id,
+            moderated_at=now,
+        )
+        .execution_options(synchronize_session=False)
+    )
+
+
 def _is_about_themselves(reviewer: User, subject_user_id: UUID | None) -> bool:
     """Whether this decision is a moderator's about themselves or their own
     content, which is another moderator's to make (#1003, #1063).
@@ -2169,6 +2226,11 @@ def create_moderation_router(
                             status_code=409,
                             detail="The reported content has already been deleted.",
                         )
+                    prior_decision = (
+                        target.moderation_state,
+                        target.moderated_by_user_id,
+                        target.moderated_at,
+                    )
                     target.moderation_state = body.moderation_state
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
@@ -2205,6 +2267,15 @@ def create_moderation_router(
                                 moderated_by_user_id=reviewer.id,
                                 moderated_at=now,
                             )
+                        )
+                        await _carry_decision_to_copies(
+                            session,
+                            prior=prior_decision,
+                            decision=body.moderation_state,
+                            owner_user_id=report.reported_owner_user_id,
+                            language=target.language,
+                            reviewer_id=reviewer.id,
+                            now=now,
                         )
                     # Telling somebody their content was hidden is the least
                     # the review owes them, and it is the second use the

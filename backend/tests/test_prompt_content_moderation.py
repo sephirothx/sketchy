@@ -1274,3 +1274,200 @@ async def test_a_hide_decided_during_a_save_reaches_the_version_the_save_writes(
     async with factory() as session:
         row = await session.get(PromptVersion, UUID(current.prompt_version_id))
         assert row.moderation_state == "hidden"
+
+
+async def test_a_word_hidden_in_one_list_is_hidden_in_the_owners_others(env):
+    """#1091: a hidden word typed into another of the owner's lists - a new
+    one or one they already had - was a new concept born active. The takedown
+    reaches every list the owner has, in that language; another player typing
+    the same word is untouched."""
+    new_client, factory, prompts = env
+    owner_http, stranger_http = new_client(), new_client()
+    owner = await register(owner_http, "ManyLists")
+    stranger = await register(stranger_http, "Unrelated")
+    first = await prompts.create_owned(
+        owner["id"], name="First", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt", aliases=("its alias",)),),
+    )
+    other = await prompts.create_owned(
+        owner["id"], name="Other", description="", language="en",
+        prompts=(PromptListEntryInput(answer="fine"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(first.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+
+    fresh = await prompts.create_owned(
+        owner["id"], name="Fresh", description="", language="en",
+        prompts=(PromptListEntryInput(answer="Offensive Prompt"), PromptListEntryInput(answer="ok")),
+    )
+    assert {p.answer: p.moderation_state for p in fresh.prompts} == {
+        "Offensive Prompt": "hidden",
+        "ok": "active",
+    }
+
+    edited = await prompts.update_owned(
+        owner["id"], other.id, expected_version=other.version, name=other.name,
+        description="",
+        prompts=(
+            PromptListEntryInput(answer="fine", concept_id=other.prompts[0].concept_id),
+            PromptListEntryInput(answer="its alias"),
+        ),
+    )
+    assert {p.answer: p.moderation_state for p in edited.prompts} == {
+        "fine": "active",
+        "its alias": "hidden",
+    }
+
+    theirs = await prompts.create_owned(
+        stranger["id"], name="Theirs", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    assert theirs.prompts[0].moderation_state == "active", "another player's list is theirs"
+
+    elsewhere = await prompts.create_owned(
+        owner["id"], name="Anderswo", description="", language="de",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    assert elsewhere.prompts[0].moderation_state == "active", "keys mean one language"
+
+
+async def _staff_member(factory, account: dict, role: UserRole) -> None:
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(account["id"]))).role = role.value
+    await mark_staff_ready(factory, account["id"])
+
+
+async def test_restoring_a_word_restores_the_copies_its_takedown_was_carried_to(env):
+    """#1091 review: the owner's copy in another list was born hidden with the
+    decision's byline. A restore reached only the original's concept, so the
+    copy stayed hidden with no report to decide it - and, as a hidden word,
+    re-hid the original the next time its entry was edited."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "RestoredOwner")
+    await register(reporter_http, "RestoreReporter")
+    moderator = await register(moderator_http, "RestoreModerator")
+    await _staff_member(factory, moderator, UserRole.MODERATOR)
+    first = await prompts.create_owned(
+        owner["id"], name="Original", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"), PromptListEntryInput(answer="fine")),
+    )
+    await published(factory, first.id)
+    word = first.prompts[0]
+
+    async def decide(state: str) -> None:
+        report = await reporter_http.post(
+            "/api/prompt-content-reports",
+            json={
+                "promptListId": first.id,
+                "promptVersionId": word.prompt_version_id,
+                "reason": "other",
+                "details": f"Decide it {state}.",
+            },
+        )
+        assert report.status_code == 201, report.text
+        decided = await moderator_http.patch(
+            f"/api/moderation/prompt-content-reports/{report.json()['id']}",
+            json={"status": "resolved", "note": state, "moderationState": state},
+        )
+        assert decided.status_code == 200, decided.text
+
+    await decide("hidden")
+    copy = await prompts.create_owned(
+        owner["id"], name="Copy", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"),),
+    )
+    assert copy.prompts[0].moderation_state == "hidden"
+
+    # Decided hidden a second time: the copy carries the new decision too,
+    # or the restore below - matching on it - would miss the copy.
+    await decide("hidden")
+    await decide("active")
+    async with factory() as session:
+        carried = await session.get(PromptVersion, UUID(copy.prompts[0].prompt_version_id))
+        assert carried.moderation_state == "active", "the carried copy comes back too"
+    another = await prompts.create_owned(
+        owner["id"], name="After the restore", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"),),
+    )
+    assert another.prompts[0].moderation_state == "active", "nothing left to carry"
+
+    latest = await prompts.get_owned(owner["id"], first.id)
+    edited = await prompts.update_owned(
+        owner["id"], first.id, expected_version=latest.version, name=first.name,
+        description="",
+        prompts=(
+            PromptListEntryInput(answer=word.answer, concept_id=word.concept_id, aliases=("edge",)),
+            PromptListEntryInput(answer="fine", concept_id=first.prompts[1].concept_id),
+        ),
+    )
+    [again] = [p for p in edited.prompts if p.concept_id == word.concept_id]
+    assert again.moderation_state == "active", "the restore stands through an edit"
+
+
+async def test_a_takedown_outlives_its_deleted_list(env):
+    """#1091 review: the lookup reaches hidden words through list revisions,
+    and reclaiming a deleted list's unpinned revisions a day later let the word
+    be typed into a new list active. A revision holding a takedown is kept."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "Deleter")
+    doomed = await prompts.create_owned(
+        owner["id"], name="Doomed", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(doomed.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+            row.moderated_at = datetime.now(timezone.utc)
+    assert await prompts.delete_owned(owner["id"], doomed.id)
+    await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+
+    fresh = await prompts.create_owned(
+        owner["id"], name="Fresh start", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    assert fresh.prompts[0].moderation_state == "hidden"
+
+
+
+async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
+    """The takedown pins its revision only while the list has an owner whose
+    saves look there; an erased account's retired list is reclaimed as any
+    other, rather than keeping its hidden text for good."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import PromptListRevision
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "Erased")
+    doomed = await prompts.create_owned(
+        owner["id"], name="Ownerless", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(doomed.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+    assert await prompts.delete_owned(owner["id"], doomed.id)
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(PromptList, UUID(doomed.id))).owner_user_id = None
+    await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+    async with factory() as session:
+        left = await session.scalar(
+            select(func.count(PromptListRevision.id)).where(
+                PromptListRevision.prompt_list_id == UUID(doomed.id)
+            )
+        )
+    assert left == 0

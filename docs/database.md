@@ -1756,8 +1756,9 @@ An immutable, language-specific wording.
 A moderator's decision is the concept's, not one wording's: resolving a report sets
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
 concept, an owner's edit that writes a new version (an alias added, an answer respelled)
-carries them to it, and a new version whose answer or alias matches any prompt this list has
-ever held that is hidden — a word typed back in, or another entry respelled into it — is
+carries them to it, and a new version whose answer or alias matches any prompt that is hidden in
+any list its owner has ever held, in the same language (#1091) — a word typed back in, into
+this list or another, or another entry respelled into it — is
 born with them — so a hidden word stays hidden (#1020). A concept belongs to
 one list; copies mint their own. Bundled seed versions are the operator's own editions and
 start `active`.
@@ -1813,7 +1814,9 @@ revision before the deletion to finish and write its game (R-LIST-07): the unpin
 revisions and their items, then the list row itself once no revision is left, then the
 prompt versions and concepts that no revision, list, turn, offer, usage fact or content
 report names any more, aliases cascading with them. A list a game pinned stays as a
-non-discoverable, private tombstone (`deleted_at` set).
+non-discoverable, private tombstone (`deleted_at` set). A revision holding a prompt a moderator hid counts as
+pinned too, while its list has an owner: it is where an owner's saves look for the takedown, so reclaiming it would
+let the word into a new list a day after its list was deleted (#1091).
 
 That tombstone is **permanent, and the sweep no longer selects it**. A pin is a finished
 game's provenance and never lapses, so a list whose every remaining revision is pinned
