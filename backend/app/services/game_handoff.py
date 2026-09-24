@@ -60,6 +60,7 @@ from typing import NamedTuple
 from uuid import UUID
 
 from sqlalchemy import delete, or_, select, update
+from sqlalchemy.exc import DataError, DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.deployment import history_encode_workers
@@ -780,6 +781,27 @@ class ReplayOutcome(StrEnum):
     LOST_CLAIM = "lost_claim"
 
 
+def _refused_content(error: BaseException) -> bool:
+    """Whether a statement failed on a value in the envelope, not on the database.
+
+    SQLSTATE class 22 (data exception) or 23 (integrity), read off the
+    driver's error: the asyncpg dialect wraps a server-side data exception
+    as a bare `DBAPIError`, never as SQLAlchemy's `DataError`, so the type
+    check alone would leave the production dialect on the transient path.
+    """
+    if isinstance(error, (DataError, IntegrityError)):
+        return True
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        code = getattr(current, "pgcode", None) or getattr(current, "sqlstate", None)
+        if isinstance(code, str) and len(code) == 5:
+            return code[:2] in ("22", "23")
+        current = getattr(current, "orig", None) or current.__cause__
+    return False
+
+
 class _Transient(Exception):
     """A failure the next attempt may not see."""
 
@@ -869,6 +891,19 @@ async def replay_claim(
                 )
             except GameHistoryConflictError as error:
                 return await _fail(HandoffFailureCode.CONFLICT, str(error))
+            except ValueError as error:
+                # The writer's own proofs refused the envelope's content
+                # (R-HIST-12). That does not change between attempts:
+                # retrying for two hours only hid a deterministic bug behind
+                # a transient-looking metric (#992).
+                return await _fail(HandoffFailureCode.INVALID, f"history: {error!r}")
+            except DBAPIError as error:
+                if _refused_content(error):
+                    # The database refused a value in the envelope - a string
+                    # past its column, a number out of range. As above: the
+                    # same bytes refuse the same way next time.
+                    return await _fail(HandoffFailureCode.INVALID, f"history: {error!r}")
+                raise _Transient(f"history: {error!r}") from error
             except (asyncio.TimeoutError, Exception) as error:
                 raise _Transient(f"history: {error!r}") from error
             # How long the write took and how late the game landed (#892):

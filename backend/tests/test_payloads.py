@@ -291,3 +291,28 @@ def test_the_reaction_payload_offers_exactly_the_current_set():
     assert set(get_args(literal)) == set(OFFERED_REACTION_EMOJI_CODES)
     assert ReactToDrawingPayload.model_validate({"turnId": "t", "emoji": None}).emoji is None
     assert ReactToDrawingPayload.model_validate({"turnId": "t"}).emoji is None
+
+
+@pytest.mark.parametrize(
+    ("model", "payload"),
+    [
+        (TextPayload, {"text": "hi\x00"}),
+        (GuessPayload, {"text": "pa\x1bnda"}),
+        (CreateRoomPayload, {"name": "Room\x00"}),
+        (CreateRoomPayload, {"customPrompts": "panda\nkoala\x00"}),
+        (CreateRoomPayload, {"promptListSlugs": ["animals\x00"]}),
+        (UpdateRoomSettingsPayload, {"name": "\x7f"}),
+    ],
+)
+def test_control_characters_are_refused_before_any_field_reads_them(model, payload):
+    """PostgreSQL refuses U+0000 in text, and the statement that met it
+    failed with everything batched beside it (#995). The rule is applied to
+    the raw value of every field, so a field that strips or parses its text
+    never meets the character."""
+    with pytest.raises(PayloadError) as error:
+        parse_payload(model, payload)
+    assert error.value.field == next(iter(payload))
+
+
+def test_line_breaks_and_tabs_are_still_ordinary_text():
+    assert parse_payload(CreateRoomPayload, {"customPrompts": "panda\nkoala\r\n\tzebra"}).custom_prompts == "panda\nkoala\r\n\tzebra"

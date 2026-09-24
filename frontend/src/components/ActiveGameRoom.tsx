@@ -31,6 +31,7 @@ import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
+import { isSigningOut } from "../store/authStore";
 import { useToast } from "../lib/toast";
 import {
   DotsIcon,
@@ -138,6 +139,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     // One seat per account per room: another tab took this one over. Say so
     // rather than leaving this tab on a board that has silently stopped.
     function onSuperseded(data: { code?: string }) {
+      // This tab's own sign-out closes its socket the same way (#1007);
+      // `logout` leaves the room itself, and a red "signed out" over a
+      // chosen action is wrong.
+      if (data?.code === "signed_out" && isSigningOut()) return;
       exitingRoomRef.current = true;
       setExitingRoom(true);
       clearSession();

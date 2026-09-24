@@ -402,6 +402,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "Die Neustart-Abstimmung wurde abgebrochen, weil weniger als zwei aktive Spieler übrig sind.",
   restart_cancelled: (p) => `Der Neustart wurde abgebrochen, weil ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "Das Spiel wurde per Spielerabstimmung neu gestartet.",
+  game_ended_too_few_players: () => "Das Spiel ist beendet: weniger als zwei Spieler sind übrig.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} Pkt. – ${counted(count(p.count, 1), {
@@ -584,6 +585,7 @@ export const DE: Catalogue = {
     addressIsConfirmedYouCan: (p: { address: string }) =>
       `${p.address} ist bestätigt. Du kannst dieses Konto jetzt wiederherstellen.`,
     yourPasswordIsSetAnd: "Dein Passwort ist gesetzt und du bist wieder angemeldet.",
+    yourPasswordIsSetSignIn: "Dein Passwort ist gesetzt. Melde dich erneut mit deinem zweiten Faktor an.",
     resetYourPassword: "Passwort zurücksetzen",
     thatLinkNoLongerWorks: "Dieser Link funktioniert nicht mehr",
     chooseANewPassword: "Wähle ein neues Passwort",
@@ -655,6 +657,9 @@ export const DE: Catalogue = {
     email: "E-Mail",
     pleaseWait: "Bitte warten …",
     sendConfirmation: "Bestätigung senden",
+    yourPassword: "Dein Passwort",
+    passwordConfirmsItIsYou: "Dein Passwort bestätigt, dass du es bist: über diese Adresse wird das Konto wiederhergestellt.",
+    enterYourPasswordToConfirm: "Gib dein Passwort ein, um die Änderung zu bestätigen.",
     close: "Schließen",
     notNow: "Nicht jetzt",
   },
@@ -1419,7 +1424,6 @@ export const DE: Catalogue = {
     requestCouldNotBeSent: "Diese Anfrage konnte nicht gesendet werden.",
     nowFriends: (p: { name: string }) => `Du und ${p.name} seid jetzt Freunde.`,
     friendRequestSent: (p: { name: string }) => `Freundschaftsanfrage an ${p.name} gesendet.`,
-    nothingToDoAbout: (p: { name: string }) => `Mit ${p.name} ist gerade nichts zu tun.`,
     rank: (p: { rank: number }) => `Platz ${p.rank}`,
     moderationFor: (p: { name: string }) => `Moderation für ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Moderationsaktionen für ${p.name}`,
@@ -2650,5 +2654,6 @@ export const DE: Catalogue = {
     removedByAdmin: "Ein Administrator hat dich entfernt.",
     accountDeleted: "Dein Konto wurde gelöscht.",
     accountSuspended: "Dein Konto wurde gesperrt.",
+    signedOut: "Du wurdest auf diesem Gerät abgemeldet.",
   },
 };

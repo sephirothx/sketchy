@@ -22,7 +22,8 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+from app.request_text import ControlFreeModel
 from sqlalchemy.orm import defer
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -83,7 +84,7 @@ def _sniff_image(payload: bytes) -> str | None:
     return None
 
 
-class BugReportBody(BaseModel):
+class BugReportBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     area: BugReportArea
@@ -107,7 +108,7 @@ class BugReportBody(BaseModel):
         return cleaned
 
 
-class BugReviewBody(BaseModel):
+class BugReviewBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     status: Literal["resolved", "dismissed"]

@@ -296,5 +296,114 @@ async def test_leaving_the_room_the_session_names_drops_its_binding():
     await sio.handlers["/"]["create_room"]("sid-A", {"nickname": "Ann"})
     await sio.handlers["/"]["leave_room"]("sid-A")
 
-    assert sessions.sessions["sid-A"] == {"user_id": sessions.account_for("sid-A")}
+    assert sessions.sessions["sid-A"] == {"user_id": sessions.account_for("sid-A"), "session_id": None}
     assert await ctx.game_flow.require_current_player("sid-A") is None
+
+
+async def test_a_join_racing_the_last_leave_is_refused_rather_than_seated_in_a_ghost():
+    """The joiner's identity read is a database call, and the host leaves
+    inside it: the room is torn down and its code retired, but the seat used
+    to be added to the dead object and answered `ok`. Every later command
+    from that socket was `not_in_room`, and it never saw a `room_state` (#1000)."""
+    import asyncio
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock
+
+    rm = RoomManager()
+    ctx, sio, sessions = build_stack(rm)
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(side_effect=["AAAAAA"]),
+        release_unpublished=AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=AsyncMock(return_value=False),
+    )
+    handlers = sio.handlers["/"]
+    created = await handlers["create_room"]("sid-host", {"nickname": "Host", "name": "R"})
+    room_id = created["roomId"]
+
+    real_get = sessions.get
+    gate = asyncio.Event()
+    calls = {"n": 0}
+
+    async def slow_get(sid, namespace=None):
+        if sid == "sid-join":
+            calls["n"] += 1
+            # The third read of this socket's session is the identity
+            # resolution (`_existing_player_for_sid`, `_seat_in_room`'s own
+            # read, then `resolve_identity`): the room is resolved, the seat
+            # is not yet taken.
+            if calls["n"] == 3:
+                await gate.wait()
+        return await real_get(sid)
+
+    sio.get_session = AsyncMock(side_effect=slow_get)
+    join = asyncio.create_task(
+        handlers["join_room"]("sid-join", {"roomId": room_id, "nickname": "Late"})
+    )
+    await asyncio.sleep(0.01)
+    await handlers["leave_room"]("sid-host", None)
+    assert rm.get_room(room_id) is None
+    gate.set()
+
+    answer = await join
+
+    assert answer["ok"] is False
+    assert answer["errorCode"] == "room_ended"
+    assert rm.get_room(room_id) is None, "nothing was resurrected"
+    await ctx.timers.close()
+
+
+async def test_a_rebind_racing_the_last_leave_is_refused_too():
+    """The other half of #1000: a disconnected seat being rebound holds the
+    room open for nobody, and releasing the socket's seat elsewhere awaited
+    before the seat was marked live. The host could leave through that
+    await, and the rebind carried on into the dead room."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    codes = iter(["AAAAAA", "BBBBBB"])
+    ctx.room_codes = SimpleNamespace(
+        allocate=AsyncMock(side_effect=lambda *a, **k: next(codes)),
+        release_unpublished=AsyncMock(),
+        retire_ephemeral=AsyncMock(),
+        is_retired=AsyncMock(return_value=False),
+    )
+    handlers = sio.handlers["/"]
+    await sessions.save("sid-pat", {"user_id": "user-pat"})
+    await sessions.save("sid-pat2", {"user_id": "user-pat"})
+    created = await handlers["create_room"]("sid-host", {"nickname": "Host", "name": "X"})
+    x_id = created["roomId"]
+    joined = await handlers["join_room"]("sid-pat", {"roomId": x_id, "nickname": "Pat"})
+    assert joined["ok"], joined
+    # Pat's socket drops: the seat stays, disconnected, inside its grace.
+    await handlers["disconnect"]("sid-pat")
+    # Pat's next socket opens a room of its own, then comes back for X.
+    other = await handlers["create_room"]("sid-pat2", {"nickname": "Pat", "name": "Y"})
+    assert other["ok"], other
+
+    gate = asyncio.Event()
+    armed = {"held": False}
+    real_save = sessions.save
+
+    async def slow_save(sid, session, namespace=None):
+        # Releasing the seat in Y saves this socket's session: the await the
+        # host leaves through.
+        if sid == "sid-pat2" and not armed["held"]:
+            armed["held"] = True
+            await gate.wait()
+        return await real_save(sid, session)
+
+    sio.save_session = AsyncMock(side_effect=slow_save)
+    rebind = asyncio.create_task(
+        handlers["join_room"]("sid-pat2", {"roomId": x_id, "nickname": "Pat"})
+    )
+    await asyncio.sleep(0.01)
+    assert armed["held"], "the rebind is inside the release"
+    await handlers["leave_room"]("sid-host", None)
+    assert room_manager.get_room(x_id) is None
+    gate.set()
+
+    answer = await rebind
+
+    assert answer["ok"] is False and answer["errorCode"] == "room_ended", answer
+    assert room_manager.get_room(x_id) is None
+    await ctx.timers.close()
