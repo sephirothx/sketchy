@@ -4892,21 +4892,25 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # is a new version of another; either way, born with that entry's
         # `active` it undid the takedown in a couple of clicks (#1020 review).
         # A decision covers every version of its concept, so any one says it.
+        # Anchored on the hidden side - rare, and indexed - with the list's
+        # history asked only about those, so a save costs the number of
+        # hidden versions rather than every item of every revision.
         hidden_versions = (
             await session.scalars(
                 select(PromptVersion)
-                .join(
-                    PromptListRevisionItem,
-                    PromptListRevisionItem.prompt_version_id == PromptVersion.id,
-                )
-                .join(
-                    PromptListRevision,
-                    PromptListRevision.id == PromptListRevisionItem.revision_id,
-                )
                 .where(
-                    PromptListRevision.prompt_list_id == prompt_list.id,
                     PromptVersion.moderation_state
                     == PromptContentModerationState.HIDDEN.value,
+                    select(PromptListRevisionItem.revision_id)
+                    .join(
+                        PromptListRevision,
+                        PromptListRevision.id == PromptListRevisionItem.revision_id,
+                    )
+                    .where(
+                        PromptListRevisionItem.prompt_version_id == PromptVersion.id,
+                        PromptListRevision.prompt_list_id == prompt_list.id,
+                    )
+                    .exists(),
                 )
                 .options(
                     selectinload(PromptVersion.version_aliases).selectinload(
