@@ -2374,7 +2374,7 @@ account key is an HMAC of the lowercased username rather than of an address
 
 | Variable | Default | Applies to |
 | --- | --- | --- |
-| `AUTH_LOGIN_LIMIT` | 10 / 5 min | `POST /api/auth/login`, keyed on the **address**; failures only |
+| `AUTH_LOGIN_LIMIT` | 10 / 5 min | `POST /api/auth/login`, keyed on the **address**; failures only. Beside the windows, at most 2 verifications per account and 4 per address are in flight at once — a burst past that is `429` with `Retry-After: 1` before anything is hashed (R-RATE-12, #1001) |
 | `AUTH_LOGIN_ACCOUNT_LIMIT` | 10 / 15 min | The same route keyed on the **account** — the key a distributed attack cannot dodge (R-RATE-12); failures only |
 | `AUTH_LOGIN_GLOBAL_LIMIT` | 500 / 5 min | The same route for the whole deployment; failures only. `0` switches it off — it is the one bucket an attacker can saturate on purpose (N-17) |
 | `AUTH_SECOND_FACTOR_LIMIT` | 20 / 15 min | The `/api/auth/second-factor/*` and `/api/auth/step-up` routes |

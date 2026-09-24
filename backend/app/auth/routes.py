@@ -991,12 +991,25 @@ def create_auth_router(
                 retry_after_ms=verdict.retry_after_seconds * 1000,
                 headers={"Retry-After": str(verdict.retry_after_seconds)},
             )
-        credentials = await user_repo.get_credentials_by_username(body.username)
-        # Hash even when the username does not exist. Skipping it would return
-        # noticeably faster and turn response time into a username oracle,
-        # which is precisely what the uniform error message avoids.
-        password_hash = credentials.password_hash if credentials else DUMMY_HASH
-        matched = await verify_password(password_hash, body.password)
+        # A slot per verification, bounded per account and per address
+        # (#1001): the windows are charged after the hash, so a burst that
+        # passed the peeks together used to be verified in full.
+        async with login_guard.attempt(username=body.username, address=address) as admitted:
+            if not admitted:
+                # The same words as every other refusal here (R-RATE-12).
+                raise Refusal(
+                    429,
+                    ErrorCode.TOO_MANY_ATTEMPTS,
+                    verdict.message,
+                    retry_after_ms=1000,
+                    headers={"Retry-After": "1"},
+                )
+            credentials = await user_repo.get_credentials_by_username(body.username)
+            # Hash even when the username does not exist. Skipping it would
+            # return noticeably faster and turn response time into a username
+            # oracle, which is precisely what the uniform error message avoids.
+            password_hash = credentials.password_hash if credentials else DUMMY_HASH
+            matched = await verify_password(password_hash, body.password)
         if credentials is None or not matched:
             # Charged here rather than before the check, so signing in
             # correctly costs nothing at all and the ceilings can be low
