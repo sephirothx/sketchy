@@ -11,6 +11,7 @@ import { useEmailStateSync } from "./hooks/useEmailStateSync";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
 import { useRoomSessionReconnect } from "./hooks/useRoomSessionReconnect";
 import { useServerNotices } from "./hooks/useServerNotices";
+import { useSignedOutElsewhere } from "./hooks/useSignedOutElsewhere";
 import { LobbyBrowserPage } from "./pages/LobbyBrowserPage";
 import {
   AccountRecoveryPage,
@@ -150,6 +151,7 @@ function App() {
   }, [refreshFriends, myAccountId]);
   useEmailStateSync();
   useServerNotices();
+  useSignedOutElsewhere();
 
   // Who this visitor is, asked once on arrival (naming yourself is what
   // creates an account; this only reads one, and a registered account's

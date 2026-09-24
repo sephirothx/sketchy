@@ -153,6 +153,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   host_only: "Seul l’hôte peut faire cela.",
   players_only: "Seuls les joueurs peuvent faire cela.",
   waiting_room_only: "Ce n’est disponible que dans la salle d’attente.",
+  kicked_from_room: "Tu as été exclu de ce salon et tu ne peux pas y revenir.",
   already_a_player: "Tu es déjà joueur.",
   registered_name_fixed: "Les joueurs inscrits jouent sous leur nom d’utilisateur.",
   name_taken_by_account: "Ce nom appartient à un joueur inscrit.",
@@ -402,6 +403,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "Le vote de redémarrage a été annulé car il reste moins de deux joueurs actifs.",
   restart_cancelled: (p) => `Le redémarrage a été annulé car ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "La partie a été redémarrée par vote des joueurs.",
+  game_ended_too_few_players: () => "La partie est terminée : il reste moins de deux joueurs.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} pts - trouvée ${counted(count(p.count, 1), {
@@ -584,6 +586,7 @@ export const FR: Catalogue = {
     addressIsConfirmedYouCan: (p: { address: string }) =>
       `${p.address} est confirmée. Tu peux maintenant récupérer ce compte.`,
     yourPasswordIsSetAnd: "Ton mot de passe est défini et tu es de nouveau connecté.",
+    yourPasswordIsSetSignIn: "Ton mot de passe est défini. Reconnecte-toi avec ton second facteur.",
     resetYourPassword: "Réinitialise ton mot de passe",
     thatLinkNoLongerWorks: "Ce lien ne fonctionne plus",
     chooseANewPassword: "Choisis un nouveau mot de passe",
@@ -655,6 +658,9 @@ export const FR: Catalogue = {
     email: "E-mail",
     pleaseWait: "Patiente…",
     sendConfirmation: "Envoyer la confirmation",
+    yourPassword: "Ton mot de passe",
+    passwordConfirmsItIsYou: "Ton mot de passe confirme que c’est bien toi : cette adresse sert à récupérer le compte.",
+    enterYourPasswordToConfirm: "Saisis ton mot de passe pour confirmer la modification.",
     close: "Fermer",
     notNow: "Pas maintenant",
   },
@@ -1419,7 +1425,6 @@ export const FR: Catalogue = {
     requestCouldNotBeSent: "Cette demande n’a pas pu être envoyée.",
     nowFriends: (p: { name: string }) => `${p.name} et toi êtes maintenant amis.`,
     friendRequestSent: (p: { name: string }) => `Demande d’ami envoyée à ${p.name}.`,
-    nothingToDoAbout: (p: { name: string }) => `Rien à faire au sujet de ${p.name} pour le moment.`,
     rank: (p: { rank: number }) => `Rang ${p.rank}`,
     moderationFor: (p: { name: string }) => `Modération pour ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Actions de modération pour ${p.name}`,
@@ -1957,6 +1962,7 @@ export const FR: Catalogue = {
     gameEnded: "Cette partie est terminée",
     endedServerUpdate: "Le serveur a été mis à jour et la partie en cours n’a pas pu continuer.",
     endedRoomClosed: "Le salon a fermé pendant que tu étais déconnecté.",
+    removedByVote: "Exclu du salon",
     backToLobby: "Retour au hall",
   },
 
@@ -2652,5 +2658,6 @@ export const FR: Catalogue = {
     removedByAdmin: "Un administrateur t’a retiré.",
     accountDeleted: "Ton compte a été supprimé.",
     accountSuspended: "Ton compte a été suspendu.",
+    signedOut: "Tu as été déconnecté sur cet appareil.",
   },
 };

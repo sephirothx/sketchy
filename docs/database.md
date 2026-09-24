@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`d7e8f9a0b1c2_runtime_metrics_to_prometheus.py` (#965). Both this line and the table
+`b5c6d7e8f9a1_invalid_handoff_failure.py` (#992). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1238,7 +1238,7 @@ batch; nullable, **null on a failed row**) · `byte_size` · `checksum_sha256` �
 resumes only the missing one; `none` is decided at staging when the game had no usage
 to write, which is a fact, not a gap) · `attempts` · `next_attempt_at` · `claimed_at`,
 `claim_token` (a claim is the pair; every later write is fenced by the token) ·
-`failure_code` (`conflict \| exhausted \| unreadable`) · `last_error` · `created_at` ·
+`failure_code` (`conflict \| exhausted \| unreadable \| invalid`) · `last_error` · `created_at` ·
 `failed_at`. `ix_finished_game_envelopes_due` on `(state, next_attempt_at)` is the
 loop's queue scan.
 
@@ -1265,7 +1265,10 @@ idempotent by content (R-HIST-02), so a commit whose acknowledgement was lost is
 tried again. A transient failure hands the row back with backoff — 1 s, 5 s, 30 s,
 2 min, 10 min, 30 min, 60 min, eight attempts in all — and then fails it as `exhausted`;
 a conflict (the database already holds this game or this batch with different content)
-fails on first sight; an envelope this build cannot read fails as `unreadable`. A failure
+fails on first sight; an envelope this build cannot read fails as `unreadable`; one the
+writer refuses — a ledger that does not reconcile (R-HIST-12), a value the database will
+not take — fails as `invalid` on first sight too, since the same bytes refuse the same way
+on every attempt (#992). A failure
 after the history half is written loses only the usage counters and is counted under
 kind `prompt_usage`; the room's recap opens the moment the history is in. A claim
 older than 15 minutes belongs to a process that died and is taken over with a new
@@ -1733,8 +1736,10 @@ An immutable, language-specific wording.
 `uq_prompt_version_concept_language_version`.
 
 Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
-registry, which case-folds, collapses whitespace, and folds canonically decomposable
-accents ([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
+registry, which case-folds, collapses whitespace, folds canonically decomposable
+accents, and reads every apostrophe a keyboard writes as the plain one (#1011; the
+bundled lists are written with the plain one, so no stored key changed)
+([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
 BCP-47 tags are **rejected until their matching semantics are implemented.**
 
 `match_key` is that fold for the row's own language, with the language's

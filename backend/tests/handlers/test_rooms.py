@@ -182,7 +182,8 @@ async def test_only_host_can_update_waiting_room_settings_and_not_during_game():
     sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": host.id})
     room.state = "playing"
     assert "waiting room" in (await update("host-sid", {"rounds": 4}))["error"]
-    assert (await sio.handlers["/"]["send_chat"]("host-sid", {"text": "nope"}))["ok"] is False
+    # Chat is not a setting: it stays open during a game (#1008).
+    assert (await sio.handlers["/"]["send_chat"]("host-sid", {"text": "nope"}))["ok"] is True
 
 async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
     """The lobby autosaves one setting at a time, so a patch has to leave the

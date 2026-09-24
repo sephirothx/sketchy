@@ -460,6 +460,12 @@ class Room:
     prompt_letter_counts: dict[str, int] = field(default_factory=dict, repr=False)
     prompt_letter_total: int = 0
     players: dict[str, Player] = field(default_factory=dict)
+    # Accounts a majority voted out of this room, barred from taking a seat
+    # in it again for as long as it lives (#1010). The seat itself is gone
+    # by then, so without this the invite link - or Quick play, for a public
+    # room - let them straight back in with a fresh seat and a clean score,
+    # and the vote had bought the room a few seconds.
+    kicked_user_ids: set[str] = field(default_factory=set, repr=False)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
     canvas_generation: int = 0

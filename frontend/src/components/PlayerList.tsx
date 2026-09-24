@@ -105,17 +105,15 @@ export function PlayerList({
         notify(refusalText(answer, ui.playerList.requestCouldNotBeSent));
         return;
       }
-      // Two outcomes worth telling apart, and a third that deliberately is
-      // not: already friends, already asked, an earlier refusal, or a block
-      // all answer the same, so the reply never becomes a way to test for
-      // one. Which means the wording must not name any of them - saying "you
-      // have already asked" asserts the one fact it happens not to know.
+      // One outcome worth telling apart - they had already asked, so you
+      // are friends now - and every other answers the same: landed, already
+      // asked, already friends, an earlier refusal, or a block all say
+      // "sent", so the reply never becomes a way to test for one (R-FRIEND-04,
+      // #1002). The wording must not name any of them.
       if (answer.status === "accepted") {
         notify(ui.playerList.nowFriends({ name: nickname }));
-      } else if (answer.status === "created") {
-        notify(ui.playerList.friendRequestSent({ name: nickname }));
       } else {
-        notify(ui.playerList.nothingToDoAbout({ name: nickname }));
+        notify(ui.playerList.friendRequestSent({ name: nickname }));
       }
     } catch {
       notify(ui.playerList.thatRequestCouldNotBeSent);

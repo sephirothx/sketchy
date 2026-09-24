@@ -165,6 +165,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   host_only: "Only the host can do that.",
   players_only: "Only players can do that.",
   waiting_room_only: "That is only available in the waiting room.",
+  kicked_from_room: "You were kicked from this room and cannot come back.",
   already_a_player: "You are already a player.",
   registered_name_fixed: "Registered players play as their username.",
   name_taken_by_account: "That name belongs to a registered player.",
@@ -414,6 +415,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "The restart vote was cancelled because fewer than two active players remain.",
   restart_cancelled: (p) => `The restart was cancelled because ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "The game was restarted by player vote.",
+  game_ended_too_few_players: () => "The game ended: fewer than two players remain.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} pts - found ${counted(count(p.count, 1), {
@@ -592,6 +594,7 @@ export const EN = {
     addressIsConfirmedYouCan:
       (p: { address: string }) => `${p.address} is confirmed. You can now recover this account.`,
     yourPasswordIsSetAnd: "Your password is set and you are signed in again.",
+    yourPasswordIsSetSignIn: "Your password is set. Sign in again with your second factor.",
     resetYourPassword: "Reset your password",
     thatLinkNoLongerWorks: "That link no longer works",
     chooseANewPassword: "Choose a new password",
@@ -665,6 +668,9 @@ export const EN = {
     email: "Email",
     pleaseWait: "Please wait…",
     sendConfirmation: "Send confirmation",
+    yourPassword: "Your password",
+    passwordConfirmsItIsYou: "Your password confirms it is you: this address is how the account is recovered.",
+    enterYourPasswordToConfirm: "Enter your password to confirm the change.",
     close: "Close",
     notNow: "Not now",
   },
@@ -1427,7 +1433,6 @@ export const EN = {
     requestCouldNotBeSent: "That request could not be sent.",
     nowFriends: (p: { name: string }) => `You and ${p.name} are now friends.`,
     friendRequestSent: (p: { name: string }) => `Friend request sent to ${p.name}.`,
-    nothingToDoAbout: (p: { name: string }) => `Nothing to do about ${p.name} right now.`,
     rank: (p: { rank: number }) => `Rank ${p.rank}`,
     moderationFor: (p: { name: string }) => `Moderation for ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Moderation actions for ${p.name}`,
@@ -1959,6 +1964,7 @@ export const EN = {
     gameEnded: "This game ended",
     endedServerUpdate: "The server was updated, and the game in progress couldn’t carry on.",
     endedRoomClosed: "The room closed while you were disconnected.",
+    removedByVote: "Removed from the room",
     backToLobby: "Back to lobby",
   },
 
@@ -2657,5 +2663,6 @@ export const EN = {
     removedByAdmin: "An administrator removed you.",
     accountDeleted: "Your account was deleted.",
     accountSuspended: "Your account was suspended.",
+    signedOut: "You were signed out on this device.",
   },
 };

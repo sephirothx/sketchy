@@ -558,6 +558,7 @@ export type ErrorCode =
   | "host_only"
   | "players_only"
   | "waiting_room_only"
+  | "kicked_from_room"
   | "already_a_player"
   | "registered_name_fixed"
   | "name_taken_by_account"

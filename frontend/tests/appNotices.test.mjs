@@ -147,3 +147,16 @@ test("the last seconds are said again, only while a game is being played", () =>
   // The card, when it is still up, is the louder of the two and the only one.
   assert.deepEqual(drainCue({ ...DRAIN, secondsLeft: 5 }), { card: true, finalCountdown: false });
 });
+
+test("a vote-kick refused on rebind ends the stage with its own reason (#1010)", () => {
+  const store = useServerNoticesStore;
+  store.getState().set({ roomEnded: { code: "ABC123", reason: "room-closed" } });
+  store.getState().markKickedFromRoom("ABC123");
+  assert.deepEqual(store.getState().roomEnded, { code: "ABC123", reason: "kicked" });
+  assert.deepEqual(
+    roomStage({ ...LIVE, code: "ABC123", roomEnded: store.getState().roomEnded }),
+    { kind: "ended", reason: "kicked" },
+  );
+  // Another room is not this one's kick.
+  assert.deepEqual(roomStage({ ...LIVE, code: "ZZZ999", roomEnded: store.getState().roomEnded }), { kind: "live" });
+});

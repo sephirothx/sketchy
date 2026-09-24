@@ -140,7 +140,9 @@ async def test_socket_handshake_uses_the_same_revocation_record(database):
     environ = {"HTTP_COOKIE": f"sketchy_session={issued.token}"}
 
     await socket_connect(context, "first", environ, {"protocol": PROTOCOL_VERSION})
-    sio.save_session.assert_awaited_with("first", {"user_id": user.id})
+    # The session too, so a revocation can find the sockets it opened (#1007).
+    first_saved = sio.save_session.await_args_list[-1].args[1]
+    assert first_saved["user_id"] == user.id and first_saved["session_id"]
     # The account broadcast room is what account-level news (a suspension, a
     # moderator warning) is emitted to, wherever the socket is in the app.
     sio.enter_room.assert_awaited_with("first", f"user:{user.id}")
@@ -149,4 +151,4 @@ async def test_socket_handshake_uses_the_same_revocation_record(database):
         factory, session_id=issued.session.id, user_id=user.id
     )
     await socket_connect(context, "second", environ, {"protocol": PROTOCOL_VERSION})
-    sio.save_session.assert_awaited_with("second", {"user_id": None})
+    sio.save_session.assert_awaited_with("second", {"user_id": None, "session_id": None})
