@@ -1,6 +1,6 @@
 import type { ErrorCode } from "../types.ts";
 import type { RefusalParams } from "./refusals.ts";
-import { PROTOCOL_HEADER, handleProtocolHeader } from "./protocol.ts";
+import { PROTOCOL_HEADER, handleProtocolHeader, upgradeReload } from "./protocol.ts";
 import { noteUpdateStuckFromRest } from "./socket.ts";
 import { reportSuspended, suspensionFromPayload } from "./suspension.ts";
 const DEFAULT_TIMEOUT_MS = 8000;
@@ -152,6 +152,7 @@ function checkProtocol(response: Response): void {
     storage: typeof sessionStorage === "undefined" ? null : sessionStorage,
     reload: () => window.location.reload(),
     onStuck: noteUpdateStuckFromRest,
+    reloadInFlight: upgradeReload,
   });
 }
 

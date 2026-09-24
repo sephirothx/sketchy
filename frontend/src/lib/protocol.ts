@@ -15,6 +15,12 @@ export const PROTOCOL_VERSION = 41;
 /** The response header every REST answer carries the server's version in. */
 export const PROTOCOL_HEADER = "x-sketchy-protocol";
 
+/** This page load's upgrade reload, once asked for - by the socket's notice or
+by a REST response's header, whichever came first. One object for both, so the
+other one arriving while the page unloads is waited out rather than reported
+as stuck (#1056). */
+export const upgradeReload = { pending: false };
+
 /** Where the last upgrade reload is remembered, so it can happen only once. */
 const RELOAD_MARKER_KEY = "sketchy:upgrade-reload";
 

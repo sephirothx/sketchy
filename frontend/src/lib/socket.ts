@@ -6,7 +6,7 @@ import {
   noteHealth,
   takeHealthReport,
 } from "./connectionHealth.ts";
-import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
+import { PROTOCOL_VERSION, handleUpgradeRequired, upgradeReload } from "./protocol.ts";
 import { isUpdateRequired, markUpdateRequired } from "./updateRequired.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
@@ -353,9 +353,6 @@ socket.on("connect_error", (error) => {
 // Registered here rather than in a component because a version skew is not
 // scoped to any screen: the socket can be told to upgrade while the player is
 // in the lobby, mid-game, or on the invite page.
-// This page load's upgrade reload, once asked for (#1056).
-const upgradeReload = { pending: false };
-
 socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
   recordClientError(
     "socket",
