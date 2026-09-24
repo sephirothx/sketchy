@@ -305,3 +305,13 @@ class RoomCapacityService:
         taking a second seat.
         """
         return self._takeovers.check(player_id)
+
+    def refund_takeover(self, player_id: str) -> None:
+        """Give back a takeover that rebound nobody (#1009).
+
+        Charged before the refusals that follow it, so a rebind refused - an
+        account being ended, a room torn down meanwhile - used to cost the
+        seat an attempt, and a phone flapping between networks was locked
+        out of its own seat while the grace ran out.
+        """
+        self._takeovers.refund(player_id)

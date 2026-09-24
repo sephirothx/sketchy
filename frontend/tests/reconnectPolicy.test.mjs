@@ -15,6 +15,7 @@ import {
   attemptIsInFlight,
   shouldReconnectImmediately,
   shutdownHoldMs,
+  stallRecovery,
   transportAlive,
 } from "../src/lib/reconnectPolicy.ts";
 
@@ -176,4 +177,12 @@ test("a flapping interface does not interrupt the handshake it keeps asking for"
   bounce();
   bounce();
   assert.equal(opened, 1, "three `online` events, one attempt");
+});
+
+test("a phase that overran its clock costs a soft rebind while the server is only slow (#1009)", () => {
+  assert.equal(stallRecovery({ transportAlive: true, restartApproved: false }), "soft");
+  assert.equal(stallRecovery({ transportAlive: false, restartApproved: false }), "restart");
+  // A passed restart vote leaves the game with no phase to be late in.
+  assert.equal(stallRecovery({ transportAlive: true, restartApproved: true }), "none");
+  assert.equal(stallRecovery({ transportAlive: false, restartApproved: true }), "none");
 });

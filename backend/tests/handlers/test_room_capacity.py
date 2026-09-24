@@ -11,6 +11,7 @@ import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
+from app.refusals import ErrorCode
 from app.rooms import RoomManager
 from app.services.room_quotas import RoomCapacityService
 from tests.handlers.helpers import SessionStore
@@ -289,3 +290,33 @@ async def test_being_turned_away_from_a_full_room_does_not_spend_the_allowance()
     assert all(answer["errorCode"] == "room_full" for answer in answers), (
         "a refused seat spent the join budget and changed the reason given"
     )
+
+
+async def test_a_takeover_refused_after_it_was_charged_is_refunded():
+    """A rebind refused because the account is being ended bought nothing.
+
+    The charge lands before that refusal, so without the refund a seat whose
+    rebinds are turned away is also told, once the ceiling is reached, that
+    it is changing hands too quickly: the wrong reason, and one that holds
+    for the whole window (#1009).
+    """
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_capacity = RoomCapacityService(environ={"ROOM_TAKEOVER_LIMIT": "1"})
+    created = await open_room(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+
+    await sessions.save("ending-tab", {"user_id": sessions.account_for("host-sid")})
+    with ctx.ending(["ending-tab"]):
+        refused = await sio.handlers["/"]["join_room"](
+            "ending-tab", {"roomId": room.id, "nickname": "Host"}
+        )
+    assert refused["ok"] is False
+    assert refused["errorCode"] != ErrorCode.SEAT_CHANGING_TOO_FAST
+
+    await sessions.save("next-tab", {"user_id": sessions.account_for("host-sid")})
+    rebound = await sio.handlers["/"]["join_room"](
+        "next-tab", {"roomId": room.id, "nickname": "Host"}
+    )
+    assert rebound["ok"] is True, rebound
+    assert room.players[created["playerId"]].sid == "next-tab"

@@ -135,6 +135,24 @@ export function afterFailedRebind(options: {
   return options.keepTransport && options.transportAlive ? "keep" : "restart";
 }
 
+/** What a phase that has overrun its clock should cost (#1009).
+
+The stall check used to force a full transport restart whenever the local
+phase ran 2.5 s past its deadline. A server that is merely late runs every
+room's phase late at once, so every seated client tore its transport down
+every ten seconds, and each restart was a seat takeover the server counts;
+past the takeover ceiling the rebind was refused and a healthy game was
+shown as "Couldn't reconnect". While the transport is alive the server is
+slow, not gone, and a soft rebind reconciles the phase without a teardown;
+during an approved restart the game has no phase to be late in. */
+export function stallRecovery(state: {
+  transportAlive: boolean;
+  restartApproved: boolean;
+}): "none" | "soft" | "restart" {
+  if (state.restartApproved) return "none";
+  return state.transportAlive ? "soft" : "restart";
+}
+
 /** What this client knows about a planned restart, from the notice to the
 replacement connection (#872).
 

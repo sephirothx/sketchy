@@ -872,6 +872,7 @@ async def _seat_in_room(
             user_id=metrics_user_id(player.user_id),
         )
         if ctx.is_ending(sid):
+            ctx.room_capacity.refund_takeover(player.id)
             return ENDED_ACCOUNT_ACKNOWLEDGEMENT
         await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
         if ctx.is_ending(sid):

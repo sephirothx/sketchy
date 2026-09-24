@@ -7,7 +7,7 @@ import {
   shouldResyncOnReturn,
 } from "../lib/heartbeatSchedule";
 import { emitWithAck, restartExpected, socket, transportIsAlive } from "../lib/socket";
-import { RESTART_PATIENCE_MS, afterFailedRebind, escalateHeartbeat } from "../lib/reconnectPolicy";
+import { RESTART_PATIENCE_MS, afterFailedRebind, escalateHeartbeat, stallRecovery } from "../lib/reconnectPolicy";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
@@ -225,7 +225,16 @@ export function useRoomSessionReconnect() {
       const remainingMs = state.phaseSeconds * 1000 - (Date.now() - state.phaseStartedAt);
       if (remainingMs > -STALL_GRACE_MS) return;
       if (Date.now() - lastStallRecoveryAt < 10_000) return;
+      const recovery = stallRecovery({
+        transportAlive: transportIsAlive(),
+        restartApproved: state.restartVote?.status === "approved",
+      });
+      if (recovery === "none") return;
       lastStallRecoveryAt = Date.now();
+      if (recovery === "soft") {
+        queueRebind({ soft: true, keepTransport: true });
+        return;
+      }
       queueRebind({ forceTransportRestart: true });
     }
 
