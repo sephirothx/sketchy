@@ -1026,12 +1026,12 @@ async def test_a_reset_and_a_change_racing_for_one_account_apply_in_turn(
     let_the_reset_commit = asyncio.Event()
     calls: list[str] = []
 
-    async def paused(session, *, user_id, now=None):
+    async def paused(session, *, user_id, now=None, **options):
         calls.append("revoke")
         if len(calls) == 1:
             reset_is_holding_the_row.set()
             await let_the_reset_commit.wait()
-        return await real_revoke(session, user_id=user_id, now=now)
+        return await real_revoke(session, user_id=user_id, now=now, **options)
 
     monkeypatch.setattr(recovery, "revoke_sessions", paused)
     reset = asyncio.create_task(
