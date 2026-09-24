@@ -779,6 +779,41 @@ async def test_a_role_change_signs_the_account_out_everywhere(env):
     assert (await target_http.get("/api/auth/me")).json() is None
 
 
+async def test_a_role_change_leaves_a_suspended_accounts_escape_hatch(env):
+    """R-BAN-04: moderation MUST NOT erase privacy rights. A role change
+    revokes every session, but a staff action is not the owner's, so the
+    session the ban revoked keeps its export (#1082 review)."""
+    from datetime import datetime, timezone
+    from uuid import UUID
+
+    from app.auth.sessions import revoke_all_sessions
+    from app.db.models import UserBan, generate_uuid
+
+    _new_client, factory, *_ = env
+    admin = await an_admin(env)
+    target_http, target = await an_enrolled_player(env, "SuspStaff")
+    banned_at = datetime.now(timezone.utc)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBan(
+                    id=generate_uuid(),
+                    user_id=UUID(target["id"]),
+                    reason="Suspended for the test",
+                    created_at=banned_at,
+                )
+            )
+    await revoke_all_sessions(factory, user_id=target["id"], now=banned_at)
+    assert (await target_http.get("/api/auth/data-exports")).status_code == 200
+
+    response = await admin.patch(
+        f"/api/admin/players/{target['id']}/role",
+        json={"role": UserRole.MODERATOR.value, "reason": "rota, while suspended"},
+    )
+    assert response.status_code == 200, response.text
+    assert (await target_http.get("/api/auth/data-exports")).status_code == 200
+
+
 async def test_a_role_change_that_changes_nothing_leaves_sessions_alone(env):
     """The no-op path returns before the revocation, as it does before the
     notice: re-pressing the button must not sign somebody out."""

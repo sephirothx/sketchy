@@ -716,6 +716,72 @@ async def test_a_suspended_account_can_still_sign_out(env):
     assert visitor.json()["isAnonymous"] is True
 
 
+async def test_a_revocation_after_the_ban_ends_the_escape_hatch(env):
+    """#1082: the ban revokes every session at its own instant and keeps them
+    for export, deletion and sign-out (R-BAN-04). Every later revocation
+    skipped those rows as already revoked, so a copied cookie kept exporting
+    the account's data for the whole suspension, whatever the owner did."""
+    from app.auth.password_reset import reset_password_as_operator
+    from app.auth.sessions import revoke_all_sessions
+
+    new_client, factory, _ = env
+    moderator_http, owner, spare = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, "HatchModerator")
+    target = await register(owner, "HatchTarget")
+    assert (
+        await spare.post("/api/auth/login", json={"username": "HatchTarget", "password": PASSWORD})
+    ).status_code == 200
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    copy = new_client()
+    copy.cookies.set("sketchy_session", owner.cookies.get("sketchy_session"))
+
+    banned = await moderator_http.post(
+        "/api/moderation/bans",
+        json={"userId": target["id"], "reason": "Suspended for the test"},
+    )
+    assert banned.status_code == 201
+    # The ban-time credential still reaches its hatch, from either holder.
+    assert (await copy.get("/api/auth/data-exports")).status_code == 200
+
+    # The owner signs out on that device: the copy of its cookie goes with it.
+    assert (await owner.post("/api/auth/logout")).status_code == 200
+    assert (await copy.get("/api/auth/data-exports")).status_code == 401
+
+    # A staff-side revocation of every session leaves the hatch standing:
+    # moderation must not erase privacy rights.
+    await revoke_all_sessions(factory, user_id=target["id"])
+    assert (await spare.get("/api/auth/data-exports")).status_code == 200
+    # The owner's own reset ends it on every other ban-time session too.
+    await reset_password_as_operator(
+        factory,
+        username="HatchTarget",
+        password="a-fresh-long-password-81",
+        reason="Owner asked after the account was taken",
+    )
+    assert (await spare.get("/api/auth/data-exports")).status_code == 401
+
+
+async def test_a_session_issued_after_the_ban_has_no_escape_hatch(env):
+    from app.auth.sessions import create_session, resolve_session_status
+
+    new_client, factory, _ = env
+    moderator_http, owner = new_client(), new_client()
+    moderator = await register(moderator_http, "LateModerator")
+    target = await register(owner, "LateTarget")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    assert (
+        await moderator_http.post(
+            "/api/moderation/bans",
+            json={"userId": target["id"], "reason": "Suspended for the test"},
+        )
+    ).status_code == 201
+
+    issued = await create_session(factory, user_id=target["id"], device_label="Later")
+    resolution = await resolve_session_status(factory, issued.token)
+    assert resolution.banned_user_id == target["id"]
+    assert resolution.session is None
+
+
 async def test_a_suspension_from_a_report_shows_the_messages_it_was_about(env):
     """A reason with nothing behind it is easy to dismiss. Their own words are
     what make it something they can weigh."""

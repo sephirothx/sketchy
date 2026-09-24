@@ -290,3 +290,44 @@ async def test_account_may_save_at_most_twenty_presets(env):
     assert "at most 20" in overflow.json()["detail"]
     async with factory() as session:
         assert len((await session.scalars(select(RoomPreset.id))).all()) == 20
+
+
+async def test_a_name_that_outgrows_its_key_when_folded_is_refused(env):
+    """#1017 review: 64 characters of `ß` fold to 128 for a 64-wide
+    `name_key` - a 500 on PostgreSQL. Refused as a name too long, on both the
+    create and the rename."""
+    client, _users, prompt_lists, _service, _ = env
+    owner = await register(client)
+    prompt_list = await owned_prompt_list(prompt_lists, owner["id"])
+    refused = await client.post(
+        "/api/room-presets",
+        json={"name": "ß" * 64, "settings": settings(prompt_list.slug)},
+    )
+    assert refused.status_code == 422, refused.text
+
+    created = await client.post(
+        "/api/room-presets",
+        json={"name": "Fine", "settings": settings(prompt_list.slug)},
+    )
+    assert created.status_code == 201
+    preset = created.json()
+    renamed = await client.put(
+        f"/api/room-presets/{preset['id']}",
+        json={
+            "name": "ß" * 64,
+            "settings": settings(prompt_list.slug),
+            "expectedVersion": preset["version"],
+        },
+    )
+    assert renamed.status_code == 422, renamed.text
+    # The same request with a name that fits goes through: the refusal above
+    # was the name's.
+    fits = await client.put(
+        f"/api/room-presets/{preset['id']}",
+        json={
+            "name": "Still fine",
+            "settings": settings(prompt_list.slug),
+            "expectedVersion": preset["version"],
+        },
+    )
+    assert fits.status_code == 200, fits.text

@@ -4,6 +4,7 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -611,3 +612,28 @@ async def test_a_refused_publish_writes_no_ledger_entry(env):
         assert await session.scalar(
             select(func.count(AuditEvent.id)).where(AuditEvent.target_id == list_id)
         ) == 0
+
+
+@pytest.mark.parametrize(
+    "entry",
+    [
+        pytest.param({"prompt": "ﬃ" * 32}, id="answer"),
+        pytest.param({"prompt": "otter", "aliases": ["\ufb03" * 22]}, id="alias"),
+    ],
+)
+async def test_an_answer_that_outgrows_its_key_when_folded_is_refused(env, entry):
+    """#1017: 32 characters in, but case-folding expands `ﬃ` to "ffi" - a
+    66- or 96-character key for a 64-wide column. PostgreSQL
+    refused the write (a 500); SQLite never checks. A validation refusal."""
+    http, users, factory = env
+    account = await users.create_anonymous("Folder")
+    account = await users.claim_account(account.id, "Folder", "test-hash")
+    await sign_in(http, factory, account.id)
+
+    response = await http.post(
+        "/api/prompt-lists/mine", json={"name": "Folded", "prompts": [entry]}
+    )
+
+    assert response.status_code == 422, response.text
+    async with factory() as session:
+        assert await session.scalar(select(func.count(PromptList.id))) == 0

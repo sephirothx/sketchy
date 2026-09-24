@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`b5c6d7e8f9a1_invalid_handoff_failure.py` (#992). Both this line and the table
+`a8b9c0d1e2f4_session_last_device_label.py` (#1016). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -211,7 +211,8 @@ told the room has ended.
 A private, named, versioned copy of typed settings for a future *ordinary* room. Same
 columns and `CHECK` set as a room's typed settings, with no code, plus `name_key` with
 `uq_room_presets_owner_name (owner_user_id, name_key)`. `ON DELETE CASCADE` from
-`users`.
+`users`. `name_key` is the case-folded name, bounded to its 64 characters *after* folding
+(`ß` folds to "ss"), since a longer one was a 500 on PostgreSQL (#1017).
 
 A preset has **no room code, members, host identity, game, scores, timers, chat, or
 canvas.** Applying one fills the create form but does not enable *Keep this room for
@@ -285,7 +286,7 @@ Notable design points:
 One revocable signed-in device.
 
 `id` · `user_id` (CASCADE) · `token_hash` VARCHAR(64) **unique** · `device_label` ·
-`rotated_from_id` (self-FK, unique, `SET NULL`) · `ip_hash` · `last_ip_hash` ·
+`last_device_label` · `rotated_from_id` (self-FK, unique, `SET NULL`) · `ip_hash` · `last_ip_hash` ·
 `anomaly_at` · `anomaly_count` · `stepped_up_at` · `created_at` · `last_used_at` ·
 `expires_at` · `revoked_at`, with `ck_auth_sessions_anomaly_count` and
 `ck_auth_sessions_anomaly_pair` (a session that never looked wrong has no time at
@@ -324,8 +325,11 @@ enrol from.
 `ip_hash` is the address the session was **issued** to and `last_ip_hash` the one it was
 last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limiter uses
 — raw addresses are never stored, so these answer "same network?" without knowing which
-network. `anomaly_at`/`anomaly_count` record a session used from a browser it was not
-issued to, or for staff from a different address; a player's address change is
+network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
+the one it was last seen from, or for staff from a different address. `device_label` is
+the browser the session was issued to; `last_device_label` the one it was last used from
+(NULL until the session is first seen from another browser), and the comparison is against it, so a label
+that changed for good is one anomaly rather than one per request (#1016); a player's address change is
 deliberately *not* an anomaly, because a phone crossing between mobile data and wi-fi
 does it several times an hour. An anomaly clears `stepped_up_at`, which is otherwise the
 last time this device proved its second factor (R-AUTH-21) — held here rather than in
@@ -1100,8 +1104,10 @@ prompt in play, chat text, or a query string.
 **Screenshots** follow `turn_drawings` rather than inventing storage:
 `screenshot_payload` with `screenshot_byte_size`, `screenshot_checksum_sha256`,
 `screenshot_content_type`, dimensions, and a `screenshot_status` of
-`none | ready | erased | expired`. The server sniffs the magic bytes, re-derives the size
-and digest, and rejects anything that is not a real PNG or WebP under 2 MB.
+`none | ready | erased | expired`. The server sniffs the magic bytes, re-derives the size,
+digest and dimensions (from the picture's header, not the sender's claim, and only up to
+16384 a side — a claimed `10**12` once overflowed the column and lost the report on
+PostgreSQL, #1017), and rejects anything that is not a real PNG or WebP under 2 MB.
 `ck_bug_reports_screenshot_ready_identity` requires a `ready` row to hold the bytes and
 their identity; `ck_bug_reports_screenshot_erased` and
 `ck_bug_reports_screenshot_expired` make both erasures **structural** — neither a decided
@@ -1139,7 +1145,13 @@ seat immediately. Correct-password login, authenticated HTTP requests, and Socke
 handshakes all reject an active suspension. A token revoked at ban time stays
 recognizable until expiry, so its next request cannot be mistaken for a new cookieless
 guest. **Data export, account deletion, and logout remain available** through that
-ban-time credential, so moderation cannot erase privacy rights. Expired suspensions stop
+ban-time credential, so moderation cannot erase privacy rights. "Ban-time" is exact:
+a session the ban itself revoked (`revoked_at` equal to the ban's `created_at`) and
+issued before it. The owner's own later revocations — signing out on that device, a
+password reset by mail or by an operator — restamp `revoked_at`, which ends that
+session's hatch; before, they skipped the ban-revoked rows, and a copied cookie kept
+exporting for the whole suspension (#1082). A staff action that revokes sessions (a role
+change) leaves the hatch alone. Expired suspensions stop
 applying automatically; revocation preserves the historic record and its reason.
 
 `source_report_id` is what lets the suspension notice show the reported player their own
@@ -1740,6 +1752,15 @@ An immutable, language-specific wording.
 `moderation_state` (`active \| under_review \| hidden`) · `moderated_by_user_id` ·
 `moderated_at` · `created_at`, with
 `uq_prompt_version_concept_language_version`.
+
+A moderator's decision is the concept's, not one wording's: resolving a report sets
+`moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
+concept, an owner's edit that writes a new version (an alias added, an answer respelled)
+carries them to it, and a new version whose answer or alias matches any prompt this list has
+ever held that is hidden — a word typed back in, or another entry respelled into it — is
+born with them — so a hidden word stays hidden (#1020). A concept belongs to
+one list; copies mint their own. Bundled seed versions are the operator's own editions and
+start `active`.
 
 Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
 registry, which case-folds, collapses whitespace, folds canonically decomposable

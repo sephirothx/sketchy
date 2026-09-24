@@ -229,3 +229,67 @@ async def test_a_flush_takes_at_most_its_batch_and_the_overflow_is_still_counted
         assert raw == 50
     finally:
         await engine.dispose()
+
+
+async def test_the_stored_count_does_not_scan_the_table_on_postgresql():
+    """#1076: the ops page asked for an exact `count(*)` of a thirty-day
+    table on every load. PostgreSQL answers from the planner's estimate
+    instead - exact after an ANALYZE - and SQLite still counts."""
+    from sqlalchemy import text
+
+    from app.services.runtime_metrics import stored_event_count
+
+    factory, engine = await create_test_db()
+    try:
+        recorder = RuntimeMetrics(max_buffered=10_000)
+        _record(recorder, 120)
+        assert await flush_events(factory, recorder=recorder) == 120
+        postgresql = engine.dialect.name == "postgresql"
+        if postgresql:
+            # As the table's owner when the suite runs as the application
+            # role, which may not ANALYZE it (PostgreSQL skips with a warning
+            # and the estimate stays at "never analyzed").
+            import os
+
+            from tests.dbfixtures import create_test_engine
+
+            owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+            analyzer = create_test_engine(owner_url) if owner_url else engine
+            try:
+                async with analyzer.connect() as connection:
+                    await connection.execute(text("ANALYZE runtime_events"))
+            finally:
+                if analyzer is not engine:
+                    await analyzer.dispose()
+        statements = _capture(engine)
+
+        assert await stored_event_count(factory) == 120
+        counted = [s for s in statements if "count(" in s.lower() and "runtime_events" in s]
+        assert (counted == []) if postgresql else (len(counted) == 1)
+    finally:
+        await engine.dispose()
+
+
+async def test_the_outcome_breakdown_is_read_at_most_once_a_minute():
+    """#1076 review: a grouped count over every game ever finished ran on
+    each ten-second poll of the ops page."""
+    from app.api.operations import GameOutcomeCounts
+
+    factory, engine = await create_test_db()
+    try:
+        now = [1000.0]
+        counts = GameOutcomeCounts(factory, clock=lambda: now[0])
+        statements = _capture(engine)
+        first = await counts.read()
+        await counts.read()
+        now[0] += 30
+        await counts.read()
+        grouped = [s for s in statements if "game_records" in s and "GROUP BY" in s]
+        assert len(grouped) == 1
+        assert first == {}
+        now[0] += 31
+        await counts.read()
+        grouped = [s for s in statements if "game_records" in s and "GROUP BY" in s]
+        assert len(grouped) == 2
+    finally:
+        await engine.dispose()

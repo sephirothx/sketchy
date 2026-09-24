@@ -50,6 +50,7 @@ from app.auth.sessions import (
     STAFF_LIFETIME,
     STEP_UP_WINDOW,
     create_session,
+    record_step_up,
     lifetime_for,
     resolve_session,
     list_active_sessions,
@@ -449,6 +450,52 @@ async def test_a_session_used_from_another_browser_is_flagged(env):
             )
         ).all()
     assert [event.details["reason"] for event in events] == ["device"]
+
+
+async def test_a_browser_that_moved_is_one_anomaly_not_one_per_request(env):
+    """#1016: compared against the browser last seen, a label that changed
+    for good is recorded once. Compared against the issuing label, it was an
+    audit row and a session write on every request. Switching back is a
+    change again, and counted as one."""
+    _, factory, repo = env
+    user = await repo.create_anonymous("Moved")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
+
+    for _ in range(25):
+        resolved = await resolve_session(
+            factory, issued.token, device_label="Chrome on Android"
+        )
+        assert resolved is not None
+    assert resolved.anomaly_count == 1
+    assert resolved.device_label == "Chrome on Windows", "still what it was issued to"
+
+    back = await resolve_session(factory, issued.token, device_label="Chrome on Windows")
+    assert back is not None and back.anomaly_count == 2
+
+    async with factory() as session:
+        events = (
+            await session.scalars(
+                select(AuditEvent).where(AuditEvent.event_type == "session.anomaly")
+            )
+        ).all()
+    assert len(events) == 2
+
+
+async def test_a_step_up_made_after_the_anomaly_survives(env):
+    """#1016: the anomaly clears the step-up once; proving again on the new
+    browser holds, where it used to be cleared on the very next request."""
+    _, factory, repo = env
+    user = await repo.create_anonymous("Emulated")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on macOS")
+    moved = await resolve_session(factory, issued.token, device_label="Chrome on iOS")
+    assert moved is not None and moved.stepped_up_at is None
+
+    assert await record_step_up(factory, session_id=issued.session.id, user_id=user.id)
+    for _ in range(3):
+        again = await resolve_session(factory, issued.token, device_label="Chrome on iOS")
+        assert again is not None
+        assert again.is_stepped_up()
+    assert again.anomaly_count == 1
 
 
 async def test_a_moved_session_has_to_prove_itself_again(env):

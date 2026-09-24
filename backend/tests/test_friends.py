@@ -743,25 +743,26 @@ async def test_the_hourly_ceiling_lives_with_the_service_not_a_router():
         await engine.dispose()
 
 
-async def test_a_request_that_wrote_nothing_is_given_back():
-    """R-RATE-05's rule, and now it applies to both entry points at once."""
+async def test_every_request_is_spent_whatever_became_of_it():
+    """#1062: refunding an attempt that wrote nothing made the bucket say
+    whether a request landed (R-FRIEND-04). A silent outcome - nobody there,
+    a block, already asked - costs one like a request that landed; only the
+    caller's own ceiling refusals are given back (below)."""
     factory, engine = await create_test_db()
     try:
-        limiter = CountingLimiter(2)
+        limiter = CountingLimiter(10)
         service = FriendService(factory, request_limiter=limiter)
         ada = await make_account(factory, "Ada")
         guest = await make_account(factory, "Guesty", guest=True)
         bob = await make_account(factory, "Bob")
 
-        # A request that goes nowhere, several times over.
-        for _ in range(5):
+        for _ in range(3):
             assert await service.request(ada, guest) == FriendshipOutcome.IGNORED
-        assert limiter.spent[str(ada)] == 0
+        assert limiter.spent[str(ada)] == 3
 
-        # Asking the same person twice spends one, not two.
         await service.request(ada, bob)
         await service.request(ada, bob)
-        assert limiter.spent[str(ada)] == 1
+        assert limiter.spent[str(ada)] == 5
     finally:
         await engine.dispose()
 
@@ -957,8 +958,11 @@ async def test_a_request_to_somebody_whose_list_is_full_says_so_without_numbers(
         await engine.dispose()
 
 
-async def test_a_crowded_inbox_is_refused_without_describing_it():
-    """Naming the recipient's inbox would disclose a third party's state."""
+async def test_a_crowded_inbox_is_answered_like_a_request_that_went_nowhere():
+    """Naming the recipient's inbox would disclose a third party's state -
+    and so did refusing at all: the check runs after the block and the
+    earlier refusal, so a 409 meant "a real account that has not blocked
+    you" (#1062 review). It is dropped silently, as those are."""
     factory, engine = await create_test_db()
     try:
         service = FriendService(factory)
@@ -992,8 +996,8 @@ async def test_a_crowded_inbox_is_refused_without_describing_it():
                         )
                     )
 
-        with pytest.raises(FriendshipRefused, match="could not be sent"):
-            await service.request(ada, popular)
+        assert await service.request(ada, popular) == FriendshipOutcome.IGNORED
+        assert await row_for(factory, ada, popular) is None
     finally:
         await engine.dispose()
 
@@ -1009,5 +1013,49 @@ async def test_asking_somebody_you_are_already_friends_with_changes_nothing():
 
         assert await service.request(ada, bob) == FriendshipOutcome.UNCHANGED
         assert await service.request(bob, ada) == FriendshipOutcome.UNCHANGED
+    finally:
+        await engine.dispose()
+
+
+async def test_asking_back_after_declining_meets_a_crowded_inbox_silently():
+    """The declined-row rewrite answers to the same ceilings as a new row, and
+    a full inbox there is dropped as silently too (#1062 review)."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        popular = await make_account(factory, "Popular")
+        await service.request(popular, ada)
+        assert await service.remove(ada, popular) == FriendshipOutcome.IGNORED
+        async with factory() as session:
+            async with session.begin():
+                askers = [generate_uuid() for _ in range(MAX_PENDING_RECEIVED)]
+                session.add_all(
+                    [
+                        User(
+                            id=other,
+                            display_name=f"Queue{index}",
+                            username=f"queue{index}",
+                            password_hash="hash",
+                            state=AccountState.REGISTERED.value,
+                        )
+                        for index, other in enumerate(askers)
+                    ]
+                )
+                await session.flush()
+                for other in askers:
+                    low, high = friendship_key(popular, other)
+                    session.add(
+                        Friendship(
+                            user_low_id=low,
+                            user_high_id=high,
+                            requested_by_id=other,
+                            status=FriendshipState.PENDING.value,
+                        )
+                    )
+
+        assert await service.request(ada, popular) == FriendshipOutcome.IGNORED
+        row = await row_for(factory, ada, popular)
+        assert row.status == FriendshipState.DECLINED.value, "the refusal is untouched"
     finally:
         await engine.dispose()

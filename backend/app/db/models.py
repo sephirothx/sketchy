@@ -2077,9 +2077,14 @@ class AuthSession(Base):
     idle_expires_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
     last_ip_hash: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    # The browser this session was last used from, when that is not the one
+    # it was issued to (`device_label`). The anomaly check compares against
+    # it, so a browser whose label changed is one anomaly rather than one per
+    # request (#1016). NULL means "still the one it was issued to".
+    last_device_label: Mapped[str | None] = mapped_column(String(64), nullable=True)
     # When this session was last used from a browser or - for staff - a
-    # network that does not match how it was issued, and how often that has
-    # happened. Shown in the device list so somebody can recognize a session
+    # network other than the one it was last seen from, and how often that
+    # has happened. Shown in the device list so somebody can recognize a session
     # that is not theirs (R-AUTH-22).
     anomaly_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     anomaly_count: Mapped[int] = mapped_column(

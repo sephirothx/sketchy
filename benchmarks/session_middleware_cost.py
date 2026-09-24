@@ -81,11 +81,27 @@ def fresh(path: str) -> str:
     return path
 
 
+# The browser every request comes from, and the one the session is issued
+# to. They have to agree: a session used from a browser other than the one it
+# was last seen from is an anomaly (R-AUTH-22), and before #1016 that meant
+# an audit row and a session write on *every* request - which is what this
+# table measured while the session said "Benchmark" and the requests said
+# python-httpx.
+USER_AGENT = (
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/128.0.0.0 Safari/537.36"
+)
+
+
 async def signed_in_database(path: str):
     """A SQLite file with one account and one live session; its cookie."""
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
-    from app.auth.sessions import cookie_name, create_session
+    from app.auth.sessions import (
+        cookie_name,
+        create_session,
+        device_label_from_user_agent,
+    )
     from app.db.models import Base
     from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
@@ -94,7 +110,11 @@ async def signed_in_database(path: str):
         await connection.run_sync(Base.metadata.create_all)
     factory = async_sessionmaker(engine, expire_on_commit=False)
     account = await SqlAlchemyUserRepository(factory).create_anonymous("Bench")
-    issued = await create_session(factory, user_id=account.id, device_label="Benchmark")
+    issued = await create_session(
+        factory,
+        user_id=account.id,
+        device_label=device_label_from_user_agent(USER_AGENT),
+    )
     return engine, factory, {cookie_name(): issued.token}
 
 
@@ -103,7 +123,10 @@ async def cost(app: FastAPI, path: str, requests: int, cookies) -> tuple[float, 
     whole process - the difference being aiosqlite's worker thread, where the
     session read runs."""
     async with AsyncClient(
-        transport=ASGITransport(app=app), base_url="http://bench", cookies=cookies
+        transport=ASGITransport(app=app),
+        base_url="http://bench",
+        cookies=cookies,
+        headers={"user-agent": USER_AGENT},
     ) as http:
         for _ in range(50):
             await http.get(path)

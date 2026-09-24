@@ -2,6 +2,7 @@ import { create } from "zustand";
 
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules.ts";
 import { applyReactionEvent } from "../lib/reactions.ts";
+import { isTurnAlreadyShown } from "../lib/turnResults.ts";
 import type {
   ChatMessage,
   ColorblindSafeSuggestion,
@@ -160,6 +161,10 @@ interface GameStore {
     turnId?: string;
   }) => void;
   endTurn: (payload: TurnEndedPayload) => void;
+  /** `turn_ended` as it arrives: the results applied, and `line` (the "The
+   * prompt was …" message) added only the first time this turn is shown -
+   * a rebind during the results re-sends it (#1018). */
+  applyTurnEnded: (payload: TurnEndedPayload, line: () => ChatMessage) => void;
   endGame: (payload: GameEndedPayload) => void;
   /** The recap for a socket that arrived after the game ended (#871). */
   applyLastGame: (payload: LastGamePayload) => void;
@@ -218,7 +223,7 @@ const initialGameFields = {
   gameHighlights: [] as GameHighlight[],
 };
 
-export const useGameStore = create<GameStore>((set) => ({
+export const useGameStore = create<GameStore>((set, get) => ({
   playerId: null,
   isExitingRoom: false,
   roomId: null,
@@ -421,6 +426,11 @@ export const useGameStore = create<GameStore>((set) => ({
         hintSpend: hintSpend ?? s.hintSpend,
       };
     }),
+  applyTurnEnded: (payload, line) => {
+    const repeated = isTurnAlreadyShown(get(), payload);
+    get().endTurn(payload);
+    if (!repeated) get().addMessage(line());
+  },
   endTurn: (payload) =>
     set((s) => ({
       phase: "turn_results",

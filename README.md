@@ -1502,6 +1502,7 @@ your players share one address:
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 per hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
+| `FRIEND_REQUEST_LIMIT` | 20 per hour | Friend requests, keyed by account. Every attempt spends one whatever became of it, so the limit cannot say whether a request landed (#1062) |
 
 In-room commands answer to their own per-caller budgets, which are **not** environment
 variables: they follow the client's cadence rather than the size of the host, and they
