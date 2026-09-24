@@ -402,6 +402,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "A votação de reinício foi cancelada porque restam menos de dois jogadores ativos.",
   restart_cancelled: (p) => `O reinício foi cancelado porque ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "A partida foi reiniciada por votação dos jogadores.",
+  game_ended_too_few_players: () => "O jogo terminou: restam menos de dois jogadores.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} pts - encontrada ${counted(count(p.count, 1), {
@@ -584,6 +585,7 @@ export const PT: Catalogue = {
     addressIsConfirmedYouCan: (p: { address: string }) =>
       `${p.address} está confirmado. Já podes recuperar esta conta.`,
     yourPasswordIsSetAnd: "A tua palavra-passe está definida e voltaste a iniciar sessão.",
+    yourPasswordIsSetSignIn: "A tua palavra-passe está definida. Inicia sessão novamente com o teu segundo fator.",
     resetYourPassword: "Repõe a tua palavra-passe",
     thatLinkNoLongerWorks: "Essa ligação já não funciona",
     chooseANewPassword: "Escolhe uma palavra-passe nova",
@@ -655,6 +657,9 @@ export const PT: Catalogue = {
     email: "E-mail",
     pleaseWait: "Aguarda…",
     sendConfirmation: "Enviar confirmação",
+    yourPassword: "A tua palavra-passe",
+    passwordConfirmsItIsYou: "A tua palavra-passe confirma que és tu: este endereço é a forma de recuperar a conta.",
+    enterYourPasswordToConfirm: "Introduz a tua palavra-passe para confirmar a alteração.",
     close: "Fechar",
     notNow: "Agora não",
   },
@@ -1419,7 +1424,6 @@ export const PT: Catalogue = {
     requestCouldNotBeSent: "Não foi possível enviar esse pedido.",
     nowFriends: (p: { name: string }) => `Tu e ${p.name} são agora amigos.`,
     friendRequestSent: (p: { name: string }) => `Pedido de amizade enviado a ${p.name}.`,
-    nothingToDoAbout: (p: { name: string }) => `Não há nada a fazer com ${p.name} neste momento.`,
     rank: (p: { rank: number }) => `Lugar ${p.rank}`,
     moderationFor: (p: { name: string }) => `Moderação para ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Ações de moderação para ${p.name}`,

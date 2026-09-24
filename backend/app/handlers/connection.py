@@ -72,6 +72,10 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     # it arrived rather than from the first thing it happened to say (#677).
     ctx.activity.note(sid)
     accepted = False
+    # Told the server is full, and connected only until that notice has
+    # landed (#998): counted against the ceiling until then, since it is a
+    # socket the server is holding, and released by its own disconnect.
+    turned_away = False
     # Anything that leaves early without saying otherwise was refused: a
     # suspension raises out, and so would any failure in the lookups below.
     outcome = "refused"
@@ -91,7 +95,11 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
                 {"reason": "Sketchy is full right now. Try again in a few minutes."},
                 to=sid,
             )
-            await ctx.sio.disconnect(sid)
+            # Not awaited here: the CONNECT this handshake ends with has to
+            # reach the client before the close does, or the notice is
+            # buffered against a namespace that never connected and lost.
+            ctx.close_after_handshake(sid)
+            turned_away = True
             return
         user_id = None
         auth_session = None
@@ -212,7 +220,7 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             transport = _opened_on(environ) or _transport_of(ctx, sid)
             telemetry.note_handshake_transport(transport)
             telemetry.note_socket_opened(sid, transport)
-        if not accepted:
+        if not accepted and not turned_away:
             ctx.room_capacity.note_socket_closed(sid)
             ctx.presence.note_socket_closed(sid)
             # The stamp written on the way in, released on the same terms as
@@ -242,6 +250,7 @@ async def disconnect(ctx: HandlerContext, sid, reason: str | None = None):
         # Its friends are read again when it next asks, not kept for good.
         ctx.friend_presence.forget(went_offline_user_id)
     ctx.clear_command_budget(sid)
+    ctx.forget_turned_away(sid)
     # The activity stamp and any open AFK check belong to this connection and
     # nothing else: a seat that reconnects holds a new sid and starts a fresh
     # clock, which is right, because reconnecting is something a person did.

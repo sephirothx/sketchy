@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 import {
   MAX_EMAIL_LENGTH,
   emailLooksUsable,
@@ -30,7 +31,10 @@ export function AddEmailDialog({
   const state = useEmailStateStore((store) => store.state);
   const refresh = useEmailStateStore((store) => store.refresh);
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
+  // A staff account is asked for its second factor as well (R-AUTH-26).
+  const { guard, dialog: stepUpDialog } = useStepUp();
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -50,11 +54,17 @@ export function AddEmailDialog({
       setError(ui.addEmailDialog.thatDoesNotLookLikeEmail);
       return;
     }
+    if (!password) {
+      setError(ui.addEmailDialog.enterYourPasswordToConfirm);
+      return;
+    }
     setBusy(true);
     setError(null);
     try {
-      const { pendingAddress } = await setEmailAddress(email.trim());
-      setSentTo(pendingAddress);
+      const result = await guard(() => setEmailAddress(email.trim(), password));
+      if (result === STEP_UP_ABANDONED) return;
+      setSentTo(result.pendingAddress);
+      setPassword("");
       void refresh();
     } catch (submitError) {
       setError(
@@ -129,6 +139,19 @@ export function AddEmailDialog({
                 spellCheck={false}
                 required
               />
+              <label htmlFor={`${titleId}-password`}>{ui.addEmailDialog.yourPassword}</label>
+              <input
+                id={`${titleId}-password`}
+                type="password"
+                value={password}
+                onChange={(event) => {
+                  setPassword(event.target.value);
+                  setError(null);
+                }}
+                autoComplete="current-password"
+                required
+              />
+              <p className="modal-hint">{ui.addEmailDialog.passwordConfirmsItIsYou}</p>
               {error && (
                 <p className="auth-error" role="alert">
                   {error}
@@ -145,6 +168,7 @@ export function AddEmailDialog({
           {sentTo ? ui.addEmailDialog.close : ui.addEmailDialog.notNow}
         </button>
       </div>
+      {stepUpDialog}
     </div>
   );
 }
