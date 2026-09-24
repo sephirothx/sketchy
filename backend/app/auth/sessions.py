@@ -428,6 +428,8 @@ async def resolve_session_status(
                 record.anomaly_at = checked_at
                 record.anomaly_count = (record.anomaly_count or 0) + 1
                 record.last_ip_hash = ip_hash or record.last_ip_hash
+                if device_label:
+                    record.last_device_label = device_label[:64]
                 record.last_used_at = checked_at
                 record.idle_expires_at = _idle_deadline(record, checked_at)
                 # A step-up is an assertion about the browser holding the
@@ -536,11 +538,13 @@ def _anomaly_reason(
     staff, whose sessions last a week rather than a year and whose credentials
     are worth the false positives (#468).
     """
-    if (
-        device_label
-        and record.device_label
-        and device_label[:64] != record.device_label
-    ):
+    # Against the browser last seen, not the one the session was issued to:
+    # a label that changed for good is one anomaly, recorded once, rather
+    # than one per request - an audit row each time, and for staff a step-up
+    # cleared before it could ever be used (#1016). Switching back and forth
+    # still counts each switch.
+    seen_from = record.last_device_label or record.device_label
+    if device_label and seen_from and device_label[:64] != seen_from:
         return "device"
     # Staff sessions are the short ones, and the only ones for which an
     # address change is worth the false positives. Same reading of the row
