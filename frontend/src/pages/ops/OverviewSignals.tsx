@@ -313,7 +313,7 @@ export function DatabaseCard({ live, reasons }: { live: LiveSnapshot; reasons: A
         <Cell
           label="History writes lost"
           value={String(lost.lastHour)}
-          note={`last hour · ${lost.total} since start (${lost.byReason.timeout} timed out, ${lost.byReason.error} failed, ${lost.byReason.conflict + lost.byReason.exhausted + lost.byReason.unreadable} given up in replay)`}
+          note={`last hour · ${lost.total} since start (${lost.byReason.timeout} timed out, ${lost.byReason.error} failed, ${lost.byReason.conflict + lost.byReason.exhausted + lost.byReason.unreadable + lost.byReason.invalid} given up in replay)`}
           warning={flagged(reasons, "history-lost")}
         />
         <Cell
