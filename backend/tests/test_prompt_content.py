@@ -240,3 +240,27 @@ async def test_prompt_concepts_do_not_merge_by_equal_text_and_links_are_explicit
                 await session.commit()
     finally:
         await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    "written",
+    [
+        "feu d\u2019artifice",  # U+2019, what iOS Smart Punctuation writes
+        "feu d\u02bcartifice",  # U+02BC modifier letter apostrophe
+        "feu d\u2018artifice",  # U+2018, a smart-quote engine at a word start
+        "feu d\u00b4artifice",  # U+00B4 spacing acute accent
+        "feu d`artifice",  # backtick, on the apostrophe key of some layouts
+    ],
+)
+def test_every_apostrophe_a_keyboard_writes_matches_the_bundled_answer(written):
+    """`feu d'artifice` is bundled with a plain apostrophe; an iPhone with
+    Smart Punctuation on (the default) types U+2019, and until #1011 the
+    guess never matched and was called "very close" for the rest of the
+    turn. Folded on both sides, so a list typed with typographic quotes
+    meets a plain-keyboard guess too."""
+    plain = prompt_match_variants("feu d'artifice", "fr")
+    assert prompt_match_variants(written, "fr") == plain
+    assert prompt_match_key(written, "fr") == prompt_match_key("feu d'artifice", "fr")
+    assert prompt_match_variants("olio d\u2019oliva", "it") == prompt_match_variants(
+        "olio d'oliva", "it"
+    )
