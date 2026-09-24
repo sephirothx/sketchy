@@ -102,6 +102,10 @@ async def vote_player(ctx: HandlerContext, sid, data):
             target_sid = target.sid
             ctx.timers.cancel_disconnect_timer(target.id)
             ctx.room_manager.remove_player(room, target.id)
+            if target.user_id:
+                # For the room's lifetime (#1010): the seat is gone, and the
+                # invite link would otherwise seat them again at once.
+                room.kicked_user_ids.add(target.user_id)
             if target_sid:
                 await ctx.sio.emit("kicked", {"code": "kicked_by_vote", "reason": "You were kicked from the room by vote."}, to=target_sid)
                 await ctx.sio.leave_room(target_sid, room.id)
@@ -109,6 +113,12 @@ async def vote_player(ctx: HandlerContext, sid, data):
                 room, Announcement.KICKED_BY_VOTE, {"nickname": target.nickname}
             )
             if room.game and room.state == "playing":
+                # The roster without this seat goes first, as an eviction's
+                # does (#883, #1010): kicking the drawer starts the next turn,
+                # and its `turn_starting` must not reach a client whose player
+                # list still holds the player it just lost.
+                await ctx.game_flow._emit_room_state(room)
+                await ctx.game_flow._flush_room_state(room)
                 await ctx.game_flow._remove_player_from_game(room, target.id)
             await ctx.game_flow._emit_room_state(room)
             return {"ok": True, "action": "kick", "executed": True}

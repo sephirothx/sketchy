@@ -153,6 +153,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   host_only: "Eso solo lo puede hacer el anfitrión.",
   players_only: "Eso solo lo pueden hacer los jugadores.",
   waiting_room_only: "Eso solo está disponible en la sala de espera.",
+  kicked_from_room: "Te han expulsado de esta sala y no puedes volver.",
   already_a_player: "Ya eres jugador.",
   registered_name_fixed: "Los jugadores registrados juegan con su nombre de usuario.",
   name_taken_by_account: "Ese nombre pertenece a un jugador registrado.",
@@ -1958,6 +1959,7 @@ export const ES: Catalogue = {
     gameEnded: "Esta partida ha terminado",
     endedServerUpdate: "El servidor se actualizó y la partida en curso no pudo continuar.",
     endedRoomClosed: "La sala se cerró mientras estabas desconectado.",
+    removedByVote: "Fuera de la sala",
     backToLobby: "Volver al vestíbulo",
   },
 

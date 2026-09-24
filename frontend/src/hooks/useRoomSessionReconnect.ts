@@ -121,6 +121,15 @@ export function useRoomSessionReconnect() {
         setRoomBindingStatus("ready");
         return;
       }
+      // Voted out while this tab was away (#1010): the seat is gone and the
+      // room will not have this player back while it lives, so asking again
+      // on every reconnect finds the same answer. Said on the stage, with
+      // the lobby offered, like a room that ended.
+      if (refused === "kicked_from_room") {
+        useServerNoticesStore.getState().markKickedFromRoom(code);
+        setRoomBindingStatus("ready");
+        return;
+      }
       throw new Error(refusalText(response, ui.useRoomSessionReconnect.joinRoomFailed));
     }
 

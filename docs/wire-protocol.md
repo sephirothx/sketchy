@@ -436,7 +436,7 @@ moderation - are the rest of the same enum, and are listed at
 | Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `max_players_below_seated`, `empty_message` |
 | Rate and capacity | `too_fast`, `seat_changing_too_fast`, `joining_too_fast`, `room_quota`, `room_full`, `spectators_full`, `player_slots_full` |
 | Server and account state | `server_draining`, `server_paused`, `server_busy`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
-| Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
+| Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `kicked_from_room`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
 | Games and turns | `not_in_game`, `game_in_progress`, `game_starting`, `need_two_players`, `room_not_startable`, `prompt_not_ready`, `prompt_unavailable`, `hints_disabled`, `hint_spend_limit`, `hint_unavailable` |
 | Canvas | `drawer_only`, `canvas_stale_generation`, `canvas_sequence_committed`, `canvas_out_of_sequence`, `canvas_out_of_sync`, `nothing_to_undo` |
 | Votes and restarts | `spectators_cannot_vote`, `spectators_cannot_be_targets`, `invalid_vote_target`, `not_eligible`, `restart_vote_active`, `restart_vote_cooldown`, `no_restart_vote`, `restart_vote_closed` |
@@ -463,6 +463,10 @@ Three distinctions worth knowing:
   again (#1000). The room is re-checked by identity before the seat is taken, on the
   new-seat path and the rebind path alike; a seat this socket already holds and is
   connected on needs no check, since its own presence keeps the room alive.
+- `kicked_from_room` is final for as long as that room lives (#1010): Quick play skips the
+  room on the server side, and a client rebinding a seat it held when the vote passed
+  treats it like `room_ended` — the stage says so and offers the lobby — rather than
+  asking again on every reconnect.
 
 A payload that fails validation is refused by
 `PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py`](../backend/app/handlers/payloads.py))

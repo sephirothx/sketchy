@@ -153,6 +153,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   host_only: "Dat kan alleen de gastheer.",
   players_only: "Dat kunnen alleen spelers.",
   waiting_room_only: "Dat kan alleen in de wachtkamer.",
+  kicked_from_room: "Je bent uit deze kamer gezet en kunt niet terugkomen.",
   already_a_player: "Je bent al speler.",
   registered_name_fixed: "Geregistreerde spelers spelen onder hun gebruikersnaam.",
   name_taken_by_account: "Deze naam hoort bij een geregistreerde speler.",
@@ -1959,6 +1960,7 @@ export const NL: Catalogue = {
     gameEnded: "Dit spel is afgelopen",
     endedServerUpdate: "De server is bijgewerkt en het lopende spel kon niet doorgaan.",
     endedRoomClosed: "De kamer is gesloten terwijl je verbinding weg was.",
+    removedByVote: "Uit de kamer gezet",
     backToLobby: "Terug naar de lobby",
   },
 
