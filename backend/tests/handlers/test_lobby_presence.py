@@ -15,6 +15,7 @@ import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
+import asyncio
 import pytest
 import socketio
 from socketio.exceptions import ConnectionRefusedError
@@ -146,15 +147,24 @@ async def test_a_visitor_who_has_not_chosen_a_name_is_not_in_the_list(monkeypatc
 
 
 async def test_a_socket_refused_for_capacity_leaves_nothing_behind(monkeypatch):
-    """It is told and then closed, and never reaches the disconnect handler."""
+    """It is told, held counted for the moment the notice needs to land, and
+    closed (#998); the close is what releases it, and nothing else is left."""
+    from app.protocol import SERVER_FULL_CLOSE_SECONDS
+
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
     account_cookies(monkeypatch, {"tok-ada": "user-ada"})
     ctx.room_capacity.sockets = 0
 
+    async def close_socket(target, *_args, **_kwargs):
+        await sio.handlers["/"]["disconnect"](target)
+
+    sio.disconnect = AsyncMock(side_effect=close_socket)
     await connect_as(ctx, sio, "sid-a", "tok-ada")
 
     assert ctx.presence.online_accounts == 0
+    assert ctx.room_capacity.open_sockets == 1, "held to the ceiling until it closes"
+    await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
     assert ctx.room_capacity.open_sockets == 0
     assert_balanced(ctx)
 

@@ -120,8 +120,16 @@ async def test_the_server_stops_accepting_sockets_past_its_ceiling():
     # Told inside the handshake, closed after it: the CONNECT has to go out
     # before the close or the client never sees the notice (#998).
     assert sio.disconnect.await_args_list == []
+    # Connected for that moment, but past the ceiling: still counted, and
+    # nothing it says is acted on - a seat taken in that window would be
+    # one the ceiling never allowed.
+    assert ctx.room_capacity.open_sockets == 3
+    told = await sio.handlers["/"]["create_room"]("third", {"nickname": "Sneak"})
+    assert told == {"ok": False, "errorCode": "server_busy", "error": "Sketchy is full right now. Try again in a few minutes."}
     await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
     assert sio.disconnect.await_args_list[-1].args[0] == "third"
+    assert ctx.room_capacity.open_sockets == 2
+    assert not ctx.is_turned_away("third")
 
     # A socket that leaves gives its place back.
     await sio.handlers["/"]["disconnect"]("first")

@@ -167,6 +167,9 @@ class HandlerContext:
     )
     # Sockets turned away for capacity, closed once their handshake is done (#998).
     _capacity_closes: set[asyncio.Task[None]] = field(default_factory=set, repr=False, compare=False)
+    # Sockets told the server is full and waiting for their close (#998):
+    # still counted against the ceiling, and refused at the door meanwhile.
+    _turned_away: set[str] = field(default_factory=set, repr=False, compare=False)
     # Sockets whose last `draw` frame was dropped at the door (throttled).
     # Nobody awaits a frame, so the drop is silent here; the drawing handler
     # reads this on the next frame and closes the path the drop tore a hole
@@ -249,6 +252,19 @@ class HandlerContext:
                     "Reload the page to continue.",
                     expected=PROTOCOL_VERSION,
                     received=stale[0],
+                )
+            # A socket told the server is full is connected for the quarter
+            # second its notice needs to land (#998), and nothing it says in
+            # that window is acted on: it is past the ceiling, and the door
+            # is where that is enforced, not each handler.
+            if sid in self._turned_away:
+                telemetry.socket_event(command, "refused", None)
+                _note_door_refusal(command, ErrorCode.SERVER_BUSY, "refused", args)
+                if command in SILENT_COMMANDS:
+                    return None
+                return refuse(
+                    ErrorCode.SERVER_BUSY,
+                    "Sketchy is full right now. Try again in a few minutes.",
                 )
             # A person did something. Stamped before the budget check on
             # purpose: a command refused for arriving too fast still came from
@@ -342,9 +358,17 @@ class HandlerContext:
                 return
             await self.sio.disconnect(sid)
 
+        self._turned_away.add(sid)
         task = asyncio.create_task(close_later())
         self._capacity_closes.add(task)
         task.add_done_callback(self._capacity_closes.discard)
+
+    def is_turned_away(self, sid: str) -> bool:
+        """Whether this socket was told the server is full and awaits its close."""
+        return sid in self._turned_away
+
+    def forget_turned_away(self, sid: str) -> None:
+        self._turned_away.discard(sid)
 
     def quarantine(
         self, sid: str, received: int, *, close_after: float

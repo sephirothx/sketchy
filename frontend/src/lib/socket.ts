@@ -433,8 +433,17 @@ const serverFullListeners = new Set<(reason: string | null) => void>();
 // that may not be mounted.
 // One meaning, so the sentence is written here: the payload's `reason` is
 // English, for a log (R-I18N-01).
+// Whether this very handshake was turned away: `server_full` is emitted
+// inside the server's connect handler and delivered before this socket's
+// `connect` event, so a `connect` that follows it is the turned-away socket's
+// own, not an admission (review of #1053). Reset when the transport opens.
+let turnedAwayThisHandshake = false;
+socket.io.on("open", () => {
+  turnedAwayThisHandshake = false;
+});
 socket.on("server_full", () => {
   recordClientError("socket", "server_full");
+  turnedAwayThisHandshake = true;
   serverFullReason = ui.socket.sketchyIsFullRightNow;
   serverFullListeners.forEach((listener) => listener(serverFullReason));
 });
@@ -455,8 +464,11 @@ socket.on("connect", () => {
     window.clearTimeout(serverCloseTimer);
     serverCloseTimer = null;
   }
-  if (serverFullReason !== null) {
-    // Back in: the banner that said the server was full is stale.
+  if (serverFullReason !== null && !turnedAwayThisHandshake) {
+    // Back in: the banner that said the server was full is stale. Not on
+    // the `connect` of the socket being turned away, which the notice
+    // precedes: that one keeps the banner, and its close keeps the 30 s
+    // first retry.
     serverFullReason = null;
     serverFullListeners.forEach((listener) => listener(null));
   }
