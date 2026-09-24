@@ -1267,7 +1267,7 @@ async def test_a_staff_reset_sets_the_password_but_signs_nobody_in(env):
     )
 
     assert reset.status_code == 200, reset.text
-    assert reset.json() == {"ok": True, "signedIn": False}
+    assert reset.json() == {"ok": True, "signedIn": False, "reason": "second_factor"}
     assert (await browser.get("/api/auth/me")).json() is None
     # The password took, and the front door still wants the code.
     login = await new_client().post(
@@ -1319,3 +1319,78 @@ async def test_a_mail_reset_ends_a_suspended_accounts_escape_hatch(env):
     )
     assert reset.status_code == 200, reset.text
     assert (await browser.get("/api/auth/data-exports")).status_code == 401
+
+
+async def test_a_suspended_reset_sets_the_password_but_signs_nobody_in(env):
+    """Login and the passkey both refuse a suspended account at the door; the
+    reset issued a cookie without asking (#1052). The password still takes -
+    the mailbox was proved - and signing in with it is what says why."""
+    from app.db.models import UserBan, generate_uuid
+
+    new_client, factory = env
+    browser = new_client()
+    account = await register(browser, "Suspended", email="suspended@example.com")
+    await verify_via_email(browser, factory)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBan(
+                    id=generate_uuid(),
+                    user_id=UUID(account["id"]),
+                    reason="Suspended for the test",
+                )
+            )
+
+    await new_client().post("/api/auth/password/forgot", json={"identifier": "Suspended"})
+    stranger = new_client()
+    reset = await stranger.post(
+        "/api/auth/password/reset",
+        json={"token": token_in(await drain(factory)), "password": NEW_PASSWORD},
+    )
+
+    assert reset.status_code == 200, reset.text
+    assert reset.json() == {"ok": True, "signedIn": False, "reason": "suspended"}
+    assert (await stranger.get("/api/auth/me")).json() is None
+    async with factory() as session:
+        live = await session.scalar(
+            select(func.count(AuthSession.id)).where(
+                AuthSession.user_id == UUID(account["id"]),
+                AuthSession.revoked_at.is_(None),
+            )
+        )
+    # No session at all, so nothing for R-BAN-04's escape hatch to ride on:
+    # that stays with the session held when the ban landed.
+    assert live == 0
+    login = await new_client().post(
+        "/api/auth/login", json={"username": "Suspended", "password": NEW_PASSWORD}
+    )
+    assert login.status_code == 403
+    assert login.json()["detail"] == "This account is suspended."
+
+
+async def test_a_suspended_moderators_reset_says_suspended_not_second_factor(env):
+    """The suspension is what stands between them and signing in, so that is
+    what the page says; the second-factor path would only refuse them."""
+    from app.db.models import User, UserBan, generate_uuid
+    from tests.staffauth import mark_staff_ready
+
+    new_client, factory = env
+    browser = new_client()
+    account = await register(browser, "SuspendedMod", email="suspendedmod@example.com")
+    await verify_via_email(browser, factory)
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(account["id"]))
+            user.role = "moderator"
+            session.add(
+                UserBan(id=generate_uuid(), user_id=UUID(account["id"]), reason="Test")
+            )
+    await mark_staff_ready(factory, account["id"])
+
+    await new_client().post("/api/auth/password/forgot", json={"identifier": "SuspendedMod"})
+    reset = await new_client().post(
+        "/api/auth/password/reset",
+        json={"token": token_in(await drain(factory)), "password": NEW_PASSWORD},
+    )
+    assert reset.status_code == 200, reset.text
+    assert reset.json() == {"ok": True, "signedIn": False, "reason": "suspended"}

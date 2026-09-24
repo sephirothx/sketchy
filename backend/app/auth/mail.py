@@ -20,10 +20,13 @@ place nobody scoped for one, so `SKETCHY_ENV=production` refuses to start
 without a relay (`deployment.validate_mail_configuration`) and the console
 transport refuses to write a body there even if something reaches it anyway
 (#466).
+
+The relay connection is encrypted and its certificate verified unless
+`SMTP_SECURITY=none` says otherwise (`SmtpSecurity`, #1013).
 """
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -31,8 +34,10 @@ import logging
 import os
 import re
 import smtplib
+import ssl
 from email.message import EmailMessage
 from email.utils import parseaddr
+from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
@@ -232,6 +237,52 @@ class MemoryTransport:
         self.sent.append(message)
 
 
+class SmtpSecurity(StrEnum):
+    """How the connection to the relay is encrypted (`SMTP_SECURITY`).
+
+    Both encrypted modes verify the relay's certificate against the system
+    trust store and its hostname against `SMTP_HOST`. Encryption that accepts
+    any certificate protects against nobody: whoever sits between this server
+    and the relay presents their own, receives the relay password on the
+    `AUTH` that follows and then every reset link in the clear (#1013). A
+    certificate that does not verify fails the send, and the outbox retries
+    and then records it as failed like any other refusal.
+    """
+
+    # Connect in the clear and upgrade before anything is said (port 587).
+    STARTTLS = "starttls"
+    # Encrypted from the first byte (port 465, "implicit TLS").
+    TLS = "tls"
+    # No encryption: a relay on the same host or a private network only.
+    # Production refuses it together with a password
+    # (`deployment.validate_mail_configuration`).
+    NONE = "none"
+
+
+DEFAULT_SMTP_PORTS = {
+    SmtpSecurity.STARTTLS: 587,
+    SmtpSecurity.TLS: 465,
+    SmtpSecurity.NONE: 587,
+}
+
+
+def smtp_security(environ: Mapping[str, str] | None = None) -> SmtpSecurity:
+    """The configured mode; an unrecognised value is an error, not a default.
+
+    A typo read as the default would be harmless in one direction and not the
+    other, and nobody finds out which until a reset mail is missing.
+    """
+    values = os.environ if environ is None else environ
+    raw = values.get("SMTP_SECURITY", "").strip().lower() or SmtpSecurity.STARTTLS.value
+    try:
+        return SmtpSecurity(raw)
+    except ValueError:
+        choices = ", ".join(mode.value for mode in SmtpSecurity)
+        raise RuntimeError(
+            f"SMTP_SECURITY must be one of {choices}; got {raw!r}"
+        ) from None
+
+
 class SmtpTransport:
     """stdlib smtplib on a worker thread.
 
@@ -246,17 +297,41 @@ class SmtpTransport:
         port: int,
         username: str | None,
         password: str | None,
-        use_tls: bool,
+        security: SmtpSecurity,
         sender: str,
         timeout: float = 10.0,
+        tls_context: Callable[[], ssl.SSLContext] = ssl.create_default_context,
     ) -> None:
         self._host = host
         self._port = port
         self._username = username
         self._password = password
-        self._use_tls = use_tls
+        self._security = security
         self._sender = sender
         self._timeout = timeout
+        # A factory rather than a context, so a test can trust its own
+        # certificate authority; production always takes the default, which
+        # requires a certificate and checks the hostname.
+        self._tls_context = tls_context
+
+    def _connect(self) -> smtplib.SMTP:
+        if self._security is SmtpSecurity.TLS:
+            return smtplib.SMTP_SSL(
+                self._host,
+                self._port,
+                timeout=self._timeout,
+                context=self._tls_context(),
+            )
+        client = smtplib.SMTP(self._host, self._port, timeout=self._timeout)
+        if self._security is SmtpSecurity.STARTTLS:
+            try:
+                # Raises when the relay does not offer STARTTLS rather than
+                # carrying on in the clear.
+                client.starttls(context=self._tls_context())
+            except BaseException:
+                client.close()
+                raise
+        return client
 
     def _send_blocking(self, message: OutgoingMessage) -> None:
         payload = EmailMessage()
@@ -266,9 +341,7 @@ class SmtpTransport:
         if message.message_id:
             payload["Message-ID"] = message.message_id
         payload.set_content(message.body)
-        with smtplib.SMTP(self._host, self._port, timeout=self._timeout) as client:
-            if self._use_tls:
-                client.starttls()
+        with self._connect() as client:
             if self._username and self._password:
                 client.login(self._username, self._password)
             client.send_message(payload)
@@ -287,12 +360,14 @@ def transport_from_environment(
         # this selection was made from rather than a live one that may have
         # been monkeypatched apart from it.
         return ConsoleTransport(values)
+    security = smtp_security(values)
+    port = values.get("SMTP_PORT", "").strip()
     return SmtpTransport(
         host=host,
-        port=int(values.get("SMTP_PORT", "587")),
+        port=int(port) if port else DEFAULT_SMTP_PORTS[security],
         username=values.get("SMTP_USERNAME") or None,
         password=values.get("SMTP_PASSWORD") or None,
-        use_tls=values.get("SMTP_STARTTLS", "1") not in {"0", "false", "no"},
+        security=security,
         sender=sender_address(values),
     )
 
