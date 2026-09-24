@@ -588,6 +588,19 @@ these paths that means a second room, or a game started twice. Instead:
   `id`. A retry is abandoned rather than sent while disconnected — after a reconnect it
   would be exactly the replay volatile delivery exists to prevent. Two unacknowledged
   attempts are reported to the player instead of vanishing.
+  A line is sent as a `guess` only while the seat may guess — the drawing phase, not
+  the drawer, not a spectator, not yet correct; everything else, a line typed while the
+  drawer is choosing a prompt included, is `send_chat`. The panel used to send a guess
+  whenever the room was playing, scoped to the turn it last saw, and while the drawer
+  chose that was the previous turn: the server dropped it as out of scope (#1008).
+  `send_chat` is accepted in every room state, and the server decides the audience
+  from the seat rather than from the event: outside the drawing phase — the waiting
+  room, a drawer choosing, a turn's results, a game's end — the whole room hears it;
+  while something is being drawn, a seat that already knows or may not guess the prompt
+  (the drawer, a spectator, a correct guesser, a seat the turn froze out) reaches the
+  prompt-aware audience only (R-SPEC-04), and a seat that may still guess has its line
+  scored and delivered as a guess whichever event carried it, so chat is never a way
+  to put the prompt in front of the other guessers.
 
   The retry is sent only inside the **scope** the first attempt captured — the same
   connection (`socket.id`), the same room and the same turn — and abandoned otherwise
