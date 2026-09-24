@@ -49,7 +49,7 @@ keyboard that takes half the screen, and one thumb.
   be marked nor a way to avoid it — the only clock is what you have done. If the
   host is the one who went, the room passes to somebody who is still playing, since
   only the host can start a game.
-- Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
+- Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay. The game given up is recorded as abandoned, like one everybody walked out of.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
 - Game highlights — the hardest prompt, the fastest guess, the best drawer, the quickest

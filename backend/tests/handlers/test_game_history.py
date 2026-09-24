@@ -147,7 +147,24 @@ async def test_departed_player_still_counts_as_a_participant():
     assert any(r.drawer_user_id == "user-ann" for r in saved.turns)
 
 
-async def test_restart_discards_the_turns_played_so_far():
+async def _play_out(ctx, room) -> None:
+    """Run whatever turns are left the way the timers would, then replay."""
+    flow = ctx.game_flow
+    while room.game is not None:
+        game = room.game
+        if game.phase.value == "choosing_prompt":
+            game.force_prompt_choice()
+            game.set_phase_deadline(game.drawing_seconds)
+            await flow._end_turn(room)
+        ctx.timers.cancel_phase_timer(room.id)
+        await flow._finish_or_next(room)
+    await ctx.timers.close()
+    await replay_staged(ctx)
+
+
+async def test_a_restart_records_the_game_it_replaces_and_starts_clean():
+    """The replaced game's turns are its own row, marked abandoned (R-HIST-05,
+    #993) - never folded into the restarted game's, and never dropped."""
     room_manager, room, players = build_room(rounds=1)
     history = FakeGameHistoryRepository()
     ctx = build_context(room_manager, history)
@@ -155,6 +172,7 @@ async def test_restart_discards_the_turns_played_so_far():
 
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
+    replaced_id = game.id
     game.force_prompt_choice()
     game.set_phase_deadline(game.drawing_seconds)
     await flow._end_turn(room)
@@ -162,12 +180,18 @@ async def test_restart_discards_the_turns_played_so_far():
 
     await flow._start_fresh_game(room, room.player_list(), restarted=True)
     assert room.game.completed_turns == []
+    assert room.last_game_history == "none", "the recap belongs to the new game"
 
-    await play_to_completion(ctx, room, players)
+    # Played out from here, not through `play_to_completion`: that starts a
+    # fresh game of its own, which would abandon the restarted one in turn.
+    await _play_out(ctx, room)
 
-    assert len(history.saved) == 1
-    # Only the restarted game's turns, never the abandoned one's.
-    assert len(history.saved[0].turns) == 2
+    by_id = {saved.record.id: saved for saved in history.saved}
+    assert set(by_id) == {replaced_id, room.last_game_id}
+    assert by_id[replaced_id].record.outcome == "abandoned"
+    assert len(by_id[replaced_id].turns) == 1
+    assert by_id[room.last_game_id].record.outcome == "finished"
+    assert len(by_id[room.last_game_id].turns) == 2
 
 
 async def test_a_game_everyone_walks_out_of_is_still_recorded():
@@ -946,6 +970,183 @@ async def test_a_write_that_lands_is_not_counted_as_lost(signals):
     assert signals.history_writes_abandoned.total() == 0
 
 
+# --- a restart vote stops a game, and a game that stops is recorded (#993) ------
+
+
+async def _vote_to_restart(ctx, room, players):
+    """Propose and carry the vote through the real handlers, with the restart
+    delay shortened to nothing."""
+    from app.flow_timing import timing
+
+    sessions = {p.sid: {"room_id": room.id, "player_id": p.id} for p in players.values()}
+    ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    proposer, voter = players["Ann"], players["Bob"]
+    proposed = await ctx.sio.handlers["/"]["propose_restart_vote"](proposer.sid, {})
+    assert proposed["ok"], proposed
+    with patch.object(timing, "restart_delay_seconds", 0.01):
+        approved = await ctx.sio.handlers["/"]["cast_restart_vote"](voter.sid, {"vote": True})
+        assert approved["approved"] is True, approved
+        await asyncio.sleep(0.05)
+
+
+async def _one_turn_in(ctx, room):
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    game.force_prompt_choice()
+    game.set_phase_deadline(game.drawing_seconds)
+    await flow._end_turn(room)
+    ctx.timers.cancel_phase_timer(room.id)
+    await flow._finish_or_next(room)
+    room.game.force_prompt_choice()
+    room.game.set_phase_deadline(room.game.drawing_seconds)
+    return game.id
+
+
+async def test_a_passed_restart_vote_records_the_game_it_gave_up_as_abandoned():
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    replaced_id = await _one_turn_in(ctx, room)
+
+    await _vote_to_restart(ctx, room, players)
+
+    assert room.game is not None and room.game.id != replaced_id
+    await replay_staged(ctx)
+    [saved] = history.saved
+    assert saved.record.id == replaced_id
+    assert saved.record.outcome == "abandoned"
+    # The finished turn, and the one the vote interrupted mid-drawing: ended
+    # the way the clock ends it, so its drawing is in the record too.
+    assert len(saved.turns) == 2
+    await ctx.timers.close()
+
+
+async def test_a_cancelled_restart_still_records_the_game_the_vote_gave_up():
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    replaced_id = await _one_turn_in(ctx, room)
+    from app.flow_timing import timing
+
+    sessions = {p.sid: {"room_id": room.id, "player_id": p.id} for p in players.values()}
+    ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    proposer, voter = players["Ann"], players["Bob"]
+    await ctx.sio.handlers["/"]["propose_restart_vote"](proposer.sid, {})
+    with patch.object(timing, "restart_delay_seconds", 0.01):
+        approved = await ctx.sio.handlers["/"]["cast_restart_vote"](voter.sid, {"vote": True})
+        assert approved["approved"] is True
+        # Too few players by the time the restart fires: it is cancelled.
+        voter.connected = False
+        voter.sid = None
+        await asyncio.sleep(0.05)
+
+    assert room.state == "waiting" and room.game is None
+    await replay_staged(ctx)
+    [saved] = history.saved
+    assert (saved.record.id, saved.record.outcome, len(saved.turns)) == (replaced_id, "abandoned", 2)
+    await ctx.timers.close()
+
+
+async def test_a_vote_that_expires_while_the_turn_is_being_ended_still_restarts():
+    """The final vote carries the moment it lands; the window closing during
+    the broadcast that ends the turn must not reject it, or the room is left
+    at GAME_END with no restart pending (review of #1048)."""
+    from app.flow_timing import timing
+
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    replaced_id = await _one_turn_in(ctx, room)
+    flow = ctx.game_flow
+    real_end_turn = flow._end_turn
+
+    async def slow_end_turn(target):
+        await real_end_turn(target)
+        # Long enough for the window, shortened below, to close meanwhile.
+        await asyncio.sleep(0.05)
+
+    flow._end_turn = slow_end_turn  # type: ignore[method-assign]
+    sessions = {p.sid: {"room_id": room.id, "player_id": p.id} for p in players.values()}
+    ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    proposer, voter = players["Ann"], players["Bob"]
+    with patch.object(timing, "restart_vote_seconds", 0.01), patch.object(
+        timing, "restart_delay_seconds", 0.05
+    ):
+        proposed = await ctx.sio.handlers["/"]["propose_restart_vote"](proposer.sid, {})
+        assert proposed["ok"], proposed
+        vote = room.restart_vote
+        approved = await ctx.sio.handlers["/"]["cast_restart_vote"](voter.sid, {"vote": True})
+        assert approved["approved"] is True, approved
+        assert room.restart_vote is vote and vote.status == "approved"
+        await asyncio.sleep(0.15)
+
+    assert room.game is not None and room.game.id != replaced_id, "the restart happened"
+    assert room.state == "playing"
+    await ctx.timers.close()
+
+
+async def test_a_vote_passed_after_only_wrong_guesses_still_keeps_the_turn():
+    """Nobody got it, but the drawing was drawn and guessed at: the record
+    has only completed turns, so the interrupted one is closed like the
+    clock closes it rather than dropped (review of #1048)."""
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    replaced_id = game.id
+    guesser = next(p for p in players.values() if p.id != game.current_drawer)
+    game.force_prompt_choice()
+    game.snapshot_turn_participants({guesser.id: "eligible"})
+    game.set_phase_deadline(game.drawing_seconds)
+    correct, _ = game.submit_guess(guesser.id, "not the prompt")
+    assert not correct
+
+    await _vote_to_restart(ctx, room, players)
+
+    await replay_staged(ctx)
+    [saved] = history.saved
+    assert (saved.record.id, saved.record.outcome, len(saved.turns)) == (replaced_id, "abandoned", 1)
+    assert all(p.final_score == 0 for p in saved.participants)
+    await ctx.timers.close()
+
+
+async def test_a_vote_passed_after_a_correct_guess_keeps_the_turn_and_its_points():
+    """The most common restart - "someone got it, restart anyway" - leaves
+    points on the guesser's seat. The turn is ended before the game is given
+    up, so the record has the turn those points came from and the ledger
+    the writer proves against sums to the seats."""
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    replaced_id = game.id
+    guesser = next(p for p in players.values() if p.id != game.current_drawer)
+    game.force_prompt_choice()
+    game.snapshot_turn_participants({guesser.id: "eligible"})
+    game.set_phase_deadline(game.drawing_seconds)
+    correct, points = game.submit_guess(guesser.id, game.prompt)
+    assert correct and points > 0
+    guesser.score += points
+
+    await _vote_to_restart(ctx, room, players)
+
+    await replay_staged(ctx)
+    [saved] = history.saved
+    assert (saved.record.id, saved.record.outcome, len(saved.turns)) == (replaced_id, "abandoned", 1)
+    ledger = {}
+    for event in saved.score_events:
+        ledger[event.participant_seat_id] = ledger.get(event.participant_seat_id, 0) + event.points_delta
+    by_seat = {p.seat_id: p.final_score for p in saved.participants}
+    assert by_seat == {seat: ledger.get(seat, 0) for seat in by_seat}, "what the writer proves"
+    assert set(by_seat.values()) == {points}, "the guesser's award and the drawer's bonus"
+    await ctx.timers.close()
+
+
 # --- the ledger has to sum with the seats, whoever left (#992) -----------------
 
 
@@ -981,21 +1182,6 @@ async def _final_scores(factory, game_id: str) -> dict[str, int]:
             )
         ).all()
     return {name: score for name, score in rows}
-
-
-async def _play_out(ctx, room) -> None:
-    """Run whatever turns are left the way the timers would, then replay."""
-    flow = ctx.game_flow
-    while room.game is not None:
-        game = room.game
-        if game.phase.value == "choosing_prompt":
-            game.force_prompt_choice()
-            game.set_phase_deadline(game.drawing_seconds)
-            await flow._end_turn(room)
-        ctx.timers.cancel_phase_timer(room.id)
-        await flow._finish_or_next(room)
-    await ctx.timers.close()
-    await replay_staged(ctx)
 
 
 def _first_turn(players, game):
