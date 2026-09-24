@@ -10,6 +10,7 @@ from sqlalchemy import select, update
 
 from app.db.models import TurnDrawing, TurnDrawingReaction
 from app.domain_values import TurnDrawingStatus
+from app.repositories.sqlalchemy import _encode_gallery_cursor, _gallery_cursor_mac
 from app.services.gallery_ranking import (
     HOT_DECAY_SECONDS,
     MAX_GALLERY_OFFSET,
@@ -211,11 +212,9 @@ async def test_pages_are_a_cursor_that_stops_480_deep(repos):
     assert _ids(third) == [games[4].turn_id] and third.next_cursor is None
     # A mangled cursor is page one; a page past the ceiling is empty.
     assert _ids(await history.list_gallery(sort="new", limit=2, cursor="???")) == _ids(first)
-    from app.repositories.sqlalchemy import _encode_gallery_cursor
-
     deep = await history.list_gallery(
         sort="new",
-        cursor=_encode_gallery_cursor(None, NOW, UUID(int=0), MAX_GALLERY_OFFSET),
+        cursor=_encode_gallery_cursor("new", None, NOW, UUID(int=0), MAX_GALLERY_OFFSET),
     )
     assert deep.entries == () and deep.next_cursor is None
     # The page size is clamped, never trusted.
@@ -299,3 +298,68 @@ async def test_the_migration_backfills_both_projections(tmp_path):
         assert math.isclose(score, hot_score(1, finished))
     finally:
         await engine.dispose()
+
+
+async def test_a_cursor_that_was_forged_or_carried_across_orders_is_page_one(repos):
+    """The depth ceiling reads the rows served off the cursor, so an unsigned
+    one could be rewritten to read the whole Gallery; a naive datetime or an
+    absurd key would be refused by the driver at bind time - a 500 - rather
+    than by us (#1072 review). Every such cursor is page one."""
+    import base64
+    import json
+
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    for i in range(3):
+        await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(minutes=i))
+    first = await history.list_gallery(sort="new", limit=2)
+    page_one = _ids(first)
+
+    def forged(payload: list) -> str:
+        token = json.dumps(payload, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(token + _gallery_cursor_mac(token)).decode().rstrip("=")
+
+    def unsigned(payload: list) -> str:
+        token = json.dumps(payload, separators=(",", ":")).encode()
+        return base64.urlsafe_b64encode(token + b"x" * 16).decode().rstrip("=")
+
+    naive = NOW.replace(tzinfo=None).isoformat()
+    aware = NOW.isoformat()
+    for cursor in (
+        unsigned(["new", None, aware, str(UUID(int=0)), MAX_GALLERY_OFFSET]),  # rewritten depth
+        forged(["hot", 1.0, aware, str(UUID(int=0)), 0]),  # another order's cursor
+        forged(["new", None, naive, str(UUID(int=0)), 0]),  # naive datetime
+        forged(["hot", 10**400, aware, str(UUID(int=0)), 0]),  # out of range
+        forged(["top", True, aware, str(UUID(int=0)), 0]),  # a bool key
+        "???",
+    ):
+        page = await history.list_gallery(sort="new", limit=2, cursor=cursor)
+        assert _ids(page) == page_one, cursor
+    # The genuine one still pages on.
+    assert len(_ids(await history.list_gallery(sort="new", limit=2, cursor=first.next_cursor))) == 1
+    assert (await history.list_gallery(sort="hot", limit=2, cursor=first.next_cursor)).entries[:2] == (await history.list_gallery(sort="hot", limit=2)).entries[:2]
+
+
+async def test_ties_on_every_key_page_without_a_repeat_or_a_skip(repos):
+    """Six games finished at one instant, so the finish and the Hot score tie
+    and only the turn id orders them: the equality predicates are what each
+    page after the first rests on (#1072 review)."""
+    users, history, factory = repos
+    ann = await registered(users, "Ann")
+    bob = await registered(users, "Bob")
+    games = [
+        await record_game(history, drawer=ann.id, reactor=bob.id, visibility="public", finished_at=NOW - timedelta(hours=1))
+        for _ in range(6)
+    ]
+    expected = {g.turn_id for g in games}
+    for sort in ("hot", "new", "top"):
+        seen: list[str] = []
+        cursor = None
+        while True:
+            page = await history.list_gallery(sort=sort, limit=1, cursor=cursor)
+            seen.extend(_ids(page))
+            cursor = page.next_cursor
+            if not cursor:
+                break
+        assert len(seen) == len(set(seen)) == 6 and set(seen) == expected, (sort, seen)

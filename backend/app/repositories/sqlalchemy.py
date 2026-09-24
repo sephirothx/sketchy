@@ -3,6 +3,9 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hmac
+import math
+import secrets
 from collections import Counter, OrderedDict, defaultdict
 from collections.abc import Awaitable, Callable, Collection, Sequence
 from dataclasses import dataclass, field
@@ -218,8 +221,22 @@ def _encode_catalogue_cursor(offset: int) -> str:
     return str(offset)
 
 
+# The cursor is signed with a key this process made up at start (#1072
+# review): the depth ceiling reads the rows served off the cursor, and an
+# unsigned one could be rewritten to read the whole Gallery. Per process
+# rather than a configured secret because nothing has to verify it but the
+# process that issued it - one worker - and a restart reading an old cursor
+# as page one is the outcome a mangled cursor gets anyway.
+_GALLERY_CURSOR_KEY = secrets.token_bytes(32)
+_GALLERY_CURSOR_MAC_BYTES = 16
+
+
+def _gallery_cursor_mac(token: bytes) -> bytes:
+    return hmac.new(_GALLERY_CURSOR_KEY, token, "sha256").digest()[:_GALLERY_CURSOR_MAC_BYTES]
+
+
 def _encode_gallery_cursor(
-    sort_key: float | int | None, finished_at: datetime, turn_id: UUID, served: int
+    sort: str, sort_key: float | int | None, finished_at: datetime, turn_id: UUID, served: int
 ) -> str:
     """Where the last row of a page stood, so the next page starts after it.
 
@@ -228,32 +245,43 @@ def _encode_gallery_cursor(
     row at the cut twice - a drawing shown two times on one screen - or
     skipped one on the way down. `served` keeps the depth ceiling: the
     cursor knows how many rows came before it, which an offset used to be.
+    The sort is inside, so a cursor cannot be carried from one order to
+    another, and the whole thing is signed.
     """
     token = json.dumps(
-        [sort_key, finished_at.isoformat(), str(turn_id), served], separators=(",", ":")
-    )
-    return base64.urlsafe_b64encode(token.encode()).decode().rstrip("=")
+        [sort, sort_key, finished_at.isoformat(), str(turn_id), served], separators=(",", ":")
+    ).encode()
+    return base64.urlsafe_b64encode(token + _gallery_cursor_mac(token)).decode().rstrip("=")
 
 
 def _decode_gallery_cursor(
-    cursor: str | None,
+    cursor: str | None, *, sort: str
 ) -> tuple[float | int | None, datetime, UUID, int] | None:
-    """A malformed cursor reads as the first page, as the catalogue's does."""
+    """A malformed, forged, or foreign cursor reads as the first page, as the
+    catalogue's does: it is an opaque token the client got from us, and page
+    one is a better answer than a 422 - or a 500 from a value the driver
+    refuses at bind time - on a link somebody shared."""
     if not cursor:
         return None
     try:
         padded = cursor + "=" * (-len(cursor) % 4)
-        sort_key, finished_at, turn_id, served = json.loads(
-            base64.urlsafe_b64decode(padded.encode()).decode()
-        )
-        if sort_key is not None and not isinstance(sort_key, (int, float)):
+        raw = base64.urlsafe_b64decode(padded.encode())
+        token, mac = raw[:-_GALLERY_CURSOR_MAC_BYTES], raw[-_GALLERY_CURSOR_MAC_BYTES:]
+        if not hmac.compare_digest(mac, _gallery_cursor_mac(token)):
             return None
-        return (
-            sort_key,
-            datetime.fromisoformat(finished_at),
-            UUID(turn_id),
-            max(0, int(served)),
-        )
+        cursor_sort, sort_key, finished_at, turn_id, served = json.loads(token.decode())
+        if cursor_sort != sort:
+            return None
+        if sort_key is not None:
+            if isinstance(sort_key, bool) or not isinstance(sort_key, (int, float)):
+                return None
+            sort_key = float(sort_key)
+            if not math.isfinite(sort_key):
+                return None
+        finished = datetime.fromisoformat(finished_at)
+        if finished.tzinfo is None:
+            return None
+        return (sort_key, finished, UUID(turn_id), max(0, int(served)))
     except (ValueError, TypeError, AttributeError):
         return None
 
@@ -2593,7 +2621,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             return GalleryPage(entries=(), next_cursor=None)
         requester_id = _optional_entity_id(requesting_user_id)
         limit = max(1, min(int(limit), MAX_GALLERY_PAGE))
-        after = _decode_gallery_cursor(cursor)
+        after = _decode_gallery_cursor(cursor, sort=sort)
         served = after[3] if after else 0
         # The community catalogue's rule, for the same reason: nobody reaches
         # this deep by looking, so a deeper page is a scrape.
@@ -2709,7 +2737,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             elif sort == "hot":
                 last_key = last_hot_score
             next_cursor = _encode_gallery_cursor(
-                last_key, last_finished, last_turn.id, served + len(rows)
+                sort, last_key, last_finished, last_turn.id, served + len(rows)
             )
         return GalleryPage(entries=tuple(entries), next_cursor=next_cursor)
 
