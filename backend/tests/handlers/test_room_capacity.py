@@ -321,6 +321,40 @@ async def test_a_takeover_refused_after_it_was_charged_is_refunded():
     assert room.players[created["playerId"]].sid == "next-tab"
 
 
+async def test_a_rebind_that_fails_after_the_seat_changed_hands_stays_charged(monkeypatch):
+    """Seating names the new socket on the seat before it awaits anything;
+    a failure past that point is a takeover that happened, and refunding it
+    would let a rebind that fails late be repeated past the ceiling (review
+    of #1068)."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_capacity = RoomCapacityService(environ={"ROOM_TAKEOVER_LIMIT": "1"})
+    created = await open_room(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+    seat = room.players[created["playerId"]]
+
+    async def seating_fails_late(sid, room_, player, **kwargs):
+        player.sid = sid
+        player.connected = True
+        raise RuntimeError("the socket room could not be joined")
+
+    monkeypatch.setattr(ctx.game_flow, "_join_socket_room", seating_fails_late)
+    await sessions.save("late-tab", {"user_id": sessions.account_for("host-sid")})
+    with pytest.raises(RuntimeError):
+        await sio.handlers["/"]["join_room"](
+            "late-tab", {"roomId": room.id, "nickname": "Host"}
+        )
+    monkeypatch.undo()
+    assert seat.sid == "late-tab"
+
+    await sessions.save("next-tab", {"user_id": sessions.account_for("host-sid")})
+    refused = await sio.handlers["/"]["join_room"](
+        "next-tab", {"roomId": room.id, "nickname": "Host"}
+    )
+    assert refused["errorCode"] == ErrorCode.SEAT_CHANGING_TOO_FAST
+    assert seat.sid == "late-tab"
+
+
 async def test_a_rebind_that_fails_while_seating_is_refunded_too(monkeypatch):
     """Seating raising after the charge is not a takeover either (#1009)."""
     room_manager = RoomManager()
