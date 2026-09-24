@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+import os
 from uuid import UUID
 
 import pytest
@@ -1051,3 +1052,85 @@ async def test_restoring_a_reported_prompt_restores_every_version(env):
     async with factory() as session:
         row = await session.get(PromptVersion, UUID(current.prompt_version_id))
         assert row.moderation_state == "active"
+
+
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"),
+    reason="proves row locking, which SQLite's single test connection cannot",
+)
+async def test_a_hide_decided_during_a_save_reaches_the_version_the_save_writes(
+    env, monkeypatch
+):
+    """#1092 review: a save that had read the concept as active and not yet
+    written its new version, while a moderator hid the concept, committed
+    that version active - the concept-wide UPDATE never saw it. The decision
+    now takes the list row the save holds, so it waits and then covers it."""
+    import asyncio
+
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "RacingOwner")
+    await register(reporter_http, "RacingReporter")
+    moderator = await register(moderator_http, "RacingMod")
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(moderator["id"]))).role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+    created = await prompts.create_owned(
+        owner["id"], name="Raced", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"), PromptListEntryInput(answer="fine")),
+    )
+    await published(factory, created.id)
+    word, fine = created.prompts
+    report = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={
+            "promptListId": created.id,
+            "promptVersionId": word.prompt_version_id,
+            "reason": "hateful_or_abusive",
+            "details": "This one.",
+        },
+    )
+    assert report.status_code == 201, report.text
+
+    # Hold the save at its first flush: it has read the concept as active
+    # and built the new version from that, holding the list row.
+    reached, release = asyncio.Event(), asyncio.Event()
+    original_flush = AsyncSession.flush
+    held = [True]
+
+    async def flush_then_wait(self, *args, **kwargs):
+        if held and held.pop():
+            reached.set()
+            await release.wait()
+        return await original_flush(self, *args, **kwargs)
+
+    monkeypatch.setattr(AsyncSession, "flush", flush_then_wait)
+    save = asyncio.create_task(
+        prompts.update_owned(
+            owner["id"], created.id, expected_version=created.version, name=created.name,
+            description="",
+            prompts=(
+                PromptListEntryInput(answer=word.answer, concept_id=word.concept_id, aliases=("edge",)),
+                PromptListEntryInput(answer=fine.answer, concept_id=fine.concept_id),
+            ),
+        )
+    )
+    await asyncio.wait_for(reached.wait(), timeout=10)
+    decide = asyncio.create_task(
+        moderator_http.patch(
+            f"/api/moderation/prompt-content-reports/{report.json()['id']}",
+            json={"status": "resolved", "note": "Hidden.", "moderationState": "hidden"},
+        )
+    )
+    await asyncio.sleep(0.3)
+    assert not decide.done(), "the decision waits for the save holding the list"
+    release.set()
+    saved, decided = await asyncio.wait_for(asyncio.gather(save, decide), timeout=10)
+    assert decided.status_code == 200, decided.text
+    [current] = [p for p in saved.prompts if p.concept_id == word.concept_id]
+    async with factory() as session:
+        row = await session.get(PromptVersion, UUID(current.prompt_version_id))
+        assert row.moderation_state == "hidden"

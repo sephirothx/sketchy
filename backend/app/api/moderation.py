@@ -2133,6 +2133,20 @@ def create_moderation_router(
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
                     if report.target_type == "prompt":
+                        # Taken in the order `update_owned` takes it: an
+                        # owner's save in flight holds the list row while it
+                        # reads the concept's state and writes its new
+                        # version, so it either commits first - and the
+                        # UPDATE below covers the version it wrote - or starts
+                        # after, and carries the decision. Without it a save
+                        # that read "active" could commit a new active version
+                        # the UPDATE never saw (#1092 review).
+                        if report.prompt_list_id is not None:
+                            await session.execute(
+                                select(PromptList.id)
+                                .where(PromptList.id == report.prompt_list_id)
+                                .with_for_update()
+                            )
                         # The decision is the concept's, not one wording's
                         # (R-MOD-11, #1020): a report names the version the
                         # game played, and the owner may have saved a newer
