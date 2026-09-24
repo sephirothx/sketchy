@@ -770,8 +770,8 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `get_custom_prompts` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `get_recap_drawing` | `RecapDrawingPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `react_to_drawing` | `ReactToDrawingPayload` | ✓ | [`reactions.py`](../backend/app/handlers/reactions.py) |
-| `update_player_settings` | `PlayerSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) — `nameColor` must be a `#rrggbb` that reads at 1.8:1 on both themes' player-list panel (R-ACCT-08); anything else answers `{ ok: false, error: "Invalid player name color" }`, and a guest's colour is always refused |
-| `rename_player` | `RenamePlayerPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
+| `update_player_settings` | `PlayerSettingsPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) — `nameColor` must be a `#rrggbb` that reads at 1.8:1 on both themes' player-list panel (R-ACCT-08); anything else answers `{ ok: false, error: "Invalid player name color" }`, and a guest's colour is always refused. Its database work runs under the entry deadline and answers `database_busy` when it fails or expires (#1012) |
+| `rename_player` | `RenamePlayerPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) — the account is written before the seat is renamed, under the entry deadline; a failed or expired write answers `database_busy` and changes nothing (#1012) |
 | `become_player` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `session_ping` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `accept_colorblind_suggestion` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
@@ -916,6 +916,9 @@ the server resolves the seat against the live room and selects the evidence itse
 { "targetPlayerId": "…", "reason": "harassment", "details": "…", "includeDrawing": false }
 ```
 
+The database work runs under the entry deadline, inside the client's wait, and answers
+`database_busy` when it fails or expires (#1012), as `rename_player` and `update_player_settings` do: a handler
+that raised sent no acknowledgement at all, and the dialog waited out its timeout.
 `reason` ∈ `harassment | offensive_drawing | inappropriate_name | cheating | spam |
 inappropriate_avatar`; `details` is optional and at most 1000 characters (stripped, so
 blank is empty) — the server attaches the evidence itself, and from a room that is

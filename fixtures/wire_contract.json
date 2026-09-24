@@ -2395,10 +2395,13 @@
    "chatEpoch",
    "chatSeq"
   ],
-  "handlers.moderation:report_player": [
+  "handlers.moderation:_file_player_report": [
    "drawingAttached",
    "errorCode",
    "evidenceCount"
+  ],
+  "handlers.moderation:report_player": [
+   "errorCode"
   ],
   "handlers.moderation:toggle_afk": [
    "errorCode",
