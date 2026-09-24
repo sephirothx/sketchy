@@ -202,6 +202,14 @@ def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> Non
     # In every environment: an unrecognised mode would otherwise surface as
     # every message failing, one sweep at a time, long after startup.
     security = smtp_security(values)
+    if "SMTP_STARTTLS" in values:
+        # Its replacement's default is to encrypt, so an old
+        # `SMTP_STARTTLS=0` for a plain local relay would otherwise turn into
+        # every send failing, found only in the outbox's `last_error`.
+        raise RuntimeError(
+            "SMTP_STARTTLS was replaced by SMTP_SECURITY (starttls, tls or "
+            "none); remove it and set SMTP_SECURITY instead."
+        )
     if not is_production(values):
         return
 

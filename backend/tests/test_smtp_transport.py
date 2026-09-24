@@ -84,6 +84,25 @@ async def test_a_relay_whose_certificate_verifies_is_sent_to_over_tls(
     assert b"token=abc123" in relay.messages[0]
 
 
+async def test_a_trusted_certificate_for_another_host_is_refused(certificate):
+    """Trusting the authority is half of it; the certificate must also name
+    the host asked for. The relay's names 127.0.0.1 only."""
+    with FakeRelay(*certificate) as relay:
+        carrier = SmtpTransport(
+            host="localhost",
+            port=relay.port,
+            username="relay-user",
+            password="relay-secret",
+            security=SmtpSecurity.STARTTLS,
+            sender="sketchy@example.test",
+            timeout=5,
+            tls_context=relay.trusting_context,
+        )
+        with pytest.raises(ssl.SSLCertVerificationError, match="match|mismatch"):
+            await carrier.send(MESSAGE)
+    assert relay.logins == []
+
+
 async def test_a_relay_that_does_not_offer_starttls_is_not_spoken_to_in_the_clear(
     certificate,
 ):
@@ -121,11 +140,18 @@ def test_the_mode_picks_the_default_port(environ, security, port):
 
 def test_an_unknown_mode_is_refused_at_startup_in_every_environment():
     """A typo read as a default would be harmless one way and not the other."""
-    for env in ("development", "production"):
+    for env in ("development", "test", "production"):
         with pytest.raises(RuntimeError, match="SMTP_SECURITY must be one of"):
             validate_mail_configuration(
                 {"SKETCHY_ENV": env, "SMTP_HOST": "relay.example", "SMTP_SECURITY": "ssl"}
             )
+
+
+def test_the_retired_starttls_switch_is_refused_rather_than_ignored():
+    with pytest.raises(RuntimeError, match="replaced by SMTP_SECURITY"):
+        validate_mail_configuration(
+            {"SKETCHY_ENV": "development", "SMTP_HOST": "relay.example", "SMTP_STARTTLS": "0"}
+        )
 
 
 def test_production_refuses_an_unencrypted_relay_with_a_password():

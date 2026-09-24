@@ -114,20 +114,27 @@ class FakeRelay:
                 continue
             except OSError:
                 return
+            # The socket the conversation ends on - the TLS one after an
+            # upgrade - is the one to close; closing the plain one it wraps
+            # leaves the TLS socket to the collector.
+            current = [connection]
             try:
                 connection.settimeout(30)
-                self._converse(connection)
+                self._converse(current)
             except (OSError, ssl.SSLError) as error:
                 # A client refusing the certificate aborts the handshake;
                 # recorded rather than raised so a test can see it happened.
                 self.errors.append(error)
             finally:
+                current[-1].close()
                 connection.close()
 
-    def _converse(self, connection: socket.socket) -> None:
+    def _converse(self, current: list[socket.socket]) -> None:
+        connection = current[-1]
         secure = False
         if self.implicit_tls:
             connection = self._server_context.wrap_socket(connection, server_side=True)
+            current.append(connection)
             secure = True
         reader = connection.makefile("rb")
 
@@ -153,6 +160,7 @@ class FakeRelay:
                 connection = self._server_context.wrap_socket(
                     connection, server_side=True
                 )
+                current.append(connection)
                 reader = connection.makefile("rb")
                 secure = True
             elif verb == "AUTH":
