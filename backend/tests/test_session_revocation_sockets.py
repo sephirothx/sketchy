@@ -86,6 +86,35 @@ async def test_revoking_a_device_closes_that_devices_sockets(env):
     assert revoked == [(account["id"], [other], None)]
 
 
+async def test_revoking_a_rotated_device_closes_the_sockets_it_opened_before(env):
+    """A rotation mints a new session under a socket that stays open, so the
+    device list names an id no socket carries; the sockets opened with the
+    session it was rotated from go too (#1083)."""
+    from app.auth.sessions import rotate_session
+
+    new_client, factory, revoked = env
+    laptop, phone = new_client(), new_client()
+    account = await register(laptop, "Rotated")
+    assert (
+        await phone.post("/api/auth/login", json={"username": "Rotated", "password": PASSWORD})
+    ).status_code == 200
+    sessions = (await laptop.get("/api/auth/sessions")).json()["sessions"]
+    [opened_with] = [row["id"] for row in sessions if not row["current"]]
+    middle = await rotate_session(
+        factory, session_id=opened_with, user_id=account["id"], device_label="Phone"
+    )
+    latest = await rotate_session(
+        factory, session_id=middle.session.id, user_id=account["id"], device_label="Phone"
+    )
+    listed = (await laptop.get("/api/auth/sessions")).json()["sessions"]
+    assert [row["id"] for row in listed if not row["current"]] == [latest.session.id]
+
+    assert (await laptop.delete(f"/api/auth/sessions/{latest.session.id}")).status_code == 200
+    assert revoked == [
+        (account["id"], [latest.session.id, middle.session.id, opened_with], None)
+    ]
+
+
 async def test_a_password_change_closes_every_other_browsers_sockets(env):
     """This browser's session is revoked with the rest, but its sockets are
     kept: the notice would beat the response carrying the new cookie, and

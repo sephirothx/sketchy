@@ -689,6 +689,41 @@ async def revoke_session(
             return result.rowcount == 1
 
 
+async def with_predecessors(
+    session_factory: async_sessionmaker[AsyncSession], session_ids: list[str]
+) -> list[str]:
+    """These sessions and every session each one was rotated from.
+
+    A socket remembers the session it was opened with, and a rotation mints
+    a new session under a socket that stays open: the device list then names
+    the successor, which no socket carries (#1083). Walked back through
+    `rotated_from_id`, a link per rotation the device has lived through, and
+    only when something is revoked - never on an ordinary request.
+    """
+    ordered = list(dict.fromkeys(str(session_id) for session_id in session_ids))
+    frontier: set[UUID] = set()
+    for session_id in ordered:
+        try:
+            frontier.add(UUID(session_id))
+        except (ValueError, TypeError, AttributeError):
+            continue
+    seen = set(frontier)
+    async with session_factory() as database:
+        while frontier:
+            parents = (
+                await database.scalars(
+                    select(AuthSession.rotated_from_id).where(
+                        AuthSession.id.in_(frontier),
+                        AuthSession.rotated_from_id.is_not(None),
+                    )
+                )
+            ).all()
+            frontier = {parent for parent in parents if parent not in seen}
+            seen |= frontier
+            ordered.extend(str(parent) for parent in frontier)
+    return ordered
+
+
 async def revoke_sessions(
     database: AsyncSession,
     *,
