@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import case, delete, func, or_, select, update
+from sqlalchemy import case, delete, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.totp import (
@@ -31,6 +31,7 @@ from app.auth.totp import (
     provisioning_uri,
 )
 from app.db.models import UserRecoveryCode, UserSecondFactor, generate_uuid
+from app.db.types import UTCDateTime
 
 
 # Long enough to find the authenticator app and short enough that a machine
@@ -248,6 +249,10 @@ async def verify_second_factor(
             elif await _spend_recovery_code(
                 database, user_id=user_id, code=code, now=checked_at
             ):
+                # Not gated on a lock set since the pre-check: a recovery code
+                # is some fifty bits only its holder has, so parallel guesses
+                # at one gain nothing, and a valid one is exactly what should
+                # clear a lock.
                 await database.execute(
                     update(UserSecondFactor)
                     .where(UserSecondFactor.user_id == owner)
@@ -270,8 +275,12 @@ async def verify_second_factor(
                             (reaches, 0),
                             else_=UserSecondFactor.failed_attempts + 1,
                         ),
+                        # Typed as the column is, so the deadline is stored
+                        # in UTC like every other write of it; a bare literal
+                        # inside CASE is a plain DateTime and SQLite would
+                        # keep a non-UTC offset's wall clock.
                         locked_until=case(
-                            (reaches, lock_until),
+                            (reaches, literal(lock_until, UTCDateTime())),
                             else_=UserSecondFactor.locked_until,
                         ),
                     )
@@ -279,8 +288,15 @@ async def verify_second_factor(
                 )
             ).one_or_none()
             if counted is None:
-                # Locked by a parallel failure since the read above (or the
-                # factor removed): nothing left to count against.
+                # Locked by a parallel failure since the read above - or the
+                # factor removed, which is not a lockout to report.
+                still_enrolled = await database.scalar(
+                    select(UserSecondFactor.user_id).where(
+                        UserSecondFactor.user_id == owner
+                    )
+                )
+                if still_enrolled is None:
+                    return SecondFactorOutcome.NOT_ENROLLED
                 return SecondFactorOutcome.LOCKED
             if counted.locked_until is not None and counted.locked_until > checked_at:
                 return SecondFactorOutcome.LOCKED
