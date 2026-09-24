@@ -445,6 +445,50 @@ async def _close_every_socket_of(
         await sio.disconnect(sid)
 
 
+async def close_sockets_of_revoked_sessions(
+    user_id: str, session_ids: list[str] | None, keep: str | None = None
+) -> None:
+    """Close the sockets a revocation just signed out (#1007).
+
+    A session revoked on one device - a sign-out everywhere, a password
+    change, a device revoked from the list - was checked on the next HTTP
+    request and nowhere else: the socket reads the cookie once, so a device
+    signed out kept playing under the account until it happened to reconnect,
+    and every REST call on it 401'd in silence. `None` is every session of
+    the account; otherwise only the sockets opened with one of those.
+    Told first, then closed; the client comes back and handshakes with
+    whatever cookie it still holds - none on the ones signed out. `keep`
+    names the session of the browser that acted: a password change or
+    reset revokes it too, but its sockets stay - they are that account's
+    still, and the notice would reach them before the response carrying
+    the new cookie, so the tab would re-read itself as signed out and
+    leave its room over a change it made on purpose. The client
+    re-handshakes once the response is in hand.
+    """
+    wanted = None if session_ids is None else set(session_ids)
+    closing: list[str] = []
+    for sid in _sockets_of(user_id):
+        if wanted is not None or keep is not None:
+            try:
+                session = await sio.get_session(sid)
+            except KeyError:
+                # Gone between the walk and this read; the rest still count.
+                continue
+            opened_with = (session or {}).get("session_id")
+            if keep is not None and opened_with == keep:
+                continue
+            if wanted is not None and opened_with not in wanted:
+                continue
+        closing.append(sid)
+    for sid in closing:
+        await sio.emit(
+            "session_superseded",
+            {"code": "signed_out", "reason": "You were signed out on this device."},
+            to=sid,
+        )
+        await sio.disconnect(sid)
+
+
 def forget_presence_identity(user_id: str) -> None:
     """Drop a cached lobby row so the next handshake reads it again.
 
@@ -834,6 +878,7 @@ api.include_router(
         on_friends_changed=friend_service.announce_to,
         on_email_state_changed=push_email_state_changed,
         on_export_requested=export_worker.wake,
+        on_sessions_revoked=close_sockets_of_revoked_sessions,
         presence=handler_context.presence,
         presence_identities=handler_context.presence_identities,
     )

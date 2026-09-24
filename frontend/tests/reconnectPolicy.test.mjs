@@ -18,6 +18,10 @@ import {
   shutdownHoldMs,
   stallRecovery,
   transportAlive,
+  SERVER_CLOSE_RETRY_BASE_MS,
+  SERVER_CLOSE_RETRY_MAX_MS,
+  SERVER_FULL_RETRY_MS,
+  serverCloseRetryDelayMs,
 } from "../src/lib/reconnectPolicy.ts";
 
 test("the hold after a shutdown is a uniform draw across the window the server named", () => {
@@ -210,4 +214,32 @@ test("stall recoveries back off like the heartbeat's escalations (#1009)", () =>
   // ±50% jitter around the base.
   assert.equal(stallRecovery({ escalations: 0, notBefore: 0, now: 0, random: 0, transportAlive: true, restartApproved: false }).notBefore, STALL_INTERVAL_MS / 2);
   assert.equal(stallRecovery({ escalations: 0, notBefore: 0, now: 0, random: 1, transportAlive: true, restartApproved: false }).notBefore, STALL_INTERVAL_MS * 1.5);
+});
+
+test("a socket the server closed is reopened, on a backoff, unless the close was final (#998)", () => {
+  const closed = (attempt, extra = {}) =>
+    serverCloseRetryDelayMs({
+      reason: "io server disconnect",
+      attempt,
+      updateRequired: false,
+      turnedAwayForCapacity: false,
+      random: 0.5,
+      ...extra,
+    });
+  // Another tab took the seat, a kick, a stale socket: come back.
+  assert.equal(closed(0), SERVER_CLOSE_RETRY_BASE_MS);
+  assert.equal(closed(1), 2 * SERVER_CLOSE_RETRY_BASE_MS);
+  assert.equal(closed(10), SERVER_CLOSE_RETRY_MAX_MS);
+  // ±50% jitter around the step.
+  assert.equal(closed(0, { random: 0 }), SERVER_CLOSE_RETRY_BASE_MS / 2);
+  assert.equal(closed(0, { random: 1 }), SERVER_CLOSE_RETRY_BASE_MS * 1.5);
+  // Told it was full: the server said a few minutes, so the first try waits.
+  assert.equal(closed(0, { turnedAwayForCapacity: true }), SERVER_FULL_RETRY_MS);
+  // A stale build was closed on purpose and would only be closed again.
+  assert.equal(closed(0, { updateRequired: true }), null);
+  // This client closing its own socket, or a transport drop, is the
+  // manager's business, not this policy's.
+  assert.equal(closed(0, { reason: "io client disconnect" }), null);
+  assert.equal(closed(0, { reason: "transport close" }), null);
+  assert.equal(closed(0, { reason: "ping timeout" }), null);
 });

@@ -2,6 +2,7 @@ import { useId, useRef, useState } from "react";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { changePassword, requestPasswordReset } from "../lib/accountRecovery";
+import { reconnectWithCurrentIdentity } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
@@ -62,6 +63,10 @@ export function ChangePasswordDialog({
     setError(null);
     try {
       await changePassword(current, next);
+      // Every other device's socket was closed by the server; this one was
+      // kept, and handshakes again with the cookie the response just set,
+      // so it remembers the session it now belongs to (#1007).
+      reconnectWithCurrentIdentity();
       notify(ui.changePasswordDialog.passwordChangedEveryOtherDeviceHas, "success");
       onClose();
     } catch (failure) {

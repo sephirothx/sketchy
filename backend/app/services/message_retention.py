@@ -9,6 +9,7 @@ import time
 from uuid import UUID
 
 from sqlalchemy import delete, select
+from sqlalchemy.exc import DataError, DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.services.telemetry import database_operation_of, telemetry
@@ -72,6 +73,27 @@ async def purge_expired_room_messages(
         probe=overdue_probe(RoomMessage.expires_at, RoomMessage.expires_at <= cutoff),
         now=cutoff,
     )
+
+
+def _refused_a_row(error: BaseException) -> bool:
+    """Whether the statement failed on a value in it, not on the database.
+
+    SQLSTATE class 22 (data exception - a NUL in text is 22021) or 23
+    (integrity). Read off the driver's error, because the asyncpg dialect
+    wraps a server-side data exception as a bare `DBAPIError`, never as
+    SQLAlchemy's `DataError`; the type check is for the other dialects.
+    """
+    if isinstance(error, (DataError, IntegrityError)):
+        return True
+    seen: set[int] = set()
+    current: BaseException | None = error
+    while current is not None and id(current) not in seen:
+        seen.add(id(current))
+        code = getattr(current, "pgcode", None) or getattr(current, "sqlstate", None)
+        if isinstance(code, str) and len(code) == 5:
+            return code[:2] in ("22", "23")
+        current = getattr(current, "orig", None) or current.__cause__
+    return False
 
 
 class MessageRetentionService:
@@ -307,6 +329,24 @@ class MessageRetentionService:
                         len(batch),
                         WRITE_TIMEOUT_SECONDS,
                     )
+                except DBAPIError as error:
+                    if not _refused_a_row(error):
+                        # A lost connection, a lock, a timeout: the batch
+                        # would fail again row by row, and a hundred waits
+                        # for the same outage help nobody.
+                        logger.exception("Failed to retain %d messages", len(batch))
+                    else:
+                        # One row the database will not take - a value the
+                        # validators let through - failed the statement, and
+                        # a batch insert fails as one. The other lines are
+                        # somebody else's evidence (#995): write them one at
+                        # a time and log the row that is refused, rather
+                        # than losing the batch to it.
+                        logger.exception(
+                            "Batch of %d messages refused; retaining them singly",
+                            len(batch),
+                        )
+                        await self._write_singly(batch)
                 except Exception:
                     logger.exception("Failed to retain %d messages", len(batch))
             finally:
@@ -345,6 +385,44 @@ class MessageRetentionService:
         self._wake.clear()
         with contextlib.suppress(asyncio.TimeoutError):
             await asyncio.wait_for(self._wake.wait(), timeout=self._linger_seconds)
+
+    async def _write_singly(self, batch: list[RoomMessage]) -> None:
+        """Write each row on its own, so one the database refuses costs one.
+
+        Only a refusal the database pins on a row's value is worth going on
+        past: a timeout, a lost connection or anything else is the database
+        itself, and a hundred rows retried one by one against it would hold
+        the only writer for as many timeouts while later lines queued up
+        behind them. The rest of the batch is given up, as the batch path
+        gives up.
+        """
+        for row in batch:
+            try:
+                await asyncio.wait_for(self._write([row]), timeout=WRITE_TIMEOUT_SECONDS)
+            except asyncio.TimeoutError:
+                logger.error(
+                    "Timed out retaining message %s after %ss; the rest of its "
+                    "batch is not retried row by row",
+                    row.id,
+                    WRITE_TIMEOUT_SECONDS,
+                )
+                return
+            except DBAPIError as error:
+                if _refused_a_row(error):
+                    logger.warning("Message %s is not kept: the database refused it", row.id)
+                    continue
+                logger.exception(
+                    "Message %s is not kept, and the database is not answering; "
+                    "the rest of its batch is not retried row by row",
+                    row.id,
+                )
+                return
+            except Exception:
+                logger.exception(
+                    "Message %s is not kept; the rest of its batch is not retried row by row",
+                    row.id,
+                )
+                return
 
     @database_operation_of("message_batch")
     async def _write(self, batch: list[RoomMessage]) -> None:
