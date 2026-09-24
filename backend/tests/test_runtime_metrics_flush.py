@@ -246,8 +246,21 @@ async def test_the_stored_count_does_not_scan_the_table_on_postgresql():
         assert await flush_events(factory, recorder=recorder) == 120
         postgresql = engine.dialect.name == "postgresql"
         if postgresql:
-            async with engine.connect() as connection:
-                await connection.execute(text("ANALYZE runtime_events"))
+            # As the table's owner when the suite runs as the application
+            # role, which may not ANALYZE it (PostgreSQL skips with a warning
+            # and the estimate stays at "never analyzed").
+            import os
+
+            from tests.dbfixtures import create_test_engine
+
+            owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+            analyzer = create_test_engine(owner_url) if owner_url else engine
+            try:
+                async with analyzer.connect() as connection:
+                    await connection.execute(text("ANALYZE runtime_events"))
+            finally:
+                if analyzer is not engine:
+                    await analyzer.dispose()
         statements = _capture(engine)
 
         assert await stored_event_count(factory) == 120
