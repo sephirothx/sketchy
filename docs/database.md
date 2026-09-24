@@ -327,7 +327,7 @@ last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limit
 network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
 the one it was last seen from, or for staff from a different address. `device_label` is
 the browser the session was issued to; `last_device_label` the one it was last used from
-(NULL while that is still the issuing one), and the comparison is against it, so a label
+(NULL until the session is first seen from another browser), and the comparison is against it, so a label
 that changed for good is one anomaly rather than one per request (#1016); a player's address change is
 deliberately *not* an anomaly, because a phone crossing between mobile data and wi-fi
 does it several times an hour. An anomaly clears `stepped_up_at`, which is otherwise the

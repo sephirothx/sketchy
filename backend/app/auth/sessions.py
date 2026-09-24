@@ -107,8 +107,8 @@ class SessionData:
     lifetime: SessionLifetime = PLAYER_LIFETIME
     # When silence alone would end it, as the row itself records.
     idle_expires_at: datetime | None = None
-    # Set when this session was last used from a browser that does not match
-    # the one it was issued to - or, for staff, a different network. What the
+    # Set when this session was last used from a browser other than the one
+    # it was last seen from - or, for staff, a different network. What the
     # device list shows and what clears a step-up (R-AUTH-22).
     anomaly_at: datetime | None = None
     anomaly_count: int = 0
@@ -526,7 +526,7 @@ def _anomaly_reason(
     ip_hash: str | None,
     device_label: str | None,
 ) -> str | None:
-    """What about this use of the session does not match how it was issued.
+    """What about this use of the session does not match how it was last used.
 
     A changed browser is the signal worth acting on for everybody: a session
     issued to Chrome on Windows and used from Safari on macOS is a token that
