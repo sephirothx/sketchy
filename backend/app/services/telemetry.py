@@ -1502,7 +1502,7 @@ class Telemetry:
                             for (_, why), count in self.history_writes_abandoned.items()
                             if why == reason
                         )
-                        for reason in ("timeout", "error", "conflict", "exhausted", "unreadable")
+                        for reason in ("timeout", "error", "conflict", "exhausted", "unreadable", "invalid")
                     },
                 },
                 "historyHandoff": {

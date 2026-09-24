@@ -1166,7 +1166,9 @@ class Game:
                     self.prompt or ""
                 ),
                 drawer_token=self.current_drawer or "",
-                duration_seconds=self.elapsed_drawing_seconds(),
+                # Floored: a turn ended the instant it began (#1005) lasted
+                # nothing, and the record refuses a duration of nothing.
+                duration_seconds=max(self.elapsed_drawing_seconds(), 0.01),
                 guesses=tuple(
                     TurnGuessRecord(
                         token=token,

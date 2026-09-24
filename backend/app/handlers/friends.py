@@ -46,6 +46,7 @@ from app.handlers.rooms import (
     entry_deadline,
     _seat_in_room,
 )
+from app.domain_values import FriendshipState
 from app.services.friends import (
     REGISTER_FIRST,
     FriendshipOutcome,
@@ -119,13 +120,16 @@ async def add_friend(ctx: HandlerContext, sid, data):
         return BUSY_ACKNOWLEDGEMENT
     except FriendshipRefused as refused:
         return {"ok": False, "errorCode": ErrorCode.FRIEND_REFUSED, "error": str(refused)}
-    # Only the two outcomes that changed something are named. Everything else -
-    # already friends, already asked, or a block - answers the same, so the
-    # command cannot be used to tell those apart.
+    # One answer for a request, whatever became of it: landed, dropped by a
+    # block or an earlier refusal, already friends, already asked. Naming
+    # `created` beside `unchanged` told the asker which - the leak R-FRIEND-04
+    # forbids, closed on the REST route the same way (#1002). Only answering
+    # a request the other person had already made is named, and that is the
+    # caller's own news.
     reported = (
-        outcome.value
-        if outcome in (FriendshipOutcome.CREATED, FriendshipOutcome.ACCEPTED)
-        else "unchanged"
+        FriendshipState.ACCEPTED.value
+        if outcome == FriendshipOutcome.ACCEPTED
+        else FriendshipState.PENDING.value
     )
     return {"ok": True, "status": reported}
 

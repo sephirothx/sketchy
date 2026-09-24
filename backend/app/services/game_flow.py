@@ -10,7 +10,7 @@ import logging
 from collections import Counter
 from contextlib import asynccontextmanager
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from typing import Mapping, Protocol
 
@@ -763,6 +763,14 @@ class GameFlowService:
             raise RoomNoLongerStartableError(
                 "Need at least 2 active non-AFK players to start"
             )
+        if room.game is not None:
+            # A restart replaces a game that never ended. Its turns were drawn
+            # and guessed, and R-HIST-05 says a game that stops is recorded;
+            # the first version of this simply overwrote it, and a restart
+            # vote was the one way to lose a game without a trace (#993).
+            # Recorded before anything below is reset, since the scores, the
+            # departed seats and the recap it is made of are about to go.
+            await self.record_abandoned_game(room)
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0
         room.last_game_scores = []
@@ -1167,6 +1175,19 @@ class GameFlowService:
             game, player, spectators_see_prompt, reactions, drawer_transport
         )
 
+    def _turn_moved_on(self, room: Room, game: Game, turn_id: str | None, phase: Phase) -> bool:
+        """Whether the turn a fan-out was about is no longer the one in play.
+
+        Every per-seat emit is an await the game can move through: a seat
+        released while `turn_started` is being sent abandons the turn, and
+        the nested `_start_turn` schedules the next turn's choosing timer -
+        which the outer call then replaced with the drawing timer it was about
+        to arm, so the new drawer chose a prompt against a 90-300 s clock the
+        client showed as 15 s (#1004). A timer is armed only for the phase
+        it was computed for.
+        """
+        return room.game is not game or game.current_turn_id != turn_id or game.phase != phase
+
     async def _start_turn(self, room: Room, *, game_started: bool = False) -> None:
         game = room.game
         assert game is not None
@@ -1196,13 +1217,18 @@ class GameFlowService:
         }
         if game_started:
             starting["gameStarted"] = True
+        turn_id = game.current_turn_id
         await self._sio.emit("turn_starting", starting, room=room.id)
+        if self._turn_moved_on(room, game, turn_id, Phase.CHOOSING_PROMPT):
+            return
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",
                 {"choices": choices, "seconds": timing.choose_prompt_seconds},
                 to=drawer.sid,
             )
+        if self._turn_moved_on(room, game, turn_id, Phase.CHOOSING_PROMPT):
+            return
         self.schedule_phase_timer(room, timing.choose_prompt_seconds)
 
     async def _begin_drawing(self, room: Room) -> None:
@@ -1221,7 +1247,21 @@ class GameFlowService:
                 if player.id != game.current_drawer
             }
         )
+        # The drawing deadline first: a turn ended below reads its duration
+        # off it, and the choose-prompt deadline still standing here would
+        # record a turn that lasted nothing as most of a drawing phase.
         game.set_phase_deadline(game.drawing_seconds)
+        if not any(
+            reason == TurnEligibilityReason.ELIGIBLE.value
+            for reason in (game.turn_eligibility_reasons or {}).values()
+        ):
+            # Nobody can guess this turn - every other seat is AFK or away,
+            # and eligibility is frozen for the turn - so the clock would
+            # only run out on an empty room (#1005). Ended the way it would
+            # have ended then, so the results show and the game moves on.
+            await self._end_turn(room)
+            return
+        turn_id = game.current_turn_id
         # Read once for the whole fan-out: one drawer, one transport.
         drawer_transport = self._drawer_transport(room)
         # One emit per socket, deliberately, even though at turn start every
@@ -1235,6 +1275,12 @@ class GameFlowService:
         for p in room.player_list():
             if not p.sid:
                 continue
+            if self._turn_moved_on(room, game, turn_id, Phase.DRAWING):
+                # The seats not yet reached would be told a turn that has
+                # already gone - the departed drawer's, with the drawing
+                # countdown - and the client takes `turn_started` as the
+                # phase it is in.
+                return
             await self._sio.emit(
                 "turn_started",
                 {
@@ -1256,6 +1302,8 @@ class GameFlowService:
                 },
                 to=p.sid,
             )
+        if self._turn_moved_on(room, game, turn_id, Phase.DRAWING):
+            return
         self.schedule_phase_timer(room, game.drawing_seconds)
         self.schedule_hint_checkpoints(room)
 
@@ -1270,12 +1318,17 @@ class GameFlowService:
         """
         return await self._end_turn(room)
 
-    async def _end_turn(self, room: Room) -> bool:
-        game = room.game
-        if not game or game.phase != Phase.DRAWING:
-            return False
-        self._timers.cancel_phase_timer(room.id)
-        self._timers.cancel_hint_timers(room.id)
+    def _settle_live_turn(self, room: Room, game: Game) -> int | None:
+        """Close the drawing turn as a fact: outcomes, scores, the drawing.
+
+        Everything `_end_turn` decides about a turn, and nothing it says
+        about it - no emit, no timer - so a game recorded while a turn is
+        in progress (#992: everybody walked out, or the process is draining,
+        after somebody guessed) can fold that turn into its history and the
+        points already on the seats have the ledger events the writer
+        requires. Returns the drawer bonus, or None when there was no
+        drawing turn to close.
+        """
         active_eligible = {
             player.id
             for player in room.active_players()
@@ -1310,10 +1363,17 @@ class GameFlowService:
             all_active_guessed=all_active_guessed,
         )
         if drawer_bonus is None:
-            return False
+            return None
         drawer = room.players.get(game.current_drawer)
+        departed = room.departed_seats.get(game.current_drawer or "")
         if drawer:
             drawer.score += drawer_bonus
+        elif departed is not None:
+            # A drawer who walked out after somebody guessed still earned the
+            # bonus (R-SCORE-08), and the history writer requires the seat's
+            # score to sum with the ledger's `drawer_bonus` event (#992).
+            departed = replace(departed, score=departed.score + drawer_bonus)
+            room.departed_seats[departed.player_id] = departed
         room.record_drawing_recap(
             DrawingRecapEntry(
                 # end_turn appended this turn a moment ago, so it is the one
@@ -1323,14 +1383,33 @@ class GameFlowService:
                 round_number=game.round_number,
                 turn_number=len(room.last_game_drawings) + 1,
                 drawer_id=game.current_drawer or "",
-                drawer_nickname=drawer.nickname if drawer else "Unknown player",
-                drawer_name_color=drawer.name_color if drawer else None,
+                drawer_nickname=(
+                    drawer.nickname
+                    if drawer
+                    else departed.nickname
+                    if departed
+                    else "Unknown player"
+                ),
+                drawer_name_color=(
+                    drawer.name_color if drawer else departed.name_color if departed else None
+                ),
                 prompt=game.prompt or "",
                 action_count=len(game.canvas.history),
                 canvas_history=game.canvas.sync_payload(),
             )
         )
 
+        return drawer_bonus
+
+    async def _end_turn(self, room: Room) -> bool:
+        game = room.game
+        if not game or game.phase != Phase.DRAWING:
+            return False
+        self._timers.cancel_phase_timer(room.id)
+        self._timers.cancel_hint_timers(room.id)
+        drawer_bonus = self._settle_live_turn(room, game)
+        if drawer_bonus is None:
+            return False
         # Before the payload is built: `seconds` on it is
         # `game.remaining_seconds()`, which without this still answers for the
         # drawing phase that just ended. A turn that ran out of clock therefore
@@ -1339,11 +1418,14 @@ class GameFlowService:
         # 200 seconds for a 5 second screen. The countdown the client draws
         # from it was wrong in both directions.
         game.set_phase_deadline(timing.turn_results_seconds)
+        turn_id = game.current_turn_id
         await self._sio.emit(
             "turn_ended",
             self._turn_ended_payload(room, drawer_bonus=drawer_bonus),
             room=room.id,
         )
+        if self._turn_moved_on(room, game, turn_id, Phase.TURN_RESULTS):
+            return True
         self.schedule_phase_timer(room, timing.turn_results_seconds)
         return True
 
@@ -1368,6 +1450,12 @@ class GameFlowService:
         game = room.game
         if game is None:
             return False
+        if game.phase == Phase.DRAWING and game.correct_guessers:
+            # Somebody guessed the turn in progress: their points are on
+            # their seat, and the history writer proves every seat's score
+            # against the ledger (R-HIST-12). Closed as a fact so the ledger
+            # has the turn those points came from (#992).
+            self._settle_live_turn(room, game)
         history = (
             build_game_history(
                 room,
@@ -1547,19 +1635,46 @@ class GameFlowService:
             room.state = "waiting"
             room.game = None
             self._note_history_write_started(room, game, history)
+            usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
+            envelope = FinishedGameEnvelope(history, usage, revision_ids) if history else None
+            # Always on its own task (#976 fourth review), never inside the
+            # action: a game ends inside a `room_state_batch`, so awaiting the
+            # handoff here put the encode - deliberately unbounded, so that a
+            # burst of endings costs latency rather than games - in front of
+            # the room's own snapshot. Nothing a player is waiting to see is
+            # behind it: the task runs at the next suspension, which is the
+            # `game_ended` below. Created *before* the shutdown coordinator
+            # is told the game is over (#994): the drain counts a room with
+            # no game as drained and `drain_room_cleanups` returns at once
+            # when nothing is tracked, so a staging created after either
+            # look ran on a task nobody waited for, and a deploy landing on
+            # the last turn's results screen lost the game without a trace.
+            self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
-            room.last_game_scores = [
+            # An account that left and rejoined holds the points of both
+            # seats, here as in the record (R-HIST-12, #992): the standings
+            # a room is shown and the ones it is written with agree.
+            carried: dict[str, int] = {}
+            for seat in room.departed_seats.values():
+                if seat.user_id and not seat.is_spectator:
+                    carried[seat.user_id] = carried.get(seat.user_id, 0) + seat.score
+            standings = [
                 {
                     "playerId": p.id,
                     "nickname": p.nickname,
                     "nameColor": p.name_color,
                     "avatarUrl": avatar_url(p.avatar_key),
                     "isAnonymous": p.is_anonymous,
-                    "score": p.score,
+                    "score": p.score + (carried.get(p.user_id, 0) if p.user_id else 0),
                 }
-                for p in sorted(room.player_list(), key=lambda p: -p.score)
+                for p in room.player_list()
             ]
+            # Ordered by the score each entry carries, not the seat's alone:
+            # the podium is read off this order, and a seat holding 100 of
+            # its account's 500 belongs above one holding 300 (review of
+            # #1047).
+            room.last_game_scores = sorted(standings, key=lambda entry: -entry["score"])
             # Built from the snapshot above, before the emit and before any
             # await, for the same reason the scores are: by the time anything
             # yields, the room is an editable waiting room again.
@@ -1570,17 +1685,6 @@ class GameFlowService:
             # room is about to be shown.
             await self._sio.emit("game_ended", room.last_game_payload(), room=room.id)
             await self._emit_room_state(room)
-            # Last, so that nothing a player is waiting to see is behind a
-            # database round trip.
-            usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
-            envelope = FinishedGameEnvelope(history, usage, revision_ids) if history else None
-            # Always on its own task (#976 fourth review), never inside the
-            # action: a game ends inside a `room_state_batch`, so awaiting the
-            # handoff here put the encode - deliberately unbounded, so that a
-            # burst of endings costs latency rather than games - in front of
-            # the room's own snapshot. Tracked, so the shutdown drain still
-            # waits for it.
-            self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
         else:
             await self._start_turn(room)
 
@@ -1633,6 +1737,9 @@ class GameFlowService:
         """
         game = room.game
         if not game or room.state != "playing":
+            return
+        if player.is_afk and self._too_few_to_go_on(room, game):
+            await self._end_game_too_few(room)
             return
         if player.is_afk and player.id == game.current_drawer:
             if game.phase == Phase.CHOOSING_PROMPT:
@@ -1687,20 +1794,73 @@ class GameFlowService:
         game = room.game
         if not game:
             return
+        if (
+            token == game.current_drawer
+            and game.phase == Phase.DRAWING
+            and game.correct_guessers
+        ):
+            # Somebody already guessed: the points are on their seat and the
+            # drawing exists, so this is a turn that ended, not one that never
+            # happened. Abandoning it dropped the turn from `completed_turns`
+            # while the points stayed on the seats, and the ledger the history
+            # writer proves against no longer summed to the scores - every game
+            # with a mid-turn walkout was refused (#992). Ended the way the
+            # clock ends one, the way an AFK drawer's turn already is - and
+            # before the rotation loses the seat, because removing the drawer
+            # rewinds the cursor to before the next survivor, and a turn
+            # recorded after that carries round 0.
+            await self._end_turn(room)
         was_drawer = game.remove_player_from_rotation(token)
-        if not game.turn_order:
-            self._timers.cancel_phase_timer(room.id)
-            self._timers.cancel_hint_timers(room.id)
-            self._timers.cancel_restart_timer(room.id)
-            room.restart_vote = None
-            room.state = "waiting"
-            await self.record_abandoned_game(room, defer_durable=defer_durable)
-            if self._ctx.shutdown is not None:
-                self._ctx.shutdown.notify_game_state_changed()
-        elif was_drawer:
+        if self._too_few_to_go_on(room, game):
+            await self._end_game_too_few(room, defer_durable=defer_durable)
+        elif was_drawer and game.phase != Phase.TURN_RESULTS:
             await self._abandon_current_turn(room, defer_durable=defer_durable)
+        elif was_drawer:
+            # The turn just ended - above, or by its own clock a moment ago.
+            # The results screen runs its course and its timer moves the game
+            # on from the cursor the removal left; cutting it short showed
+            # the next turn under a results screen nobody had read.
+            pass
         else:
             await self._end_turn_if_all_guessed(room)
+
+    def _too_few_to_go_on(self, room: Room, game: Game) -> bool:
+        """Fewer than two seats that are in the rotation and not AFK.
+
+        Counted like the start is (`_start_fresh_game`): an AFK seat stays in
+        the rotation, but a game with one active player and one AFK one is a
+        game one person is playing - and with every turn ending at once for
+        want of a guesser (#1005), it would fast-forward through its rounds
+        and be recorded as finished, with a win against nobody.
+        """
+        active = [
+            token
+            for token in game.turn_order
+            if (player := room.players.get(token)) is not None and not player.is_afk
+        ]
+        return len(active) < MIN_PLAYERS_TO_START
+
+    async def _end_game_too_few(self, room: Room, *, defer_durable: bool = False) -> None:
+        """Stop a game too few are left to play (#1005).
+
+        The way one everybody walked out of stops: recorded as abandoned,
+        the room back to waiting, where whoever is left can be joined again,
+        and told - one player would otherwise draw every remaining turn to an
+        empty room for the full clock each time.
+        """
+        game = room.game
+        if game is None:
+            return
+        self._timers.cancel_phase_timer(room.id)
+        self._timers.cancel_hint_timers(room.id)
+        self._timers.cancel_restart_timer(room.id)
+        room.restart_vote = None
+        room.state = "waiting"
+        await self.record_abandoned_game(room, defer_durable=defer_durable)
+        if self._ctx.shutdown is not None:
+            self._ctx.shutdown.notify_game_state_changed()
+        if room.connected_players():
+            await self.announce(room, Announcement.GAME_ENDED_TOO_FEW_PLAYERS)
 
     async def _existing_player_for_sid(self, sid: str, room_id: str) -> Player | None:
         """If this socket already has a live session in the target room, return its player.
