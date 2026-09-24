@@ -72,7 +72,10 @@ export function RoomChatPanel({
   const locale = useLocaleRerender();
   recordRender("chat");
   const inputPurpose = inputPurposeFor(mode, canGuess);
-  const [previousInputPurpose, setPreviousInputPurpose] = useState(inputPurpose);
+  // A draft outlives the purpose flipping under it: a correct guess, or a
+  // turn's results giving way to the next drawing, is not a reason to lose a
+  // half-typed line. Only entering or leaving a game clears the input.
+  const [previousMode, setPreviousMode] = useState(mode);
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
   const [historyIndex, setHistoryIndex] = useState<number | null>(null);
@@ -151,8 +154,8 @@ export function RoomChatPanel({
     return () => window.clearTimeout(timeout);
   }, [deliveryError]);
 
-  if (previousInputPurpose !== inputPurpose) {
-    setPreviousInputPurpose(inputPurpose);
+  if (previousMode !== mode) {
+    setPreviousMode(mode);
     setText("");
     setHistoryIndex(null);
     setError(null);
@@ -220,7 +223,6 @@ export function RoomChatPanel({
   }
 
   function handleKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
-    if (inputPurpose !== "guess") return;
     if (event.key === "ArrowUp") {
       if (history.length === 0) return;
       const targetInput = event.currentTarget;
