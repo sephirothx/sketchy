@@ -143,9 +143,17 @@ export function GalleryPage() {
     try {
       const fetched = await fetchGallery(filters, cursor);
       if (askingRef.current !== asked) return;
-      setPage((held) => (held && held.key === filterKey && held.reader === reader
-        ? { ...held, entries: [...held.entries, ...fetched.entries], cursor: fetched.nextCursor }
-        : held));
+      setPage((held) => {
+        if (!held || held.key !== filterKey || held.reader !== reader) return held;
+        // Hot and Top are live ranks: a reaction landing between two pages
+        // can move a row from above the cut to below it, and the next page
+        // then carries a drawing already on screen (#1072). Dropped here -
+        // a repeat is the one drift a reader can see; a row moved the other
+        // way is simply not met until a reload, as R-GAL-04 records.
+        const shown = new Set(held.entries.map((entry) => entry.turnId));
+        const fresh = fetched.entries.filter((entry) => !shown.has(entry.turnId));
+        return { ...held, entries: [...held.entries, ...fresh], cursor: fetched.nextCursor };
+      });
       setStalledView(null);
       setFailure(null);
     } catch (moreError) {
