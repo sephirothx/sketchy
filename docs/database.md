@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`b5c6d7e8f9a1_invalid_handoff_failure.py` (#992). Both this line and the table
+`a8b9c0d1e2f4_session_last_device_label.py` (#1016). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -285,7 +285,7 @@ Notable design points:
 One revocable signed-in device.
 
 `id` · `user_id` (CASCADE) · `token_hash` VARCHAR(64) **unique** · `device_label` ·
-`rotated_from_id` (self-FK, unique, `SET NULL`) · `ip_hash` · `last_ip_hash` ·
+`last_device_label` · `rotated_from_id` (self-FK, unique, `SET NULL`) · `ip_hash` · `last_ip_hash` ·
 `anomaly_at` · `anomaly_count` · `stepped_up_at` · `created_at` · `last_used_at` ·
 `expires_at` · `revoked_at`, with `ck_auth_sessions_anomaly_count` and
 `ck_auth_sessions_anomaly_pair` (a session that never looked wrong has no time at
@@ -324,8 +324,11 @@ enrol from.
 `ip_hash` is the address the session was **issued** to and `last_ip_hash` the one it was
 last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limiter uses
 — raw addresses are never stored, so these answer "same network?" without knowing which
-network. `anomaly_at`/`anomaly_count` record a session used from a browser it was not
-issued to, or for staff from a different address; a player's address change is
+network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
+the one it was last seen from, or for staff from a different address. `device_label` is
+the browser the session was issued to; `last_device_label` the one it was last used from
+(NULL until the session is first seen from another browser), and the comparison is against it, so a label
+that changed for good is one anomaly rather than one per request (#1016); a player's address change is
 deliberately *not* an anomaly, because a phone crossing between mobile data and wi-fi
 does it several times an hour. An anomaly clears `stepped_up_at`, which is otherwise the
 last time this device proved its second factor (R-AUTH-21) — held here rather than in
