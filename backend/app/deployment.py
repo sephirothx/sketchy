@@ -185,6 +185,10 @@ def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> Non
     the point: a mail misconfiguration that only shows up in the recovery
     flow shows up to the one person who cannot report it.
 
+    For the same reason a production relay reached with a password must be
+    encrypted (#1013): `SMTP_SECURITY=none` would hand the password, and then
+    every reset link, to anyone on the path.
+
     Imported locally for the reason ``validate_database_configuration`` has:
     this module is imported by the runner before the application is, and
     ``app.auth.mail`` reaches the ORM. Asking that module rather than reading
@@ -192,10 +196,22 @@ def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> Non
     """
 
     values = os.environ if environ is None else environ
+
+    from app.auth.mail import SmtpSecurity, mail_is_configured, smtp_security
+
+    # In every environment: an unrecognised mode would otherwise surface as
+    # every message failing, one sweep at a time, long after startup.
+    security = smtp_security(values)
+    if "SMTP_STARTTLS" in values:
+        # Its replacement's default is to encrypt, so an old
+        # `SMTP_STARTTLS=0` for a plain local relay would otherwise turn into
+        # every send failing, found only in the outbox's `last_error`.
+        raise RuntimeError(
+            "SMTP_STARTTLS was replaced by SMTP_SECURITY (starttls, tls or "
+            "none); remove it and set SMTP_SECURITY instead."
+        )
     if not is_production(values):
         return
-
-    from app.auth.mail import mail_is_configured
 
     if not mail_is_configured(values):
         raise RuntimeError(
@@ -203,6 +219,13 @@ def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> Non
             "Without a relay the outbox falls back to logging each message, "
             "which would write confirmation and reset links into the "
             "application log and send nothing to the player waiting for one."
+        )
+    if security is SmtpSecurity.NONE and values.get("SMTP_PASSWORD"):
+        raise RuntimeError(
+            f"SMTP_SECURITY=none sends SMTP_PASSWORD in the clear; use "
+            f"starttls or tls when {ENVIRONMENT_VARIABLE}={PRODUCTION}. "
+            "An unencrypted relay is for a server on the same host or a "
+            "private network, which needs no password."
         )
 
 
