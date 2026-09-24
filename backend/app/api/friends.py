@@ -17,7 +17,8 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
@@ -84,7 +85,7 @@ async def _current_account(
 MAX_ANNOUNCED_AT_ONCE = 50
 
 
-class FriendBody(BaseModel):
+class FriendBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_id: UUID = Field(alias="userId")
@@ -110,7 +111,7 @@ def _person_payload(row: Friendship, person: User, viewer_id: UUID) -> dict:
     }
 
 
-class AnnouncedBody(BaseModel):
+class AnnouncedBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_ids: list[UUID] = Field(

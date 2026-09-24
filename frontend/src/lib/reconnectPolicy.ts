@@ -250,3 +250,42 @@ would change nothing. Engine.IO closes the session 45 s after the last pong
 export function attemptIsInFlight(managerReadyState: string | undefined): boolean {
   return managerReadyState === "opening" || managerReadyState === "open";
 }
+
+// --- after the server closed the socket (#998) -----------------------------
+//
+// socket.io-client treats `io server disconnect` as final: the manager does
+// not retry, and nothing else on this client reopened the socket. Every
+// server-side close that is not a refusal - another tab taking the seat, a
+// kick, a socket told to upgrade and still here, the capacity ceiling - left
+// the tab with a socket that never came back: a lobby with no room list and
+// a "reconnecting" banner that meant nothing. The server closes a socket it
+// wants gone *for now*; one it wants gone for good refuses the handshake, and
+// a refused handshake is not retried by the manager either.
+
+export const SERVER_CLOSE_RETRY_BASE_MS = 1000;
+export const SERVER_CLOSE_RETRY_MAX_MS = 30_000;
+/** Told the server is full: it said "a few minutes", so the first try waits. */
+export const SERVER_FULL_RETRY_MS = 30_000;
+
+/** How long to wait before reopening a socket the server closed, or null when
+this close is not one to come back from. `attempt` counts closes since the
+last successful handshake; `random` is a uniform draw for the ±50% jitter. */
+export function serverCloseRetryDelayMs(state: {
+  reason: string;
+  attempt: number;
+  updateRequired: boolean;
+  turnedAwayForCapacity: boolean;
+  random: number;
+}): number | null {
+  if (state.reason !== "io server disconnect") return null;
+  // A stale build is closed on purpose and asked to reload; reopening would
+  // be told the same thing and closed again (R-CONN-10).
+  if (state.updateRequired) return null;
+  const base = state.turnedAwayForCapacity
+    ? SERVER_FULL_RETRY_MS
+    : Math.min(
+        SERVER_CLOSE_RETRY_BASE_MS * 2 ** Math.max(0, state.attempt),
+        SERVER_CLOSE_RETRY_MAX_MS,
+      );
+  return Math.round(base * (0.5 + state.random));
+}

@@ -1317,3 +1317,31 @@ async def test_a_spray_is_still_bounded_once_the_deployment_bucket_is_full(env, 
     await guard.note_failure(username="Spread99", address="10.3.3.99")
     # ...and no more while the deployment bucket stays full.
     assert not (await guard.check(username="Spread99", address="10.3.3.99")).allowed
+
+
+async def test_a_password_holding_a_control_character_opens_every_door(env):
+    """The policy accepts such a password; the control-character door
+    (#995) must not read it as text, or its owner is refused at sign-in,
+    at the password change and at every other proof (review of #1046)."""
+    new_client, _, _ = env
+    browser = new_client()
+    password = "long-enough\x1bsecret"
+    registered = await browser.post(
+        "/api/auth/register", json={"username": "Escaped", "password": password}
+    )
+    assert registered.status_code == 200, registered.text
+    assert (await browser.post("/api/auth/logout")).status_code == 200
+    signed_in = await browser.post(
+        "/api/auth/login", json={"username": "Escaped", "password": password}
+    )
+    assert signed_in.status_code == 200, signed_in.text
+    changed = await browser.post(
+        "/api/auth/password/change",
+        json={"currentPassword": password, "password": "another\x1bgood-password-42"},
+    )
+    assert changed.status_code == 200, changed.text
+    # The text fields beside it are still held to the rule.
+    refused = await browser.post(
+        "/api/auth/login", json={"username": "Esc\x00aped", "password": password}
+    )
+    assert refused.status_code == 422

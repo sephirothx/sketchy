@@ -584,6 +584,7 @@ export const NL: Catalogue = {
     addressIsConfirmedYouCan: (p: { address: string }) =>
       `${p.address} is bevestigd. Je kunt dit account nu herstellen.`,
     yourPasswordIsSetAnd: "Je wachtwoord is ingesteld en je bent weer ingelogd.",
+    yourPasswordIsSetSignIn: "Je wachtwoord is ingesteld. Log opnieuw in met je tweede factor.",
     resetYourPassword: "Wachtwoord opnieuw instellen",
     thatLinkNoLongerWorks: "Die link werkt niet meer",
     chooseANewPassword: "Kies een nieuw wachtwoord",
@@ -655,6 +656,9 @@ export const NL: Catalogue = {
     email: "E-mail",
     pleaseWait: "Even geduld…",
     sendConfirmation: "Bevestiging sturen",
+    yourPassword: "Je wachtwoord",
+    passwordConfirmsItIsYou: "Je wachtwoord bevestigt dat jij het bent: via dit adres wordt het account hersteld.",
+    enterYourPasswordToConfirm: "Voer je wachtwoord in om de wijziging te bevestigen.",
     close: "Sluiten",
     notNow: "Niet nu",
   },

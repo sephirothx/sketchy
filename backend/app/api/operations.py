@@ -24,6 +24,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
+from app.request_text import CONTROL_CHARACTER_MESSAGE, has_control_characters
 from app.auth.audit import audit_coordinates
 from app.db.models import (
     AuditEvent,
@@ -54,6 +55,12 @@ from app.services.telemetry import (
 
 
 logger = logging.getLogger(__name__)
+
+
+def _refuse_control_characters(*values: str | None) -> None:
+    """A filter reaches a statement as it is; PostgreSQL refuses a NUL in it (#995)."""
+    if any(value and has_control_characters(value) for value in values):
+        raise HTTPException(status_code=422, detail=CONTROL_CHARACTER_MESSAGE)
 
 
 def _scrape_token() -> str:
@@ -683,6 +690,7 @@ def create_operations_router(
     ):
         """Raw observations, for looking at one room or one kind of event."""
         await require_admin(request)
+        _refuse_control_characters(event_type, room_id)
         return {
             "events": await recent_events(
                 session_factory,
@@ -751,6 +759,7 @@ def create_operations_router(
         target is the question the ledger could not answer before #397.
         """
         await require_admin(request)
+        _refuse_control_characters(event_type, target_type, target_id)
         async with session_factory() as session:
             statement = select(AuditEvent).order_by(AuditEvent.created_at.desc())
             if event_type:
