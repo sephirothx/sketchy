@@ -5,6 +5,7 @@ import { ScratchPad } from "./ScratchPad";
 import { Button } from "./ui/Button";
 import { DRAIN_CUE_MS, drainCue, type RoomPauseCause } from "../lib/appNotices";
 import { useDrainSecondsLeft } from "../hooks/useServerNotices";
+import { kickedText } from "../lib/roomNotices";
 import { useServerNoticesStore, type RoomEndReason } from "../store/serverNoticesStore";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/reactions.css";
@@ -71,9 +72,15 @@ export function RoomEndedCard({ reason, onLeave }: { reason: RoomEndReason; onLe
   return (
     <div className="room-ended" data-testid="room-ended" data-reason={reason}>
       <div className="surface-card room-stage-card" role="alert">
-        <h2 className="room-stage-title">{ui.roomStageNotice.gameEnded}</h2>
+        <h2 className="room-stage-title">
+          {reason === "kicked" ? ui.roomStageNotice.removedByVote : ui.roomStageNotice.gameEnded}
+        </h2>
         <p className="room-stage-body">
-          {reason === "server-update" ? ui.roomStageNotice.endedServerUpdate : ui.roomStageNotice.endedRoomClosed}
+          {reason === "kicked"
+            ? kickedText("kicked_by_vote")
+            : reason === "server-update"
+              ? ui.roomStageNotice.endedServerUpdate
+              : ui.roomStageNotice.endedRoomClosed}
         </p>
         <div className="room-stage-actions">
           <button ref={actionRef} type="button" className="btn btn-primary" onClick={onLeave}>

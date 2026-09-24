@@ -153,6 +153,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   host_only: "Dat kan alleen de gastheer.",
   players_only: "Dat kunnen alleen spelers.",
   waiting_room_only: "Dat kan alleen in de wachtkamer.",
+  kicked_from_room: "Je bent uit deze kamer gezet en kunt niet terugkomen.",
   already_a_player: "Je bent al speler.",
   registered_name_fixed: "Geregistreerde spelers spelen onder hun gebruikersnaam.",
   name_taken_by_account: "Deze naam hoort bij een geregistreerde speler.",
@@ -402,6 +403,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "De herstartstemming is afgebroken omdat er minder dan twee actieve spelers over zijn.",
   restart_cancelled: (p) => `De herstart is afgebroken omdat ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "Het spel is opnieuw gestart door een stemming van de spelers.",
+  game_ended_too_few_players: () => "Het spel is afgelopen: er zijn minder dan twee spelers over.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} ptn - ${counted(count(p.count, 1), {
@@ -584,6 +586,7 @@ export const NL: Catalogue = {
     addressIsConfirmedYouCan: (p: { address: string }) =>
       `${p.address} is bevestigd. Je kunt dit account nu herstellen.`,
     yourPasswordIsSetAnd: "Je wachtwoord is ingesteld en je bent weer ingelogd.",
+    yourPasswordIsSetSignIn: "Je wachtwoord is ingesteld. Log opnieuw in met je tweede factor.",
     resetYourPassword: "Wachtwoord opnieuw instellen",
     thatLinkNoLongerWorks: "Die link werkt niet meer",
     chooseANewPassword: "Kies een nieuw wachtwoord",
@@ -655,6 +658,9 @@ export const NL: Catalogue = {
     email: "E-mail",
     pleaseWait: "Even geduld…",
     sendConfirmation: "Bevestiging sturen",
+    yourPassword: "Je wachtwoord",
+    passwordConfirmsItIsYou: "Je wachtwoord bevestigt dat jij het bent: via dit adres wordt het account hersteld.",
+    enterYourPasswordToConfirm: "Voer je wachtwoord in om de wijziging te bevestigen.",
     close: "Sluiten",
     notNow: "Niet nu",
   },
@@ -1419,7 +1425,6 @@ export const NL: Catalogue = {
     requestCouldNotBeSent: "Dit verzoek kon niet verstuurd worden.",
     nowFriends: (p: { name: string }) => `Jij en ${p.name} zijn nu vrienden.`,
     friendRequestSent: (p: { name: string }) => `Vriendschapsverzoek gestuurd naar ${p.name}.`,
-    nothingToDoAbout: (p: { name: string }) => `Er valt nu niets te doen met ${p.name}.`,
     rank: (p: { rank: number }) => `Plek ${p.rank}`,
     moderationFor: (p: { name: string }) => `Moderatie voor ${p.name}`,
     moderationActionsFor: (p: { name: string }) => `Moderatieacties voor ${p.name}`,
@@ -1955,6 +1960,7 @@ export const NL: Catalogue = {
     gameEnded: "Dit spel is afgelopen",
     endedServerUpdate: "De server is bijgewerkt en het lopende spel kon niet doorgaan.",
     endedRoomClosed: "De kamer is gesloten terwijl je verbinding weg was.",
+    removedByVote: "Uit de kamer gezet",
     backToLobby: "Terug naar de lobby",
   },
 
@@ -2650,5 +2656,6 @@ export const NL: Catalogue = {
     removedByAdmin: "Een beheerder heeft je verwijderd.",
     accountDeleted: "Je account is verwijderd.",
     accountSuspended: "Je account is geschorst.",
+    signedOut: "Je bent op dit apparaat uitgelogd.",
   },
 };

@@ -135,6 +135,45 @@ export function afterFailedRebind(options: {
   return options.keepTransport && options.transportAlive ? "keep" : "restart";
 }
 
+/** What a phase that has overrun its clock should cost (#1009).
+
+The stall check used to force a full transport restart whenever the local
+phase ran 2.5 s past its deadline, every ten seconds. A server that is merely
+late runs every room's phase late at once, so every seated client tore its
+transport down every ten seconds, and each restart was a seat takeover the
+server counts; past the takeover ceiling the rebind was refused and a healthy
+game was shown as "Couldn't reconnect". While the transport is alive the
+server is slow, not gone, and a soft rebind reconciles the phase without a
+teardown; during an approved restart the game has no phase to be late in.
+Each recovery pushes the next one out, doubling from `STALL_INTERVAL_MS` to
+a minute with the heartbeat's ±50% jitter (#872), so a server slow enough to
+miss the soft rebind too is asked less often the slower it gets rather than
+by every seat on a fixed ten-second cadence. The hook resets the run once
+the phase is on time again. */
+export const STALL_INTERVAL_MS = 10_000;
+
+export function stallRecovery(state: {
+  transportAlive: boolean;
+  restartApproved: boolean;
+  escalations: number;
+  notBefore: number;
+  now: number;
+  random: number;
+}): { action: "none" | "soft" | "restart"; escalations: number; notBefore: number } {
+  const { escalations, notBefore, now, random } = state;
+  if (state.restartApproved || now < notBefore) {
+    return { action: "none", escalations, notBefore };
+  }
+  const next = escalations + 1;
+  const base = Math.min(STALL_INTERVAL_MS * 2 ** (next - 1), ESCALATION_MAX_MS);
+  const jitter = 0.5 + Math.min(Math.max(random, 0), 1);
+  return {
+    action: state.transportAlive ? "soft" : "restart",
+    escalations: next,
+    notBefore: now + Math.floor(base * jitter),
+  };
+}
+
 /** What this client knows about a planned restart, from the notice to the
 replacement connection (#872).
 
@@ -249,4 +288,43 @@ would change nothing. Engine.IO closes the session 45 s after the last pong
 (wire-protocol §1) and the ordinary reconnect follows. */
 export function attemptIsInFlight(managerReadyState: string | undefined): boolean {
   return managerReadyState === "opening" || managerReadyState === "open";
+}
+
+// --- after the server closed the socket (#998) -----------------------------
+//
+// socket.io-client treats `io server disconnect` as final: the manager does
+// not retry, and nothing else on this client reopened the socket. Every
+// server-side close that is not a refusal - another tab taking the seat, a
+// kick, a socket told to upgrade and still here, the capacity ceiling - left
+// the tab with a socket that never came back: a lobby with no room list and
+// a "reconnecting" banner that meant nothing. The server closes a socket it
+// wants gone *for now*; one it wants gone for good refuses the handshake, and
+// a refused handshake is not retried by the manager either.
+
+export const SERVER_CLOSE_RETRY_BASE_MS = 1000;
+export const SERVER_CLOSE_RETRY_MAX_MS = 30_000;
+/** Told the server is full: it said "a few minutes", so the first try waits. */
+export const SERVER_FULL_RETRY_MS = 30_000;
+
+/** How long to wait before reopening a socket the server closed, or null when
+this close is not one to come back from. `attempt` counts closes since the
+last successful handshake; `random` is a uniform draw for the ±50% jitter. */
+export function serverCloseRetryDelayMs(state: {
+  reason: string;
+  attempt: number;
+  updateRequired: boolean;
+  turnedAwayForCapacity: boolean;
+  random: number;
+}): number | null {
+  if (state.reason !== "io server disconnect") return null;
+  // A stale build is closed on purpose and asked to reload; reopening would
+  // be told the same thing and closed again (R-CONN-10).
+  if (state.updateRequired) return null;
+  const base = state.turnedAwayForCapacity
+    ? SERVER_FULL_RETRY_MS
+    : Math.min(
+        SERVER_CLOSE_RETRY_BASE_MS * 2 ** Math.max(0, state.attempt),
+        SERVER_CLOSE_RETRY_MAX_MS,
+      );
+  return Math.round(base * (0.5 + state.random));
 }

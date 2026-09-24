@@ -5,12 +5,16 @@ spectators, and every one of them was another recipient of every broadcast.
 """
 from __future__ import annotations
 
+import asyncio
 from unittest.mock import AsyncMock
+
+from app.protocol import SERVER_FULL_CLOSE_SECONDS
 
 import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
+from app.refusals import ErrorCode
 from app.rooms import RoomManager
 from app.services.room_quotas import RoomCapacityService
 from tests.handlers.helpers import SessionStore
@@ -114,7 +118,19 @@ async def test_the_server_stops_accepting_sockets_past_its_ceiling():
         if call.args and call.args[0] == "server_full"
     ]
     assert len(refusals) == 1
+    # Told inside the handshake, closed after it: the CONNECT has to go out
+    # before the close or the client never sees the notice (#998).
+    assert sio.disconnect.await_args_list == []
+    # Connected for that moment, but past the ceiling: still counted, and
+    # nothing it says is acted on - a seat taken in that window would be
+    # one the ceiling never allowed.
+    assert ctx.room_capacity.open_sockets == 3
+    told = await sio.handlers["/"]["create_room"]("third", {"nickname": "Sneak"})
+    assert told == {"ok": False, "errorCode": "server_busy", "error": "Sketchy is full right now. Try again in a few minutes."}
+    await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
     assert sio.disconnect.await_args_list[-1].args[0] == "third"
+    assert ctx.room_capacity.open_sockets == 2
+    assert not ctx.is_turned_away("third")
 
     # A socket that leaves gives its place back.
     await sio.handlers["/"]["disconnect"]("first")
@@ -289,3 +305,92 @@ async def test_being_turned_away_from_a_full_room_does_not_spend_the_allowance()
     assert all(answer["errorCode"] == "room_full" for answer in answers), (
         "a refused seat spent the join budget and changed the reason given"
     )
+
+
+async def test_a_takeover_refused_after_it_was_charged_is_refunded():
+    """A rebind refused because the account is being ended bought nothing.
+
+    The charge lands before that refusal, so without the refund a seat whose
+    rebinds are turned away is also told, once the ceiling is reached, that
+    it is changing hands too quickly: the wrong reason, and one that holds
+    for the whole window (#1009).
+    """
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_capacity = RoomCapacityService(environ={"ROOM_TAKEOVER_LIMIT": "1"})
+    created = await open_room(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+
+    await sessions.save("ending-tab", {"user_id": sessions.account_for("host-sid")})
+    with ctx.ending(["ending-tab"]):
+        refused = await sio.handlers["/"]["join_room"](
+            "ending-tab", {"roomId": room.id, "nickname": "Host"}
+        )
+    assert refused["errorCode"] == ErrorCode.ACCOUNT_ENDED
+
+    await sessions.save("next-tab", {"user_id": sessions.account_for("host-sid")})
+    rebound = await sio.handlers["/"]["join_room"](
+        "next-tab", {"roomId": room.id, "nickname": "Host"}
+    )
+    assert rebound["ok"] is True, rebound
+    assert room.players[created["playerId"]].sid == "next-tab"
+
+
+async def test_a_rebind_that_fails_after_the_seat_changed_hands_stays_charged(monkeypatch):
+    """Seating names the new socket on the seat before it awaits anything;
+    a failure past that point is a takeover that happened, and refunding it
+    would let a rebind that fails late be repeated past the ceiling (review
+    of #1068)."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_capacity = RoomCapacityService(environ={"ROOM_TAKEOVER_LIMIT": "1"})
+    created = await open_room(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+    seat = room.players[created["playerId"]]
+
+    async def seating_fails_late(sid, room_, player, **kwargs):
+        player.sid = sid
+        player.connected = True
+        raise RuntimeError("the socket room could not be joined")
+
+    monkeypatch.setattr(ctx.game_flow, "_join_socket_room", seating_fails_late)
+    await sessions.save("late-tab", {"user_id": sessions.account_for("host-sid")})
+    with pytest.raises(RuntimeError):
+        await sio.handlers["/"]["join_room"](
+            "late-tab", {"roomId": room.id, "nickname": "Host"}
+        )
+    monkeypatch.undo()
+    assert seat.sid == "late-tab"
+
+    await sessions.save("next-tab", {"user_id": sessions.account_for("host-sid")})
+    refused = await sio.handlers["/"]["join_room"](
+        "next-tab", {"roomId": room.id, "nickname": "Host"}
+    )
+    assert refused["errorCode"] == ErrorCode.SEAT_CHANGING_TOO_FAST
+    assert seat.sid == "late-tab"
+
+
+async def test_a_rebind_that_fails_while_seating_is_refunded_too(monkeypatch):
+    """Seating raising after the charge is not a takeover either (#1009)."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = build_stack(room_manager)
+    ctx.room_capacity = RoomCapacityService(environ={"ROOM_TAKEOVER_LIMIT": "1"})
+    created = await open_room(sio, sessions)
+    room = room_manager.get_room(created["roomId"])
+
+    async def seating_fails(*args, **kwargs):
+        raise RuntimeError("seating failed")
+
+    monkeypatch.setattr(ctx.game_flow, "_join_socket_room", seating_fails)
+    await sessions.save("failing-tab", {"user_id": sessions.account_for("host-sid")})
+    with pytest.raises(RuntimeError):
+        await sio.handlers["/"]["join_room"](
+            "failing-tab", {"roomId": room.id, "nickname": "Host"}
+        )
+    monkeypatch.undo()
+
+    await sessions.save("next-tab", {"user_id": sessions.account_for("host-sid")})
+    rebound = await sio.handlers["/"]["join_room"](
+        "next-tab", {"roomId": room.id, "nickname": "Host"}
+    )
+    assert rebound["ok"] is True, rebound

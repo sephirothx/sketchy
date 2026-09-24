@@ -31,6 +31,12 @@ from app.services.player_reports import (
     record_player_report,
 )
 from app.handlers.refusals import ErrorCode
+from app.handlers.rooms import (
+    BUSY_ACKNOWLEDGEMENT,
+    EntryTimedOut,
+    _bounded,
+    entry_deadline,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -102,6 +108,10 @@ async def vote_player(ctx: HandlerContext, sid, data):
             target_sid = target.sid
             ctx.timers.cancel_disconnect_timer(target.id)
             ctx.room_manager.remove_player(room, target.id)
+            if target.user_id:
+                # For the room's lifetime (#1010): the seat is gone, and the
+                # invite link would otherwise seat them again at once.
+                room.kicked_user_ids.add(target.user_id)
             if target_sid:
                 await ctx.sio.emit("kicked", {"code": "kicked_by_vote", "reason": "You were kicked from the room by vote."}, to=target_sid)
                 await ctx.sio.leave_room(target_sid, room.id)
@@ -109,6 +119,12 @@ async def vote_player(ctx: HandlerContext, sid, data):
                 room, Announcement.KICKED_BY_VOTE, {"nickname": target.nickname}
             )
             if room.game and room.state == "playing":
+                # The roster without this seat goes first, as an eviction's
+                # does (#883, #1010): kicking the drawer starts the next turn,
+                # and its `turn_starting` must not reach a client whose player
+                # list still holds the player it just lost.
+                await ctx.game_flow._emit_room_state(room)
+                await ctx.game_flow._flush_room_state(room)
                 await ctx.game_flow._remove_player_from_game(room, target.id)
             await ctx.game_flow._emit_room_state(room)
             return {"ok": True, "action": "kick", "executed": True}
@@ -181,6 +197,27 @@ async def report_player(ctx: HandlerContext, sid, data):
         drawing_from_live_room(room, target.id) if payload.include_drawing else None
     )
 
+    # Bounded, and never escaping (#1012): python-socketio sends no
+    # acknowledgement for a handler that raises, so a database error - or a
+    # write that hangs - used to leave the reporter's dialog waiting out its
+    # timeout with nothing to say. The entry deadline, so the answer lands
+    # inside the client's wait (R-ROOM-14); what is cut short rolls back
+    # with its transaction.
+    try:
+        with entry_deadline():
+            return await _bounded(
+                _file_player_report(ctx, room, reporter, target, payload, drawing),
+                "filing the report",
+            )
+    except EntryTimedOut:
+        return BUSY_ACKNOWLEDGEMENT
+    except Exception:
+        logger.exception("Could not file a player report in room %s", room.id)
+        return BUSY_ACKNOWLEDGEMENT
+
+
+async def _file_player_report(ctx: HandlerContext, room, reporter, target, payload, drawing) -> dict:
+    """Refuse or write the report, in two transactions; see `report_player`."""
     # Two transactions with the flush between them (#972 fourth review). The
     # first answers everything that can refuse the report, cheaply; then the
     # connection goes back to the pool while the retention writer is waited

@@ -2253,6 +2253,7 @@
    "reminderDue",
    "roleGranted",
    "sessionsRevoked",
+   "signedIn",
    "stepUpWindowSeconds",
    "steppedUp"
   ],
@@ -2262,6 +2263,9 @@
   "auth.routes:delete_account": [
    "identitiesAnonymized",
    "sessionsRevoked"
+  ],
+  "auth.routes:perform_password_reset": [
+   "signedIn"
   ],
   "auth.routes:read_email": [
    "deliveryConfigured",
@@ -2391,10 +2395,13 @@
    "chatEpoch",
    "chatSeq"
   ],
-  "handlers.moderation:report_player": [
+  "handlers.moderation:_file_player_report": [
    "drawingAttached",
    "errorCode",
    "evidenceCount"
+  ],
+  "handlers.moderation:report_player": [
+   "errorCode"
   ],
   "handlers.moderation:toggle_afk": [
    "errorCode",
@@ -2803,6 +2810,7 @@
    "host_only",
    "players_only",
    "waiting_room_only",
+   "kicked_from_room",
    "already_a_player",
    "registered_name_fixed",
    "name_taken_by_account",

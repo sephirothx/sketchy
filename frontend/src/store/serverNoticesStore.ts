@@ -10,7 +10,7 @@ while a banner at the top of the page was the only thing that showed it. The
 room header shows two of these as chips now (#797), so the facts are shared and
 each surface decides for itself how to say them. Written only by
 `useServerNotices`; everything else reads. */
-export type RoomEndReason = "server-update" | "room-closed";
+export type RoomEndReason = "server-update" | "room-closed" | "kicked";
 
 interface ServerNoticesStore {
   shutdownNotice: ServerShutdownNotice | null;
@@ -28,9 +28,13 @@ interface ServerNoticesStore {
   roomEnded: { code: string; reason: RoomEndReason } | null;
   /** The drain (its `startedAt`) whose opening card this tab already showed (#826). */
   drainCueSeenFor: string | null;
-  set: (partial: Partial<Omit<ServerNoticesStore, "set" | "markRoomEnded">>) => void;
+  set: (partial: Partial<Omit<ServerNoticesStore, "set" | "markRoomEnded" | "markKickedFromRoom">>) => void;
   /** Record that rejoining *code* was refused because the room is gone. */
   markRoomEnded: (code: string) => void;
+  /** Record that rejoining *code* was refused because a vote removed this
+   *  player while the tab was away (#1010): final for that room, like an
+   *  ending, rather than a failure to retry on every reconnect. */
+  markKickedFromRoom: (code: string) => void;
 }
 
 export const useServerNoticesStore = create<ServerNoticesStore>((set) => ({
@@ -63,4 +67,8 @@ export const useServerNoticesStore = create<ServerNoticesStore>((set) => ({
       restarted: false,
       lostDuringDrain: false,
     })),
+  // Told apart from an ending: the room is still there, and the sentence
+  // has to say why this player is not. It overrides an earlier answer for
+  // the same code, since the kick is the more specific of the two.
+  markKickedFromRoom: (code) => set({ roomEnded: { code, reason: "kicked" } }),
 }));

@@ -6,7 +6,7 @@ import socketio
 
 from app.handlers import register_all_handlers as register_handlers
 from tests.handlers.helpers import SessionStore, build_context
-from app.game import DRAWING_SECONDS, MAX_GUESS_POINTS, MAX_HINT_SPEND, Game
+from app.game import DRAWING_SECONDS, MAX_GUESS_POINTS, MAX_HINT_SPEND, Game, Phase
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import RoomManager
 from app.prompts import MAX_PROMPT_LENGTH
@@ -1045,3 +1045,97 @@ async def test_a_guess_with_no_scope_is_accepted_as_before():
     assert guesser.id in room.game.correct_guessers
     refused = await sio.handlers["/"]["guess"]("guesser-sid", {"text": "x", "code": ""})
     assert refused["errorCode"] == "invalid_payload"
+
+
+def _game_with_a_spectator():
+    """A drawer, a guesser and a spectator, one turn started, nothing chosen yet."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    drawer.sid, guesser.sid, spectator.sid = "drawer-sid", "guesser-sid", "spec-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[drawer.id, guesser.id], rounds_total=1)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    sio = socketio.AsyncServer(async_mode="asgi")
+    timers = register_handlers(sio, room_manager).timers
+    sessions = {
+        "drawer-sid": {"room_id": room.id, "player_id": drawer.id},
+        "guesser-sid": {"room_id": room.id, "player_id": guesser.id},
+        "spec-sid": {"room_id": room.id, "player_id": spectator.id},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    return room, sio, timers
+
+
+async def _cancel_timers(timers, room):
+    timer = timers.phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer
+
+
+def _chat_emits(sio):
+    return [call for call in sio.emit.await_args_list if call.args[0] == "chat_message"]
+
+
+async def test_chat_while_the_drawer_chooses_reaches_the_whole_room():
+    """Nothing to spoil before a prompt exists (#1008).
+
+    The server used to refuse chat outside the waiting room, and the client
+    used to send a guess scoped to the turn it last saw, which the server
+    dropped as out of scope: a line typed while the drawer chose reached
+    nobody, silently.
+    """
+    room, sio, timers = _game_with_a_spectator()
+    assert room.game.phase == Phase.CHOOSING_PROMPT
+
+    for sid in ("guesser-sid", "drawer-sid", "spec-sid"):
+        assert (await sio.handlers["/"]["send_chat"](sid, {"text": f"hi from {sid}"}))["ok"] is True
+
+    emitted = _chat_emits(sio)
+    assert [call.kwargs.get("room") for call in emitted] == [room.id] * 3
+    assert not any(call.args[1].get("restricted") for call in emitted)
+    await _cancel_timers(timers, room)
+
+
+async def test_chat_while_drawing_keeps_to_the_prompt_aware_audience():
+    """A spectator's or a correct guesser's line must not reach a guesser
+    still working (R-SPEC-04), whichever event carried it."""
+    room, sio, timers = _game_with_a_spectator()
+    room.game._set_prompt("apple")
+    assert room.game.phase == Phase.DRAWING
+
+    assert (await sio.handlers["/"]["send_chat"]("spec-sid", {"text": "nice lines"}))["ok"] is True
+    emitted = _chat_emits(sio)
+    assert len(emitted) == 1
+    assert emitted[0].args[1]["restricted"] is True
+    assert set(emitted[0].kwargs["to"]) == {"drawer-sid", "spec-sid"}
+
+    # The drawer has nothing to guess either; its line is chat to the same audience.
+    assert (await sio.handlers["/"]["send_chat"]("drawer-sid", {"text": "thanks"}))["ok"] is True
+    assert "guesser-sid" not in _chat_emits(sio)[-1].kwargs["to"]
+    await _cancel_timers(timers, room)
+
+
+async def test_a_guessing_seat_cannot_broadcast_the_prompt_as_chat():
+    """Whatever event a seat that may still guess uses, its line is a guess.
+
+    Otherwise `send_chat` would be a way round the guess check: the prompt,
+    typed as chat, in front of every other guesser.
+    """
+    room, sio, timers = _game_with_a_spectator()
+    room.game._set_prompt("apple")
+
+    answer = await sio.handlers["/"]["send_chat"]("guesser-sid", {"text": "apple"})
+    assert answer["ok"] is True
+    guesser = next(p for p in room.player_list() if p.sid == "guesser-sid")
+    assert guesser.id in room.game.correct_guessers
+    assert any(call.args[0] == "correct_guess" for call in sio.emit.await_args_list)
+    # Its line went out as a correct guess to the prompt-aware audience, never
+    # as plain chat to the room.
+    assert all(call.kwargs.get("room") is None for call in _chat_emits(sio))
+    await _cancel_timers(timers, room)

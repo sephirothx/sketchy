@@ -131,16 +131,34 @@ def default_prompt_list_slug(language: str) -> str:
     return f"{PromptLanguage(validate_prompt_language(language)).name.lower()}_standard"
 
 
+# Every mark a keyboard writes for the apostrophe in "feu d'artifice" (#1011):
+# the typographic right quote iOS Smart Punctuation substitutes on its own
+# (and Word, and most phones), the modifier letter, the left quote a
+# smart-quote engine picks at the start of a word, the reversed one, the
+# prime, the spacing acute accent, the backtick some layouts put on the key,
+# and the fullwidth form a CJK input method emits. NFC leaves all of them
+# alone - none is canonically equivalent to U+0027, and only NFKC would fold
+# the fullwidth one - so without this fold the bundled French and Italian
+# answers written with an apostrophe were unguessable from an iPhone, and
+# the player was told "very close" for the rest of the turn.
+_APOSTROPHES = str.maketrans(
+    {mark: "'" for mark in "\u2019\u02bc\u2018\u201b\u2032\u00b4\u0060\uff07"}
+)
+
+
 def _collapsed(answer: str) -> str:
-    """Whitespace collapsed, case folded, and *composed*.
+    """Whitespace collapsed, case folded, *composed*, apostrophes made plain.
 
     NFC before anything language-specific, because a transliteration table is
     written in letters: "ä" as one codepoint is in it, and "a" followed by a
     combining diaeresis is not. Text arrives both ways - a macOS filename or
     an IME can hand over the decomposed form - and the two are canonically
-    equivalent, so they have to fold to one key.
+    equivalent, so they have to fold to one key. The apostrophe fold runs on
+    both the stored key and the guess, so a list written with typographic
+    quotes matches a plain-keyboard guess as well as the other way round.
     """
-    return unicodedata.normalize("NFC", " ".join(answer.split()).casefold())
+    composed = unicodedata.normalize("NFC", " ".join(answer.split()).casefold())
+    return composed.translate(_APOSTROPHES)
 
 
 def _fold_accents(text: str) -> str:
