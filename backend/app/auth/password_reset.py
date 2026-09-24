@@ -100,7 +100,9 @@ async def reset_password_as_operator(
                 )
             )
             # Committed with the password, or not at all (R-AUTH-10).
-            revoked = await revoke_sessions(session, user_id=user.id, now=changed_at)
+            revoked = await revoke_sessions(
+                session, user_id=user.id, now=changed_at, end_privacy_hatch=True
+            )
             user_id, resolved_name = str(user.id), user.username or username
 
     return OperatorResetResult(

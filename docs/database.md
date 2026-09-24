@@ -1137,10 +1137,11 @@ recognizable until expiry, so its next request cannot be mistaken for a new cook
 guest. **Data export, account deletion, and logout remain available** through that
 ban-time credential, so moderation cannot erase privacy rights. "Ban-time" is exact:
 a session the ban itself revoked (`revoked_at` equal to the ban's `created_at`) and
-issued before it. Any later revocation — a sign-out, a reset, a password change —
-restamps `revoked_at`, which ends that session's hatch; before, those revocations
-skipped the ban-revoked rows, and a copied cookie kept exporting for the whole
-suspension (#1082). Expired suspensions stop
+issued before it. The owner's own later revocations — signing out on that device, a
+password reset by mail or by an operator — restamp `revoked_at`, which ends that
+session's hatch; before, they skipped the ban-revoked rows, and a copied cookie kept
+exporting for the whole suspension (#1082). A staff action that revokes sessions (a role
+change) leaves the hatch alone. Expired suspensions stop
 applying automatically; revocation preserves the historic record and its reason.
 
 `source_report_id` is what lets the suspension notice show the reported player their own

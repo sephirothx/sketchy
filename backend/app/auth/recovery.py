@@ -458,7 +458,9 @@ async def change_password(
             # In the same transaction as the new password: a change that took
             # effect while every session stood is the one failure worth
             # avoiding, and only one commit can rule it out.
-            await revoke_sessions(session, user_id=user_id, now=changed_at)
+            await revoke_sessions(
+                session, user_id=user_id, now=changed_at, end_privacy_hatch=True
+            )
     return True
 
 
@@ -530,6 +532,8 @@ async def reset_password(
             # Token spent, password set, devices out, mail and audit queued:
             # one commit, so a crash anywhere leaves all of it undone rather
             # than a new password with every old session still standing.
-            await revoke_sessions(session, user_id=user.id, now=changed_at)
+            await revoke_sessions(
+                session, user_id=user.id, now=changed_at, end_privacy_hatch=True
+            )
             outcome = PasswordResetOutcome(user_id=user.id, role=user.role)
     return outcome

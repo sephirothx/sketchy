@@ -365,8 +365,8 @@ async def resolve_session_status(
                 # resurrected as a privacy credential.
                 #
                 # Revoked *by the ban*, exactly: the ban revokes every session
-                # at its own instant, and any later revocation - a reset, a
-                # password change, a sign-out, a device dropped - restamps it
+                # at its own instant, and the owner's later revocations -
+                # signing out on that device, a password reset - restamp it
                 # (`_revocable`), which is what ends the hatch. Anything
                 # revoked later used to count as "active when banned", so a
                 # copied cookie the owner's reset had revoked kept exporting
@@ -686,15 +686,21 @@ async def record_step_up(
             return result.rowcount == 1
 
 
-def _revocable(user_id: UUID, checked_at: datetime):
-    """The sessions a revocation acts on: live ones, and ones the standing
-    suspension revoked, which still carry R-BAN-04's export/delete hatch.
+def _revocable(user_id: UUID, checked_at: datetime, *, end_privacy_hatch: bool):
+    """The sessions a revocation acts on: live ones - and, for the owner's
+    own revocations, ones the standing suspension revoked, which still carry
+    R-BAN-04's export/delete hatch.
 
     Without the second half every revocation after a ban skipped the
     ban-revoked rows as already revoked, so nothing the owner did could end
     a hatch a copied cookie was using (#1082). Restamping `revoked_at` moves
-    it off the ban's instant, and the hatch is keyed on that instant.
+    it off the ban's instant, and the hatch is keyed on that instant. Only
+    the owner's: signing out, or proving the mailbox or a shell on the box
+    with a reset. A staff action - a role change - must not, because
+    moderation MUST NOT erase privacy rights.
     """
+    if not end_privacy_hatch:
+        return AuthSession.revoked_at.is_(None)
     standing_ban_instants = select(UserBan.created_at).where(
         UserBan.user_id == user_id,
         UserBan.revoked_at.is_(None),
@@ -740,7 +746,7 @@ async def revoke_session(
                     .where(
                         AuthSession.id == cursor,
                         AuthSession.user_id == db_user_id,
-                        _revocable(db_user_id, revoked_at),
+                        _revocable(db_user_id, revoked_at, end_privacy_hatch=True),
                     )
                     .values(revoked_at=revoked_at)
                 )
@@ -760,6 +766,7 @@ async def revoke_sessions(
     *,
     user_id: str | UUID,
     now: datetime | None = None,
+    end_privacy_hatch: bool = False,
 ) -> int:
     """Revoke every live session of an account inside the caller's transaction.
 
@@ -772,7 +779,10 @@ async def revoke_sessions(
     revoked_at = now or datetime.now(timezone.utc)
     result = await database.execute(
         update(AuthSession)
-        .where(AuthSession.user_id == owner, _revocable(owner, revoked_at))
+        .where(
+            AuthSession.user_id == owner,
+            _revocable(owner, revoked_at, end_privacy_hatch=end_privacy_hatch),
+        )
         .values(revoked_at=revoked_at)
     )
     return int(result.rowcount or 0)
