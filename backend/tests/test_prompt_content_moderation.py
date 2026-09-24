@@ -1382,10 +1382,18 @@ async def test_restoring_a_word_restores_the_copies_its_takedown_was_carried_to(
     )
     assert copy.prompts[0].moderation_state == "hidden"
 
+    # Decided hidden a second time: the copy carries the new decision too,
+    # or the restore below - matching on it - would miss the copy.
+    await decide("hidden")
     await decide("active")
     async with factory() as session:
         carried = await session.get(PromptVersion, UUID(copy.prompts[0].prompt_version_id))
         assert carried.moderation_state == "active", "the carried copy comes back too"
+    another = await prompts.create_owned(
+        owner["id"], name="After the restore", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"),),
+    )
+    assert another.prompts[0].moderation_state == "active", "nothing left to carry"
 
     latest = await prompts.get_owned(owner["id"], first.id)
     edited = await prompts.update_owned(
@@ -1428,3 +1436,38 @@ async def test_a_takedown_outlives_its_deleted_list(env):
         prompts=(PromptListEntryInput(answer="offensive prompt"),),
     )
     assert fresh.prompts[0].moderation_state == "hidden"
+
+
+
+async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
+    """The takedown pins its revision only while the list has an owner whose
+    saves look there; an erased account's retired list is reclaimed as any
+    other, rather than keeping its hidden text for good."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import PromptListRevision
+    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "Erased")
+    doomed = await prompts.create_owned(
+        owner["id"], name="Ownerless", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(doomed.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+    assert await prompts.delete_owned(owner["id"], doomed.id)
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(PromptList, UUID(doomed.id))).owner_user_id = None
+    await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+    async with factory() as session:
+        left = await session.scalar(
+            select(func.count(PromptListRevision.id)).where(
+                PromptListRevision.prompt_list_id == UUID(doomed.id)
+            )
+        )
+    assert left == 0

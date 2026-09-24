@@ -1051,7 +1051,7 @@ async def _reviewer(session: AsyncSession, request: Request) -> User:
     return user
 
 
-async def _restore_carried_copies(
+async def _carry_decision_to_copies(
     session: AsyncSession,
     *,
     prior: tuple[str, UUID | None, datetime | None],
@@ -1061,18 +1061,20 @@ async def _restore_carried_copies(
     reviewer_id: UUID,
     now: datetime,
 ) -> None:
-    """A restore reaches the copies the takedown was carried to.
+    """A new decision on a hidden word reaches the copies the old one was
+    carried to.
 
     A hidden word typed into another of the owner's lists is born hidden
     with the decision's byline copied onto it (#1091). Restoring the original
     left those copies hidden with no report of their own to decide - and, as
     hidden words, re-hiding the original the next time its entry was edited.
-    The byline says which versions carry this decision and not another.
+    A second "hidden" is carried too, or the copies keep the first byline and
+    a later restore, matching on the second, misses them. The byline says
+    which versions carry that decision and not another.
     """
     state, decided_by, decided_at = prior
     if (
-        decision != PromptContentModerationState.ACTIVE.value
-        or state != PromptContentModerationState.HIDDEN.value
+        state != PromptContentModerationState.HIDDEN.value
         or decided_at is None
         or owner_user_id is None
     ):
@@ -2266,7 +2268,7 @@ def create_moderation_router(
                                 moderated_at=now,
                             )
                         )
-                        await _restore_carried_copies(
+                        await _carry_decision_to_copies(
                             session,
                             prior=prior_decision,
                             decision=body.moderation_state,
