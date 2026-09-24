@@ -1593,7 +1593,7 @@ class GameFlowService:
             for seat in room.departed_seats.values():
                 if seat.user_id and not seat.is_spectator:
                     carried[seat.user_id] = carried.get(seat.user_id, 0) + seat.score
-            room.last_game_scores = [
+            standings = [
                 {
                     "playerId": p.id,
                     "nickname": p.nickname,
@@ -1602,8 +1602,13 @@ class GameFlowService:
                     "isAnonymous": p.is_anonymous,
                     "score": p.score + (carried.get(p.user_id, 0) if p.user_id else 0),
                 }
-                for p in sorted(room.player_list(), key=lambda p: -p.score)
+                for p in room.player_list()
             ]
+            # Ordered by the score each entry carries, not the seat's alone:
+            # the podium is read off this order, and a seat holding 100 of
+            # its account's 500 belongs above one holding 300 (review of
+            # #1047).
+            room.last_game_scores = sorted(standings, key=lambda entry: -entry["score"])
             # Built from the snapshot above, before the emit and before any
             # await, for the same reason the scores are: by the time anything
             # yields, the room is an editable waiting room again.

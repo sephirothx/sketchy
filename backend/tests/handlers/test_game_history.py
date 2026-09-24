@@ -1186,3 +1186,30 @@ async def test_a_game_the_writer_refuses_is_given_up_at_once_as_invalid(signals)
     assert (row.state, row.failure_code, row.payload) == ("failed", "invalid", None)
     assert "does not reconcile" in row.last_error
     assert signals.history_writes_abandoned.get(("replay", "invalid")) == 1
+
+
+async def test_the_standings_are_ordered_by_the_score_each_entry_carries():
+    """An account holds the points of every seat it sat in (R-HIST-12); the
+    podium is read off this list, so a seat holding 100 of its account's 500
+    belongs above one holding 300 (review of #1047)."""
+    room_manager, room, players = build_room(rounds=1)
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    drawer, guesser = _first_turn(players, game)
+    guesser.score = 400
+    room_manager.remove_player(room, guesser.id)
+    await flow._remove_player_from_game(room, guesser.id)
+    rejoined = room_manager.add_player(room, guesser.nickname, user_id=guesser.user_id)
+    rejoined.sid = "sid-rejoined"
+    game.add_player_to_rotation(rejoined.id)
+    rejoined.score = 100
+    drawer.score = 300
+
+    await _play_out(ctx, room)
+
+    assert [(entry["nickname"], entry["score"]) for entry in room.last_game_scores] == [
+        (guesser.nickname, 500),
+        (drawer.nickname, 300),
+    ]
