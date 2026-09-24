@@ -31,7 +31,12 @@ from app.services.player_reports import (
     record_player_report,
 )
 from app.handlers.refusals import ErrorCode
-from app.handlers.rooms import BUSY_ACKNOWLEDGEMENT, EntryTimedOut, _bounded
+from app.handlers.rooms import (
+    BUSY_ACKNOWLEDGEMENT,
+    EntryTimedOut,
+    _bounded,
+    entry_deadline,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -185,14 +190,15 @@ async def report_player(ctx: HandlerContext, sid, data):
     # Bounded, and never escaping (#1012): python-socketio sends no
     # acknowledgement for a handler that raises, so a database error - or a
     # write that hangs - used to leave the reporter's dialog waiting out its
-    # timeout with nothing to say. Ten seconds is past the client's patience
-    # anyway; what is cut short rolls back with its transaction.
+    # timeout with nothing to say. The entry deadline, so the answer lands
+    # inside the client's wait (R-ROOM-14); what is cut short rolls back
+    # with its transaction.
     try:
-        return await _bounded(
-            _file_player_report(ctx, room, reporter, target, payload, drawing),
-            "filing the report",
-            within_entry=False,
-        )
+        with entry_deadline():
+            return await _bounded(
+                _file_player_report(ctx, room, reporter, target, payload, drawing),
+                "filing the report",
+            )
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     except Exception:
