@@ -247,6 +247,13 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
             "error": "Need at least two active players to restart",
         }
 
+    # Carried before anything is awaited (review of #1048): the expiry timer
+    # runs on the far side of the broadcast ending the turn awaits, and had
+    # it fired there it cleared the vote this handler was about to schedule
+    # the restart for - a room left at GAME_END with nothing pending.
+    ctx.timers.cancel_restart_timer(room.id)
+    vote.status = "approved"
+    vote.restart_at = time.time() + timing.restart_delay_seconds
     if room.game.phase == Phase.DRAWING:
         # The turn in progress is ended the way the clock ends it, whatever
         # was guessed: the record has only completed turns, so a drawing and
@@ -257,12 +264,9 @@ async def cast_restart_vote(ctx: HandlerContext, sid, data):
         # `completed_turns` while its points stayed was a record the writer
         # refused. The results show for the moment the countdown takes.
         await ctx.game_flow._end_turn(room)
-    ctx.timers.cancel_restart_timer(room.id)
     ctx.timers.cancel_phase_timer(room.id)
     ctx.timers.cancel_hint_timers(room.id)
     room.game.phase = Phase.GAME_END
-    vote.status = "approved"
-    vote.restart_at = time.time() + timing.restart_delay_seconds
     await ctx.game_flow.announce(
         room,
         Announcement.RESTART_VOTE_PASSED,

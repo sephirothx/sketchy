@@ -1048,6 +1048,44 @@ async def test_a_cancelled_restart_still_records_the_game_the_vote_gave_up():
     await ctx.timers.close()
 
 
+async def test_a_vote_that_expires_while_the_turn_is_being_ended_still_restarts():
+    """The final vote carries the moment it lands; the window closing during
+    the broadcast that ends the turn must not reject it, or the room is left
+    at GAME_END with no restart pending (review of #1048)."""
+    from app.flow_timing import timing
+
+    room_manager, room, players = build_room(rounds=2)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    replaced_id = await _one_turn_in(ctx, room)
+    flow = ctx.game_flow
+    real_end_turn = flow._end_turn
+
+    async def slow_end_turn(target):
+        await real_end_turn(target)
+        # Long enough for the window, shortened below, to close meanwhile.
+        await asyncio.sleep(0.05)
+
+    flow._end_turn = slow_end_turn  # type: ignore[method-assign]
+    sessions = {p.sid: {"room_id": room.id, "player_id": p.id} for p in players.values()}
+    ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    proposer, voter = players["Ann"], players["Bob"]
+    with patch.object(timing, "restart_vote_seconds", 0.01), patch.object(
+        timing, "restart_delay_seconds", 0.05
+    ):
+        proposed = await ctx.sio.handlers["/"]["propose_restart_vote"](proposer.sid, {})
+        assert proposed["ok"], proposed
+        vote = room.restart_vote
+        approved = await ctx.sio.handlers["/"]["cast_restart_vote"](voter.sid, {"vote": True})
+        assert approved["approved"] is True, approved
+        assert room.restart_vote is vote and vote.status == "approved"
+        await asyncio.sleep(0.15)
+
+    assert room.game is not None and room.game.id != replaced_id, "the restart happened"
+    assert room.state == "playing"
+    await ctx.timers.close()
+
+
 async def test_a_vote_passed_after_only_wrong_guesses_still_keeps_the_turn():
     """Nobody got it, but the drawing was drawn and guessed at: the record
     has only completed turns, so the interrupted one is closed like the
