@@ -1777,6 +1777,11 @@ canvas had no next trigger.
   the history, drop pending actions the server has committed and paths still open,
   replay the rest through the paced sender (above) with a deadline each, or fall back to
   server truth if they do not fit.
+- **A full reply includes the open path.** It is built at the moment it is sent, with a
+  stroke still being drawn in it as it stands and hashed, so a viewer that painted that
+  stroke's first frames before the reply arrived keeps it and the following frames
+  continue it (#1043, pinned by `test_canvas_session.py` and
+  `frontend/tests/syncAfterLiveFrames.test.mjs`).
 - **Acknowledged, and retried.** The request is acknowledged: `{ok: true}` when the
   reply is on its way, `not_in_game` with `retryAfterMs` (2 s) between turns, `too_fast`
   with the resync budget's window. A refused request is retried after exactly the
