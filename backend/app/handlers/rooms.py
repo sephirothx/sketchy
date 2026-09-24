@@ -905,8 +905,20 @@ async def _seat_in_room(
             user_id=metrics_user_id(player.user_id),
         )
         if ctx.is_ending(sid):
+            ctx.room_capacity.refund_takeover(player.id)
             return ENDED_ACCOUNT_ACKNOWLEDGEMENT
-        await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        try:
+            await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=True)
+        except Exception:
+            # Not a takeover either, when the seat was never rebound (#1009).
+            # Seating names this socket on the seat before it awaits
+            # anything; past that point the seat has changed hands, whatever
+            # failed after, and the charge stands - refunded, a rebind that
+            # failed late could be repeated past the ceiling (review of
+            # #1068).
+            if player.sid != sid:
+                ctx.room_capacity.refund_takeover(player.id)
+            raise
         if ctx.is_ending(sid):
             return await _unseat_an_ended_account(ctx, room, player)
         if empty_for is not None:

@@ -7,7 +7,7 @@ import {
   shouldResyncOnReturn,
 } from "../lib/heartbeatSchedule";
 import { emitWithAck, restartExpected, socket, transportIsAlive } from "../lib/socket";
-import { RESTART_PATIENCE_MS, afterFailedRebind, escalateHeartbeat } from "../lib/reconnectPolicy";
+import { RESTART_PATIENCE_MS, afterFailedRebind, escalateHeartbeat, stallRecovery } from "../lib/reconnectPolicy";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
@@ -59,7 +59,10 @@ export function useRoomSessionReconnect() {
   useEffect(() => {
     let cancelled = false;
     let inFlight: Promise<void> | null = null;
-    let lastStallRecoveryAt = 0;
+    // How far a run of stall recoveries has escalated, and when the next may
+    // go (#1009); reset once the phase is on time again.
+    let stallEscalations = 0;
+    let stallNotBefore = 0;
     let heartbeatInFlight = false;
     let consecutiveHeartbeatFailures = 0;
     // How far this run of missed probes has escalated, and when it may next
@@ -217,15 +220,36 @@ export function useRoomSessionReconnect() {
       queueRebind({ soft: true });
     }
 
-    function checkPhaseStall() {
+    function phaseIsStalled(): boolean {
       const state = useGameStore.getState();
-      if (!state.playerId || !state.code) return;
-      if (!ACTIVE_PHASES.has(state.phase)) return;
-      if (!state.phaseSeconds || !state.phaseStartedAt) return;
+      if (!state.playerId || !state.code) return false;
+      if (!ACTIVE_PHASES.has(state.phase)) return false;
+      if (!state.phaseSeconds || !state.phaseStartedAt) return false;
       const remainingMs = state.phaseSeconds * 1000 - (Date.now() - state.phaseStartedAt);
-      if (remainingMs > -STALL_GRACE_MS) return;
-      if (Date.now() - lastStallRecoveryAt < 10_000) return;
-      lastStallRecoveryAt = Date.now();
+      return remainingMs <= -STALL_GRACE_MS;
+    }
+
+    function checkPhaseStall() {
+      if (!phaseIsStalled()) {
+        stallEscalations = 0;
+        stallNotBefore = 0;
+        return;
+      }
+      const next = stallRecovery({
+        transportAlive: transportIsAlive(),
+        restartApproved: useGameStore.getState().restartVote?.status === "approved",
+        escalations: stallEscalations,
+        notBefore: stallNotBefore,
+        now: Date.now(),
+        random: Math.random(),
+      });
+      stallEscalations = next.escalations;
+      stallNotBefore = next.notBefore;
+      if (next.action === "none") return;
+      if (next.action === "soft") {
+        queueRebind({ soft: true, keepTransport: true });
+        return;
+      }
       queueRebind({ forceTransportRestart: true });
     }
 
