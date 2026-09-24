@@ -255,3 +255,28 @@ async def test_the_stored_count_does_not_scan_the_table_on_postgresql():
         assert (counted == []) if postgresql else (len(counted) == 1)
     finally:
         await engine.dispose()
+
+
+async def test_the_outcome_breakdown_is_read_at_most_once_a_minute():
+    """#1076 review: a grouped count over every game ever finished ran on
+    each ten-second poll of the ops page."""
+    from app.api.operations import GameOutcomeCounts
+
+    factory, engine = await create_test_db()
+    try:
+        now = [1000.0]
+        counts = GameOutcomeCounts(factory, clock=lambda: now[0])
+        statements = _capture(engine)
+        first = await counts.read()
+        await counts.read()
+        now[0] += 30
+        await counts.read()
+        grouped = [s for s in statements if "game_records" in s and "GROUP BY" in s]
+        assert len(grouped) == 1
+        assert first == {}
+        now[0] += 31
+        await counts.read()
+        grouped = [s for s in statements if "game_records" in s and "GROUP BY" in s]
+        assert len(grouped) == 2
+    finally:
+        await engine.dispose()
