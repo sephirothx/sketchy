@@ -65,6 +65,23 @@ export function transportAlive(
   return now - lastPingAt <= pingWindowMs;
 }
 
+/** Whether an in-the-moment action may go out now, or must be dropped.
+
+socket.io discards a volatile packet only when the transport is not writable;
+when the transport is writable but the socket is not connected - the round
+trip between the engine opening and the namespace CONNECT being acknowledged,
+or a connection whose ping has expired - it **buffers** it, and replays it on
+the new socket before any rebind runs (#966). That is the replay R-CONN-06
+forbids: a `leave_room` or a vote landing in whatever the room has become. So
+all three must hold, and anything else is a drop. */
+export function transientSendable(state: {
+  connected: boolean;
+  transportWritable: boolean;
+  transportAlive: boolean;
+}): boolean {
+  return state.connected && state.transportWritable && state.transportAlive;
+}
+
 /** Engine.IO's interval plus timeout (25 s + 20 s), for an engine that has not
 said its own. One number on purpose: the drawing-limit E2E finds the canvas
 limit by its minified literal, which a separate 25-second constant would
