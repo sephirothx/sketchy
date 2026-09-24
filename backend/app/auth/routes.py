@@ -1492,15 +1492,20 @@ def create_auth_router(
             # sockets of every revoked session go too, this browser's
             # included: it holds no cookie now, and re-reads as nobody.
             await _sockets_signed_out(str(outcome.user_id), None)
-            return {"ok": True, "signedIn": False}
+            return {"ok": True, "signedIn": False, "reason": "second_factor"}
         if await is_user_banned(session_factory, str(outcome.user_id)):
             # Nor for a suspended one: the front door refuses it on the
             # password and on a passkey, and a reset is a third front door,
             # not a way round the other two (#1052). The password still
             # takes - the mailbox was proved, and the suspension ends one day
-            # - and signing in with it says why nothing was issued here.
+            # - and the page says why nothing was issued here, rather than
+            # sending the person to a sign-in that only refuses them. The
+            # reset proved the mailbox, so this discloses nothing new.
+            # Nor does it reopen export or deletion: a suspended account
+            # keeps those only on the session it held when the ban landed
+            # (R-BAN-04), and one that lost every device asks an operator.
             await _sockets_signed_out(str(outcome.user_id), None)
-            return {"ok": True, "signedIn": False}
+            return {"ok": True, "signedIn": False, "reason": "suspended"}
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
         await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)

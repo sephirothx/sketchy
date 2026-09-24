@@ -119,8 +119,8 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
     try {
       const result = await completePasswordReset(token, password);
       // Every session was just revoked, this tab's included, and the reset
-      // signed this browser in as the account - or, for a staff account,
-      // left it signed out. Become whatever the server left it as, the way
+      // signed this browser in as the account - or, for a staff account or
+      // a suspended one, left it signed out. Become whatever the server left it as, the way
       // a sign-in does, socket included (#1006): a re-read alone left the
       // next room entered as the guest the tab had been, and a store still
       // saying "moderator" over a cookie that is gone would render a
@@ -129,7 +129,9 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       setDone(
         result.signedIn
           ? ui.accountRecoveryPage.yourPasswordIsSetAnd
-          : ui.accountRecoveryPage.yourPasswordIsSetSignIn,
+          : result.reason === "suspended"
+            ? ui.accountRecoveryPage.yourPasswordIsSetSuspended
+            : ui.accountRecoveryPage.yourPasswordIsSetSignIn,
       );
     } catch (resetError) {
       setError(

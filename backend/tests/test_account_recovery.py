@@ -1267,7 +1267,7 @@ async def test_a_staff_reset_sets_the_password_but_signs_nobody_in(env):
     )
 
     assert reset.status_code == 200, reset.text
-    assert reset.json() == {"ok": True, "signedIn": False}
+    assert reset.json() == {"ok": True, "signedIn": False, "reason": "second_factor"}
     assert (await browser.get("/api/auth/me")).json() is None
     # The password took, and the front door still wants the code.
     login = await new_client().post(
@@ -1313,7 +1313,7 @@ async def test_a_suspended_reset_sets_the_password_but_signs_nobody_in(env):
     )
 
     assert reset.status_code == 200, reset.text
-    assert reset.json() == {"ok": True, "signedIn": False}
+    assert reset.json() == {"ok": True, "signedIn": False, "reason": "suspended"}
     assert (await stranger.get("/api/auth/me")).json() is None
     async with factory() as session:
         live = await session.scalar(
@@ -1322,6 +1322,8 @@ async def test_a_suspended_reset_sets_the_password_but_signs_nobody_in(env):
                 AuthSession.revoked_at.is_(None),
             )
         )
+    # No session at all, so nothing for R-BAN-04's escape hatch to ride on:
+    # that stays with the session held when the ban landed.
     assert live == 0
     login = await new_client().post(
         "/api/auth/login", json={"username": "Suspended", "password": NEW_PASSWORD}
