@@ -4886,15 +4886,40 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             item.prompt_version.concept_id: item.prompt_version
             for item in (previous.items if previous else ())
         }
-        # Every key a hidden prompt answers to, for a word deleted from the
-        # list and typed in again: that is a new concept, and born `active`
-        # it undid the takedown with two clicks (#1020 review).
+        # Every key a prompt this list has ever held answers to, if a
+        # moderator hid it: a word deleted and typed in again - now, or a save
+        # later - is a new concept, and one existing entry respelled into it
+        # is a new version of another; either way, born with that entry's
+        # `active` it undid the takedown in a couple of clicks (#1020 review).
+        # A decision covers every version of its concept, so any one says it.
+        hidden_versions = (
+            await session.scalars(
+                select(PromptVersion)
+                .join(
+                    PromptListRevisionItem,
+                    PromptListRevisionItem.prompt_version_id == PromptVersion.id,
+                )
+                .join(
+                    PromptListRevision,
+                    PromptListRevision.id == PromptListRevisionItem.revision_id,
+                )
+                .where(
+                    PromptListRevision.prompt_list_id == prompt_list.id,
+                    PromptVersion.moderation_state
+                    == PromptContentModerationState.HIDDEN.value,
+                )
+                .options(
+                    selectinload(PromptVersion.version_aliases).selectinload(
+                        PromptVersionAlias.alias
+                    )
+                )
+            )
+        ).unique().all()
         hidden_by_key: dict[str, PromptVersion] = {}
-        for current in current_by_concept.values():
-            if current.moderation_state == PromptContentModerationState.HIDDEN.value:
-                hidden_by_key[current.match_key] = current
-                for link in current.version_aliases:
-                    hidden_by_key[link.alias.match_key] = current
+        for hidden in hidden_versions:
+            hidden_by_key[hidden.match_key] = hidden
+            for link in hidden.version_aliases:
+                hidden_by_key[link.alias.match_key] = hidden
         supplied_ids = {
             UUID(entry.concept_id) for entry in entries if entry.concept_id is not None
         }
@@ -4951,7 +4976,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 match_key=normalize_prompt_answer(entry.answer, prompt_list.language),
             )
             decided_by = existing
-            if existing is None and hidden_by_key:
+            if hidden_by_key and not (
+                existing is not None
+                and existing.moderation_state
+                == PromptContentModerationState.HIDDEN.value
+            ):
+                # Hidden wins over the entry's own state: an existing active
+                # entry respelled into a hidden word is that word again.
                 decided_by = next(
                     (
                         hidden_by_key[key]
@@ -4964,7 +4995,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         )
                         if key in hidden_by_key
                     ),
-                    None,
+                    existing,
                 )
             if decided_by is not None:
                 # A moderator's decision is about the concept, not one

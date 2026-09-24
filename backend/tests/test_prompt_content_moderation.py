@@ -937,3 +937,117 @@ async def test_hiding_a_reported_version_hides_the_one_the_list_has_now(env):
     async with factory() as session:
         row = await session.get(PromptVersion, UUID(current.prompt_version_id))
         assert row.moderation_state == "hidden"
+
+
+async def _list_with_a_hidden_word(env, owner_name: str):
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, owner_name)
+    created = await prompts.create_owned(
+        owner["id"],
+        name="Has a hidden word",
+        description="",
+        language="en",
+        prompts=(
+            PromptListEntryInput(answer="offensive prompt"),
+            PromptListEntryInput(answer="safe prompt"),
+            PromptListEntryInput(answer="third prompt"),
+        ),
+    )
+    hidden, safe, third = created.prompts
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(hidden.prompt_version_id))
+            row.moderation_state = "hidden"
+    return owner, prompts, created, safe, third
+
+
+async def test_a_hidden_word_typed_back_a_save_later_stays_hidden(env):
+    """Round two of #1020's review: matching only the previous revision lost
+    the decision after one save without the word."""
+    owner, prompts, created, safe, third = await _list_with_a_hidden_word(env, "TwoSaves")
+    dropped = await prompts.update_owned(
+        owner["id"], created.id, expected_version=created.version, name=created.name,
+        description="",
+        prompts=tuple(
+            PromptListEntryInput(answer=e.answer, concept_id=e.concept_id) for e in (safe, third)
+        ),
+    )
+    back = await prompts.update_owned(
+        owner["id"], created.id, expected_version=dropped.version, name=created.name,
+        description="",
+        prompts=(
+            *(PromptListEntryInput(answer=e.answer, concept_id=e.concept_id) for e in (safe, third)),
+            PromptListEntryInput(answer="offensive prompt"),
+        ),
+    )
+    [retyped] = [p for p in back.prompts if p.answer == "offensive prompt"]
+    assert retyped.moderation_state == "hidden"
+
+
+async def test_another_entry_respelled_into_a_hidden_word_is_hidden(env):
+    owner, prompts, created, safe, third = await _list_with_a_hidden_word(env, "Respeller")
+    updated = await prompts.update_owned(
+        owner["id"], created.id, expected_version=created.version, name=created.name,
+        description="",
+        prompts=(
+            PromptListEntryInput(answer="offensive prompt", concept_id=safe.concept_id),
+            PromptListEntryInput(answer=third.answer, concept_id=third.concept_id),
+        ),
+    )
+    [respelled] = [p for p in updated.prompts if p.concept_id == safe.concept_id]
+    assert respelled.moderation_state == "hidden"
+    [kept] = [p for p in updated.prompts if p.concept_id == third.concept_id]
+    assert kept.moderation_state == "active"
+
+
+async def test_restoring_a_reported_prompt_restores_every_version(env):
+    """The concept-wide decision runs both ways: a restore reaches the
+    versions an edit carried the hidden state to."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "Restored")
+    await register(reporter_http, "Reporter2")
+    moderator = await register(moderator_http, "RestoreMod")
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(moderator["id"]))).role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+    created = await prompts.create_owned(
+        owner["id"], name="Restorable", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"), PromptListEntryInput(answer="fine")),
+    )
+    await published(factory, created.id)
+    word, fine = created.prompts
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(word.prompt_version_id))
+            row.moderation_state = "hidden"
+    edited = await prompts.update_owned(
+        owner["id"], created.id, expected_version=created.version, name=created.name,
+        description="",
+        prompts=(
+            PromptListEntryInput(answer=word.answer, concept_id=word.concept_id, aliases=("edge",)),
+            PromptListEntryInput(answer=fine.answer, concept_id=fine.concept_id),
+        ),
+    )
+    [current] = [p for p in edited.prompts if p.concept_id == word.concept_id]
+    assert current.moderation_state == "hidden"
+    report = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={
+            "promptListId": created.id,
+            "promptVersionId": word.prompt_version_id,
+            "reason": "other",
+            "details": "Was it right to hide this?",
+        },
+    )
+    assert report.status_code == 201, report.text
+    restored = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{report.json()['id']}",
+        json={"status": "resolved", "note": "It was fine.", "moderationState": "active"},
+    )
+    assert restored.status_code == 200, restored.text
+    async with factory() as session:
+        row = await session.get(PromptVersion, UUID(current.prompt_version_id))
+        assert row.moderation_state == "active"
