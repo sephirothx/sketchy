@@ -1031,7 +1031,13 @@ class GameFlowService:
         # names, and clearing that would leave it seated but unable to act.
         session = await self._sio.get_session(sid) or {}
         if session.get("room_id") == room.id:
-            await self._sio.save_session(sid, {"user_id": session.get("user_id")})
+            # The account and the session that opened the socket both stay
+            # (#1007): a revocation finds a socket by its session, and a
+            # rewrite that dropped it left a revoked device playing on.
+            await self._sio.save_session(
+                sid,
+                {"user_id": session.get("user_id"), "session_id": session.get("session_id")},
+            )
         if not room.connected_players():
             self._timers.cancel_phase_timer(room.id)
             self._timers.cancel_hint_timers(room.id)
@@ -1086,7 +1092,11 @@ class GameFlowService:
         player.connected = True
         # Preserve the account bound at handshake time: the session dict is
         # replaced wholesale here, and losing user_id would strand the
-        # player with no way to reconnect to their own seat.
+        # player with no way to reconnect to their own seat. The session
+        # that opened the socket too (#1007): a revocation finds the socket
+        # by it, and a seated socket without it was one a targeted sign-out
+        # or device revocation skipped - and one the acting browser's own
+        # password change closed instead of keeping.
         previous = await self._sio.get_session(sid) or {}
         await self._sio.save_session(
             sid,
@@ -1094,6 +1104,7 @@ class GameFlowService:
                 "room_id": room.id,
                 "player_id": player.id,
                 "user_id": previous.get("user_id"),
+                "session_id": previous.get("session_id"),
             },
         )
         await self._sio.enter_room(sid, room.id)

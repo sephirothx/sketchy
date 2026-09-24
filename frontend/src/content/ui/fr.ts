@@ -2656,5 +2656,6 @@ export const FR: Catalogue = {
     removedByAdmin: "Un administrateur t’a retiré.",
     accountDeleted: "Ton compte a été supprimé.",
     accountSuspended: "Ton compte a été suspendu.",
+    signedOut: "Tu as été déconnecté sur cet appareil.",
   },
 };

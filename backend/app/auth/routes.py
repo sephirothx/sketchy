@@ -309,6 +309,12 @@ def create_auth_router(
     # the handshake - which is written once, while these can change at any
     # moment and from a request that touches no socket at all.
     on_profile_changed: Callable[[str], None] | None = None,
+    # Called with the account and the session ids a revocation ended - `None`
+    # for every session it holds - so the sockets those sessions opened are
+    # closed rather than left playing under the account (#1007).
+    on_sessions_revoked: (
+        Callable[[str, list[str] | None, str | None], Awaitable[None]] | None
+    ) = None,
     # Called with every account that lost a friendship or a pending request
     # to a deletion, so their lists stop showing somebody who is gone. Wired to
     # the friend service's own announcement, so there is one implementation of
@@ -466,6 +472,20 @@ def create_auth_router(
             ),
         )
         return issued.session.id
+
+    async def _sockets_signed_out(
+        user_id: str, session_ids: list[str] | None, *, keep: str | None = None
+    ) -> None:
+        """Best effort, after the commit: the revocation stands either way.
+
+        `keep` is the acting browser's session, whose sockets are left alone.
+        """
+        if on_sessions_revoked is None:
+            return
+        try:
+            await on_sessions_revoked(str(user_id), session_ids, keep)
+        except Exception:
+            logger.exception("Could not close the sockets of revoked sessions for %s", user_id)
 
     async def _sign_this_browser_in(response: Response, request: Request, account):
         """Everything that follows a proof, whatever the proof was.
@@ -1102,6 +1122,7 @@ def create_auth_router(
             raise Refusal(404, ErrorCode.SESSION_NOT_FOUND, "Active session not found.")
         if session_id == getattr(request.state, "session_id", None):
             clear_session_cookie(response, secure=is_secure_request(request))
+        await _sockets_signed_out(user_id, [str(session_id)])
         return {"ok": True}
 
     @router.post("/logout-all")
@@ -1112,6 +1133,7 @@ def create_auth_router(
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         revoked = await revoke_all_sessions(session_factory, user_id=user_id)
         clear_session_cookie(response, secure=is_secure_request(request))
+        await _sockets_signed_out(user_id, None)
         return {"ok": True, "revoked": revoked}
 
     @router.post("/data-exports", status_code=202)
@@ -1414,6 +1436,8 @@ def create_auth_router(
     async def perform_password_reset(
         body: ResetPasswordBody, request: Request, response: Response
     ):
+        acting_session = getattr(request.state, "session_id", None)
+        acting_session = str(acting_session) if acting_session else None
         # Limited like its siblings: this route hashes, and the hashing pool
         # is shared with every sign-in, so an unlimited one is a way to hold
         # that queue full from outside (#975 review).
@@ -1464,11 +1488,19 @@ def create_auth_router(
             # a code. Issued here, the session was a staff sign-in that
             # asked for no code - and the password just set is enough to
             # replace the authenticator, so the second factor was reduced
-            # to mailbox control (#996). Login runs the gate; go there.
+            # to mailbox control (#996). Login runs the gate; go there. The
+            # sockets of every revoked session go too, this browser's
+            # included: it holds no cookie now, and re-reads as nobody.
+            await _sockets_signed_out(str(outcome.user_id), None)
             return {"ok": True, "signedIn": False}
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
         await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)
+        # Every other device's socket goes. This browser's, if it was signed
+        # in as the account, stays and re-handshakes once the new cookie is
+        # in hand: closed now, it would re-read itself before the cookie
+        # landed and take the reset for a sign-out.
+        await _sockets_signed_out(str(outcome.user_id), None, keep=acting_session)
         return {"ok": True, "signedIn": True}
 
     @router.post("/password/change")
@@ -1482,6 +1514,8 @@ def create_auth_router(
         the case where they do not, and remains the only route for a guest,
         who has no password to change.
         """
+        acting_session = getattr(request.state, "session_id", None)
+        acting_session = str(acting_session) if acting_session else None
         await throttle(password_change_limiter, request)
         user = await require_user(request)
         if user.is_anonymous:
@@ -1526,6 +1560,11 @@ def create_auth_router(
         # back in is what keeps a password change from also being a logout.
         clear_session_cookie(response, secure=is_secure_request(request))
         await issue_cookie(response, request, user.id, role=user.role)
+        # Every other device's socket goes. This browser's stays - it is
+        # this account's still - and re-handshakes once the response has
+        # delivered the new cookie; closed now, the notice would land first
+        # and the tab would take its own change for a sign-out.
+        await _sockets_signed_out(user.id, None, keep=acting_session)
         return {"ok": True}
 
     @router.get("/second-factor")
@@ -2033,8 +2072,14 @@ def create_auth_router(
     @router.post("/logout")
     async def logout(request: Request, response: Response):
         """Revoke this session. The next /me call provisions a fresh guest."""
+        user_id = getattr(request.state, "user_id", None)
+        session_id = getattr(request.state, "session_id", None)
         await revoke_current(request)
         clear_session_cookie(response, secure=is_secure_request(request))
+        if user_id and session_id:
+            # Another tab of this browser shares the session: its socket is
+            # signed out with it.
+            await _sockets_signed_out(user_id, [str(session_id)])
         return {"ok": True}
 
     return router

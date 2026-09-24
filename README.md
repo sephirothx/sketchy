@@ -1301,8 +1301,11 @@ expiry, rotation, and revocation. Tokens rotate halfway through their one-year
 maximum lifetime, logout revokes the current token immediately, and registered
 players can inspect and revoke individual devices or log out everywhere from
 the account menu. Socket.IO handshakes resolve the same revocable record as
-HTTP requests, so revocation applies on the next connection across all server
-processes without a shared signing secret.
+HTTP requests, and a revocation also reaches the sockets the revoked sessions
+opened - told, then closed - so a device signed out from elsewhere stops
+playing under the account at once rather than on its next connection. The
+browser that changed or reset the password keeps its own socket, which
+handshakes again with the new cookie.
 
 Logging in while carrying a guest identity links that guest to the registered
 account through an immutable alias. Historical participant, drawer, and guess

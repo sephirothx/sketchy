@@ -125,7 +125,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       // next room entered as the guest the tab had been, and a store still
       // saying "moderator" over a cookie that is gone would render a
       // signed-in header with no way to sign in.
-      await adoptFromServer();
+      await adoptFromServer({ rebindSocket: true });
       setDone(
         result.signedIn
           ? ui.accountRecoveryPage.yourPasswordIsSetAnd

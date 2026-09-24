@@ -102,6 +102,7 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
             turned_away = True
             return
         user_id = None
+        auth_session = None
         if ctx.session_factory is not None:
             token = session_token_from_cookie_header(environ.get("HTTP_COOKIE"))
             resolution = await resolve_session_status(
@@ -120,7 +121,19 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
                 raise ConnectionRefusedError("This account is suspended.")
             auth_session = resolution.session
             user_id = auth_session.user_id if auth_session else None
-        await ctx.sio.save_session(sid, {"user_id": user_id})
+        # The session too (#1007): a revocation names sessions, and the
+        # sockets a revoked one opened have to be found by it.
+        await ctx.sio.save_session(
+            sid,
+            {
+                "user_id": user_id,
+                "session_id": (
+                    str(session_id)
+                    if (session_id := getattr(auth_session, "id", None)) is not None
+                    else None
+                ),
+            },
+        )
         # Balanced by the same `finally` the socket ledger uses, and for the
         # same reason: a handshake refused below never reaches `disconnect`.
         if ctx.presence.note_socket_opened(sid, user_id):

@@ -2655,5 +2655,6 @@ export const IT: Catalogue = {
     removedByAdmin: "Un amministratore ti ha rimosso.",
     accountDeleted: "Il tuo account è stato eliminato.",
     accountSuspended: "Il tuo account è stato sospeso.",
+    signedOut: "Sei stato disconnesso su questo dispositivo.",
   },
 };

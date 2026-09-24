@@ -26,6 +26,8 @@ export function supersededText(code: unknown): string {
       return ui.roomNotices.accountDeleted;
     case "account_suspended":
       return ui.roomNotices.accountSuspended;
+    case "signed_out":
+      return ui.roomNotices.signedOut;
     default:
       // `opened_elsewhere`, and anything newer.
       return ui.activeGameRoom.thisRoomWasOpenedIn;
