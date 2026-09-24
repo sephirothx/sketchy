@@ -291,6 +291,16 @@ used to be all of that from every client inside a second, against a pool of ten.
 - **The REST refetches** a reconnect triggers (friends, recovery address) run
   a random 0–3 s behind it, so they queue behind the seat rebind rather than
   beside it. A first connection does not wait.
+- **A close the server made** (`io server disconnect`: another tab took the
+  seat, a kick, the capacity ceiling, a stale socket that never reloaded) is
+  one socket.io-client treats as final — the manager does not retry it, and
+  nothing else reopened the socket, so the tab sat on the lobby with a
+  "reconnecting" banner that meant nothing (#998). The client now reopens it
+  itself: 1 s, doubling to 30 s, ±50%, reset by a successful handshake; 30 s
+  first when it was told the server was full, since the notice said a few
+  minutes. Not after a stuck update (R-CONN-10), which the server would only
+  close again. A close the server means for good is a refused *handshake*, which
+  the manager never retries.
 - **Missed `session_ping`s** (three in a row) no longer tear the transport
   down by default. While Engine.IO's own pings keep arriving the connection is
   alive and the server is only slow, so the seat gets a soft `join_room`, which
@@ -962,7 +972,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `role_changed` | `{notice: {id, role, pending, createdAt} | null, pendingRole}` — the same body `GET /api/role-notices/pending` returns. Emitted whether or not there is a notice: `pendingRole` says what is still outstanding on the account, and **withdrawing an offer** is the case with nothing to say and a change worth hearing — it settles the notice and ends the offer together, and a browser that missed it would go on offering an enrolment that would now grant nothing. The role and nothing else: the reason the administrator recorded is ledger text written for other administrators and can name a report or a second account. `pending` distinguishes a role the account **holds** from one it has been **offered** and takes up by enrolling a second factor (R-AUTH-20) — the second asks something of the reader, so it cannot be worded like the first, and it revokes nothing | every socket of the account whose role changed |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
-| `server_full` | `{reason}` — English, for a log; the client says it from the event itself (R-I18N-01). The socket is closed immediately afterwards | one socket, at handshake |
+| `server_full` | `{reason}` — English, for a log; the client says it from the event itself (R-I18N-01). The socket is closed a moment **after** the handshake completes (`SERVER_FULL_CLOSE_SECONDS`): the namespace CONNECT goes out only when the connect handler returns, and a close awaited inside it reached the client first, so the notice was buffered against a namespace that never connected and nobody was told (#998). For that moment the socket is connected but **still counted** against the ceiling, and every command it sends is refused at the door with `server_busy` — it is past the ceiling, and a seat taken in that window would be one the ceiling never allowed. The client keeps its notice through the `connect` event that follows it, since that event is the turned-away socket's own, not an admission | one socket, at handshake |
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
