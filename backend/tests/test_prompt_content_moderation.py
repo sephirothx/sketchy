@@ -1274,3 +1274,60 @@ async def test_a_hide_decided_during_a_save_reaches_the_version_the_save_writes(
     async with factory() as session:
         row = await session.get(PromptVersion, UUID(current.prompt_version_id))
         assert row.moderation_state == "hidden"
+
+
+async def test_a_word_hidden_in_one_list_is_hidden_in_the_owners_others(env):
+    """#1091: a hidden word typed into another of the owner's lists - a new
+    one or one they already had - was a new concept born active. The takedown
+    reaches every list the owner has, in that language; another player typing
+    the same word is untouched."""
+    new_client, factory, prompts = env
+    owner_http, stranger_http = new_client(), new_client()
+    owner = await register(owner_http, "ManyLists")
+    stranger = await register(stranger_http, "Unrelated")
+    first = await prompts.create_owned(
+        owner["id"], name="First", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt", aliases=("its alias",)),),
+    )
+    other = await prompts.create_owned(
+        owner["id"], name="Other", description="", language="en",
+        prompts=(PromptListEntryInput(answer="fine"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(first.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+
+    fresh = await prompts.create_owned(
+        owner["id"], name="Fresh", description="", language="en",
+        prompts=(PromptListEntryInput(answer="Offensive Prompt"), PromptListEntryInput(answer="ok")),
+    )
+    assert {p.answer: p.moderation_state for p in fresh.prompts} == {
+        "Offensive Prompt": "hidden",
+        "ok": "active",
+    }
+
+    edited = await prompts.update_owned(
+        owner["id"], other.id, expected_version=other.version, name=other.name,
+        description="",
+        prompts=(
+            PromptListEntryInput(answer="fine", concept_id=other.prompts[0].concept_id),
+            PromptListEntryInput(answer="its alias"),
+        ),
+    )
+    assert {p.answer: p.moderation_state for p in edited.prompts} == {
+        "fine": "active",
+        "its alias": "hidden",
+    }
+
+    theirs = await prompts.create_owned(
+        stranger["id"], name="Theirs", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    assert theirs.prompts[0].moderation_state == "active", "another player's list is theirs"
+
+    elsewhere = await prompts.create_owned(
+        owner["id"], name="Anderswo", description="", language="de",
+        prompts=(PromptListEntryInput(answer="offensive prompt"),),
+    )
+    assert elsewhere.prompts[0].moderation_state == "active", "keys mean one language"

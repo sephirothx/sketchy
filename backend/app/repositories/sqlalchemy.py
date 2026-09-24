@@ -4895,23 +4895,34 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # is a new version of another; either way, born with that entry's
         # `active` it undid the takedown in a couple of clicks (#1020 review).
         # A decision covers every version of its concept, so any one says it.
-        # Anchored on the hidden side - rare, and indexed - with the list's
-        # history asked only about those, so a save costs the number of
-        # hidden versions rather than every item of every revision.
+        # And not this list's alone: a word hidden in one of the owner's lists
+        # typed into another of theirs - or a new one - is the same word
+        # (#1091), so every list the owner has ever held is asked, in this
+        # list's language, where the keys mean the same thing. Anchored on
+        # the hidden side - rare, and indexed - with the histories asked only
+        # about those, so a save costs the number of hidden versions rather
+        # than every item of every revision.
+        in_scope = (
+            PromptList.owner_user_id == prompt_list.owner_user_id
+            if prompt_list.owner_user_id is not None
+            else PromptList.id == prompt_list.id
+        )
         hidden_versions = (
             await session.scalars(
                 select(PromptVersion)
                 .where(
                     PromptVersion.moderation_state
                     == PromptContentModerationState.HIDDEN.value,
+                    PromptVersion.language == prompt_list.language,
                     select(PromptListRevisionItem.revision_id)
                     .join(
                         PromptListRevision,
                         PromptListRevision.id == PromptListRevisionItem.revision_id,
                     )
+                    .join(PromptList, PromptList.id == PromptListRevision.prompt_list_id)
                     .where(
                         PromptListRevisionItem.prompt_version_id == PromptVersion.id,
-                        PromptListRevision.prompt_list_id == prompt_list.id,
+                        in_scope,
                     )
                     .exists(),
                 )

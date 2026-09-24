@@ -1756,8 +1756,9 @@ An immutable, language-specific wording.
 A moderator's decision is the concept's, not one wording's: resolving a report sets
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
 concept, an owner's edit that writes a new version (an alias added, an answer respelled)
-carries them to it, and a new version whose answer or alias matches any prompt this list has
-ever held that is hidden — a word typed back in, or another entry respelled into it — is
+carries them to it, and a new version whose answer or alias matches any prompt that is hidden in
+any list its owner has ever held, in the same language (#1091) — a word typed back in, into
+this list or another, or another entry respelled into it — is
 born with them — so a hidden word stays hidden (#1020). A concept belongs to
 one list; copies mint their own. Bundled seed versions are the operator's own editions and
 start `active`.
