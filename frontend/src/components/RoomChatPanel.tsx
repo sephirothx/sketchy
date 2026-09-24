@@ -6,6 +6,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sendGuess } from "../lib/guessSender";
+import { inputPurposeFor } from "../lib/chatPurpose";
 import type { AckResponse, ChatMessage, PlayerInfo } from "../types";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ChevronDownIcon, ChevronRightIcon } from "./icons";
@@ -70,7 +71,7 @@ export function RoomChatPanel({
 }: RoomChatPanelProps) {
   const locale = useLocaleRerender();
   recordRender("chat");
-  const inputPurpose = mode === "playing" ? "guess" : "chat";
+  const inputPurpose = inputPurposeFor(mode, canGuess);
   const [previousInputPurpose, setPreviousInputPurpose] = useState(inputPurpose);
   const [text, setText] = useState("");
   const [history, setHistory] = useState<string[]>([]);
