@@ -1283,3 +1283,48 @@ async def test_a_staff_reset_sets_the_password_but_signs_nobody_in(env):
             )
         )
     assert live == 0
+
+
+async def test_a_suspended_reset_sets_the_password_but_signs_nobody_in(env):
+    """Login and the passkey both refuse a suspended account at the door; the
+    reset issued a cookie without asking (#1052). The password still takes -
+    the mailbox was proved - and signing in with it is what says why."""
+    from app.db.models import UserBan, generate_uuid
+
+    new_client, factory = env
+    browser = new_client()
+    account = await register(browser, "Suspended", email="suspended@example.com")
+    await verify_via_email(browser, factory)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBan(
+                    id=generate_uuid(),
+                    user_id=UUID(account["id"]),
+                    reason="Suspended for the test",
+                )
+            )
+
+    await new_client().post("/api/auth/password/forgot", json={"identifier": "Suspended"})
+    stranger = new_client()
+    reset = await stranger.post(
+        "/api/auth/password/reset",
+        json={"token": token_in(await drain(factory)), "password": NEW_PASSWORD},
+    )
+
+    assert reset.status_code == 200, reset.text
+    assert reset.json() == {"ok": True, "signedIn": False}
+    assert (await stranger.get("/api/auth/me")).json() is None
+    async with factory() as session:
+        live = await session.scalar(
+            select(func.count(AuthSession.id)).where(
+                AuthSession.user_id == UUID(account["id"]),
+                AuthSession.revoked_at.is_(None),
+            )
+        )
+    assert live == 0
+    login = await new_client().post(
+        "/api/auth/login", json={"username": "Suspended", "password": NEW_PASSWORD}
+    )
+    assert login.status_code == 403
+    assert login.json()["detail"] == "This account is suspended."

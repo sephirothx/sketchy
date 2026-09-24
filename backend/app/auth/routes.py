@@ -1493,6 +1493,14 @@ def create_auth_router(
             # included: it holds no cookie now, and re-reads as nobody.
             await _sockets_signed_out(str(outcome.user_id), None)
             return {"ok": True, "signedIn": False}
+        if await is_user_banned(session_factory, str(outcome.user_id)):
+            # Nor for a suspended one: the front door refuses it on the
+            # password and on a passkey, and a reset is a third front door,
+            # not a way round the other two (#1052). The password still
+            # takes - the mailbox was proved, and the suspension ends one day
+            # - and signing in with it says why nothing was issued here.
+            await _sockets_signed_out(str(outcome.user_id), None)
+            return {"ok": True, "signedIn": False}
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
         await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)
