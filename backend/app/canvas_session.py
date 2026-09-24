@@ -275,6 +275,10 @@ class CanvasSession:
         if not self.history:
             return False
         self.active_path_index = None
+        # The path this may have removed was the open one: left marked open,
+        # every later opener was asked for a sequence the client had already
+        # spent, for the rest of the turn (#999).
+        self.active_draw_sequence = None
         removed = self.history.pop()
         del self.hashes[len(self.history):]
         if removed.tag == PATH_TAG:

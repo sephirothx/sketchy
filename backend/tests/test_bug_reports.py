@@ -513,3 +513,25 @@ async def test_erasure_is_structural_not_procedural(env):
                     .where(BugReport.id == report_id)
                     .values(screenshot_status="erased")
                 )
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        {"details": "a\x00b"},
+        {"summary": "Timer\x1b[31m"},
+        {"clientContext": {"buildSha": "a299f80", "route": "/room/\x00"}},
+    ],
+)
+async def test_a_control_character_is_refused_rather_than_stored(env, body):
+    """PostgreSQL will not take U+0000 in text, and a body that got as far
+    as the INSERT used to answer 500 and lose the report (#995)."""
+    new_client, factory, _ = env
+    http = new_client()
+    await guest(http)
+
+    response = await http.post("/api/bug-reports", json=a_report(**body))
+
+    assert response.status_code == 422, response.text
+    async with factory() as session:
+        assert await session.scalar(select(BugReport)) is None

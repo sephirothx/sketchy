@@ -214,3 +214,117 @@ async def test_a_game_ends_as_abandoned_when_fewer_than_two_remain():
     await replay_staged(ctx)
     [saved] = history.saved
     assert saved.record.id == game.id and saved.record.outcome == "abandoned"
+
+
+# --- a seat released inside a fan-out (#1004) ----------------------------------
+
+
+def _watch_scheduling(flow):
+    scheduled = []
+    real = flow.schedule_phase_timer
+
+    def watched(room, seconds):
+        scheduled.append((room.game.phase.value if room.game else None, seconds))
+        return real(room, seconds)
+
+    flow.schedule_phase_timer = watched
+    return scheduled
+
+
+async def test_a_drawer_released_during_turn_started_leaves_the_next_turn_its_own_timer():
+    """Every per-seat emit is an await the game can move through. The seat
+    released there abandoned the turn and the nested `_start_turn` armed the
+    next turn's choosing timer - which the outer call then replaced with the
+    drawing timer it was about to arm: a 15 s choice (R-GAME-01) against a
+    90-300 s clock (#1004). And the seats not yet reached were still told the
+    departed drawer's turn had started."""
+    from unittest.mock import AsyncMock
+
+    from app.flow_timing import timing
+    from app.game import Phase
+    from tests.fake_game_history_repo import FakeGameHistoryRepository
+    from tests.handlers.helpers import build_context, build_room
+
+    room_manager, room, players = build_room(rounds=3, accounts={"Ann": "ua", "Bob": "ub", "Cat": "uc"})
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    sessions = {p.sid: {"room_id": room.id, "player_id": p.id, "user_id": p.user_id} for p in players.values()}
+    ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    ctx.sio.leave_room = AsyncMock()
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    drawer = room.players[game.current_drawer]
+    first_turn = game.current_turn_id
+    released = {"done": False}
+    real_emit = ctx.sio.emit
+
+    async def emit(event, *args, **kwargs):
+        if event == "turn_started" and not released["done"]:
+            released["done"] = True
+            await flow.release_seat(drawer.sid, room, drawer)
+        return await real_emit(event, *args, **kwargs)
+
+    ctx.sio.emit = emit
+    scheduled = _watch_scheduling(flow)
+    game.force_prompt_choice()
+
+    await flow._begin_drawing(room)
+
+    assert game.current_turn_id != first_turn and game.phase == Phase.CHOOSING_PROMPT
+    assert scheduled == [("choosing_prompt", timing.choose_prompt_seconds)]
+    stale = [
+        call for call in real_emit.await_args_list
+        if call.args[0] == "turn_started" and call.args[1]["turnId"] == first_turn
+    ]
+    assert len(stale) == 1, "only the seat reached before the release heard the old turn"
+    assert game.remaining_seconds() <= timing.choose_prompt_seconds + 1
+    assert not ctx.timers.hint_timers.get(room.id)
+    await ctx.timers.close()
+
+
+async def test_a_drawer_released_during_turn_ended_does_not_shorten_the_next_choice():
+    from unittest.mock import AsyncMock
+
+    from app.flow_timing import timing
+    from app.game import Phase
+    from tests.fake_game_history_repo import FakeGameHistoryRepository
+    from tests.handlers.helpers import build_context, build_room
+
+    room_manager, room, players = build_room(rounds=3, accounts={"Ann": "ua", "Bob": "ub", "Cat": "uc"})
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    sessions = {p.sid: {"room_id": room.id, "player_id": p.id, "user_id": p.user_id} for p in players.values()}
+    ctx.sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    ctx.sio.leave_room = AsyncMock()
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    drawer = room.players[game.current_drawer]
+    game.force_prompt_choice()
+    await flow._begin_drawing(room)
+    ctx.timers.cancel_phase_timer(room.id)
+    released = {"done": False}
+    real_emit = ctx.sio.emit
+
+    async def emit(event, *args, **kwargs):
+        if event == "turn_ended" and not released["done"]:
+            released["done"] = True
+            await flow.release_seat(drawer.sid, room, drawer)
+        return await real_emit(event, *args, **kwargs)
+
+    ctx.sio.emit = emit
+    scheduled = _watch_scheduling(flow)
+
+    await flow._end_turn(room)
+
+    # Whatever the release did with the results screen, exactly one timer
+    # is armed, and it is the one for the phase in play: on main the outer
+    # call armed the 5 s results timer over the next turn's 15 s choice.
+    assert len(scheduled) == 1, scheduled
+    phase, seconds = scheduled[0]
+    assert phase == game.phase.value
+    assert seconds == (
+        timing.choose_prompt_seconds
+        if game.phase == Phase.CHOOSING_PROMPT
+        else timing.turn_results_seconds
+    )
+    await ctx.timers.close()

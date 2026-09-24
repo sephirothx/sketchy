@@ -19,7 +19,8 @@ from collections.abc import Awaitable, Callable, Collection
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, Request
-from pydantic import BaseModel, ConfigDict, Field, StrictFloat, StrictInt
+from pydantic import ConfigDict, Field, StrictFloat, StrictInt
+from app.request_text import ControlFreeModel
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.admin_auth import admin_gate
@@ -40,7 +41,7 @@ from app.services.runtime_settings import (
 CONFIG_CHANGED = "config.changed"
 
 
-class TunableChanges(BaseModel):
+class TunableChanges(ControlFreeModel):
     """One or more settings to change, and one or more to put back.
 
     Both in one request on purpose: a pair of values that only makes sense

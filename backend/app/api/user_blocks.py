@@ -4,7 +4,8 @@ from __future__ import annotations
 from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 from sqlalchemy import delete, func, select
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -28,7 +29,7 @@ from app.domain_values import AccountState
 MAX_BLOCKS_PER_ACCOUNT = 1_000
 
 
-class BlockBody(BaseModel):
+class BlockBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_id: UUID = Field(alias="userId")
