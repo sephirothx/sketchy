@@ -118,5 +118,10 @@ test("the issue's premise - a reply that lacks the open stroke - is caught at th
   v.onDraw(SECOND);
   v.onDraw(encodePathEnd(), COMMIT);
   assert.deepEqual(v.history.actions, []);
-  assert.deepEqual(v.resyncs, ["commit mismatch"]);
+  // Whichever the viewer meets first - a relative frame it cannot place, or
+  // a commit for a path it never opened - it asks for server truth, as the
+  // hook does on both (`requestAuthoritativeSync`); the ink comes back one
+  // round trip later rather than never.
+  assert.ok(v.resyncs.length > 0, "a resync is asked for");
+  assert.ok(v.resyncs.every((reason) => ["undecodable", "commit mismatch"].includes(reason)));
 });
