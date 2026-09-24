@@ -3284,7 +3284,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     selectinload(GameRecord.participants),
                     defer(GameRecord.rule_snapshot, raiseload=True),
                 )
-                .order_by(GameRecord.finished_at.desc())
+                # The id breaks a tie: two games finished in the same
+                # microsecond had no order between them, so a page boundary
+                # could repeat one and skip the other (#1077).
+                .order_by(GameRecord.finished_at.desc(), GameRecord.id.desc())
                 .limit(clamped_limit)
                 .offset(clamped_offset)
             )
