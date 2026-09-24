@@ -211,6 +211,10 @@ let inFlightProvision: Promise<AuthUser> | null = null;
 // in during it would be erased by its result.
 let identityVersion = 0;
 let inFlightFetchMe: Promise<AuthUser | null> | null = null;
+// Whether the last `/me` read failed to reach the server, as opposed to the
+// server answering that nobody is signed in (review of #1065): the two are
+// both `null` to a caller, and only the second is a sign-out.
+let lastReadFailed = false;
 
 /**
  * Whether this visitor still has to choose a name before they can play.
@@ -279,6 +283,7 @@ export const useAuthStore = create<AuthStore>((set, get) => {
 
     set({ isLoading: true });
     const startedAt = identityVersion;
+    lastReadFailed = false;
     inFlightFetchMe = (async () => {
       try {
         const { settings, ...user } = (await apiRequest<MeResponse | null>("/api/auth/me")) ?? {};
@@ -295,9 +300,13 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         return account;
       } catch {
         // Offline or the server is down. The app still works: play continues
-        // without a durable identity rather than blocking on the account.
-        set({ user: null, isLoading: false, hasResolved: true });
-        return null;
+        // without a durable identity rather than blocking on the account -
+        // and with the one it already held, if any: a read that never
+        // arrived says nothing about the account.
+        lastReadFailed = true;
+        const held = get().user;
+        set({ user: held, isLoading: false, hasResolved: true });
+        return held;
       } finally {
         inFlightFetchMe = null;
       }
@@ -311,6 +320,10 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     if (inFlightFetchMe) await inFlightFetchMe.catch(() => null);
     const before = get().user?.id ?? null;
     const account = await get().fetchMe();
+    // A read that failed is not an answer: the identity, the seat and the
+    // socket stay as they were rather than being given up as nobody's
+    // (review of #1065). The next read settles it.
+    if (lastReadFailed) return account;
     if ((account?.id ?? null) === before) return account;
     // `fetchMe` has already installed the account, reconciled its colour and
     // loaded its settings; what it does not do is the transition - the bump
