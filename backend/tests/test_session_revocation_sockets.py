@@ -171,6 +171,96 @@ async def test_the_sockets_of_the_named_sessions_are_told_and_closed(monkeypatch
     assert server.disconnected == ["phone-sid"]
 
 
+async def test_a_socket_whose_opening_session_is_gone_is_closed_too(monkeypatch):
+    """The rotation walk stops where a link was purged, 30 days after an
+    expiry; a socket opened with such a session can be traced to no device,
+    so a named revocation on the account closes it as well (#1083 review)."""
+    from app import main
+
+    class Server(FakeServer):
+        async def get_session(self, sid):
+            return {
+                "laptop-sid": {"user_id": "u1", "session_id": "s-laptop"},
+                "ancient-sid": {"user_id": "u1", "session_id": "s-purged"},
+                "phone-sid": {"user_id": "u1", "session_id": "s-phone"},
+            }[sid]
+
+    server = Server({"user:u1": ["laptop-sid", "ancient-sid", "phone-sid"]})
+    monkeypatch.setattr(main, "sio", server)
+    asked: list[set[str]] = []
+
+    async def untraceable(ids):
+        asked.append(ids)
+        return {"s-purged"}
+
+    monkeypatch.setattr(main, "untraceable_sessions", untraceable)
+
+    await main.close_sockets_of_revoked_sessions("u1", ["s-laptop"])
+    assert server.disconnected == ["laptop-sid", "ancient-sid"]
+    assert asked == [{"s-purged", "s-phone"}]
+
+
+async def test_untraceable_sessions_are_the_missing_and_the_expired():
+    from datetime import datetime, timedelta, timezone
+    from uuid import UUID, uuid4
+
+    from sqlalchemy import update
+
+    from app.auth.sessions import create_session, rotate_session
+    from app.db.models import AuthSession
+    from app.main import untraceable_sessions
+
+    factory, engine = await create_test_db()
+    try:
+        user = await SqlAlchemyUserRepository(factory).create_anonymous("Old")
+        live = await create_session(factory, user_id=user.id, device_label="A")
+        rotated = await create_session(factory, user_id=user.id, device_label="B")
+        await rotate_session(
+            factory, session_id=rotated.session.id, user_id=user.id, device_label="B"
+        )
+        expired = await create_session(factory, user_id=user.id, device_label="C")
+        idle = await create_session(factory, user_id=user.id, device_label="D")
+        past = datetime.now(timezone.utc) - timedelta(minutes=1)
+        async with factory() as session:
+            async with session.begin():
+                await session.execute(
+                    update(AuthSession)
+                    .where(AuthSession.id == UUID(expired.session.id))
+                    .values(
+                        created_at=past - timedelta(days=1),
+                        last_used_at=past - timedelta(days=1),
+                        expires_at=past,
+                        idle_expires_at=past,
+                    )
+                )
+                await session.execute(
+                    update(AuthSession)
+                    .where(AuthSession.id == UUID(idle.session.id))
+                    .values(
+                        created_at=past - timedelta(days=1),
+                        last_used_at=past - timedelta(days=1),
+                        idle_expires_at=past,
+                    )
+                )
+        purged = str(uuid4())
+        ids = {
+            live.session.id,
+            rotated.session.id,
+            expired.session.id,
+            idle.session.id,
+            purged,
+            "not-a-uuid",
+        }
+        # Revoked by a rotation is still traceable: its device lives on.
+        assert await untraceable_sessions(ids, factory) == {
+            expired.session.id,
+            idle.session.id,
+            purged,
+        }
+    finally:
+        await engine.dispose()
+
+
 async def test_a_socket_gone_mid_sweep_does_not_stop_the_rest(monkeypatch):
     """`get_session` raises for a sid that left between the walk and the
     read; the sockets after it in the list are still told and closed."""
