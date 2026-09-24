@@ -1247,7 +1247,20 @@ class GameFlowService:
                 if player.id != game.current_drawer
             }
         )
+        # The drawing deadline first: a turn ended below reads its duration
+        # off it, and the choose-prompt deadline still standing here would
+        # record a turn that lasted nothing as most of a drawing phase.
         game.set_phase_deadline(game.drawing_seconds)
+        if not any(
+            reason == TurnEligibilityReason.ELIGIBLE.value
+            for reason in (game.turn_eligibility_reasons or {}).values()
+        ):
+            # Nobody can guess this turn - every other seat is AFK or away,
+            # and eligibility is frozen for the turn - so the clock would
+            # only run out on an empty room (#1005). Ended the way it would
+            # have ended then, so the results show and the game moves on.
+            await self._end_turn(room)
+            return
         turn_id = game.current_turn_id
         # Read once for the whole fan-out: one drawer, one transport.
         drawer_transport = self._drawer_transport(room)
@@ -1725,6 +1738,9 @@ class GameFlowService:
         game = room.game
         if not game or room.state != "playing":
             return
+        if player.is_afk and self._too_few_to_go_on(room, game):
+            await self._end_game_too_few(room)
+            return
         if player.is_afk and player.id == game.current_drawer:
             if game.phase == Phase.CHOOSING_PROMPT:
                 await self._abandon_current_turn(room)
@@ -1795,15 +1811,8 @@ class GameFlowService:
             # recorded after that carries round 0.
             await self._end_turn(room)
         was_drawer = game.remove_player_from_rotation(token)
-        if not game.turn_order:
-            self._timers.cancel_phase_timer(room.id)
-            self._timers.cancel_hint_timers(room.id)
-            self._timers.cancel_restart_timer(room.id)
-            room.restart_vote = None
-            room.state = "waiting"
-            await self.record_abandoned_game(room, defer_durable=defer_durable)
-            if self._ctx.shutdown is not None:
-                self._ctx.shutdown.notify_game_state_changed()
+        if self._too_few_to_go_on(room, game):
+            await self._end_game_too_few(room, defer_durable=defer_durable)
         elif was_drawer and game.phase != Phase.TURN_RESULTS:
             await self._abandon_current_turn(room, defer_durable=defer_durable)
         elif was_drawer:
@@ -1814,6 +1823,44 @@ class GameFlowService:
             pass
         else:
             await self._end_turn_if_all_guessed(room)
+
+    def _too_few_to_go_on(self, room: Room, game: Game) -> bool:
+        """Fewer than two seats that are in the rotation and not AFK.
+
+        Counted like the start is (`_start_fresh_game`): an AFK seat stays in
+        the rotation, but a game with one active player and one AFK one is a
+        game one person is playing - and with every turn ending at once for
+        want of a guesser (#1005), it would fast-forward through its rounds
+        and be recorded as finished, with a win against nobody.
+        """
+        active = [
+            token
+            for token in game.turn_order
+            if (player := room.players.get(token)) is not None and not player.is_afk
+        ]
+        return len(active) < MIN_PLAYERS_TO_START
+
+    async def _end_game_too_few(self, room: Room, *, defer_durable: bool = False) -> None:
+        """Stop a game too few are left to play (#1005).
+
+        The way one everybody walked out of stops: recorded as abandoned,
+        the room back to waiting, where whoever is left can be joined again,
+        and told - one player would otherwise draw every remaining turn to an
+        empty room for the full clock each time.
+        """
+        game = room.game
+        if game is None:
+            return
+        self._timers.cancel_phase_timer(room.id)
+        self._timers.cancel_hint_timers(room.id)
+        self._timers.cancel_restart_timer(room.id)
+        room.restart_vote = None
+        room.state = "waiting"
+        await self.record_abandoned_game(room, defer_durable=defer_durable)
+        if self._ctx.shutdown is not None:
+            self._ctx.shutdown.notify_game_state_changed()
+        if room.connected_players():
+            await self.announce(room, Announcement.GAME_ENDED_TOO_FEW_PLAYERS)
 
     async def _existing_player_for_sid(self, sid: str, room_id: str) -> Player | None:
         """If this socket already has a live session in the target room, return its player.

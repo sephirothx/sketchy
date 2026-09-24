@@ -1295,7 +1295,10 @@ async def test_a_drawer_who_leaves_after_a_guess_ends_the_turn_and_the_game_is_s
 
 
 async def test_a_drawer_who_leaves_before_anyone_guessed_still_skips_the_turn():
-    room_manager, room, players = build_room(rounds=2)
+    # Three seats: a game that drops below two ends instead (#1005).
+    room_manager, room, players = build_room(
+        rounds=2, accounts={"Ann": "user-ann", "Bob": "user-bob", "Cat": "user-cat"}
+    )
     ctx = build_context(room_manager, FakeGameHistoryRepository())
     flow = ctx.game_flow
     await flow._start_fresh_game(room, room.player_list())
@@ -1442,12 +1445,16 @@ async def test_the_standings_are_ordered_by_the_score_each_entry_carries():
     """An account holds the points of every seat it sat in (R-HIST-12); the
     podium is read off this list, so a seat holding 100 of its account's 500
     belongs above one holding 300 (review of #1047)."""
-    room_manager, room, players = build_room(rounds=1)
+    # Three seats: a game that drops below two ends instead (#1005).
+    room_manager, room, players = build_room(
+        rounds=1, accounts={"Ann": "user-ann", "Bob": "user-bob", "Cat": "user-cat"}
+    )
     ctx = build_context(room_manager, FakeGameHistoryRepository())
     flow = ctx.game_flow
     await flow._start_fresh_game(room, room.player_list())
     game = room.game
     drawer, guesser = _first_turn(players, game)
+    third = next(p for p in players.values() if p is not drawer and p is not guesser)
     guesser.score = 400
     room_manager.remove_player(room, guesser.id)
     await flow._remove_player_from_game(room, guesser.id)
@@ -1462,4 +1469,5 @@ async def test_the_standings_are_ordered_by_the_score_each_entry_carries():
     assert [(entry["nickname"], entry["score"]) for entry in room.last_game_scores] == [
         (guesser.nickname, 500),
         (drawer.nickname, 300),
+        (third.nickname, 0),
     ]

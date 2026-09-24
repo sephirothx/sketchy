@@ -402,6 +402,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "La votazione di riavvio è stata annullata perché restano meno di due giocatori attivi.",
   restart_cancelled: (p) => `Il riavvio è stato annullato perché ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "La partita è stata riavviata per votazione dei giocatori.",
+  game_ended_too_few_players: () => "La partita è finita: sono rimasti meno di due giocatori.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} pt - trovata ${counted(count(p.count, 1), {

@@ -402,6 +402,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "Le vote de redémarrage a été annulé car il reste moins de deux joueurs actifs.",
   restart_cancelled: (p) => `Le redémarrage a été annulé car ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "La partie a été redémarrée par vote des joueurs.",
+  game_ended_too_few_players: () => "La partie est terminée : il reste moins de deux joueurs.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} pts - trouvée ${counted(count(p.count, 1), {

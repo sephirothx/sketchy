@@ -2690,7 +2690,9 @@ A seated client checks with the server every five seconds that it still holds th
   rotation. A turn nobody had guessed yet is skipped; one somebody had already guessed ends
   the way the clock ends it - the guesses and the drawing stand, the results show, and the
   departed drawer's seat still receives the drawer bonus.
-- If everyone disconnects, the room is cleaned up.
+- If everyone disconnects, the room is cleaned up. If fewer than two players remain in the
+  rotation, the game ends as abandoned and the room returns to waiting. A turn that begins
+  with nobody able to guess ends at once instead of running its clock.
 - A socket the server closed - another tab took the seat, a kick, the server was full -
   is reopened by the client on its own backoff; only a stuck update stays down.
 - A seat that comes back mid-turn - a reload, a reconnect, or just returning to the tab -

@@ -414,6 +414,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "The restart vote was cancelled because fewer than two active players remain.",
   restart_cancelled: (p) => `The restart was cancelled because ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "The game was restarted by player vote.",
+  game_ended_too_few_players: () => "The game ended: fewer than two players remain.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} pts - found ${counted(count(p.count, 1), {

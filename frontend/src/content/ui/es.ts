@@ -402,6 +402,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   "La votación de reinicio se canceló porque quedan menos de dos jugadores activos.",
   restart_cancelled: (p) => `El reinicio se canceló porque ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "La partida se reinició por votación de los jugadores.",
+  game_ended_too_few_players: () => "La partida terminó: quedan menos de dos jugadores.",
 
   hint_letter_found: (p) =>
   `'${text(p.letter)}' -${count(p.cost)} pts - encontrada ${counted(count(p.count, 1), {
