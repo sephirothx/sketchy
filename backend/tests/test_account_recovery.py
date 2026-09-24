@@ -1048,7 +1048,7 @@ async def test_a_reset_and_a_change_racing_for_one_account_apply_in_turn(
     let_the_reset_commit.set()
     reset_user, changed = await asyncio.gather(reset, change)
 
-    assert reset_user == UUID(account["id"]) and changed is True
+    assert reset_user.user_id == UUID(account["id"]) and changed is True
     async with factory() as session:
         user = await session.get(User, UUID(account["id"]))
         assert user.password_hash == "from-the-change"
@@ -1122,3 +1122,47 @@ async def test_an_expired_or_spent_reset_token_is_refused_where_it_is_consumed(e
         assert await consume_token(
             session, token="spent-token", purpose=TokenPurpose.PASSWORD_RESET
         ) is None
+
+
+async def test_a_staff_reset_sets_the_password_but_signs_nobody_in(env):
+    """A reset proves the mailbox; a staff sign-in needs the code as well
+    (R-AUTH-20). The session the reset used to issue was a moderator signed
+    in without one, holding a password that could replace the
+    authenticator - the second factor reduced to mailbox control (#996)."""
+    from app.db.models import User
+    from tests.staffauth import mark_staff_ready
+
+    new_client, factory = env
+    browser = new_client()
+    account = await register(browser, "Moderating", email="moderating@example.com")
+    await verify_via_email(browser, factory)
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(account["id"]))
+            user.role = "moderator"
+    await mark_staff_ready(factory, account["id"])
+
+    await new_client().post("/api/auth/password/forgot", json={"identifier": "Moderating"})
+    transport = await drain(factory)
+    reset = await browser.post(
+        "/api/auth/password/reset",
+        json={"token": token_in(transport), "password": NEW_PASSWORD},
+    )
+
+    assert reset.status_code == 200, reset.text
+    assert reset.json() == {"ok": True, "signedIn": False}
+    assert (await browser.get("/api/auth/me")).json() is None
+    # The password took, and the front door still wants the code.
+    login = await new_client().post(
+        "/api/auth/login", json={"username": "Moderating", "password": NEW_PASSWORD}
+    )
+    assert login.status_code == 401
+    assert login.headers.get("X-Sketchy-Second-Factor") == "required"
+    async with factory() as session:
+        live = await session.scalar(
+            select(func.count(AuthSession.id)).where(
+                AuthSession.user_id == UUID(account["id"]),
+                AuthSession.revoked_at.is_(None),
+            )
+        )
+    assert live == 0

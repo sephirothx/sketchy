@@ -136,10 +136,12 @@ export function passwordResetLinkIsUsable(token: string): Promise<{ valid: boole
   });
 }
 
+/** Sets the password. `signedIn` is false for a staff account, which the
+ * server sends through login for its second factor (R-AUTH-20). */
 export function completePasswordReset(
   token: string,
   password: string,
-): Promise<unknown> {
+): Promise<{ ok: boolean; signedIn: boolean }> {
   return apiRequest("/api/auth/password/reset", {
     method: "POST",
     body: { token, password },

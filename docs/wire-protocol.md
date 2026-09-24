@@ -2098,7 +2098,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
-| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in (`AUTH_RESET_PERFORM_LIMIT`) |
+| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in — `{ok, signedIn}`. A **staff** account is not signed in (`signedIn: false`): a reset proves the mailbox and R-AUTH-20 wants the code too, so it goes through login (#996). (`AUTH_RESET_PERFORM_LIMIT`) |
 | `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
 | `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status. On a `failed` job `failureCode` is `too_large` (the deployment's ceiling, R-PRIV-13) or `generation_failed`; otherwise `null` |
