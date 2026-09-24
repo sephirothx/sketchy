@@ -1067,11 +1067,14 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
     if not current:
         return {"ok": False, "errorCode": ErrorCode.NOT_IN_ROOM, "error": "Not in this room"}
     room, player = current
-    if payload.colorblind_safe_colors is not None:
-        # Bounded and answered (#1012): a hung or failed read here used to
-        # leave the client without an acknowledgement.
-        try:
-            with entry_deadline():
+    # One deadline for the whole command (review of #1071): a payload may
+    # carry both the colour preference and the name colour, and a deadline
+    # per call let the two add up past the client's wait.
+    with entry_deadline():
+        if payload.colorblind_safe_colors is not None:
+            # Bounded and answered (#1012): a hung or failed read here used to
+            # leave the client without an acknowledgement.
+            try:
                 player.colorblind_safe_colors = await _bounded(
                     resolve_colorblind_safe_preference(
                         ctx,
@@ -1081,55 +1084,54 @@ async def update_player_settings(ctx: HandlerContext, sid, data):
                     ),
                     "storing the colour preference",
                 )
-        except EntryTimedOut:
-            return BUSY_ACKNOWLEDGEMENT
-        except Exception:
-            logger.exception("Could not store the colour preference for user %s", player.user_id)
-            return BUSY_ACKNOWLEDGEMENT
-    if player.is_anonymous:
-        # Grey italics is what marks a name as unclaimed; letting guests recolour
-        # would erase the only cue distinguishing them from registered players.
+            except EntryTimedOut:
+                return BUSY_ACKNOWLEDGEMENT
+            except Exception:
+                logger.exception("Could not store the colour preference for user %s", player.user_id)
+                return BUSY_ACKNOWLEDGEMENT
+        if player.is_anonymous:
+            # Grey italics is what marks a name as unclaimed; letting guests recolour
+            # would erase the only cue distinguishing them from registered players.
+            if payload.name_color is not None:
+                player.name_color = ANONYMOUS_NAME_COLOR
+                await ctx.game_flow._emit_room_state(room)
+                return {"ok": False, "errorCode": ErrorCode.GUESTS_CANNOT_CHOOSE_COLOR, "error": "Create an account to choose a name color"}
+            await ctx.game_flow._emit_colorblind_suggestion(room)
+            return {"ok": True}
         if payload.name_color is not None:
-            player.name_color = ANONYMOUS_NAME_COLOR
-            await ctx.game_flow._emit_room_state(room)
-            return {"ok": False, "errorCode": ErrorCode.GUESTS_CANNOT_CHOOSE_COLOR, "error": "Create an account to choose a name color"}
-        await ctx.game_flow._emit_colorblind_suggestion(room)
-        return {"ok": True}
-    if payload.name_color is not None:
-        chosen = normalize_name_color(payload.name_color)
-        if chosen is None:
-            # Well-formed but unreadable on one of the panels (#571). Refused
-            # rather than quietly kept as the old colour, so a client that sent
-            # it is told, and nothing reaches the room or the account.
-            return {"ok": False, "errorCode": ErrorCode.INVALID_NAME_COLOR, "error": "Invalid player name color"}
-        player.name_color = chosen
-    # Keep the account in step with the seat, so the color this player is
-    # using right now is the one their profile shows. A failure here must not
-    # cost the room its update: the seat has already changed color, and
-    # skipping the broadcast would leave everyone else looking at the old one.
-    if payload.name_color is not None and ctx.user_repo is not None and player.user_id:
-        try:
-            # Bounded (#1012): the broadcast below must not wait on a hung
-            # database either.
-            with entry_deadline():
+            chosen = normalize_name_color(payload.name_color)
+            if chosen is None:
+                # Well-formed but unreadable on one of the panels (#571). Refused
+                # rather than quietly kept as the old colour, so a client that sent
+                # it is told, and nothing reaches the room or the account.
+                return {"ok": False, "errorCode": ErrorCode.INVALID_NAME_COLOR, "error": "Invalid player name color"}
+            player.name_color = chosen
+        # Keep the account in step with the seat, so the color this player is
+        # using right now is the one their profile shows. A failure here must not
+        # cost the room its update: the seat has already changed color, and
+        # skipping the broadcast would leave everyone else looking at the old one.
+        if payload.name_color is not None and ctx.user_repo is not None and player.user_id:
+            try:
+                # Bounded (#1012): the broadcast below must not wait on a hung
+                # database either.
                 await _bounded(
                     ctx.user_repo.update_profile(
                         player.user_id, name_color=player.name_color
                     ),
                     "storing the name colour",
                 )
-            # The lobby shows this colour too, from a cache warmed at the
-            # handshake - and nothing re-handshakes after a colour change.
-            ctx.presence_identities.invalidate(player.user_id)
-        except Exception:
-            logger.exception(
-                "Failed to store name color for user %s", player.user_id
-            )
-    if payload.name_color is not None:
-        await ctx.game_flow._emit_room_state(room)
-    else:
-        await ctx.game_flow._emit_colorblind_suggestion(room)
-    return {"ok": True}
+                # The lobby shows this colour too, from a cache warmed at the
+                # handshake - and nothing re-handshakes after a colour change.
+                ctx.presence_identities.invalidate(player.user_id)
+            except Exception:
+                logger.exception(
+                    "Failed to store name color for user %s", player.user_id
+                )
+        if payload.name_color is not None:
+            await ctx.game_flow._emit_room_state(room)
+        else:
+            await ctx.game_flow._emit_colorblind_suggestion(room)
+        return {"ok": True}
 
 
 async def dismiss_colorblind_suggestion(ctx: HandlerContext, sid, data=None):

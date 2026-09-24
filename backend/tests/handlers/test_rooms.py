@@ -767,6 +767,7 @@ async def test_registering_mid_game_upgrades_the_existing_seat():
 
     # Claiming the account keeps the same user id, which is what lets the
     # socket bounce land back on this very seat.
+    user_repo.add_guest("user-1", "Stefano")
     await user_repo.claim_account("user-1", "Stefano", "hash")
 
     response = await sio.handlers["/"]["join_room"](
@@ -1254,3 +1255,51 @@ async def test_a_failing_profile_write_leaves_the_seat_unchanged_and_answers(mon
         assert not any(
             line.get("code") == "nickname_changed" for line in room_lines(sio.emit)
         )
+
+
+async def test_a_settings_change_with_two_writes_answers_inside_one_deadline(monkeypatch):
+    """A payload may carry the colour preference and the name colour; a
+    deadline per call let the two add up past the client's wait (review of
+    #1071). One deadline covers the command."""
+    import time
+
+    from app.handlers import rooms as rooms_handlers
+
+    monkeypatch.setattr(rooms_handlers, "ENTRY_DEADLINE_SECONDS", 0.2)
+    monkeypatch.setattr(rooms_handlers, "ENTRY_DB_TIMEOUT_SECONDS", 10)
+
+    async def slow_preference(*args, **kwargs):
+        await asyncio.sleep(0.15)
+        return True
+
+    monkeypatch.setattr(rooms_handlers, "resolve_colorblind_safe_preference", slow_preference)
+    user_repo = FakeUserRepository()
+    room_manager = RoomManager()
+    user_repo.add_guest("user-1", "Stefano")
+    await user_repo.claim_account("user-1", "Stefano", "hash")
+    room = room_manager.create_room(name="Room")
+    player = room_manager.add_player(room, "Stefano", user_id="user-1", is_anonymous=False)
+    player.sid = "sid"
+
+    async def hanging_write(user_id, **fields):
+        await asyncio.Event().wait()
+
+    user_repo.update_profile = hanging_write  # type: ignore[method-assign]
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager, user_repo=user_repo)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": player.id, "user_id": "user-1"})
+    sio.emit = AsyncMock()
+
+    started = time.monotonic()
+    answer = await asyncio.wait_for(
+        sio.handlers["/"]["update_player_settings"](
+            "sid", {"colorblindSafeColors": True, "nameColor": "#199647"}
+        ),
+        timeout=2,
+    )
+    elapsed = time.monotonic() - started
+    # The colour write failed under the shared deadline, which the room
+    # update survives; what matters is that the answer came inside one.
+    assert answer == {"ok": True}
+    assert player.name_color == "#199647"
+    assert elapsed < 0.3, elapsed
