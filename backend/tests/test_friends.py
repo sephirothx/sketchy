@@ -958,8 +958,11 @@ async def test_a_request_to_somebody_whose_list_is_full_says_so_without_numbers(
         await engine.dispose()
 
 
-async def test_a_crowded_inbox_is_refused_without_describing_it():
-    """Naming the recipient's inbox would disclose a third party's state."""
+async def test_a_crowded_inbox_is_answered_like_a_request_that_went_nowhere():
+    """Naming the recipient's inbox would disclose a third party's state -
+    and so did refusing at all: the check runs after the block and the
+    earlier refusal, so a 409 meant "a real account that has not blocked
+    you" (#1062 review). It is dropped silently, as those are."""
     factory, engine = await create_test_db()
     try:
         service = FriendService(factory)
@@ -993,8 +996,8 @@ async def test_a_crowded_inbox_is_refused_without_describing_it():
                         )
                     )
 
-        with pytest.raises(FriendshipRefused, match="could not be sent"):
-            await service.request(ada, popular)
+        assert await service.request(ada, popular) == FriendshipOutcome.IGNORED
+        assert await row_for(factory, ada, popular) is None
     finally:
         await engine.dispose()
 

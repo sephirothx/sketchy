@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -222,7 +223,10 @@ async def test_you_cannot_friend_or_unfriend_yourself(env):
     ).status_code == 422
 
 
-async def test_the_request_limit_cannot_tell_whether_a_request_landed(env, monkeypatch):
+@pytest.mark.parametrize("probe_lands", [True, False])
+async def test_the_request_limit_cannot_tell_whether_a_request_landed(
+    env, monkeypatch, probe_lands
+):
     """#1062: the bucket was refunded for an attempt that wrote nothing and
     spent for one that landed, so with one attempt left, asking X and then Y
     answered 429 for Y exactly when X had landed - R-FRIEND-04's question
@@ -239,7 +243,7 @@ async def test_the_request_limit_cannot_tell_whether_a_request_landed(env, monke
         ),
     )
     ada_http, bob_http, cid_http = new_client(), new_client(), new_client()
-    await register(ada_http, "Ada")
+    ada = await register(ada_http, "Ada")
     bob = await register(bob_http, "Bob")
     cid = await register(cid_http, "Cid")
     guest_http = new_client()
@@ -250,6 +254,11 @@ async def test_the_request_limit_cannot_tell_whether_a_request_landed(env, monke
     for _ in range(limit - 1):
         answer = await ada_http.post("/api/users/me/friends", json={"userId": guest_id})
         assert answer.status_code == 200, answer.text
+    if not probe_lands:
+        # Bob has blocked Ada: the probe goes nowhere, and says so to nobody.
+        assert (
+            await bob_http.post("/api/users/me/blocks", json={"userId": ada["id"]})
+        ).status_code in (200, 201)
     probe = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
     assert probe.status_code == 200
     # ...and the next is refused whether or not the probe landed.
