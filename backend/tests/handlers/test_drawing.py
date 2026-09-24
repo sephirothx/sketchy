@@ -1204,3 +1204,103 @@ async def test_a_final_batch_with_no_open_path_is_dropped():
     draw = sio.handlers["/"]["draw"]
     await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.5, "y": 0.51}], "previous": {"x": 0.5, "y": 0.5}, "ends": True}))
     assert len(room.game.canvas.history) == 0 and _emitted(sio, "draw") == []
+
+
+# --- an open path the drawer walked away from (#999) --------------------------
+
+
+async def _open_a_path(room, sio, sequence: int = 1):
+    """A stroke whose `draw_end` never arrived: the connection dropped."""
+    draw = sio.handlers["/"]["draw"]
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4}),
+        canvas_action(room.game, sequence),
+    )
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.2, "y": 0.2}]}))
+    canvas = room.game.canvas
+    assert canvas.active_draw_sequence == sequence and canvas.sequence == sequence - 1
+
+
+async def test_an_action_after_a_torn_path_closes_it_rather_than_asking_for_ever():
+    """The drawer's `draw_end` went with the connection; the sync after the
+    rebind restarted its numbering at the committed history, so its next
+    action carried the open path's own number. The server asked for that
+    number, the client re-sent the very action it held under it, and the two
+    looped for the rest of the turn (#999)."""
+    room, sio = _drawing_room()
+    await _open_a_path(room, sio)
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+    sio.emit.reset_mock()
+
+    # Back from the rebind: a fill, numbered as the open path was.
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_fill", {"x": 0.5, "y": 0.5, "color": "#ff0000"}),
+        canvas_action(room.game, 1),
+    )
+
+    assert canvas.active_draw_sequence is None
+    assert canvas.sequence == 1, "the torn path is committed where the server's copy ends"
+    assert len(canvas.history) == 1, "the fill was discarded, not applied"
+    assert "request_canvas_actions" not in _emitted_events(sio)
+    assert "canvas_stale" in _emitted_events(sio), "the drawer is told to resync"
+    # And the turn goes on: the next number is accepted.
+    sio.emit.reset_mock()
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_fill", {"x": 0.5, "y": 0.5, "color": "#ff0000"}),
+        canvas_action(room.game, 2),
+    )
+    assert canvas.sequence == 2 and len(canvas.history) == 2
+    assert "request_canvas_actions" not in _emitted_events(sio)
+
+
+async def test_undo_of_the_open_path_forgets_that_it_was_open():
+    """Undo removed the open path but left it marked open, so every later
+    opener was asked for a number already spent (#999)."""
+    room, sio = _drawing_room()
+    await _open_a_path(room, sio)
+    canvas = room.game.canvas
+    undo = sio.handlers["/"]["undo_stroke"]
+    draw = sio.handlers["/"]["draw"]
+
+    assert await undo("drawer-sid", [canvas.generation, 1, canvas.revision, canvas.hash]) == {"ok": True}
+    assert canvas.active_draw_sequence is None
+
+    sio.emit.reset_mock()
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.3, "y": 0.3, "color": "#000000", "width": 4}),
+        canvas_action(room.game, 2),
+    )
+    assert canvas.active_draw_sequence == 2
+    assert "request_canvas_actions" not in _emitted_events(sio)
+
+
+async def test_the_points_after_a_refused_opener_are_not_glued_onto_the_open_path():
+    """An opener refused because another path is still open set no discard
+    flag, so its moves were appended to the open path - in its colour - and
+    sent to every viewer (#999)."""
+    room, sio = _drawing_room()
+    await _open_a_path(room, sio)
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+    sio.emit.reset_mock()
+
+    # Two ahead of what the server can take: a gap, and a refusal.
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.8, "y": 0.8, "color": "#ff0000", "width": 9}),
+        canvas_action(room.game, 3),
+    )
+    assert "request_canvas_actions" in _emitted_events(sio)
+    sio.emit.reset_mock()
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.9, "y": 0.1}]}))
+    await draw("drawer-sid", encode_live_drawing("draw_end"))
+
+    assert len(canvas.history) == 1
+    assert len(canvas.history[0].points) == 2, "the open path kept only its own points"
+    assert canvas.active_draw_sequence == 1, "and is still open"
+    assert "draw" not in _emitted_events(sio), "nothing of the refused path reached the room"

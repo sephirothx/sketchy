@@ -9,7 +9,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
@@ -30,6 +31,7 @@ from app.auth.middleware import (
     is_secure_request,
     set_session_cookie,
 )
+from app.auth.step_up import require_step_up
 from app.auth.sessions import (
     STAFF_ROLES,
     STEP_UP_WINDOW,
@@ -165,7 +167,7 @@ GLOBAL_PROVISION_KEY = "all"
 
 
 
-class CredentialsBody(BaseModel):
+class CredentialsBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(max_length=MAX_NAME_LENGTH)
@@ -184,44 +186,49 @@ class RegistrationBody(CredentialsBody):
     email: str | None = Field(default=None, max_length=MAX_EMAIL_LENGTH)
 
 
-class EmailBody(BaseModel):
+class EmailBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(max_length=MAX_EMAIL_LENGTH)
+    # The recovery address is the one credential that can replace the
+    # password (forgot, reset), so setting it proves the password: with a
+    # cookie alone, a thief pointed recovery at a mailbox of their own and
+    # evicted the owner (#997).
+    password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class TokenBody(BaseModel):
+class TokenBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(max_length=256)
 
 
-class ForgotPasswordBody(BaseModel):
+class ForgotPasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     identifier: str = Field(max_length=MAX_EMAIL_LENGTH)
 
 
-class ResetPasswordBody(BaseModel):
+class ResetPasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(max_length=256)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class DisplayNameBody(BaseModel):
+class DisplayNameBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str = Field(max_length=MAX_NAME_LENGTH, alias="displayName")
 
 
-class NameColorBody(BaseModel):
+class NameColorBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     name_color: str = Field(max_length=16, alias="nameColor")
 
 
-class ChangePasswordBody(BaseModel):
+class ChangePasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     current_password: str = Field(
@@ -230,7 +237,7 @@ class ChangePasswordBody(BaseModel):
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class SecondFactorConfirmBody(BaseModel):
+class SecondFactorConfirmBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     # Echoed back from the enrolment offer, because nothing was stored: the
@@ -243,13 +250,13 @@ class SecondFactorConfirmBody(BaseModel):
     password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
 
 
-class StepUpBody(BaseModel):
+class StepUpBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(max_length=64)
 
 
-class PasskeyRegistrationBody(BaseModel):
+class PasskeyRegistrationBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     # The browser's own object, passed through to the verifier rather than
@@ -263,19 +270,19 @@ class PasskeyRegistrationBody(BaseModel):
     label: str | None = Field(default=None, max_length=64)
 
 
-class PasskeyAssertionBody(BaseModel):
+class PasskeyAssertionBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     credential: dict
 
 
-class PasswordProofBody(BaseModel):
+class PasswordProofBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class SecondFactorOwnerBody(BaseModel):
+class SecondFactorOwnerBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
@@ -285,7 +292,7 @@ class SecondFactorOwnerBody(BaseModel):
     code: str = Field(max_length=16)
 
 
-class DeleteAccountBody(BaseModel):
+class DeleteAccountBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
@@ -302,6 +309,12 @@ def create_auth_router(
     # the handshake - which is written once, while these can change at any
     # moment and from a request that touches no socket at all.
     on_profile_changed: Callable[[str], None] | None = None,
+    # Called with the account and the session ids a revocation ended - `None`
+    # for every session it holds - so the sockets those sessions opened are
+    # closed rather than left playing under the account (#1007).
+    on_sessions_revoked: (
+        Callable[[str, list[str] | None, str | None], Awaitable[None]] | None
+    ) = None,
     # Called with every account that lost a friendship or a pending request
     # to a deletion, so their lists stop showing somebody who is gone. Wired to
     # the friend service's own announcement, so there is one implementation of
@@ -459,6 +472,20 @@ def create_auth_router(
             ),
         )
         return issued.session.id
+
+    async def _sockets_signed_out(
+        user_id: str, session_ids: list[str] | None, *, keep: str | None = None
+    ) -> None:
+        """Best effort, after the commit: the revocation stands either way.
+
+        `keep` is the acting browser's session, whose sockets are left alone.
+        """
+        if on_sessions_revoked is None:
+            return
+        try:
+            await on_sessions_revoked(str(user_id), session_ids, keep)
+        except Exception:
+            logger.exception("Could not close the sockets of revoked sessions for %s", user_id)
 
     async def _sign_this_browser_in(response: Response, request: Request, account):
         """Everything that follows a proof, whatever the proof was.
@@ -984,12 +1011,25 @@ def create_auth_router(
                 retry_after_ms=verdict.retry_after_seconds * 1000,
                 headers={"Retry-After": str(verdict.retry_after_seconds)},
             )
-        credentials = await user_repo.get_credentials_by_username(body.username)
-        # Hash even when the username does not exist. Skipping it would return
-        # noticeably faster and turn response time into a username oracle,
-        # which is precisely what the uniform error message avoids.
-        password_hash = credentials.password_hash if credentials else DUMMY_HASH
-        matched = await verify_password(password_hash, body.password)
+        # A slot per verification, bounded per account and per address
+        # (#1001): the windows are charged after the hash, so a burst that
+        # passed the peeks together used to be verified in full.
+        async with login_guard.attempt(username=body.username, address=address) as admitted:
+            if not admitted:
+                # The same words as every other refusal here (R-RATE-12).
+                raise Refusal(
+                    429,
+                    ErrorCode.TOO_MANY_ATTEMPTS,
+                    verdict.message,
+                    retry_after_ms=1000,
+                    headers={"Retry-After": "1"},
+                )
+            credentials = await user_repo.get_credentials_by_username(body.username)
+            # Hash even when the username does not exist. Skipping it would
+            # return noticeably faster and turn response time into a username
+            # oracle, which is precisely what the uniform error message avoids.
+            password_hash = credentials.password_hash if credentials else DUMMY_HASH
+            matched = await verify_password(password_hash, body.password)
         if credentials is None or not matched:
             # Charged here rather than before the check, so signing in
             # correctly costs nothing at all and the ceilings can be low
@@ -1082,6 +1122,7 @@ def create_auth_router(
             raise Refusal(404, ErrorCode.SESSION_NOT_FOUND, "Active session not found.")
         if session_id == getattr(request.state, "session_id", None):
             clear_session_cookie(response, secure=is_secure_request(request))
+        await _sockets_signed_out(user_id, [str(session_id)])
         return {"ok": True}
 
     @router.post("/logout-all")
@@ -1092,6 +1133,7 @@ def create_auth_router(
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         revoked = await revoke_all_sessions(session_factory, user_id=user_id)
         clear_session_cookie(response, secure=is_secure_request(request))
+        await _sockets_signed_out(user_id, None)
         return {"ok": True, "revoked": revoked}
 
     @router.post("/data-exports", status_code=202)
@@ -1215,6 +1257,10 @@ def create_auth_router(
     ):
         """Anonymize this identity without deleting shared game results."""
         user = await require_user(request)
+        # Every password proof on the account surface sits behind a bucket
+        # (R-AUTH-21); this was the one that did not, and a stolen cookie
+        # could guess at Argon2 speed (#997).
+        await throttle(password_change_limiter, request)
         if not user.is_anonymous:
             if not body.password:
                 raise Refusal(
@@ -1282,9 +1328,25 @@ def create_auth_router(
 
     @router.put("/email")
     async def set_email(body: EmailBody, request: Request):
-        """Ask to use an address. It is recorded only once it is proved."""
+        """Ask to use an address. It is recorded only once it is proved.
+
+        Behind the password (R-AUTH-26): the address is the way back into
+        the account when the password is lost, so pointing it somewhere new
+        is worth as much to somebody holding a stolen cookie as the password
+        itself - and a staff account steps up as well, for the reason every
+        destructive staff act does (R-AUTH-21). The bucket is charged first,
+        so the proof cannot be ground at (#997).
+        """
         user = await require_user(request)
+        if user.is_anonymous:
+            # Before the proof: a guest has no password to be wrong about.
+            raise Refusal(
+                403, ErrorCode.EMAIL_CHANGE_REFUSED, "Create an account before adding an email."
+            )
         await throttle(verify_limiter, request)
+        await _prove_password(user, body.password)
+        if user.role in STAFF_ROLES:
+            require_step_up(request)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
             address = await request_email_verification(
@@ -1374,6 +1436,8 @@ def create_auth_router(
     async def perform_password_reset(
         body: ResetPasswordBody, request: Request, response: Response
     ):
+        acting_session = getattr(request.state, "session_id", None)
+        acting_session = str(acting_session) if acting_session else None
         # Limited like its siblings: this route hashes, and the hashing pool
         # is shared with every sign-in, so an unlimited one is a way to hold
         # that queue full from outside (#975 review).
@@ -1404,24 +1468,40 @@ def create_auth_router(
                 params={"reason": error.reason, "detail": error.detail},
             ) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        user_id = await reset_password(
+        outcome = await reset_password(
             session_factory,
             token=body.token,
             password_hash=await hash_password(password),
             ip_hash=ip_hash,
             request_id=request_id,
         )
-        if user_id is None:
+        if outcome is None:
             raise Refusal(
                 400,
                 ErrorCode.RESET_LINK_INVALID,
                 "That reset link has expired or already been used.",
             )
+        clear_session_cookie(response, secure=is_secure_request(request))
+        if outcome.role in STAFF_ROLES and staff_second_factor_required():
+            # Not for a staff account: a reset proves the mailbox, and
+            # R-AUTH-20 says a moderator MUST NOT sign in without producing
+            # a code. Issued here, the session was a staff sign-in that
+            # asked for no code - and the password just set is enough to
+            # replace the authenticator, so the second factor was reduced
+            # to mailbox control (#996). Login runs the gate; go there. The
+            # sockets of every revoked session go too, this browser's
+            # included: it holds no cookie now, and re-reads as nobody.
+            await _sockets_signed_out(str(outcome.user_id), None)
+            return {"ok": True, "signedIn": False}
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
-        clear_session_cookie(response, secure=is_secure_request(request))
-        await issue_cookie(response, request, str(user_id))
-        return {"ok": True}
+        await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)
+        # Every other device's socket goes. This browser's, if it was signed
+        # in as the account, stays and re-handshakes once the new cookie is
+        # in hand: closed now, it would re-read itself before the cookie
+        # landed and take the reset for a sign-out.
+        await _sockets_signed_out(str(outcome.user_id), None, keep=acting_session)
+        return {"ok": True, "signedIn": True}
 
     @router.post("/password/change")
     async def change_own_password(
@@ -1434,6 +1514,8 @@ def create_auth_router(
         the case where they do not, and remains the only route for a guest,
         who has no password to change.
         """
+        acting_session = getattr(request.state, "session_id", None)
+        acting_session = str(acting_session) if acting_session else None
         await throttle(password_change_limiter, request)
         user = await require_user(request)
         if user.is_anonymous:
@@ -1478,6 +1560,11 @@ def create_auth_router(
         # back in is what keeps a password change from also being a logout.
         clear_session_cookie(response, secure=is_secure_request(request))
         await issue_cookie(response, request, user.id, role=user.role)
+        # Every other device's socket goes. This browser's stays - it is
+        # this account's still - and re-handshakes once the response has
+        # delivered the new cookie; closed now, the notice would land first
+        # and the tab would take its own change for a sign-out.
+        await _sockets_signed_out(user.id, None, keep=acting_session)
         return {"ok": True}
 
     @router.get("/second-factor")
@@ -1985,8 +2072,14 @@ def create_auth_router(
     @router.post("/logout")
     async def logout(request: Request, response: Response):
         """Revoke this session. The next /me call provisions a fresh guest."""
+        user_id = getattr(request.state, "user_id", None)
+        session_id = getattr(request.state, "session_id", None)
         await revoke_current(request)
         clear_session_cookie(response, secure=is_secure_request(request))
+        if user_id and session_id:
+            # Another tab of this browser shares the session: its socket is
+            # signed out with it.
+            await _sockets_signed_out(user_id, [str(session_id)])
         return {"ok": True}
 
     return router

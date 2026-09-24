@@ -17,7 +17,8 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import CONTROL_CHARACTER_MESSAGE, ControlFreeModel, has_control_characters
 from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -90,7 +91,7 @@ PLAYER_SEARCH_LIMIT = 10
 MAX_SEARCH_TERM = 36
 
 
-class ShutdownRequest(BaseModel):
+class ShutdownRequest(ControlFreeModel):
     """Stop this process, giving live games a bounded window to finish."""
 
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
@@ -103,7 +104,7 @@ class ShutdownRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=200)
 
 
-class RoleRequest(BaseModel):
+class RoleRequest(ControlFreeModel):
     # Stripped before it is measured, so a reason of three spaces is no reason.
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
@@ -114,14 +115,14 @@ class RoleRequest(BaseModel):
     reason: str = Field(min_length=3, max_length=200)
 
 
-class PublicationReviewRequest(BaseModel):
+class PublicationReviewRequest(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     review: bool
     reason: str = Field(default="", max_length=200)
 
 
-class MaintenanceRequest(BaseModel):
+class MaintenanceRequest(ControlFreeModel):
     # Stripped like the two above it. The reason is optional here, so without
     # this a handful of spaces counts as "given" and is written to the ledger
     # as a reason that says nothing - worse than the absence it is recorded
@@ -617,6 +618,8 @@ def create_admin_controls_router(
         recorded, which is where it belongs.
         """
         await require_admin(request)
+        if has_control_characters(q):
+            raise HTTPException(status_code=422, detail=CONTROL_CHARACTER_MESSAGE)
         term = q.strip()[:MAX_SEARCH_TERM]
         statement = select(User).where(User.state == AccountState.REGISTERED.value)
         if term == "":

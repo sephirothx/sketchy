@@ -26,6 +26,7 @@ export type AnnouncementCode =
   | "restart_vote_abandoned"
   | "restart_cancelled"
   | "game_restarted_by_vote"
+  | "game_ended_too_few_players"
   | "hint_letter_found"
   | "hint_letter_missing"
   | "guess_very_close"

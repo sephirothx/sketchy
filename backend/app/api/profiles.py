@@ -8,7 +8,8 @@ import gzip
 import logging
 
 from fastapi import APIRouter, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+from app.request_text import ControlFreeModel
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
@@ -51,7 +52,7 @@ profile_limiter = RateLimiter(limit=120, window_seconds=60)
 logger = logging.getLogger("sketchy.api.profiles")
 
 
-class ReactionBody(BaseModel):
+class ReactionBody(ControlFreeModel):
     """The one field a reaction write carries: which emoji, by code."""
 
     model_config = ConfigDict(strict=True, extra="forbid")
@@ -59,7 +60,7 @@ class ReactionBody(BaseModel):
     emoji: str = Field(min_length=1, max_length=16)
 
 
-class PinsBody(BaseModel):
+class PinsBody(ControlFreeModel):
     """The whole shelf, in order: the turn ids of the drawings to show (#440).
 
     Bounded to the slot count here, so a body twice the cap is refused before

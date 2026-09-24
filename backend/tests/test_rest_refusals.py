@@ -38,6 +38,7 @@ STAFF_ONLY = {
     ("api/admin_controls.py", "_room_or_404"),
     ("api/admin_controls.py", "end_turn"),
     ("api/admin_controls.py", "initiate_shutdown"),
+    ("api/admin_controls.py", "search_players"),
     ("api/admin_controls.py", "kick_player"),
     ("api/admin_controls.py", "set_maintenance"),
     ("api/admin_controls.py", "set_role"),
@@ -58,6 +59,7 @@ STAFF_ONLY = {
     ("api/moderation.py", "review_publication"),
     ("api/moderation.py", "revoke_ban"),
     ("api/operations.py", "player_activity"),
+    ("api/operations.py", "_refuse_control_characters"),
     ("api/operations.py", "scrape"),
 }
 

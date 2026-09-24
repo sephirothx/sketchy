@@ -10,7 +10,8 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+from app.request_text import ControlFreeModel
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -123,7 +124,7 @@ OnUserBanned = Callable[[str], Awaitable[None]]
 OnUserWarned = Callable[[str], Awaitable[None]]
 
 
-class ReportBody(BaseModel):
+class ReportBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     reported_user_id: UUID = Field(alias="reportedUserId")
@@ -159,7 +160,7 @@ class ReportBody(BaseModel):
         return value
 
 
-class ReportReviewBody(BaseModel):
+class ReportReviewBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["resolved", "dismissed"]
@@ -174,7 +175,7 @@ class ReportReviewBody(BaseModel):
         return cleaned
 
 
-class PromptContentReportBody(BaseModel):
+class PromptContentReportBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     prompt_list_id: UUID = Field(alias="promptListId")
@@ -191,7 +192,7 @@ class PromptContentReportBody(BaseModel):
         return cleaned
 
 
-class GalleryReportBody(BaseModel):
+class GalleryReportBody(ControlFreeModel):
     """A report from the Gallery names the turn in the path and says only
     why in words: the reason is always the drawing (R-GAL-08)."""
 
@@ -205,7 +206,7 @@ class GalleryReportBody(BaseModel):
         return value.strip()
 
 
-class GalleryDecisionBody(BaseModel):
+class GalleryDecisionBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: Literal["released", "hidden"]
@@ -225,7 +226,7 @@ class GalleryDecisionBody(BaseModel):
 REVIEW_CANDIDATES = 12
 
 
-class PublicationReviewBody(BaseModel):
+class PublicationReviewBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     state: Literal["active", "hidden"]
@@ -244,7 +245,7 @@ class PublicationReviewBody(BaseModel):
         return cleaned
 
 
-class PromptContentReviewBody(BaseModel):
+class PromptContentReviewBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     status: Literal["resolved", "dismissed"]
@@ -262,7 +263,7 @@ class PromptContentReviewBody(BaseModel):
         return cleaned
 
 
-class BanBody(BaseModel):
+class BanBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_id: UUID = Field(alias="userId")
@@ -291,7 +292,7 @@ class BanBody(BaseModel):
         return value.astimezone(timezone.utc) if value is not None else None
 
 
-class BanRevokeBody(BaseModel):
+class BanRevokeBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str = Field(min_length=1, max_length=255)
@@ -979,7 +980,7 @@ def _content_incident_payload(
     }
 
 
-class ReviewedAcknowledgeBody(BaseModel):
+class ReviewedAcknowledgeBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     report_ids: list[UUID] = Field(
@@ -987,7 +988,7 @@ class ReviewedAcknowledgeBody(BaseModel):
     )
 
 
-class WarningBody(BaseModel):
+class WarningBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_id: UUID = Field(alias="userId")
@@ -1585,13 +1586,23 @@ def create_moderation_router(
         answers with, which is the order the queue is worked in.
         """
         async with session_factory() as session:
-            await _reviewer(session, request)
+            reviewer = await _reviewer(session, request)
             plan = select(
                 PlayerReport.id,
                 PlayerReport.reported_user_id,
                 PlayerReport.scope,
                 PlayerReport.room_instance_id,
                 PlayerReport.created_at,
+            ).where(
+                # Open reports about the reader are another moderator's to see
+                # and decide (#1003); a standalone report names no account,
+                # and a decided one is somebody else's decision, shown here
+                # as the closed-cases stream shows it.
+                or_(
+                    PlayerReport.reported_user_id.is_(None),
+                    PlayerReport.reported_user_id != reviewer.id,
+                    PlayerReport.status != ReportStatus.PENDING.value,
+                )
             )
             if status is not None:
                 plan = plan.where(PlayerReport.status == status.value)
@@ -1663,6 +1674,11 @@ def create_moderation_router(
             report = await session.get(PlayerReport, report_id)
         if report is None or report.reported_user_id is None:
             raise HTTPException(status_code=404, detail="No such report.")
+        if report.reported_user_id == actor.id:
+            raise HTTPException(
+                status_code=403,
+                detail="A report about you is for another moderator to decide.",
+            )
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         outcome = await remove_avatar(
             session_factory,
@@ -1943,9 +1959,15 @@ def create_moderation_router(
         )
 
     async def _lock_pending_incident(
-        session: AsyncSession, report_id: UUID
+        session: AsyncSession, report_id: UUID, *, reviewer_id: UUID
     ) -> Incident:
         """Every pending report of the named report's incident, locked.
+
+        Refused when the incident is about the reviewer: a moderator could
+        open the queue and dismiss the reports filed about themselves, with
+        the ledger naming them as the reviewer and nobody else ever asked
+        (#1003). The ban and warning routes already refuse a self-target; a
+        decision reached through a report is the same act.
 
         Locked in id order and **not** starting from the named report, which
         is what makes this deadlock-free: two moderators reaching the same
@@ -1961,6 +1983,15 @@ def create_moderation_router(
         named = await session.get(PlayerReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
+        if named.reported_user_id == reviewer_id:
+            # Before the lock and before the 409: the target never changes,
+            # and "about you" is the answer whatever state the report is in,
+            # so a reported moderator cannot learn from a 409 that their case
+            # was decided.
+            raise HTTPException(
+                status_code=403,
+                detail="A report about you is for another moderator to decide.",
+            )
         key = incident_key(named)
         if key.standalone is not None:
             criteria = [PlayerReport.id == key.standalone]
@@ -2010,7 +2041,7 @@ def create_moderation_router(
                 # Role, then freshness (R-AUTH-21): a week-long staff cookie is not
                 # on its own permission to suspend somebody.
                 require_step_up(request)
-                incident = await _lock_pending_incident(session, report_id)
+                incident = await _lock_pending_incident(session, report_id, reviewer_id=reviewer.id)
                 # One decision, one group id, however many reports it covers
                 # (#620). Each report keeps its own reviewer, moment and audit
                 # entry: review stays one-way per row, and what changed is how
@@ -2219,7 +2250,7 @@ def create_moderation_router(
         about somebody else must be refused" true of the group as well as the
         row.
         """
-        incident = await _lock_pending_incident(session, report_id)
+        incident = await _lock_pending_incident(session, report_id, reviewer_id=reviewer.id)
         named = next(
             report for report in incident.reports if report.id == report_id
         )

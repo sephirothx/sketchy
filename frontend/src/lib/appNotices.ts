@@ -73,7 +73,7 @@ export type RoomPauseCause = "reconnecting" | "offline" | "server-update" | "fai
 export type RoomStage =
   | { kind: "live" }
   | { kind: "paused"; cause: RoomPauseCause }
-  | { kind: "ended"; reason: "server-update" | "room-closed" };
+  | { kind: "ended"; reason: "server-update" | "room-closed" | "kicked" };
 
 export interface RoomStageFacts {
   /** The room this tab is showing. */
@@ -82,7 +82,7 @@ export interface RoomStageFacts {
   pauseDue: boolean;
   lostDuringDrain: boolean;
   updateRequired: boolean;
-  roomEnded: { code: string; reason: "server-update" | "room-closed" } | null;
+  roomEnded: { code: string; reason: "server-update" | "room-closed" | "kicked" } | null;
 }
 
 /**

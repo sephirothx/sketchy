@@ -207,6 +207,18 @@ function takeShellRequest(path: string): ShellRequest | null {
   return early;
 }
 
+// Told when a request finds this tab signed out that the store thought was
+// signed in. Registered by the auth store, which cannot be imported here.
+let unexpectedSignOutListener: (() => void) | null = null;
+
+export function onUnexpectedSignOut(listener: () => void): void {
+  unexpectedSignOutListener = listener;
+}
+
+function notifyUnexpectedSignOut(): void {
+  unexpectedSignOutListener?.();
+}
+
 export async function apiRequest<T>(
   path: string,
   options: { method?: string; body?: unknown; timeoutMs?: number } = {},
@@ -228,9 +240,21 @@ export async function apiRequest<T>(
 
     checkProtocol(response);
     const text = await response.text();
-    const payload = text ? JSON.parse(text) : null;
+    // A proxy answering for a server that is down sends HTML, not JSON; a
+    // parse that threw here made "Log out" do nothing at all (#1007).
+    let payload: { detail?: unknown } | null = null;
+    try {
+      payload = text ? JSON.parse(text) : null;
+    } catch {
+      payload = null;
+    }
 
     if (!response.ok) {
+      if (response.status === 401 && refusalFrom(payload)?.errorCode === "sign_in_required") {
+        // The session this tab holds is gone - revoked from another device,
+        // expired - and nothing else would tell the store (#1007).
+        notifyUnexpectedSignOut();
+      }
       // A suspension is raised here rather than left to each caller: it can
       // refuse any request, and the player is owed the reason wherever they
       // happened to be when it landed.
