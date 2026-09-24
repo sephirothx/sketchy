@@ -433,7 +433,11 @@ first, and R-AUTH-21's step-up is required again per action.
 `last_step` is the 30-second interval whose code was last spent, which is what makes a
 code single-use **inside its own step** — a relayed code finds it already gone.
 `failed_attempts` and `locked_until` stop a machine grinding six digits behind a password
-it already has, which the login throttle in front does not cover.
+it already has, which the login throttle in front does not cover. All three are written by
+conditional `UPDATE`s that carry the decision — `last_step < :step` to spend a code,
+`failed_attempts + 1` to count a miss — never a value read and written back, so two
+requests with one code cannot both be accepted and parallel misses add up to the lock
+(#1019).
 
 ### `user_passkeys`
 `credential_id` **PK** · `id` (opaque, unique) · `user_id` (CASCADE, indexed) · `public_key` ·
