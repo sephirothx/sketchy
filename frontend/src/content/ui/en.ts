@@ -592,6 +592,7 @@ export const EN = {
     addressIsConfirmedYouCan:
       (p: { address: string }) => `${p.address} is confirmed. You can now recover this account.`,
     yourPasswordIsSetAnd: "Your password is set and you are signed in again.",
+    yourPasswordIsSetSignIn: "Your password is set. Sign in again with your second factor.",
     resetYourPassword: "Reset your password",
     thatLinkNoLongerWorks: "That link no longer works",
     chooseANewPassword: "Choose a new password",
@@ -665,6 +666,9 @@ export const EN = {
     email: "Email",
     pleaseWait: "Please wait…",
     sendConfirmation: "Send confirmation",
+    yourPassword: "Your password",
+    passwordConfirmsItIsYou: "Your password confirms it is you: this address is how the account is recovered.",
+    enterYourPasswordToConfirm: "Enter your password to confirm the change.",
     close: "Close",
     notNow: "Not now",
   },

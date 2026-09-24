@@ -584,6 +584,7 @@ export const DE: Catalogue = {
     addressIsConfirmedYouCan: (p: { address: string }) =>
       `${p.address} ist bestätigt. Du kannst dieses Konto jetzt wiederherstellen.`,
     yourPasswordIsSetAnd: "Dein Passwort ist gesetzt und du bist wieder angemeldet.",
+    yourPasswordIsSetSignIn: "Dein Passwort ist gesetzt. Melde dich erneut mit deinem zweiten Faktor an.",
     resetYourPassword: "Passwort zurücksetzen",
     thatLinkNoLongerWorks: "Dieser Link funktioniert nicht mehr",
     chooseANewPassword: "Wähle ein neues Passwort",
@@ -655,6 +656,9 @@ export const DE: Catalogue = {
     email: "E-Mail",
     pleaseWait: "Bitte warten …",
     sendConfirmation: "Bestätigung senden",
+    yourPassword: "Dein Passwort",
+    passwordConfirmsItIsYou: "Dein Passwort bestätigt, dass du es bist: über diese Adresse wird das Konto wiederhergestellt.",
+    enterYourPasswordToConfirm: "Gib dein Passwort ein, um die Änderung zu bestätigen.",
     close: "Schließen",
     notNow: "Nicht jetzt",
   },
