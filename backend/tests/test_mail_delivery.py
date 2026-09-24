@@ -853,3 +853,48 @@ def test_a_suspension_names_its_category_in_the_reader_s_language():
             assert words.categories[slug] in body, f"{locale} dropped the {slug} phrase"
             if locale != "en":
                 assert slug.replace("_", " ") not in body, f"{locale} still says the slug"
+
+
+async def test_a_relay_whose_certificate_does_not_verify_is_recorded_and_logged(
+    tmp_path, caplog, monkeypatch
+):
+    """#1013 through the sweeper: the verification failure is the outbox's
+    ordinary failure - stored on the row, retried, and logged when given up
+    on - so a relay behind a bad certificate is a visible misconfiguration
+    rather than mail that quietly went somewhere else."""
+    import logging
+
+    from app.auth.mail import SmtpSecurity, SmtpTransport
+    from tests.smtp_relay import (
+        HOST,
+        FakeRelay,
+        self_signed_certificate,
+        skip_fqdn_lookup,
+    )
+
+    skip_fqdn_lookup(monkeypatch)
+    engine, factory = await outbox(tmp_path)
+    try:
+        with FakeRelay(*self_signed_certificate(tmp_path)) as relay:
+            carrier = SmtpTransport(
+                host=HOST,
+                port=relay.port,
+                username="relay-user",
+                password="relay-secret",
+                security=SmtpSecurity.STARTTLS,
+                sender="sketchy@example.test",
+                timeout=5,
+            )
+            with caplog.at_level(logging.WARNING, logger="app.auth.mail"):
+                at = datetime.now(timezone.utc)
+                for _ in range(MAX_ATTEMPTS):
+                    await deliver_pending(factory, transport=carrier, now=at)
+                    at += timedelta(hours=3)
+        assert relay.logins == []
+        async with factory() as session:
+            entry = await session.scalar(select(EmailOutboxEntry))
+        assert entry.state == EmailOutboxState.FAILED.value
+        assert "CERTIFICATE_VERIFY_FAILED" in entry.last_error
+        assert "CERTIFICATE_VERIFY_FAILED" in caplog.text
+    finally:
+        await engine.dispose()

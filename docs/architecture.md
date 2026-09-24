@@ -412,7 +412,7 @@ no request in flight.
 3. `validate_worker_topology()` — refuses a multi-worker configuration
 4. `validate_database_configuration()` — with `SKETCHY_ENV=production`, refuses a missing, blank, or SQLite `DATABASE_URL`. Ordered before `init_db()` on purpose: a production process pointed at the zero-config *relative* file must refuse to start, not migrate one and serve from it
 5. `validate_public_base_url()` — with `SKETCHY_ENV=production`, refuses a `PUBLIC_BASE_URL` that is not an `https` origin, or names a loopback address, or carries a path: every mailed link is built on it and every plain-HTTP request is redirected to it (#467)
-6. `validate_mail_configuration()` — with `SKETCHY_ENV=production`, refuses a missing or blank `SMTP_HOST`. The zero-config fallback logs each message instead of sending it, which in production writes live confirmation and reset links into the log store *and* sends nothing to the player waiting for one; `ConsoleTransport.send` refuses in production as the second lock, on the one statement that would write a body (#466)
+6. `validate_mail_configuration()` — refuses an unrecognised `SMTP_SECURITY` in every environment, and with `SKETCHY_ENV=production` a missing or blank `SMTP_HOST` or `SMTP_SECURITY=none` together with a password (R-AUTH-27, #1013). The zero-config fallback logs each message instead of sending it, which in production writes live confirmation and reset links into the log store *and* sends nothing to the player waiting for one; `ConsoleTransport.send` refuses in production as the second lock, on the one statement that would write a body (#466)
 7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
 8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
 9. No purge of its own: the retention loop's first pass starts immediately and is bounded, so a backlog left by a long outage cannot delay serving (#550)
@@ -1030,7 +1030,10 @@ relay timing out at ten seconds held it open for minutes, which blocks every SQL
 writer, holds a PostgreSQL connection and its locks, and makes one slow recipient into
 time every later message waits. Each message carries a `Message-ID` derived from its
 row, so the send that happened before a crash and the send that happens after the lease
-expires are one message with one identity rather than two.
+expires are one message with one identity rather than two. The relay
+connection is encrypted and the relay's certificate verified (`SMTP_SECURITY`,
+R-AUTH-27): a relay that fails verification or does not offer STARTTLS is a failed send
+like any other, not a reason to carry on in the clear.
 
 **Record.** Each outcome in its own short transaction: sent, deferred with backoff, or —
 past `MAX_ATTEMPTS` — kept as `failed` with its last error, so a silent mail
