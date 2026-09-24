@@ -1482,8 +1482,23 @@ def create_auth_router(
                 "That reset link has expired or already been used.",
             )
         clear_session_cookie(response, secure=is_secure_request(request))
+        if await is_user_banned(session_factory, str(outcome.user_id)):
+            # Not for a suspended account: the front door refuses it on the
+            # password and on a passkey, and a reset is a third front door,
+            # not a way round the other two (#1052). The password still
+            # takes - the mailbox was proved, and the suspension ends one day
+            # - and the page says why nothing was issued here, rather than
+            # sending the person to a sign-in that only refuses them. Checked
+            # before the staff path for the same reason: a suspended
+            # moderator sent to a second factor would only be refused there.
+            # The reset proved the mailbox, so this discloses nothing new.
+            # Nor does it reopen export or deletion: a suspended account
+            # keeps those only on the session it held when the ban landed
+            # (R-BAN-04), and one that lost every device asks an operator.
+            await _sockets_signed_out(str(outcome.user_id), None)
+            return {"ok": True, "signedIn": False, "reason": "suspended"}
         if outcome.role in STAFF_ROLES and staff_second_factor_required():
-            # Not for a staff account: a reset proves the mailbox, and
+            # Nor for a staff account: a reset proves the mailbox, and
             # R-AUTH-20 says a moderator MUST NOT sign in without producing
             # a code. Issued here, the session was a staff sign-in that
             # asked for no code - and the password just set is enough to
@@ -1493,19 +1508,6 @@ def create_auth_router(
             # included: it holds no cookie now, and re-reads as nobody.
             await _sockets_signed_out(str(outcome.user_id), None)
             return {"ok": True, "signedIn": False, "reason": "second_factor"}
-        if await is_user_banned(session_factory, str(outcome.user_id)):
-            # Nor for a suspended one: the front door refuses it on the
-            # password and on a passkey, and a reset is a third front door,
-            # not a way round the other two (#1052). The password still
-            # takes - the mailbox was proved, and the suspension ends one day
-            # - and the page says why nothing was issued here, rather than
-            # sending the person to a sign-in that only refuses them. The
-            # reset proved the mailbox, so this discloses nothing new.
-            # Nor does it reopen export or deletion: a suspended account
-            # keeps those only on the session it held when the ban landed
-            # (R-BAN-04), and one that lost every device asks an operator.
-            await _sockets_signed_out(str(outcome.user_id), None)
-            return {"ok": True, "signedIn": False, "reason": "suspended"}
         # Every session was revoked, including one held by whoever is standing
         # here. Signing them back in is the point of having reset it.
         await issue_cookie(response, request, str(outcome.user_id), role=outcome.role)

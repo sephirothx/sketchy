@@ -1330,3 +1330,31 @@ async def test_a_suspended_reset_sets_the_password_but_signs_nobody_in(env):
     )
     assert login.status_code == 403
     assert login.json()["detail"] == "This account is suspended."
+
+
+async def test_a_suspended_moderators_reset_says_suspended_not_second_factor(env):
+    """The suspension is what stands between them and signing in, so that is
+    what the page says; the second-factor path would only refuse them."""
+    from app.db.models import User, UserBan, generate_uuid
+    from tests.staffauth import mark_staff_ready
+
+    new_client, factory = env
+    browser = new_client()
+    account = await register(browser, "SuspendedMod", email="suspendedmod@example.com")
+    await verify_via_email(browser, factory)
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(account["id"]))
+            user.role = "moderator"
+            session.add(
+                UserBan(id=generate_uuid(), user_id=UUID(account["id"]), reason="Test")
+            )
+    await mark_staff_ready(factory, account["id"])
+
+    await new_client().post("/api/auth/password/forgot", json={"identifier": "SuspendedMod"})
+    reset = await new_client().post(
+        "/api/auth/password/reset",
+        json={"token": token_in(await drain(factory)), "password": NEW_PASSWORD},
+    )
+    assert reset.status_code == 200, reset.text
+    assert reset.json() == {"ok": True, "signedIn": False, "reason": "suspended"}
