@@ -618,3 +618,11 @@ async def test_a_moderators_own_drawing_is_off_their_queue_even_drawn_as_a_guest
     await _as_moderator(http, factory, other.id)
     queue = (await http.get("/api/moderation/gallery")).json()
     assert [c["turnId"] for c in queue["candidates"]] == [own.turn_id]
+
+    # An administrator's own stay in their queue (the exemption, #1063).
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(mod.id))).role = UserRole.ADMIN.value
+    await _as_moderator(http, factory, mod.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert [c["turnId"] for c in queue["candidates"]] == [own.turn_id]

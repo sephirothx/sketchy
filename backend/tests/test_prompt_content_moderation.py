@@ -918,3 +918,28 @@ async def test_a_moderator_cannot_release_their_own_held_list(env):
         f"/api/moderation/prompt-lists/{created.id}", json=decision
     )
     assert released.status_code == 200, released.text
+
+
+async def test_an_administrator_sees_and_releases_their_own_held_list(env):
+    """The exemption reaches the queue as well as the decision (#1063)."""
+    new_client, factory, prompts = env
+    admin_http = new_client()
+    admin = await register(admin_http, "HeldAdmin")
+    await _staff(factory, admin, UserRole.ADMIN)
+    created = await prompts.create_owned(
+        admin["id"],
+        name="The admin's own",
+        description="",
+        language="en",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+    held = await prompts.set_owned_publication(
+        admin["id"], created.id, published=True, under_review=True
+    )
+    queue = (await admin_http.get("/api/moderation/prompt-lists")).json()
+    assert queue["waiting"] == 1 and [row["id"] for row in queue["lists"]] == [created.id]
+    released = await admin_http.patch(
+        f"/api/moderation/prompt-lists/{created.id}",
+        json={"state": "active", "note": "Mine; fine.", "expectedVersion": held.version},
+    )
+    assert released.status_code == 200, released.text
