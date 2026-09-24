@@ -2097,7 +2097,10 @@ same-origin` and `Cross-Origin-Resource-Policy: same-origin` (`cross-origin` whe
 `ALLOWED_ORIGINS` is set). In production `Strict-Transport-Security: max-age=31536000;
 includeSubDomains` joins them, the session cookie is `__Host-sketchy_session`, and a
 request over plain HTTP is answered **308** to the same path on `PUBLIC_BASE_URL` — its
-method kept — unless it is one of the three probe paths. A response the application gave
+method kept — unless it is one of the three probe paths.
+Any byte of the path or query outside printable ASCII is escaped as `%XX`, and a
+request target that is not a path goes to the root, so the redirect never leaves the
+origin (#1015). A response the application gave
 its own value for one of these headers keeps it.
 
 Every response also carries `X-Sketchy-Protocol`, the `PROTOCOL_VERSION` this build
