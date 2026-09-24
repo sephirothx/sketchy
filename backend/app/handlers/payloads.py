@@ -32,7 +32,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator, model_validator
+from pydantic import ConfigDict, Field, ValidationError, field_validator, model_validator
+from app.request_text import ControlFreeModel
 
 from app.drawing_rules import (
     DEFAULT_ALLOWED_TOOLS,
@@ -85,7 +86,7 @@ class PayloadError(ValueError):
         return refuse(self.code, self.error, field=self.field)
 
 
-class RequestModel(BaseModel):
+class RequestModel(ControlFreeModel):
     model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
 
 

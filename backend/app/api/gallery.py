@@ -5,7 +5,8 @@ from dataclasses import replace
 import hashlib
 
 from fastapi import APIRouter, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 
 from app.api.errors import Refusal
 from app.api.profiles import reaction_payload, serve_drawing, validator_matches
@@ -55,7 +56,7 @@ def gallery_entry_payload(entry: GalleryEntry) -> dict:
     }
 
 
-class GalleryReactionBody(BaseModel):
+class GalleryReactionBody(ControlFreeModel):
     """The one field a reaction write carries: which emoji, by code."""
 
     model_config = ConfigDict(strict=True, extra="forbid")

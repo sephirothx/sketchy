@@ -1100,6 +1100,14 @@ retention window. When the queue is full the identifier is withheld instead, exa
 it was when a failed write returned nothing — the line still goes out, it simply
 cannot be cited. The queue is drained on the way out of a planned shutdown, after the
 sockets, so the last thing anybody said is written rather than abandoned.
+A batch insert fails as one statement, so a row the database refuses — a value the
+validators let through, which PostgreSQL's refusal of a NUL in `text` was until #995 —
+would have cost every line queued beside it, and those were other people's evidence.
+A `DataError` or `IntegrityError` on the batch therefore re-tries its rows one at a
+time, keeping the rest and logging the one refused; a timeout or a lost connection
+is still the whole batch's, because retrying each row would only wait out the same
+outage a hundred times — and the row-by-row pass stops at the first failure that is
+not a row's, for the same reason.
 
 A lobby line takes the same hand-off through `record_lobby`, which shares the queue,
 the worker and the queue-full rule with `record` and composes a row with no room and
@@ -1799,6 +1807,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/probe.py`](../backend/app/probe.py) | The synthetic game - two guests, a room, one stroke - over Socket.IO long-polling with the standard library; the `sketchy_probe_*` textfile series. |
 | [`app/main.py`](../backend/app/main.py) | ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app. |
 | [`app/message_limits.py`](../backend/app/message_limits.py) | Shared backend limits for player-authored chat and guess text. |
+| [`app/request_text.py`](../backend/app/request_text.py) | The one rule every player-authored string obeys before anything reads it. |
 | [`app/presenters.py`](../backend/app/presenters.py) | Pure construction of Socket.IO response and broadcast payloads. |
 | [`app/prompt_content.py`](../backend/app/prompt_content.py) | Language-aware normalization and bounded metadata for prompt content. |
 | [`app/refusals.py`](../backend/app/refusals.py) | Every reason the server refuses something, named once for both surfaces. |

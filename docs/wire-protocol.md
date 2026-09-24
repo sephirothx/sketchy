@@ -616,6 +616,19 @@ Defined and enforced in
   integers must be integers and must not be booleans.
 - **Unknown fields are rejected** (`extra="forbid"`).
 - All strings and integers are **bounded here**, before a handler authorizes or mutates.
+- **No string carries a control character** — U+0000–U+001F other than tab, newline and
+  carriage return, or U+007F — however deep it sits in the payload. PostgreSQL refuses a
+  NUL in `text`, and a value that passed every length check and reached a statement
+  failed that statement together with everything batched beside it: one chat line with a
+  NUL dropped the retention batch of up to a hundred other lines, a room name with one
+  made the finished game unsaveable (#995). The rule is one validator on the raw value of
+  every field ([`backend/app/request_text.py`](../backend/app/request_text.py)), shared by
+  every REST body model too, so a field that strips or parses its text never meets the
+  character and the refusal names the field it arrived in. A **password** is the one
+  exception: an opaque secret, hashed on arrival and never stored or compared as text,
+  so the database never sees a byte of it — and it is checked at every proof an account
+  makes, so refusing a byte the policy accepted would lock its owner out of every door,
+  the recovery link included.
 - Camel-case wire names are declared as pydantic `Field(alias=…)`; the alias is what the
   client sends.
 
@@ -2020,6 +2033,13 @@ operators in one language, and the split is written down as an allowlist in
 fails on a player-facing route that refuses with prose and on a stale exemption.
 FastAPI's own validation failures keep their `{"detail": [...]}` shape; a client that
 provoked one sent a payload no screen can produce.
+Every body model descends from `ControlFreeModel`
+([`backend/app/request_text.py`](../backend/app/request_text.py)), so a string carrying a
+control character (§3) is one of those failures — 422, naming the field — rather than
+the 500 PostgreSQL's refusal of a NUL used to become. The few strings that reach a
+statement without a body model are checked by hand: the community catalogue's `tag`
+and the prompt-stats route's `{slug}` (answered as not found), and the operators' own
+filters (`GET /api/admin/players?q=`, `/api/admin/metrics/events`, `/api/admin/audit`).
 
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
 a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only
