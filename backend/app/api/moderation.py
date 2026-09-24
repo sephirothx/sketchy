@@ -1694,7 +1694,7 @@ def create_moderation_router(
             report = await session.get(PlayerReport, report_id)
         if report is None or report.reported_user_id is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if report.reported_user_id == actor.id:
+        if _is_about_themselves(actor, report.reported_user_id):
             raise HTTPException(
                 status_code=403,
                 detail="A report about you is for another moderator to decide.",
@@ -2356,19 +2356,25 @@ def create_moderation_router(
         Oldest first: somebody has been waiting since they published.
         """
         async with session_factory() as session:
-            await _reviewer(session, request)
+            reviewer = await _reviewer(session, request)
+            held = list(_held())
+            if reviewer.role != UserRole.ADMIN.value:
+                # Their own held lists are another moderator's to release, so
+                # they are neither listed nor counted as waiting for them
+                # (R-MOD-07, #1063).
+                held.append(PromptList.owner_user_id != reviewer.id)
             rows = (
                 await session.execute(
                     select(PromptList, User.display_name)
                     .outerjoin(User, User.id == PromptList.owner_user_id)
-                    .where(*_held())
+                    .where(*held)
                     .order_by(PromptList.published_at, PromptList.id)
                     .offset(offset)
                     .limit(limit)
                 )
             ).all()
             waiting = await session.scalar(
-                select(func.count(PromptList.id)).where(*_held())
+                select(func.count(PromptList.id)).where(*held)
             )
             prompts_by_list = {
                 list_id: count
@@ -3171,7 +3177,7 @@ def create_moderation_router(
         set, and the current Top-week candidates nobody has decided. With the
         switch off nothing waits, since the shelf is Top-week directly."""
         async with session_factory() as session:
-            await _reviewer(session, request)
+            reviewer = await _reviewer(session, request)
         review = await read_shelf_review(session_factory)
         candidates = ()
         if review and game_history_repo is not None:
@@ -3179,6 +3185,18 @@ def create_moderation_router(
                 sort="top", window="week", limit=REVIEW_CANDIDATES, shelf_filter="undecided"
             )
             candidates = page.entries
+            if candidates and reviewer.role != UserRole.ADMIN.value:
+                # Their own drawings are another moderator's to decide
+                # (R-MOD-07, #1063); "drawn by me" resolves a claimed guest.
+                facts = await game_history_repo.viewer_gallery_facts(
+                    [entry.turn_id for entry in candidates],
+                    viewer_user_id=str(reviewer.id),
+                )
+                candidates = tuple(
+                    entry
+                    for entry in candidates
+                    if not facts.get(entry.turn_id, (None, False))[1]
+                )
         return {
             "review": review,
             "waiting": len(candidates),
@@ -3204,9 +3222,15 @@ def create_moderation_router(
                 reviewer = await _reviewer(session, request)
                 require_step_up(request)
                 turn = await session.get(TurnRecord, db_turn_id)
-                if turn is not None and _is_about_themselves(
-                    reviewer, turn.drawer_user_id
-                ):
+                # Through the alias: a drawing made as a guest who has since
+                # claimed the account is the account's (as a Gallery report
+                # resolves it).
+                drawer_id = (
+                    await canonical_user_id(session, turn.drawer_user_id)
+                    if turn is not None and turn.drawer_user_id is not None
+                    else None
+                )
+                if _is_about_themselves(reviewer, drawer_id):
                     # Releasing or hiding one's own drawing is another
                     # moderator's call (#1063).
                     raise HTTPException(

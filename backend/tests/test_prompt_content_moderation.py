@@ -900,6 +900,11 @@ async def test_a_moderator_cannot_release_their_own_held_list(env):
     held = await prompts.set_owned_publication(
         moderator["id"], created.id, published=True, under_review=True
     )
+    # Not listed or counted for them; the other moderator sees it waiting.
+    own_queue = (await moderator_http.get("/api/moderation/prompt-lists")).json()
+    assert own_queue["waiting"] == 0 and own_queue["lists"] == []
+    others_queue = (await other_http.get("/api/moderation/prompt-lists")).json()
+    assert [row["id"] for row in others_queue["lists"]] == [created.id]
     decision = {
         "state": "active",
         "note": "Looks fine to me.",

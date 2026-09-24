@@ -581,3 +581,40 @@ async def test_a_moderator_cannot_decide_their_own_drawing(env):
     await _as_moderator(http, factory, mod.id)
     own = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json=decision)
     assert own.status_code == 200, own.text
+
+
+async def test_a_moderators_own_drawing_is_off_their_queue_even_drawn_as_a_guest(env):
+    """#1063 review: a turn keeps the identity that drew it, so a drawing made
+    as a guest who later claimed the moderator's account is theirs through
+    the alias - neither listed in their review queue nor theirs to decide."""
+    from app.db.models import IdentityAlias
+
+    http, users, history, factory = env
+    mod = await _moderator(users, factory, "GuestMod")
+    other = await _moderator(users, factory, "PeerMod")
+    watcher = await _registered(users, "Watcher")
+    guest = await users.create_anonymous("OldGuest")
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                IdentityAlias(source_user_id=UUID(guest.id), target_user_id=UUID(mod.id))
+            )
+    own = await record_game(
+        history, drawer=guest.id, reactor=watcher.id, visibility="public",
+        finished_at=NOW - timedelta(hours=1),
+    )
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, SHELF_REVIEW_KEY, "1")
+
+    await _as_moderator(http, factory, mod.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert queue["waiting"] == 0 and queue["candidates"] == []
+    refused = await http.patch(
+        f"/api/moderation/gallery/{own.turn_id}", json={"decision": "released", "note": "mine"}
+    )
+    assert refused.status_code == 403
+
+    await _as_moderator(http, factory, other.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert [c["turnId"] for c in queue["candidates"]] == [own.turn_id]

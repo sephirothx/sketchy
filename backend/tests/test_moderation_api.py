@@ -3538,3 +3538,7 @@ async def test_an_administrator_sees_and_decides_a_report_about_themselves(env):
     )
     assert decided.status_code == 200, decided.text
     assert decided.json()["reviewedByUserId"] == admin["id"]
+    # The picture removal on a report about them is theirs to take too; with
+    # no picture there is nothing to remove, but it is not refused as theirs.
+    removal = await admin_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+    assert removal.status_code != 403, removal.text
