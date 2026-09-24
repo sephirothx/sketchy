@@ -424,6 +424,11 @@ export const useGameStore = create<GameStore>((set) => ({
   endTurn: (payload) =>
     set((s) => ({
       phase: "turn_results",
+      // A turn can end before it was drawn (#1005: nobody to guess), and
+      // the chooser was gated on the choices alone - the ex-drawer kept
+      // three live buttons through the results screen.
+      promptChoices: [],
+      myPrompt: null,
       lastTurnResult: payload,
       currentTurnId: payload.turnId ?? s.currentTurnId,
       drawingReactions:

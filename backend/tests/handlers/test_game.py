@@ -158,6 +158,32 @@ async def test_a_turn_nobody_can_guess_ends_at_once():
     assert "turn_ended" in events
     assert len(game.completed_turns) == 1
     assert game.completed_turns[0].end_reason == "timeout"
+    # Read off the drawing deadline, not the choosing one: a turn that lasted
+    # nothing is not most of a drawing phase, and the record refuses zero.
+    assert 0 < game.completed_turns[0].duration_seconds < 1
+    await ctx.timers.close()
+
+
+async def test_a_seat_going_afk_that_leaves_one_active_player_ends_the_game():
+    """The minimum counts active seats, as the start does: a two-player game
+    whose guesser goes AFK is a game one person is playing (#1005)."""
+    from tests.fake_game_history_repo import FakeGameHistoryRepository
+    from tests.handlers.helpers import build_context, build_room
+
+    room_manager, room, players = build_room(rounds=3)
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    game.force_prompt_choice()
+    await flow._begin_drawing(room)
+    guesser = next(p for p in players.values() if p.id != game.current_drawer)
+
+    guesser.is_afk = True
+    await flow.apply_afk_consequences(room, guesser)
+
+    assert room.game is None and room.state == "waiting"
     await ctx.timers.close()
 
 
