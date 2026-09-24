@@ -1106,7 +1106,8 @@ would have cost every line queued beside it, and those were other people's evide
 A `DataError` or `IntegrityError` on the batch therefore re-tries its rows one at a
 time, keeping the rest and logging the one refused; a timeout or a lost connection
 is still the whole batch's, because retrying each row would only wait out the same
-outage a hundred times.
+outage a hundred times — and the row-by-row pass stops at the first failure that is
+not a row's, for the same reason.
 
 A lobby line takes the same hand-off through `record_lobby`, which shares the queue,
 the worker and the queue-full rule with `record` and composes a row with no room and

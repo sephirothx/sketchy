@@ -624,7 +624,11 @@ Defined and enforced in
   made the finished game unsaveable (#995). The rule is one validator on the raw value of
   every field ([`backend/app/request_text.py`](../backend/app/request_text.py)), shared by
   every REST body model too, so a field that strips or parses its text never meets the
-  character and the refusal names the field it arrived in.
+  character and the refusal names the field it arrived in. A **password** is the one
+  exception: an opaque secret, hashed on arrival and never stored or compared as text,
+  so the database never sees a byte of it — and it is checked at every proof an account
+  makes, so refusing a byte the policy accepted would lock its owner out of every door,
+  the recovery link included.
 - Camel-case wire names are declared as pydantic `Field(alias=…)`; the alias is what the
   client sends.
 

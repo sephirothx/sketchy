@@ -1115,6 +1115,53 @@ async def test_a_lost_connection_is_not_retried_row_by_row():
         await engine.dispose()
 
 
+async def test_the_row_fallback_stops_at_the_first_failure_that_is_not_a_rows():
+    """A refused row sends the batch down the row-by-row path; a timeout or
+    a lost connection met on that path is the database, not a row, and the
+    rest of the batch is given up rather than waited out row by row
+    (review of #1046)."""
+    factory, engine = await create_test_db()
+    room_manager = RoomManager()
+    try:
+        room = room_manager.create_room(name="Fallback")
+        talker_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                session.add(User(id=talker_id, display_name="Talker"))
+        player = room_manager.add_player(room, "Talker", user_id=str(talker_id))
+        player.sid = "sid-talker"
+        service = MessageRetentionService(factory, batch_size=3, linger_seconds=0.05)
+
+        from sqlalchemy.exc import DBAPIError
+
+        class _BadValue(Exception):
+            pgcode = "22021"
+
+        calls: list[int] = []
+
+        async def write(batch):
+            calls.append(len(batch))
+            if len(batch) > 1:
+                raise DBAPIError("INSERT", {}, _BadValue("a NUL in one row"))
+            if len(calls) == 2:
+                raise DBAPIError("INSERT", {}, _BadValue("this row is the one"))
+            raise asyncio.TimeoutError()
+
+        service._write = write  # type: ignore[method-assign]
+        for text in ("one", "two", "three"):
+            await service.record(
+                room=room, player=player, text=text, message_kind="chat",
+                audience="room", recipient_sids=[player.sid],
+            )
+        await service.aclose()
+
+        # The batch, the refused row (skipped), the row that timed out - and
+        # not the third, which would only have waited out another timeout.
+        assert calls == [3, 1, 1]
+    finally:
+        await engine.dispose()
+
+
 @pytest.mark.skipif(
     not os.environ.get("TEST_DATABASE_URL"),
     reason="PostgreSQL refuses the NUL; SQLite stores it",

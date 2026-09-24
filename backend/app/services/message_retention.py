@@ -387,16 +387,42 @@ class MessageRetentionService:
             await asyncio.wait_for(self._wake.wait(), timeout=self._linger_seconds)
 
     async def _write_singly(self, batch: list[RoomMessage]) -> None:
-        """Write each row on its own, so one the database refuses costs one."""
+        """Write each row on its own, so one the database refuses costs one.
+
+        Only a refusal the database pins on a row's value is worth going on
+        past: a timeout, a lost connection or anything else is the database
+        itself, and a hundred rows retried one by one against it would hold
+        the only writer for as many timeouts while later lines queued up
+        behind them. The rest of the batch is given up, as the batch path
+        gives up.
+        """
         for row in batch:
             try:
                 await asyncio.wait_for(self._write([row]), timeout=WRITE_TIMEOUT_SECONDS)
             except asyncio.TimeoutError:
                 logger.error(
-                    "Timed out retaining message %s after %ss", row.id, WRITE_TIMEOUT_SECONDS
+                    "Timed out retaining message %s after %ss; the rest of its "
+                    "batch is not retried row by row",
+                    row.id,
+                    WRITE_TIMEOUT_SECONDS,
                 )
+                return
+            except DBAPIError as error:
+                if _refused_a_row(error):
+                    logger.warning("Message %s is not kept: the database refused it", row.id)
+                    continue
+                logger.exception(
+                    "Message %s is not kept, and the database is not answering; "
+                    "the rest of its batch is not retried row by row",
+                    row.id,
+                )
+                return
             except Exception:
-                logger.exception("Message %s is not kept", row.id)
+                logger.exception(
+                    "Message %s is not kept; the rest of its batch is not retried row by row",
+                    row.id,
+                )
+                return
 
     @database_operation_of("message_batch")
     async def _write(self, batch: list[RoomMessage]) -> None:

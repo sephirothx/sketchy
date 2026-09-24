@@ -14,6 +14,12 @@ which walks each field's raw value - strings, and strings inside lists and
 objects - and refuses a C0 control other than tab, newline and carriage
 return, plus DEL. Those three are kept because a description or a report's
 details legitimately span lines; nothing a keyboard produces needs the rest.
+
+Passwords are the exception. They are opaque secrets, hashed on arrival and
+never stored or compared as text, so the database never sees a byte of one;
+and a password is checked at every proof - sign-in, change, second-factor
+enrolment, deletion - so refusing a byte the policy once accepted would lock
+its owner out of every door at once, the recovery link included.
 """
 
 from __future__ import annotations
@@ -21,11 +27,15 @@ from __future__ import annotations
 import re
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, ValidationInfo, field_validator
 
 CONTROL_CHARACTER = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
 
 CONTROL_CHARACTER_MESSAGE = "Text must not contain control characters"
+
+# Fields that carry a secret rather than text: hashed, never stored, and the
+# key to every proof an account can make (see the module docstring).
+SECRET_FIELDS = frozenset({"password", "current_password"})
 
 
 def has_control_characters(value: str) -> bool:
@@ -65,6 +75,8 @@ class ControlFreeModel(BaseModel):
 
     @field_validator("*", mode="before")
     @classmethod
-    def _refuse_control_characters(cls, value: Any) -> Any:
+    def _refuse_control_characters(cls, value: Any, info: ValidationInfo) -> Any:
+        if info.field_name in SECRET_FIELDS:
+            return value
         _walk(value)
         return value
