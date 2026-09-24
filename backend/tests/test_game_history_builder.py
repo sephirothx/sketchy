@@ -161,8 +161,11 @@ def test_a_rejoined_account_is_recorded_once():
 
     ann = [p for p in history.participants if p.user_id == "user-ann"]
     assert len(ann) == 1
-    # The seat they still occupy is the one whose score kept moving.
-    assert ann[0].final_score == 420
+    # The seat they still occupy is the one recorded, and it carries the
+    # points of both: the ledger attributes both seats' awards to the one row
+    # written, and the writer requires the row to sum with it (#992).
+    assert ann[0].seat_id == game.history_seat_ids[rejoined.id]
+    assert ann[0].final_score == 720
     # Their earlier seat still drew a turn, and that turn is still theirs.
     assert history.turns[0].drawer_user_id == "user-ann"
 

@@ -10,7 +10,8 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import ConfigDict, Field, field_validator
+from app.request_text import ControlFreeModel
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -123,7 +124,7 @@ OnUserBanned = Callable[[str], Awaitable[None]]
 OnUserWarned = Callable[[str], Awaitable[None]]
 
 
-class ReportBody(BaseModel):
+class ReportBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     reported_user_id: UUID = Field(alias="reportedUserId")
@@ -159,7 +160,7 @@ class ReportBody(BaseModel):
         return value
 
 
-class ReportReviewBody(BaseModel):
+class ReportReviewBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     status: Literal["resolved", "dismissed"]
@@ -174,7 +175,7 @@ class ReportReviewBody(BaseModel):
         return cleaned
 
 
-class PromptContentReportBody(BaseModel):
+class PromptContentReportBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     prompt_list_id: UUID = Field(alias="promptListId")
@@ -191,7 +192,7 @@ class PromptContentReportBody(BaseModel):
         return cleaned
 
 
-class GalleryReportBody(BaseModel):
+class GalleryReportBody(ControlFreeModel):
     """A report from the Gallery names the turn in the path and says only
     why in words: the reason is always the drawing (R-GAL-08)."""
 
@@ -205,7 +206,7 @@ class GalleryReportBody(BaseModel):
         return value.strip()
 
 
-class GalleryDecisionBody(BaseModel):
+class GalleryDecisionBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     decision: Literal["released", "hidden"]
@@ -225,7 +226,7 @@ class GalleryDecisionBody(BaseModel):
 REVIEW_CANDIDATES = 12
 
 
-class PublicationReviewBody(BaseModel):
+class PublicationReviewBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     state: Literal["active", "hidden"]
@@ -244,7 +245,7 @@ class PublicationReviewBody(BaseModel):
         return cleaned
 
 
-class PromptContentReviewBody(BaseModel):
+class PromptContentReviewBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     status: Literal["resolved", "dismissed"]
@@ -262,7 +263,7 @@ class PromptContentReviewBody(BaseModel):
         return cleaned
 
 
-class BanBody(BaseModel):
+class BanBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_id: UUID = Field(alias="userId")
@@ -291,7 +292,7 @@ class BanBody(BaseModel):
         return value.astimezone(timezone.utc) if value is not None else None
 
 
-class BanRevokeBody(BaseModel):
+class BanRevokeBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     reason: str = Field(min_length=1, max_length=255)
@@ -979,7 +980,7 @@ def _content_incident_payload(
     }
 
 
-class ReviewedAcknowledgeBody(BaseModel):
+class ReviewedAcknowledgeBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     report_ids: list[UUID] = Field(
@@ -987,7 +988,7 @@ class ReviewedAcknowledgeBody(BaseModel):
     )
 
 
-class WarningBody(BaseModel):
+class WarningBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     user_id: UUID = Field(alias="userId")
