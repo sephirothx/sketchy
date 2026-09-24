@@ -340,7 +340,8 @@ export function AdminOperationsPage() {
             <div className="ops-health-row">
               <span className="ops-health-dot" aria-hidden="true" />
               <strong>Observations stored</strong>
-              <span>{live.recorder.storedEvents.toLocaleString()}</span>
+              {/* PostgreSQL's row estimate, not a count (#1076). */}
+              <span>~{live.recorder.storedEvents.toLocaleString()}</span>
             </div>
             <div className="ops-health-row">
               <span className="ops-health-dot" aria-hidden="true" />

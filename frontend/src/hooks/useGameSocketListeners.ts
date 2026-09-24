@@ -210,14 +210,13 @@ export function useGameSocketListeners() {
     };
 
     const onTurnEnded = (payload: TurnEndedPayload) => {
-      store.getState().endTurn(payload);
-      store.getState().addMessage({
+      store.getState().applyTurnEnded(payload, () => ({
         id: nextMessageId(),
         nickname: "",
         text: ui.useGameSocketListeners.thePromptWasPrompt({ prompt: payload.prompt }),
         correct: false,
         system: true,
-      });
+      }));
     };
 
     const onGameEnded = (payload: GameEndedPayload) => {

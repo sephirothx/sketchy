@@ -31,6 +31,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
 from app.api.admin_auth import admin_gate
+from app.auth.avatars import image_dimensions
 from app.auth.step_up import stepped_up
 from app.auth.audit import audit_coordinates
 from app.auth.rate_limit import PersistentRateLimiter, client_key
@@ -59,6 +60,9 @@ MAX_SCREENSHOT_BASE64 = ((MAX_SCREENSHOT_BYTES + 2) // 3) * 4 + 8
 # Long enough to see what led to the failure, short enough that a page looping
 # an error cannot turn one report into a log shipment.
 MAX_CLIENT_ERRORS = 20
+# The largest side a screenshot can be recorded with: a browser canvas tops
+# out below this, and the column is a 32-bit integer.
+MAX_SCREENSHOT_SIDE = 16_384
 MAX_CLIENT_ERROR_CHARS = 500
 
 # What a screenshot is allowed to be, keyed by the bytes a real file starts
@@ -67,6 +71,22 @@ _IMAGE_MAGIC: tuple[tuple[bytes, str], ...] = (
     (b"\x89PNG\r\n\x1a\n", "image/png"),
     (b"RIFF", "image/webp"),
 )
+
+
+def _screenshot_dimensions(payload: bytes) -> tuple[int | None, int | None]:
+    """Measured from the picture's own header, never taken from the sender.
+
+    The client's `screenshotWidth`/`screenshotHeight` used to be stored as
+    sent: a wrong claim was recorded as fact, and `10**12` was a 500 on
+    PostgreSQL's 32-bit column that lost the whole report (#1017).
+    """
+    dimensions = image_dimensions(payload)
+    if dimensions is None:
+        return None, None
+    width, height = dimensions
+    if not (0 < width <= MAX_SCREENSHOT_SIDE and 0 < height <= MAX_SCREENSHOT_SIDE):
+        return None, None
+    return width, height
 
 
 def _sniff_image(payload: bytes) -> str | None:
@@ -429,12 +449,10 @@ def create_bug_report_router(
                     report.screenshot_content_type = content_type
                     report.screenshot_byte_size = len(payload)
                     report.screenshot_checksum_sha256 = checksum
-                    width = client_context.get("screenshotWidth")
-                    height = client_context.get("screenshotHeight")
-                    report.screenshot_width = width if isinstance(width, int) else None
-                    report.screenshot_height = (
-                        height if isinstance(height, int) else None
-                    )
+                    (
+                        report.screenshot_width,
+                        report.screenshot_height,
+                    ) = _screenshot_dimensions(payload)
                 session.add(report)
                 session.add(
                     AuditEvent(

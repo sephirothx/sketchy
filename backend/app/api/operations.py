@@ -18,6 +18,7 @@ from datetime import datetime, timezone
 import logging
 from uuid import UUID
 import os
+import time
 
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from sqlalchemy import func, select
@@ -514,6 +515,44 @@ async def _resolve_subjects(
     return resolved
 
 
+class GameOutcomeCounts:
+    """Finished games by outcome, read at most once a minute (#1076 review).
+
+    A grouped count over every game ever finished - a table nothing deletes
+    from - ran on each ops-page poll, every ten seconds for as long as the
+    page is open. The breakdown moves by a game or two a minute, so it is
+    kept for one, the way `QueueDepths` and `DrawingStoreFootprint` keep
+    theirs.
+    """
+
+    CACHE_SECONDS = 60.0
+
+    def __init__(self, session_factory, *, clock=time.monotonic) -> None:
+        self._session_factory = session_factory
+        self._clock = clock
+        self._cached: tuple[float, dict[str, int]] | None = None
+        self._reading = asyncio.Lock()
+
+    async def read(self) -> dict[str, int]:
+        async with self._reading:
+            cached = self._cached
+            if cached is not None and self._clock() - cached[0] < self.CACHE_SECONDS:
+                return cached[1]
+            async with self._session_factory() as session:
+                counts = {
+                    outcome: count
+                    for outcome, count in (
+                        await session.execute(
+                            select(GameRecord.outcome, func.count(GameRecord.id)).group_by(
+                                GameRecord.outcome
+                            )
+                        )
+                    ).all()
+                }
+            self._cached = (self._clock(), counts)
+            return counts
+
+
 def create_operations_router(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -534,6 +573,7 @@ def create_operations_router(
     require_admin = admin_gate(session_factory)
     store = telemetry if telemetry is not None else default_telemetry
     queues = queue_depths if queue_depths is not None else QueueDepths(session_factory)
+    game_outcomes = GameOutcomeCounts(session_factory)
     drawings = (
         drawing_store if drawing_store is not None else DrawingStoreFootprint(session_factory)
     )
@@ -619,17 +659,7 @@ def create_operations_router(
         drawing_size = await drawings.read()
         database = dict(signals["database"])  # type: ignore[arg-type]
         database["readiness"] = database_readiness()
-        async with session_factory() as session:
-            outcomes = {
-                outcome: count
-                for outcome, count in (
-                    await session.execute(
-                        select(GameRecord.outcome, func.count(GameRecord.id)).group_by(
-                            GameRecord.outcome
-                        )
-                    )
-                ).all()
-            }
+        outcomes = await game_outcomes.read()
         return {
             "live": {
                 "rooms": gauges.rooms,

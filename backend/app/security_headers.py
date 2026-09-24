@@ -231,13 +231,36 @@ class HttpsOnly:
     def location(self, scope) -> str:
         # The raw path is still percent-encoded, which is what a Location
         # header wants; the decoded one is quoted back only in its absence.
+        # Anything outside printable ASCII is escaped; existing escapes are
+        # kept. uvicorn's h11 parser refuses such a byte before any
+        # middleware runs, so this is for an ASGI server that does not - a
+        # raw byte used to reach the header's ASCII encode and raise, a 500
+        # from the outermost middleware (#1015).
         raw_path = scope.get("raw_path")
-        path = raw_path.decode("latin-1") if raw_path else quote(scope.get("path", "/"))
+        path = (
+            _escape_unprintable(raw_path)
+            if raw_path
+            else quote(scope.get("path", "/"))
+        )
+        # A request line need not start with "/": `@evil.example` appended to
+        # the origin made `https://sketchy.example@evil.example`, a redirect
+        # off-site. Anything that is not a path goes to the root.
+        if not path.startswith("/"):
+            path = "/"
         target = self.public_origin + path
         query = scope.get("query_string", b"")
         if query:
-            target += "?" + query.decode("latin-1")
+            target += "?" + _escape_unprintable(query)
         return target
+
+
+def _escape_unprintable(raw: bytes) -> str:
+    """Printable ASCII as it came; every other byte - space, controls, a
+    CR or LF that would otherwise split the header, anything above 0x7E - as
+    a `%XX` escape."""
+    return "".join(
+        chr(byte) if 0x21 <= byte <= 0x7E else f"%{byte:02X}" for byte in raw
+    )
 
 
 class HttpsOnlyMiddleware:

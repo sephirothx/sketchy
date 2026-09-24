@@ -84,7 +84,13 @@ def _clean_name(value: str) -> tuple[str, str]:
         raise RoomPresetError("Preset name is required")
     if len(name) > 64:
         raise RoomPresetError("Preset name must be at most 64 characters")
-    return name, name.casefold()
+    key = name.casefold()
+    # Bounded after folding too: `ß` folds to "ss", so 64 characters in
+    # could be 128 out, and `name_key` is 64 wide - a 500 on PostgreSQL where
+    # the name was the thing wrong (#1017 review).
+    if len(key) > 64:
+        raise RoomPresetError("Preset name must be at most 64 characters")
+    return name, key
 
 
 class RoomPresetService:

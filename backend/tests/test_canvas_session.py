@@ -383,3 +383,31 @@ def test_a_history_with_a_misplaced_or_invalid_width_marker_is_refused(entries):
 
     with pytest.raises(ValueError):
         decode_binary_canvas_history(frame)
+
+
+def test_a_full_sync_taken_mid_stroke_carries_the_open_path():
+    """#1043's premise, refuted and pinned: a viewer that painted a stroke's
+    first frames and then adopted a full reply keeps the stroke, because the
+    reply is built when it is sent and already holds the open path as it
+    stands, hashed. The bytes are the ones
+    `frontend/tests/syncAfterLiveFrames.test.mjs` feeds a viewer; this keeps
+    that fixture the server's truth rather than a guess at it."""
+    canvas = CanvasSession(generation=3)
+    canvas.record_stroke("draw_start", {"x": 0.1, "y": 0.1, "color": "#e03131", "width": 8})
+    canvas.active_draw_sequence = 1
+    canvas.record_stroke("draw_move", {"points": [{"x": 0.2, "y": 0.1}, {"x": 0.3, "y": 0.2}]})
+
+    reply = canvas.sync_payload()
+    assert reply.hex() == "534b4348010100000000001100000000e03131084001f0008002f000c003e001"
+    assert (canvas.revision, canvas.generation, canvas.sequence, canvas.hash) == (
+        1, 3, 0, 2229650042
+    )
+    assert len(decode_binary_canvas_history(reply)) == 1, "the open path is in it"
+
+    canvas.record_stroke("draw_move", {"points": [{"x": 0.4, "y": 0.3}]})
+    canvas.record_stroke("draw_end", {})
+    canvas.active_draw_sequence = None
+    assert [canvas.generation, 1, *canvas.commit_sequence(1)[:2]] == [3, 1, 1, 3966873977]
+    assert canvas.sync_payload().hex() == (
+        "534b4348010100000000001500000000e03131084001f0008002f000c003e0010005d002"
+    )

@@ -211,7 +211,8 @@ told the room has ended.
 A private, named, versioned copy of typed settings for a future *ordinary* room. Same
 columns and `CHECK` set as a room's typed settings, with no code, plus `name_key` with
 `uq_room_presets_owner_name (owner_user_id, name_key)`. `ON DELETE CASCADE` from
-`users`.
+`users`. `name_key` is the case-folded name, bounded to its 64 characters *after* folding
+(`ß` folds to "ss"), since a longer one was a 500 on PostgreSQL (#1017).
 
 A preset has **no room code, members, host identity, game, scores, timers, chat, or
 canvas.** Applying one fills the create form but does not enable *Keep this room for
@@ -1103,8 +1104,10 @@ prompt in play, chat text, or a query string.
 **Screenshots** follow `turn_drawings` rather than inventing storage:
 `screenshot_payload` with `screenshot_byte_size`, `screenshot_checksum_sha256`,
 `screenshot_content_type`, dimensions, and a `screenshot_status` of
-`none | ready | erased | expired`. The server sniffs the magic bytes, re-derives the size
-and digest, and rejects anything that is not a real PNG or WebP under 2 MB.
+`none | ready | erased | expired`. The server sniffs the magic bytes, re-derives the size,
+digest and dimensions (from the picture's header, not the sender's claim, and only up to
+16384 a side — a claimed `10**12` once overflowed the column and lost the report on
+PostgreSQL, #1017), and rejects anything that is not a real PNG or WebP under 2 MB.
 `ck_bug_reports_screenshot_ready_identity` requires a `ready` row to hold the bytes and
 their identity; `ck_bug_reports_screenshot_erased` and
 `ck_bug_reports_screenshot_expired` make both erasures **structural** — neither a decided
@@ -1749,6 +1752,15 @@ An immutable, language-specific wording.
 `moderation_state` (`active \| under_review \| hidden`) · `moderated_by_user_id` ·
 `moderated_at` · `created_at`, with
 `uq_prompt_version_concept_language_version`.
+
+A moderator's decision is the concept's, not one wording's: resolving a report sets
+`moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
+concept, an owner's edit that writes a new version (an alias added, an answer respelled)
+carries them to it, and a new version whose answer or alias matches any prompt this list has
+ever held that is hidden — a word typed back in, or another entry respelled into it — is
+born with them — so a hidden word stays hidden (#1020). A concept belongs to
+one list; copies mint their own. Bundled seed versions are the operator's own editions and
+start `active`.
 
 Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
 registry, which case-folds, collapses whitespace, folds canonically decomposable

@@ -168,7 +168,9 @@ async def test_two_requests_at_one_below_the_pending_cap_leave_exactly_the_cap(m
         right = await make_account(factory, "Right")
         friends = FriendService(factory)
         monkeypatch.setattr(
-            friends, "_raise_if_too_many_pending", held_after(friends._raise_if_too_many_pending)
+            friends,
+            "_inbox_is_full_after_own_ceilings",
+            held_after(friends._inbox_is_full_after_own_ceilings),
         )
 
         results = await settle(friends.request(asker, left), friends.request(asker, right))

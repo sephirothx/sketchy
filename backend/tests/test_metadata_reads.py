@@ -188,3 +188,39 @@ async def test_a_stranger_asking_for_a_game_is_refused_after_one_statement():
         assert list_selects and all("rule_snapshot " not in s and "rule_snapshot," not in s for s in list_selects)
     finally:
         await engine.dispose()
+
+
+async def test_games_finished_in_the_same_instant_page_without_repeats():
+    """#1077: ordered by `finished_at` alone, two games from the same
+    microsecond could swap across a page boundary - one shown twice, the
+    other never. The id breaks the tie."""
+    from datetime import datetime, timezone
+
+    from tests.test_drawing_reactions import record_game
+
+    factory, engine = await create_test_db()
+    try:
+        users = SqlAlchemyUserRepository(factory)
+        history = SqlAlchemyGameHistoryRepository(factory)
+        drawer = await users.create_anonymous("SameInstant")
+        watcher = await users.create_anonymous("Watcher")
+        instant = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+        recorded = [
+            await record_game(history, drawer=drawer.id, reactor=watcher.id, finished_at=instant)
+            for _ in range(5)
+        ]
+        # Neither database happens to swap them in a test this size, so the
+        # order itself is also read off the statement.
+        statements = _capture(engine)
+        paged = []
+        for offset in range(5):
+            [summary] = await history.get_user_games(
+                drawer.id, requesting_user_id=drawer.id, limit=1, offset=offset
+            )
+            paged.append(summary.id)
+        assert sorted(paged) == sorted(game.game_id for game in recorded)
+        assert paged == sorted(paged, reverse=True), "newest id first within the instant"
+        listing = [s for s in _selects(statements) if "FROM game_records" in s][0]
+        assert "ORDER BY game_records.finished_at DESC, game_records.id DESC" in listing
+    finally:
+        await engine.dispose()

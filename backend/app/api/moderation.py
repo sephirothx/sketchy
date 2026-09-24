@@ -2132,6 +2132,40 @@ def create_moderation_router(
                     target.moderation_state = body.moderation_state
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
+                    if report.target_type == "prompt":
+                        # Taken in the order `update_owned` takes it: an
+                        # owner's save in flight holds the list row while it
+                        # reads the concept's state and writes its new
+                        # version, so it either commits first - and the
+                        # UPDATE below covers the version it wrote - or starts
+                        # after, and carries the decision. Without it a save
+                        # that read "active" could commit a new active version
+                        # the UPDATE never saw (#1092 review).
+                        if report.prompt_list_id is not None:
+                            await session.execute(
+                                select(PromptList.id)
+                                .where(PromptList.id == report.prompt_list_id)
+                                .with_for_update()
+                            )
+                        # The decision is the concept's, not one wording's
+                        # (R-MOD-11, #1020): a report names the version the
+                        # game played, and the owner may have saved a newer
+                        # one since - hiding only the reported one left the
+                        # list's current version live. A concept belongs to
+                        # one list (copies mint their own), so this reaches
+                        # nothing else.
+                        await session.execute(
+                            update(PromptVersion)
+                            .where(
+                                PromptVersion.concept_id == target.concept_id,
+                                PromptVersion.id != target.id,
+                            )
+                            .values(
+                                moderation_state=body.moderation_state,
+                                moderated_by_user_id=reviewer.id,
+                                moderated_at=now,
+                            )
+                        )
                     # Telling somebody their content was hidden is the least
                     # the review owes them, and it is the second use the
                     # address was collected for.
@@ -2672,7 +2706,8 @@ def create_moderation_router(
                 )
             bans = (
                 await session.scalars(
-                    statement.order_by(UserBan.created_at.desc())
+                    # The id breaks a tie, as a player's games do (#1077).
+                    statement.order_by(UserBan.created_at.desc(), UserBan.id.desc())
                     .limit(limit)
                     .offset(offset)
                 )

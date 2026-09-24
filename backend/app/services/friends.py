@@ -354,10 +354,14 @@ class FriendService:
             await self._refund_request(requester_id)
             raise
         if outcome in (FriendshipOutcome.IGNORED, FriendshipOutcome.UNCHANGED):
-            # Nothing was written, so nothing was spent (R-RATE-05's rule) and
-            # there is nobody to tell. Announcing a request that was quietly
-            # dropped would be the tell the silence exists to avoid.
-            await self._refund_request(requester_id)
+            # Nobody to tell: announcing a request that was quietly dropped
+            # would be the tell the silence exists to avoid. And **not given
+            # back** (#1062): R-RATE-05 refunds an attempt that wrote nothing,
+            # but here that refund was the tell. With one attempt left, a
+            # request to X and then one to Y answered 429 for Y exactly when X
+            # had landed - R-FRIEND-04's question, answered by the bucket
+            # instead of the status code. Every attempt costs one; only the
+            # caller's own refusals above are refunded.
             return outcome
         # Both, not just the target. An account's own other tabs are told the
         # same way anybody else is - `friends_changed` is the only thing that
@@ -466,16 +470,20 @@ class FriendService:
                     # somebody who has declined a lot of people would otherwise
                     # have a row per refusal to send an uncounted one along.
                     await self._raise_if_full(session, requester_id)
-                    await self._raise_if_too_many_pending(
+                    if await self._inbox_is_full_after_own_ceilings(
                         session, requester_id, target.id
-                    )
+                    ):
+                        return FriendshipOutcome.IGNORED
                     row.status = FriendshipState.PENDING.value
                     row.requested_by_id = requester_id
                     row.responded_at = None
                     return FriendshipOutcome.CREATED
 
                 await self._raise_if_full(session, requester_id)
-                await self._raise_if_too_many_pending(session, requester_id, target.id)
+                if await self._inbox_is_full_after_own_ceilings(
+                    session, requester_id, target.id
+                ):
+                    return FriendshipOutcome.IGNORED
                 # Same two checks as the declined-row rewrite above: every path
                 # that leaves a pending request behind answers to them.
                 session.add(
@@ -633,9 +641,17 @@ class FriendService:
                 "That player cannot take any more friends right now."
             )
 
-    async def _raise_if_too_many_pending(
+    async def _inbox_is_full_after_own_ceilings(
         self, session: AsyncSession, requester_id: UUID, target_id: UUID
-    ) -> None:
+    ) -> bool:
+        """Refuse the caller's own pending ceiling; say whether the target's is.
+
+        The caller's is theirs to be told (R-FRIEND-04 lets a refusal name a
+        ceiling the caller reached). The target's is not: it is checked after
+        the block and the earlier refusal, so a 409 for it meant "a real
+        account that has not blocked you" (#1062 review). A full inbox is
+        answered like every other request that goes nowhere - silently.
+        """
         sent = await session.scalar(
             select(func.count())
             .select_from(Friendship)
@@ -661,9 +677,4 @@ class FriendService:
                 ),
             )
         ) or 0
-        if received >= MAX_PENDING_RECEIVED:
-            # Generic on purpose. Naming the recipient's inbox state would
-            # disclose a fact about somebody who is not in this conversation.
-            raise FriendshipRefused(
-                "That request could not be sent right now. Try again later."
-            )
+        return received >= MAX_PENDING_RECEIVED

@@ -7,6 +7,9 @@ import unicodedata
 from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
 from app.prompts import MAX_PROMPT_LENGTH
 
+# The width of `prompt_versions.match_key` and `prompt_aliases.match_key`.
+MAX_MATCH_KEY_LENGTH = 64
+
 MAX_PROMPT_ALIASES = 20
 MAX_PROMPT_TAGS = 12
 MAX_TAG_SLUG_LENGTH = 32
@@ -241,7 +244,17 @@ def normalize_prompt_answer(answer: str, language: str = "en") -> str:
     collapsed = " ".join(answer.split())
     if not collapsed or len(collapsed) > MAX_PROMPT_LENGTH:
         raise ValueError(f"answer must be 1-{MAX_PROMPT_LENGTH} characters")
-    return prompt_match_key(collapsed, language)
+    key = prompt_match_key(collapsed, language)
+    # Bounded after folding, not only before: case-folding expands some
+    # characters (`ﬃ` to "ffi", `ß` to "ss"), so 32 characters in could be 96
+    # out, and the key column is 64 wide. PostgreSQL refused the write -
+    # a 500 where the input was the thing wrong; SQLite never checks
+    # (#1017). Refused here like any other answer that is too long.
+    if len(key) > MAX_MATCH_KEY_LENGTH:
+        raise ValueError(
+            f"answer must be at most {MAX_MATCH_KEY_LENGTH} characters once normalized"
+        )
+    return key
 
 
 def clean_prompt_aliases(

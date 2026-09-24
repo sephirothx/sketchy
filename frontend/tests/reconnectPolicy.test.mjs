@@ -18,6 +18,7 @@ import {
   shutdownHoldMs,
   stallRecovery,
   transportAlive,
+  transientSendable,
   SERVER_CLOSE_RETRY_BASE_MS,
   SERVER_CLOSE_RETRY_MAX_MS,
   SERVER_FULL_RETRY_MS,
@@ -254,4 +255,17 @@ test("a server close is not retried while this page reloads onto a new build (#1
   };
   assert.notEqual(serverCloseRetryDelayMs(closed), null);
   assert.equal(serverCloseRetryDelayMs({ ...closed, reloadPending: true }), null);
+});
+
+test("an in-the-moment action goes out only on a live, connected, writable socket (#966)", () => {
+  const live = { connected: true, transportWritable: true, transportAlive: true };
+  assert.equal(transientSendable(live), true);
+  // Reconnecting: the engine is open and writable, the namespace CONNECT has
+  // not been acknowledged - socket.io would buffer it and replay it on the new
+  // socket before any rebind.
+  assert.equal(transientSendable({ ...live, connected: false }), false);
+  // Connected on paper, ping expired: socket.io buffers here too.
+  assert.equal(transientSendable({ ...live, transportAlive: false }), false);
+  // Mid-POST on long-polling: socket.io drops it itself.
+  assert.equal(transientSendable({ ...live, transportWritable: false }), false);
 });
