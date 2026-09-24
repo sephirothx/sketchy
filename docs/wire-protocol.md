@@ -445,6 +445,10 @@ Three distinctions worth knowing:
   here and will take the room shortly.
 - `not_friends` answers both "we are not friends" and "there is no such account", so the
   command cannot be used to test whether somebody has unfriended you.
+- `kicked_from_room` is final for as long as that room lives (#1010): Quick play skips the
+  room on the server side, and a client rebinding a seat it held when the vote passed
+  treats it like `room_ended` — the stage says so and offers the lobby — rather than
+  asking again on every reconnect.
 
 A payload that fails validation is refused by
 `PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py`](../backend/app/handlers/payloads.py))

@@ -153,7 +153,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   host_only: "Seul l’hôte peut faire cela.",
   players_only: "Seuls les joueurs peuvent faire cela.",
   waiting_room_only: "Ce n’est disponible que dans la salle d’attente.",
-  kicked_from_room: "Tu as été exclu·e de ce salon et tu ne peux pas y revenir.",
+  kicked_from_room: "Tu as été exclu de ce salon et tu ne peux pas y revenir.",
   already_a_player: "Tu es déjà joueur.",
   registered_name_fixed: "Les joueurs inscrits jouent sous leur nom d’utilisateur.",
   name_taken_by_account: "Ce nom appartient à un joueur inscrit.",
@@ -1958,6 +1958,7 @@ export const FR: Catalogue = {
     gameEnded: "Cette partie est terminée",
     endedServerUpdate: "Le serveur a été mis à jour et la partie en cours n’a pas pu continuer.",
     endedRoomClosed: "Le salon a fermé pendant que tu étais déconnecté.",
+    removedByVote: "Exclu du salon",
     backToLobby: "Retour au hall",
   },
 

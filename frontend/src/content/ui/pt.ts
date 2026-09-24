@@ -1955,6 +1955,7 @@ export const PT: Catalogue = {
     gameEnded: "Esta partida terminou",
     endedServerUpdate: "O servidor foi atualizado e a partida a decorrer não pôde continuar.",
     endedRoomClosed: "A sala fechou enquanto estavas desligado.",
+    removedByVote: "Fora da sala",
     backToLobby: "Voltar ao átrio",
   },
 

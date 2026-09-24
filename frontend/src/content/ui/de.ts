@@ -1956,6 +1956,7 @@ export const DE: Catalogue = {
     gameEnded: "Diese Runde ist vorbei",
     endedServerUpdate: "Der Server wurde aktualisiert, und die laufende Runde konnte nicht weitergehen.",
     endedRoomClosed: "Der Raum wurde geschlossen, während du getrennt warst.",
+    removedByVote: "Aus dem Raum entfernt",
     backToLobby: "Zurück zur Lobby",
   },
 

@@ -861,6 +861,14 @@ async def _seat_in_room(
         )
         if not player.is_anonymous and (stored or name_color):
             player.name_color = stored or name_color
+        if room.players.get(player.id) is not player:
+            # The seat went while the account was being read - a kick vote
+            # passing in that window (#1010). Binding this socket to a seat
+            # the room no longer holds would leave it in the broadcast with
+            # no seat to act from; it is a new entry now, which the bar
+            # below refuses.
+            player = None
+    if player:
         if not ctx.room_capacity.admits_a_takeover(player.id):
             return {
                 "ok": False, "errorCode": ErrorCode.SEAT_CHANGING_TOO_FAST,

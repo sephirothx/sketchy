@@ -1956,6 +1956,7 @@ export const NL: Catalogue = {
     gameEnded: "Dit spel is afgelopen",
     endedServerUpdate: "De server is bijgewerkt en het lopende spel kon niet doorgaan.",
     endedRoomClosed: "De kamer is gesloten terwijl je verbinding weg was.",
+    removedByVote: "Uit de kamer gezet",
     backToLobby: "Terug naar de lobby",
   },
 

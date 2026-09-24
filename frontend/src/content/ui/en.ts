@@ -1960,6 +1960,7 @@ export const EN = {
     gameEnded: "This game ended",
     endedServerUpdate: "The server was updated, and the game in progress couldn’t carry on.",
     endedRoomClosed: "The room closed while you were disconnected.",
+    removedByVote: "Removed from the room",
     backToLobby: "Back to lobby",
   },
 

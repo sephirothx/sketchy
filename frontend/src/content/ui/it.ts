@@ -1957,6 +1957,7 @@ export const IT: Catalogue = {
     gameEnded: "Questa partita è finita",
     endedServerUpdate: "Il server è stato aggiornato e la partita in corso non è potuta continuare.",
     endedRoomClosed: "La stanza è stata chiusa mentre eri disconnesso.",
+    removedByVote: "Fuori dalla stanza",
     backToLobby: "Torna alla lobby",
   },
 

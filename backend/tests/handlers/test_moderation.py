@@ -1295,3 +1295,27 @@ async def test_kicking_the_drawer_sends_the_roster_before_the_next_turn():
             timer.cancel()
             with suppress(asyncio.CancelledError):
                 await timer
+
+
+async def test_a_kick_landing_while_a_second_tab_rebinds_does_not_seat_a_ghost(monkeypatch):
+    """The rebind path reads the account before binding the socket; a kick
+    passing in that window used to bind the socket to a seat the room had
+    already dropped, sitting in every broadcast with nothing to act from."""
+    from app.handlers import rooms as rooms_handlers
+
+    room_manager = RoomManager()
+    ctx, sio, sessions = _stack(room_manager)
+    room = room_manager.get_room(await _three_seated(sio, sessions))
+
+    async def kicked_meanwhile(ctx_, player, requested):
+        await _kick(sio, room, "two-sid", ["host-sid", "three-sid"])
+        return None, False
+
+    monkeypatch.setattr(rooms_handlers, "_rebound_account", kicked_meanwhile)
+    await sessions.save("two-tab-2", {"user_id": "user-two"})
+    answer = await sio.handlers["/"]["join_room"](
+        "two-tab-2", {"roomId": room.id, "nickname": "Two"}
+    )
+    assert answer["errorCode"] == ErrorCode.KICKED_FROM_ROOM
+    assert room_manager.get_player_by_user_id(room, "user-two") is None
+    assert not any(call.args[0] == "two-tab-2" for call in sio.enter_room.await_args_list)
