@@ -291,6 +291,16 @@ used to be all of that from every client inside a second, against a pool of ten.
 - **The REST refetches** a reconnect triggers (friends, recovery address) run
   a random 0–3 s behind it, so they queue behind the seat rebind rather than
   beside it. A first connection does not wait.
+- **A close the server made** (`io server disconnect`: another tab took the
+  seat, a kick, the capacity ceiling, a stale socket that never reloaded) is
+  one socket.io-client treats as final — the manager does not retry it, and
+  nothing else reopened the socket, so the tab sat on the lobby with a
+  "reconnecting" banner that meant nothing (#998). The client now reopens it
+  itself: 1 s, doubling to 30 s, ±50%, reset by a successful handshake; 30 s
+  first when it was told the server was full, since the notice said a few
+  minutes. Not after a stuck update (R-CONN-10), which the server would only
+  close again. A close the server means for good is a refused *handshake*, which
+  the manager never retries.
 - **Missed `session_ping`s** (three in a row) no longer tear the transport
   down by default. While Engine.IO's own pings keep arriving the connection is
   alive and the server is only slow, so the seat gets a soft `join_room`, which
@@ -445,6 +455,14 @@ Three distinctions worth knowing:
   here and will take the room shortly.
 - `not_friends` answers both "we are not friends" and "there is no such account", so the
   command cannot be used to test whether somebody has unfriended you.
+- `room_ended` also answers an entry — `join_room`, `quick_play`, `join_friend_room`, a
+  `create_room` retry — whose room was torn down *while the entry was awaiting
+  something*: the session read, the identity resolution, the release of a seat held
+  elsewhere. The last seated player can leave through any of those gaps, and a seat
+  added to the dead room afterwards answered `ok` to a player nothing would ever address
+  again (#1000). The room is re-checked by identity before the seat is taken, on the
+  new-seat path and the rebind path alike; a seat this socket already holds and is
+  connected on needs no check, since its own presence keeps the room alive.
 
 A payload that fails validation is refused by
 `PayloadError.acknowledgement()` ([`backend/app/handlers/payloads.py`](../backend/app/handlers/payloads.py))
@@ -616,6 +634,19 @@ Defined and enforced in
   integers must be integers and must not be booleans.
 - **Unknown fields are rejected** (`extra="forbid"`).
 - All strings and integers are **bounded here**, before a handler authorizes or mutates.
+- **No string carries a control character** — U+0000–U+001F other than tab, newline and
+  carriage return, or U+007F — however deep it sits in the payload. PostgreSQL refuses a
+  NUL in `text`, and a value that passed every length check and reached a statement
+  failed that statement together with everything batched beside it: one chat line with a
+  NUL dropped the retention batch of up to a hundred other lines, a room name with one
+  made the finished game unsaveable (#995). The rule is one validator on the raw value of
+  every field ([`backend/app/request_text.py`](../backend/app/request_text.py)), shared by
+  every REST body model too, so a field that strips or parses its text never meets the
+  character and the refusal names the field it arrived in. A **password** is the one
+  exception: an opaque secret, hashed on arrival and never stored or compared as text,
+  so the database never sees a byte of it — and it is checked at every proof an account
+  makes, so refusing a byte the policy accepted would lock its owner out of every door,
+  the recovery link included.
 - Camel-case wire names are declared as pydantic `Field(alias=…)`; the alias is what the
   client sends.
 
@@ -949,7 +980,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `role_changed` | `{notice: {id, role, pending, createdAt} | null, pendingRole}` — the same body `GET /api/role-notices/pending` returns. Emitted whether or not there is a notice: `pendingRole` says what is still outstanding on the account, and **withdrawing an offer** is the case with nothing to say and a change worth hearing — it settles the notice and ends the offer together, and a browser that missed it would go on offering an enrolment that would now grant nothing. The role and nothing else: the reason the administrator recorded is ledger text written for other administrators and can name a report or a second account. `pending` distinguishes a role the account **holds** from one it has been **offered** and takes up by enrolling a second factor (R-AUTH-20) — the second asks something of the reader, so it cannot be worded like the first, and it revokes nothing | every socket of the account whose role changed |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |
-| `server_full` | `{reason}` — English, for a log; the client says it from the event itself (R-I18N-01). The socket is closed immediately afterwards | one socket, at handshake |
+| `server_full` | `{reason}` — English, for a log; the client says it from the event itself (R-I18N-01). The socket is closed a moment **after** the handshake completes (`SERVER_FULL_CLOSE_SECONDS`): the namespace CONNECT goes out only when the connect handler returns, and a close awaited inside it reached the client first, so the notice was buffered against a namespace that never connected and nobody was told (#998). For that moment the socket is connected but **still counted** against the ceiling, and every command it sends is refused at the door with `server_busy` — it is past the ceiling, and a seat taken in that window would be one the ceiling never allowed. The client keeps its notice through the `connect` event that follows it, since that event is the turned-away socket's own, not an admission | one socket, at handshake |
 | `lobby_presence_changed` | `{revision, joined: LobbyPlayer[], left: userId[], changed: LobbyPlayer[], onlineCount}` — one fixed-tick delta, emitted only when the snapshot actually moved | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_rooms_changed` | `{revision, opened: RoomSummary[], closed: roomId[], changed: RoomSummary[]}` — the public room list moved, on the same fixed tick. Its own revision, because the two feeds move independently | the `lobby` channel: every socket that asked with `watch_lobby` |
 | `lobby_chat_message` | `LobbyChatMessage` — one line, the moment it was said. Not a feed: no revision, no tick, and a gap in `seq` is never resynced | the `lobby` channel, minus the sockets of accounts that blocked the author |
@@ -1674,7 +1705,7 @@ drawer                                     server                       everyone
 | `generation` is stale | `canvas_stale … stale_generation` |
 | `sequence` ≤ committed | replay the stored `canvas_commit` to that socket if the recorded mutation matches, else `canvas_stale … unknown_sequence` |
 | `sequence` > expected (a gap) | `request_canvas_actions [generation, expected, received]` |
-| A new action arrives while a path is still open | `request_canvas_actions`, unless it is a `draw_start` repeating the open sequence, which restarts that path |
+| A new action arrives while a path is still open | a `draw_start` repeating the open sequence restarts that path; an action carrying the **next committed** sequence — the drawer's `draw_end` went with its connection, and the sync after the rebind restarted its numbering where the committed history ends (#999) — closes the open path for the room with a `draw_end` carrying its commit, discards the action and sends `canvas_stale … dropped_frame`, so the drawer resyncs and does it again (asking for the open sequence looped: the client re-sent the very action it held under it; the number is spent by the path's commit, and a commit under the next one would reach a client holding the action under this one); anything else is `request_canvas_actions`, and a refused `draw_start`'s trailing frames are dropped rather than appended to the open path |
 | A refused tool or color | `canvas_stale … refused_tool` |
 | A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
 | A final batch (tag 8) past the point budget | dropped whole, nothing committed, the path stays open; the drawer's one-byte `draw_end` that follows closes it, and its completion watch covers the case where nothing does |
@@ -2020,6 +2051,13 @@ operators in one language, and the split is written down as an allowlist in
 fails on a player-facing route that refuses with prose and on a stale exemption.
 FastAPI's own validation failures keep their `{"detail": [...]}` shape; a client that
 provoked one sent a payload no screen can produce.
+Every body model descends from `ControlFreeModel`
+([`backend/app/request_text.py`](../backend/app/request_text.py)), so a string carrying a
+control character (§3) is one of those failures — 422, naming the field — rather than
+the 500 PostgreSQL's refusal of a NUL used to become. The few strings that reach a
+statement without a body model are checked by hand: the community catalogue's `tag`
+and the prompt-stats route's `{slug}` (answered as not found), and the operators' own
+filters (`GET /api/admin/players?q=`, `/api/admin/metrics/events`, `/api/admin/audit`).
 
 **Unsafe requests are held to the origin policy** (#465, [`backend/app/origin_policy.py`](../backend/app/origin_policy.py)):
 a POST, PUT, PATCH or DELETE whose `Origin` — or `Referer`, when a browser sent only
@@ -2074,11 +2112,11 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
 | `GET` | `/api/auth/sessions` | Signed-in device list: `id`, `deviceLabel`, `createdAt`, `lastUsedAt`, `expiresAt`, `idleExpiresAt` (when silence alone ends it — usually far sooner than `expiresAt`), `anomalyAt` (last used from a browser it was not issued to, or `null`), `current` (R-AUTH-03, R-AUTH-22) |
 | `DELETE` | `/api/auth/sessions/{session_id}` | Revoke one device |
-| `GET`/`PUT` | `/api/auth/email` | `PUT` is rate limited (`AUTH_VERIFY_LIMIT`) |
+| `GET`/`PUT` | `/api/auth/email` | `PUT` `{email, password}` — the current password is proved (`401 password_incorrect`), and a staff account must be stepped up (`403`, `X-Sketchy-Step-Up: required`), because the address is the way back in when the password is lost (R-AUTH-26, #997). Rate limited (`AUTH_VERIFY_LIMIT`) |
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |
-| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in (`AUTH_RESET_PERFORM_LIMIT`) |
+| `POST` | `/api/auth/password/reset` | Revokes every session, then signs the user in — `{ok, signedIn}`. A **staff** account is not signed in (`signedIn: false`): a reset proves the mailbox and R-AUTH-20 wants the code too, so it goes through login (#996). (`AUTH_RESET_PERFORM_LIMIT`) |
 | `POST` | `/api/auth/password/change` | Signed in, and knows the current password. Revokes every session, then signs the caller back in (`AUTH_PASSWORD_CHANGE_LIMIT`) |
 | `POST`/`GET` | `/api/auth/data-exports` | Request a job / list the caller's jobs. One per account per 7 days and never two live at once (R-PRIV-12): a request too soon answers `429` with the date in `detail` and a `Retry-After`; the listing carries `nextRequestAt` (ISO 8601, or `null` when one may be requested now) |
 | `GET` | `/api/auth/data-exports/{export_id}` | Job status. On a `failed` job `failureCode` is `too_large` (the deployment's ceiling, R-PRIV-13) or `generation_failed`; otherwise `null` |
@@ -2096,7 +2134,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/second-factor/recovery-codes` | `{ password }` → a fresh set, invalidating every previous code |
 | `DELETE` | `/api/auth/second-factor` | `{ password }`. Refused `409` when the account's role requires one: giving up the role is what removes the requirement |
 | `POST` | `/api/auth/step-up` | `{ code }` → `{ ok, expiresInSeconds }`. Opens the 15-minute window every destructive staff action needs (R-AUTH-21). Recorded on the session, so revoking the device revokes the proof. An authenticator app whose owner was never proved is refused here with **403**, though it may still sign in beside a password: a step-up costs an attacker only the session they stole (R-AUTH-21) |
-| `DELETE` | `/api/auth/account` | Password required for a registered account |
+| `DELETE` | `/api/auth/account` | Password required for a registered account, behind `AUTH_PASSWORD_CHANGE_LIMIT` like every other password proof (R-AUTH-21, #997) |
 
 ### Profiles and history — [`backend/app/api/profiles.py`](../backend/app/api/profiles.py)
 
@@ -2243,7 +2281,7 @@ which is the one thing the 404 exists to refuse.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/admin/metrics`, `/api/admin/metrics/events` | The first carries the live counts and recorder state, then the process signals: `windowMinutes`, `http`, `socket` (rates, outcomes, p95, bytes in and out per minute before compression, and the eight heaviest commands and emitted events with their payload-size p50/p95/p99 since start), `process`, `database` (pool, statement latency, `errorsByCause` by SQLSTATE class, `poolWaitP95Ms`, `poolTimeouts` and `poolTimeoutsInWindow`, `topOperations` — the labelled operations with the most statement time and their p95 — `retries` keyed `operation:outcome`, `historyWriteP95Ms` and `historyPersistLagP95Seconds` (#892), `historyWritesAbandoned` by reason — `timeout` and `error` are staging losses, `conflict`, `exhausted` and `unreadable` are replay losses — `historyHandoff` with games staged and replay outcomes since start, last readiness probe), `drawingStore` (`totalBytes` and `rows` — what the stored drawings occupy, and the planner's row estimate rather than a count, the whole relation including TOAST and indexes, and `null` off PostgreSQL rather than a zero that would read as an empty store; R-OBS-14), `queues` (`mailOutbox` with `sweepSeconds`, `dataExports`, `finishedGames` with `failed` and `sweepSeconds` — the staged finished games of #541), `loops`, `retention` (one row per retained table: `overdueSeconds` against the `slaSeconds` it is held to, `backlogRows`, `sweepSeconds`, `exhausted`, `failed`, `removedTotal`, `failuresTotal` and the server's own `breached` verdict — decided once, so the page and the alert rule cannot disagree; empty until the retention loop has finished a pass, R-PRIV-17), and `series` — eight sixty-point per-minute arrays, oldest first, `null` where a minute recorded nothing. Rates and percentiles are over the trailing window |
+| `GET` | `/api/admin/metrics`, `/api/admin/metrics/events` | The first carries the live counts and recorder state, then the process signals: `windowMinutes`, `http`, `socket` (rates, outcomes, p95, bytes in and out per minute before compression, and the eight heaviest commands and emitted events with their payload-size p50/p95/p99 since start), `process`, `database` (pool, statement latency, `errorsByCause` by SQLSTATE class, `poolWaitP95Ms`, `poolTimeouts` and `poolTimeoutsInWindow`, `topOperations` — the labelled operations with the most statement time and their p95 — `retries` keyed `operation:outcome`, `historyWriteP95Ms` and `historyPersistLagP95Seconds` (#892), `historyWritesAbandoned` by reason — `timeout` and `error` are staging losses, `conflict`, `exhausted`, `unreadable` and `invalid` are replay losses — `historyHandoff` with games staged and replay outcomes since start, last readiness probe), `drawingStore` (`totalBytes` and `rows` — what the stored drawings occupy, and the planner's row estimate rather than a count, the whole relation including TOAST and indexes, and `null` off PostgreSQL rather than a zero that would read as an empty store; R-OBS-14), `queues` (`mailOutbox` with `sweepSeconds`, `dataExports`, `finishedGames` with `failed` and `sweepSeconds` — the staged finished games of #541), `loops`, `retention` (one row per retained table: `overdueSeconds` against the `slaSeconds` it is held to, `backlogRows`, `sweepSeconds`, `exhausted`, `failed`, `removedTotal`, `failuresTotal` and the server's own `breached` verdict — decided once, so the page and the alert rule cannot disagree; empty until the retention loop has finished a pass, R-PRIV-17), and `series` — eight sixty-point per-minute arrays, oldest first, `null` where a minute recorded nothing. Rates and percentiles are over the trailing window |
 | `GET` | `/api/admin/players/{user_id}/activity` | **Writes an audit event on every use** |
 | `GET` | `/api/admin/audit` | |
 | `GET` | `/api/admin/tunables` | Every runtime tunable with its value, default, bounds, unit, whether its values are whole, origin and purpose |
@@ -2345,7 +2383,7 @@ account key is an HMAC of the lowercased username rather than of an address
 | `AUTH_RESET_LIMIT` | 5 / hour | `POST /api/auth/password/forgot` |
 | `AUTH_RESET_CHECK_LIMIT` | 30 / hour | `POST /api/auth/password/reset/check` |
 | `AUTH_RESET_PERFORM_LIMIT` | 10 / hour | `POST /api/auth/password/reset` — the leg that hashes, so a stolen or guessed link cannot be used to keep the hashing pool busy (#975) |
-| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change` |
+| `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change`, `DELETE /api/auth/account` |
 | `AUTH_VERIFY_LIMIT` | 10 / hour | `PUT /api/auth/email` |
 
 Lower-risk profile and prompt-statistics throttles remain process-local.

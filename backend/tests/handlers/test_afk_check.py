@@ -7,6 +7,7 @@ whose stamp outlives it.
 """
 from __future__ import annotations
 
+import asyncio
 import contextlib
 from unittest.mock import AsyncMock
 
@@ -156,15 +157,25 @@ async def test_refused_handshakes_do_not_pile_up_in_the_ledger(monkeypatch):
     """
     from socketio.exceptions import ConnectionRefusedError
 
+    from app.protocol import SERVER_FULL_CLOSE_SECONDS
+
     _, ctx, _, _, _ = build()
     ctx.room_capacity.sockets = 0  # the ceiling refuses everybody
 
+    async def close_socket(target, *_args, **_kwargs):
+        # What Socket.IO does: the disconnect handler runs from the close.
+        await ctx.sio.handlers["/"]["disconnect"](target)
+
+    ctx.sio.disconnect = AsyncMock(side_effect=close_socket)
     for attempt in range(50):
         with contextlib.suppress(ConnectionRefusedError, Exception):
             await ctx.sio.handlers["/"]["connect"](
                 f"refused-{attempt}", {}, {"protocol": PROTOCOL_VERSION}
             )
 
+    # A socket turned away for capacity is held, counted, until the close
+    # that follows its notice (#998); that close releases everything.
+    await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
     assert len(ctx.activity) == 0, "a refused handshake leaves no stamp"
     assert ctx.room_capacity.open_sockets == 0
 

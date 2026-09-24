@@ -43,6 +43,13 @@ PROTOCOL_VERSION = 41
 # any network that completed the handshake); short enough that a tab that
 # ignores it is not counted as online for long.
 STALE_SOCKET_CLOSE_SECONDS = 5.0
+# How long after its handshake a socket turned away for capacity is closed
+# (#998 review). The `server_full` notice is emitted inside the connect
+# handler, and python-socketio sends the namespace CONNECT only after that
+# handler returns: a close awaited inside it went out before the CONNECT, the
+# client buffered the notice against a namespace that never connected, and
+# nobody was ever told. The close is a task that lets the handshake finish.
+SERVER_FULL_CLOSE_SECONDS = 0.25
 
 # The response header every HTTP answer carries the version in.
 PROTOCOL_HEADER = "x-sketchy-protocol"

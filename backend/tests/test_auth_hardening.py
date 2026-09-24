@@ -1428,3 +1428,31 @@ async def test_a_lockout_binds_a_pair_for_its_own_horizon_not_the_address_window
     # Somebody else mistyping their own password from the owner's NAT.
     await guard.note_failure(username="SomeoneElse", address="2.2.2.2")
     assert (await guard.check(username="Sieged", address="2.2.2.2")).allowed
+
+
+async def test_a_password_holding_a_control_character_opens_every_door(env):
+    """The policy accepts such a password; the control-character door
+    (#995) must not read it as text, or its owner is refused at sign-in,
+    at the password change and at every other proof (review of #1046)."""
+    new_client, _, _ = env
+    browser = new_client()
+    password = "long-enough\x1bsecret"
+    registered = await browser.post(
+        "/api/auth/register", json={"username": "Escaped", "password": password}
+    )
+    assert registered.status_code == 200, registered.text
+    assert (await browser.post("/api/auth/logout")).status_code == 200
+    signed_in = await browser.post(
+        "/api/auth/login", json={"username": "Escaped", "password": password}
+    )
+    assert signed_in.status_code == 200, signed_in.text
+    changed = await browser.post(
+        "/api/auth/password/change",
+        json={"currentPassword": password, "password": "another\x1bgood-password-42"},
+    )
+    assert changed.status_code == 200, changed.text
+    # The text fields beside it are still held to the rule.
+    refused = await browser.post(
+        "/api/auth/login", json={"username": "Esc\x00aped", "password": password}
+    )
+    assert refused.status_code == 422

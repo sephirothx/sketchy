@@ -49,7 +49,7 @@ keyboard that takes half the screen, and one thumb.
   be marked nor a way to avoid it — the only clock is what you have done. If the
   host is the one who went, the room passes to somebody who is still playing, since
   only the host can start a game.
-- Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay.
+- Restart vote — active players can propose and vote to restart the current game by a strict majority without interrupting live gameplay. The game given up is recorded as abandoned, like one everybody walked out of.
 - Kick vote and AFK vote — room players can vote to kick or mark another player AFK by a strict majority of connected, non-spectator players. AFK players and the vote target count toward that population; disconnected players and spectators do not. Spectators cannot cast votes or be selected as moderation targets.
 - Save image — save the current canvas directly as a PNG file at any time.
 - Game highlights — the hardest prompt, the fastest guess, the best drawer, the quickest
@@ -696,7 +696,12 @@ process supervisor a termination grace period longer than that value plus the
 normal 10-second finished-history write bound. A second termination signal
 abandons the rest of the window immediately, so an operator who cannot wait can
 press Ctrl+C (or send `SIGTERM`) again; that forced exit also skips the
-abandonment diagnostic below.
+abandonment diagnostic below. It does not skip the teardown itself: the games
+the drain already ended are still staged and replayed, the last chat lines are
+still written, and the recorder is still flushed, under a 20-second ceiling on
+top of the budgets each of those carries. A third signal is not watched for
+during that teardown, so a supervisor that escalates to `SIGKILL` should allow
+at least 20 seconds after the second signal before it does.
 
 A game that finishes during the window follows the ordinary all-or-nothing
 history and prompt-usage paths. If the deadline expires first, the server does
@@ -2681,9 +2686,13 @@ A seated client checks with the server every five seconds that it still holds th
 - On disconnect, a player has 30 seconds to reconnect with their private stored secret and keep
   their score and place in the turn order. A successful reconnect replaces the player's active
   socket, so the superseded socket can no longer issue commands.
-- If the drawer disconnects and doesn't return in time, their turn is skipped and evicted from
-  the rotation.
+- If the drawer disconnects and doesn't return in time, or leaves, they are evicted from the
+  rotation. A turn nobody had guessed yet is skipped; one somebody had already guessed ends
+  the way the clock ends it - the guesses and the drawing stand, the results show, and the
+  departed drawer's seat still receives the drawer bonus.
 - If everyone disconnects, the room is cleaned up.
+- A socket the server closed - another tab took the seat, a kick, the server was full -
+  is reopened by the client on its own backoff; only a stuck update stays down.
 - A seat that comes back mid-turn - a reload, a reconnect, or just returning to the tab -
   still sees who has guessed, in the order they did, and a player who had already guessed
   keeps the answer, their points and a closed guess field.
