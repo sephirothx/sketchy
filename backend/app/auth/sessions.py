@@ -462,18 +462,52 @@ async def _rotated_away_token(
     nobody anything. ``False`` while a rotation's grace window is open.
     ``True`` once a token that was rotated away is presented after it, which
     is the one shape that means a second copy exists.
+
+    The grace lends the predecessor the standing of the session that replaced
+    it, so it holds only while that session does: a sign-out everywhere or a
+    password change inside the window revokes the successor, and a copy of
+    the token from before the rotation must not outlive it by up to a minute
+    (#1075). The successor may itself have rotated since, so the question is
+    asked of the live end of the chain.
     """
-    successor = await database.scalar(
-        select(AuthSession.id).where(AuthSession.rotated_from_id == record.id)
-    )
+    successor = (
+        await database.execute(
+            select(AuthSession.id, AuthSession.revoked_at).where(
+                AuthSession.rotated_from_id == record.id
+            )
+        )
+    ).one_or_none()
     if successor is None:
         return None
     if (
         record.revoked_at is not None
         and checked_at - record.revoked_at < ROTATION_GRACE
     ):
-        return False
+        if await _chain_is_live(database, successor):
+            return False
+        return None
     return True
+
+
+async def _chain_is_live(database: AsyncSession, link) -> bool:
+    """Whether a rotation chain, from `link` on, ends in an unrevoked session.
+
+    Short by construction - one link per rotation - and walked only for a
+    token presented inside a grace window, never on an ordinary request.
+    """
+    seen: set[UUID] = set()
+    while link is not None and link.id not in seen:
+        if link.revoked_at is None:
+            return True
+        seen.add(link.id)
+        link = (
+            await database.execute(
+                select(AuthSession.id, AuthSession.revoked_at).where(
+                    AuthSession.rotated_from_id == link.id
+                )
+            )
+        ).one_or_none()
+    return False
 
 
 async def _revoke_rotation_chain(

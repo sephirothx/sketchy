@@ -337,7 +337,8 @@ successor exists is a second copy rather than an unknown cookie. Every session d
 from it is revoked and a `session.token_replayed` audit event is written. A 60-second
 grace lets a just-rotated predecessor still resolve, because a browser with requests in
 flight can lose that race, and signing somebody out for using their browser normally is
-not a security outcome.
+not a security outcome — and only while the live end of the chain is unrevoked, so
+a sign-out or password change inside the window ends the predecessor with it (#1075).
 
 ### `auth_tokens`
 One-shot credentials for flows that leave the app and come back.
