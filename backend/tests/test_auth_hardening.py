@@ -1369,13 +1369,27 @@ async def test_the_owner_signs_in_while_a_stranger_holds_the_lockout(env):
         await owner.aclose()
 
 
-async def test_a_burst_of_guesses_is_verified_only_as_far_as_the_slots_allow(env):
+async def test_a_burst_of_guesses_is_verified_only_as_far_as_the_slots_allow(env, monkeypatch):
     """Every counter is charged after the hash, so a burst that passed the
     peeks together was verified in full: sixty concurrent wrong passwords
-    were sixty Argon2 runs against a ceiling of ten (#1001)."""
+    were sixty Argon2 runs against a ceiling of ten (#1001).
+
+    The hash is made slow on purpose: what the slots bound is verifications
+    *in flight*, and with the test's cheap hash a verification could finish
+    before the next request of the burst reached the gate (it did, against
+    PostgreSQL), which is the slot working, not a third verification."""
     import asyncio
 
+    from app.auth import routes as auth_routes
     from app.auth.login_guard import MAX_INFLIGHT_PER_ACCOUNT
+
+    real_verify = auth_routes.verify_password
+
+    async def slow_verify(password_hash, password):
+        await asyncio.sleep(0.5)
+        return await real_verify(password_hash, password)
+
+    monkeypatch.setattr(auth_routes, "verify_password", slow_verify)
 
     new_client, _, _ = env
     http = new_client()
