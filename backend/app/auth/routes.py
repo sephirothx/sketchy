@@ -43,6 +43,7 @@ from app.auth.sessions import (
     revoke_session,
     rotate_session,
     should_rotate,
+    with_predecessors,
 )
 from app.auth.names import (
     MAX_NAME_LENGTH,
@@ -479,9 +480,21 @@ def create_auth_router(
         """Best effort, after the commit: the revocation stands either way.
 
         `keep` is the acting browser's session, whose sockets are left alone.
+
+        Named sessions reach the sockets opened before they were rotated in,
+        which carry a predecessor's id (#1083). `keep` is deliberately not
+        widened the same way: a socket opened with a pre-rotation cookie may
+        be a copy's, and a password change is exactly what should close it -
+        the acting browser's own old socket re-handshakes instead.
         """
         if on_sessions_revoked is None:
             return
+        if session_ids is not None:
+            try:
+                session_ids = await with_predecessors(session_factory, session_ids)
+            except Exception:
+                # The named ones still go; only the older sockets are missed.
+                logger.exception("Could not read the rotation chain for %s", user_id)
         try:
             await on_sessions_revoked(str(user_id), session_ids, keep)
         except Exception:

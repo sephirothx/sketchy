@@ -1,6 +1,8 @@
 """ASGI entrypoint: mounts the Socket.IO server alongside a small FastAPI REST app."""
 from contextlib import asynccontextmanager
+from datetime import datetime, timezone
 from pathlib import Path
+from uuid import UUID
 
 import asyncio
 import logging
@@ -10,6 +12,7 @@ import os
 import signal
 
 import socketio
+from sqlalchemy import select
 
 from fastapi import FastAPI, Request
 from fastapi.responses import Response
@@ -59,6 +62,7 @@ from app.request_limits import RequestSizeLimitMiddleware
 from app.request_timing import RequestTimingMiddleware
 from app.auth.routes import create_auth_router
 from app.db import async_engine, async_session_factory, init_db, verify_least_privilege
+from app.db.models import AuthSession
 from app.db.seed import seed_prompt_lists
 from app.deployment import (
     history_encode_workers,
@@ -445,6 +449,36 @@ async def _close_every_socket_of(
         await sio.disconnect(sid)
 
 
+async def untraceable_sessions(
+    session_ids: set[str], session_factory=async_session_factory
+) -> set[str]:
+    """Of these ids, the sessions no longer on record or past either expiry.
+
+    Revoked is not enough: a session rotated away is revoked while the socket
+    it opened stays open and belongs to a live device.
+    """
+    parsed: dict[UUID, str] = {}
+    for session_id in session_ids:
+        try:
+            parsed[UUID(session_id)] = session_id
+        except (ValueError, TypeError, AttributeError):
+            continue
+    if not parsed:
+        return set()
+    now = datetime.now(timezone.utc)
+    async with session_factory() as database:
+        live = (
+            await database.scalars(
+                select(AuthSession.id).where(
+                    AuthSession.id.in_(parsed),
+                    AuthSession.expires_at > now,
+                    AuthSession.idle_expires_at > now,
+                )
+            )
+        ).all()
+    return {session_id for key, session_id in parsed.items() if key not in set(live)}
+
+
 async def close_sockets_of_revoked_sessions(
     user_id: str, session_ids: list[str] | None, keep: str | None = None
 ) -> None:
@@ -467,6 +501,9 @@ async def close_sockets_of_revoked_sessions(
     """
     wanted = None if session_ids is None else set(session_ids)
     closing: list[str] = []
+    # Sockets the named sessions do not reach, by the session they opened
+    # with: kept unless that session can no longer be traced (below).
+    spared: dict[str, str] = {}
     for sid in _sockets_of(user_id):
         if wanted is not None or keep is not None:
             try:
@@ -478,8 +515,25 @@ async def close_sockets_of_revoked_sessions(
             if keep is not None and opened_with == keep:
                 continue
             if wanted is not None and opened_with not in wanted:
+                if opened_with:
+                    spared[sid] = opened_with
                 continue
         closing.append(sid)
+    if spared:
+        # The named sessions were widened to every session they were rotated
+        # from, but that walk stops where a link has been purged - 30 days
+        # after an expiry (#1083 review). A socket opened with a session that
+        # has expired or is gone cannot be traced to any device, so a
+        # revocation on the account closes it too; it re-handshakes with
+        # whatever cookie its browser holds now.
+        try:
+            dead = await untraceable_sessions(set(spared.values()))
+        except Exception:
+            logging.getLogger("sketchy.main").exception(
+                "Could not check the opening sessions of %s", user_id
+            )
+            dead = set()
+        closing.extend(sid for sid, opened_with in spared.items() if opened_with in dead)
     for sid in closing:
         await sio.emit(
             "session_superseded",
