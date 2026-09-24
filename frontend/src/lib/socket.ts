@@ -6,7 +6,7 @@ import {
   noteHealth,
   takeHealthReport,
 } from "./connectionHealth.ts";
-import { PROTOCOL_VERSION, handleUpgradeRequired } from "./protocol.ts";
+import { PROTOCOL_VERSION, handleUpgradeRequired, upgradeReload } from "./protocol.ts";
 import { isUpdateRequired, markUpdateRequired } from "./updateRequired.ts";
 import type { UpgradeRequiredNotice } from "./protocol.ts";
 import type { AckResponse } from "../types";
@@ -362,6 +362,7 @@ socket.on("upgrade_required", (notice: UpgradeRequiredNotice | undefined) => {
   handleUpgradeRequired(notice, {
     storage: typeof sessionStorage === "undefined" ? null : sessionStorage,
     reload: () => window.location.reload(),
+    reloadInFlight: upgradeReload,
     onStuck: () => {
       recordClientError(
         "socket",
@@ -481,6 +482,7 @@ socket.on("disconnect", (reason) => {
     updateRequired: isUpdateRequired(),
     turnedAwayForCapacity: serverFullReason !== null,
     random: Math.random(),
+    reloadPending: upgradeReload.pending,
   });
   if (wait === null) return;
   serverCloseAttempts += 1;

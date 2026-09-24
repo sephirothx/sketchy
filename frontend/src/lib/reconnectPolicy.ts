@@ -333,11 +333,15 @@ export function serverCloseRetryDelayMs(state: {
   updateRequired: boolean;
   turnedAwayForCapacity: boolean;
   random: number;
+  /** This page load has asked for its upgrade reload and is unloading. */
+  reloadPending?: boolean;
 }): number | null {
   if (state.reason !== "io server disconnect") return null;
   // A stale build is closed on purpose and asked to reload; reopening would
-  // be told the same thing and closed again (R-CONN-10).
-  if (state.updateRequired) return null;
+  // be told the same thing and closed again (R-CONN-10) - and while the
+  // reload is already under way, reopening from the unloading page is what
+  // made a slow reload look like a stuck one (#1056).
+  if (state.updateRequired || state.reloadPending) return null;
   const base = state.turnedAwayForCapacity
     ? SERVER_FULL_RETRY_MS
     : Math.min(

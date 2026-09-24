@@ -15,6 +15,12 @@ export const PROTOCOL_VERSION = 41;
 /** The response header every REST answer carries the server's version in. */
 export const PROTOCOL_HEADER = "x-sketchy-protocol";
 
+/** This page load's upgrade reload, once asked for - by the socket's notice or
+by a REST response's header, whichever came first. One object for both, so the
+other one arriving while the page unloads is waited out rather than reported
+as stuck (#1056). */
+export const upgradeReload = { pending: false };
+
 /** Where the last upgrade reload is remembered, so it can happen only once. */
 const RELOAD_MARKER_KEY = "sketchy:upgrade-reload";
 
@@ -38,8 +44,16 @@ export function handleUpgradeRequired(
     storage?: Pick<Storage, "getItem" | "setItem"> | null;
     reload: () => void;
     onStuck?: (notice: UpgradeRequiredNotice | undefined) => void;
+    /** This page load's own reload, once asked for. A reload can take longer
+     * than the server's five seconds before it closes the stale socket; a
+     * handshake from the unloading page then heard `upgrade_required` again,
+     * found the marker it had just written, and reported a stuck update that
+     * was only a slow one (#1056). While it is pending, a repeat is waited
+     * out, not reported. */
+    reloadInFlight?: { pending: boolean };
   },
 ): boolean {
+  if (environment.reloadInFlight?.pending) return true;
   const expected = String(notice?.expected ?? "unknown");
   let alreadyReloaded: boolean;
   try {
@@ -60,6 +74,7 @@ export function handleUpgradeRequired(
   } catch {
     // Ignored for the same reason.
   }
+  if (environment.reloadInFlight) environment.reloadInFlight.pending = true;
   environment.reload();
   return true;
 }
