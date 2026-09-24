@@ -3577,3 +3577,34 @@ async def test_a_moderator_neither_sees_nor_decides_reports_about_themselves(env
             f"/api/moderation/reports/{report_id}", json={"status": "dismissed", "note": "Mine."}
         )
     ).status_code == 403
+
+
+async def test_an_administrator_sees_and_decides_a_report_about_themselves(env):
+    """#1063: a deployment's one admin with no moderators could otherwise
+    never decide a report about themselves - it waited, hidden from every
+    queue. Administrators are exempt from the rule moderators keep."""
+    new_client, factory, _ = env
+    reporter_http, admin_http = new_client(), new_client()
+    await register(reporter_http, "AdminReporter")
+    admin = await register(admin_http, "SoleAdmin")
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={"reportedUserId": admin["id"], "reason": "harassment", "details": "Rude."},
+    )
+    assert submitted.status_code == 201, submitted.text
+    report_id = submitted.json()["id"]
+
+    queue = await admin_http.get("/api/moderation/reports", params={"status": "pending"})
+    assert [r["id"] for i in queue.json()["incidents"] for r in i["reports"]] == [report_id]
+    decided = await admin_http.patch(
+        f"/api/moderation/reports/{report_id}",
+        json={"status": "dismissed", "note": "Reviewed; nothing to act on."},
+    )
+    assert decided.status_code == 200, decided.text
+    assert decided.json()["reviewedByUserId"] == admin["id"]
+    # The picture removal on a report about them is theirs to take too; with
+    # no picture there is nothing to remove, but it is not refused as theirs.
+    removal = await admin_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+    assert removal.status_code != 403, removal.text

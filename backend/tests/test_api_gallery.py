@@ -551,3 +551,109 @@ async def test_the_staff_bytes_route_serves_public_games_only(env):
     assert (
         await http.get(f"/api/moderation/gallery/{private.turn_id}/drawing", headers={"If-None-Match": 'W/"x"'})
     ).status_code == 404
+
+
+async def test_a_moderator_cannot_decide_their_own_drawing(env):
+    """#1063: releasing or hiding one's own drawing is another moderator's
+    call; an administrator is exempt, as they are for every report."""
+    http, users, history, factory = env
+    mod = await _moderator(users, factory, "DrawingMod")
+    other = await _moderator(users, factory, "OtherMod")
+    reactor = await _registered(users, "Watcher")
+    game = await record_game(
+        history, drawer=mod.id, reactor=reactor.id, visibility="public",
+        finished_at=NOW - timedelta(hours=1),
+    )
+    decision = {"decision": "released", "note": "fine by me"}
+
+    await _as_moderator(http, factory, mod.id)
+    refused = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json=decision)
+    assert refused.status_code == 403
+
+    await _as_moderator(http, factory, other.id)
+    decided = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json=decision)
+    assert decided.status_code == 200, decided.text
+
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(User, UUID(mod.id))
+            row.role = UserRole.ADMIN.value
+    await _as_moderator(http, factory, mod.id)
+    own = await http.patch(f"/api/moderation/gallery/{game.turn_id}", json=decision)
+    assert own.status_code == 200, own.text
+
+
+async def test_a_moderators_own_drawing_is_off_their_queue_even_drawn_as_a_guest(env):
+    """#1063 review: a turn keeps the identity that drew it, so a drawing made
+    as a guest who later claimed the moderator's account is theirs through
+    the alias - neither listed in their review queue nor theirs to decide."""
+    from app.db.models import IdentityAlias
+
+    http, users, history, factory = env
+    mod = await _moderator(users, factory, "GuestMod")
+    other = await _moderator(users, factory, "PeerMod")
+    watcher = await _registered(users, "Watcher")
+    guest = await users.create_anonymous("OldGuest")
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                IdentityAlias(source_user_id=UUID(guest.id), target_user_id=UUID(mod.id))
+            )
+    own = await record_game(
+        history, drawer=guest.id, reactor=watcher.id, visibility="public",
+        finished_at=NOW - timedelta(hours=1),
+    )
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, SHELF_REVIEW_KEY, "1")
+
+    await _as_moderator(http, factory, mod.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert queue["waiting"] == 0 and queue["candidates"] == []
+    refused = await http.patch(
+        f"/api/moderation/gallery/{own.turn_id}", json={"decision": "released", "note": "mine"}
+    )
+    assert refused.status_code == 403
+
+    await _as_moderator(http, factory, other.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert [c["turnId"] for c in queue["candidates"]] == [own.turn_id]
+
+    # An administrator's own stay in their queue (the exemption, #1063).
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(mod.id))).role = UserRole.ADMIN.value
+    await _as_moderator(http, factory, mod.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert [c["turnId"] for c in queue["candidates"]] == [own.turn_id]
+
+
+async def test_a_moderators_own_drawings_do_not_take_the_places_of_others(env):
+    """#1063 review: one page of twelve was filtered after it was read, so
+    twelve top-ranked drawings of the reader's own left their queue empty
+    while another player's drawing, thirteenth, waited unseen."""
+    from app.api.moderation import REVIEW_CANDIDATES
+
+    http, users, history, factory = env
+    mod = await _moderator(users, factory, "BusyMod")
+    fan = await _registered(users, "Fan")
+    other = await _registered(users, "OtherArtist")
+    # More than any fixed number of pages would cover: the queue reads on
+    # until it is full or the week runs out.
+    for index in range(REVIEW_CANDIDATES * 5):
+        await record_game(
+            history, drawer=mod.id, reactor=fan.id, reactions="default",
+            visibility="public", finished_at=NOW - timedelta(hours=1, minutes=index),
+        )
+    theirs = await record_game(
+        history, drawer=other.id, reactor=fan.id, visibility="public",
+        finished_at=NOW - timedelta(hours=2),
+    )
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, SHELF_REVIEW_KEY, "1")
+
+    await _as_moderator(http, factory, mod.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert [c["turnId"] for c in queue["candidates"]] == [theirs.turn_id]
+    assert queue["waiting"] == 1

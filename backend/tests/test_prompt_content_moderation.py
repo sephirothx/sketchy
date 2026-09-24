@@ -806,6 +806,146 @@ async def test_withdrawing_a_held_publication_releases_the_hold(env):
     assert decision.status_code == 409
 
 
+async def _staff(factory, account: dict, role: UserRole) -> None:
+    async with factory() as session:
+        async with session.begin():
+            user = await session.get(User, UUID(account["id"]))
+            user.role = role.value
+    await mark_staff_ready(factory, account["id"])
+
+
+async def test_a_moderator_neither_sees_nor_decides_reports_about_their_own_list(env):
+    """#1063: the player queue's rule (#1003) on the account that owns the
+    reported list. Another moderator decides it; an administrator may decide
+    their own, since a deployment's one admin would otherwise never can."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, other_http, admin_http = (
+        new_client(), new_client(), new_client(), new_client()
+    )
+    owner = await register(owner_http, "ModOwner")
+    await register(reporter_http, "ListReporter")
+    other = await register(other_http, "OtherListMod")
+    admin = await register(admin_http, "ListAdmin")
+    await _staff(factory, owner, UserRole.MODERATOR)
+    await _staff(factory, other, UserRole.MODERATOR)
+    await _staff(factory, admin, UserRole.ADMIN)
+
+    async def reported_list(name: str, owner_account: dict) -> str:
+        created = await prompts.create_owned(
+            owner_account["id"],
+            name=name,
+            description="",
+            language="en",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        await published(factory, created.id)
+        report = await reporter_http.post(
+            "/api/prompt-content-reports",
+            json={"promptListId": created.id, "reason": "spam", "details": "Spam."},
+        )
+        assert report.status_code == 201, report.text
+        return report.json()["id"]
+
+    report_id = await reported_list("Moderated by me", owner)
+    own_queue = await owner_http.get(
+        "/api/moderation/prompt-content-reports", params={"status": "pending"}
+    )
+    assert own_queue.json()["incidents"] == [], "not theirs to see"
+    refused = await owner_http.patch(
+        f"/api/moderation/prompt-content-reports/{report_id}",
+        json={"status": "dismissed", "note": "Nothing here."},
+    )
+    assert refused.status_code == 403
+
+    others_queue = await other_http.get(
+        "/api/moderation/prompt-content-reports", params={"status": "pending"}
+    )
+    assert [r["id"] for i in others_queue.json()["incidents"] for r in i["reports"]] == [
+        report_id
+    ]
+    decided = await other_http.patch(
+        f"/api/moderation/prompt-content-reports/{report_id}",
+        json={"status": "dismissed", "note": "Fine."},
+    )
+    assert decided.status_code == 200, decided.text
+
+    admins_own = await reported_list("Administered by me", admin)
+    admin_queue = await admin_http.get(
+        "/api/moderation/prompt-content-reports", params={"status": "pending"}
+    )
+    assert [r["id"] for i in admin_queue.json()["incidents"] for r in i["reports"]] == [
+        admins_own
+    ]
+    assert (
+        await admin_http.patch(
+            f"/api/moderation/prompt-content-reports/{admins_own}",
+            json={"status": "dismissed", "note": "Mine, and fine."},
+        )
+    ).status_code == 200
+
+
+async def test_a_moderator_cannot_release_their_own_held_list(env):
+    new_client, factory, prompts = env
+    moderator_http, other_http = new_client(), new_client()
+    moderator = await register(moderator_http, "HeldModOwner")
+    other = await register(other_http, "HeldModOther")
+    await _staff(factory, moderator, UserRole.MODERATOR)
+    await _staff(factory, other, UserRole.MODERATOR)
+    created = await prompts.create_owned(
+        moderator["id"],
+        name="My own held list",
+        description="",
+        language="en",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+    held = await prompts.set_owned_publication(
+        moderator["id"], created.id, published=True, under_review=True
+    )
+    # Not listed or counted for them; the other moderator sees it waiting.
+    own_queue = (await moderator_http.get("/api/moderation/prompt-lists")).json()
+    assert own_queue["waiting"] == 0 and own_queue["lists"] == []
+    others_queue = (await other_http.get("/api/moderation/prompt-lists")).json()
+    assert [row["id"] for row in others_queue["lists"]] == [created.id]
+    decision = {
+        "state": "active",
+        "note": "Looks fine to me.",
+        "expectedVersion": held.version,
+    }
+    refused = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{created.id}", json=decision
+    )
+    assert refused.status_code == 403
+    released = await other_http.patch(
+        f"/api/moderation/prompt-lists/{created.id}", json=decision
+    )
+    assert released.status_code == 200, released.text
+
+
+async def test_an_administrator_sees_and_releases_their_own_held_list(env):
+    """The exemption reaches the queue as well as the decision (#1063)."""
+    new_client, factory, prompts = env
+    admin_http = new_client()
+    admin = await register(admin_http, "HeldAdmin")
+    await _staff(factory, admin, UserRole.ADMIN)
+    created = await prompts.create_owned(
+        admin["id"],
+        name="The admin's own",
+        description="",
+        language="en",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+    held = await prompts.set_owned_publication(
+        admin["id"], created.id, published=True, under_review=True
+    )
+    queue = (await admin_http.get("/api/moderation/prompt-lists")).json()
+    assert queue["waiting"] == 1 and [row["id"] for row in queue["lists"]] == [created.id]
+    released = await admin_http.patch(
+        f"/api/moderation/prompt-lists/{created.id}",
+        json={"state": "active", "note": "Mine; fine.", "expectedVersion": held.version},
+    )
+    assert released.status_code == 200, released.text
+
+
 @pytest.mark.parametrize(
     "edit",
     [
