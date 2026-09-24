@@ -18,10 +18,12 @@ PASSWORD = "marmalade-frog-lantern"
 async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "revocation-test-secret")
     factory, engine = await create_test_db()
-    revoked: list[tuple[str, list[str] | None]] = []
+    revoked: list[tuple[str, list[str] | None, str | None]] = []
 
-    async def record(user_id: str, session_ids: list[str] | None) -> None:
-        revoked.append((user_id, session_ids))
+    async def record(
+        user_id: str, session_ids: list[str] | None, keep: str | None
+    ) -> None:
+        revoked.append((user_id, session_ids, keep))
 
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
@@ -56,7 +58,7 @@ async def test_signing_out_everywhere_closes_every_socket_of_the_account(env):
     browser = new_client()
     account = await register(browser, "Everywhere")
     assert (await browser.post("/api/auth/logout-all")).status_code == 200
-    assert revoked == [(account["id"], None)]
+    assert revoked == [(account["id"], None, None)]
 
 
 async def test_signing_out_closes_the_sockets_of_that_session_alone(env):
@@ -68,7 +70,7 @@ async def test_signing_out_closes_the_sockets_of_that_session_alone(env):
     sessions = (await browser.get("/api/auth/sessions")).json()["sessions"]
     [current] = [row["id"] for row in sessions if row["current"]]
     assert (await browser.post("/api/auth/logout")).status_code == 200
-    assert revoked == [(account["id"], [current])]
+    assert revoked == [(account["id"], [current], None)]
 
 
 async def test_revoking_a_device_closes_that_devices_sockets(env):
@@ -81,19 +83,24 @@ async def test_revoking_a_device_closes_that_devices_sockets(env):
     sessions = (await laptop.get("/api/auth/sessions")).json()["sessions"]
     [other] = [row["id"] for row in sessions if not row["current"]]
     assert (await laptop.delete(f"/api/auth/sessions/{other}")).status_code == 200
-    assert revoked == [(account["id"], [other])]
+    assert revoked == [(account["id"], [other], None)]
 
 
-async def test_a_password_change_closes_every_socket_including_this_browsers(env):
+async def test_a_password_change_closes_every_other_browsers_sockets(env):
+    """This browser's session is revoked with the rest, but its sockets are
+    kept: the notice would beat the response carrying the new cookie, and
+    the tab would take its own change for a sign-out."""
     new_client, _, revoked = env
     browser = new_client()
     account = await register(browser, "Changing")
+    sessions = (await browser.get("/api/auth/sessions")).json()["sessions"]
+    [current] = [row["id"] for row in sessions if row["current"]]
     changed = await browser.post(
         "/api/auth/password/change",
         json={"currentPassword": PASSWORD, "password": "another-good-password-42"},
     )
     assert changed.status_code == 200, changed.text
-    assert revoked == [(account["id"], None)]
+    assert revoked == [(account["id"], None, current)]
 
 
 async def test_the_sockets_of_the_named_sessions_are_told_and_closed(monkeypatch):
@@ -128,3 +135,26 @@ async def test_the_sockets_of_the_named_sessions_are_told_and_closed(monkeypatch
     server.disconnected.clear()
     await main.close_sockets_of_revoked_sessions("u1", None)
     assert server.disconnected == ["laptop-sid", "phone-sid", "laptop-tab-2"]
+
+    # The acting browser keeps its sockets, every tab of it.
+    server.disconnected.clear()
+    await main.close_sockets_of_revoked_sessions("u1", None, keep="s-laptop")
+    assert server.disconnected == ["phone-sid"]
+
+
+async def test_a_socket_gone_mid_sweep_does_not_stop_the_rest(monkeypatch):
+    """`get_session` raises for a sid that left between the walk and the
+    read; the sockets after it in the list are still told and closed."""
+    from app import main
+
+    class Server(FakeServer):
+        async def get_session(self, sid):
+            if sid == "gone-sid":
+                raise KeyError("Session not found")
+            return {"user_id": "u1", "session_id": "s-phone"}
+
+    server = Server({"user:u1": ["gone-sid", "phone-sid"]})
+    monkeypatch.setattr(main, "sio", server)
+
+    await main.close_sockets_of_revoked_sessions("u1", ["s-phone"])
+    assert server.disconnected == ["phone-sid"]

@@ -122,7 +122,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       // before - a guest, most often, since the link opens a tab of its own.
       // Become it the way a sign-in does, socket included (#1006); a re-read
       // alone left the next room entered as the guest.
-      await adoptFromServer();
+      await adoptFromServer({ rebindSocket: true });
       setDone(ui.accountRecoveryPage.yourPasswordIsSetAnd);
     } catch (resetError) {
       setError(

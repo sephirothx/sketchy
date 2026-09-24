@@ -71,7 +71,7 @@ interface AuthStore {
    * password reset completed as a guest) and then only re-read it entered
    * the next room as the guest it had been.
    */
-  adoptFromServer: () => Promise<AuthUser | null>;
+  adoptFromServer: (options?: { rebindSocket?: boolean }) => Promise<AuthUser | null>;
   /**
    * Adopt an offer the account's own socket room just announced.
    *
@@ -305,13 +305,20 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     return inFlightFetchMe;
   },
 
-  adoptFromServer: async () => {
+  adoptFromServer: async (options) => {
     // A `/me` already in the air may predate the change this is asked to
     // notice; let it land, then read afresh.
     if (inFlightFetchMe) await inFlightFetchMe.catch(() => null);
     const before = get().user?.id ?? null;
     const account = await get().fetchMe();
-    if ((account?.id ?? null) === before) return account;
+    if ((account?.id ?? null) === before) {
+      // The same account under a new session - a password change or reset
+      // by this very browser - keeps its seat, but the socket handshook with
+      // the session just revoked and remembers it: handshake again with the
+      // cookie now in hand, so a later revocation of this session finds it.
+      if (options?.rebindSocket) reconnectWithCurrentIdentity();
+      return account;
+    }
     // `fetchMe` has already installed the account, reconciled its colour and
     // loaded its settings; what it does not do is the transition - the bump
     // every in-flight read checks, the seat, the socket.
@@ -416,6 +423,9 @@ export const useAuthStore = create<AuthStore>((set, get) => {
   },
 
   logout: async () => {
+    // This tab's own sign-out closes its socket from the server side too
+    // (#1007), and that notice must not read as "signed out elsewhere".
+    signingOut = true;
     try {
       await apiRequest("/api/auth/logout", { method: "POST" });
     } catch {
@@ -430,9 +440,19 @@ export const useAuthStore = create<AuthStore>((set, get) => {
     // account and it would never see the cookie that arrives moments later.
     await useAuthStore.getState().fetchMe();
     reconnectSocketAsNewIdentity();
+    signingOut = false;
   },
   };
 });
+
+let signingOut = false;
+
+/** Whether this tab is in the middle of its own sign-out (#1007): the server
+closes its socket with a `session_superseded` notice like any revoked
+session's, and only a notice this tab did not ask for is news. */
+export function isSigningOut(): boolean {
+  return signingOut;
+}
 
 // A request that found this tab signed out re-reads the account, so the
 // header stops claiming an account whose session another device revoked

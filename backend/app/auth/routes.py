@@ -305,7 +305,9 @@ def create_auth_router(
     # Called with the account and the session ids a revocation ended - `None`
     # for every session it holds - so the sockets those sessions opened are
     # closed rather than left playing under the account (#1007).
-    on_sessions_revoked: Callable[[str, list[str] | None], Awaitable[None]] | None = None,
+    on_sessions_revoked: (
+        Callable[[str, list[str] | None, str | None], Awaitable[None]] | None
+    ) = None,
     # Called with every account that lost a friendship or a pending request
     # to a deletion, so their lists stop showing somebody who is gone. Wired to
     # the friend service's own announcement, so there is one implementation of
@@ -464,12 +466,17 @@ def create_auth_router(
         )
         return issued.session.id
 
-    async def _sockets_signed_out(user_id: str, session_ids: list[str] | None) -> None:
-        """Best effort, after the commit: the revocation stands either way."""
+    async def _sockets_signed_out(
+        user_id: str, session_ids: list[str] | None, *, keep: str | None = None
+    ) -> None:
+        """Best effort, after the commit: the revocation stands either way.
+
+        `keep` is the acting browser's session, whose sockets are left alone.
+        """
         if on_sessions_revoked is None:
             return
         try:
-            await on_sessions_revoked(str(user_id), session_ids)
+            await on_sessions_revoked(str(user_id), session_ids, keep)
         except Exception:
             logger.exception("Could not close the sockets of revoked sessions for %s", user_id)
 
@@ -1389,6 +1396,8 @@ def create_auth_router(
     async def perform_password_reset(
         body: ResetPasswordBody, request: Request, response: Response
     ):
+        acting_session = getattr(request.state, "session_id", None)
+        acting_session = str(acting_session) if acting_session else None
         # Limited like its siblings: this route hashes, and the hashing pool
         # is shared with every sign-in, so an unlimited one is a way to hold
         # that queue full from outside (#975 review).
@@ -1436,7 +1445,11 @@ def create_auth_router(
         # here. Signing them back in is the point of having reset it.
         clear_session_cookie(response, secure=is_secure_request(request))
         await issue_cookie(response, request, str(user_id))
-        await _sockets_signed_out(str(user_id), None)
+        # Every other device's socket goes. This browser's, if it was signed
+        # in as the account, stays and re-handshakes once the new cookie is
+        # in hand: closed now, it would re-read itself before the cookie
+        # landed and take the reset for a sign-out.
+        await _sockets_signed_out(str(user_id), None, keep=acting_session)
         return {"ok": True}
 
     @router.post("/password/change")
@@ -1450,6 +1463,8 @@ def create_auth_router(
         the case where they do not, and remains the only route for a guest,
         who has no password to change.
         """
+        acting_session = getattr(request.state, "session_id", None)
+        acting_session = str(acting_session) if acting_session else None
         await throttle(password_change_limiter, request)
         user = await require_user(request)
         if user.is_anonymous:
@@ -1494,9 +1509,11 @@ def create_auth_router(
         # back in is what keeps a password change from also being a logout.
         clear_session_cookie(response, secure=is_secure_request(request))
         await issue_cookie(response, request, user.id, role=user.role)
-        # This browser's socket goes too: it handshook with the session just
-        # revoked, and comes back with the cookie just issued.
-        await _sockets_signed_out(user.id, None)
+        # Every other device's socket goes. This browser's stays - it is
+        # this account's still - and re-handshakes once the response has
+        # delivered the new cookie; closed now, the notice would land first
+        # and the tab would take its own change for a sign-out.
+        await _sockets_signed_out(user.id, None, keep=acting_session)
         return {"ok": True}
 
     @router.get("/second-factor")
