@@ -1175,6 +1175,19 @@ class GameFlowService:
             game, player, spectators_see_prompt, reactions, drawer_transport
         )
 
+    def _turn_moved_on(self, room: Room, game: Game, turn_id: str | None, phase: Phase) -> bool:
+        """Whether the turn a fan-out was about is no longer the one in play.
+
+        Every per-seat emit is an await the game can move through: a seat
+        released while `turn_started` is being sent abandons the turn, and
+        the nested `_start_turn` schedules the next turn's choosing timer -
+        which the outer call then replaced with the drawing timer it was about
+        to arm, so the new drawer chose a prompt against a 90-300 s clock the
+        client showed as 15 s (#1004). A timer is armed only for the phase
+        it was computed for.
+        """
+        return room.game is not game or game.current_turn_id != turn_id or game.phase != phase
+
     async def _start_turn(self, room: Room, *, game_started: bool = False) -> None:
         game = room.game
         assert game is not None
@@ -1204,13 +1217,18 @@ class GameFlowService:
         }
         if game_started:
             starting["gameStarted"] = True
+        turn_id = game.current_turn_id
         await self._sio.emit("turn_starting", starting, room=room.id)
+        if self._turn_moved_on(room, game, turn_id, Phase.CHOOSING_PROMPT):
+            return
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",
                 {"choices": choices, "seconds": timing.choose_prompt_seconds},
                 to=drawer.sid,
             )
+        if self._turn_moved_on(room, game, turn_id, Phase.CHOOSING_PROMPT):
+            return
         self.schedule_phase_timer(room, timing.choose_prompt_seconds)
 
     async def _begin_drawing(self, room: Room) -> None:
@@ -1230,6 +1248,7 @@ class GameFlowService:
             }
         )
         game.set_phase_deadline(game.drawing_seconds)
+        turn_id = game.current_turn_id
         # Read once for the whole fan-out: one drawer, one transport.
         drawer_transport = self._drawer_transport(room)
         # One emit per socket, deliberately, even though at turn start every
@@ -1243,6 +1262,12 @@ class GameFlowService:
         for p in room.player_list():
             if not p.sid:
                 continue
+            if self._turn_moved_on(room, game, turn_id, Phase.DRAWING):
+                # The seats not yet reached would be told a turn that has
+                # already gone - the departed drawer's, with the drawing
+                # countdown - and the client takes `turn_started` as the
+                # phase it is in.
+                return
             await self._sio.emit(
                 "turn_started",
                 {
@@ -1264,6 +1289,8 @@ class GameFlowService:
                 },
                 to=p.sid,
             )
+        if self._turn_moved_on(room, game, turn_id, Phase.DRAWING):
+            return
         self.schedule_phase_timer(room, game.drawing_seconds)
         self.schedule_hint_checkpoints(room)
 
@@ -1378,11 +1405,14 @@ class GameFlowService:
         # 200 seconds for a 5 second screen. The countdown the client draws
         # from it was wrong in both directions.
         game.set_phase_deadline(timing.turn_results_seconds)
+        turn_id = game.current_turn_id
         await self._sio.emit(
             "turn_ended",
             self._turn_ended_payload(room, drawer_bonus=drawer_bonus),
             room=room.id,
         )
+        if self._turn_moved_on(room, game, turn_id, Phase.TURN_RESULTS):
+            return True
         self.schedule_phase_timer(room, timing.turn_results_seconds)
         return True
 
