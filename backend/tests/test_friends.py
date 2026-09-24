@@ -1015,3 +1015,47 @@ async def test_asking_somebody_you_are_already_friends_with_changes_nothing():
         assert await service.request(bob, ada) == FriendshipOutcome.UNCHANGED
     finally:
         await engine.dispose()
+
+
+async def test_asking_back_after_declining_meets_a_crowded_inbox_silently():
+    """The declined-row rewrite answers to the same ceilings as a new row, and
+    a full inbox there is dropped as silently too (#1062 review)."""
+    factory, engine = await create_test_db()
+    try:
+        service = FriendService(factory)
+        ada = await make_account(factory, "Ada")
+        popular = await make_account(factory, "Popular")
+        await service.request(popular, ada)
+        assert await service.remove(ada, popular) == FriendshipOutcome.IGNORED
+        async with factory() as session:
+            async with session.begin():
+                askers = [generate_uuid() for _ in range(MAX_PENDING_RECEIVED)]
+                session.add_all(
+                    [
+                        User(
+                            id=other,
+                            display_name=f"Queue{index}",
+                            username=f"queue{index}",
+                            password_hash="hash",
+                            state=AccountState.REGISTERED.value,
+                        )
+                        for index, other in enumerate(askers)
+                    ]
+                )
+                await session.flush()
+                for other in askers:
+                    low, high = friendship_key(popular, other)
+                    session.add(
+                        Friendship(
+                            user_low_id=low,
+                            user_high_id=high,
+                            requested_by_id=other,
+                            status=FriendshipState.PENDING.value,
+                        )
+                    )
+
+        assert await service.request(ada, popular) == FriendshipOutcome.IGNORED
+        row = await row_for(factory, ada, popular)
+        assert row.status == FriendshipState.DECLINED.value, "the refusal is untouched"
+    finally:
+        await engine.dispose()
