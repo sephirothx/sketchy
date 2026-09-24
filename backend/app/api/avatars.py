@@ -27,7 +27,7 @@ from app.auth.avatars import (
     AvatarError,
     avatar_url,
 )
-from app.auth.rate_limit import PersistentRateLimiter, client_key
+from app.auth.rate_limit import PersistentRateLimiter
 from app.repositories.interfaces import UserRepository
 from app.services.avatars import (
     AvatarBlocked,
@@ -94,13 +94,19 @@ def create_avatar_router(
 
     @router.post("/api/users/me/avatar")
     async def upload_avatar(body: AvatarUploadBody, request: Request):
-        if not await upload_limiter.check(client_key(request)):
+        # Who first, then how many, and counted per account (#1074). Charged
+        # before the check and keyed on the address, a guest - who is refused
+        # anyway - spent the bucket of every registered player behind the same
+        # address, and ten posts locked a school or a household out for an
+        # hour. An account is what an upload writes to, so it is what is
+        # limited; making more accounts is throttled where accounts are made.
+        user = await require_registered(request)
+        if not await upload_limiter.check(str(user.id)):
             raise Refusal(
                 429,
                 ErrorCode.TOO_MANY_PICTURES,
                 "Too many pictures. Please wait and try again.",
             )
-        user = await require_registered(request)
         try:
             payload = base64.b64decode(body.image, validate=True)
         except (binascii.Error, ValueError) as error:
