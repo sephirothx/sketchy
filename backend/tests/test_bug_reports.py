@@ -12,6 +12,7 @@ from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select, update
 from sqlalchemy.exc import IntegrityError
 
+from app.auth.avatars import image_dimensions
 from app.api.bug_reports import MAX_SCREENSHOT_BASE64, create_bug_report_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
@@ -337,6 +338,30 @@ async def test_a_screenshot_is_measured_by_the_server_not_the_sender(env, image)
         import hashlib
 
         assert report.screenshot_checksum_sha256 == hashlib.sha256(image).hexdigest()
+        # Measured from the picture, not the 1440x900 the sender claimed.
+        assert (report.screenshot_width, report.screenshot_height) == (
+            image_dimensions(image) or (None, None)
+        )
+        assert report.screenshot_width != 1440
+
+
+async def test_a_dimension_no_screenshot_could_have_is_not_a_lost_report(env):
+    """#1017: `10**12` from client JSON reached a 32-bit column - a 500 on
+    PostgreSQL that lost the report. The sender's numbers are not used."""
+    new_client, factory, _ = env
+    http = new_client()
+    await guest(http)
+    response = await http.post(
+        "/api/bug-reports",
+        json=a_report(
+            screenshot=encoded(PNG),
+            clientContext={"screenshotWidth": 10**12, "screenshotHeight": -5},
+        ),
+    )
+    assert response.status_code == 201, response.text
+    async with factory() as session:
+        report = await session.get(BugReport, UUID(response.json()["id"]))
+        assert (report.screenshot_width, report.screenshot_height) == image_dimensions(PNG)
 
 
 @pytest.mark.parametrize(

@@ -1103,8 +1103,10 @@ prompt in play, chat text, or a query string.
 **Screenshots** follow `turn_drawings` rather than inventing storage:
 `screenshot_payload` with `screenshot_byte_size`, `screenshot_checksum_sha256`,
 `screenshot_content_type`, dimensions, and a `screenshot_status` of
-`none | ready | erased | expired`. The server sniffs the magic bytes, re-derives the size
-and digest, and rejects anything that is not a real PNG or WebP under 2 MB.
+`none | ready | erased | expired`. The server sniffs the magic bytes, re-derives the size,
+digest and dimensions (from the picture's header, not the sender's claim, and only up to
+16384 a side — a claimed `10**12` once overflowed the column and lost the report on
+PostgreSQL, #1017), and rejects anything that is not a real PNG or WebP under 2 MB.
 `ck_bug_reports_screenshot_ready_identity` requires a `ready` row to hold the bytes and
 their identity; `ck_bug_reports_screenshot_erased` and
 `ck_bug_reports_screenshot_expired` make both erasures **structural** — neither a decided
