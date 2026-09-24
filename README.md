@@ -696,7 +696,12 @@ process supervisor a termination grace period longer than that value plus the
 normal 10-second finished-history write bound. A second termination signal
 abandons the rest of the window immediately, so an operator who cannot wait can
 press Ctrl+C (or send `SIGTERM`) again; that forced exit also skips the
-abandonment diagnostic below.
+abandonment diagnostic below. It does not skip the teardown itself: the games
+the drain already ended are still staged and replayed, the last chat lines are
+still written, and the recorder is still flushed, under a 20-second ceiling on
+top of the budgets each of those carries. A third signal is not watched for
+during that teardown, so a supervisor that escalates to `SIGKILL` should allow
+at least 20 seconds after the second signal before it does.
 
 A game that finishes during the window follows the ordinary all-or-nothing
 history and prompt-usage paths. If the deadline expires first, the server does

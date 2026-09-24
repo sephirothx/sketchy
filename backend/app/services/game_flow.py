@@ -1592,6 +1592,21 @@ class GameFlowService:
             room.state = "waiting"
             room.game = None
             self._note_history_write_started(room, game, history)
+            usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
+            envelope = FinishedGameEnvelope(history, usage, revision_ids) if history else None
+            # Always on its own task (#976 fourth review), never inside the
+            # action: a game ends inside a `room_state_batch`, so awaiting the
+            # handoff here put the encode - deliberately unbounded, so that a
+            # burst of endings costs latency rather than games - in front of
+            # the room's own snapshot. Nothing a player is waiting to see is
+            # behind it: the task runs at the next suspension, which is the
+            # `game_ended` below. Created *before* the shutdown coordinator
+            # is told the game is over (#994): the drain counts a room with
+            # no game as drained and `drain_room_cleanups` returns at once
+            # when nothing is tracked, so a staging created after either
+            # look ran on a task nobody waited for, and a deploy landing on
+            # the last turn's results screen lost the game without a trace.
+            self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
             if self._ctx.shutdown is not None:
                 self._ctx.shutdown.notify_game_state_changed()
             # An account that left and rejoined holds the points of both
@@ -1627,17 +1642,6 @@ class GameFlowService:
             # room is about to be shown.
             await self._sio.emit("game_ended", room.last_game_payload(), room=room.id)
             await self._emit_room_state(room)
-            # Last, so that nothing a player is waiting to see is behind a
-            # database round trip.
-            usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
-            envelope = FinishedGameEnvelope(history, usage, revision_ids) if history else None
-            # Always on its own task (#976 fourth review), never inside the
-            # action: a game ends inside a `room_state_batch`, so awaiting the
-            # handoff here put the encode - deliberately unbounded, so that a
-            # burst of endings costs latency rather than games - in front of
-            # the room's own snapshot. Tracked, so the shutdown drain still
-            # waits for it.
-            self._ctx.defer_cleanup(self._hand_off_finished_game(room, envelope))
         else:
             await self._start_turn(room)
 

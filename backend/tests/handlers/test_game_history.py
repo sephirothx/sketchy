@@ -970,6 +970,70 @@ async def test_a_write_that_lands_is_not_counted_as_lost(signals):
     assert signals.history_writes_abandoned.total() == 0
 
 
+# --- a deploy landing on the last results screen must not lose the game (#994)
+
+
+async def test_a_game_ending_during_the_drain_is_staged_before_the_process_moves_on(monkeypatch):
+    """The drain counts a room with no game as drained, and the cleanup
+    drain returns at once when nothing is tracked. A staging created after
+    either look ran on a task nobody waited for, and a deploy landing on the
+    last turn's results screen lost the game with no trace (#994). The
+    staging task now exists before the coordinator is told."""
+    from app.flow_timing import timing
+    from app.services.shutdown import ShutdownCoordinator
+
+    monkeypatch.setattr(timing, "turn_results_seconds", 0.05)
+    history = FakeGameHistoryRepository()
+    room_manager, room, players = build_room(rounds=1)
+    ctx = build_context(room_manager, history)
+    coordinator = ShutdownCoordinator(None, room_manager)
+    coordinator.begin_startup(drain_seconds=5)
+    coordinator.mark_ready()
+    ctx.shutdown = coordinator
+
+    store = ctx.finished_games.store
+    real_stage = store.stage
+
+    async def slow_stage(staged, *, now):
+        await asyncio.sleep(0.3)  # a database round trip under load
+        return await real_stage(staged, now=now)
+
+    store.stage = slow_stage
+    original_emit = ctx.sio.emit
+
+    async def yielding_emit(event, *args, **kwargs):
+        # A real socket send suspends; the mock does not. The drain wakes in
+        # exactly this gap, between the room losing its game and the staging
+        # being tracked.
+        await asyncio.sleep(0)
+        return await original_emit(event, *args, **kwargs)
+
+    ctx.sio.emit = yielding_emit
+
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    # Up to the last turn's results screen; its real timer ends the game
+    # while the drain is waiting.
+    while True:
+        game.force_prompt_choice()
+        await flow._begin_drawing(room)
+        await flow._end_turn(room)
+        if game.is_finished():
+            break
+        ctx.timers.cancel_phase_timer(room.id)
+        await flow._finish_or_next(room)
+
+    result = await coordinator.begin_shutdown(ctx.sio)
+    assert result.drained_game_count == 1
+    # What the lifespan does next, in this order.
+    await ctx.drain_room_cleanups(10)
+    await ctx.finished_games.drain()
+    await ctx.timers.close()
+
+    assert history.saved and history.saved[0].record.id == game.id
+
+
 # --- a restart vote stops a game, and a game that stops is recorded (#993) ------
 
 

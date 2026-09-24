@@ -464,7 +464,10 @@ A game that finishes inside the window follows the ordinary all-or-nothing histo
 path — on a task of its own (#976), which is why the shutdown drains those tasks
 (`HandlerContext.room_cleanups`) before it stops the handoff worker: the drain is what
 ends rooms and stages their games, and the bounded replay pass below it is what writes
-them. Its budget covers a queued encode as well as the write it is bounded by, computed
+them. That task is created **before** the coordinator is told the game is over (#994):
+the drain counts a room with no game as drained, and the cleanup drain returns at once
+when nothing is tracked, so a staging created after either look ran on a task nobody
+waited for, and a deploy landing on the last turn's results screen lost the game. Its budget covers a queued encode as well as the write it is bounded by, computed
 from `ROOM_GLOBAL_LIMIT` and `HISTORY_ENCODE_WORKERS` rather than fixed, and it
 re-checks the set as it goes, because a teardown task defers a staging task of its own.
 Whatever is still running when the budget is spent is **cancelled and counted** as a
@@ -476,7 +479,10 @@ shutdown does. A game still live when the deadline expires is **not** misreprese
 finished: one privacy-safe `planned_shutdown_abandonments` row is written instead
 (runtime IDs, phase, counts, timestamps — never room codes, names, prompts, chat, or
 canvas contents). A second termination signal abandons the rest of the window and
-skips even that diagnostic. A hard crash cannot run this hook at all.
+skips even that diagnostic — but not the teardown: Uvicorn skips the lifespan cleanup
+on a forced exit, so [`backend/app/server.py`](../backend/app/server.py) runs it itself,
+under `FORCED_EXIT_TEARDOWN_SECONDS` (20 s) on top of the budgets inside it (#994). A
+hard crash cannot run this hook at all.
 
 The notice also names `reconnectSpreadMs` (`SHUTDOWN_RECONNECT_SPREAD_SECONDS`, default
 10 s): each client holds its first attempt a random part of it, so the replacement
