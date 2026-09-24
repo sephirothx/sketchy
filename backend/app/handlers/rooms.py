@@ -176,6 +176,10 @@ ENDED_ACCOUNT_ACKNOWLEDGEMENT = {
     "ok": False, "errorCode": ErrorCode.ACCOUNT_ENDED,
     "error": "This account is no longer active.",
 }
+KICKED_FROM_ROOM_ACKNOWLEDGEMENT = {
+    "ok": False, "errorCode": ErrorCode.KICKED_FROM_ROOM,
+    "error": "You were kicked from this room and cannot come back.",
+}
 
 
 ACCOUNT_REQUIRED_TO_OPEN = {
@@ -736,7 +740,14 @@ QUICK_PLAY_CLOSED = {
 # The refusals that are about one room rather than the player: Quick play
 # tries the next room instead of answering them.
 QUICK_PLAY_SKIPS = frozenset(
-    {ErrorCode.ROOM_FULL, ErrorCode.ROOM_NOT_FOUND, ErrorCode.ROOM_ENDED}
+    {
+        ErrorCode.ROOM_FULL,
+        ErrorCode.ROOM_NOT_FOUND,
+        ErrorCode.ROOM_ENDED,
+        # Voted out of that one (#1010): Quick play owes them a room, not
+        # the refusal a link to the room they were kicked from would get.
+        ErrorCode.KICKED_FROM_ROOM,
+    }
 )
 
 
@@ -902,6 +913,11 @@ async def _seat_in_room(
         except EntryTimedOut:
             return BUSY_ACKNOWLEDGEMENT
 
+    if identity.user_id and identity.user_id in room.kicked_user_ids:
+        # Voted out, and barred while the room lives (#1010) - as a spectator
+        # too, since the vote was about the person, not the seat. Before the
+        # join is charged, so there is nothing to refund.
+        return KICKED_FROM_ROOM_ACKNOWLEDGEMENT
     if payload.as_spectator and not ctx.room_capacity.admits_a_spectator(room):
         # Deliberately not `room_full`: that code is what makes the client
         # offer spectating instead, and offering it to somebody refused *as* a

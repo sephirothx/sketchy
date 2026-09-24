@@ -153,6 +153,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   host_only: "Das kann nur der Gastgeber.",
   players_only: "Das können nur Spieler.",
   waiting_room_only: "Das gibt es nur im Warteraum.",
+  kicked_from_room: "Du wurdest aus diesem Raum geworfen und kannst nicht zurückkommen.",
   already_a_player: "Du bist schon Spieler.",
   registered_name_fixed: "Registrierte Spieler spielen unter ihrem Benutzernamen.",
   name_taken_by_account: "Dieser Name gehört einem registrierten Spieler.",

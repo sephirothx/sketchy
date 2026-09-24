@@ -68,6 +68,7 @@ class ErrorCode(StrEnum):
     HOST_ONLY = "host_only"
     PLAYERS_ONLY = "players_only"
     WAITING_ROOM_ONLY = "waiting_room_only"
+    KICKED_FROM_ROOM = "kicked_from_room"  # voted out; barred while the room lives
     ALREADY_A_PLAYER = "already_a_player"
     REGISTERED_NAME_FIXED = "registered_name_fixed"
     NAME_TAKEN_BY_ACCOUNT = "name_taken_by_account"

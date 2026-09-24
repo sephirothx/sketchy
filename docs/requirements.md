@@ -218,7 +218,7 @@ result is recorded here so the target is a measurement rather than a sentence:
 | # | Requirement |
 | --- | --- |
 | **R-VOTE-01** | Active players MUST be able to propose and carry a **restart vote** by strict majority, without interrupting live gameplay. Window 20 s, cooldown 60 s, 3 s delay before the restart. [`handlers/restart.py:18`](../backend/app/handlers/restart.py) |
-| **R-VOTE-02** | Room players MUST be able to vote to **kick** or **mark AFK** another player by strict majority (`majority_of(n) = n//2 + 1`). |
+| **R-VOTE-02** | Room players MUST be able to vote to **kick** or **mark AFK** another player by strict majority (`majority_of(n) = n//2 + 1`). A player voted out MUST stay out for the room's lifetime, as a player or a spectator, whichever way in they take — the invite link or Quick play (#1010); the seat is gone by then, and without the bar the vote bought the room a few seconds before a fresh seat with a clean score. The bar is the room's, and dies with it: a new room is a new vote. When the kick ends a turn, the roster without the seat MUST reach every client before the next turn's `turn_starting`, as an eviction's does (#883). [`handlers/moderation.py`](../backend/app/handlers/moderation.py), [`handlers/rooms.py`](../backend/app/handlers/rooms.py) |
 | **R-VOTE-03** | The voting population MUST be connected non-spectators. AFK players and the vote target **do** count toward it; disconnected players and spectators do **not**. [`rooms.py:371`](../backend/app/rooms.py) |
 
 ### Drawing

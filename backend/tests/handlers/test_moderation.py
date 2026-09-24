@@ -7,9 +7,11 @@ import socketio
 
 from app.handlers import register_all_handlers as register_handlers
 from app.game import Game, Phase
+from app.refusals import ErrorCode
 from app.rooms import RoomManager
 
 from tests.dbfixtures import create_test_db
+from tests.handlers.helpers import SessionStore
 
 
 async def test_toggle_afk_socket_handler_and_not_waited_for():
@@ -1162,3 +1164,134 @@ async def test_a_seat_with_no_picture_cannot_be_reported_for_one():
         await ctx.timers.close()
     finally:
         await engine.dispose()
+
+
+def _stack(room_manager: RoomManager):
+    sio = socketio.AsyncServer(async_mode="asgi")
+    ctx = register_handlers(sio, room_manager)
+    sessions = SessionStore()
+    sio.get_session = AsyncMock(side_effect=sessions.get)
+    sio.save_session = AsyncMock(side_effect=sessions.save)
+    sio.enter_room = AsyncMock()
+    sio.leave_room = AsyncMock()
+    sio.disconnect = AsyncMock()
+    sio.emit = AsyncMock()
+    return ctx, sio, sessions
+
+
+async def _three_seated(sio, sessions):
+    """A host and two guests, each on a socket bound to its own account."""
+    await sessions.save("host-sid", {"user_id": "user-host"})
+    created = await sio.handlers["/"]["create_room"]("host-sid", {"nickname": "Host"})
+    assert created["ok"], created
+    for name in ("Two", "Three"):
+        sid = f"{name.lower()}-sid"
+        await sessions.save(sid, {"user_id": f"user-{name.lower()}"})
+        joined = await sio.handlers["/"]["join_room"](
+            sid, {"roomId": created["roomId"], "nickname": name}
+        )
+        assert joined["ok"], joined
+    return created["roomId"]
+
+
+async def _kick(sio, room, target_sid: str, voters: list[str]) -> dict:
+    target = next(p for p in room.player_list() if p.sid == target_sid)
+    answer = None
+    for voter in voters:
+        answer = await sio.handlers["/"]["vote_player"](
+            voter, {"targetPlayerId": target.id, "action": "kick"}
+        )
+        assert answer["ok"], answer
+    return answer
+
+
+async def test_a_kicked_player_stays_out_for_the_rooms_lifetime():
+    """The seat is gone, so the invite link used to seat them again at once,
+    with a clean score (#1010). Barred as a spectator too: the vote was about
+    the person, not the seat."""
+    room_manager = RoomManager()
+    ctx, sio, sessions = _stack(room_manager)
+    room = room_manager.get_room(await _three_seated(sio, sessions))
+
+    kicked = await _kick(sio, room, "two-sid", ["host-sid", "three-sid"])
+    assert kicked["executed"] is True
+    assert room_manager.get_player_by_user_id(room, "user-two") is None
+
+    # Back through the link, on the same socket and on a fresh one.
+    for sid in ("two-sid", "two-again-sid"):
+        await sessions.save(sid, {"user_id": "user-two"})
+        refused = await sio.handlers["/"]["join_room"](
+            sid, {"roomId": room.id, "nickname": "Two"}
+        )
+        assert refused["ok"] is False
+        assert refused["errorCode"] == ErrorCode.KICKED_FROM_ROOM
+        as_spectator = await sio.handlers["/"]["join_room"](
+            sid, {"roomId": room.id, "nickname": "Two", "asSpectator": True}
+        )
+        assert as_spectator["errorCode"] == ErrorCode.KICKED_FROM_ROOM
+    assert room_manager.get_player_by_user_id(room, "user-two") is None
+    assert len(room.players) == 2
+    # The join was never charged, so the refusal cannot turn into "too fast".
+    assert ctx.room_capacity.admits_a_join("two-again-sid")
+
+
+async def test_quick_play_routes_a_kicked_player_past_that_room():
+    room_manager = RoomManager()
+    ctx, sio, sessions = _stack(room_manager)
+    room = room_manager.get_room(await _three_seated(sio, sessions))
+    await _kick(sio, room, "two-sid", ["host-sid", "three-sid"])
+
+    await sessions.save("two-again-sid", {"user_id": "user-two"})
+    answer = await sio.handlers["/"]["quick_play"](
+        "two-again-sid", {"nickname": "Two", "promptLanguage": room.prompt_language}
+    )
+    assert answer["ok"] is True, answer
+    assert answer["roomId"] != room.id
+    assert room_manager.get_player_by_user_id(room, "user-two") is None
+
+
+async def test_kicking_the_drawer_sends_the_roster_before_the_next_turn():
+    """`turn_starting` for the next turn must not reach a client whose player
+    list still holds the drawer it just lost (#883, #1010)."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    p1 = room_manager.add_player(room, "P1")
+    p2 = room_manager.add_player(room, "P2")
+    p3 = room_manager.add_player(room, "P3")
+    p1.sid, p2.sid, p3.sid = "p1-sid", "p2-sid", "p3-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=[p1.id, p2.id, p3.id], rounds_total=2)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    assert room.game.current_drawer == p1.id
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    timers = register_handlers(sio, room_manager).timers
+    sessions = {
+        "p1-sid": {"room_id": room.id, "player_id": p1.id},
+        "p2-sid": {"room_id": room.id, "player_id": p2.id},
+        "p3-sid": {"room_id": room.id, "player_id": p3.id},
+    }
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+    sio.leave_room = AsyncMock()
+
+    kicked = await _kick(sio, room, "p1-sid", ["p2-sid", "p3-sid"])
+    assert kicked["executed"] is True
+
+    events = [call.args[0] for call in sio.emit.await_args_list]
+    assert "turn_starting" in events
+    first_turn_starting = events.index("turn_starting")
+    rosters_before = [
+        {player["playerId"] for player in call.args[1]["players"]}
+        for call in sio.emit.await_args_list[:first_turn_starting]
+        if call.args[0] == "room_state"
+    ]
+    assert rosters_before, "no room_state reached the room before turn_starting"
+    assert p1.id not in rosters_before[-1]
+    assert room.game.current_drawer == p2.id
+
+    for timer in (timers.phase_timers.pop(room.id, None),):
+        if timer:
+            timer.cancel()
+            with suppress(asyncio.CancelledError):
+                await timer
