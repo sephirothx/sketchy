@@ -4886,6 +4886,44 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             item.prompt_version.concept_id: item.prompt_version
             for item in (previous.items if previous else ())
         }
+        # Every key a prompt this list has ever held answers to, if a
+        # moderator hid it: a word deleted and typed in again - now, or a save
+        # later - is a new concept, and one existing entry respelled into it
+        # is a new version of another; either way, born with that entry's
+        # `active` it undid the takedown in a couple of clicks (#1020 review).
+        # A decision covers every version of its concept, so any one says it.
+        # Anchored on the hidden side - rare, and indexed - with the list's
+        # history asked only about those, so a save costs the number of
+        # hidden versions rather than every item of every revision.
+        hidden_versions = (
+            await session.scalars(
+                select(PromptVersion)
+                .where(
+                    PromptVersion.moderation_state
+                    == PromptContentModerationState.HIDDEN.value,
+                    select(PromptListRevisionItem.revision_id)
+                    .join(
+                        PromptListRevision,
+                        PromptListRevision.id == PromptListRevisionItem.revision_id,
+                    )
+                    .where(
+                        PromptListRevisionItem.prompt_version_id == PromptVersion.id,
+                        PromptListRevision.prompt_list_id == prompt_list.id,
+                    )
+                    .exists(),
+                )
+                .options(
+                    selectinload(PromptVersion.version_aliases).selectinload(
+                        PromptVersionAlias.alias
+                    )
+                )
+            )
+        ).unique().all()
+        hidden_by_key: dict[str, PromptVersion] = {}
+        for hidden in hidden_versions:
+            hidden_by_key[hidden.match_key] = hidden
+            for link in hidden.version_aliases:
+                hidden_by_key[link.alias.match_key] = hidden
         supplied_ids = {
             UUID(entry.concept_id) for entry in entries if entry.concept_id is not None
         }
@@ -4941,6 +4979,39 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 canonical_answer=entry.answer,
                 match_key=normalize_prompt_answer(entry.answer, prompt_list.language),
             )
+            decided_by = existing
+            if hidden_by_key and not (
+                existing is not None
+                and existing.moderation_state
+                == PromptContentModerationState.HIDDEN.value
+            ):
+                # Hidden wins over the entry's own state: an existing active
+                # entry respelled into a hidden word is that word again.
+                decided_by = next(
+                    (
+                        hidden_by_key[key]
+                        for key in (
+                            prompt_version.match_key,
+                            *(
+                                normalize_prompt_answer(alias, prompt_list.language)
+                                for alias in entry.aliases
+                            ),
+                        )
+                        if key in hidden_by_key
+                    ),
+                    existing,
+                )
+            if decided_by is not None:
+                # A moderator's decision is about the concept, not one
+                # spelling of it: a new version born `active` brought a hidden
+                # word back in the list's next revision with nobody asked -
+                # add one alias and it was live again (#1020). The decision,
+                # and who made it, carries to every version after it, and to
+                # the same word deleted and typed in again; only a moderator
+                # changes it.
+                prompt_version.moderation_state = decided_by.moderation_state
+                prompt_version.moderated_by_user_id = decided_by.moderated_by_user_id
+                prompt_version.moderated_at = decided_by.moderated_at
             session.add(prompt_version)
             for alias_answer in entry.aliases:
                 alias_key = normalize_prompt_answer(alias_answer, prompt_list.language)
