@@ -18,7 +18,7 @@ from datetime import datetime, timedelta, timezone
 from enum import Enum
 from uuid import UUID
 
-from sqlalchemy import delete, func, select, update
+from sqlalchemy import case, delete, func, literal, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.totp import (
@@ -31,6 +31,7 @@ from app.auth.totp import (
     provisioning_uri,
 )
 from app.db.models import UserRecoveryCode, UserSecondFactor, generate_uuid
+from app.db.types import UTCDateTime
 
 
 # Long enough to find the authenticator app and short enough that a machine
@@ -203,40 +204,101 @@ async def verify_second_factor(
 
     A recovery code is tried only when the digits are not a TOTP code at all,
     so an ordinary mistyped code never burns one.
+
+    Every decision is made by the database, in the UPDATE that records it,
+    the way `_spend_recovery_code` always was (#1019). Reading the row and
+    writing back a value computed from it let two requests carrying the same
+    code both be accepted, and let N parallel wrong codes each write
+    `failed_attempts = 1`, so the lock never tripped. The row is read first
+    only for the secret, which the code is checked against in this process;
+    the accepting UPDATE requires that same secret, so a factor replaced in
+    between is not credited with a code for the old one.
     """
     checked_at = now or datetime.now(timezone.utc)
+    owner = UUID(user_id)
+    async with session_factory() as database:
+        record = await database.get(UserSecondFactor, owner)
+        if record is None:
+            return SecondFactorOutcome.NOT_ENROLLED
+        secret = record.secret
+        if record.locked_until is not None and record.locked_until > checked_at:
+            return SecondFactorOutcome.LOCKED
+
+    step = matching_step(secret, code, timestamp=checked_at.timestamp())
+    unlocked = or_(
+        UserSecondFactor.locked_until.is_(None),
+        UserSecondFactor.locked_until <= checked_at,
+    )
     async with session_factory() as database:
         async with database.begin():
-            record = await database.get(UserSecondFactor, UUID(user_id))
-            if record is None:
-                return SecondFactorOutcome.NOT_ENROLLED
-            if record.locked_until is not None and record.locked_until > checked_at:
-                return SecondFactorOutcome.LOCKED
-
-            step = matching_step(
-                record.secret, code, timestamp=checked_at.timestamp()
-            )
-            if step is not None and step > record.last_step:
-                record.last_step = step
-                record.failed_attempts = 0
-                record.locked_until = None
-                return SecondFactorOutcome.ACCEPTED
-
-            if step is None:
-                spent = await _spend_recovery_code(
-                    database, user_id=user_id, code=code, now=checked_at
+            if step is not None:
+                # Spent by the condition: of two requests with the same code,
+                # the one that finds `last_step` still below it wins.
+                accepted = await database.execute(
+                    update(UserSecondFactor)
+                    .where(
+                        UserSecondFactor.user_id == owner,
+                        UserSecondFactor.secret == secret,
+                        UserSecondFactor.last_step < step,
+                        unlocked,
+                    )
+                    .values(last_step=step, failed_attempts=0, locked_until=None)
                 )
-                if spent:
-                    record.failed_attempts = 0
-                    record.locked_until = None
-                    return SecondFactorOutcome.RECOVERY_CODE_SPENT
+                if accepted.rowcount:
+                    return SecondFactorOutcome.ACCEPTED
+            elif await _spend_recovery_code(
+                database, user_id=user_id, code=code, now=checked_at
+            ):
+                # Not gated on a lock set since the pre-check: a recovery code
+                # is some fifty bits only its holder has, so parallel guesses
+                # at one gain nothing, and a valid one is exactly what should
+                # clear a lock.
+                await database.execute(
+                    update(UserSecondFactor)
+                    .where(UserSecondFactor.user_id == owner)
+                    .values(failed_attempts=0, locked_until=None)
+                )
+                return SecondFactorOutcome.RECOVERY_CODE_SPENT
 
             # Either the code was wrong, or it was right and already spent.
-            # Both are counted: a replayed code is not an honest mistake.
-            record.failed_attempts = (record.failed_attempts or 0) + 1
-            if record.failed_attempts >= MAX_SECOND_FACTOR_FAILURES:
-                record.locked_until = checked_at + SECOND_FACTOR_LOCKOUT
-                record.failed_attempts = 0
+            # Both are counted: a replayed code is not an honest mistake. The
+            # increment is the database's, so parallel failures add up, and
+            # the one that reaches the ceiling is the one that sets the lock.
+            reaches = UserSecondFactor.failed_attempts + 1 >= MAX_SECOND_FACTOR_FAILURES
+            lock_until = checked_at + SECOND_FACTOR_LOCKOUT
+            counted = (
+                await database.execute(
+                    update(UserSecondFactor)
+                    .where(UserSecondFactor.user_id == owner, unlocked)
+                    .values(
+                        failed_attempts=case(
+                            (reaches, 0),
+                            else_=UserSecondFactor.failed_attempts + 1,
+                        ),
+                        # Typed as the column is, so the deadline is stored
+                        # in UTC like every other write of it; a bare literal
+                        # inside CASE is a plain DateTime and SQLite would
+                        # keep a non-UTC offset's wall clock.
+                        locked_until=case(
+                            (reaches, literal(lock_until, UTCDateTime())),
+                            else_=UserSecondFactor.locked_until,
+                        ),
+                    )
+                    .returning(UserSecondFactor.locked_until)
+                )
+            ).one_or_none()
+            if counted is None:
+                # Locked by a parallel failure since the read above - or the
+                # factor removed, which is not a lockout to report.
+                still_enrolled = await database.scalar(
+                    select(UserSecondFactor.user_id).where(
+                        UserSecondFactor.user_id == owner
+                    )
+                )
+                if still_enrolled is None:
+                    return SecondFactorOutcome.NOT_ENROLLED
+                return SecondFactorOutcome.LOCKED
+            if counted.locked_until is not None and counted.locked_until > checked_at:
                 return SecondFactorOutcome.LOCKED
             return SecondFactorOutcome.REJECTED
 
