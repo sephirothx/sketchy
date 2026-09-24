@@ -808,18 +808,21 @@ async def test_withdrawing_a_held_publication_releases_the_hold(env):
 @pytest.mark.parametrize(
     "edit",
     [
-        pytest.param(lambda entry: ("offensive prompt", ("an alias",)), id="alias added"),
-        pytest.param(lambda entry: ("offensive  prompt!", ()), id="answer respelled"),
+        pytest.param(lambda entry: ("offensive prompt", ("an alias",), True), id="alias added"),
+        pytest.param(lambda entry: ("offensive  prompt!", (), True), id="answer respelled"),
+        pytest.param(lambda entry: ("Offensive Prompt", (), False), id="deleted and re-added"),
     ],
 )
 async def test_editing_a_hidden_prompt_does_not_bring_it_back(env, edit):
     """#1020: any edit to an entry - one alias - writes a new version of the
     concept, and a new version was born `active`, so a word a moderator hid
-    came back in the list's next revision with nobody asked. The hidden
-    state is the concept's, and the new version carries it."""
+    came back in the list's next revision with nobody asked. Deleting the
+    row and typing the word in again made a new concept, born active too.
+    The decision carries, and the word stays out of play."""
     new_client, factory, prompts = env
-    owner_http = new_client()
+    owner_http, moderator_http = new_client(), new_client()
     owner = await register(owner_http, "HiddenOwner")
+    moderator = await register(moderator_http, "HidingMod")
     created = await prompts.create_owned(
         owner["id"],
         name="Has a hidden word",
@@ -828,15 +831,19 @@ async def test_editing_a_hidden_prompt_does_not_bring_it_back(env, edit):
         prompts=(
             PromptListEntryInput(answer="offensive prompt"),
             PromptListEntryInput(answer="safe prompt"),
+            PromptListEntryInput(answer="third prompt"),
         ),
     )
-    hidden_entry, safe_entry = created.prompts
+    hidden_entry, *others = created.prompts
+    hidden_at = datetime.now(timezone.utc) - timedelta(hours=1)
     async with factory() as session:
         async with session.begin():
             version = await session.get(PromptVersion, UUID(hidden_entry.prompt_version_id))
             version.moderation_state = "hidden"
+            version.moderated_by_user_id = UUID(moderator["id"])
+            version.moderated_at = hidden_at
 
-    answer, aliases = edit(hidden_entry)
+    answer, aliases, keeps_identity = edit(hidden_entry)
     updated = await prompts.update_owned(
         owner["id"],
         created.id,
@@ -845,11 +852,88 @@ async def test_editing_a_hidden_prompt_does_not_bring_it_back(env, edit):
         description="",
         prompts=(
             PromptListEntryInput(
-                answer=answer, concept_id=hidden_entry.concept_id, aliases=aliases
+                answer=answer,
+                concept_id=hidden_entry.concept_id if keeps_identity else None,
+                aliases=aliases,
             ),
-            PromptListEntryInput(answer=safe_entry.answer, concept_id=safe_entry.concept_id),
+            *(
+                PromptListEntryInput(answer=entry.answer, concept_id=entry.concept_id)
+                for entry in others
+            ),
         ),
     )
-    edited = next(p for p in updated.prompts if p.concept_id == hidden_entry.concept_id)
+    kept = {entry.concept_id for entry in others}
+    [edited] = [p for p in updated.prompts if p.concept_id not in kept]
     assert edited.prompt_version_id != hidden_entry.prompt_version_id, "a new version"
     assert edited.moderation_state == "hidden"
+    async with factory() as session:
+        row = await session.get(PromptVersion, UUID(edited.prompt_version_id))
+        assert row.moderated_by_user_id == UUID(moderator["id"])
+        assert row.moderated_at == hidden_at
+    selection = await prompts.resolve_selection(
+        [created.slug], requesting_user_id=owner["id"]
+    )
+    assert edited.answer not in selection.prompts
+    assert sorted(selection.prompts) == sorted(entry.answer for entry in others)
+
+
+async def test_hiding_a_reported_version_hides_the_one_the_list_has_now(env):
+    """#1020 review: a report names the version a game played; if the owner
+    saved a newer one before a moderator got to it, hiding only the reported
+    version left the list's current one live."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "EditsFirst")
+    await register(reporter_http, "PlayedIt")
+    moderator = await register(moderator_http, "LateMod")
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(moderator["id"]))).role = UserRole.MODERATOR.value
+    await mark_staff_ready(factory, moderator["id"])
+    created = await prompts.create_owned(
+        owner["id"],
+        name="Edited after the game",
+        description="",
+        language="en",
+        prompts=(
+            PromptListEntryInput(answer="offensive prompt"),
+            PromptListEntryInput(answer="safe prompt"),
+        ),
+    )
+    await published(factory, created.id)
+    played, safe = created.prompts
+    report = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={
+            "promptListId": created.id,
+            "promptVersionId": played.prompt_version_id,
+            "reason": "hateful_or_abusive",
+            "details": "This one.",
+        },
+    )
+    assert report.status_code == 201, report.text
+    edited = await prompts.update_owned(
+        owner["id"],
+        created.id,
+        expected_version=created.version,
+        name=created.name,
+        description="",
+        prompts=(
+            PromptListEntryInput(
+                answer=played.answer, concept_id=played.concept_id, aliases=("alias",)
+            ),
+            PromptListEntryInput(answer=safe.answer, concept_id=safe.concept_id),
+        ),
+    )
+    [current] = [p for p in edited.prompts if p.concept_id == played.concept_id]
+    assert current.prompt_version_id != played.prompt_version_id
+    assert current.moderation_state == "active", "nothing to carry yet"
+
+    resolved = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{report.json()['id']}",
+        json={"status": "resolved", "note": "Hidden.", "moderationState": "hidden"},
+    )
+    assert resolved.status_code == 200, resolved.text
+    async with factory() as session:
+        row = await session.get(PromptVersion, UUID(current.prompt_version_id))
+        assert row.moderation_state == "hidden"

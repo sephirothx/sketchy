@@ -1744,10 +1744,13 @@ An immutable, language-specific wording.
 `moderated_at` · `created_at`, with
 `uq_prompt_version_concept_language_version`.
 
-A moderator's decision is the concept's, not one wording's: an owner's edit that writes a
-new version (an alias added, an answer respelled) carries `moderation_state`,
-`moderated_by_user_id` and `moderated_at` to it, so a hidden word stays hidden (#1020).
-Bundled seed versions are the operator's own editions and start `active`.
+A moderator's decision is the concept's, not one wording's: resolving a report sets
+`moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
+concept, an owner's edit that writes a new version (an alias added, an answer respelled)
+carries them to it, and a new concept whose answer or alias matches a hidden prompt of the
+same list is born with them — so a hidden word stays hidden (#1020). A concept belongs to
+one list; copies mint their own. Bundled seed versions are the operator's own editions and
+start `active`.
 
 Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
 registry, which case-folds, collapses whitespace, folds canonically decomposable

@@ -2132,6 +2132,26 @@ def create_moderation_router(
                     target.moderation_state = body.moderation_state
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
+                    if report.target_type == "prompt":
+                        # The decision is the concept's, not one wording's
+                        # (R-MOD-11, #1020): a report names the version the
+                        # game played, and the owner may have saved a newer
+                        # one since - hiding only the reported one left the
+                        # list's current version live. A concept belongs to
+                        # one list (copies mint their own), so this reaches
+                        # nothing else.
+                        await session.execute(
+                            update(PromptVersion)
+                            .where(
+                                PromptVersion.concept_id == target.concept_id,
+                                PromptVersion.id != target.id,
+                            )
+                            .values(
+                                moderation_state=body.moderation_state,
+                                moderated_by_user_id=reviewer.id,
+                                moderated_at=now,
+                            )
+                        )
                     # Telling somebody their content was hidden is the least
                     # the review owes them, and it is the second use the
                     # address was collected for.

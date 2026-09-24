@@ -4886,6 +4886,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             item.prompt_version.concept_id: item.prompt_version
             for item in (previous.items if previous else ())
         }
+        # Every key a hidden prompt answers to, for a word deleted from the
+        # list and typed in again: that is a new concept, and born `active`
+        # it undid the takedown with two clicks (#1020 review).
+        hidden_by_key: dict[str, PromptVersion] = {}
+        for current in current_by_concept.values():
+            if current.moderation_state == PromptContentModerationState.HIDDEN.value:
+                hidden_by_key[current.match_key] = current
+                for link in current.version_aliases:
+                    hidden_by_key[link.alias.match_key] = current
         supplied_ids = {
             UUID(entry.concept_id) for entry in entries if entry.concept_id is not None
         }
@@ -4941,16 +4950,33 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 canonical_answer=entry.answer,
                 match_key=normalize_prompt_answer(entry.answer, prompt_list.language),
             )
-            if existing is not None:
+            decided_by = existing
+            if existing is None and hidden_by_key:
+                decided_by = next(
+                    (
+                        hidden_by_key[key]
+                        for key in (
+                            prompt_version.match_key,
+                            *(
+                                normalize_prompt_answer(alias, prompt_list.language)
+                                for alias in entry.aliases
+                            ),
+                        )
+                        if key in hidden_by_key
+                    ),
+                    None,
+                )
+            if decided_by is not None:
                 # A moderator's decision is about the concept, not one
                 # spelling of it: a new version born `active` brought a hidden
                 # word back in the list's next revision with nobody asked -
                 # add one alias and it was live again (#1020). The decision,
-                # and who made it, carries to every version after it; only a
-                # moderator changes it.
-                prompt_version.moderation_state = existing.moderation_state
-                prompt_version.moderated_by_user_id = existing.moderated_by_user_id
-                prompt_version.moderated_at = existing.moderated_at
+                # and who made it, carries to every version after it, and to
+                # the same word deleted and typed in again; only a moderator
+                # changes it.
+                prompt_version.moderation_state = decided_by.moderation_state
+                prompt_version.moderated_by_user_id = decided_by.moderated_by_user_id
+                prompt_version.moderated_at = decided_by.moderated_at
             session.add(prompt_version)
             for alias_answer in entry.aliases:
                 alias_key = normalize_prompt_answer(alias_answer, prompt_list.language)
