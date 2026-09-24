@@ -224,6 +224,9 @@ class GalleryDecisionBody(ControlFreeModel):
 # How many undecided Top-week drawings the shelf's review queue shows: the
 # six the shelf would take, and a second six behind them.
 REVIEW_CANDIDATES = 12
+# Pages of the Top-week order read to fill a moderator's queue past their own
+# drawings (#1063 review).
+REVIEW_PAGES_MAX = 4
 
 
 class PublicationReviewBody(ControlFreeModel):
@@ -3179,24 +3182,39 @@ def create_moderation_router(
         async with session_factory() as session:
             reviewer = await _reviewer(session, request)
         review = await read_shelf_review(session_factory)
-        candidates = ()
+        candidates: list = []
         if review and game_history_repo is not None:
-            page = await game_history_repo.list_gallery(
-                sort="top", window="week", limit=REVIEW_CANDIDATES, shelf_filter="undecided"
-            )
-            candidates = page.entries
-            if candidates and reviewer.role != UserRole.ADMIN.value:
-                # Their own drawings are another moderator's to decide
-                # (R-MOD-07, #1063); "drawn by me" resolves a claimed guest.
-                facts = await game_history_repo.viewer_gallery_facts(
-                    [entry.turn_id for entry in candidates],
-                    viewer_user_id=str(reviewer.id),
+            skip_own = reviewer.role != UserRole.ADMIN.value
+            cursor = None
+            # Their own drawings are another moderator's to decide (R-MOD-07,
+            # #1063; "drawn by me" resolves a claimed guest), and they are left
+            # out *before* the queue is counted: filtering one page of twelve
+            # let each own drawing take the place of one the reader could
+            # decide. Pages are read until the queue is full; a moderator's own
+            # drawings are few, so this is one page nearly always, and bounded.
+            for _ in range(REVIEW_PAGES_MAX):
+                page = await game_history_repo.list_gallery(
+                    sort="top",
+                    window="week",
+                    limit=REVIEW_CANDIDATES,
+                    cursor=cursor,
+                    shelf_filter="undecided",
                 )
-                candidates = tuple(
-                    entry
-                    for entry in candidates
-                    if not facts.get(entry.turn_id, (None, False))[1]
-                )
+                entries = list(page.entries)
+                if entries and skip_own:
+                    facts = await game_history_repo.viewer_gallery_facts(
+                        [entry.turn_id for entry in entries],
+                        viewer_user_id=str(reviewer.id),
+                    )
+                    entries = [
+                        entry
+                        for entry in entries
+                        if not facts.get(entry.turn_id, (None, False))[1]
+                    ]
+                candidates.extend(entries[: REVIEW_CANDIDATES - len(candidates)])
+                cursor = page.next_cursor
+                if len(candidates) >= REVIEW_CANDIDATES or cursor is None:
+                    break
         return {
             "review": review,
             "waiting": len(candidates),

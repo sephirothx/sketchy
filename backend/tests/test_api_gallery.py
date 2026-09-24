@@ -626,3 +626,32 @@ async def test_a_moderators_own_drawing_is_off_their_queue_even_drawn_as_a_guest
     await _as_moderator(http, factory, mod.id)
     queue = (await http.get("/api/moderation/gallery")).json()
     assert [c["turnId"] for c in queue["candidates"]] == [own.turn_id]
+
+
+async def test_a_moderators_own_drawings_do_not_take_the_places_of_others(env):
+    """#1063 review: one page of twelve was filtered after it was read, so
+    twelve top-ranked drawings of the reader's own left their queue empty
+    while another player's drawing, thirteenth, waited unseen."""
+    from app.api.moderation import REVIEW_CANDIDATES
+
+    http, users, history, factory = env
+    mod = await _moderator(users, factory, "BusyMod")
+    fan = await _registered(users, "Fan")
+    other = await _registered(users, "OtherArtist")
+    for index in range(REVIEW_CANDIDATES):
+        await record_game(
+            history, drawer=mod.id, reactor=fan.id, reactions="default",
+            visibility="public", finished_at=NOW - timedelta(hours=1, minutes=index),
+        )
+    theirs = await record_game(
+        history, drawer=other.id, reactor=fan.id, visibility="public",
+        finished_at=NOW - timedelta(hours=2),
+    )
+    async with factory() as session:
+        async with session.begin():
+            await config_store.put(session, SHELF_REVIEW_KEY, "1")
+
+    await _as_moderator(http, factory, mod.id)
+    queue = (await http.get("/api/moderation/gallery")).json()
+    assert [c["turnId"] for c in queue["candidates"]] == [theirs.turn_id]
+    assert queue["waiting"] == 1
