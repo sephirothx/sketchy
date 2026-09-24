@@ -721,7 +721,8 @@ async def test_a_revocation_after_the_ban_ends_the_escape_hatch(env):
     for export, deletion and sign-out (R-BAN-04). Every later revocation
     skipped those rows as already revoked, so a copied cookie kept exporting
     the account's data for the whole suspension, whatever the owner did."""
-    from app.auth.sessions import revoke_all_sessions, revoke_sessions
+    from app.auth.password_reset import reset_password_as_operator
+    from app.auth.sessions import revoke_all_sessions
 
     new_client, factory, _ = env
     moderator_http, owner, spare = new_client(), new_client(), new_client()
@@ -750,11 +751,13 @@ async def test_a_revocation_after_the_ban_ends_the_escape_hatch(env):
     # moderation must not erase privacy rights.
     await revoke_all_sessions(factory, user_id=target["id"])
     assert (await spare.get("/api/auth/data-exports")).status_code == 200
-    # The owner's own - what a password reset does - ends it on every other
-    # ban-time session too.
-    async with factory() as session:
-        async with session.begin():
-            await revoke_sessions(session, user_id=target["id"], end_privacy_hatch=True)
+    # The owner's own reset ends it on every other ban-time session too.
+    await reset_password_as_operator(
+        factory,
+        username="HatchTarget",
+        password="a-fresh-long-password-81",
+        reason="Owner asked after the account was taken",
+    )
     assert (await spare.get("/api/auth/data-exports")).status_code == 401
 
 

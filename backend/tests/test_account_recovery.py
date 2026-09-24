@@ -1283,3 +1283,39 @@ async def test_a_staff_reset_sets_the_password_but_signs_nobody_in(env):
             )
         )
     assert live == 0
+
+
+async def test_a_mail_reset_ends_a_suspended_accounts_escape_hatch(env):
+    """#1082: the ban's own revocation keeps the ban-time session for export
+    (R-BAN-04); the owner's reset is what ends it, so a copied cookie cannot
+    keep exporting after the owner has taken the account back."""
+    from datetime import datetime, timezone
+
+    from app.auth.sessions import revoke_all_sessions
+    from app.db.models import UserBan, generate_uuid
+
+    new_client, factory = env
+    browser = new_client()
+    account = await register(browser, "HatchMail", email="hatchmail@example.com")
+    await verify_via_email(browser, factory)
+    banned_at = datetime.now(timezone.utc)
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                UserBan(
+                    id=generate_uuid(),
+                    user_id=UUID(account["id"]),
+                    reason="Suspended for the test",
+                    created_at=banned_at,
+                )
+            )
+    await revoke_all_sessions(factory, user_id=account["id"], now=banned_at)
+    assert (await browser.get("/api/auth/data-exports")).status_code == 200
+
+    await new_client().post("/api/auth/password/forgot", json={"identifier": "HatchMail"})
+    reset = await new_client().post(
+        "/api/auth/password/reset",
+        json={"token": token_in(await drain(factory)), "password": NEW_PASSWORD},
+    )
+    assert reset.status_code == 200, reset.text
+    assert (await browser.get("/api/auth/data-exports")).status_code == 401
