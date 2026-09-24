@@ -1257,6 +1257,56 @@ async def test_an_action_after_a_torn_path_closes_it_rather_than_asking_for_ever
     assert "request_canvas_actions" not in _emitted_events(sio)
 
 
+async def test_a_fresh_stroke_reusing_the_open_number_closes_the_torn_path():
+    """#1057: back from a rebind, a *new* `draw_start` carried the open
+    path's number. Taken for a retransmission, it popped the partial path on
+    the server alone - every viewer still held it and failed the commit, and
+    the partial stroke was gone from the record. A different opener is a
+    fresh stroke: the torn path is closed for the room, kept, and committed."""
+    room, sio = _drawing_room()
+    await _open_a_path(room, sio)
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+    sio.emit.reset_mock()
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.7, "y": 0.7, "color": "#ff0000", "width": 9}),
+        canvas_action(room.game, 1),
+    )
+
+    assert canvas.active_draw_sequence is None
+    assert canvas.sequence == 1, "the torn path is committed where the server's copy ends"
+    assert len(canvas.history) == 1 and canvas.history[0].points == [(0.1, 0.1), (0.2, 0.2)]
+    room_frames = [
+        call for call in sio.emit.await_args_list
+        if call.args[0] == "draw" and call.kwargs.get("skip_sid") == "drawer-sid"
+    ]
+    assert room_frames, "the room is sent the draw_end closing the torn path"
+    assert "canvas_stale" in _emitted_events(sio), "the drawer is told to resync"
+    # The fresh stroke's trailing points are not glued onto anything.
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.8, "y": 0.8}]}))
+    assert canvas.history[0].points == [(0.1, 0.1), (0.2, 0.2)]
+
+
+async def test_a_retransmitted_opener_still_restarts_the_open_path():
+    """The same opener, byte for byte, is the drawer re-sending the stroke it
+    was in the middle of: that path starts over, as it always did."""
+    room, sio = _drawing_room()
+    await _open_a_path(room, sio)
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4}),
+        canvas_action(room.game, 1),
+    )
+
+    assert canvas.active_draw_sequence == 1
+    assert len(canvas.history) == 1 and canvas.history[0].points == [(0.1, 0.1)]
+
+
 async def test_undo_of_the_open_path_forgets_that_it_was_open():
     """Undo removed the open path but left it marked open, so every later
     opener was asked for a number already spent (#999)."""

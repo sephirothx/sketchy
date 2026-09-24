@@ -253,6 +253,23 @@ class CanvasSession:
             return None
         return self.commits[index]
 
+    def is_active_path_opener(self, payload: dict) -> bool:
+        """Whether a `draw_start` repeats the open path's own opener - a
+        retransmission - rather than beginning a new stroke that reuses its
+        number after the path's `draw_end` was lost (#1057)."""
+        if self.active_path_index is None or self.history.last_is_clear():
+            return False
+        try:
+            return self.history.opens_like(
+                self.active_path_index,
+                x=payload["x"],
+                y=payload["y"],
+                color=color_to_int(payload["color"]),
+                width=payload["width"],
+            )
+        except (KeyError, TypeError, ValueError):
+            return False
+
     def restart_active_path(self) -> bool:
         """Discard an uncommitted path so its semantic action can be replayed."""
         if (

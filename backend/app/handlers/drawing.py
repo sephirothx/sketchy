@@ -108,8 +108,24 @@ async def _draw(ctx: HandlerContext, sid, payload) -> str:
             if (
                 packet.event == "draw_start"
                 and sequence == room.game.canvas.active_draw_sequence
+                and room.game.canvas.is_active_path_opener(packet.payload)
             ):
+                # The same opener again: a retransmission, so the path starts
+                # over from it.
                 room.game.canvas.restart_active_path()
+            elif (
+                packet.event == "draw_start"
+                and sequence == room.game.canvas.active_draw_sequence
+            ):
+                # The open path's number on a *different* opener: a fresh
+                # stroke after the path's `draw_end` was lost and the rebind
+                # sync restarted the numbering (#1057). Restarting popped the
+                # partial path on the server alone - every viewer still held
+                # it, failed the commit and resynced, and the partial stroke
+                # was erased from the record. Closed where the server's copy
+                # ends instead, as #1054 does for a fill, shape or clear.
+                await _close_torn_path(ctx, room, sid)
+                return "discarded"
             elif sequence == room.game.canvas.sequence + 1:
                 # The drawer has moved on from a path this server still holds
                 # open: its `draw_end` was dropped with the connection, and
