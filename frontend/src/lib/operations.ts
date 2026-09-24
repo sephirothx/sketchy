@@ -219,8 +219,15 @@ export type ServerSignals = {
     historyWritesAbandoned: {
       total: number;
       lastHour: number;
-      /** Staging losses (timeout, error) and replay losses (conflict, exhausted, unreadable). */
-      byReason: { timeout: number; error: number; conflict: number; exhausted: number; unreadable: number };
+      /** Staging losses (timeout, error) and replay losses (conflict, exhausted, unreadable, invalid). */
+      byReason: {
+        timeout: number;
+        error: number;
+        conflict: number;
+        exhausted: number;
+        unreadable: number;
+        invalid: number;
+      };
     };
     /** The durable handoff (#541): games staged since start, and how replay attempts ended. */
     historyHandoff: {

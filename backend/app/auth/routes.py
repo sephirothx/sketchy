@@ -9,7 +9,8 @@ from uuid import UUID
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import ConfigDict, Field
+from app.request_text import ControlFreeModel
 
 from app.api.errors import Refusal
 from app.refusals import ErrorCode
@@ -165,7 +166,7 @@ GLOBAL_PROVISION_KEY = "all"
 
 
 
-class CredentialsBody(BaseModel):
+class CredentialsBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     username: str = Field(max_length=MAX_NAME_LENGTH)
@@ -184,44 +185,44 @@ class RegistrationBody(CredentialsBody):
     email: str | None = Field(default=None, max_length=MAX_EMAIL_LENGTH)
 
 
-class EmailBody(BaseModel):
+class EmailBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     email: str = Field(max_length=MAX_EMAIL_LENGTH)
 
 
-class TokenBody(BaseModel):
+class TokenBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(max_length=256)
 
 
-class ForgotPasswordBody(BaseModel):
+class ForgotPasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     identifier: str = Field(max_length=MAX_EMAIL_LENGTH)
 
 
-class ResetPasswordBody(BaseModel):
+class ResetPasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     token: str = Field(max_length=256)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class DisplayNameBody(BaseModel):
+class DisplayNameBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     display_name: str = Field(max_length=MAX_NAME_LENGTH, alias="displayName")
 
 
-class NameColorBody(BaseModel):
+class NameColorBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     name_color: str = Field(max_length=16, alias="nameColor")
 
 
-class ChangePasswordBody(BaseModel):
+class ChangePasswordBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     current_password: str = Field(
@@ -230,7 +231,7 @@ class ChangePasswordBody(BaseModel):
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class SecondFactorConfirmBody(BaseModel):
+class SecondFactorConfirmBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     # Echoed back from the enrolment offer, because nothing was stored: the
@@ -243,13 +244,13 @@ class SecondFactorConfirmBody(BaseModel):
     password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)
 
 
-class StepUpBody(BaseModel):
+class StepUpBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     code: str = Field(max_length=64)
 
 
-class PasskeyRegistrationBody(BaseModel):
+class PasskeyRegistrationBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     # The browser's own object, passed through to the verifier rather than
@@ -263,19 +264,19 @@ class PasskeyRegistrationBody(BaseModel):
     label: str | None = Field(default=None, max_length=64)
 
 
-class PasskeyAssertionBody(BaseModel):
+class PasskeyAssertionBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     credential: dict
 
 
-class PasswordProofBody(BaseModel):
+class PasswordProofBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
 
 
-class SecondFactorOwnerBody(BaseModel):
+class SecondFactorOwnerBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
@@ -285,7 +286,7 @@ class SecondFactorOwnerBody(BaseModel):
     code: str = Field(max_length=16)
 
 
-class DeleteAccountBody(BaseModel):
+class DeleteAccountBody(ControlFreeModel):
     model_config = ConfigDict(extra="forbid")
 
     password: str | None = Field(default=None, max_length=MAX_PASSWORD_LENGTH)

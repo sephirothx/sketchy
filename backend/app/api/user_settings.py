@@ -5,7 +5,8 @@ from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, Request
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import ConfigDict, Field, field_validator, model_validator
+from app.request_text import ControlFreeModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -53,7 +54,7 @@ def _validated_key_bindings(value: dict[str, list[str]] | None):
 BrushSize = Literal[2, 4, 6, 8, 12, 16, 24, 32]
 
 
-class UserSettingsSeed(BaseModel):
+class UserSettingsSeed(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     theme: Literal["light", "dark", "system"] = "system"
@@ -93,7 +94,7 @@ class UserSettingsSeed(BaseModel):
         return _validated_key_bindings(value)
 
 
-class UserSettingsPatch(BaseModel):
+class UserSettingsPatch(ControlFreeModel):
     model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     theme: Literal["light", "dark", "system"] | None = None
