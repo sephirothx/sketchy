@@ -104,6 +104,9 @@ async def play(
 async def test_an_unknown_list_is_not_found(env):
     http, _ = env
     assert (await http.get("/api/prompt-lists/nope/prompt-stats")).status_code == 404
+    # A slug carrying a NUL names no list either, and is answered before it
+    # reaches a statement PostgreSQL would refuse (#995).
+    assert (await http.get("/api/prompt-lists/no%00pe/prompt-stats")).status_code == 404
 
 
 async def test_a_prompt_below_the_sample_floor_is_listed_but_flagged(env):
