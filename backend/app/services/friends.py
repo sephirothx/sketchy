@@ -354,10 +354,14 @@ class FriendService:
             await self._refund_request(requester_id)
             raise
         if outcome in (FriendshipOutcome.IGNORED, FriendshipOutcome.UNCHANGED):
-            # Nothing was written, so nothing was spent (R-RATE-05's rule) and
-            # there is nobody to tell. Announcing a request that was quietly
-            # dropped would be the tell the silence exists to avoid.
-            await self._refund_request(requester_id)
+            # Nobody to tell: announcing a request that was quietly dropped
+            # would be the tell the silence exists to avoid. And **not given
+            # back** (#1062): R-RATE-05 refunds an attempt that wrote nothing,
+            # but here that refund was the tell. With one attempt left, a
+            # request to X and then one to Y answered 429 for Y exactly when X
+            # had landed - R-FRIEND-04's question, answered by the bucket
+            # instead of the status code. Every attempt costs one; only the
+            # caller's own refusals above are refunded.
             return outcome
         # Both, not just the target. An account's own other tabs are told the
         # same way anybody else is - `friends_changed` is the only thing that

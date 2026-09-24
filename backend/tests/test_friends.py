@@ -743,25 +743,26 @@ async def test_the_hourly_ceiling_lives_with_the_service_not_a_router():
         await engine.dispose()
 
 
-async def test_a_request_that_wrote_nothing_is_given_back():
-    """R-RATE-05's rule, and now it applies to both entry points at once."""
+async def test_every_request_is_spent_whatever_became_of_it():
+    """#1062: refunding an attempt that wrote nothing made the bucket say
+    whether a request landed (R-FRIEND-04). A silent outcome - nobody there,
+    a block, already asked - costs one like a request that landed; only the
+    caller's own ceiling refusals are given back (below)."""
     factory, engine = await create_test_db()
     try:
-        limiter = CountingLimiter(2)
+        limiter = CountingLimiter(10)
         service = FriendService(factory, request_limiter=limiter)
         ada = await make_account(factory, "Ada")
         guest = await make_account(factory, "Guesty", guest=True)
         bob = await make_account(factory, "Bob")
 
-        # A request that goes nowhere, several times over.
-        for _ in range(5):
+        for _ in range(3):
             assert await service.request(ada, guest) == FriendshipOutcome.IGNORED
-        assert limiter.spent[str(ada)] == 0
+        assert limiter.spent[str(ada)] == 3
 
-        # Asking the same person twice spends one, not two.
         await service.request(ada, bob)
         await service.request(ada, bob)
-        assert limiter.spent[str(ada)] == 1
+        assert limiter.spent[str(ada)] == 5
     finally:
         await engine.dispose()
 

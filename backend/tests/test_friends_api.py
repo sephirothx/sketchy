@@ -222,26 +222,39 @@ async def test_you_cannot_friend_or_unfriend_yourself(env):
     ).status_code == 422
 
 
-async def test_the_request_limit_is_only_spent_on_a_request_that_landed(env, monkeypatch):
-    """R-RATE-05's refund rule: an attempt that writes nothing is given back."""
-    new_client, _, _ = env
-    ada_http, bob_http = new_client(), new_client()
-    ada = await register(ada_http, "Ada")
+async def test_the_request_limit_cannot_tell_whether_a_request_landed(env, monkeypatch):
+    """#1062: the bucket was refunded for an attempt that wrote nothing and
+    spent for one that landed, so with one attempt left, asking X and then Y
+    answered 429 for Y exactly when X had landed - R-FRIEND-04's question
+    answered by the limit. Every attempt now costs one."""
+    from app.auth.rate_limit import PersistentRateLimiter
+
+    new_client, factory, service = env
+    limit = 3
+    monkeypatch.setattr(
+        service,
+        "_request_limiter",
+        PersistentRateLimiter(
+            factory, scope="friend_request", limit=limit, window_seconds=3600
+        ),
+    )
+    ada_http, bob_http, cid_http = new_client(), new_client(), new_client()
+    await register(ada_http, "Ada")
     bob = await register(bob_http, "Bob")
+    cid = await register(cid_http, "Cid")
     guest_http = new_client()
     await name_a_guest(guest_http, "Guesty")
     guest_id = (await guest_http.get("/api/auth/me")).json()["id"]
 
-    # Twenty requests that go nowhere must not use up the hour's allowance.
-    for _ in range(25):
-        answer = await ada_http.post(
-            "/api/users/me/friends", json={"userId": guest_id}
-        )
+    # One attempt left, spent on a probe that lands nowhere...
+    for _ in range(limit - 1):
+        answer = await ada_http.post("/api/users/me/friends", json={"userId": guest_id})
         assert answer.status_code == 200, answer.text
-
-    landed = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
-    assert landed.status_code == 200
-    assert ada["id"] and bob["id"]
+    probe = await ada_http.post("/api/users/me/friends", json={"userId": bob["id"]})
+    assert probe.status_code == 200
+    # ...and the next is refused whether or not the probe landed.
+    after = await ada_http.post("/api/users/me/friends", json={"userId": cid["id"]})
+    assert after.status_code == 429
 
 
 async def test_an_unknown_or_malformed_target_is_refused_without_a_stack_trace(env):
