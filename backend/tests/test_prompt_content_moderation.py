@@ -803,3 +803,53 @@ async def test_withdrawing_a_held_publication_releases_the_hold(env):
         },
     )
     assert decision.status_code == 409
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        pytest.param(lambda entry: ("offensive prompt", ("an alias",)), id="alias added"),
+        pytest.param(lambda entry: ("offensive  prompt!", ()), id="answer respelled"),
+    ],
+)
+async def test_editing_a_hidden_prompt_does_not_bring_it_back(env, edit):
+    """#1020: any edit to an entry - one alias - writes a new version of the
+    concept, and a new version was born `active`, so a word a moderator hid
+    came back in the list's next revision with nobody asked. The hidden
+    state is the concept's, and the new version carries it."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "HiddenOwner")
+    created = await prompts.create_owned(
+        owner["id"],
+        name="Has a hidden word",
+        description="",
+        language="en",
+        prompts=(
+            PromptListEntryInput(answer="offensive prompt"),
+            PromptListEntryInput(answer="safe prompt"),
+        ),
+    )
+    hidden_entry, safe_entry = created.prompts
+    async with factory() as session:
+        async with session.begin():
+            version = await session.get(PromptVersion, UUID(hidden_entry.prompt_version_id))
+            version.moderation_state = "hidden"
+
+    answer, aliases = edit(hidden_entry)
+    updated = await prompts.update_owned(
+        owner["id"],
+        created.id,
+        expected_version=created.version,
+        name=created.name,
+        description="",
+        prompts=(
+            PromptListEntryInput(
+                answer=answer, concept_id=hidden_entry.concept_id, aliases=aliases
+            ),
+            PromptListEntryInput(answer=safe_entry.answer, concept_id=safe_entry.concept_id),
+        ),
+    )
+    edited = next(p for p in updated.prompts if p.concept_id == hidden_entry.concept_id)
+    assert edited.prompt_version_id != hidden_entry.prompt_version_id, "a new version"
+    assert edited.moderation_state == "hidden"

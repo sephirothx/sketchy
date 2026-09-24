@@ -4941,6 +4941,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 canonical_answer=entry.answer,
                 match_key=normalize_prompt_answer(entry.answer, prompt_list.language),
             )
+            if existing is not None:
+                # A moderator's decision is about the concept, not one
+                # spelling of it: a new version born `active` brought a hidden
+                # word back in the list's next revision with nobody asked -
+                # add one alias and it was live again (#1020). The decision,
+                # and who made it, carries to every version after it; only a
+                # moderator changes it.
+                prompt_version.moderation_state = existing.moderation_state
+                prompt_version.moderated_by_user_id = existing.moderated_by_user_id
+                prompt_version.moderated_at = existing.moderated_at
             session.add(prompt_version)
             for alias_answer in entry.aliases:
                 alias_key = normalize_prompt_answer(alias_answer, prompt_list.language)

@@ -1744,6 +1744,11 @@ An immutable, language-specific wording.
 `moderated_at` · `created_at`, with
 `uq_prompt_version_concept_language_version`.
 
+A moderator's decision is the concept's, not one wording's: an owner's edit that writes a
+new version (an alias added, an answer respelled) carries `moderation_state`,
+`moderated_by_user_id` and `moderated_at` to it, so a hidden word stays hidden (#1020).
+Bundled seed versions are the operator's own editions and start `active`.
+
 Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
 registry, which case-folds, collapses whitespace, folds canonically decomposable
 accents, and reads every apostrophe a keyboard writes as the plain one (#1011; the
