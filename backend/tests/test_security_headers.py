@@ -1,6 +1,8 @@
 """Browser hardening headers, and production's refusal of plain HTTP (#467)."""
 from __future__ import annotations
 
+import pytest
+
 import base64
 import hashlib
 from pathlib import Path
@@ -234,3 +236,13 @@ async def test_a_raw_non_ascii_byte_is_redirected_not_a_500():
     assert start["status"] == 308
     location = dict(start["headers"])[b"location"]
     assert location == b"https://sketchy.example/caf%C3%A9%20x/%41?q=%E9&r=a%0D%0Ab"
+
+
+@pytest.mark.parametrize("raw_path", [b"@evil.example", b".evil.example/", b"http://evil.example/x"])
+def test_a_request_target_that_is_not_a_path_goes_to_the_root(raw_path):
+    """#1015 review: appended to the origin, `@evil.example` made a Location
+    whose host is evil.example. Only a raw client can send one, but the
+    redirect should never leave the origin."""
+    rule = HttpsOnly(enabled=True, public_origin="https://sketchy.example")
+    location = rule.location({"path": "/", "raw_path": raw_path, "query_string": b""})
+    assert location == "https://sketchy.example/"
