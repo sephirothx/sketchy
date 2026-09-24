@@ -154,6 +154,14 @@ def _webp_dimensions(payload: bytes) -> tuple[int, int] | None:
     return None
 
 
+def image_dimensions(payload: bytes) -> tuple[int, int] | None:
+    """Width and height of a PNG or WebP, read from its fixed-position header
+    without decoding anything; None when it is neither."""
+    if payload.startswith(_PNG_SIGNATURE):
+        return _png_dimensions(payload)
+    return _webp_dimensions(payload)
+
+
 def inspect_avatar(payload: bytes) -> tuple[str, int, int]:
     """Refuse anything but a WebP or PNG of exactly AVATAR_SIZE square under the cap.
 

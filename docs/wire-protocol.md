@@ -713,6 +713,7 @@ Shared bounds:
 | --- | --- | --- |
 | `MAX_CHAT_MESSAGE_LENGTH` | 500 | [`message_limits.py`](../backend/app/message_limits.py) |
 | `MAX_PROMPT_LENGTH` | 32 | [`prompts.py`](../backend/app/prompts.py) |
+| `MAX_MATCH_KEY_LENGTH` (an answer or alias once normalized; case-folding can lengthen it, #1017) | 64 | [`prompt_content.py`](../backend/app/prompt_content.py) |
 | `MAX_RAW_INPUT_LENGTH` (custom prompts blob) | 80 000 | [`prompts.py`](../backend/app/prompts.py) |
 | `MAX_CUSTOM_PROMPTS` | 2 000 | [`prompts.py`](../backend/app/prompts.py) |
 | `MAX_ROOM_NAME_LENGTH` | 40 | [`payloads.py`](../backend/app/handlers/payloads.py) |
