@@ -164,7 +164,7 @@ async def test_an_unproved_address_reserves_nothing(env):
 
     # The second account may still claim it, because the first proved nothing.
     assert (
-        await owner.put("/api/auth/email", json={"email": "shared@example.com"})
+        await owner.put("/api/auth/email", json={"email": "shared@example.com", "password": PASSWORD})
     ).status_code == 200
     transport = await drain(factory)
     owner_token = token_in(transport)
@@ -382,7 +382,7 @@ async def test_every_tab_hears_when_the_address_state_moves(env, announced):
     laptop, mail_client = new_client(), new_client()
     account = await register(laptop, "Tidy")
 
-    offered = await laptop.put("/api/auth/email", json={"email": "tidy@example.com"})
+    offered = await laptop.put("/api/auth/email", json={"email": "tidy@example.com", "password": PASSWORD})
     assert offered.status_code == 200, offered.text
     assert announced == [account["id"]]
 
@@ -1122,6 +1122,123 @@ async def test_an_expired_or_spent_reset_token_is_refused_where_it_is_consumed(e
         assert await consume_token(
             session, token="spent-token", purpose=TokenPurpose.PASSWORD_RESET
         ) is None
+
+
+# --- the recovery address is a credential, and is set like one (#997) --------
+
+
+async def test_setting_the_address_proves_the_password(env):
+    """With a cookie alone, a thief pointed recovery at a mailbox of their
+    own, confirmed it, and reset the owner out of the account."""
+    new_client, factory = env
+    browser = new_client()
+    await register(browser, "Careful")
+
+    unproved = await browser.put("/api/auth/email", json={"email": "me@example.com"})
+    assert unproved.status_code == 422
+    wrong = await browser.put(
+        "/api/auth/email", json={"email": "me@example.com", "password": "not-it"}
+    )
+    assert wrong.status_code == 401
+    assert (await drain(factory)).sent == [], "nothing was mailed for a refused ask"
+
+    right = await browser.put(
+        "/api/auth/email", json={"email": "me@example.com", "password": PASSWORD}
+    )
+    assert right.status_code == 200, right.text
+
+
+async def test_a_staff_account_sets_its_address_only_after_stepping_up(env):
+    from app.db.models import User
+    from tests.staffauth import mark_staff_ready
+
+    new_client, factory = env
+    browser = new_client()
+    account = await register(browser, "Moderating")
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(User, UUID(account["id"]))).role = "moderator"
+
+    body = {"email": "mod@example.com", "password": PASSWORD}
+    not_yet = await browser.put("/api/auth/email", json=body)
+    assert not_yet.status_code == 403
+    assert not_yet.headers.get("X-Sketchy-Step-Up") == "required"
+
+    await mark_staff_ready(factory, account["id"])
+    assert (await browser.put("/api/auth/email", json=body)).status_code == 200
+
+
+async def test_a_new_password_retires_a_verification_still_in_the_post(env):
+    """A link asked for before the password changed was still good for a day,
+    and confirming it needs no session: the thief the change evicted could
+    still point recovery at their mailbox afterwards."""
+    new_client, factory = env
+    browser, thief = new_client(), new_client()
+    await register(browser, "Evicting")
+    assert (
+        await browser.put(
+            "/api/auth/email", json={"email": "thief@example.com", "password": PASSWORD}
+        )
+    ).status_code == 200
+    queued = token_in(await drain(factory))
+
+    changed = await browser.post(
+        "/api/auth/password/change",
+        json={"currentPassword": PASSWORD, "password": NEW_PASSWORD},
+    )
+    assert changed.status_code == 200, changed.text
+
+    late = await thief.post("/api/auth/email/verify", json={"token": queued})
+    assert late.status_code == 400
+    assert (await browser.get("/api/auth/email")).json()["address"] is None
+
+
+async def test_a_reset_retires_a_verification_still_in_the_post(env):
+    new_client, factory = env
+    browser, thief = new_client(), new_client()
+    await register(browser, "Resetting", email="resetting@example.com")
+    await verify_via_email(browser, factory)
+    assert (
+        await browser.put(
+            "/api/auth/email", json={"email": "thief@example.com", "password": PASSWORD}
+        )
+    ).status_code == 200
+    queued = token_in(await drain(factory))
+
+    await new_client().post("/api/auth/password/forgot", json={"identifier": "Resetting"})
+    reset = await browser.post(
+        "/api/auth/password/reset",
+        json={"token": token_in(await drain(factory)), "password": NEW_PASSWORD},
+    )
+    assert reset.status_code == 200, reset.text
+
+    late = await thief.post("/api/auth/email/verify", json={"token": queued})
+    assert late.status_code == 400
+    assert (await browser.get("/api/auth/email")).json()["address"] == "resetting@example.com"
+
+
+async def test_deleting_the_account_is_a_throttled_password_proof(env):
+    """The one password proof on the account surface with no bucket: a stolen
+    cookie could guess at Argon2 speed, and a right guess deleted the account."""
+    new_client, _factory = env
+    browser = new_client()
+    await register(browser, "Guessed")
+    answers = []
+    for _ in range(11):
+        response = await browser.request(
+            "DELETE", "/api/auth/account", json={"password": "not-it"}
+        )
+        answers.append(response.status_code)
+    assert answers[:10] == [401] * 10
+    assert answers[10] == 429
+
+
+async def test_a_guest_is_told_to_create_an_account_not_that_a_password_is_wrong(env):
+    new_client, _factory = env
+    guest = new_client()
+    assert (await guest.post("/api/auth/display-name", json={"displayName": "Drifter"})).status_code == 200
+    refused = await guest.put("/api/auth/email", json={"email": "d@example.com", "password": "anything"})
+    assert refused.status_code == 403
 
 
 async def test_a_staff_reset_sets_the_password_but_signs_nobody_in(env):

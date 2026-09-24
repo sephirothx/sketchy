@@ -25,7 +25,7 @@ from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.auth.email import EmailAddressError, normalize_email
@@ -37,7 +37,7 @@ from app.auth.tokens import (
     issue_token,
     token_is_usable,
 )
-from app.db.models import AuditEvent, User, UserSettings, generate_uuid
+from app.db.models import AuditEvent, AuthToken, User, UserSettings, generate_uuid
 from app.domain_values import AccountState, AuditTargetType, EmailTemplate
 
 
@@ -382,6 +382,25 @@ async def password_reset_identity(
         return (user.username, user.email) if user is not None else (None, None)
 
 
+async def _retire_pending_verifications(session: AsyncSession, user_id: UUID) -> None:
+    """Drop every unspent address verification the account has out.
+
+    A new password ends every session (R-AUTH-10), but a verification link
+    queued before it was still good for a day, and confirming it needs no
+    session at all: a thief who asked for one before the owner changed the
+    password could still point recovery at their own mailbox afterwards and
+    reset their way back in (#997). Retired in the same transaction as the
+    sessions, and before the account row is locked: every writer here goes
+    token rows, then account row, so none can wait on another.
+    """
+    await session.execute(
+        delete(AuthToken).where(
+            AuthToken.user_id == user_id,
+            AuthToken.purpose == AuthTokenPurpose.EMAIL_VERIFY.value,
+        )
+    )
+
+
 async def change_password(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -402,6 +421,11 @@ async def change_password(
     changed_at = now or datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
+            # Token rows first, then the account row - the order every writer
+            # keeps (`confirm_email` consumes its token, then updates the
+            # account), so an owner changing their password while a thief
+            # clicks a verification link cannot deadlock the two (#997).
+            await _retire_pending_verifications(session, user_id)
             # Locked so a reset and a change racing for the same account apply
             # one after the other, each revoking what the other issued.
             user = await session.get(User, user_id, with_for_update=True)
@@ -470,9 +494,12 @@ async def reset_password(
             )
             if record is None:
                 return None
+            # Still among the token rows: the verifications this reset
+            # retires go before the account row is locked (#997).
+            await _retire_pending_verifications(session, record.user_id)
             # The claim above locked the token row; the account row comes
-            # second, always, so a concurrent change (which locks only the
-            # account) cannot deadlock with a reset.
+            # second, always, so a concurrent change (which touches token rows
+            # first too) cannot deadlock with a reset.
             user = await session.get(User, record.user_id, with_for_update=True)
             if user is None or user.state != AccountState.REGISTERED.value:
                 return None

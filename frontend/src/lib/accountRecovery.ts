@@ -107,8 +107,13 @@ export function readEmailState(): Promise<EmailState> {
   return apiRequest<EmailState>("/api/auth/email");
 }
 
-export function setEmailAddress(email: string): Promise<{ pendingAddress: string }> {
-  return apiRequest("/api/auth/email", { method: "PUT", body: { email } });
+/** Proves the password with it: the address is the way back in when the
+ * password is lost, so it is set like a credential (R-AUTH-26). */
+export function setEmailAddress(
+  email: string,
+  password: string,
+): Promise<{ pendingAddress: string }> {
+  return apiRequest("/api/auth/email", { method: "PUT", body: { email, password } });
 }
 
 export function confirmEmailToken(token: string): Promise<{ address: string }> {
