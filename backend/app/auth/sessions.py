@@ -467,12 +467,11 @@ async def _rotated_away_token(
     it, so it holds only while that session does: a sign-out everywhere or a
     password change inside the window revokes the successor, and a copy of
     the token from before the rotation must not outlive it by up to a minute
-    (#1075). The successor may itself have rotated since, so the question is
-    asked of the live end of the chain.
+    (#1075).
     """
     successor = (
         await database.execute(
-            select(AuthSession.id, AuthSession.revoked_at).where(
+            select(AuthSession.revoked_at).where(
                 AuthSession.rotated_from_id == record.id
             )
         )
@@ -483,31 +482,11 @@ async def _rotated_away_token(
         record.revoked_at is not None
         and checked_at - record.revoked_at < ROTATION_GRACE
     ):
-        if await _chain_is_live(database, successor):
-            return False
-        return None
+        # Only the successor is asked, not the chain beyond it: rotation
+        # waits a day at least (`should_rotate`), so a successor never
+        # rotates again inside its predecessor's minute.
+        return False if successor.revoked_at is None else None
     return True
-
-
-async def _chain_is_live(database: AsyncSession, link) -> bool:
-    """Whether a rotation chain, from `link` on, ends in an unrevoked session.
-
-    Short by construction - one link per rotation - and walked only for a
-    token presented inside a grace window, never on an ordinary request.
-    """
-    seen: set[UUID] = set()
-    while link is not None and link.id not in seen:
-        if link.revoked_at is None:
-            return True
-        seen.add(link.id)
-        link = (
-            await database.execute(
-                select(AuthSession.id, AuthSession.revoked_at).where(
-                    AuthSession.rotated_from_id == link.id
-                )
-            )
-        ).one_or_none()
-    return False
 
 
 async def _revoke_rotation_chain(
@@ -703,24 +682,47 @@ async def revoke_session(
     session_id: str,
     user_id: str,
     now: datetime | None = None,
-) -> bool:
+) -> list[str]:
+    """Revoke one session, and whatever replaced it; the ids revoked.
+
+    Forward along the rotation chain because a token rotated away still
+    resolves as its own row for the grace window (R-AUTH-22): a sign-out
+    sent with it, from a browser that lost the race with the rotating
+    response, would otherwise revoke a row that was already revoked and
+    leave the successor live - signed in again the moment the new cookie
+    lands (#1075). Empty when nothing was live to revoke.
+    """
     try:
         db_session_id = UUID(session_id)
         db_user_id = UUID(user_id)
     except (ValueError, TypeError, AttributeError):
-        return False
+        return []
+    revoked_at = now or datetime.now(timezone.utc)
+    revoked: list[str] = []
     async with session_factory() as database:
         async with database.begin():
-            result = await database.execute(
-                update(AuthSession)
-                .where(
-                    AuthSession.id == db_session_id,
-                    AuthSession.user_id == db_user_id,
-                    AuthSession.revoked_at.is_(None),
+            cursor: UUID | None = db_session_id
+            seen: set[UUID] = set()
+            while cursor is not None and cursor not in seen:
+                seen.add(cursor)
+                result = await database.execute(
+                    update(AuthSession)
+                    .where(
+                        AuthSession.id == cursor,
+                        AuthSession.user_id == db_user_id,
+                        AuthSession.revoked_at.is_(None),
+                    )
+                    .values(revoked_at=revoked_at)
                 )
-                .values(revoked_at=now or datetime.now(timezone.utc))
-            )
-            return result.rowcount == 1
+                if result.rowcount == 1:
+                    revoked.append(str(cursor))
+                cursor = await database.scalar(
+                    select(AuthSession.id).where(
+                        AuthSession.rotated_from_id == cursor,
+                        AuthSession.user_id == db_user_id,
+                    )
+                )
+    return revoked
 
 
 async def revoke_sessions(

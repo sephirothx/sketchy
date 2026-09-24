@@ -73,6 +73,27 @@ async def test_signing_out_closes_the_sockets_of_that_session_alone(env):
     assert revoked == [(account["id"], [current], None)]
 
 
+async def test_signing_out_with_a_rotated_away_cookie_closes_its_successors_sockets(env):
+    """The browser lost the race with a rotation and signs out with the old
+    cookie, which the grace still resolves. The session that replaced it goes
+    too, and so do the sockets opened on it (#1075)."""
+    from app.auth.sessions import resolve_session, rotate_session
+
+    new_client, factory, revoked = env
+    browser = new_client()
+    account = await register(browser, "RacedOut")
+    sessions = (await browser.get("/api/auth/sessions")).json()["sessions"]
+    [current] = [row["id"] for row in sessions if row["current"]]
+    successor = await rotate_session(
+        factory, session_id=current, user_id=account["id"], device_label="Browser"
+    )
+    assert successor is not None
+
+    assert (await browser.post("/api/auth/logout")).status_code == 200
+    assert revoked == [(account["id"], [current, successor.session.id], None)]
+    assert await resolve_session(factory, successor.token) is None
+
+
 async def test_revoking_a_device_closes_that_devices_sockets(env):
     new_client, _, revoked = env
     laptop, phone = new_client(), new_client()

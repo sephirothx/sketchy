@@ -407,29 +407,26 @@ async def test_the_grace_ends_with_the_successor(env, how):
     assert replayed == []
 
 
-async def test_the_grace_follows_a_successor_that_rotated_again(env):
-    """The chain's live end is what counts, not its first link."""
+async def test_signing_out_with_the_rotated_away_cookie_reaches_the_successor(env):
+    """A browser that lost the race sends its sign-out with the old cookie,
+    which the grace still resolves. Revoking only that row - already revoked
+    by the rotation - left the successor live, and the browser signed in
+    again the moment the rotated cookie landed (#1075)."""
     _, factory, repo = env
-    user = await repo.create_anonymous("Twice")
+    user = await repo.create_anonymous("RacedOut")
     issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
-    middle = await rotate_session(
+    successor = await rotate_session(
         factory,
         session_id=issued.session.id,
         user_id=user.id,
         device_label="Chrome on Windows",
     )
-    assert middle is not None
-    latest = await rotate_session(
-        factory,
-        session_id=middle.session.id,
-        user_id=user.id,
-        device_label="Chrome on Windows",
-    )
-    assert latest is not None
-    inside = datetime.now(timezone.utc) + ROTATION_GRACE - timedelta(seconds=5)
-    assert await resolve_session(factory, issued.token, now=inside) is not None
+    assert successor is not None
 
-    assert await revoke_all_sessions(factory, user_id=user.id) == 1
+    revoked = await revoke_session(factory, session_id=issued.session.id, user_id=user.id)
+    assert revoked == [successor.session.id]
+    assert await resolve_session(factory, successor.token) is None
+    inside = datetime.now(timezone.utc) + ROTATION_GRACE - timedelta(seconds=5)
     assert await resolve_session(factory, issued.token, now=inside) is None
 
 
