@@ -1117,7 +1117,6 @@ export const NL: Catalogue = {
   lobbyBrowserPage: {
     quickPlay: "Snel spelen",
     lobby: "Lobby",
-    moreFromSketchy: "Meer van Sketchy",
     quickPlayBusy: "Kamer zoeken…",
     couldNotFindOrOpenARoom: "Er kon geen kamer worden gevonden of geopend.",
     filterByLanguage: "Filteren op taal",

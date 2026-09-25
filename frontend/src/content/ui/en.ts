@@ -1132,7 +1132,6 @@ export const EN = {
   lobbyBrowserPage: {
     quickPlay: "Quick play",
     lobby: "Lobby",
-    moreFromSketchy: "More from Sketchy",
     quickPlayBusy: "Finding a room…",
     couldNotFindOrOpenARoom: "Could not find or open a room.",
     filterByLanguage: "Filter by language",

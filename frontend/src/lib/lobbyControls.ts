@@ -33,7 +33,7 @@ export function showsRoomCount(state: { loaded: boolean; shown: number; total: n
   return state.loaded && state.shown < state.total;
 }
 
-/** Whether the lobby's links lead to the Gallery: only with a session, since
+/** Whether the header's site links lead to the Gallery: only with a session, since
     without one the Gallery is a refusal rather than a page (R-GAL-02). A guest
     has a session; a visitor who has not chosen a name has none. */
 export function linksToGallery(user: unknown): boolean {

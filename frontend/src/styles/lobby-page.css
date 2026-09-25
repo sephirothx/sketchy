@@ -84,7 +84,7 @@
    well: the bar sits on the paper, and in the light theme `--well` is the
    paper's own colour, so the mark was only a change of text colour - too
    little to find with icons alone. None on a phone, whose bar has no room for
-   it; the lobby's foot row is the way there instead. */
+   it; the chip's menu is the way there instead. */
 .site-nav {
   display: none;
 }
@@ -2063,55 +2063,4 @@ a.online-player-name:focus-visible {
 .rules-enforcement p {
   line-height: 1.65;
   margin: 8px 0 0;
-}
-
-/* ── The lobby's links ───────────────────────────────────────────────────
-   The rest of the site from the lobby itself: a footer's weight, below the
-   rooms and the people, so it never competes with the ways into a game. */
-.lobby-links ul {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 2px 18px;
-  justify-content: center;
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-
-.lobby-links a {
-  align-items: center;
-  border-radius: var(--radius-sm);
-  color: var(--muted);
-  display: inline-flex;
-  font-size: 14px;
-  font-weight: 600;
-  gap: 6px;
-  min-height: 32px;
-  padding: 4px 6px;
-  text-decoration: none;
-}
-
-.lobby-links a:hover {
-  color: var(--ink);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-/* From 901px the header's own links (`.site-nav`) are on every page, this
-   one included, so the lobby's row would only say them twice. */
-@media (min-width: 901px) {
-  .lobby-links {
-    display: none;
-  }
-}
-
-@media (max-width: 720px) {
-  /* A thumb's target, and a row the dock does not sit on. */
-  .lobby-links {
-    margin-top: 8px;
-  }
-
-  .lobby-links a {
-    min-height: 44px;
-  }
 }

@@ -1117,7 +1117,6 @@ export const PT: Catalogue = {
   lobbyBrowserPage: {
     quickPlay: "Jogo rápido",
     lobby: "Átrio",
-    moreFromSketchy: "Mais do Sketchy",
     quickPlayBusy: "À procura de uma sala…",
     couldNotFindOrOpenARoom: "Não foi possível encontrar ou abrir uma sala.",
     filterByLanguage: "Filtrar por idioma",
