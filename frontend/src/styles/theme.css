@@ -104,6 +104,9 @@
   --app-height: 100dvh;
   /* height of the top banner stack, written by AppBanners */
   --banner-height: 0px;
+  /* how far up from the bottom edge a friend invite reaches, written by
+     FriendInviteNotice while one is shown; the toasts stand on it */
+  --friend-invite-clearance: 0px;
 }
 
 /* Dark: the shipped slate ground (#0f172a / #1e293b / #334155 / #475569 and

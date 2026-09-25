@@ -58,7 +58,7 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 20;
+  z-index: var(--z-popover);
   width: 216px;
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -533,7 +533,7 @@
   text-align: center;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 480px) {
   .two-factor-setup { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .two-factor-scan { margin: 0 auto; max-width: 190px; }
 }
@@ -929,7 +929,7 @@
   min-height: 40px;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 480px) {
   .identity-name {
     max-width: 9ch;
   }

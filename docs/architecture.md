@@ -1899,7 +1899,14 @@ Files are named for their single concern; the directory says the role.
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
-`frontend/src/styles/` is one CSS file per surface.
+`frontend/src/styles/` is one CSS file per surface. A media query cannot read a custom
+property, so the breakpoints are a fixed set of widths rather than tokens, each named as
+the first width of the wider side — 481, 641, 721, 901, 1001, 1200, 1500 and 2100 as a
+`min-width`, one less as a `max-width`, so no width is on both sides. Components asking
+through `useMediaQuery` use the same numbers. They are listed in
+[`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css), and
+[`stylesheetScales.test.mjs`](../frontend/tests/stylesheetScales.test.mjs) fails on any
+other width except the three it names as measured against content.
 
 ### The phone layout
 
@@ -1947,9 +1954,22 @@ leave, via `100cqh` on `.canvas-wrapper` — with `aspect-ratio` deriving the
 other side. A definite `height` would stop `aspect-ratio` applying and stretch
 the drawing.
 
-`.game-room-playing` deliberately carries no `z-index`: a positioned element
-with one creates a stacking context, which would trap every overlay inside the
-shell below the confetti canvas at the root. Overlays are bottom sheets
+What stacks over what is one scale of named layers, `--z-float` up to
+`--z-toast`, declared in order in
+[`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css)
+with the reason for each; a bare `z-index` of 0–4 only orders one component's own
+children. Dialogs sit over the route overlays, the room's sheets and the banners,
+blocking notices (suspension, warning, role change, the AFK check) over every
+other dialog, and toasts over everything, because a toast is often the only word on
+what a dialog just did; [`stylesheetScales.test.mjs`](../frontend/tests/stylesheetScales.test.mjs)
+holds the order. Before it there were nineteen literals and the report, suspension
+and AFK dialogs had each been lifted past the drawers by hand. The shell is the one
+place the scale does not reach: `position: fixed` makes `.game-room-playing` a
+stacking context whatever its `z-index`, so its sheets and turn recap are ordered
+only against each other and the whole shell paints at the page's base level, under
+the confetti, the friend invite and the toasts. It carries no `z-index` so that
+stays true; a dialog that has to clear it is portaled to `<body>`, as the report
+dialogs are. Overlays are bottom sheets
 (`BottomSheet`, which the stylesheet centres as an ordinary dialog above the
 breakpoint), and the drawing dock renders through a portal into
 `#room-shell-dock` in `RoomShell` so the palette lands after the chat region,

@@ -484,7 +484,7 @@
 
    No second column to stand a list in. The cards are the page; an open list
    replaces them, with a way back, rather than landing somewhere below them. */
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .community-catalogue-body { grid-template-columns: minmax(0, 1fr); }
   .community-catalogue-pane-slot { position: static; }
   .community-catalogue-page:not(.has-selection) .community-catalogue-pane-slot { display: none; }

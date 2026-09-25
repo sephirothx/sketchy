@@ -4,11 +4,12 @@
    banner each, which all stuck to the same top: 0 and covered one another; and
    its height is published as --banner-height (AppBanners), so the screens that
    size themselves to the viewport make room instead of going underneath (#797).
-   Above ordinary dialogs, below the confirmation and toast layers. */
+   Above the page, below every overlay, sheet and dialog (the layers, in
+   layout-primitives.css). */
 .app-banners {
   position: sticky;
   top: 0;
-  z-index: 1150;
+  z-index: var(--z-banner);
 }
 
 .connection-status-banner {
@@ -96,8 +97,12 @@
   background: var(--primary-edge-soft);
 }
 
+/* Above a friend invite rather than on it (--friend-invite-clearance): the
+   invite is the same bottom-centre spot, and the component that shows it is
+   also what announces friend requests - onto its own Join button. The invite
+   stays out of this stack on purpose; see FriendInviteNotice. */
 .toast-viewport {
-  bottom: 20px;
+  bottom: calc(20px + var(--friend-invite-clearance));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -107,7 +112,7 @@
   position: fixed;
   transform: translateX(-50%);
   width: max-content;
-  z-index: 1200;
+  z-index: var(--z-toast);
 }
 
 .app-toast {
@@ -156,10 +161,10 @@
 /* A lazy overlay whose chunk could not be fetched (LazyOverlay): the toast's
    look, pinned where a toast would sit, over whatever page is open. */
 .lazy-overlay-notice {
-  bottom: max(16px, env(safe-area-inset-bottom));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--friend-invite-clearance));
   left: 50%;
   position: fixed;
   transform: translateX(-50%);
   width: min(440px, calc(100vw - 32px));
-  z-index: 1000;
+  z-index: var(--z-toast);
 }

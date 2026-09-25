@@ -694,7 +694,7 @@ details.form-section > .form-section-body {
   transition: opacity 120ms ease, transform 120ms ease;
   white-space: normal;
   width: max-content;
-  z-index: 20;
+  z-index: var(--z-popover);
 }
 .m3-switch-hint-tooltip::after {
   border: 5px solid transparent;
@@ -852,7 +852,7 @@ details.form-section > .form-section-body {
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   .create-room-footer .create-room-submit {

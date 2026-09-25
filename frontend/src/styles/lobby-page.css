@@ -397,7 +397,7 @@
   min-width: 132px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .public-room-card {
     align-items: stretch;
     flex-direction: column;
@@ -651,7 +651,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .invite-entry-page {
     padding: 14px 12px 32px;
   }
@@ -691,7 +691,7 @@
     right: 0;
     bottom: 0;
     left: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     border-top: 1.5px solid var(--line);
     background: var(--card);
@@ -772,7 +772,7 @@
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   .lobby-dock .btn {
@@ -1263,7 +1263,7 @@ a.online-player-name:focus-visible {
    a short desktop window: below it the panels would each be a few rows tall,
    which is less usable than the ordinary page, so the ordinary page is what
    it falls back to. */
-@media (min-width: 900px) and (min-height: 640px) {
+@media (min-width: 901px) and (min-height: 640px) {
   /* A visitor who has not chosen a name yet gets a page that can grow: the
      first-run block, the rooms and the social column together can outgrow a
      short window, and pinning the viewport around them left the rooms panel a
@@ -1628,7 +1628,7 @@ a.online-player-name:focus-visible {
   left: 50%;
   bottom: 18px;
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: var(--z-notice);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1700,7 +1700,7 @@ a.online-player-name:focus-visible {
   padding: 0.35rem;
   position: absolute;
   top: calc(100% + 4px);
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .online-player-menu-item {
@@ -1774,7 +1774,7 @@ a.online-player-name:focus-visible {
   grid-template-columns: 260px minmax(0, 1fr);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-layout {
     grid-template-columns: 1fr;
   }
@@ -1786,7 +1786,7 @@ a.online-player-name:focus-visible {
   top: 16px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-rail {
     position: static;
   }
