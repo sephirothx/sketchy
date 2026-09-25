@@ -140,9 +140,11 @@
 }
 
 /* Where the bar does print the name, the waiting room's heading would say it
-   again a few pixels below: it stays for a screen reader only (the
-   `.visually-hidden` recipe, a11y.css). One breakpoint for both, so there is
-   no width with the name twice or not at all. */
+   again a few pixels below: it stays for a screen reader only. These are the
+   `.visually-hidden` declarations (a11y.css) copied on purpose, not drift: a
+   class cannot be switched on at a breakpoint, and the component's own width
+   check (900px) is not the bar's (1100px) - which left 901-1100px with no
+   name at all. One breakpoint for both, so no width says it twice or never. */
 @media (min-width: 1101px) {
   .waiting-room-head h1 {
     border: 0;

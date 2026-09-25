@@ -235,14 +235,15 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           name, so this is the one place it is said. The status says whether
           the room could start now, by the same rule as Start (R-ROOM-05):
           "waiting for players" beside an enabled Start was wrong half the
-          time. Never "ready" during a drain, when the server refuses a start
-          and the drain notice says so. */}
+          time. During a drain it says neither: the server refuses a start
+          whoever is here, and the drain's own notice says so. */}
       <header className="waiting-room-head">
         <h1>{props.name}</h1>
         <p className="section-label">
-          {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom} · {rematch
+          {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom}
+          {!draining && <> · {rematch
             ? ui.waitingRoomPanel.betweenGames
-            : canStart && !draining ? ui.waitingRoomPanel.readyToStart : ui.waitingRoomPanel.waitingForPlayers}
+            : canStart ? ui.waitingRoomPanel.readyToStart : ui.waitingRoomPanel.waitingForPlayers}</>}
         </p>
       </header>
 

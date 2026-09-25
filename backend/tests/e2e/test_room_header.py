@@ -122,6 +122,13 @@ FULL_ROUND_SHOWN = """() => {
 }"""
 
 
+SHORT_ROUND_SHOWN = """() => {
+  const short = document.querySelector('.game-header-round-short');
+  return !!short && getComputedStyle(short).display !== 'none'
+    && short.getBoundingClientRect().width > 0;
+}"""
+
+
 async def test_a_phone_s_round_says_round_when_it_fits_and_never_pushes_the_bar():
     """The phone's round read "R1/1" (C16). It says "Round 1/3" where the bar
     has room and "1/3" where it does not, chosen by measuring the bar, so it
@@ -167,6 +174,28 @@ async def test_a_phone_s_round_says_round_when_it_fits_and_never_pushes_the_bar(
                 assert bar["mark"]["right"] <= bar["round"]["left"], (width, bar)
                 assert bar["round"]["right"] <= bar["menu"]["left"], (width, bar)
                 assert "R1/" not in bar["text"], (width, bar)
+
+            # Too narrow for the word: "Round 1/3" needs about 340px and a
+            # 340px phone's bar has 320. The numbers alone, nothing pushed.
+            await guest.set_viewport_size({"width": 340, "height": 800})
+            await guest.wait_for_function(SHORT_ROUND_SHOWN)
+            bar = await guest.evaluate(ROUND)
+            assert bar["page"] <= bar["inner"], bar
+            assert bar["mark"]["right"] <= bar["round"]["left"], bar
+            assert bar["round"]["right"] <= bar["menu"]["left"], bar
+
+            # A notice beside the round: measured with it, so still nothing
+            # pushed off the bar, whichever label that leaves room for.
+            await guest.set_viewport_size({"width": 360, "height": 800})
+            await guest_context.set_offline(True)
+            await guest.wait_for_selector(".room-notice-chip")
+            await guest.wait_for_timeout(300)
+            bar = await guest.evaluate(ROUND)
+            notice = await guest.locator(".room-notice-chip").bounding_box()
+            assert bar["page"] <= bar["inner"], bar
+            assert notice and bar["round"]["right"] <= notice["x"], (notice, bar)
+            assert notice["x"] + notice["width"] <= bar["menu"]["left"], (notice, bar)
+            await guest_context.set_offline(False)
         finally:
             await host_context.close()
             await guest_context.close()

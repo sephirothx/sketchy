@@ -60,8 +60,10 @@ function fullRoundFits(bar: HTMLElement, chip: HTMLElement): boolean {
  * the word beside the wordmark, the clock, any notice and the menu - never
  * "R2/3", which read as a code. The word is the first thing on the bar to go,
  * so it never pushes the wordmark or the clock (R-UX-11). Both labels are
- * rendered and the chip says which shows; the bar is measured on every
- * change of its size or content, before paint.
+ * rendered and the chip says which shows; the bar is measured on mount and
+ * on every change of its size or content. The mount measure lands before the
+ * first paint; a later change (a notice arriving, a resize) is a state update
+ * React schedules, so the old label may stand for a frame before it follows.
  *
  * The ring runs on a phone too. A game scored on seconds should not put its
  * clock in 12px of grey text, and the turn bar's numeral is what covers the

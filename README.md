@@ -2741,7 +2741,7 @@ A seated client checks with the server every five seconds that it still holds th
   the clock, the menu and your avatar stay, down to a phone - where a notice on a narrow bar
   borrows the wordmark's room until it ends. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
   that, where the bar has given the name up - and says "ready to start" once Start would work
-  (not during a server update, when no new game can start).
+  (and neither that nor "waiting" during a server update, when no new game can start).
   On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card. An invite link shows the room the same six
