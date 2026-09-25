@@ -574,6 +574,7 @@ export const EN = {
     newHere: "New here? ",
     createAnAccount: "Create an account",
     guestIdentity: (p: { name: string }) => `${p.name}. Your display name is not saved.`,
+    guestNameNotSaved: "Guest name, not saved to an account",
     signedInAs: (p: { name: string }) => `Signed in as ${p.name}`,
   },
 
@@ -1038,7 +1039,7 @@ export const EN = {
     friends: "Friends",
     close: "Close",
     closeFriends: "Close friends",
-    friendsNeedAccountGuestNameBelongs: "Friends need an account. A guest name belongs to this browser\n              rather than to you, so there would be nobody left to be friends\n              with a month from now.",
+    friendsNeedAnAccount: "Friends need an account, so they can find you again. Create an account or sign in to add friends.",
     loading: "Loading…",
     noFriendsYetAddSomebodyFrom: "No friends yet. Add somebody from the lobby, or from a game you\n              are both in.",
     requests: "Requests",
@@ -1506,7 +1507,8 @@ export const EN = {
     createAccount: "Create account",
     statistics: "Statistics",
     gameHistory: "Game history",
-    includeGamesThatFellApart: "Include games that fell apart",
+    includeAbandonedGames: "Include abandoned games",
+    winsAndScoresAppearAfterFirstGame: "Wins and scores appear after the first finished game.",
     notKept: "not kept",
     pinnedDrawings: "Pinned drawings",
     nothingPinnedYet: "Nothing pinned yet. Pin a drawing from a game's recap, or from a game in your history below.",
@@ -1533,7 +1535,7 @@ export const EN = {
     promptSourceBuiltinFallback: "Built-in fallback prompts",
     unknownPlayer: "Unknown player",
     backToLobby: "Back to lobby",
-    guestDisplayNameNotSaved: "Guest — display name not saved",
+    guest: "Guest",
     registeredPlayer: "Registered player",
     noFinishedGamesYetPlay: "No finished games yet. Play one and it will show up here.",
     noGamesToShowGames:
@@ -2058,7 +2060,6 @@ export const EN = {
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} lives in this browser only. An account keeps the name, your points and your history on every device, and lets you pick a color.`,
     systemThemeNow: (p: { theme: "dark" | "light" }) => `Now: ${p.theme}`,
-    needsAccount: "Needs an account",
     choosePicture: "Choose a picture",
     editPicture: "Edit picture",
     picture: "Picture",
@@ -2131,18 +2132,15 @@ export const EN = {
     notVerified: "Not verified",
     saving: "Saving…",
     save: "Save",
-    aGuestHasNothingTo: "A guest has nothing to recover: there is no password to forget.",
     withoutOneThereIsNo:
       "Without one there is no way back into this account if the password is forgotten.",
     addAnEmail: "Add an email",
-    guestsHaveNoPassword: "Guests have no password.",
     changingItSignsEveryOther: "Changing it signs every other device out.",
     setThisUpAndThe:
       (p: { pendingRole: string }) => `Set this up and the ${p.pendingRole} role you have been offered takes effect.`,
     anAuthenticatorAppSCode:
       "An authenticator app's code, on top of your password. Moderators and administrators must have one.",
     setUp: "Set up",
-    thisBrowserIsTheOnly: "This browser is the only place you exist.",
     everyBrowserStillHoldingA:
       "Every browser still holding a session, and a way to end any of them.",
     worksForAGuestToo: "Works for a guest too: the games you have played are yours.",

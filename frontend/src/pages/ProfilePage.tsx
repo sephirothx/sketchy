@@ -7,6 +7,8 @@ import { AppHeader } from "../components/AppHeader";
 import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "../components/icons";
 import { ReportAccountDialog } from "../components/ReportAccountDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
+import { formatDate } from "../lib/clock";
+import { statisticsLayout, type TurnStat } from "../lib/profileStats";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
@@ -61,6 +63,53 @@ function promptSourceLabel(mode: GameSummary["promptSourceMode"]): string {
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
   return reactions.map((reaction) => ({ playerId: reaction.seatId, emoji: reaction.emoji }));
+}
+
+/** The label of a per-turn count, read at render so a locale switch reaches it. */
+function turnStatLabel(key: TurnStat): string {
+  switch (key) {
+    case "turnsPlayed":
+      return ui.profilePage.turnsPlayed;
+    case "promptsGuessed":
+      return ui.profilePage.promptsGuessed;
+    case "drawingsMade":
+      return ui.profilePage.drawingsMade;
+    case "reactionsReceived":
+      return ui.profilePage.reactionsReceived;
+  }
+}
+
+/** The numbers, drawn only where they say something (`lib/profileStats.ts`). */
+function StatisticsPanel({ stats }: { stats: ProfileStats }) {
+  const statsLayout = statisticsLayout(stats);
+  return (
+    <section className="panel profile-statistics">
+      <h2>{ui.profilePage.statistics}</h2>
+      {statsLayout.gameStats ? (
+        <div className="profile-stats">
+          <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
+          <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
+          <StatTile
+            label={ui.profilePage.winRate}
+            value={`${Math.round(stats.winRate * 100)}%`}
+          />
+          <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
+        </div>
+      ) : (
+        <p className="profile-note">{ui.profilePage.winsAndScoresAppearAfterFirstGame}</p>
+      )}
+      {(statsLayout.gameStats || statsLayout.turnStats.length > 0) && (
+        <div className="profile-stats profile-stats-small">
+          {statsLayout.turnStats.map((key) => (
+            <StatTile key={key} label={turnStatLabel(key)} value={String(stats[key])} />
+          ))}
+          {statsLayout.gameStats && (
+            <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
@@ -483,7 +532,6 @@ export function ProfilePage() {
 
 
 function ProfileView({ userId }: { userId: string }) {
-  const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
   const [subject, setSubject] = useState<PublicProfile | null>(null);
   // Ownership is decided by the resolved subject, not the route: a history
@@ -628,7 +676,7 @@ function ProfileView({ userId }: { userId: string }) {
                 is 56px with the page's own type scale on it. */}
             <span className="avatar-frame" aria-hidden="true">
             <span
-              className={`profile-avatar avatar avatar-player${
+              className={`profile-avatar avatar ${subject.isAnonymous ? "avatar-guest" : "avatar-player"}${
                 !subject.isAnonymous && subject.avatarUrl && !doodleNameOf(subject.avatarUrl)
                   ? " has-picture"
                   : ""
@@ -666,9 +714,11 @@ function ProfileView({ userId }: { userId: string }) {
                 />
               </h1>
               <p className="profile-subtitle">
-                {subject.isAnonymous ? ui.profilePage.guestDisplayNameNotSaved : ui.profilePage.registeredPlayer}
+                {subject.isAnonymous ? ui.profilePage.guest : ui.profilePage.registeredPlayer}
+                {/* The day, not the minute: when somebody joined is a fact
+                    about them, not an appointment. */}
                 {subject.createdAt
-                  && ` · ${ui.profilePage.joinedOn({ date: formatTimestamp(subject.createdAt, timeFormat) })}`}
+                  && ` · ${ui.profilePage.joinedOn({ date: formatDate(new Date(subject.createdAt)) })}`}
                 {lastSeenLabel(subject) && (
                   <>
                     {" · "}
@@ -768,25 +818,7 @@ function ProfileView({ userId }: { userId: string }) {
               long read, and the numbers stay in view while it scrolls. The
               statistics come first here, so they are still read first. */}
           <div className="profile-columns">
-          <section className="panel profile-statistics">
-            <h2>{ui.profilePage.statistics}</h2>
-            <div className="profile-stats">
-              <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
-              <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
-              <StatTile
-                label={ui.profilePage.winRate}
-                value={`${Math.round(stats.winRate * 100)}%`}
-              />
-              <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
-            </div>
-            <div className="profile-stats profile-stats-small">
-              <StatTile label={ui.profilePage.turnsPlayed} value={String(stats.turnsPlayed)} />
-              <StatTile label={ui.profilePage.promptsGuessed} value={String(stats.promptsGuessed)} />
-              <StatTile label={ui.profilePage.drawingsMade} value={String(stats.drawingsMade)} />
-              <StatTile label={ui.profilePage.reactionsReceived} value={String(stats.reactionsReceived)} />
-              <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
-            </div>
-          </section>
+          <StatisticsPanel stats={stats} />
 
           <section className="panel profile-history">
             <div className="profile-history-head">
@@ -797,7 +829,7 @@ function ProfileView({ userId }: { userId: string }) {
                   checked={includeAbandoned}
                   onChange={(change) => setIncludeAbandoned(change.target.checked)}
                 />
-                {ui.profilePage.includeGamesThatFellApart}
+                {ui.profilePage.includeAbandonedGames}
               </label>
             </div>
             {games.length === 0 ? (

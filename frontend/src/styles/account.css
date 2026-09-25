@@ -8,8 +8,12 @@
  *
  * #6b7280 is 4.83:1 on white; the dark-theme override is 5.7:1 or better. No
  * opacity - it would scale the contrast straight back down.
+ *
+ * The header chip's own name wears it too (GLOSSARY: Guest), so a guest reads
+ * the same in the chip as in every list.
  */
-.colored-player-name.is-guest {
+.colored-player-name.is-guest,
+.identity-name.is-guest {
   font-style: italic;
   font-weight: 600;
   color: #6b7280;
@@ -27,7 +31,8 @@
   padding-right: 0.22em;
 }
 
-[data-theme="dark"] .colored-player-name.is-guest {
+[data-theme="dark"] .colored-player-name.is-guest,
+[data-theme="dark"] .identity-name.is-guest {
   color: #94a3b8;
 }
 
@@ -236,13 +241,14 @@
 
 /*
  * Marks a name as not yet claimed. Purely supplementary - the chip's
- * aria-label says so in words, so nothing depends on seeing the dot.
+ * aria-label says so in words, and the dot's title says it to a pointer, so
+ * nothing depends on seeing it. The warning tone per theme, not a literal.
  */
 .identity-unclaimed {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: var(--warning);
   flex: none;
 }
 
@@ -888,12 +894,6 @@
   font-weight: 600;
   cursor: pointer;
   min-height: 32px;
-}
-
-.settings-locked-hint {
-  margin: 0;
-  font-size: 13px;
-  opacity: 0.75;
 }
 
 /* Post-game claim prompt. */

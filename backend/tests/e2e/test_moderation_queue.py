@@ -121,8 +121,8 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
 
             # Decide it, then find it again under Closed.
             await moderator_page.locator(".mod-note textarea").fill("Looked, and it was fine.")
-            # Scoped to the case's own actions: the email reminder banner
-            # carries a Dismiss of its own.
+            # Scoped to the case's own actions: other notes on the page (the
+            # email reminder, once it is due) carry a Dismiss of their own.
             await moderator_page.locator(".mod-actions").get_by_role(
                 "button", name="Dismiss"
             ).click()

@@ -39,8 +39,33 @@
   opacity: 0.75;
 }
 
+/* One heading pattern for every panel on the page: the panel's own padding
+   above the title, one 12px gap below it, and the lobby's 22px panel title.
+   Game history's title shares a row with its filter, so there the row keeps
+   the gap and the title keeps none - it used to take the browser's default
+   margins and float in 40px while the others sat against their content. */
+.profile-page .panel > h2,
+.profile-history-head {
+  margin: 0 0 12px;
+}
+
+.profile-history-head h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+/* A panel's one-line note sits in the heading's gap, not a paragraph's. */
+.profile-page .panel > .profile-note {
+  margin: 0;
+}
+
+/* Turn counts under the "no finished game yet" line, clear of it. */
+.profile-statistics .profile-note + .profile-stats-small {
+  padding-top: 12px;
+}
+
 .profile-claim p {
-  margin: 4px 0 12px;
+  margin: 0 0 12px;
   font-size: 14px;
 }
 
