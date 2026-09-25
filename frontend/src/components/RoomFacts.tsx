@@ -1,6 +1,7 @@
 import { useLayoutEffect, useRef, type ReactNode } from "react";
 import { BulbIcon, ClockIcon, DeckIcon, RoundsIcon, TrophyIcon, UsersIcon } from "./icons";
-import { otherRoomRules, roomFacts, type RoomFactKey, type RoomFactsInput } from "../lib/roomCardFacts";
+import { columnsFor, otherRoomRules, roomFacts, type RoomFactKey, type RoomFactsInput } from "../lib/roomCardFacts";
+import { textWidth } from "../lib/textWidth";
 import { ui } from "../content/ui/index.ts";
 
 const ICONS: Record<RoomFactKey, ReactNode> = {
@@ -12,42 +13,24 @@ const ICONS: Record<RoomFactKey, ReactNode> = {
   prompts: <DeckIcon size={18} />,
 };
 
-/** Six to a row, then three, then two: whichever is the most that still
-    gives every word its own width. */
-const COLUMN_CHOICES = [6, 3, 2] as const;
-
-let measureContext: CanvasRenderingContext2D | null | undefined;
-
+/** The widest single word in the strip, values and labels, in its own font:
+    what a cell has to hold for no word to break inside itself. */
 function widestWord(dl: HTMLElement): number {
-  measureContext ??= document.createElement("canvas").getContext("2d");
-  if (!measureContext) return 0;
   let widest = 0;
   for (const el of dl.querySelectorAll<HTMLElement>(".room-fact-text, .room-fact-label")) {
-    const style = getComputedStyle(el);
-    measureContext.font = `${style.fontStyle} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
     for (const word of (el.textContent ?? "").split(/\s+/)) {
-      widest = Math.max(widest, measureContext.measureText(word).width);
+      widest = Math.max(widest, textWidth(word, el));
     }
   }
   return widest;
 }
 
-/**
- * How many cells to a row, so that no word breaks inside itself: "Defau|lt"
- * in six cells of a 340px column, "Zeitgesteu|erte" in three on a German
- * phone. Measured, not a breakpoint, because the widest word is the
- * language's - "Default" fits three to a phone's row where "Zeitgesteuerte"
- * (Timed) and "Niederländisch" (Dutch) need two - and the strip sits in
- * columns of different widths on the waiting room and the invite page.
- */
-function fitColumns(dl: HTMLElement): number {
+/** A cell's horizontal padding. */
+function cellPadding(dl: HTMLElement): number {
   const cell = dl.querySelector<HTMLElement>(".room-fact");
-  if (!cell) return COLUMN_CHOICES[0];
+  if (!cell) return 0;
   const style = getComputedStyle(cell);
-  // The cell's padding, its 1px rule, and a pixel for canvas-versus-layout
-  // rounding.
-  const needed = widestWord(dl) + parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) + 2;
-  return COLUMN_CHOICES.find((columns) => dl.clientWidth / columns >= needed) ?? 2;
+  return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight);
 }
 
 /**
@@ -69,14 +52,26 @@ export function RoomFacts({ room, testId = "room-facts" }: { room: RoomFactsInpu
   useLayoutEffect(() => {
     const dl = listRef.current;
     if (!dl) return;
+    // The words are measured once per set of words (and again once the font
+    // has loaded); a resize only divides the strip's new width by them.
+    let widest = 0;
+    let padding = 0;
+    const measure = () => {
+      widest = widestWord(dl);
+      padding = cellPadding(dl);
+    };
     const fit = () => {
-      dl.dataset.columns = String(fitColumns(dl));
+      const current = dl.dataset.columns ? Number(dl.dataset.columns) : undefined;
+      dl.dataset.columns = String(columnsFor(dl.clientWidth, widest, padding, current));
     };
     // Before the first paint, and again once the font has loaded.
+    measure();
     fit();
     let live = true;
     void document.fonts?.ready.then(() => {
-      if (live) fit();
+      if (!live) return;
+      measure();
+      fit();
     });
     // A later resize waits a frame: the new column count changes the strip's
     // height, which inside the observer's own callback is a loop it reports
