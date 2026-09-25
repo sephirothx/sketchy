@@ -109,7 +109,7 @@ export function GameEndOverlay({
               : <>
                   {winners.map((winner, index) => (
                     <span key={winner.playerId}>
-                      {index > 0 ? (index === winners.length - 1 ? " and " : ", ") : ""}
+                      {index > 0 ? (index === winners.length - 1 ? ui.gameEndOverlay.nameListAnd : ", ") : ""}
                       <span
                         className={playerNameClass(winner.isAnonymous)}
                         style={playerNameStyle(winner.nameColor, winner.isAnonymous)}

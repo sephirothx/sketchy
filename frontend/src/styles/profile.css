@@ -395,49 +395,13 @@
 
 
 
-/* The info link riding along with a prompt-list chip. */
+/* A prompt-list chip, with its "how this list plays" hint riding along. */
 .prompt-list-chip-group {
   align-items: center;
   display: inline-flex;
   gap: 2px;
 }
 
-/* The mark reads small, but the target it sits in is 24px square: below that
-   it fails WCAG 2.2 target-size, which the axe suite enforces. */
-.prompt-list-chip-info {
-  align-items: center;
-  color: var(--muted);
-  display: inline-flex;
-  height: 24px;
-  justify-content: center;
-  text-decoration: none;
-  width: 24px;
-}
-
-.prompt-list-chip-info > span {
-  align-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  display: inline-flex;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 11px;
-  font-style: italic;
-  font-weight: 700;
-  height: 18px;
-  justify-content: center;
-  line-height: 1;
-  width: 18px;
-}
-
-.prompt-list-chip-info:hover,
-.prompt-list-chip-info:focus-visible {
-  color: var(--primary);
-}
-
-.prompt-list-chip-info:hover > span,
-.prompt-list-chip-info:focus-visible > span {
-  border-color: var(--primary);
-}
 
 
 

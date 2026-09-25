@@ -573,7 +573,9 @@ export const DE: Catalogue = {
     thatConfirmationLinkCouldNotBe: "Dieser Bestätigungslink konnte nicht verwendet werden.",
     somethingWentWrongPleaseTryAgain: "Etwas ist schiefgelaufen. Bitte versuch es noch einmal.",
     evenBestGuessersForgetSometimes: "Auch die besten Ratenden vergessen mal etwas.",
-    weRsquoLlSendSecureTime: "Wir senden einen sicheren, zeitlich begrenzten Link an die bestätigte\n            E-Mail-Adresse deines Kontos.",
+    asideForgot: "Wir senden einen sicheren, zeitlich begrenzten Link an die bestätigte E-Mail-Adresse deines Kontos.",
+    asideReset: "Wähle ein Passwort, das du nirgendwo sonst verwendest.",
+    asideVerify: "Mit einer bestätigten E-Mail-Adresse kommst du wieder rein, falls du dein Passwort einmal vergisst.",
     accountHelp: "Kontohilfe",
     backLobby: "Zurück zur Lobby",
     enterYourUsernameYourConfirmedEmail: "Gib deinen Benutzernamen oder deine bestätigte E-Mail-Adresse ein. Wenn\n              das Konto wiederhergestellt werden kann, ist ein Link unterwegs.",
@@ -848,8 +850,6 @@ export const DE: Catalogue = {
     deleteThisRoomSettingPreset: "Diese Raumvorlage löschen?",
     deletePresetDescription: "Räume, die du damit schon erstellt hast, bleiben unverändert.",
     createTheRoom: "den Raum erstellen",
-    noScoring: "Ohne Punkte",
-    public: "Öffentlich",
     private: "Privat",
     backToLobby: "Zurück zur Lobby",
     leaveBlankForARandom: "Leer lassen für einen Zufallsnamen!",
@@ -857,10 +857,6 @@ export const DE: Catalogue = {
     createRoom2: "Raum erstellen",
     yourRoom: "Dein Raum",
     aRandomName: "Ein zufälliger Name",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "Spieler", other: "Spieler" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "Runde", other: "Runden" }),
   },
 
   customPromptsEditor: {
@@ -1045,6 +1041,8 @@ export const DE: Catalogue = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " und ",
     continueLabel: "Weiter",
     youFinished: (p: { points: number }) =>
       `Du wurdest {place} mit ${counted(p.points, { one: "Punkt", other: "Punkten" })}.`,
@@ -1349,8 +1347,10 @@ export const DE: Catalogue = {
       `${counted(p.prompts, { one: "Begriff", other: "Begriffe" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `Diese Liste ist ${p.state} und kann in neuen Runden nicht verwendet werden. Bearbeiten stellt sie nicht automatisch wieder her; ein Moderator muss sie prüfen.`,
+    underReview: "In Prüfung",
+    hidden: "Ausgeblendet",
+    listUnderReviewWarning: "Diese Liste wird geprüft und kann in neuen Runden nicht verwendet werden. Bearbeiten stellt sie nicht automatisch wieder her; ein Moderator muss sie prüfen.",
+    listHiddenWarning: "Diese Liste ist ausgeblendet und kann in neuen Runden nicht verwendet werden. Bearbeiten stellt sie nicht automatisch wieder her; ein Moderator muss sie prüfen.",
     needsReview: (p: { count: number }) => `Zu prüfen (${p.count})`,
     removePrompt: (p: { prompt: string }) => `${p.prompt} entfernen`,
     couldNotLoadYourPromptLists: "Deine Begriffslisten konnten nicht geladen werden.",
@@ -1475,16 +1475,8 @@ export const DE: Catalogue = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "Runde", other: "Runden" })} · ${counted(p.players, { one: "Spieler", other: "Spieler" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} Pkt.`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Regeln: Wertung ${p.scoringMode}${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (alte Version unbekannt)"
-      } · Hinweise ${p.hintMode} · ${p.seconds} Sekunden · Begriffe ${p.promptSource}`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Regeln: ${p.scoring} · ${p.hints} · ${p.seconds} Sekunden · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
     privateRoom: "privater Raum",
     thisGameDidNotFinishSo: "Diese Runde ist nicht zu Ende gegangen, das hier ist also der Punktestand\n              beim Abbruch und keine Endplatzierung.",
@@ -1520,10 +1512,17 @@ export const DE: Catalogue = {
     onlyThePlayersInThis: "Nur die Spieler dieses Spiels können seine Züge sehen.",
     couldNotLoadTheTurns: "Die Züge dieses Spiels konnten nicht geladen werden.",
     cutShort: "abgebrochen",
+    abandoned: "verlassen",
     noAttempt: "kein Versuch",
     joinedLate: "spät beigetreten",
-    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
-      `nicht gewertet (${p.eligibilityReason})`,
+    notEligibleAfk: "nicht gewertet (AFK)",
+    notEligibleDisconnected: "nicht gewertet (getrennt)",
+    notEligible: "nicht gewertet",
+    noGuessers: "keine Ratenden",
+    promptSourceCurated: "Kuratierte Begriffe",
+    promptSourceCustom: "Eigene Begriffe",
+    promptSourceMixed: "Gemischte Begriffe",
+    promptSourceBuiltinFallback: "Eingebaute Ersatzbegriffe",
     unknownPlayer: "Unbekannte Person",
     backToLobby: "Zurück zur Lobby",
     guestDisplayNameNotSaved: "Gast – Anzeigename nicht gespeichert",
@@ -1575,7 +1574,7 @@ export const DE: Catalogue = {
     pickSomethingDraw: "Wähle etwas zum Zeichnen",
     autoPicksWhenTimeRunsOut: "Wählt automatisch, wenn die Zeit abläuft.",
     hintSpendLimitReached: "Hinweis-Limit erreicht",
-    deductedFromYourScoreIfYou: "Wird von deinen Punkten abgezogen, wenn du den Begriff errätst",
+    hintSpendComesOutOfTurnPoints: "Wird von den Punkten dieses Zugs abgezogen, wenn du den Begriff errätst.",
     buyLetterRevealsEveryMatch: "Buchstaben kaufen – zeigt jedes Vorkommen",
     selectThePrompt: "den Begriff auswählen",
     choosing: "Wird gewählt …",
@@ -1613,10 +1612,9 @@ export const DE: Catalogue = {
     scoring: "Punkte",
     hints: "Hinweise",
     findPrompt: "Begriff finden",
-    rollerCoaster: "Achterbahn",
     loading: "Wird geladen …",
     prompt: "Begriff",
-    howGoes: "Wie es läuft",
+    howHard: "Wie schwer",
     guessed: "Erraten",
     picked: "Gewählt",
     drawn: "Gezeichnet",
@@ -1628,10 +1626,6 @@ export const DE: Catalogue = {
     defaultScoring: "Standardpunkte",
     pressureScoring: "Druckpunkte",
     allHintModes: "Alle Hinweismodi",
-    noHints: "Keine Hinweise",
-    checkpointHints: "Zeitgesteuerte Hinweise",
-    purchasedHints: "Gekaufte Hinweise",
-    letterWheel: "Buchstabenrad",
     backToLobby: "Zurück zur Lobby",
   },
 
@@ -1876,6 +1870,7 @@ export const DE: Catalogue = {
   },
 
   roomPlayersPanel: {
+    you: "(du)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "Zuschauer", other: "Zuschauer" }),
     spectatorsHeading: (p: { count: number }) => `Zuschauer (${p.count})`,
@@ -1907,7 +1902,7 @@ export const DE: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Sprache",
+    promptLanguage: "Begriffssprache",
     visibility: "Sichtbarkeit",
     maxPlayers: "Maximale Spielerzahl",
     rounds: "Runden",
@@ -2336,10 +2331,6 @@ export const DE: Catalogue = {
       `${p.name} und ${counted(p.others, { one: "eine weitere Person", other: "weitere Personen" })} wollen befreundet sein.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
-  },
-
   roomVisibilityIcon: {
     publicRoom: "Öffentlicher Raum",
     privateRoom: "Privater Raum",
@@ -2549,8 +2540,8 @@ export const DE: Catalogue = {
       `${p.drawerNickname} wählt einen Begriff …`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Der Begriff war „${p.prompt}“`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} hat es erraten${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} hat es erraten · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} ist wieder verbunden`,
     playerDisconnected: (p: { nickname: string }) =>
@@ -2588,7 +2579,7 @@ export const DE: Catalogue = {
     colorblindSafe: "Farbenblindensicher",
     colorsThatStayApartFor: "Farben, die für farbenblinde Spieler unterscheidbar bleiben.",
     blackAndWhite: "Schwarz-Weiß",
-    blackAndWhiteOnly: "Nur Schwarz und Weiß.",
+    twoSwatchesNoCustomColors: "Nur zwei Farbfelder; keine eigenen Farben.",
     allTools: "Alle Werkzeuge",
     onlyTool: (p: { tool: string }) =>
       `nur ${p.tool}`,
