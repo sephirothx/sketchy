@@ -18,6 +18,7 @@ from app.auth.password_reset import (
     reset_password_as_operator,
 )
 from app.auth.routes import create_auth_router
+from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.email import EmailAddressError
 from app.auth.recovery import (
     EmailAlreadyInUse,
@@ -39,7 +40,7 @@ from app.db.models import (
     UserSettings,
     generate_uuid,
 )
-from app.domain_values import EmailOutboxState
+from app.domain_values import AccountState, EmailOutboxState
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
 from tests.dbfixtures import create_test_db
@@ -141,7 +142,8 @@ async def test_an_offered_address_is_not_recorded_until_it_is_proved(env):
         "address": None,
         "verified": False,
         "pendingAddress": "claimant@example.com",
-        "reminderDue": True,
+        # Not yet: the first reminder comes a week after signing up.
+        "reminderDue": False,
         "deliveryConfigured": False,
     }
 
@@ -335,25 +337,82 @@ async def test_an_expired_link_is_refused(env):
     assert refused.status_code == 400
 
 
+async def _age_the_reminder_clock(factory, days: int = 8) -> None:
+    async with factory() as session:
+        async with session.begin():
+            settings = await session.scalar(select(UserSettings))
+            settings.email_reminder_last_shown_at = datetime.now(
+                timezone.utc
+            ) - timedelta(days=days)
+
+
 async def test_the_reminder_returns_rather_than_repeats(env):
     new_client, factory = env
     http = new_client()
     await register(http, "Forgetful")
+    await _age_the_reminder_clock(factory)
 
     assert (await http.get("/api/auth/email")).json()["reminderDue"] is True
     assert (await http.post("/api/auth/email/reminder-seen")).status_code == 200
     assert (await http.get("/api/auth/email")).json()["reminderDue"] is False
 
+    await _age_the_reminder_clock(factory)
+    assert (await http.get("/api/auth/email")).json()["reminderDue"] is True
+
+
+async def test_the_first_reminder_waits_a_week_after_signing_up(env):
+    """The form has just called the address optional (R-AUTH-15).
+
+    A banner asking for it on the very next page contradicts the form, so the
+    clock starts at registration and the first reminder is due a week later.
+    """
+    new_client, factory = env
+    http = new_client()
+    await register(http, "Newcomer")
+
+    assert (await http.get("/api/auth/email")).json()["reminderDue"] is False
+    await _age_the_reminder_clock(factory, days=6)
+    assert (await http.get("/api/auth/email")).json()["reminderDue"] is False
+    await _age_the_reminder_clock(factory, days=7)
+    assert (await http.get("/api/auth/email")).json()["reminderDue"] is True
+
+
+async def test_a_claimed_guest_gets_the_same_week(env):
+    """Claiming a guest is signing up too: the grace is not for fresh accounts only."""
+    new_client, factory = env
+    http = new_client()
+    guest = await http.post("/api/auth/display-name", json={"displayName": "Lingerer"})
+    assert guest.status_code == 200, guest.text
+    guest_id = guest.json()["id"]
+
+    account = await register(http, "Lingerer")
+    assert account["id"] == guest_id, "registering should have claimed the guest"
+
+    assert (await http.get("/api/auth/email")).json()["reminderDue"] is False
+    await _age_the_reminder_clock(factory)
+    assert (await http.get("/api/auth/email")).json()["reminderDue"] is True
+
+
+async def test_a_settings_row_made_before_the_seed_still_gets_the_week(env):
+    """Another tab can create the row between the claim and the seed."""
+    _, factory = env
+    user_id = generate_uuid()
     async with factory() as session:
         async with session.begin():
-            from app.db.models import UserSettings
+            session.add(
+                User(
+                    id=user_id,
+                    username="Racer",
+                    display_name="Racer",
+                    state=AccountState.REGISTERED.value,
+                    password_hash="x",
+                )
+            )
+            await session.flush()
+            session.add(UserSettings(user_id=user_id))
 
-            settings = await session.scalar(select(UserSettings))
-            settings.email_reminder_last_shown_at = datetime.now(
-                timezone.utc
-            ) - timedelta(days=8)
-
-    assert (await http.get("/api/auth/email")).json()["reminderDue"] is True
+    await seed_user_settings(factory, user_id=str(user_id), values=UserSettingsSeed())
+    assert (await email_state(factory, user_id=user_id)).reminder_due is False
 
 
 async def test_a_proved_address_ends_the_reminder(env):

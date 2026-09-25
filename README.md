@@ -928,7 +928,9 @@ Claiming an account can offer an email address. It is optional, and stays
 optional: requiring one would break registration on every deployment with no
 SMTP configured, which includes the zero-configuration default this project
 documents. An account without one is reminded weekly that a forgotten password
-cannot be reset - a note that can be closed and returns, with the interval kept
+cannot be reset, the first time a week after signing up (or claiming a guest),
+since the form has only just called the address optional - a note that can be
+closed and returns, with the interval kept
 on the account so it neither restarts on each new device nor disappears when
 browser storage is cleared. It stays out of rooms entirely: a room lays itself
 out to the viewport rather than flowing beneath a banner, so the note landed on
@@ -1337,8 +1339,10 @@ changes and there is no Save: changes made together are merged into one write,
 success is silent, and a write the account refuses raises a notice while the
 value stays applied locally. The rows a server can refuse — the display name,
 the email address, the password — keep a button of their own. Guests see every
-section, with account-only rows locked and the reason on the row; a guest who
-logs in from inside Settings is told once that the account's values took over.
+section, but not the rows only an account has: the card at the top of Account,
+with **Create an account** and **Sign in**, is the one invitation, and **Signing
+in** appears once there is an account to sign in to. A guest who signs in from
+inside Settings is told once that the account's values took over.
 
 The identity menu is navigation only: Settings, profile, prompt stats, prompt
 lists, bug reports, log out. Account absorbs what the menu used to hold: the

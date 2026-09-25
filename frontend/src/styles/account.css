@@ -223,6 +223,14 @@
   white-space: nowrap;
 }
 
+/* A guest's name in italics, as every list draws it (GLOSSARY: Guest). The
+   slant is synthesised and this box clips, so it gets the room the lobby's
+   rows give it - see `.colored-player-name.is-guest` above. */
+.identity-name.is-guest {
+  font-style: italic;
+  padding-right: 0.22em;
+}
+
 .identity-chevron {
   display: inline-flex;
   color: var(--faint);
@@ -230,13 +238,14 @@
 
 /*
  * Marks a name as not yet claimed. Purely supplementary - the chip's
- * aria-label says so in words, so nothing depends on seeing the dot.
+ * aria-label says so in words, and the dot's title says it to a pointer, so
+ * nothing depends on seeing it. The warning tone per theme, not a literal.
  */
 .identity-unclaimed {
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: var(--warning);
   flex: none;
 }
 
@@ -891,12 +900,6 @@
   font-weight: 600;
   cursor: pointer;
   min-height: 32px;
-}
-
-.settings-locked-hint {
-  margin: 0;
-  font-size: 13px;
-  opacity: 0.75;
 }
 
 /* Post-game claim prompt. */

@@ -65,6 +65,12 @@
   line-height: 1.5;
 }
 
+/* A guest's one line and the two ways past it. */
+.friends-guest {
+  display: grid;
+  gap: 12px;
+}
+
 .friends-section-heading {
   display: flex;
   align-items: center;

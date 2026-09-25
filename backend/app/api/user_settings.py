@@ -1,6 +1,7 @@
 """Registered-account preferences shared across devices."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -219,7 +220,15 @@ async def seed_user_settings(
     user_id: str,
     values: UserSettingsSeed,
 ) -> dict:
-    """Create once during registration; never overwrite an existing account."""
+    """Create once during registration; never overwrite an existing account.
+
+    Registration also starts the no-email reminder's clock (R-AUTH-15): the
+    form has just called the address optional, so the first reminder is due a
+    week after signing up rather than on the very next page. Stamped whether or
+    not this call made the row - a tab still holding the guest cookie can
+    reach `settings_of_registered_account` between the claim and this seed and
+    make it first - but only when unset, so it never pushes a reminder back.
+    """
     db_user_id = UUID(user_id)
     async with session_factory() as session:
         async with session.begin():
@@ -231,7 +240,12 @@ async def seed_user_settings(
                     **_settings_values(values),
                 )
                 session.add(settings)
-                await session.flush()
+            if settings.email_reminder_last_shown_at is None:
+                settings.email_reminder_last_shown_at = datetime.now(timezone.utc)
+            await session.flush()
+            # Stamping a row that already existed is an UPDATE, whose
+            # database-generated ``updated_at`` stays expired until reloaded.
+            await session.refresh(settings)
         return user_settings_payload(settings)
 
 

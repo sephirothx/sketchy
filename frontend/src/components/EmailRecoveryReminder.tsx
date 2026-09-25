@@ -18,6 +18,8 @@ Email is optional, so somebody can register without one and never think about
 it again - until they forget their password, when there is nothing anyone can
 do for them. This is the reminder, deliberately shaped as a note rather than a
 gate: it can be closed, and it comes back in a week rather than on every load.
+It first appears a week after signing up, not on the page after the form that
+called the address optional - the server decides that (R-AUTH-15).
 The interval is kept on the account rather than in the browser, so it does not
 restart on each new device or vanish when storage is cleared.
 

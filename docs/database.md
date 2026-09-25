@@ -584,6 +584,12 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 Bounded at both the API and database layers: key bindings must describe the complete
 supported action set.
 
+`email_reminder_last_shown_at` is the no-email reminder's clock (R-AUTH-15): the
+reminder is due once it is a week old, and showing the reminder resets it. It is
+also stamped when the row is seeded at registration — a claimed guest included — so
+the first reminder comes a week after signing up rather than on the next page;
+`NULL` means an account that has never been told, and is due at once.
+
 **Two languages, and they are not the same one.** `prompt_language` is the language
 this player *plays* in (R-PROMPT-11) — what the lobby leads with and what a new room
 starts in. `locale` is the language they *read* in (R-I18N-06): the interface, the

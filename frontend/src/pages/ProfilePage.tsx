@@ -7,6 +7,7 @@ import { AppHeader } from "../components/AppHeader";
 import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "../components/icons";
 import { ReportAccountDialog } from "../components/ReportAccountDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
+import { formatDate } from "../lib/clock";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
@@ -31,6 +32,7 @@ import {
   formatTimestamp,
   HISTORY_PAGE_SIZE,
   setHistoryReaction,
+  statisticsAreEmpty,
   type GameDetail,
   type GameTurn,
   type GameSummary,
@@ -465,7 +467,6 @@ export function ProfilePage() {
 
 
 function ProfileView({ userId }: { userId: string }) {
-  const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
   const [subject, setSubject] = useState<PublicProfile | null>(null);
   // Ownership is decided by the resolved subject, not the route: a history
@@ -610,7 +611,7 @@ function ProfileView({ userId }: { userId: string }) {
                 is 56px with the page's own type scale on it. */}
             <span className="avatar-frame" aria-hidden="true">
             <span
-              className={`profile-avatar avatar avatar-player${
+              className={`profile-avatar avatar ${subject.isAnonymous ? "avatar-guest" : "avatar-player"}${
                 !subject.isAnonymous && subject.avatarUrl && !doodleNameOf(subject.avatarUrl)
                   ? " has-picture"
                   : ""
@@ -648,9 +649,11 @@ function ProfileView({ userId }: { userId: string }) {
                 />
               </h1>
               <p className="profile-subtitle">
-                {subject.isAnonymous ? ui.profilePage.guestDisplayNameNotSaved : ui.profilePage.registeredPlayer}
+                {subject.isAnonymous ? ui.profilePage.guest : ui.profilePage.registeredPlayer}
+                {/* The day, not the minute: when somebody joined is a fact
+                    about them, not an appointment. */}
                 {subject.createdAt
-                  && ` · ${ui.profilePage.joinedOn({ date: formatTimestamp(subject.createdAt, timeFormat) })}`}
+                  && ` · ${ui.profilePage.joinedOn({ date: formatDate(new Date(subject.createdAt)) })}`}
                 {lastSeenLabel(subject) && (
                   <>
                     {" · "}
@@ -752,6 +755,10 @@ function ProfileView({ userId }: { userId: string }) {
           <div className="profile-columns">
           <section className="panel profile-statistics">
             <h2>{ui.profilePage.statistics}</h2>
+            {statisticsAreEmpty(stats) ? (
+              <p className="profile-note">{ui.profilePage.statisticsAppearAfterFirstGame}</p>
+            ) : (
+            <>
             <div className="profile-stats">
               <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
               <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
@@ -768,6 +775,8 @@ function ProfileView({ userId }: { userId: string }) {
               <StatTile label={ui.profilePage.reactionsReceived} value={String(stats.reactionsReceived)} />
               <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
             </div>
+            </>
+            )}
           </section>
 
           <section className="panel profile-history">
@@ -779,7 +788,7 @@ function ProfileView({ userId }: { userId: string }) {
                   checked={includeAbandoned}
                   onChange={(change) => setIncludeAbandoned(change.target.checked)}
                 />
-                {ui.profilePage.includeGamesThatFellApart}
+                {ui.profilePage.includeAbandonedGames}
               </label>
             </div>
             {games.length === 0 ? (

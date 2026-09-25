@@ -2,7 +2,10 @@
 
 import { NAME_COLOR_PALETTE } from "../store/settingsStore";
 
-export const GUEST_AVATAR_COLOR = "#888888";
+/** The theme's guest fill, not a colour of its own. A literal grey here drew
+    the header chip and the profile a different grey from every other guest
+    disc, which read `--guest-avatar` - and it could not change with the theme. */
+export const GUEST_AVATAR_COLOR = "var(--guest-avatar)";
 
 export function avatarInitial(name: string): string {
   const trimmed = name.trim();
