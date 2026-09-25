@@ -411,8 +411,15 @@ async def test_a_settings_row_made_before_the_seed_still_gets_the_week(env):
             await session.flush()
             session.add(UserSettings(user_id=user_id))
 
-    # The row exists, so the insert meets the conflict rather than raising.
-    await seed_user_settings(factory, user_id=str(user_id), values=UserSettingsSeed())
+    # The row exists, so the insert meets the conflict rather than raising -
+    # and the browser's values still become the account's (R-SET-03): the row
+    # another tab made can only hold defaults.
+    seeded = await seed_user_settings(
+        factory,
+        user_id=str(user_id),
+        values=UserSettingsSeed(theme="dark", timeFormat="24h", locale="nl"),
+    )
+    assert (seeded["theme"], seeded["timeFormat"], seeded["locale"]) == ("dark", "24h", "nl")
     assert (await email_state(factory, user_id=user_id)).reminder_due is False
 
     # And a clock that is already running is left alone: seeding again never

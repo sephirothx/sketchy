@@ -588,7 +588,10 @@ supported action set.
 reminder is due once it is a week old, and closing the reminder resets it. It is
 also stamped when the row is seeded at registration — a claimed guest included — so
 the first reminder comes a week after signing up rather than on the next page;
-`NULL` means an account that has never been told, and is due at once.
+`NULL` means an account that has never been told, and is due at once. The seed
+writes the browser's values and the stamp together, and a row that already has a
+stamp is never re-seeded — which is how a registration that finds a defaults row
+made by another tab still carries the browser's settings over (R-SET-03).
 
 **Two languages, and they are not the same one.** `prompt_language` is the language
 this player *plays* in (R-PROMPT-11) — what the lobby leads with and what a new room

@@ -8,7 +8,7 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from app.request_text import ControlFreeModel
-from sqlalchemy import select, update
+from sqlalchemy import select
 from sqlalchemy.dialects.postgresql import insert as postgresql_insert
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -232,7 +232,7 @@ async def seed_user_settings(
     user_id: str,
     values: UserSettingsSeed,
 ) -> dict:
-    """Create once during registration; never overwrite an existing account.
+    """Seed the account's settings from the browser, once, at registration.
 
     Registration also starts the no-email reminder's clock (R-AUTH-15): the
     form has just called the address optional, so the first reminder is due a
@@ -241,32 +241,36 @@ async def seed_user_settings(
     The account is already claimed when this runs, so a tab still holding its
     cookie can reach `settings_of_registered_account` and make the row first.
     Read-then-insert lost that race with an IntegrityError - a 500 after the
-    account had been created - so the row is inserted with ON CONFLICT DO
-    NOTHING, and the clock is then stamped only where it is unset: a row made
-    by the other tab still gets its week, and nothing ever pushes a reminder
-    back.
+    account had been created - and doing nothing on the conflict would keep
+    that tab's defaults over the browser's values, breaking R-SET-03's "the
+    browser's copy becomes the account's, exactly once".
+
+    So the conflict updates the row, but only a row nobody has seeded: the
+    reminder stamp is what tells them apart. A row this function wrote carries
+    one from the moment it exists; a row made anywhere else starts without one.
+    The seed and the stamp land together, so a seeded account is never
+    overwritten by a second call and a running clock is never pushed back.
     """
     db_user_id = UUID(user_id)
     now = datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
             await _registered_user(session, db_user_id)
-            await session.execute(
-                _settings_insert(session)
-                .values(
-                    user_id=db_user_id,
-                    email_reminder_last_shown_at=now,
-                    **_settings_values(values),
-                )
-                .on_conflict_do_nothing(index_elements=["user_id"])
+            seeded = _settings_values(values)
+            statement = _settings_insert(session).values(
+                user_id=db_user_id,
+                email_reminder_last_shown_at=now,
+                **seeded,
             )
             await session.execute(
-                update(UserSettings)
-                .where(
-                    UserSettings.user_id == db_user_id,
-                    UserSettings.email_reminder_last_shown_at.is_(None),
+                statement.on_conflict_do_update(
+                    index_elements=["user_id"],
+                    set_={
+                        key: statement.excluded[key]
+                        for key in (*seeded, "email_reminder_last_shown_at")
+                    },
+                    where=UserSettings.email_reminder_last_shown_at.is_(None),
                 )
-                .values(email_reminder_last_shown_at=now)
             )
             settings = await session.get(
                 UserSettings, db_user_id, populate_existing=True
