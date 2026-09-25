@@ -187,9 +187,14 @@ const FAINT_TEXT =
   "a small count written in --faint (2.7:1 light, 3.6:1 dark); needs --muted, not yet changed";
 const PRIMARY_TEXT =
   "--primary as text on a dark card is 3.2:1; needs a lighter text indigo, not yet changed";
+// Deliberate product decision (2026-09-25): the marker-orange buttons - Quick
+// play, Start game, a public room's compact Join - keep white on the brand
+// --warm (3.08:1 light, 2.72:1 dark). The orange is the brand's colour for
+// "go", and the product owner chose it over a darker fill or dark label.
+const BRAND_WARM = "product decision 2026-09-25: brand orange kept, white on --warm";
 const KNOWN_SHORT = {
-  "primitives.css .btn-warm light": "the marker-orange call to action is a brand decision, open",
-  "primitives.css .btn-warm dark": "the marker-orange call to action is a brand decision, open",
+  "primitives.css .btn-warm light": BRAND_WARM,
+  "primitives.css .btn-warm dark": BRAND_WARM,
   "community-lists.css .community-prompts-search light": FAINT_ICON,
   "community-lists.css .community-prompts-search dark": FAINT_ICON,
   "lobby-page.css .lobby-room-search light": FAINT_ICON,
