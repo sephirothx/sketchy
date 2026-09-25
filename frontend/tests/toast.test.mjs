@@ -54,13 +54,13 @@ test("a toast arriving on a screen below the cap evicts nothing", () => {
 // this is left with the other half: a tone that is there but wrong. It reads
 // every `notify(...)` in the source and fails on one whose message is plainly
 // a failure - a refusal sentence, a socket error, a caught error, or a
-// catalogue key that says it could not, failed, went wrong or was refused -
+// key or literal that says it could not, cannot, failed, went wrong or was refused -
 // sent with a tone that cannot be "error". A message held in a `const` in the
 // same file is followed to what it was set to; a conditional tone passes when
 // one of its branches is "error", since the message then usually branches too.
 const ROOT = "src";
 const FAILURE_CALLS = new Set(["refusalText", "refusalSentence", "socketRequestErrorMessage"]);
-const FAILURE_KEY = /couldn(o)?t|failed|wentwrong|refused/i;
+const FAILURE_KEY = /could\s?n[o']?t|cannot|failed|went\s?wrong|refused/i;
 // What a `catch` names what it caught, in this source.
 const CAUGHT = /^(err|error|failure|problem|caught|\w+Error)$/;
 
@@ -116,7 +116,8 @@ function misTonedFailures(path, text = readFileSync(path, "utf8")) {
           const next = new Set(following).add(name);
           failure = consts.get(name).some((init) => saysFailure(init, next));
         }
-      } else if (ts.isStringLiteralLike(child) && FAILURE_KEY.test(child.text)) {
+      } else if ((ts.isStringLiteralLike(child) || ts.isTemplateLiteralToken(child))
+        && FAILURE_KEY.test(child.text)) {
         failure = true;
       } else {
         ts.forEachChild(child, visit);
@@ -156,6 +157,10 @@ test("the scan catches a failure toast sent with a tone that is not error", () =
     notify(ui.x["couldNotY"], "info");
     notify(ok ? ui.x.saved : ui.x.couldNotSave, ok ? "success" : "error");
     notify(ok ? ui.x.saved : ui.x.couldNotSave, ok ? "success" : "info");
+    notify("Could not copy the report.", "success");
+    notify(\`Couldn't reach \${what}.\`, "info");
+    notify(ui.x.cannotJoin, "info");
+    notify("Report copied as Markdown.", "success");
   `;
   assert.deepEqual(misTonedFailures("src/snippet.ts", snippet), [
     "snippet.ts:2",
@@ -166,6 +171,9 @@ test("the scan catches a failure toast sent with a tone that is not error", () =
     "snippet.ts:10",
     "snippet.ts:11",
     "snippet.ts:13",
+    "snippet.ts:14",
+    "snippet.ts:15",
+    "snippet.ts:16",
   ]);
 });
 
