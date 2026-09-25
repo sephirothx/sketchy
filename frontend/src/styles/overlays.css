@@ -176,15 +176,23 @@
   margin-inline: calc(-1 * var(--ink-overhang));
 }
 
-/* The name is a flex item beside "you", so it takes the ellipsis itself: the
-   row's own clip cut a long name off mid-letter. */
+/* The name takes the ellipsis itself, so the dots are the name's color -
+   a guest's grey - rather than the row's ink; on the podium and standings,
+   where it is a flex item beside "you", the row's own clip used to cut a
+   long name off mid-letter. The roster tile's name is inline, so it is made
+   a block to clip at all. */
 .game-end-podium-name > .colored-player-name,
-.game-end-standing-name > .colored-player-name {
+.game-end-standing-name > .colored-player-name,
+.waiting-roster-name > .colored-player-name {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   padding-inline: var(--ink-overhang);
   margin-inline: calc(-1 * var(--ink-overhang));
+}
+
+.waiting-roster-name > .colored-player-name {
+  display: block;
 }
 
 .game-end-you {

@@ -13,7 +13,10 @@ starting with "j" notices, so this reads the stylesheets for the two shapes:
   gives it back as negative margin (`--ink-overhang` in theme.css):
   `padding-inline: var(--ink-overhang)` and
   `margin-inline: calc(-1 * var(--ink-overhang))`. The start-only forms are
-  accepted for a box whose end already has room of its own.
+  accepted only for a scroll container (`auto`/`scroll`, no ellipsis or
+  clamp), whose wrapped lines never reach its end; anything that truncates or
+  clips with `hidden` needs both sides, because the end is where an italic
+  leans out.
 - A rule that pads a text field indents the text by the allowance
   (`text-indent: var(--ink-overhang)`), and takes it off the start padding so
   the text stays where it was: the field clips at its content box, whatever
@@ -21,7 +24,14 @@ starting with "j" notices, so this reads the stylesheets for the two shapes:
 
 A rule that does neither is listed below with the reason it does not need to,
 so a new one is looked at before it ships, and an entry nothing matches any
-more fails too. */
+more fails too.
+
+What this cannot see, being a reading of each rule on its own rather than a
+cascade: a later or more specific rule that resets `padding` or `margin` on a
+box that has the allowance passes here and undoes it there; and a scroll
+container, or a clipped wrapper, whose class does not look text-bearing
+(`TEXT_BEARING`) is not checked at all. The browser probe that found these
+(the PR for #1170) is the check for those. */
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync, readdirSync } from "node:fs";
@@ -108,14 +118,31 @@ function clipsText({ selector, declarations }) {
   return clips && subjects(selector).some((subject) => TEXT_BEARING.test(subject));
 }
 
-function hasInkRoom({ declarations }) {
-  const padded = ["padding-inline", "padding-inline-start"].some((property) =>
-    (declarations.get(property) ?? "").startsWith(OVERHANG),
-  );
-  const givenBack = ["margin-inline", "margin-inline-start"].some((property) =>
-    (declarations.get(property) ?? "").startsWith(GIVEN_BACK),
-  );
-  return padded && givenBack;
+// A scroll container: it clips by scrolling (`auto`/`scroll`), never by
+// `hidden`/`clip`, and truncates nothing. Its lines wrap, so its end is a
+// scrollbar's lane rather than a place a letter is cut.
+function isScrollContainer({ declarations }) {
+  const overflow = declarations.get("text-overflow");
+  if ((overflow && overflow !== "clip") || declarations.has("-webkit-line-clamp") || declarations.has("line-clamp")) {
+    return false;
+  }
+  const values = ["overflow", "overflow-x", "overflow-y"].map((property) => declarations.get(property) ?? "");
+  return values.some((value) => /\b(auto|scroll)\b/.test(value)) && !values.some((value) => /\b(hidden|clip)\b/.test(value));
+}
+
+function hasInkRoom(rule) {
+  const { declarations } = rule;
+  const padding = declarations.get("padding-inline") ?? "";
+  const margin = declarations.get("margin-inline") ?? "";
+  // Both sides: the end is where an italic leans out and an ellipsis box
+  // or a clipped item cuts it.
+  if (padding === OVERHANG && margin === GIVEN_BACK) return true;
+  if (!isScrollContainer(rule)) return false;
+  const startPadded =
+    padding.startsWith(OVERHANG) || declarations.get("padding-inline-start") === OVERHANG;
+  const startGivenBack =
+    margin.startsWith(GIVEN_BACK) || declarations.get("margin-inline-start") === GIVEN_BACK;
+  return startPadded && startGivenBack;
 }
 
 const NOT_TEXT = /\[type="(number|checkbox|radio|range|color|file)"\]/;
@@ -158,8 +185,13 @@ test("every padded text field indents its text by the ink allowance", () => {
       .filter((rule) => rule.declarations.get("text-indent") === OVERHANG)
       .flatMap((rule) => parts(rule.selector).map((part) => `${rule.file}: ${part}`)),
   );
+  // A rule that pads every `input` may hand the indent to one narrowed to its
+  // text fields (`input:not([type="checkbox"], ...)`, `input[type="search"]`):
+  // an indent on a checkbox means nothing, and on a number it moves the digits.
+  const narrowedFrom = (field) =>
+    [...indented].some((key) => key.startsWith(`${field}:not(`) || key.startsWith(`${field}[type=`));
   const offenders = [...new Set(all.flatMap(paddedTextFields))].filter(
-    (field) => !indented.has(field) && !(field in REVIEWED),
+    (field) => !indented.has(field) && !narrowedFrom(field) && !(field in REVIEWED),
   );
   assert.deepEqual(offenders, [], "pads a text field without text-indent: var(--ink-overhang)");
 });

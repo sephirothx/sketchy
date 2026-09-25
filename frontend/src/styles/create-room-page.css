@@ -43,6 +43,11 @@
   max-width: 220px;
   min-height: 42px;
   padding: 6px 10px;
+}
+
+/* The name field's inner editor clips at its content box; the select beside
+   it does not, and an indent would only move its text. */
+.room-preset-bar .room-preset-name {
   padding-inline-start: calc(10px - var(--ink-overhang));
   text-indent: var(--ink-overhang);
 }

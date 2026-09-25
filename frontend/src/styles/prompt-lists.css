@@ -178,8 +178,9 @@
 }
 
 /* A field's inner editor clips at its content box; a select and a textarea
-   do not, and a textarea would indent only its first line. */
-.prompt-list-manager-layout input {
+   do not, and a textarea would indent only its first line. Text fields only:
+   the same rule above also pads the checkboxes. */
+.prompt-list-manager-layout input:not([type="checkbox"], [type="radio"], [type="number"], [type="range"], [type="color"], [type="file"]) {
   padding-inline-start: calc(10px - var(--ink-overhang));
   text-indent: var(--ink-overhang);
 }

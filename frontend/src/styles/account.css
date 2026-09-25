@@ -24,7 +24,7 @@
    * clips from cutting the lean, or a "j"'s tail at the other end: every
    * such box carries --ink-overhang (theme.css) for that, italic or not.
    */
-  padding-right: 0.22em;
+  padding-right: var(--ink-overhang);
 }
 
 [data-theme="dark"] .colored-player-name.is-guest {
