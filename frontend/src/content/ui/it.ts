@@ -1856,7 +1856,6 @@ export const IT: Catalogue = {
     playersScores: "Giocatori e punteggi",
     copyInviteLink: "Copia il link d’invito",
     saveThisDrawing: "Salva questo disegno",
-    settings: "Impostazioni",
     leaveRoom: "Esci dalla stanza",
     iMBack: "Sono tornato",
     goAwayForABit: "Assentati un attimo",
@@ -2333,14 +2332,21 @@ export const IT: Catalogue = {
       `${p.name} e ${counted(p.others, { one: "un’altra persona", other: "altre persone" })} vogliono diventare tuoi amici.`,
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Stanza pubblica",
+    privateRoom: "Stanza privata",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Modifica le regole della stanza",
+    editRules: "Modifica regole",
+    doodle: "Scarabocchia",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "round" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Manca 1 giocatore", other: "Mancano altri giocatori" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} inizierà la rivincita" : "{host} inizierà la partita",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "In attesa che {host} inizi la rivincita" : "In attesa che {host} inizi",
     copied: (p: { what: string }) => `${p.what} copiato.`,
     couldNotCopy: (p: { what: string }) =>
       `Non è stato possibile copiare ${p.what}. Copialo dalla barra degli indirizzi.`,
@@ -2349,6 +2355,7 @@ export const IT: Catalogue = {
     inviteYourFriends: "Invita i tuoi amici",
     shareLink: "Condividi il link",
     copyCode: "Copia il codice",
+    copyLink: "Copia il link",
     inTheRoom: "Nella stanza",
     you: "(tu)",
     host: "Host",
@@ -2360,10 +2367,6 @@ export const IT: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Entra nella mia stanza di Sketchy: ${p.code}`,
     inviteLink: "Link d’invito",
-    publicRoom: "Stanza pubblica",
-    privateRoom: "Stanza privata",
-    betweenGames: "tra una partita e l’altra",
-    waitingForPlayers: "in attesa di giocatori",
     roomCode: "Codice stanza",
     starting: "Avvio…",
     rematch: "Rivincita",
@@ -2446,6 +2449,10 @@ export const IT: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Round ${p.roundNumber} di ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Round ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "Il prossimo giocatore",

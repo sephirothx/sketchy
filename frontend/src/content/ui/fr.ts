@@ -1857,7 +1857,6 @@ export const FR: Catalogue = {
     playersScores: "Joueurs et scores",
     copyInviteLink: "Copier le lien d’invitation",
     saveThisDrawing: "Enregistrer ce dessin",
-    settings: "Paramètres",
     leaveRoom: "Quitter le salon",
     iMBack: "Je suis de retour",
     goAwayForABit: "M’absenter un moment",
@@ -2334,14 +2333,21 @@ export const FR: Catalogue = {
       `${p.name} et ${counted(p.others, { one: "une autre personne", other: "autres personnes" })} veulent devenir tes amis.`,
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Salon public",
+    privateRoom: "Salon privé",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Modifier les règles du salon",
+    editRules: "Modifier les règles",
+    doodle: "Gribouiller",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "manche", other: "manches" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Il manque 1 joueur", other: "Il manque des joueurs" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} lancera la revanche" : "{host} lancera la partie",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "On attend que {host} lance la revanche" : "On attend que {host} démarre",
     copied: (p: { what: string }) => `${p.what} copié.`,
     couldNotCopy: (p: { what: string }) =>
       `Impossible de copier ${p.what}. Copie-le depuis la barre d’adresse.`,
@@ -2350,6 +2356,7 @@ export const FR: Catalogue = {
     inviteYourFriends: "Invite tes amis",
     shareLink: "Partage le lien",
     copyCode: "Copier le code",
+    copyLink: "Copier le lien",
     inTheRoom: "Dans le salon",
     you: "(toi)",
     host: "Hôte",
@@ -2361,10 +2368,6 @@ export const FR: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Rejoins mon salon Sketchy : ${p.code}`,
     inviteLink: "Lien d’invitation",
-    publicRoom: "Salon public",
-    privateRoom: "Salon privé",
-    betweenGames: "entre deux parties",
-    waitingForPlayers: "en attente de joueurs",
     roomCode: "Code du salon",
     starting: "Lancement…",
     rematch: "Revanche",
@@ -2447,6 +2450,10 @@ export const FR: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Manche ${p.roundNumber} sur ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Manche ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "Le joueur suivant",

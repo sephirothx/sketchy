@@ -1859,7 +1859,6 @@ export const EN = {
     playersScores: "Players and scores",
     copyInviteLink: "Copy the invite link",
     saveThisDrawing: "Save this drawing",
-    settings: "Settings",
     leaveRoom: "Leave the room",
     iMBack: "I’m back",
     goAwayForABit: "Go away for a bit",
@@ -2342,14 +2341,21 @@ export const EN = {
       `${p.name} and ${counted(p.others, { one: "other", other: "others" })} want to be friends.`,
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Public room",
+    privateRoom: "Private room",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Edit room rules",
+    editRules: "Edit rules",
+    doodle: "Doodle",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "rounds" }),
     needMorePlayers: (p: { count: number }) =>
       `Need ${counted(p.count, { one: "more player", other: "more players" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} will start the rematch" : "{host} will start the game",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Waiting for {host} to start the rematch" : "Waiting for {host} to start",
     copied: (p: { what: string }) => `${p.what} copied.`,
     couldNotCopy: (p: { what: string }) =>
       `Couldn’t copy the ${p.what}. Copy it from the address bar.`,
@@ -2358,6 +2364,7 @@ export const EN = {
     inviteYourFriends: "Invite your friends",
     shareLink: "Share the link",
     copyCode: "Copy code",
+    copyLink: "Copy link",
     inTheRoom: "In the room",
     you: "(you)",
     host: "Host",
@@ -2369,10 +2376,6 @@ export const EN = {
       "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.",
     joinMySketchyRoomCode: (p: { code: string }) => `Join my Sketchy room: ${p.code}`,
     inviteLink: "Invite link",
-    publicRoom: "Public room",
-    privateRoom: "Private room",
-    betweenGames: "between games",
-    waitingForPlayers: "waiting for players",
     roomCode: "Room code",
     starting: "Starting…",
     rematch: "Rematch",
@@ -2458,6 +2461,10 @@ export const EN = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds:
       (p: { roundNumber: number; totalRounds: number }) => `Round ${p.roundNumber} of ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Round ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "The next player",

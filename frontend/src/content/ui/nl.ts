@@ -1855,7 +1855,6 @@ export const NL: Catalogue = {
     playersScores: "Spelers en punten",
     copyInviteLink: "De uitnodigingslink kopiëren",
     saveThisDrawing: "Deze tekening opslaan",
-    settings: "Instellingen",
     leaveRoom: "De kamer verlaten",
     iMBack: "Ik ben terug",
     goAwayForABit: "Even weg",
@@ -2332,14 +2331,21 @@ export const NL: Catalogue = {
       `${p.name} en ${counted(p.others, { one: "iemand anders", other: "anderen" })} willen vrienden worden.`,
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Openbare kamer",
+    privateRoom: "Privékamer",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Kamerregels bewerken",
+    editRules: "Regels bewerken",
+    doodle: "Krabbelen",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "ronde", other: "rondes" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Nog 1 speler nodig", other: "Nog meer spelers nodig" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} begint de revanche" : "{host} begint het spel",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Wachten tot {host} de revanche begint" : "Wachten tot {host} begint",
     copied: (p: { what: string }) => `${p.what} gekopieerd.`,
     couldNotCopy: (p: { what: string }) =>
       `Kon ${p.what} niet kopiëren. Kopieer het uit de adresbalk.`,
@@ -2348,6 +2354,7 @@ export const NL: Catalogue = {
     inviteYourFriends: "Nodig je vrienden uit",
     shareLink: "Deel de link",
     copyCode: "Code kopiëren",
+    copyLink: "Link kopiëren",
     inTheRoom: "In de kamer",
     you: "(jij)",
     host: "Gastheer",
@@ -2359,10 +2366,6 @@ export const NL: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Kom in mijn Sketchy-kamer: ${p.code}`,
     inviteLink: "Uitnodigingslink",
-    publicRoom: "Openbare kamer",
-    privateRoom: "Privékamer",
-    betweenGames: "tussen spellen door",
-    waitingForPlayers: "wacht op spelers",
     roomCode: "Kamercode",
     starting: "Starten…",
     rematch: "Revanche",
@@ -2445,6 +2448,10 @@ export const NL: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Ronde ${p.roundNumber} van ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Ronde ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "De volgende speler",

@@ -1854,7 +1854,6 @@ export const ES: Catalogue = {
     playersScores: "Jugadores y puntos",
     copyInviteLink: "Copiar el enlace de invitación",
     saveThisDrawing: "Guardar este dibujo",
-    settings: "Ajustes",
     leaveRoom: "Salir de la sala",
     iMBack: "Ya estoy aquí",
     goAwayForABit: "Ausentarme un rato",
@@ -2331,14 +2330,21 @@ export const ES: Catalogue = {
       `${p.name} y ${counted(p.others, { one: "otra persona", other: "otras personas" })} quieren ser tus amigos.`,
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Sala pública",
+    privateRoom: "Sala privada",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Editar reglas de la sala",
+    editRules: "Editar reglas",
+    doodle: "Garabatear",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "ronda", other: "rondas" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Falta 1 jugador", other: "Faltan más jugadores" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} empezará la revancha" : "{host} empezará la partida",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Esperando a que {host} empiece la revancha" : "Esperando a que {host} empiece",
     copied: (p: { what: string }) => `${p.what} copiado.`,
     couldNotCopy: (p: { what: string }) =>
       `No se pudo copiar ${p.what}. Cópialo de la barra de direcciones.`,
@@ -2347,6 +2353,7 @@ export const ES: Catalogue = {
     inviteYourFriends: "Invita a tus amigos",
     shareLink: "Comparte el enlace",
     copyCode: "Copiar código",
+    copyLink: "Copiar enlace",
     inTheRoom: "En la sala",
     you: "(tú)",
     host: "Anfitrión",
@@ -2358,10 +2365,6 @@ export const ES: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Únete a mi sala de Sketchy: ${p.code}`,
     inviteLink: "Enlace de invitación",
-    publicRoom: "Sala pública",
-    privateRoom: "Sala privada",
-    betweenGames: "entre partidas",
-    waitingForPlayers: "esperando jugadores",
     roomCode: "Código de sala",
     starting: "Empezando…",
     rematch: "Revancha",
@@ -2444,6 +2447,10 @@ export const ES: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Ronda ${p.roundNumber} de ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Ronda ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "El siguiente jugador",

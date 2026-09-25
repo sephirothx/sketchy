@@ -1855,7 +1855,6 @@ export const DE: Catalogue = {
     playersScores: "Spieler und Punkte",
     copyInviteLink: "Einladungslink kopieren",
     saveThisDrawing: "Diese Zeichnung speichern",
-    settings: "Einstellungen",
     leaveRoom: "Den Raum verlassen",
     iMBack: "Bin wieder da",
     goAwayForABit: "Kurz weggehen",
@@ -2332,14 +2331,21 @@ export const DE: Catalogue = {
       `${p.name} und ${counted(p.others, { one: "eine weitere Person", other: "weitere Personen" })} wollen befreundet sein.`,
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Öffentlicher Raum",
+    privateRoom: "Privater Raum",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Raumregeln bearbeiten",
+    editRules: "Regeln ändern",
+    doodle: "Kritzeln",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "Runde", other: "Runden" }),
     needMorePlayers: (p: { count: number }) =>
       `Es fehlen noch ${counted(p.count, { one: "Spieler", other: "Spieler" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} startet die Revanche" : "{host} startet das Spiel",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Warten, bis {host} die Revanche startet" : "Warten, bis {host} startet",
     copied: (p: { what: string }) => `${p.what} kopiert.`,
     couldNotCopy: (p: { what: string }) =>
       `Konnte ${p.what} nicht kopieren. Kopiere es aus der Adresszeile.`,
@@ -2348,6 +2354,7 @@ export const DE: Catalogue = {
     inviteYourFriends: "Lade deine Freunde ein",
     shareLink: "Link teilen",
     copyCode: "Code kopieren",
+    copyLink: "Link kopieren",
     inTheRoom: "Im Raum",
     you: "(du)",
     host: "Gastgeber",
@@ -2359,10 +2366,6 @@ export const DE: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Komm in meinen Sketchy-Raum: ${p.code}`,
     inviteLink: "Einladungslink",
-    publicRoom: "Öffentlicher Raum",
-    privateRoom: "Privater Raum",
-    betweenGames: "zwischen den Spielen",
-    waitingForPlayers: "wartet auf Spieler",
     roomCode: "Raumcode",
     starting: "Startet …",
     rematch: "Revanche",
@@ -2445,6 +2448,10 @@ export const DE: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Runde ${p.roundNumber} von ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Runde ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "Die nächste Person",

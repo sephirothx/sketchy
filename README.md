@@ -2731,17 +2731,25 @@ A seated client checks with the server every five seconds that it still holds th
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
   tab, a full server) stack in one box that the screens sized to the viewport make room for.
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
-  home, and in a room the room's name), what is going on (the round and the clock, a
+  home, and in a room the room's name, with a globe after it for a public room and a lock
+  for a private one), what is going on (the round and the clock, a
   server notice, and an *Away* chip while you are away), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
-  go away, save the drawing, start over, settings, and Leave last in red - a dropdown on a
-  desktop and the ⋯ sheet on a phone, with the same rows. A short window gives way in a fixed
+  go away, save the drawing, start over, and Leave last in red - a dropdown on a
+  desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the
+  room's. A phone's round reads "Round 2/3", or "2/3" when the bar has no room for the word. A short window gives way in a fixed
   order: the room's name, then your chip's name (it becomes your round avatar); the wordmark,
   the clock, the menu and your avatar stay, down to a phone - where a notice on a narrow bar
-  borrows the wordmark's room until it ends. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
+  borrows the wordmark's room until it ends. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
+  that, where the bar has given the name up - with no status line under it: Start itself says
+  what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
+  On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
-  Edit and an orange Start in the same card. An invite link shows the room the same six
-  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait" swaps
+  Edit and an orange Start in the same card - on one line where the words fit, otherwise with
+  every row filled: Edit and the pad's button over a full-width Start. An invite link shows the room the same six
+  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait"
+  ("Doodle" up to 1100px, where it shares a row with "Edit rules", or with "Waiting for Hosty to
+  start" for everybody but the host) swaps
   the column for a scratch pad at a turn's size - only yours, like the one an outage shows,
   and the same drawing on both - with the room code (a chip that copies the invite link) and Start kept in a strip above it.
 - Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
