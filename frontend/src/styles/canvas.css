@@ -101,18 +101,6 @@
   --scratch-pad-width: max(280px, min(800px, calc((100dvh - var(--banner-height, 0px) - 280px) * 4 / 3)));
 }
 
-.scratch-pad-dialog-head {
-  align-items: center;
-  display: flex;
-  justify-content: space-between;
-  margin: 0 auto;
-  max-width: var(--scratch-pad-width, 800px);
-}
-
-.scratch-pad-dialog-head .modal-title {
-  margin: 0;
-}
-
 .scratch-pad-dialog .scratch-pad {
   margin-top: 8px;
 }

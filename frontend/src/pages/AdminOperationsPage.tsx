@@ -33,6 +33,7 @@ import {
   type LiveSnapshot,
   type RuntimeEventRow,
 } from "../lib/operations";
+import { ModalShell } from "../components/ui/ModalShell";
 import "../styles/lazy/operator.css";
 
 // The live numbers are re-read this often while the overview is on screen.
@@ -538,43 +539,28 @@ export function AdminOperationsPage() {
       </OpsTabPanel>
 
       {player && (
-        <div
-          className="modal-overlay"
-          onMouseDown={(click) => {
-            if (click.target === click.currentTarget) setPlayer(null);
-          }}
+        <ModalShell
+          title={player.displayName}
+          cardClassName="ops-player-dialog"
+          onDismiss={() => setPlayer(null)}
         >
-          <div
-            className="modal-card ops-player-dialog"
-            role="dialog"
-            aria-modal="true"
-          >
-            <h3 className="modal-title">{player.displayName}</h3>
-            <p className="modal-body">
-              Opening this view is itself recorded in the audit ledger.
-            </p>
-            <div className="ops-table-scroll">
-              <table className="ops-table">
-                <tbody>
-                  {player.events.map((row) => (
-                    <tr key={row.id}>
-                      <td>{dateTime(new Date(row.occurredAt))}</td>
-                      <td>{row.eventType}</td>
-                      <td>{row.roomId ?? "—"}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-            <button
-              type="button"
-              className="modal-dismiss"
-              onClick={() => setPlayer(null)}
-            >
-              Close
-            </button>
+          <p className="modal-body">
+            Opening this view is itself recorded in the audit ledger.
+          </p>
+          <div className="ops-table-scroll">
+            <table className="ops-table">
+              <tbody>
+                {player.events.map((row) => (
+                  <tr key={row.id}>
+                    <td>{dateTime(new Date(row.occurredAt))}</td>
+                    <td>{row.eventType}</td>
+                    <td>{row.roomId ?? "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
-        </div>
+        </ModalShell>
       )}
     </main>
   );

@@ -1,6 +1,7 @@
 import { useClock } from "../hooks/useClock";
-import { useEffect, useId, useRef, useState } from "react";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useEffect, useState } from "react";
+import { ModalShell } from "./ui/ModalShell";
+import { ConfirmationDialog } from "./ConfirmationDialog";
 import {
   fetchAccountSessions,
   logoutEverywhere,
@@ -17,15 +18,12 @@ function usedLabel(value: string, dateTime: (date: Date) => string): string {
 
 export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
   const { dateTime } = useClock();
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const titleId = useId();
   const logout = useAuthStore((state) => state.logout);
   const [sessions, setSessions] = useState<AccountSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-
-  useFocusTrap(dialogRef, { active: true, onEscape: onClose });
+  const [confirmingAll, setConfirmingAll] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -77,22 +75,27 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
+  const dismiss = () => {
+    if (busyId === null) onClose();
+  };
+
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card session-manager"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
+    <>
+      <ModalShell
+        title={ui.sessionManagerDialog.signedDevices}
+        cardClassName="session-manager"
+        onDismiss={dismiss}
+        footer={
+          <button
+            type="button"
+            className="btn btn-danger session-revoke-all"
+            onClick={() => setConfirmingAll(true)}
+            disabled={busyId !== null || sessions.length === 0}
+          >
+            {busyId === "all" ? ui.sessionManagerDialog.loggingOut : ui.sessionManagerDialog.logOutEverywhere}
+          </button>
+        }
       >
-        <h3 id={titleId} className="modal-title">{ui.sessionManagerDialog.signedDevices}</h3>
         <p className="modal-body">
           {ui.sessionManagerDialog.revokeAnyDeviceYouNoLonger}
         </p>
@@ -129,6 +132,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
                 </span>
                 <button
                   type="button"
+                  className="btn btn-secondary btn-compact"
                   disabled={busyId !== null}
                   onClick={() => void revoke(session)}
                 >
@@ -138,18 +142,22 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
             ))}
           </ul>
         )}
-        <div className="session-actions">
-          <button type="button" onClick={onClose} disabled={busyId !== null}>{ui.sessionManagerDialog.close}</button>
-          <button
-            type="button"
-            className="session-revoke-all"
-            onClick={() => void revokeAll()}
-            disabled={busyId !== null || sessions.length === 0}
-          >
-            {busyId === "all" ? ui.sessionManagerDialog.loggingOut : ui.sessionManagerDialog.logOutEverywhere}
-          </button>
-        </div>
-      </div>
-    </div>
+      </ModalShell>
+      {/* Asked first, because it reaches further than it reads: "everywhere"
+          includes this device, which is signed out along with the rest. A
+          single revoke says which device it means; this one does not. */}
+      {confirmingAll && (
+        <ConfirmationDialog
+          title={ui.sessionManagerDialog.logOutEverywhereTitle}
+          description={ui.sessionManagerDialog.logOutEverywhereBody}
+          confirmLabel={ui.sessionManagerDialog.logOutEverywhere}
+          onCancel={() => setConfirmingAll(false)}
+          onConfirm={() => {
+            setConfirmingAll(false);
+            void revokeAll();
+          }}
+        />
+      )}
+    </>
   );
 }

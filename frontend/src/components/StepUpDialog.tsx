@@ -1,7 +1,7 @@
-import { useRef, useState } from "react";
+import { useId, useState } from "react";
 
 import { SegmentedCodeInput } from "./SegmentedCodeInput";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import { assertPasskey, passkeysAvailable } from "../lib/passkeys";
 import { stepUp } from "../lib/secondFactor";
 import { refusalText } from "../lib/refusals.ts";
@@ -27,8 +27,7 @@ export function StepUpDialog({
   onProved: () => void;
   onCancel: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const titleId = useRef(`step-up-${Math.random().toString(36).slice(2)}`).current;
+  const formId = useId();
   const [code, setCode] = useState("");
   // A recovery code is ten letters and digits, so it cannot go in the six
   // numeric boxes - and the server takes one here, which is the whole point
@@ -37,8 +36,6 @@ export function StepUpDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const canUsePasskeys = passkeysAvailable();
-
-  useFocusTrap(dialogRef, { active: true, onEscape: onCancel });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -80,77 +77,83 @@ export function StepUpDialog({
     }
   }
 
+  // The scrim does not cancel: this interrupts an action the caller is
+  // holding, and a stray click should not be what abandons it.
   return (
-    <div className="modal-overlay">
-      <div
-        ref={dialogRef}
-        className="modal-card step-up"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">{ui.stepUpDialog.confirmYou}</h3>
-        <p className="modal-body">{reason}</p>
-        {error && <p className="auth-error" role="alert">{error}</p>}
-        {canUsePasskeys && (
-          <button
-            type="button"
-            className="modal-button step-up-passkey"
-            onClick={() => void proveWithPasskey()}
-            disabled={busy}
-          >
-            {busy ? ui.stepUpDialog.waitingForYourDevice : ui.stepUpDialog.useYourPasskey}
+    <ModalShell
+      title={ui.stepUpDialog.confirmYou}
+      cardClassName="step-up"
+      onDismiss={onCancel}
+      dismissOnBackdrop={false}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={onCancel} disabled={busy}>
+            {ui.stepUpDialog.cancel}
           </button>
+          <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>
+            {busy ? ui.stepUpDialog.checking : ui.stepUpDialog.confirm}
+          </button>
+        </>
+      }
+    >
+      <p className="modal-body">{reason}</p>
+      {error && <p className="auth-error" role="alert">{error}</p>}
+      {canUsePasskeys && (
+        <button
+          type="button"
+          className="btn btn-secondary step-up-passkey"
+          onClick={() => void proveWithPasskey()}
+          disabled={busy}
+        >
+          {busy ? ui.stepUpDialog.waitingForYourDevice : ui.stepUpDialog.useYourPasskey}
+        </button>
+      )}
+      <form id={formId} onSubmit={(event) => void submit(event)}>
+        {useRecovery ? (
+          <>
+            <label className="two-factor-field-label" htmlFor={`${formId}-recovery`}>
+              {ui.stepUpDialog.recoveryCode}
+            </label>
+            <input
+              id={`${formId}-recovery`}
+              value={code}
+              onChange={(event) => setCode(event.target.value)}
+              autoComplete="one-time-code"
+              autoCapitalize="characters"
+              autoCorrect="off"
+              spellCheck={false}
+              maxLength={32}
+              autoFocus
+              required
+            />
+          </>
+        ) : (
+          <>
+            <span className="two-factor-field-label">
+              {ui.stepUpDialog.codeFromYourAuthenticatorApp}
+            </span>
+            <SegmentedCodeInput
+              value={code}
+              onChange={setCode}
+              onComplete={(complete) => void submitWith(complete)}
+              label={ui.stepUpDialog.codeFromYourAuthenticatorApp2}
+              autoFocus
+              disabled={busy}
+            />
+          </>
         )}
-        <form onSubmit={(event) => void submit(event)}>
-          {useRecovery ? (
-            <>
-              <label className="two-factor-field-label" htmlFor="step-up-recovery">
-                {ui.stepUpDialog.recoveryCode}
-              </label>
-              <input
-                id="step-up-recovery"
-                value={code}
-                onChange={(event) => setCode(event.target.value)}
-                autoComplete="one-time-code"
-                maxLength={32}
-                autoFocus
-                required
-              />
-            </>
-          ) : (
-            <>
-              <span className="two-factor-field-label">
-                {ui.stepUpDialog.codeFromYourAuthenticatorApp}
-              </span>
-              <SegmentedCodeInput
-                value={code}
-                onChange={setCode}
-                onComplete={(complete) => void submitWith(complete)}
-                label={ui.stepUpDialog.codeFromYourAuthenticatorApp2}
-                autoFocus
-                disabled={busy}
-              />
-            </>
-          )}
-          <button
-            type="button"
-            className="btn btn-ghost btn-compact step-up-swap"
-            onClick={() => {
-              setUseRecovery((current) => !current);
-              setCode("");
-              setError(null);
-            }}
-          >
-            {useRecovery ? ui.stepUpDialog.useYourAuthenticatorApp : ui.stepUpDialog.useARecoveryCode}
-          </button>
-          <div className="step-up-actions">
-            <button type="button" onClick={onCancel} disabled={busy}>{ui.stepUpDialog.cancel}</button>
-            <button type="submit" disabled={busy}>{busy ? ui.stepUpDialog.checking : ui.stepUpDialog.confirm}</button>
-          </div>
-        </form>
-      </div>
-    </div>
+        <button
+          type="button"
+          className="btn btn-ghost btn-compact step-up-swap"
+          onClick={() => {
+            setUseRecovery((current) => !current);
+            setCode("");
+            setError(null);
+          }}
+        >
+          {useRecovery ? ui.stepUpDialog.useYourAuthenticatorApp : ui.stepUpDialog.useARecoveryCode}
+        </button>
+      </form>
+    </ModalShell>
   );
 }

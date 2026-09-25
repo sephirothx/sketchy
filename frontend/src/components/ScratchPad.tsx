@@ -61,13 +61,7 @@ export function ScratchPadDialog({ onClose }: { onClose: () => void }) {
   // Portalled: the banner stack that opens it is sticky, and a fixed layer
   // inside it would be stacked under the page it is meant to cover.
   return createPortal(
-    <ModalShell ariaLabel={ui.scratchPad.title} cardClassName="scratch-pad-dialog" onDismiss={onClose}>
-      <div className="scratch-pad-dialog-head">
-        <h3 className="modal-title">{ui.scratchPad.title}</h3>
-        <button type="button" className="btn btn-secondary btn-compact" onClick={onClose}>
-          {ui.scratchPad.close}
-        </button>
-      </div>
+    <ModalShell title={ui.scratchPad.title} cardClassName="scratch-pad-dialog" onDismiss={onClose}>
       <ScratchPad />
     </ModalShell>,
     document.body,

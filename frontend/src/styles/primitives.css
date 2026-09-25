@@ -58,6 +58,14 @@
   font-size: 14px;
 }
 
+/* The destructive act itself - "Delete for good", "Log out everywhere" -
+   filled, where the ghost above is for the quieter way to the same place. */
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--danger) 70%, #000);
+}
+
 .btn-icon {
   width: 44px;
   height: 44px;

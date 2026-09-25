@@ -35,7 +35,6 @@ export function AvatarDoodleDialog({
   currentUrl: string | null | undefined;
   onClose: () => void;
 }) {
-  const titleId = useId();
   const introId = useId();
   const gridRef = useRef<HTMLDivElement | null>(null);
   const wearing = doodleNameOf(currentUrl);
@@ -84,15 +83,12 @@ export function AvatarDoodleDialog({
 
   return (
     <ModalShell
-      labelledBy={titleId}
+      title={ui.avatarDoodleDialog.title}
       describedBy={introId}
       cardClassName="doodle-picker-card"
       onDismiss={onClose}
       initialFocusRef={startRef}
     >
-      <h3 id={titleId} className="modal-title">
-        {ui.avatarDoodleDialog.title}
-      </h3>
       <p id={introId} className="modal-body">
         {ui.avatarDoodleDialog.intro}
       </p>
@@ -130,9 +126,6 @@ export function AvatarDoodleDialog({
           {error}
         </p>
       )}
-      <button type="button" className="modal-dismiss" onClick={onClose}>
-        {ui.avatarDoodleDialog.close}
-      </button>
     </ModalShell>
   );
 }

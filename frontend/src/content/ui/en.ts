@@ -522,7 +522,6 @@ export const EN = {
     loadingExports: "Loading exports…",
     youHaveNotRequestedExportYet: "You have not requested an export yet.",
     download: "Download",
-    close: "Close",
     requesting: "Requesting…",
     requestExport: "Request export",
   },
@@ -556,7 +555,6 @@ export const EN = {
     username: "Username",
     password: "Password",
     codeFromYourAuthenticatorApp: "Code from your authenticator app",
-    recoveryCodeWorksHereTooCan: "A recovery code works here too, and can be used once.",
     email: "Email",
     optional: "optional",
     letsYouResetYourPasswordLater: "Lets you reset your password later. Used for nothing else.",
@@ -672,7 +670,6 @@ export const EN = {
     yourPassword: "Your password",
     passwordConfirmsItIsYou: "Your password confirms it is you: this address is how the account is recovered.",
     enterYourPasswordToConfirm: "Enter your password to confirm the change.",
-    close: "Close",
     notNow: "Not now",
   },
 
@@ -769,7 +766,6 @@ export const EN = {
     changeYourPassword: "Change your password",
     pleaseWait: "Please wait…",
     changePassword: "Change password",
-    close: "Close",
     cancel: "Cancel",
   },
 
@@ -785,6 +781,14 @@ export const EN = {
     switchRoomPaletteFutureDrawings: "Switch the room palette for future drawings?",
     switchColors: "Switch colors",
     notNow: "Not now",
+  },
+
+  /** Words every dialog shares: its ✕, and the line a notice shows when
+      its acknowledgement did not land. */
+  dialog: {
+    close: "Close",
+    cancel: "Cancel",
+    couldNotSave: "Could not save. Try again.",
   },
 
   confirmationDialog: {
@@ -929,8 +933,6 @@ export const EN = {
     deleteYourAccount: "Delete your account",
     deleting: "Deleting…",
     deleteForGood: "Delete for good",
-    keepPlaying: "Keep playing",
-    keepMyAccount: "Keep my account",
   },
 
   drainCue: {
@@ -1950,7 +1952,6 @@ export const EN = {
     drawWhileYouWait: "Draw while you wait",
     canvasLabel: "Scratch pad. Only you can see what you draw here.",
     save: "Save",
-    close: "Close",
     backToTheRoom: "Back to the room",
   },
 
@@ -1989,11 +1990,12 @@ export const EN = {
     revokeAnyDeviceYouNoLonger: "Revoke any device you no longer recognize. Device names are coarse and do not store browser versions.\n          A device you stop using signs itself out after ninety days.",
     loadingDevices: "Loading devices…",
     currentDevice: "Current device",
-    close: "Close",
     revoking: "Revoking…",
     revoke: "Revoke",
     loggingOut: "Logging out…",
     logOutEverywhere: "Log out everywhere",
+    logOutEverywhereTitle: "Log out everywhere?",
+    logOutEverywhereBody: "Every device signed in to this account is signed out, this one included. You will need to sign in again here.",
   },
 
   avatarDoodles: {
@@ -2029,7 +2031,6 @@ export const EN = {
     intro: "Drawn in your name color, wherever your name appears.",
     wearing: "Wearing now",
     couldNotChoose: "Could not change the doodle.",
-    close: "Close",
   },
   settingsOverlay: {
     email: "Email",
@@ -2320,7 +2321,6 @@ export const EN = {
     newRecoveryCodes: "New recovery codes",
     turnOff: "Turn off",
     addAuthenticatorApp: "Add an authenticator app",
-    close: "Close",
     couldNotStartSettingThis: "Could not start setting this up.",
     thatCodeWasNotAccepted: "That code was not accepted.",
     couldNotAddThatPasskey: "Could not add that passkey.",
@@ -2636,6 +2636,7 @@ export const EN = {
   },
   passwordPolicy: {
     tooShort: (p: { count: number }) => `A password needs at least ${p.count} characters.`,
+    rule: (p: { count: number }) => `At least ${p.count} characters.`,
   },
   operatorAccess: {
     administrator: "administrator",

@@ -512,7 +512,6 @@ export const ES: Catalogue = {
     loadingExports: "Cargando exportaciones…",
     youHaveNotRequestedExportYet: "Todavía no has pedido ninguna exportación.",
     download: "Descargar",
-    close: "Cerrar",
     requesting: "Solicitando…",
     requestExport: "Solicitar exportación",
   },
@@ -546,7 +545,6 @@ export const ES: Catalogue = {
     username: "Nombre de usuario",
     password: "Contraseña",
     codeFromYourAuthenticatorApp: "Código de tu aplicación de autenticación",
-    recoveryCodeWorksHereTooCan: "Aquí también sirve un código de recuperación, y se puede usar una vez.",
     email: "Correo",
     optional: "opcional",
     letsYouResetYourPasswordLater: "Te permite restablecer la contraseña más adelante. No se usa para nada más.",
@@ -662,7 +660,6 @@ export const ES: Catalogue = {
     yourPassword: "Tu contraseña",
     passwordConfirmsItIsYou: "Tu contraseña confirma que eres tú: esta dirección es la forma de recuperar la cuenta.",
     enterYourPasswordToConfirm: "Introduce tu contraseña para confirmar el cambio.",
-    close: "Cerrar",
     notNow: "Ahora no",
   },
 
@@ -758,7 +755,6 @@ export const ES: Catalogue = {
     changeYourPassword: "Cambia tu contraseña",
     pleaseWait: "Espera, por favor…",
     changePassword: "Cambiar contraseña",
-    close: "Cerrar",
     cancel: "Cancelar",
   },
 
@@ -774,6 +770,12 @@ export const ES: Catalogue = {
     switchRoomPaletteFutureDrawings: "¿Cambiar la paleta de la sala para los próximos dibujos?",
     switchColors: "Cambiar colores",
     notNow: "Ahora no",
+  },
+
+  dialog: {
+    close: "Cerrar",
+    cancel: "Cancelar",
+    couldNotSave: "No se pudo guardar. Inténtalo de nuevo.",
   },
 
   confirmationDialog: {
@@ -918,8 +920,6 @@ export const ES: Catalogue = {
     deleteYourAccount: "Eliminar tu cuenta",
     deleting: "Eliminando…",
     deleteForGood: "Eliminar para siempre",
-    keepPlaying: "Seguir jugando",
-    keepMyAccount: "Conservar mi cuenta",
   },
 
   drainCue: {
@@ -1945,7 +1945,6 @@ export const ES: Catalogue = {
     drawWhileYouWait: "Dibuja mientras esperas",
     canvasLabel: "Bloc de notas. Solo tú ves lo que dibujas aquí.",
     save: "Guardar",
-    close: "Cerrar",
     backToTheRoom: "Volver a la sala",
   },
 
@@ -1984,11 +1983,12 @@ export const ES: Catalogue = {
     revokeAnyDeviceYouNoLonger: "Cierra cualquier dispositivo que ya no reconozcas. Los nombres son aproximados y no guardan versiones de navegador.\n          Un dispositivo que dejas de usar cierra su sesión a los noventa días.",
     loadingDevices: "Cargando dispositivos…",
     currentDevice: "Dispositivo actual",
-    close: "Cerrar",
     revoking: "Revocando…",
     revoke: "Revocar",
     loggingOut: "Cerrando sesión…",
     logOutEverywhere: "Cerrar sesión en todas partes",
+    logOutEverywhereTitle: "¿Cerrar sesión en todas partes?",
+    logOutEverywhereBody: "Se cierra la sesión en todos los dispositivos conectados a esta cuenta, incluido este. Tendrás que volver a iniciar sesión aquí.",
   },
 
   avatarDoodles: {
@@ -2024,7 +2024,6 @@ export const ES: Catalogue = {
     intro: "En el color de tu nombre, dondequiera que aparezca tu nombre.",
     wearing: "Lo llevas ahora",
     couldNotChoose: "No se pudo cambiar el dibujo.",
-    close: "Cerrar",
   },
   settingsOverlay: {
     email: "Correo",
@@ -2309,7 +2308,6 @@ export const ES: Catalogue = {
     newRecoveryCodes: "Códigos de recuperación nuevos",
     turnOff: "Desactivar",
     addAuthenticatorApp: "Añadir una aplicación de autenticación",
-    close: "Cerrar",
     couldNotStartSettingThis: "No se pudo empezar la configuración.",
     thatCodeWasNotAccepted: "Ese código no se aceptó.",
     couldNotAddThatPasskey: "No se pudo añadir esa passkey.",
@@ -2631,6 +2629,7 @@ export const ES: Catalogue = {
   passwordPolicy: {
     tooShort: (p: { count: number }) =>
       `Una contraseña necesita al menos ${p.count} caracteres.`,
+    rule: (p: { count: number }) => `Al menos ${p.count} caracteres.`,
   },
   operatorAccess: {
     administrator: "administrador",

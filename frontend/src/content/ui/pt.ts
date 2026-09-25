@@ -512,7 +512,6 @@ export const PT: Catalogue = {
     loadingExports: "A carregar exportações…",
     youHaveNotRequestedExportYet: "Ainda não pediste nenhuma exportação.",
     download: "Descarregar",
-    close: "Fechar",
     requesting: "A pedir…",
     requestExport: "Pedir exportação",
   },
@@ -546,7 +545,6 @@ export const PT: Catalogue = {
     username: "Nome de utilizador",
     password: "Palavra-passe",
     codeFromYourAuthenticatorApp: "Código da tua aplicação de autenticação",
-    recoveryCodeWorksHereTooCan: "Um código de recuperação também serve aqui, e pode ser usado uma vez.",
     email: "E-mail",
     optional: "opcional",
     letsYouResetYourPasswordLater: "Permite-te repor a palavra-passe mais tarde. Não serve para mais nada.",
@@ -662,7 +660,6 @@ export const PT: Catalogue = {
     yourPassword: "A tua palavra-passe",
     passwordConfirmsItIsYou: "A tua palavra-passe confirma que és tu: este endereço é a forma de recuperar a conta.",
     enterYourPasswordToConfirm: "Introduz a tua palavra-passe para confirmar a alteração.",
-    close: "Fechar",
     notNow: "Agora não",
   },
 
@@ -758,7 +755,6 @@ export const PT: Catalogue = {
     changeYourPassword: "Muda a tua palavra-passe",
     pleaseWait: "Aguarda…",
     changePassword: "Mudar palavra-passe",
-    close: "Fechar",
     cancel: "Cancelar",
   },
 
@@ -774,6 +770,12 @@ export const PT: Catalogue = {
     switchRoomPaletteFutureDrawings: "Mudar a paleta da sala para os próximos desenhos?",
     switchColors: "Mudar as cores",
     notNow: "Agora não",
+  },
+
+  dialog: {
+    close: "Fechar",
+    cancel: "Cancelar",
+    couldNotSave: "Não foi possível guardar. Tenta de novo.",
   },
 
   confirmationDialog: {
@@ -918,8 +920,6 @@ export const PT: Catalogue = {
     deleteYourAccount: "Eliminar a tua conta",
     deleting: "A eliminar…",
     deleteForGood: "Eliminar de vez",
-    keepPlaying: "Continuar a jogar",
-    keepMyAccount: "Manter a minha conta",
   },
 
   drainCue: {
@@ -1945,7 +1945,6 @@ export const PT: Catalogue = {
     drawWhileYouWait: "Desenha enquanto esperas",
     canvasLabel: "Bloco de rascunho. Só tu vês o que desenhas aqui.",
     save: "Guardar",
-    close: "Fechar",
     backToTheRoom: "Voltar à sala",
   },
 
@@ -1984,11 +1983,12 @@ export const PT: Catalogue = {
     revokeAnyDeviceYouNoLonger: "Revoga qualquer dispositivo que já não reconheças. Os nomes dos dispositivos são aproximados e não guardam versões de navegador.\n          Um dispositivo que deixas de usar termina a sessão sozinho ao fim de noventa dias.",
     loadingDevices: "A carregar dispositivos…",
     currentDevice: "Dispositivo atual",
-    close: "Fechar",
     revoking: "A revogar…",
     revoke: "Revogar",
     loggingOut: "A terminar sessão…",
     logOutEverywhere: "Terminar sessão em todo o lado",
+    logOutEverywhereTitle: "Terminar sessão em todo o lado?",
+    logOutEverywhereBody: "Todos os dispositivos com sessão iniciada nesta conta terminam a sessão, incluindo este. Vais ter de iniciar sessão aqui outra vez.",
   },
 
   avatarDoodles: {
@@ -2024,7 +2024,6 @@ export const PT: Catalogue = {
     intro: "Na cor do teu nome, onde quer que o teu nome apareça.",
     wearing: "Usas agora",
     couldNotChoose: "Não foi possível mudar o desenho.",
-    close: "Fechar",
   },
   settingsOverlay: {
     email: "E-mail",
@@ -2309,7 +2308,6 @@ export const PT: Catalogue = {
     newRecoveryCodes: "Códigos de recuperação novos",
     turnOff: "Desligar",
     addAuthenticatorApp: "Adicionar uma aplicação de autenticação",
-    close: "Fechar",
     couldNotStartSettingThis: "Não foi possível começar a configuração.",
     thatCodeWasNotAccepted: "Esse código não foi aceite.",
     couldNotAddThatPasskey: "Não foi possível adicionar essa passkey.",
@@ -2631,6 +2629,7 @@ export const PT: Catalogue = {
   passwordPolicy: {
     tooShort: (p: { count: number }) =>
       `Uma palavra-passe precisa de pelo menos ${p.count} caracteres.`,
+    rule: (p: { count: number }) => `Pelo menos ${p.count} caracteres.`,
   },
   operatorAccess: {
     administrator: "administrador",

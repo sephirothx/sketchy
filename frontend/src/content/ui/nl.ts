@@ -512,7 +512,6 @@ export const NL: Catalogue = {
     loadingExports: "Exports laden…",
     youHaveNotRequestedExportYet: "Je hebt nog geen export aangevraagd.",
     download: "Downloaden",
-    close: "Sluiten",
     requesting: "Aanvragen…",
     requestExport: "Export aanvragen",
   },
@@ -546,7 +545,6 @@ export const NL: Catalogue = {
     username: "Gebruikersnaam",
     password: "Wachtwoord",
     codeFromYourAuthenticatorApp: "Code uit je authenticatie-app",
-    recoveryCodeWorksHereTooCan: "Een herstelcode werkt hier ook, en is één keer te gebruiken.",
     email: "E-mail",
     optional: "optioneel",
     letsYouResetYourPasswordLater: "Hiermee kun je later je wachtwoord herstellen. Verder wordt het nergens voor gebruikt.",
@@ -662,7 +660,6 @@ export const NL: Catalogue = {
     yourPassword: "Je wachtwoord",
     passwordConfirmsItIsYou: "Je wachtwoord bevestigt dat jij het bent: via dit adres wordt het account hersteld.",
     enterYourPasswordToConfirm: "Voer je wachtwoord in om de wijziging te bevestigen.",
-    close: "Sluiten",
     notNow: "Niet nu",
   },
 
@@ -758,7 +755,6 @@ export const NL: Catalogue = {
     changeYourPassword: "Wijzig je wachtwoord",
     pleaseWait: "Even geduld…",
     changePassword: "Wachtwoord wijzigen",
-    close: "Sluiten",
     cancel: "Annuleren",
   },
 
@@ -774,6 +770,12 @@ export const NL: Catalogue = {
     switchRoomPaletteFutureDrawings: "Het kleurenpalet van de kamer omzetten voor volgende tekeningen?",
     switchColors: "Kleuren omzetten",
     notNow: "Nu niet",
+  },
+
+  dialog: {
+    close: "Sluiten",
+    cancel: "Annuleren",
+    couldNotSave: "Opslaan lukte niet. Probeer het nog eens.",
   },
 
   confirmationDialog: {
@@ -918,8 +920,6 @@ export const NL: Catalogue = {
     deleteYourAccount: "Je account verwijderen",
     deleting: "Verwijderen…",
     deleteForGood: "Voorgoed verwijderen",
-    keepPlaying: "Blijven spelen",
-    keepMyAccount: "Mijn account houden",
   },
 
   drainCue: {
@@ -1946,7 +1946,6 @@ export const NL: Catalogue = {
     drawWhileYouWait: "Teken terwijl je wacht",
     canvasLabel: "Kladblok. Alleen jij ziet wat je hier tekent.",
     save: "Opslaan",
-    close: "Sluiten",
     backToTheRoom: "Terug naar de kamer",
   },
 
@@ -1985,11 +1984,12 @@ export const NL: Catalogue = {
     revokeAnyDeviceYouNoLonger: "Trek elk apparaat in dat je niet meer herkent. Apparaatnamen zijn grof en bewaren geen browserversies.\n          Een apparaat dat je niet meer gebruikt, logt zichzelf na negentig dagen uit.",
     loadingDevices: "Apparaten laden…",
     currentDevice: "Huidig apparaat",
-    close: "Sluiten",
     revoking: "Intrekken…",
     revoke: "Intrekken",
     loggingOut: "Uitloggen…",
     logOutEverywhere: "Overal uitloggen",
+    logOutEverywhereTitle: "Overal uitloggen?",
+    logOutEverywhereBody: "Elk apparaat dat met dit account is ingelogd, wordt uitgelogd, ook dit. Hier moet je daarna opnieuw inloggen.",
   },
 
   avatarDoodles: {
@@ -2025,7 +2025,6 @@ export const NL: Catalogue = {
     intro: "In je naamkleur, overal waar je naam verschijnt.",
     wearing: "Draag je nu",
     couldNotChoose: "De tekening kon niet gewijzigd worden.",
-    close: "Sluiten",
   },
   settingsOverlay: {
     email: "E-mail",
@@ -2310,7 +2309,6 @@ export const NL: Catalogue = {
     newRecoveryCodes: "Nieuwe herstelcodes",
     turnOff: "Uitschakelen",
     addAuthenticatorApp: "Een authenticatie-app toevoegen",
-    close: "Sluiten",
     couldNotStartSettingThis: "Het instellen kon niet beginnen.",
     thatCodeWasNotAccepted: "Die code werd niet geaccepteerd.",
     couldNotAddThatPasskey: "Die passkey kon niet worden toegevoegd.",
@@ -2632,6 +2630,7 @@ export const NL: Catalogue = {
   passwordPolicy: {
     tooShort: (p: { count: number }) =>
       `Een wachtwoord heeft minstens ${p.count} tekens nodig.`,
+    rule: (p: { count: number }) => `Minstens ${p.count} tekens.`,
   },
   operatorAccess: {
     administrator: "beheerder",
