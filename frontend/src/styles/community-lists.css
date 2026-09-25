@@ -161,6 +161,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .community-catalogue-dot { color: var(--faint); }
@@ -455,6 +457,8 @@
   min-width: 0;
   outline: none;
   padding: 0;
+  margin-inline-start: calc(-1 * var(--ink-overhang));
+  text-indent: var(--ink-overhang);
 }
 
 .community-prompts-search-count {

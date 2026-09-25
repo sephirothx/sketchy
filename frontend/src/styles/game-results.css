@@ -53,6 +53,8 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .turn-results-score-change {

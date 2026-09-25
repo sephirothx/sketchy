@@ -23,12 +23,12 @@
    * slant: the glyphs lean but their advance widths do not grow, and the last
    * one leans past the end of the box. Measured across ASCII, the worst case
    * is 0.208em ("Y", Nunito Sans at weight 800); every weight either font is
-   * asked for stays under 0.21em. Any name that clips itself to one line -
-   * the player list, the standings, the roster tile - then cut that lean off.
-   * The allowance belongs to the italic, so it is set with it rather than at
-   * each of those places.
+   * asked for stays under 0.21em. This allowance keeps the lean off whatever
+   * follows the name - a colon, a "you" tag. It does not stop a box that
+   * clips from cutting the lean, or a "j"'s tail at the other end: every
+   * such box carries --ink-overhang (theme.css) for that, italic or not.
    */
-  padding-right: 0.22em;
+  padding-right: var(--ink-overhang);
 }
 
 [data-theme="dark"] .colored-player-name.is-guest,
@@ -130,6 +130,8 @@
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
   padding: 10px 12px;
+  padding-inline-start: calc(12px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour. */
   background: var(--field);
   /* Explicit, not `inherit`: the dialog sets a light text color for its own
@@ -221,10 +223,13 @@
   font-weight: 800;
   font-size: 14px;
   color: var(--ink);
-  max-width: 12ch;
+  /* 12ch of name; the ink allowance either side is on top of it. */
+  max-width: calc(12ch + 2 * var(--ink-overhang));
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .identity-chevron {
@@ -523,6 +528,8 @@
   font-size: 16px;
   margin-top: 6px;
   padding: 10px 12px;
+  padding-inline-start: calc(12px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   width: 100%;
 }
 .step-up-passkey { margin: 0 0 14px; width: 100%; }
@@ -660,7 +667,12 @@
   /* 16px or more keeps iOS from zooming the viewport on focus. */
   font-size: 22px;
   font-weight: 600;
-  padding: 2px 4px 4px;
+  /* The display face's "j" hooks back 2.6px at this size, and the field's
+     inner editor clipped it (#1170). The start padding is less than the
+     allowance, so it all goes to the indent: the text sits under a pixel
+     further in than it did. */
+  padding: 2px 4px 4px 0;
+  text-indent: var(--ink-overhang);
   width: 100%;
 }
 

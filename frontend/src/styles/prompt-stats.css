@@ -46,6 +46,8 @@
 
 .prompt-stats-table-scroll {
   overflow-x: auto;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 /* A list with nothing ranked: the names alone, in columns. Every row of the
@@ -174,8 +176,16 @@
   padding: 6px 10px;
 }
 
+/* A field's inner editor clips at its content box; a select does not. */
+.prompt-stats-controls input[type="search"] {
+  padding-inline-start: calc(10px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
+}
+
 .prompt-stats-table-scroll {
   overflow-x: auto;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .prompt-stats-more {
