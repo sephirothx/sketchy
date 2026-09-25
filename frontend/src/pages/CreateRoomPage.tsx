@@ -515,7 +515,7 @@ export function CreateRoomPage() {
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
         <button
           type="button"
-          className="custom-prompts-apply"
+          className="btn btn-primary custom-prompts-apply"
           onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
         >
           {ui.createRoomPage.saveAsReusableList}

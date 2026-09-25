@@ -15,6 +15,15 @@
   font-weight: 800;
   min-height: 44px;
   color: var(--ink);
+  /* A <Link> wears the recipe too, and must not keep a link's underline. */
+  text-decoration: none;
+  transition:
+    filter var(--motion-fast),
+    translate var(--motion-fast),
+    box-shadow var(--motion-fast),
+    background-color var(--motion-fast),
+    border-color var(--motion-fast),
+    color var(--motion-fast);
 }
 
 .btn-primary {
@@ -50,6 +59,12 @@
   font-size: 14px;
 }
 
+.btn-danger {
+  background: var(--danger);
+  color: #fff;
+  box-shadow: 0 2px 0 color-mix(in srgb, var(--danger) 70%, #000);
+}
+
 .btn-danger-ghost {
   background: transparent;
   color: var(--danger);
@@ -83,6 +98,73 @@
   width: 38px;
   height: 38px;
   padding: 0;
+}
+
+/* States, once, for every variant. They were missing, so only the buttons
+   that reimplemented .btn reacted to the pointer - each with its own filter.
+
+   Wrapped in :where() so a state weighs no more than the variant it modifies:
+   it beats `.btn-primary` by coming after it, and loses to any component rule
+   that deliberately restyles a button, rather than repainting it on hover.
+
+   Hover only where a pointer can hover: a tap leaves :hover stuck on touch
+   screens until the next tap somewhere else. */
+@media (hover: hover) {
+  .btn-primary:where(:hover:not(:disabled)),
+  .btn-warm:where(:hover:not(:disabled)),
+  .btn-success:where(:hover:not(:disabled)),
+  .btn-danger:where(:hover:not(:disabled)) {
+    filter: brightness(1.07);
+  }
+
+  .btn-secondary:where(:hover:not(:disabled)),
+  .btn-icon:where(:hover:not(:disabled)) {
+    border-color: var(--faint);
+    color: var(--ink);
+  }
+
+  .btn-ghost:where(:hover:not(:disabled)),
+  .btn-danger-ghost:where(:hover:not(:disabled)) {
+    background: color-mix(in srgb, currentColor 9%, transparent);
+  }
+
+  .btn-ghost:where(:hover:not(:disabled)) {
+    color: var(--ink);
+  }
+}
+
+/* The press: the button sinks onto its edge. `translate` rather than
+   `transform`, so a button a component positions with a transform (the chat's
+   centred "new messages" pill) keeps its place while it is pressed. */
+.btn:where(:active:not(:disabled)) {
+  translate: 0 1px;
+}
+
+.btn-primary:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--primary-edge);
+}
+
+.btn-warm:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--warm-edge);
+}
+
+.btn-success:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--success-button-edge);
+}
+
+.btn-danger:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--danger) 70%, #000);
+}
+
+.btn-secondary:where(:active:not(:disabled)),
+.btn-icon:where(:active:not(:disabled)) {
+  box-shadow: none;
+}
+
+/* Disabled is dimmed globally (reset.css); a disabled button also loses its
+   edge, so it no longer looks like something that can be pressed. */
+.btn:where(:disabled) {
+  box-shadow: none;
 }
 
 /* ------------------------------------------------------------------ chips */

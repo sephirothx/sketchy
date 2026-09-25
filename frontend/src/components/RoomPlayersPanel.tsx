@@ -145,6 +145,7 @@ export function RoomPlayersPanel({
           </p>
           <button
             type="button"
+            className="btn btn-primary btn-compact"
             disabled={!playerSpaceAvailable || promotionBusy}
             onClick={() => void becomePlayer()}
           >

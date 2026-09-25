@@ -500,9 +500,9 @@
   flex: none;
 }
 
-.profile-game-place.is-place-1 { background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--gold); }
-.profile-game-place.is-place-2 { background: color-mix(in srgb, var(--silver) 16%, transparent); color: var(--silver); }
-.profile-game-place.is-place-3 { background: color-mix(in srgb, var(--bronze) 16%, transparent); color: var(--bronze); }
+.profile-game-place.is-place-1 { background: var(--gold-soft); color: var(--gold); }
+.profile-game-place.is-place-2 { background: var(--silver-soft); color: var(--silver); }
+.profile-game-place.is-place-3 { background: var(--bronze-soft); color: var(--bronze); }
 
 /* The quieter second row of statistics. */
 .profile-stats-small {

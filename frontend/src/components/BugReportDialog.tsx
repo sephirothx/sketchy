@@ -271,8 +271,8 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         {error && <p className="auth-error" role="alert">{error}</p>}
 
         <div className="confirmation-dialog-actions">
-          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.bugReportDialog.cancel}</button>
-          <button type="submit" className="modal-button" disabled={busy || !summary.trim() || !details.trim()}>{busy ? ui.bugReportDialog.sending : ui.bugReportDialog.sendReport}</button>
+          <button ref={cancelRef} type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>{ui.bugReportDialog.cancel}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy || !summary.trim() || !details.trim()}>{busy ? ui.bugReportDialog.sending : ui.bugReportDialog.sendReport}</button>
         </div>
       </form>
     </div>

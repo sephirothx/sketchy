@@ -145,7 +145,7 @@ export function ReportLobbyLineDialog({
                   {error}
                 </p>
               )}
-              <button type="submit" className="modal-button" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy ? ui.reportLobbyLineDialog.sending : ui.reportLobbyLineDialog.sendReport}
               </button>
             </form>
@@ -153,7 +153,7 @@ export function ReportLobbyLineDialog({
         ) : (
           <>
             <p className="modal-body">{ui.reportLobbyLineDialog.sentWithLineWhatWasSaid}</p>
-            <button type="button" className="modal-button" onClick={onClose}>
+            <button type="button" className="btn btn-primary" onClick={onClose}>
               {ui.reportLobbyLineDialog.done}
             </button>
           </>

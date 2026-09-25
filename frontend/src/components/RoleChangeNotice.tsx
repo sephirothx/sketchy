@@ -173,7 +173,7 @@ export function RoleChangeNotice() {
           <div className="role-notice-decide">
             <button
               type="button"
-              className="modal-button"
+              className="btn btn-primary"
               disabled={busy}
               onClick={() => {
                 setEnrolling(true);
@@ -194,7 +194,7 @@ export function RoleChangeNotice() {
         ) : (
           <button
             type="button"
-            className="modal-button"
+            className="btn btn-primary"
             disabled={busy}
             onClick={() => void dismiss()}
           >
