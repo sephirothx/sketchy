@@ -8,6 +8,7 @@ import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { competitionRanks } from "../lib/standings";
+import { formatGuessTime } from "../lib/guessTime";
 import {
   canAttachDrawing,
   canCastModerationVote,
@@ -29,12 +30,9 @@ interface PlayerListProps {
   variant?: "waiting" | "playing" | "game-end";
   allowVoting?: boolean;
   moderation: ModerationState;
-  /** Per-player elapsed seconds for correct guesses this turn. */
+  /** Per-player seconds into the drawing of each correct guess this turn,
+      as the server timed them. */
   turnCorrectGuesses?: Record<string, number>;
-}
-
-function guessTime(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 
@@ -190,7 +188,7 @@ export function PlayerList({
         ) : guessedAt != null ? (
           <span className="player-status player-status-guessed">
             <CheckIcon size={12} />
-            {ui.playerList.gotIt} <span className="player-status-time">{guessTime(guessedAt)}</span>
+            {ui.playerList.gotIt} <span className="player-status-time">{formatGuessTime(guessedAt)}</span>
           </span>
         ) : p.isAfk ? (
           <span className="player-status player-status-afk">

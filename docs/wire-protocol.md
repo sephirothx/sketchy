@@ -975,13 +975,13 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
 | `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, drawerTransport}` — the last being `"polling"`, `"websocket"` or `null` for a seat between reconnects, which this socket resolves against the cadences in force to pace its playback of the drawer's batches (§1, R-DRAW-01) | **per socket** |
-| `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `drawerTransport` (§1), `correctGuessers: [[playerId, seconds]]` in guessing order, and `guessed` — this seat's correct-guess receipt (what a correct `guess` is answered with, §2), or `null` (R-CONN-13) | one socket |
+| `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `drawerTransport` (§1), `correctGuessers: [[playerId, seconds]]` in guessing order — each `seconds` the one `correct_guess` carried — and `guessed` — this seat's correct-guess receipt (what a correct `guess` is answered with, §2), or `null` (R-CONN-13) | one socket |
 | `turn_ended` | `TurnEndedPayload` | room |
 | `game_ended` | `{scores, highlights, drawings}` — each drawing carrying `turnId` and its `reactions[]` | room |
 | `last_game` | the same `{scores, highlights, drawings}`, for a socket that joined or rejoined the waiting room after `game_ended` (#871) — the recap without the end-of-game moment | one socket |
 | `drawing_reaction` | `DrawingReaction` — one seat reacted to, or took its reaction back from, one drawing; on a finished game's recap also `highlight`, the refreshed most-reacted card or `null` (#871). No `room_state` follows it | room, the drawer included |
 | `chat_message` | `ChatMessage` | room or a filtered recipient list |
-| `correct_guess` | `{playerId, nickname, points}` | room |
+| `correct_guess` | `{playerId, nickname, points, seconds}` — `points` net of the hints the seat bought; `seconds` how far into the drawing it guessed, timed by the server and rounded to tenths ([`presenters.guess_seconds`](../backend/app/presenters.py)). The same number `sync_game`'s `correctGuessers` and `turn_ended`'s `guesses[]` carry for that seat, so the chat line, the players panel and the results card agree: each client used to time this event on its own clock, in whole seconds, and one guess read 0:04 in chat and 3.6s on the results card (R-CONN-13) | room |
 | `hint_revealed` | `{maskedPrompt, turnId}` — a **timed** checkpoint hint, which answers no command; a bought hint answers in its own acknowledgement (#884) and names no turn, being an answer to something the player just did. `turnId` is the turn the hint belongs to: the loop emits one per seat and the turn can end between two of them, so a client drops a hint for a turn it has already ended rather than re-masking the prompt `turn_ended` revealed (#883) | **per socket**, each seat its own masked prompt |
 | `draw` | the drawer's exact wire frame, rebroadcast verbatim — plus `[generation, sequence, revision, historyHash]` when that frame commits an action (§7) | room, `skip_sid` drawer |
 | `canvas_commit` | `[generation, sequence, revision, historyHash]` | the drawer, or one socket replaying a duplicate |
@@ -1264,7 +1264,7 @@ names anybody. The client reduces the list to a tally itself
 glyph; the glyph table is the client's, so a code the server adds later still arrives.
 
 **`turn_ended`** carries `prompt`, `turnId`, `reactions[]`, `drawerId`, `drawerBonus`, `seconds`, the ordered
-`guesses[]` (each with the guesser's `seconds`), and `scores[]` — each entry carrying
+`guesses[]` (each with the guesser's `seconds`, the one `correct_guess` carried), and `scores[]` — each entry carrying
 `score`, `delta`, `previousRank`, and `newRank` so the client can animate the standings
 without recomputing ranks. Ranks use standard competition ranking (1, 2, 2, 4) via
 `competition_ranks()` ([`backend/app/game.py:53`](../backend/app/game.py)), shared with
@@ -2437,7 +2437,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (41) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (42) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

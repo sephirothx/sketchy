@@ -117,13 +117,34 @@ def turn_payload(
         # event at a time. A socket that resyncs mid-turn missed some of those
         # events, and every tab that comes back into view resyncs (#870).
         "correctGuessers": [
-            [token, round(game.guess_times.get(token, 0.0))]
-            for token in game.guess_points
+            [token, guess_seconds(game, token)] for token in game.guess_points
         ],
         # This seat's own `you_guessed_correctly`, restored the same way, so
         # its guess input stays closed and the breakdown adds up. Private:
         # sync_game is only ever a per-socket emit.
         "guessed": guessed_receipt(game, player_id),
+    }
+
+
+def guess_seconds(game: Game, token: str) -> float:
+    """How far into the drawing `token` guessed, as every surface shows it.
+
+    One number for the chat line, the players panel, a resync and the results
+    card, so the same guess never reads 0:04 in one place and 3.6s in another:
+    each client used to time `correct_guess` on its own clock, rounded to
+    whole seconds. Tenths, because that is what the results card shows and
+    anything finer is noise in the event loop's own latency."""
+    return round(game.guess_times.get(token, 0.0), 1)
+
+
+def correct_guess_payload(game: Game, player: Player, points: int) -> dict:
+    """What the room is told when `player` guesses the prompt: the points it
+    earned (net of hints) and the server's `seconds` into the drawing."""
+    return {
+        "playerId": player.id,
+        "nickname": player.nickname,
+        "points": points,
+        "seconds": guess_seconds(game, player.id),
     }
 
 
@@ -198,7 +219,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "nameColor": player.name_color,
                 "avatarUrl": avatar_url(player.avatar_key),
                 "isAnonymous": player.is_anonymous,
-                "seconds": game.guess_times[player.id],
+                "seconds": guess_seconds(game, player.id),
             }
             for player in sorted(
                 players,
