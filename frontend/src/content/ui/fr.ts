@@ -2349,12 +2349,14 @@ export const FR: Catalogue = {
 
   waitingRoomPanel: {
     editRoomRules: "Modifier les règles du salon",
+    editRules: "Modifier les règles",
+    doodle: "Gribouiller",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "manche", other: "manches" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Il manque 1 joueur", other: "Il manque des joueurs" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} lancera la revanche" : "{host} lancera la partie",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "On attend que {host} lance la revanche" : "On attend que {host} démarre",
     copied: (p: { what: string }) => `${p.what} copié.`,
     couldNotCopy: (p: { what: string }) =>
       `Impossible de copier ${p.what}. Copie-le depuis la barre d’adresse.`,

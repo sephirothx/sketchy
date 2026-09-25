@@ -147,7 +147,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const waitingForHost = (
     <p className="waiting-start-waiting">
       {host
-        ? <>{fill(ui.waitingRoomPanel.hostWillStart({ rematch }), {
+        ? <>{fill(ui.waitingRoomPanel.waitingForHostToStart({ rematch }), {
         host: (
           <span
             className={playerNameClass(host.isAnonymous)}
@@ -160,6 +160,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         : ui.waitingRoomPanel.waitingForAHost}
     </p>
   );
+  // A phone's dock puts this button on one row with Edit (the host's) or
+  // with the wait for the host (everybody else's), so there it has the short
+  // label; the accessible name is the visible one either way (WCAG 2.5.3).
   const drawButton = (
     <button
       ref={drawButtonRef}
@@ -169,7 +172,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       onClick={() => swapTo(true)}
     >
       <BrushIcon size={15} />
-      {ui.scratchPad.drawWhileYouWait}
+      {isNarrow ? ui.waitingRoomPanel.doodle : ui.scratchPad.drawWhileYouWait}
     </button>
   );
 
@@ -381,7 +384,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 onClick={() => setSettingsOpen(true)}
               >
                 <PencilIcon size={15} />
-                {ui.waitingRoomPanel.editRoomRules}
+                {isNarrow ? ui.waitingRoomPanel.editRules : ui.waitingRoomPanel.editRoomRules}
               </button>
               {props.startError && <p className="waiting-start-error">{props.startError}</p>}
               {drawButton}

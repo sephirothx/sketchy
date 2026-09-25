@@ -757,16 +757,35 @@
   margin-left: auto;
 }
 
-/* On the phone's dock Start takes the width Edit leaves. */
-@media (max-width: 900px) {
-  .waiting-rules-footer .waiting-start-button {
-    flex: 1 1 auto;
-    width: auto;
-  }
+/* Everybody but the host: one row at every width - the wait for the host
+   on the left, wrapping onto a second line of text before it ever pushes
+   Doodle onto a row of its own, and the pad's button on the right. A centred
+   line over a lone button (a phone's dock, and 901-1100px) read as if
+   something were missing. */
+.waiting-rules-footer .waiting-start-waiting {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: left;
 }
 
-.waiting-rules-footer .waiting-start-waiting {
-  flex: 1 1 auto;
+.waiting-rules-footer .waiting-start-waiting + .waiting-draw-button {
+  flex: none;
+}
+
+/* The host's phone dock is two rows: Edit rules and Doodle sharing the first
+   (short labels, WaitingRoomPanel), Start the whole second. It was three
+   rows, the long labels too wide to sit side by side. */
+@media (max-width: 900px) {
+  .waiting-rules-footer .waiting-start-button {
+    flex: 1 0 100%;
+    width: auto;
+  }
+
+  .waiting-rules-footer .waiting-rules-edit,
+  .waiting-rules-footer .waiting-draw-button {
+    flex: 1 1 auto;
+    white-space: nowrap;
+  }
 }
 
 /* The scratch pad in place of the column (#591): one strip - back, the code,

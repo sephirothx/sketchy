@@ -2347,12 +2347,14 @@ export const NL: Catalogue = {
 
   waitingRoomPanel: {
     editRoomRules: "Kamerregels bewerken",
+    editRules: "Regels bewerken",
+    doodle: "Krabbelen",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "ronde", other: "rondes" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Nog 1 speler nodig", other: "Nog meer spelers nodig" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} begint de revanche" : "{host} begint het spel",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Wachten tot {host} de revanche begint" : "Wachten tot {host} begint",
     copied: (p: { what: string }) => `${p.what} gekopieerd.`,
     couldNotCopy: (p: { what: string }) =>
       `Kon ${p.what} niet kopiëren. Kopieer het uit de adresbalk.`,

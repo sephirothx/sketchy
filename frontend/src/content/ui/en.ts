@@ -2357,12 +2357,14 @@ export const EN = {
 
   waitingRoomPanel: {
     editRoomRules: "Edit room rules",
+    editRules: "Edit rules",
+    doodle: "Doodle",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "rounds" }),
     needMorePlayers: (p: { count: number }) =>
       `Need ${counted(p.count, { one: "more player", other: "more players" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} will start the rematch" : "{host} will start the game",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Waiting for {host} to start the rematch" : "Waiting for {host} to start",
     copied: (p: { what: string }) => `${p.what} copied.`,
     couldNotCopy: (p: { what: string }) =>
       `Couldn’t copy the ${p.what}. Copy it from the address bar.`,

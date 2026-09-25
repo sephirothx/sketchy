@@ -2346,12 +2346,14 @@ export const PT: Catalogue = {
 
   waitingRoomPanel: {
     editRoomRules: "Editar regras da sala",
+    editRules: "Editar regras",
+    doodle: "Rabiscar",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "ronda", other: "rondas" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Falta 1 jogador", other: "Faltam mais jogadores" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} vai começar a desforra" : "{host} vai começar a partida",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "À espera que {host} comece a desforra" : "À espera que {host} comece",
     copied: (p: { what: string }) => `${p.what} copiado.`,
     couldNotCopy: (p: { what: string }) =>
       `Não foi possível copiar ${p.what}. Copia-o da barra de endereço.`,

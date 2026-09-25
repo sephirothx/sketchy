@@ -2746,7 +2746,9 @@ A seated client checks with the server every five seconds that it still holds th
   On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card. An invite link shows the room the same six
-  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait" swaps
+  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait"
+  ("Doodle" on a phone, where it shares a row with "Edit rules", or with "Waiting for Hosty to
+  start" for everybody but the host) swaps
   the column for a scratch pad at a turn's size - only yours, like the one an outage shows,
   and the same drawing on both - with the room code (a chip that copies the invite link) and Start kept in a strip above it.
 - Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
