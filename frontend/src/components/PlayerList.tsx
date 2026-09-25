@@ -111,9 +111,9 @@ export function PlayerList({
       // "sent", so the reply never becomes a way to test for one (R-FRIEND-04,
       // #1002). The wording must not name any of them.
       if (answer.status === "accepted") {
-        notify(ui.playerList.nowFriends({ name: nickname }));
+        notify(ui.playerList.nowFriends({ name: nickname }), "success");
       } else {
-        notify(ui.playerList.friendRequestSent({ name: nickname }));
+        notify(ui.playerList.friendRequestSent({ name: nickname }), "success");
       }
     } catch {
       notify(ui.playerList.thatRequestCouldNotBeSent, "error");
