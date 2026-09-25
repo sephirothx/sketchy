@@ -839,7 +839,6 @@
 .waiting-host-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 .waiting-start-error { color: var(--danger); margin: 8px 0 0; }
 .waiting-start-button { flex: 0 0 auto; }
-.waiting-start-button:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
 .custom-prompts-apply { margin-top: 10px; }
 .waiting-chat-empty { color: var(--muted); font-style: italic; margin: 0; }
 .waiting-chat-form { margin-top: 10px; }

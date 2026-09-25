@@ -136,6 +136,12 @@
   margin-top: 10px;
 }
 
+/* A footer row lines its buttons up by itself; the primary's gap above is for
+   a button standing alone under the fields. */
+.confirmation-dialog-actions > .btn {
+  margin-top: 0;
+}
+
 .auth-error {
   color: var(--danger);
   font-size: 13px;

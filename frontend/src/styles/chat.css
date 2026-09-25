@@ -31,15 +31,17 @@
   font-size: 13.5px;
 }
 
-/* A compact primary .btn, floated over the foot of the list. */
+/* A compact primary .btn, floated over the foot of the list: a pill, and
+   raised, because it hovers over messages rather than sitting in a row. */
 .chat-scroll-bottom-button {
   position: absolute;
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
+  border-radius: 999px;
+  box-shadow: 0 2px 0 var(--primary-edge), var(--shadow-raised);
   gap: 4px;
   z-index: 10;
-  animation: popIn 0.2s ease;
 }
 
 /* System lines read quietly, marked with a dot instead of a color. */

@@ -186,8 +186,6 @@
    theme's gold is an ink-dark olive, so first place read as a brown block on
    a page whose accents are indigo and orange. */
 .game-end-podium-block {
-  --medal: var(--faint);
-  --medal-soft: var(--well);
   width: 100%;
   border-radius: 10px 10px 0 0;
   background: var(--medal-soft);
@@ -286,10 +284,15 @@
 /* Continue is a big primary .btn with the countdown ring inside it, where
    an icon would sit (the glossary's Continue): the loud action by size and
    colour, no longer by being the one pill-shaped button in the app. It needs
-   no rule of its own outside the phone layout below.
+   keeps the old pill's height, so it stays the tallest control in the row
+   after Stay here has taken the ring out of it.
 
    Stay here is a real button, a ghost one: it does a button's job (it stops
    the countdown), which a faint underlined link did not look like it would. */
+.game-end-continue {
+  min-height: 54px;
+}
+
 .game-end-stay {
   margin: 8px 0 0;
 }
