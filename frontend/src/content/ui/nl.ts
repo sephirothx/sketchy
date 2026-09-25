@@ -473,12 +473,6 @@ export const NL: Catalogue = {
       `${p.percent} geraden`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Commitdatum: ${p.commitDate} | Gebouwd: ${p.builtAt}`,
-    version: (p: { sha: string; builtAt: string }) => `Versie ${p.sha} (${p.builtAt})`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, cijfer ${p.index} van ${p.length}`,

@@ -473,12 +473,6 @@ export const IT: Catalogue = {
       `${p.percent} indovinato`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Data del commit: ${p.commitDate} | Build: ${p.builtAt}`,
-    version: (p: { sha: string; builtAt: string }) => `Versione ${p.sha} (${p.builtAt})`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, cifra ${p.index} di ${p.length}`,

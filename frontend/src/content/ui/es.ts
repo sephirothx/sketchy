@@ -473,12 +473,6 @@ export const ES: Catalogue = {
       `${p.percent} adivinado`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Fecha del commit: ${p.commitDate} | Compilado: ${p.builtAt}`,
-    version: (p: { sha: string; builtAt: string }) => `Versión ${p.sha} (${p.builtAt})`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, dígito ${p.index} de ${p.length}`,

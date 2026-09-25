@@ -473,12 +473,6 @@ export const PT: Catalogue = {
       `${p.percent} acertado`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Data do commit: ${p.commitDate} | Compilado: ${p.builtAt}`,
-    version: (p: { sha: string; builtAt: string }) => `Versão ${p.sha} (${p.builtAt})`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, dígito ${p.index} de ${p.length}`,

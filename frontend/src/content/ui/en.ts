@@ -483,12 +483,6 @@ export const EN = {
       `${p.percent} guessed`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Commit date: ${p.commitDate} | Built: ${p.builtAt}`,
-    version: (p: { sha: string; builtAt: string }) => `Version ${p.sha} (${p.builtAt})`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, digit ${p.index} of ${p.length}`,
