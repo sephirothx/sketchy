@@ -42,7 +42,7 @@ fires a dismissal for something nobody can see. */
 export function keepRecentToasts<T>(
   current: T[],
   arriving: T,
-  same: (a: T, b: T) => boolean = () => false,
+  same: (onScreen: T, arriving: T) => boolean,
 ): {
   kept: T[];
   evicted: T[];
@@ -58,6 +58,22 @@ export function keepRecentToasts<T>(
     kept: [...others.slice(-room), arriving],
     evicted: [...repeated, ...others.slice(0, Math.max(0, others.length - room))],
   };
+}
+
+/** Whether an arriving toast repeats one on screen, for `keepRecentToasts`:
+    the same words in the same tone, and nothing to act on. A toast with an
+    action is its own offer and is never folded into another, and the same
+    words as a warning and as an error are two different things to say. */
+export function sameToast(
+  onScreen: { message: string; tone: ToastTone; action?: ToastAction },
+  arriving: { message: string; tone: ToastTone; action?: ToastAction },
+): boolean {
+  return (
+    onScreen.message === arriving.message &&
+    onScreen.tone === arriving.tone &&
+    !onScreen.action &&
+    !arriving.action
+  );
 }
 
 export const ToastContext = createContext<ToastContextValue | null>(null);

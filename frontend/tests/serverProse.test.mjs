@@ -42,7 +42,8 @@ const REVIEWED = {
   "components/InviteEntryPage.tsx: state.message": "a room-entry state, written from the catalogue",
   "components/PictureCropDialog.tsx: failure.message": "an AvatarInputError, thrown with catalogue text",
   "components/ToastProvider.tsx: toast.message": "a toast's own text, written by whoever raised it",
-  "components/ToastProvider.tsx: next.message": "the same, for the toast arriving, compared with one on screen",
+  "lib/toast.ts: onScreen.message": "a toast's own text, compared to fold a repeat into it (sameToast)",
+  "lib/toast.ts: arriving.message": "the same, for the toast arriving",
   "components/LobbyChatPanel.tsx: error.message":
     "an IdentityRequiredError, thrown with the name check's catalogue text",
   "pages/LobbyBrowserPage.tsx: error.message": "the same",

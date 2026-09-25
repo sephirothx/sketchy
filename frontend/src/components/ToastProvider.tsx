@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ToastContext,
   keepRecentToasts,
+  sameToast,
   type ToastAction,
   type ToastTone,
 } from "../lib/toast";
@@ -38,9 +39,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       const { kept, evicted } = keepRecentToasts(
         current,
         { id, message, tone, action },
-        // The same words and tone, and nothing to act on: a toast with an
-        // action is its own offer, and is never folded into another.
-        (toast, next) => toast.message === next.message && toast.tone === next.tone && !toast.action && !next.action,
+        sameToast,
       );
       // A toast that fell off the stack still has a timer running against it.
       for (const gone of evicted) {
