@@ -140,7 +140,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "You are doing that too quickly. Try again in a moment.",
-  seat_changing_too_fast: "You have reopened this room too many times in a row. Try again in a minute.",
+  seat_changing_too_fast: "Your seat in this room has moved between tabs or connections too often. Try again in a minute.",
   joining_too_fast: "You are joining rooms too quickly. Try again in a minute.",
   room_quota: "You have as many rooms open as you can have at once.",
   room_full: "This room is full.",
