@@ -417,11 +417,13 @@
 /* ------------------------------------------------------------ invite entry */
 .invite-entry-page {
   min-height: 100vh;
-  padding: 20px 16px 48px;
+  padding: 24px 16px 48px;
 }
 
+/* The page itself runs the window's width, so the bar is capped at the shell
+   here rather than reaching out to it: the same place as on every other page. */
 .invite-entry-page .lobby-header {
-  max-width: 760px;
+  max-width: var(--shell-width);
   margin: 0 auto 28px;
 }
 
@@ -1379,7 +1381,8 @@ a.online-player-name:focus-visible {
     grid-template-rows: auto auto auto minmax(0, 1fr);
     column-gap: 16px;
     row-gap: 0;
-    max-width: calc(var(--shell-width) + 32px);
+    --page-width: var(--shell-width);
+    max-width: calc(var(--page-width) + 32px);
   }
 
   .lobby-page > .lobby-header {
@@ -1762,9 +1765,12 @@ a.online-player-name:focus-visible {
 
 /* Narrower than `.ops-page`: with the rail taken out, what is left is the
    reading column, and it should be a reading width rather than whatever the
-   page has spare. */
-.rules-page {
-  max-width: 960px;
+   page has spare. Both classes, because `.ops-page` arrives later: it is in
+   operator.css, which the Rules page's own chunk loads after this entry
+   sheet, so a lone `.rules-page` lost the tie and the page ran to the shell. */
+.ops-page.rules-page {
+  --page-width: 928px;
+  max-width: calc(var(--page-width) + 32px);
 }
 
 .rules-layout {

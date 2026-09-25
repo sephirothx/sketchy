@@ -32,6 +32,7 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 const EMPTY_LISTS: PromptListSummary[] = [];
 
@@ -40,6 +41,7 @@ const EMPTY_LISTS: PromptListSummary[] = [];
 const createRequests = createRequestIds(mintRequestId);
 
 export function CreateRoomPage() {
+  useDocumentTitle(ui.createRoomPage.createRoom);
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setSession = useGameStore((state) => state.setSession);

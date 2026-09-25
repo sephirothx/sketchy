@@ -16,6 +16,7 @@ import { reactionEligibility } from "../lib/reactions";
 import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/gallery.css";
 
 /**
@@ -26,6 +27,7 @@ import "../styles/lazy/gallery.css";
  * what it publishes is what the feed publishes and nothing more (R-GAL-03).
  */
 export function GalleryDrawingPage() {
+  useDocumentTitle(ui.galleryPage.gallery);
   const navigate = useNavigate();
   const { turnId = "" } = useParams<{ turnId: string }>();
   const user = useAuthStore((state) => state.user);

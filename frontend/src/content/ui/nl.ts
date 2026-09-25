@@ -1120,6 +1120,7 @@ export const NL: Catalogue = {
 
   lobbyBrowserPage: {
     quickPlay: "Snel spelen",
+    lobby: "Lobby",
     quickPlayBusy: "Kamer zoeken…",
     couldNotFindOrOpenARoom: "Er kon geen kamer worden gevonden of geopend.",
     filterByLanguage: "Filteren op taal",
@@ -1396,6 +1397,7 @@ export const NL: Catalogue = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Deze pagina heeft niemand getekend",
+    pageNotFound: "Pagina niet gevonden",
     thatLinkDoesnTLeadAnywhere: "Die link leidt nergens heen op Sketchy.",
     backLobby: "Terug naar de lobby",
   },

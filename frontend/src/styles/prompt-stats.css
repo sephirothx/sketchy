@@ -3,9 +3,11 @@
    loaded in that order; fetched with the page (#475) they can arrive in either,
    so the page keeps its rules in one file, in the order they were written. */
 .prompt-stats-page {
+  --page-width: 868px;
   margin: 0 auto;
-  max-width: 900px;
-  padding: 16px;
+  max-width: calc(var(--page-width) + 32px);
+  /* The same top as every other page, so the header does not move. */
+  padding: 24px 16px 16px;
 }
 
 .prompt-stats-header h1 {
@@ -105,7 +107,7 @@
 
 @media (min-width: 1200px) {
 .prompt-stats-page {
-    max-width: 1272px;
+    --page-width: 1240px;
   }
 
 }

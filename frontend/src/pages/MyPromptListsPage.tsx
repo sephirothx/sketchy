@@ -33,6 +33,7 @@ import { useEmailStateStore } from "../store/emailStateStore";
 import type { CopiedFrom, OwnedPromptList, PromptLanguage, PromptTag } from "../types";
 import { refusalCode, refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/community-lists.css";
 import "../styles/lazy/prompt-lists.css";
 
@@ -75,6 +76,7 @@ function draftFromList(promptList: OwnedPromptList): PromptListDraft {
 }
 
 export function MyPromptListsPage() {
+  useDocumentTitle(ui.accountMenu.myPromptLists);
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const userId = user?.id;
@@ -355,16 +357,18 @@ export function MyPromptListsPage() {
 
   return <main className="prompt-list-manager-page">
     <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
-    <section className="prompt-list-manager-card">
-      <div className="prompt-list-manager-heading">
-        <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
-        {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
+    {/* The title sits on the page, as every other page's does; the card
+        below is the editor, not the page. */}
+    <div className="prompt-list-manager-heading">
+      <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
+      {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
+    </div>
+    {!user || user.isAnonymous ? (
+      <div className="prompt-list-manager-empty">
+        <p>{ui.myPromptListsPage.createAccountSaveReviseSharePrompt}</p>
       </div>
-      {!user || user.isAnonymous ? (
-        <div className="prompt-list-manager-empty">
-          <p>{ui.myPromptListsPage.createAccountSaveReviseSharePrompt}</p>
-        </div>
-      ) : (
+    ) : (
+      <section className="prompt-list-manager-card">
         <div className="prompt-list-manager-layout">
           <aside aria-label={ui.myPromptListsPage.yourPromptLists}>
             {loading && lists.length === 0 && <p>{ui.myPromptListsPage.loading}</p>}
@@ -585,8 +589,8 @@ export function MyPromptListsPage() {
             </div>
           </form>
         </div>
-      )}
-    </section>
+      </section>
+    )}
     {confirmingDelete && <ConfirmationDialog
       title={ui.myPromptListsPage.deleteListTitle({ name: lists.find((item) => item.id === selectedId)?.name ?? draft.name })}
       description={ui.myPromptListsPage.deleteListDescription}

@@ -40,6 +40,7 @@ import type {
   PromptTag,
 } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/community-lists.css";
 
 /** A tag's name in the reader's language, by the slug that never changes. */
@@ -48,6 +49,7 @@ function tagName(slug: string): string {
 }
 
 export function CommunityCataloguePage() {
+  useDocumentTitle(ui.communityCataloguePage.communityCatalogue);
   const navigate = useNavigate();
   const params = useParams<{ listId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();

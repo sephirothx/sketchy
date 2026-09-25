@@ -14,6 +14,7 @@ import { useEmailStateStore } from "../store/emailStateStore";
 import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 type Mode = "forgot" | "reset" | "verify";
 
@@ -152,6 +153,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           ? ui.accountRecoveryPage.thatLinkNoLongerWorks
           : ui.accountRecoveryPage.chooseANewPassword
         : ui.accountRecoveryPage.confirmingYourEmail;
+  useDocumentTitle(heading);
 
   return (
     <main className="recovery-page">

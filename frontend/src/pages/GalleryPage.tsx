@@ -18,6 +18,7 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/gallery.css";
 
 const SORTS: readonly GallerySort[] = ["hot", "new", "top"];
@@ -38,6 +39,7 @@ const BACK_TO_TOP_AFTER_PX = 600;
  * door (R-GAL-06).
  */
 export function GalleryPage() {
+  useDocumentTitle(ui.galleryPage.gallery);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);

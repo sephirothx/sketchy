@@ -1120,6 +1120,7 @@ export const ES: Catalogue = {
 
   lobbyBrowserPage: {
     quickPlay: "Juego rápido",
+    lobby: "Vestíbulo",
     quickPlayBusy: "Buscando una sala…",
     couldNotFindOrOpenARoom: "No se pudo encontrar ni abrir una sala.",
     filterByLanguage: "Filtrar por idioma",
@@ -1396,6 +1397,7 @@ export const ES: Catalogue = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Nadie ha dibujado esta página",
+    pageNotFound: "Página no encontrada",
     thatLinkDoesnTLeadAnywhere: "Ese enlace no lleva a ninguna parte de Sketchy.",
     backLobby: "Volver al vestíbulo",
   },

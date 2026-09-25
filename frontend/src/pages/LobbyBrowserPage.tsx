@@ -32,6 +32,7 @@ import {
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -148,6 +149,8 @@ function identityMessage(error: unknown): string {
 }
 
 export function LobbyBrowserPage() {
+  // The front door: the tab says the site's name and nothing else.
+  useDocumentTitle(null);
   const navigate = useNavigate();
   const location = useLocation();
   const nameColor = useSettingsStore((s) => s.nameColor);
@@ -400,6 +403,10 @@ export function LobbyBrowserPage() {
   return (
     <div className="lobby-page">
       <AppHeader languageSwitch />
+      {/* The page's one heading. The wordmark above is a link, not a heading,
+          and the lobby shows its name nowhere else: every panel below has its
+          own. Out of the layout, so the grid and flex rows are untouched. */}
+      <h1 className="visually-hidden">{ui.lobbyBrowserPage.lobby}</h1>
 
       {criticalError && (
         <RemovedFromRoomDialog

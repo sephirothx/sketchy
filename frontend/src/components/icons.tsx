@@ -361,8 +361,8 @@ export function Wordmark({ size = 30, decorative = false }: { size?: number; dec
       height={height}
       viewBox={WORDMARK_VIEWBOX}
       /* Labelled, not decorative, by default: AppHeader renders this as the
-       * lobby's <h1>, and an unnamed svg there is an axe `svg-img-alt`
-       * violation (serious) plus an empty heading. */
+       * whole content of its home link, and an unnamed svg there is an axe
+       * `svg-img-alt` violation (serious) plus a link with no name. */
       {...(decorative ? { "aria-hidden": true } : { role: "img", "aria-label": "Sketchy" })}
       style={{ display: "block", color: "var(--brand-wordmark)" }}
     >

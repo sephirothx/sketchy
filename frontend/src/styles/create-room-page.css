@@ -1,7 +1,7 @@
 /* Create-room page, per docs/ui-mockups (CreateRoomPage in
    tools/pages-entry.mjs). The control recipes here (segmented, steppers,
    chips, switches) are shared with the waiting room's settings editor. */
-.create-room-page { margin: 0 auto; max-width: 780px; padding: 26px 16px 64px; }
+.create-room-page { --page-width: 748px; margin: 0 auto; max-width: calc(var(--page-width) + 32px); padding: 24px 16px 64px; }
 
 .create-room-heading-row {
   display: flex;
@@ -384,7 +384,7 @@ details.form-section > .form-section-body {
    read down a column, and wider fields would not make it any faster to fill. */
 @media (min-width: 1200px) {
   .create-room-page {
-    max-width: calc(780px + 16px + 340px + 32px);
+    --page-width: calc(780px + 16px + 340px);
   }
 
   .create-room-layout {

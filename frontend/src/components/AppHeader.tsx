@@ -24,6 +24,10 @@ import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
  * first-time visitor may arrive on from a link, and it has to say whose site
  * it is.
  *
+ * The bar spans the shell (`--shell-width`) on every page, whatever width the
+ * page's own content keeps (`.lobby-header` in settings-shared.css), so the
+ * wordmark and the chip sit in the same place on every page.
+ *
  * You is the identity chip, and nothing beside it: Player settings are the
  * first row of the chip's menu on every width, where the gear used to sit one
  * control to its left (variant C). Before there is anybody to show - a first
@@ -77,7 +81,10 @@ export function AppHeader({
             <BackIcon size={15} />
           </button>
         )}
-        <h1 className="lobby-wordmark">
+        {/* Not a heading: the page's own <h1> is its name, and a wordmark
+            heading on every page made two of them. The link keeps the
+            wordmark's name, "Sketchy". */}
+        <div className="lobby-wordmark">
           <a
             href="/"
             className="header-home-link"
@@ -90,7 +97,7 @@ export function AppHeader({
           >
             <Wordmark size={34} />
           </a>
-        </h1>
+        </div>
         {parent && !isNarrow && (
           <p className="header-crumb">
             <ChevronRightIcon size={14} />

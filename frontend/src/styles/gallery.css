@@ -6,8 +6,9 @@
 /* ------------------------------------------------------------------- page */
 
 .gallery-page {
+  --page-width: 1008px;
   margin: 0 auto;
-  max-width: 1040px;
+  max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 64px;
 }
 

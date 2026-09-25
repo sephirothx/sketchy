@@ -20,6 +20,7 @@ import type {
   ScoringMode,
 } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/profile.css";
 import "../styles/lazy/prompt-lists.css";
 import "../styles/lazy/prompt-stats.css";
@@ -49,6 +50,7 @@ const HINT_FILTERS: Array<{ value: "all" | HintMode; label: string }> = [
 ];
 
 export function PromptStatsPage() {
+  useDocumentTitle(ui.promptStatsPage.promptStats);
   const params = useParams<{ slug?: string }>();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();

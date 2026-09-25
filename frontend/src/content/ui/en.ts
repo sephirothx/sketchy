@@ -1131,6 +1131,7 @@ export const EN = {
 
   lobbyBrowserPage: {
     quickPlay: "Quick play",
+    lobby: "Lobby",
     quickPlayBusy: "Finding a room…",
     couldNotFindOrOpenARoom: "Could not find or open a room.",
     filterByLanguage: "Filter by language",
@@ -1404,6 +1405,7 @@ export const EN = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Nobody drew this page",
+    pageNotFound: "Page not found",
     thatLinkDoesnTLeadAnywhere: "That link doesn’t lead anywhere on Sketchy.",
     backLobby: "Back to lobby",
   },

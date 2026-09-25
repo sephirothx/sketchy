@@ -7,6 +7,23 @@
   align-items: flex-end;
   gap: 16px;
   margin-bottom: 26px;
+  /* One bar on every page. Each page keeps its own content width (#581), and
+     the bar used to take whatever that was, so the wordmark and the identity
+     chip jumped sideways between the lobby, the Gallery, Create and Rules.
+     Now the bar reaches out of the page's column to the shell - or to the
+     window's 16px gutter when that is nearer - and sits in the same place on
+     every page.
+
+     A page declares its column as `--page-width`, the content width its
+     max-width leaves inside the 16px padding. The reach is only taken while
+     the page is at that width: below it the column already fills the window,
+     and `100vw` counts a classic scrollbar the column does not have, so
+     reaching out there would put the bar a few pixels past the content. The
+     clamp's upper bound is that switch - huge while the column is at its full
+     width, negative (so no reach at all) once it is narrower. A page with no
+     `--page-width` gets no reach and keeps its own width. */
+  --header-reach: calc((min(var(--shell-width), 100vw - 32px) - 100%) / 2);
+  margin-inline: calc(-1 * clamp(0px, var(--header-reach), (100% - var(--page-width) + 1px) * 999));
 }
 
 .header-settings-button:hover {

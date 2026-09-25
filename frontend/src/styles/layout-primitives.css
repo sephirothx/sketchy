@@ -47,7 +47,8 @@
   }
 }
 .lobby-page {
-  max-width: 960px;
+  --page-width: 928px;
+  max-width: calc(var(--page-width) + 32px);
   margin: 0 auto;
   padding: 24px 16px 64px;
 }

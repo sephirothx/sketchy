@@ -6,8 +6,9 @@
    is the screen players arrive from, and a stranger's list and a stranger's
    room are the same kind of thing to choose between. */
 .community-catalogue-page {
+  --page-width: 1008px;
   margin: 0 auto;
-  max-width: 1040px;
+  max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 64px;
 }
 

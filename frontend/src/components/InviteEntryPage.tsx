@@ -10,6 +10,7 @@ import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/toolbar.css";
 
 const INVITE_LOADING_DELAY_MS = 250;
@@ -54,6 +55,7 @@ export function InviteEntryPage({ code }: { code: string }) {
   const busy = state.status === "joining";
   const entryError = state.status === "preview" ? state.error : undefined;
   const notice = state.status === "preview" || state.status === "joining" ? state.notice : undefined;
+  useDocumentTitle(room?.name ?? code);
 
   return (
     <div className="invite-entry-page">

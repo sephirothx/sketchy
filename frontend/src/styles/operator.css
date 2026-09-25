@@ -4,8 +4,9 @@
 /* The operator pages follow the shell steps (#581): their tables, charts and
    master-detail layouts are what a wide monitor is for. */
 .ops-page {
+  --page-width: var(--shell-width);
   margin: 0 auto;
-  max-width: calc(var(--shell-width) + 32px);
+  max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 48px;
 }
 
