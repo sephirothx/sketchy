@@ -41,6 +41,7 @@
   border-radius: 999px;
   box-shadow: 0 2px 0 var(--primary-edge), var(--shadow-raised);
   gap: 4px;
+  white-space: nowrap;
   z-index: 10;
 }
 

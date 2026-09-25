@@ -18,12 +18,12 @@
   /* A <Link> wears the recipe too, and must not keep a link's underline. */
   text-decoration: none;
   transition:
-    filter var(--motion-fast),
-    translate var(--motion-fast),
-    box-shadow var(--motion-fast),
-    background-color var(--motion-fast),
-    border-color var(--motion-fast),
-    color var(--motion-fast);
+    filter var(--dur-fast) ease-out,
+    translate var(--dur-fast) ease-out,
+    box-shadow var(--dur-fast) ease-out,
+    background-color var(--dur-fast) ease-out,
+    border-color var(--dur-fast) ease-out,
+    color var(--dur-fast) ease-out;
 }
 
 .btn-primary {

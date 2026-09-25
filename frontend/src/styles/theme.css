@@ -109,11 +109,11 @@
   --shadow: 0 1px 2px rgba(20, 16, 10, 0.06);
   --shadow-raised: 0 10px 30px rgba(20, 16, 10, 0.14);
 
-  /* motion — a control answering the pointer: quick enough to feel like the
-     press itself rather than an animation of it. Not reset for reduced motion
-     here, because a11y.css already removes every transition under
-     prefers-reduced-motion, this one included. */
-  --motion-fast: 120ms ease-out;
+  /* motion — --dur-fast is a control answering the pointer: quick enough to
+     feel like the press itself rather than an animation of it. Easing is
+     written where it is used. Not reset for reduced motion here, because
+     a11y.css already removes every transition under prefers-reduced-motion. */
+  --dur-fast: 120ms;
 
   /* visual-viewport vars written by useVisualViewportCssVars */
   --vv-height: 100dvh;
