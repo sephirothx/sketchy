@@ -698,8 +698,8 @@ details.form-section > .form-section-body {
 /* Out of the layout until it is shown: an invisible tooltip still widens the
    page, and one centred over a "?" near a phone's right edge made the whole
    form scroll sideways. `--tip-shift` is set by `FieldHint` to keep a shown
-   one inside the viewport; the arrow moves back by as much, so it still
-   points at its "?". */
+   one inside the viewport, or inside the nearest scrolling container when that
+   is narrower; the arrow moves back by as much, so it still points at its "?". */
 .m3-switch-hint-tooltip {
   --tip-shift: 0px;
   background: var(--ink);

@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { CheckIcon, PlusIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
@@ -74,21 +74,23 @@ export function FieldHint({ hint, href }: { hint: string; href?: string }) {
    *
    * Computed from the "?" and the tooltip's own width rather than from where
    * the tooltip is drawn: that box is transformed by the shift being decided,
-   * so measuring it mid-move settled on the wrong answer. Synchronous, before
-   * the tooltip's first painted frame, so it is never shown unplaced - a
-   * tooltip drawn once past the edge of a phone widens its layout viewport
-   * for good.
+   * so measuring it mid-move settled on the wrong answer. Worked out ahead of
+   * time - on mount, when the "?" is first laid out (a closed section has no
+   * layout), and on resize or rotation - so a tooltip is never shown
+   * unplaced, and the pointer entering only confirms the value: changing it
+   * inside a touch's pointerenter swallowed that tap's click.
    */
   function place() {
     const wrap = wrapRef.current;
     const tip = tipRef.current;
     if (!wrap || !tip) return;
+    const anchor = wrap.getBoundingClientRect();
+    if (anchor.width === 0) return; // Not laid out: inside a closed section.
     // Hidden tooltips are out of the layout; lay this one out to measure it.
     const hidden = tip.offsetWidth === 0;
     if (hidden) tip.style.display = "block";
     const width = tip.offsetWidth;
     if (hidden) tip.style.removeProperty("display");
-    const anchor = wrap.getBoundingClientRect();
     const centre = anchor.left + anchor.width / 2;
     const bounds = tooltipBounds(wrap);
     const left = centre - width / 2;
@@ -97,8 +99,26 @@ export function FieldHint({ hint, href }: { hint: string; href?: string }) {
       : left < bounds.left
         ? bounds.left - left
         : left + width > bounds.right ? bounds.right - (left + width) : 0;
-    tip.style.setProperty("--tip-shift", `${shift}px`);
+    const value = `${Math.round(shift)}px`;
+    if (tip.style.getPropertyValue("--tip-shift") !== value) {
+      tip.style.setProperty("--tip-shift", value);
+    }
   }
+
+  useLayoutEffect(() => {
+    place();
+    const wrap = wrapRef.current;
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => place());
+    if (wrap) observer?.observe(wrap);
+    window.addEventListener("resize", place);
+    window.addEventListener("orientationchange", place);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", place);
+      window.removeEventListener("orientationchange", place);
+    };
+    // Again when the words change: they change the tooltip's width.
+  }, [hint]);
 
   return (
     <span ref={wrapRef} className="m3-switch-hint-wrap" onPointerEnter={place} onFocus={place}>
