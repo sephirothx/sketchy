@@ -10,7 +10,6 @@ import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
-import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useRoomsStore } from "../store/roomsStore";
@@ -755,7 +754,6 @@ export function LobbyBrowserPage() {
         </BottomSheet>
       )}
 
-      <VersionBadge />
     </div>
   );
 }

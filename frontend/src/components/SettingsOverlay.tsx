@@ -89,6 +89,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
+import { VersionBadge } from "./VersionBadge";
 import "../styles/lazy/settings.css";
 import "../styles/lazy/toolbar.css";
 
@@ -1401,6 +1402,7 @@ export function SettingsOverlay() {
             {section === "appearance" && <AppearancePane />}
             {section === "sound" && <SoundPane />}
             {section === "shortcuts" && <ShortcutsPane />}
+            <VersionBadge />
           </div>
         </div>
       </div>

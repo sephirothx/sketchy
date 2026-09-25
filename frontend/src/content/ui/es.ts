@@ -476,6 +476,7 @@ export const ES: Catalogue = {
   versionBadge: {
     buildDetails: (p: { commitDate: string; builtAt: string }) =>
       `Fecha del commit: ${p.commitDate} | Compilado: ${p.builtAt}`,
+    version: (p: { sha: string; builtAt: string }) => `Versión ${p.sha} (${p.builtAt})`,
   },
 
   segmentedCodeInput: {

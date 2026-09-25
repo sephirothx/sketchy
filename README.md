@@ -1607,7 +1607,8 @@ and three severities, and describe what happened. It reaches administrators at
 `/admin/bug-reports`, never the moderation queue: a bug report carries build and
 diagnostic data rather than safety evidence.
 
-The client attaches what it knows — build SHA, path (never the query string),
+The client attaches what it knows — build SHA (the same one Player settings shows
+at the foot of every section, rather than a stamp on the lobby), path (never the query string),
 viewport, browser, accessibility preferences, connection telemetry, heap use, and
 the last 20 errors its own recorder caught — and the server adds its own account
 of the reporter's **live seat**, resolved by finding their room rather than

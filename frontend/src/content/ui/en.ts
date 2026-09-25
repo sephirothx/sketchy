@@ -486,6 +486,7 @@ export const EN = {
   versionBadge: {
     buildDetails: (p: { commitDate: string; builtAt: string }) =>
       `Commit date: ${p.commitDate} | Built: ${p.builtAt}`,
+    version: (p: { sha: string; builtAt: string }) => `Version ${p.sha} (${p.builtAt})`,
   },
 
   segmentedCodeInput: {
