@@ -698,6 +698,11 @@ export const EN = {
     sketchyHome: "Go to the lobby",
     /** The header's site links (desktop), as one landmark. */
     siteNav: "Pages",
+    /** The header's link names for two pages whose titles are long in some
+        languages. English keeps the page title; a language whose title
+        does not fit the bar at 1200px shortens it, still naming the page. */
+    communityLink: "Community catalogue",
+    promptStatsLink: "Prompt stats",
   },
 
   bugReportDialog: {

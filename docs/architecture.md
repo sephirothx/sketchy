@@ -2074,9 +2074,12 @@ included. The link for the page you are on carries `aria-current="page"`, and
 the one for the section a nested page sits in (a Gallery drawing, a list's
 Prompt stats) `aria-current="true"`
 ([`lib/siteNav.ts`](../frontend/src/lib/siteNav.ts)). Below 1200px the links
-are icons with a tooltip; from 1200px they are labelled when the labels fit.
-Whether they fit is measured rather than assumed, because the labels are as
-long as a language makes them: the nav takes `flex: 1 1 0` — the width the bar
+are icons with a tooltip; from 1200px they are labelled. Two labels have
+header-only keys (`appHeader.communityLink`, `appHeader.promptStatsLink`):
+English and German use the page titles, and the languages whose titles do not
+fit the bar beside a crumb at 1200px use shorter names for the same pages.
+Whether they fit is still measured rather than assumed, as a safety net for a
+label a later translation makes longer: the nav takes `flex: 1 1 0` — the width the bar
 has left, which its own content never changes, so the measurement cannot
 oscillate — and falls back to icons (`is-crowded`) when the labelled row is
 wider than that. Below 901px the bar has no room for it; a phone keeps the

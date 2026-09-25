@@ -163,10 +163,11 @@ export function AppHeader({
  * The labels are always in the markup; from 901 to 1199px they are hidden
  * visually and the link keeps its name, with the same words as a tooltip.
  *
- * From 1200px the labels show if they fit. In English they fit with room to
- * spare, but the labels are as long as a language makes them - Spanish's
- * Prompt stats is "Estadísticas de palabras" - and beside a crumb, the flag
- * and a long name they pushed the flag onto a second row at 1200px. So the
+ * From 1200px the labels show if they fit. Two of them have header-only keys
+ * (`communityLink`, `promptStatsLink`): at the page titles' length Spanish,
+ * French, Italian, Portuguese and Dutch did not fit beside a crumb, the flag
+ * and a long name at 1200px, so those languages name the pages more briefly
+ * here. The check stays as a safety net for a later, longer translation: the
  * nav takes only the width the bar has left (`flex-basis: 0`, which also means
  * its own content never changes that width, so the check cannot flip back and
  * forth), and when the labelled row is wider than that it falls back to icons
@@ -224,8 +225,8 @@ function SiteNav() {
   const pages: { to: string; label: string; icon: ReactNode }[] = [
     { to: "/", label: ui.lobbyBrowserPage.lobby, icon: <HomeIcon size={16} /> },
     ...(hasSession ? [{ to: "/gallery", label: ui.galleryPage.gallery, icon: <ImageIcon size={16} /> }] : []),
-    { to: "/community-lists", label: ui.communityCataloguePage.communityCatalogue, icon: <StarIcon size={16} /> },
-    { to: "/prompt-lists", label: ui.accountMenu.promptStats, icon: <BarChartIcon size={16} /> },
+    { to: "/community-lists", label: ui.appHeader.communityLink, icon: <StarIcon size={16} /> },
+    { to: "/prompt-lists", label: ui.appHeader.promptStatsLink, icon: <BarChartIcon size={16} /> },
     { to: "/rules", label: ui.accountMenu.rules, icon: <InfoIcon size={16} /> },
   ];
   return (

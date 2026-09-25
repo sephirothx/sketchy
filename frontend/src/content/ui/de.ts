@@ -687,6 +687,8 @@ export const DE: Catalogue = {
     playerSettings: "Spielereinstellungen",
     sketchyHome: "Zur Lobby",
     siteNav: "Seiten",
+    communityLink: "Community-Katalog",
+    promptStatsLink: "Begriffsstatistik",
   },
 
   bugReportDialog: {
