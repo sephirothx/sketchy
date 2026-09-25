@@ -1540,7 +1540,7 @@ export const ES: Catalogue = {
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Denunciar a ${p.name}`,
     reportsAreReviewedAfterSubmissionList: "Las denuncias se revisan tras enviarlas. La lista sigue disponible salvo que un moderador la oculte.",
-    sentWithTheListAttached: "Enviada, con la lista tal como está ahora adjunta.",
+    sentWithTheListAttached: "Enviada, con una copia de la lista tal como está ahora.",
     content: "Contenido",
     entireList: "Lista entera",
     reason: "Motivo",

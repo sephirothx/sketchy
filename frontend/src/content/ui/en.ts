@@ -1551,7 +1551,7 @@ export const EN = {
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Report ${p.name}`,
     reportsAreReviewedAfterSubmissionList: "Reports are reviewed after submission. The list stays available unless a moderator hides it.",
-    sentWithTheListAttached: "Sent, with the list as it reads now attached.",
+    sentWithTheListAttached: "Sent, with a copy of the list as it reads now.",
     content: "Content",
     entireList: "Entire list",
     reason: "Reason",

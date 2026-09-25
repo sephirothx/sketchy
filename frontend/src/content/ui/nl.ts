@@ -1540,7 +1540,7 @@ export const NL: Catalogue = {
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `${p.name} melden`,
     reportsAreReviewedAfterSubmissionList: "Meldingen worden na het versturen bekeken. De lijst blijft beschikbaar tenzij een moderator hem verbergt.",
-    sentWithTheListAttached: "Verstuurd, met de lijst zoals die er nu uitziet erbij.",
+    sentWithTheListAttached: "Verstuurd, met een kopie van de lijst zoals die er nu uitziet.",
     content: "Inhoud",
     entireList: "Hele lijst",
     reason: "Reden",
