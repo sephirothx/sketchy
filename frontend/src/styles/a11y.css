@@ -51,6 +51,21 @@ select:focus-visible {
   outline-offset: 0;
 }
 
+/* The reaction strip's circles sit 2px apart on a dark pill over the white
+   canvas, so an outset ring would land half on the canvas and on the next
+   circle; this one is drawn inside the circle, in the strip's white
+   (--focus-ring is re-pointed on .reaction-picker). */
+.reaction-option:focus-visible {
+  outline-offset: -3px;
+}
+
+/* The catalogue card's name stretches over the whole card, which wears the
+   ring instead (community-lists.css). Here rather than beside it, because a
+   suppression in the components layer loses to the global ring above. */
+.community-catalogue-card-open:focus-visible {
+  outline: none;
+}
+
 .chat-input-box input:focus-visible,
 .input-number input:focus-visible {
   border-color: transparent;

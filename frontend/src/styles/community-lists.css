@@ -195,8 +195,6 @@
   position: absolute;
 }
 
-.community-catalogue-card-open:focus-visible { outline: none; }
-
 .community-catalogue-card:has(.community-catalogue-card-open:focus-visible) {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;

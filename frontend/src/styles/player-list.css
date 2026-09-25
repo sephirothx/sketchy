@@ -291,7 +291,7 @@ button.player-vote-chip-afk:focus-visible {
 button.player-vote-chip-kick:hover,
 button.player-vote-chip-kick:focus-visible {
   background: var(--danger-button);
-  color: #fff;
+  color: var(--on-danger);
 }
 
 .player-vote-chip-afk {

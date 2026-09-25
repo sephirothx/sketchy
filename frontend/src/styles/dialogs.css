@@ -131,7 +131,7 @@
 .confirmation-danger-button {
   background: var(--danger-button);
   border: 1px solid var(--danger-button-edge);
-  color: #fff;
+  color: var(--on-danger);
 }
 
 .confirmation-danger-button:hover { filter: brightness(1.08); }

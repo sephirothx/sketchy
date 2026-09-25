@@ -331,7 +331,7 @@
   padding: 8px 12px;
 }
 .session-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.session-revoke-all { background: var(--danger-button); border-color: var(--danger-button) !important; color: #fff; }
+.session-revoke-all { background: var(--danger-button); border-color: var(--danger-button) !important; color: var(--on-danger); }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
 /* A session used from a browser it was not issued to. Given the warning
@@ -583,7 +583,7 @@
 .account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--on-primary); text-decoration: none; }
 .account-danger-zone { border-color: var(--danger-soft); }
 .account-danger-zone > p { font-size: 14px; line-height: 1.5; }
-.account-delete-start, .account-delete-confirm { background: var(--danger-button); border-color: var(--danger-button) !important; color: #fff !important; }
+.account-delete-start, .account-delete-confirm { background: var(--danger-button); border-color: var(--danger-button) !important; color: var(--on-danger) !important; }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
 .account-delete-form input { background: var(--card); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-size: 16px; padding: 9px 11px; }
@@ -657,6 +657,9 @@
 /* The tag itself: a red banner, a dashed rule to write on, and the button
    that sticks it on. Tilted a degree and a half, because a sticker is. */
 .first-run-tag {
+  /* White in both themes, so the dark theme's lifted ring (2.7:1 here) gives
+     way to the indigo edge, which is dark in both. */
+  --focus-ring: var(--primary-edge);
   background: #fff;
   /* A name tag is a name tag: it never runs the width of the card. */
   justify-self: center;

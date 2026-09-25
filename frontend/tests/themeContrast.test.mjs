@@ -88,7 +88,8 @@ function resolve(value, tokens) {
   const rgb = text.match(/^rgba?\(([^)]+)\)$/);
   if (rgb) {
     const [r, g, b, a = "1"] = rgb[1].split(/[\s,/]+/).filter(Boolean);
-    return [Number(r), Number(g), Number(b), Number(a)];
+    const alpha = a.endsWith("%") ? Number(a.slice(0, -1)) / 100 : Number(a);
+    return [Number(r), Number(g), Number(b), alpha];
   }
   const mix = text.match(/^color-mix\(in srgb,\s*(.+)\)$/);
   if (mix) {
@@ -144,7 +145,7 @@ const TEXT_PAIRS = [
   ["--muted", "--card", "secondary text on a card"],
   ["--on-primary", "--primary", "label on an indigo button, badge or toast action"],
   ["#ffffff", "--success-button", "label on a go button, and the approved restart banner"],
-  ["#ffffff", "--danger-button", "label on a destructive button, and a kick"],
+  ["--on-danger", "--danger-button", "label on a destructive button, and a kick"],
   ["--primary-ink", "--primary-soft", "indigo chip on a card"],
   ["--primary-ink", "--primary-soft", "indigo chip on the page", "--paper"],
   ["--success-ink", "--success-soft", "success chip"],
@@ -162,7 +163,6 @@ const TEXT_PAIRS = [
 const NON_TEXT_PAIRS = [
   ["--focus-ring", "--paper", "focus ring on the page"],
   ["--focus-ring", "--card", "focus ring on a card"],
-  ["--menu-ink", "--menu", "focus ring on the vote menu"],
 ];
 
 function check(pairs, floor) {
@@ -206,23 +206,34 @@ const KNOWN_SHORT = {
 
 const STYLES = new URL("../src/styles/", import.meta.url);
 const COLOUR = String.raw`(var\(--[\w-]+\)|#[0-9a-f]{3}(?:[0-9a-f]{3})?)\s*(?:!important)?\s*;`;
+// A literal translucent fill is only read for a ring: which ground a text
+// rule's wash lands on is not in the rule, and --card is a guess.
+const ANY_COLOUR = String.raw`(var\(--[\w-]+\)|#[0-9a-f]{3}(?:[0-9a-f]{3})?|rgba?\([^)]*\))\s*(?:!important)?\s*;`;
+const RING = new RegExp(String.raw`(?:^|[;\s])--focus-ring\s*:\s*` + COLOUR, "i");
 const BACKGROUND = new RegExp(String.raw`(?:^|[;\s])background(?:-color)?\s*:\s*` + COLOUR, "i");
+const ANY_BACKGROUND = new RegExp(
+  String.raw`(?:^|[;\s])background(?:-color)?\s*:\s*` + ANY_COLOUR,
+  "i",
+);
 const FOREGROUND = new RegExp(String.raw`(?:^|[;\s])color\s*:\s*` + COLOUR, "i");
 
-/** Every rule in every stylesheet that names a background and a text colour. */
-function paintedRules() {
+/** Every rule in every stylesheet that sets `foreground` (a text colour, or a
+    re-pointed focus ring), with the background it sets beside it, if any. */
+function paintedRules(foreground = FOREGROUND, background = BACKGROUND) {
   const rules = [];
-  for (const file of readdirSync(STYLES).filter((name) => name.endsWith(".css"))) {
+  // theme.css declares the defaults, which the pair tables above measure.
+  const sheets = readdirSync(STYLES).filter((name) => name.endsWith(".css") && name !== "theme.css");
+  for (const file of sheets) {
     const css = readFileSync(new URL(file, STYLES), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     for (const [, selector, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
-      const bg = body.match(BACKGROUND);
-      const fg = body.match(FOREGROUND);
-      if (!bg || !fg) continue;
+      const bg = body.match(background);
+      const fg = body.match(foreground);
+      if (!fg) continue;
       const token = (value) => (value.startsWith("var(") ? value.slice(4, -1) : value);
       rules.push({
         name: `${file} ${selector.trim().replace(/\s+/g, " ")}`,
         fg: token(fg[1]),
-        bg: token(bg[1]),
+        bg: bg ? token(bg[1]) : null,
       });
     }
   }
@@ -246,7 +257,7 @@ test("the focus ring reaches 3:1 against the page and a card, in both themes", (
 });
 
 test("a rule that paints a background and writes on it reaches 4.5:1, in both themes", () => {
-  const rules = paintedRules();
+  const rules = paintedRules().filter((rule) => rule.bg);
   // The scan is only worth something if it finds the rules it is about.
   assert.ok(rules.some((rule) => rule.name === "global-feedback.css .app-toast .app-toast-action"));
   const seen = new Set();
@@ -270,5 +281,24 @@ test("a rule that paints a background and writes on it reaches 4.5:1, in both th
   }
   for (const key of Object.keys(KNOWN_SHORT)) {
     assert.ok(seen.has(key), `KNOWN_SHORT names ${key}, which is no longer a painted rule`);
+  }
+});
+
+test("a surface that re-points the focus ring keeps it at 3:1 on that surface, in both themes", () => {
+  // The global ring is checked against the page and a card above; a surface
+  // that is neither - the dark vote menus, the reaction strip, the white name
+  // tag - sets its own --focus-ring, and must say on the same rule what it
+  // paints, so the pair can be measured here.
+  const rules = paintedRules(RING, ANY_BACKGROUND);
+  assert.ok(rules.some((rule) => rule.name === "reactions.css .reaction-picker"));
+  for (const rule of rules) {
+    assert.ok(rule.bg, `${rule.name} re-points --focus-ring without naming its background`);
+    for (const theme of Object.keys(THEMES)) {
+      const measured = contrast(theme, rule.fg, rule.bg);
+      assert.ok(
+        measured >= NON_TEXT,
+        `${rule.name} ${theme}: ring ${rule.fg} on ${rule.bg} is ${measured.toFixed(2)}:1`,
+      );
+    }
   }
 });

@@ -1,11 +1,14 @@
 /* Design tokens. The values are the redesign palette from
  * docs/ui-mockups/tools/ui.mjs (PALETTES): a warm paper light theme and a
  * slate dark theme whose tinted surfaces are alpha washes of their accent so
- * they blend with any ground. Two fills have since been darkened a step so
- * the white label on them reaches WCAG AA (4.5:1) - the dark theme's
- * --primary and --success-button - which the mockups have not followed.
- * frontend/tests/themeContrast.test.mjs holds the text-on-ground pairs
- * declared here to that bar, so a value moved below it fails there first.
+ * they blend with any ground. Five values have since moved a step so the
+ * text on or in them reaches WCAG AA (4.5:1), and the mockups have not
+ * followed: --success-button (both themes, with its edge) and the dark
+ * theme's --primary are darker under their white labels; the light theme's
+ * --warning and --warm-ink are darker on their washes; and the dark theme's
+ * --danger is lighter on its own. frontend/tests/themeContrast.test.mjs holds
+ * the text-on-ground pairs declared here to that bar, so a value moved below
+ * it fails there first.
  * `data-theme` on <html> is always resolved to
  * "light" or "dark" before paint (index.html + settingsStore), so light
  * lives on :root and dark overrides below.
@@ -102,6 +105,7 @@
      deletes or kicks gets its own pair, the same in both themes. */
   --danger-button: #c92a2a;
   --danger-button-edge: #a51d1d;
+  --on-danger: #ffffff;
   /* A QR code is read by a camera, not by a person, so these do not follow
      the theme: a scanner needs dark modules on a light quiet zone in both
      light and dark mode. */

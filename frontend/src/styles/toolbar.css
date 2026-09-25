@@ -173,11 +173,15 @@
   align-items: center;
   justify-content: center;
   min-height: 44px;
-  gap: 2px;
+  /* The dot's white ring reaches 4px below it; this keeps 2px clear of the
+     readout. */
+  gap: 6px;
 }
 
+/* On the same white disc as the toolbar's own size dot (.width-dot, below). */
 .preview-dot {
   border-radius: 50%;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--line-strong);
   display: inline-block;
   /* Its size is its size: never the thing that gives when space is short. */
   flex: 0 0 auto;
@@ -533,6 +537,21 @@
 
 .toolbar-mobile-chip .size-text-readout {
   font-size: 11px;
+}
+
+/* The phone's size chip is 44px across and holds the dot and two digits, so
+   its disc is a thinner ring and the dot stops at 16px (the popover still
+   shows the full size): at 20px with the 4px ring the disc ran into the digits
+   and touched the chip's border from brush 16 up. The margin keeps the ring
+   off the readout. */
+.toolbar-mobile-chip .width-dot {
+  box-shadow: 0 0 0 2px #fff, 0 0 0 3px var(--line-strong);
+  max-height: 16px;
+  max-width: 16px;
+}
+
+.toolbar-mobile-chip .width-dot + .size-text-readout {
+  margin-left: 2px;
 }
 
 .toolbar-mobile-sep {
