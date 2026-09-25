@@ -164,7 +164,7 @@ export function PromptListPicker({
   if (loading) {
     return (
       <div className="prompt-list-picker-loading">
-        <p>{ui.promptListPicker.loadingCuratedPromptLists}</p>
+        <p className="loading-note" role="status">{ui.promptListPicker.loadingCuratedPromptLists}</p>
       </div>
     );
   }

@@ -65,6 +65,120 @@
   text-decoration: underline;
 }
 
+/* ── The site's pages, in the bar ────────────────────────────────────────
+   The way around the site (AppHeader's `SiteNav`), after the wordmark and
+   before the flag and the chip, at any width it fits: named, as icons, or not
+   at all (`is-labels`, `is-icons`, `is-hidden`), which SiteNav decides from
+   the room the bar leaves. Quiet until it is where you are: muted words, and
+   the current page - or the section a nested page sits in - in ink on the
+   track, which is also what a hover shows. The track rather than the well:
+   the bar sits on the paper, and in the light theme `--well` is the paper's
+   own colour, so the mark was only a change of text colour - too little to
+   find with icons alone.
+
+   The box takes only free space (`flex: 1 1 0`), so it never pushes the
+   wordmark, a crumb, the flag or the chip, and its content box is the room
+   SiteNav measures. Its margins cancel two of the bar's gaps and its padding
+   gives one back inside, before the list: the bar keeps one gap between the
+   wordmark and the chip when there is no nav, and the list sits a gap from
+   the wordmark when there is one. The same padding is room for a focus ring
+   inside the clip, and the clip is what keeps the frame before a decision
+   from painting names over the flag. The box reaches back over the wordmark's
+   side by that much, so it lets clicks through and only the links take
+   them. */
+/* The flag and the chip stay whole, on one row, at every width; the nav is
+   what gives. */
+.lobby-header > .lobby-header-actions {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
+.site-nav {
+  align-self: center;
+  flex: 1 1 0;
+  margin: -6px;
+  margin-left: calc(-6px - 2 * var(--header-gap));
+  min-width: 0;
+  overflow: clip;
+  padding: 6px;
+  padding-left: calc(6px + var(--header-gap));
+  pointer-events: none;
+  position: relative;
+}
+
+.site-nav > nav > ul,
+.site-nav-ruler {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
+}
+
+.site-nav > nav > ul {
+  margin-left: var(--header-gap);
+}
+
+.site-nav-link {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 700;
+  gap: 7px;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 8px 12px;
+  pointer-events: auto;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-nav-link:hover,
+.site-nav-link[aria-current] {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.site-nav-link > svg {
+  flex: none;
+}
+
+/* Icons alone: the name stays in the link, as its accessible name, and the
+   link's tooltip says it. Only the real list's, through `> nav`: the rulers
+   sit in the same box and must keep measuring both modes whichever one is on
+   screen. */
+.site-nav.is-icons > nav .site-nav-link,
+.site-nav-ruler.is-icons .site-nav-link {
+  padding-inline: 10px;
+}
+
+.site-nav.is-icons > nav .site-nav-label {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* The two measures SiteNav reads: the row with its names and without, laid
+   out like the real one but never seen, focused or read out. */
+.site-nav-rulers {
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  visibility: hidden;
+}
+
+.site-nav-ruler {
+  position: absolute;
+}
+
 .panel > h2 {
   /* 22px per the Main artboard; the browser default 1.5em read a size too
      large next to the body copy. Family and weight come from the base rule. */
@@ -238,11 +352,6 @@
   flex: 0 0 auto;
 }
 
-.lobby-no-matches {
-  color: var(--muted);
-  font-style: italic;
-}
-
 /* --------------------------------------------------------------- room card */
 .public-room-card {
   align-items: center;
@@ -348,12 +457,14 @@
 /* ------------------------------------------------------------ invite entry */
 .invite-entry-page {
   min-height: 100vh;
-  padding: 20px 16px 48px;
+  padding: 24px 16px 48px;
 }
 
+/* The page itself runs the window's width, so the bar is capped at the shell
+   here rather than reaching out to it: the same place as on every other page. */
 .invite-entry-page .lobby-header {
-  max-width: 760px;
-  margin: 0 auto 28px;
+  max-width: var(--shell-width);
+  margin: 0 auto var(--header-space);
 }
 
 .invite-card {
@@ -550,6 +661,8 @@
     padding: 14px 12px 32px;
   }
 
+  /* The one exception to `--header-space`: the screen a first-time visitor
+     lands on from a link, where the Join button has to clear the fold. */
   .invite-entry-page .lobby-header {
     margin-bottom: 18px;
   }
@@ -898,13 +1011,6 @@
   align-items: start;
 }
 
-.lobby-chat-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
 /* On a phone the panel is as tall as its contents, so the list has to bound
    itself; the desktop's pinned viewport lifts this and lets the panel do it. */
 .lobby-chat-panel .chat-messages {
@@ -982,12 +1088,6 @@
 .lobby-chat-name-prompt {
   align-self: flex-start;
   margin-top: 10px;
-}
-
-.online-players-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
 }
 
 .online-players-list {
@@ -1072,6 +1172,35 @@ a.online-player-name:focus-visible {
   }
 }
 
+/* Side by side, one height. Chat and Who is online share a row from 721px
+   until the wide lobby stacks them (1500px), and each took its own
+   content's height: a 305px chat beside a 126px list of one person. The chat
+   sets the row - its list is bounded (`.chat-messages`) - and the list of
+   people fills the rest and scrolls inside it. `contain: size` is what keeps
+   a long list from growing the row instead: the panel is sized by the row,
+   never by what is in it. The pinned lobby already sizes both from the
+   window; this is the same answer for a window too short or too narrow to
+   pin. */
+@media (min-width: 721px) and (max-width: 1499px) {
+  .lobby-social {
+    align-items: stretch;
+  }
+
+  .lobby-social > .lobby-online-panel {
+    contain: size;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .lobby-online-panel .online-players-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 /* The lobby as a screen rather than a document.
 
    Everything that matters is on it at once — the rooms, who is around, and
@@ -1107,7 +1236,13 @@ a.online-player-name:focus-visible {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    overflow: hidden;
+    /* Clipped top to bottom only. The header reaches sideways out of this
+       column to the shell (settings-shared.css), and `overflow: hidden` cut
+       the wordmark and the chip off at laptop widths. `clip` rather than
+       `hidden` on the one axis, because `hidden` would turn the other
+       axis's `visible` into `auto`; nothing in here is sticky. */
+    overflow-x: visible;
+    overflow-y: clip;
   }
 
   /* The gap owns the spacing now; the per-panel margin would double it. */
@@ -1115,6 +1250,13 @@ a.online-player-name:focus-visible {
   .lobby-page > .lobby-social,
   .lobby-social > .panel {
     margin-bottom: 0;
+  }
+
+  /* The bar's space less the gap under it, so the rooms sit as far below
+     the bar as they do on a phone and on every other page: gap and margin
+     added up to 42px, and the rooms jumped 16px down at 901px. */
+  .lobby-page > .lobby-header {
+    margin-bottom: calc(var(--header-space) - 16px);
   }
 
   /* Chrome keeps its height; only the lists give ground. */
@@ -1170,9 +1312,8 @@ a.online-player-name:focus-visible {
 
   /* The states that stand in for the list sit where the list would, rather
      than collapsing the panel to its heading and leaving a gap under it. */
-  .lobby-rooms-panel .room-list-loading,
-  .lobby-rooms-panel .lobby-no-matches,
-  .lobby-rooms-panel > p {
+  .lobby-rooms-panel > .loading-note,
+  .lobby-rooms-panel > .empty-state {
     flex: 1 1 auto;
     min-height: 0;
   }
@@ -1191,8 +1332,8 @@ a.online-player-name:focus-visible {
 
    Every row is placed by hand, because a gap would also open above a first-run
    block or an error that is not there. So the rows have no gap and each item
-   above the columns brings its own margin, the header keeping the 16px the
-   pinned lobby's gap added to its own 26. The chat comes first in the markup,
+   above the columns brings its own margin, the header its usual
+   `--header-space`. The chat comes first in the markup,
    which is the order a phone stacks them in; on this column the list of
    people is the short one, so it goes on top. */
 @media (min-width: 1500px) {
@@ -1202,13 +1343,14 @@ a.online-player-name:focus-visible {
     grid-template-rows: auto auto auto minmax(0, 1fr);
     column-gap: 16px;
     row-gap: 0;
-    max-width: calc(var(--shell-width) + 32px);
+    --page-width: var(--shell-width);
+    max-width: calc(var(--page-width) + 32px);
   }
 
   .lobby-page > .lobby-header {
     grid-column: 1 / -1;
     grid-row: 1;
-    margin-bottom: 42px;
+    margin-bottom: var(--header-space);
   }
 
   .lobby-page > .first-run {
@@ -1558,7 +1700,7 @@ a.online-player-name:focus-visible {
 
 .rules-masthead h1 {
   font-size: 30px;
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 /* Sits at the top of the document column rather than across the page: the
@@ -1577,9 +1719,12 @@ a.online-player-name:focus-visible {
 
 /* Narrower than `.ops-page`: with the rail taken out, what is left is the
    reading column, and it should be a reading width rather than whatever the
-   page has spare. */
-.rules-page {
-  max-width: 960px;
+   page has spare. Both classes, because `.ops-page` arrives later: it is in
+   operator.css, which the Rules page's own chunk loads after this entry
+   sheet, so a lone `.rules-page` lost the tie and the page ran to the shell. */
+.ops-page.rules-page {
+  --page-width: 928px;
+  max-width: calc(var(--page-width) + 32px);
 }
 
 .rules-layout {

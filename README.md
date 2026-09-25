@@ -22,7 +22,7 @@ keyboard that takes half the screen, and one thumb.
 
 ## Features
 
-- Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; it is also where a room you create starts. It is the language you *play* in, not the language you *read* in — two settings, side by side in **Settings → Appearance**, because reading in Dutch while playing an English room is perfectly ordinary. The language you read in is also a flag in the lobby header, at every width, since Settings is one more screen to find in a language you cannot read.
+- Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; it is also where a room you create starts. It is the language you *play* in, not the language you *read* in — two settings, side by side in **Settings → Appearance**, because reading in Dutch while playing an English room is perfectly ordinary. The language you read in is also a flag in the lobby header, at every width, since Settings is one more screen to find in a language you cannot read. Search and the filters appear once six rooms are open, and the list's count only when a filter has left some out. The header leads to the lobby, the Gallery (once you have a session), the Community catalogue, Prompt stats and the Rules from every page, the one you are on marked, so the pages are there before you have a name and an account menu to find them in. It shows as much as the bar has room for: the names where they fit (shortened in the header where a language's page title is too long, like Spanish *Catálogo* for *Catálogo de la comunidad*), icons where only they fit, and nothing where neither does - on a narrow phone the account menu is the way there, and before you have a name the name tag links the Rules.
 - The interface is written in all seven supported languages — English, German, Spanish, French, Italian, Dutch, Portuguese — and a language is offered only once its catalogue is **complete**: there is no screen that falls back to English halfway down, because offering a language and finishing it are the same act. Which one you read in comes from your account if you have one, from this browser if you have set it here, from your browser's own languages on a first visit, and English otherwise; it is applied before the first paint — only that language's words are downloaded, alongside the account lookup rather than after it, and a language that cannot be fetched leaves the page in English rather than blank — and `<html lang>` follows it so a screen reader picks the right voice. Dates and numbers follow the same language, while the **Time format** setting still decides 12- or 24-hour on top of it. The six non-English catalogues are machine-drafted and awaiting a native reader; the unreviewed count is reported per locale in CI.
 - Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped. A list is Private until its owner publishes it, and can be duplicated into a second list of your own - one you copied from somebody else excepted, so its credit stays. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page, which opens on the Standard list of the language you play in. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned, and a list nobody has played yet says so once and lists its prompts by name. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - A **Community catalogue** of prompt lists players published for anyone to play. Browse by language and tag, read every prompt in a list before choosing it, and play it straight away — no account needed to browse or play. With one, **star** a list to keep it on a shortlist the room picker offers, **make a copy** of your own to edit, or report one. Publishing is moderated after the fact, with an operator switch that holds new publications for review instead.
@@ -824,10 +824,14 @@ production database.
 ### Accounts
 
 The lobby's first landing asks for one thing: a name, on a name tag — *Hello, my
-name is …*, and a button that sticks it on. It saves the name and nothing else;
-what puts you in a game is Quick play, beside the room list. Next to the tag, one
-line drawn from a pool on each visit ("Cubism, but by accident.") over the sentence
-that never changes: one player draws, everybody else tries to guess, and no account,
+name is …*, and a button that sticks it on. The field takes only what a name can
+hold — letters, digits, `_` and `-` — so a space or a "!" is simply not entered (the
+invite page's name field works the same way), and a name the form refuses is said in
+a toast, with the field's line turned red and, on a desktop, the cursor back in it (a
+phone lets its keyboard close instead, so the toast is not hidden under it). It saves
+the name and nothing else; what puts you in a game is Quick play, beside the room
+list. Next to the tag, one line drawn from a pool on each visit ("Cubism, but by
+accident.") over the sentence that never changes: one player draws, everybody else tries to guess, and no account,
 install or talent is required. The pool is written per language rather than
 translated, because the lines are jokes. The doodles around the block are dealt the
 same way: three of the deployment's own, on one side or the other, each leaning its
@@ -1611,7 +1615,8 @@ and three severities, and describe what happened. It reaches administrators at
 `/admin/bug-reports`, never the moderation queue: a bug report carries build and
 diagnostic data rather than safety evidence.
 
-The client attaches what it knows — build SHA, path (never the query string),
+The client attaches what it knows — build SHA (shown nowhere
+else, so a report is where it is read), path (never the query string),
 viewport, browser, accessibility preferences, connection telemetry, heap use, and
 the last 20 errors its own recorder caught — and the server adds its own account
 of the reporter's **live seat**, resolved by finding their room rather than
@@ -2776,6 +2781,11 @@ A seated client checks with the server every five seconds that it still holds th
   button, in view however far down the form you are. A profile puts its game
   history beside its statistics, and moderators get the newest decisions in a column
   beside the case they are reading.
+- The header is the same on every page: it spans the widest column the window allows,
+  so the wordmark and your avatar never move as you go from the lobby to the Gallery to
+  Rules, while each page keeps the width its own content reads best at. Where it has
+  room it also links the site's pages, with the one you are on marked. The browser tab names the
+  page you are on - "Gallery · Sketchy", or the room's own name in a room.
 - An action that expects an answer - creating a room, joining, starting, voting to restart -
   is never handed to a socket that is not connected. It waits for the connection and is sent
   once, or it times out having been sent at all, so a request reported as failed cannot arrive

@@ -473,11 +473,6 @@ export const NL: Catalogue = {
       `${p.percent} geraden`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Commitdatum: ${p.commitDate} | Gebouwd: ${p.builtAt}`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, cijfer ${p.index} van ${p.length}`,
@@ -577,7 +572,6 @@ export const NL: Catalogue = {
     asideForgot: "We sturen een veilige link met een korte houdbaarheid naar het bevestigde e-mailadres van je account.",
     asideReset: "Kies een wachtwoord dat je nergens anders gebruikt.",
     asideVerify: "Met een bevestigd e-mailadres kom je weer binnen als je ooit je wachtwoord vergeet.",
-    accountHelp: "Accounthulp",
     backLobby: "Terug naar de lobby",
     enterYourUsernameYourConfirmedEmail: "Vul je gebruikersnaam of je bevestigde e-mailadres in. Als het\n              account hersteld kan worden, is er een link onderweg.",
     usernameEmail: "Gebruikersnaam of e-mail",
@@ -695,6 +689,9 @@ export const NL: Catalogue = {
   appHeader: {
     playerSettings: "Spelerinstellingen",
     sketchyHome: "Naar de lobby",
+    siteNav: "Pagina's",
+    communityLink: "Catalogus",
+    promptStatsLink: "Woordstatistieken",
   },
 
   bugReportDialog: {
@@ -829,7 +826,6 @@ export const NL: Catalogue = {
     couldNotDeleteThatPreset: "Deze voorinstelling kon niet verwijderd worden.",
     fixCustomPromptEntriesMarkedAbove: "Verbeter de hierboven gemarkeerde eigen woorden voordat je de kamer maakt.",
     failedCreateRoom: "Kamer aanmaken mislukt",
-    roomSetup: "Kameropzet",
     createRoom: "Een kamer maken",
     startFromSavedPreset: "Beginnen met een opgeslagen voorinstelling",
     startFromPreset: "Beginnen met een voorinstelling…",
@@ -980,6 +976,7 @@ export const NL: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameTooShort: (p: { min: number }) => `Een naam heeft minstens ${p.min} tekens nodig.`,
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
     couldNotSaveThatNamePlease: "Deze naam kon niet opgeslagen worden. Probeer het nog eens.",
@@ -1119,6 +1116,7 @@ export const NL: Catalogue = {
 
   lobbyBrowserPage: {
     quickPlay: "Snel spelen",
+    lobby: "Lobby",
     quickPlayBusy: "Kamer zoeken…",
     couldNotFindOrOpenARoom: "Er kon geen kamer worden gevonden of geopend.",
     filterByLanguage: "Filteren op taal",
@@ -1146,7 +1144,8 @@ export const NL: Catalogue = {
     hideFullRooms: "Volle kamers verbergen",
     hideGamesProgress: "Lopende spellen verbergen",
     loadingPublicRooms: "Openbare kamers laden…",
-    noPublicRoomsYetCreateOne: "Nog geen openbare kamers. Maak er een!",
+    noPublicRoomsYet: "Nog geen openbare kamers",
+    noPublicRoomsYetBody: "Snel spelen opent er een voor je, of maak je eigen kamer.",
     noPublicRoomsMatchYourSearch: "Geen openbare kamers passen bij je zoekopdracht.",
     createRoom2: "Een kamer maken",
     joinWithCode: "Meedoen met een code",
@@ -1154,10 +1153,8 @@ export const NL: Catalogue = {
     couldNotSaveThatName: "Die naam kon niet worden opgeslagen. Probeer het nog eens.",
     joinAsASpectator: "als toeschouwer meedoen",
     joinTheRoom: "de kamer in gaan",
-    loading: "Laden…",
     showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
       `${p.filteredRoomsCount} van ${p.roomsCount} getoond`,
-    n0Rooms: "0 kamers",
     close: "Sluiten",
     joining: "Deelnemen…",
     joinTheRoom2: "De kamer in gaan",
@@ -1220,7 +1217,6 @@ export const NL: Catalogue = {
     nothingMatchesThoseFilters: "Geen lijst voldoet aan deze filters.",
     nothingPublishedYet: "Er is nog geen lijst gepubliceerd.",
     byOwner: (p: { owner: string }) => `van ${p.owner}`,
-    community: "Community",
     starred: "Met ster",
     tags: "Labels",
     promptCount: (p: { count: number }) =>
@@ -1265,8 +1261,7 @@ export const NL: Catalogue = {
   galleryPage: {
     gallery: "Galerij",
     backToLobby: "Terug naar de lobby",
-    eyebrow: "Tekeningen",
-    drawingsFromPublicGames: "Elke tekening uit een openbaar spel, voor iedereen die is ingelogd.",
+    drawingsFromPublicGames: "Elke tekening uit een openbaar spel.",
     loading: "Laden…",
     sortBy: "Sorteren op",
     hot: "Populair",
@@ -1276,9 +1271,9 @@ export const NL: Catalogue = {
     allTime: "Altijd",
     thisMonth: "Deze maand",
     thisWeek: "Deze week",
-    nothingThisWeek: "Nog geen openbare tekeningen deze week. Speel een openbaar spel en kom terug.",
-    nothingHereYet: "Hier is nog niets. Speel een openbaar spel en kom terug.",
-    signInToSeeTheGallery: "De galerij is voor ingelogde spelers. Log in of ga verder als gast vanuit de lobby.",
+    nothingThisWeek: "Deze week nog niets.",
+    nothingHereYet: "Nog geen tekeningen",
+    signInToSeeTheGallery: "Log in om de galerij te zien",
     couldNotLoadTheGallery: "De galerij kon niet geladen worden.",
     couldNotLoadThisDrawing: "Deze tekening kon niet worden geladen.",
     showMore: "Meer tonen",
@@ -1296,8 +1291,8 @@ export const NL: Catalogue = {
     signIn: "Inloggen",
     backToTop: "Terug naar boven",
     topOfTheWeek: "Top van de week",
-    nothingHereYetBody: "Elke bewaarde tekening uit een openbaar spel komt hier terecht.",
-    signInBody: "Log in, of ga verder als gast vanuit de lobby, om elke tekening uit een openbaar spel te zien.",
+    nothingHereYetBody: "Speel een openbaar spel, en de tekeningen ervan zijn de eerste hier.",
+    signInBody: "Of kies een naam in de lobby om als gast rond te kijken.",
     backToGallery: "Terug naar de galerij",
     replay: "Afspelen",
     pause: "Pauze",
@@ -1362,7 +1357,8 @@ export const NL: Catalogue = {
     yourLibrary: "Je bibliotheek",
     reusablePromptLists: "Herbruikbare woordenlijsten",
     newList: "Nieuwe lijst",
-    createAccountSaveReviseSharePrompt: "Maak een account om woordenlijsten te bewaren, te herzien en te delen. Snelle kamerwoorden blijven lokaal en vluchtig.",
+    promptListsNeedAnAccount: "Je woordenlijsten hebben een account nodig",
+    promptListsNeedAnAccountBody: "Een account bewaart je lijsten, om te spelen in elke kamer die je host en te publiceren als je wilt. Eigen woorden die je in een kamer typt, worden niet bewaard.",
     yourPromptLists: "Je woordenlijsten",
     loading: "Laden…",
     noSavedListsYet: "Nog geen opgeslagen lijsten.",
@@ -1397,6 +1393,7 @@ export const NL: Catalogue = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Deze pagina heeft niemand getekend",
+    pageNotFound: "Pagina niet gevonden",
     thatLinkDoesnTLeadAnywhere: "Die link leidt nergens heen op Sketchy.",
     backLobby: "Terug naar de lobby",
   },
@@ -1962,7 +1959,6 @@ export const NL: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "De regels",
     thisPage: "Op deze pagina",
     forExample: "Bijvoorbeeld",
@@ -2520,8 +2516,6 @@ export const NL: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `${p.shown} van ${p.onlineCount} getoond`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Kies een naam om onder te spelen.",

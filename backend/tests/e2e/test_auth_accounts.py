@@ -89,10 +89,39 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             assert await page.is_visible(".first-run-login")
             assert await page.is_visible(".first-run-signup")
 
-            # Guest play is one field and one click.
+            # The field only takes the name rule's characters: a space and a
+            # "!" typed key by key are simply not entered.
+            field = page.locator(".first-run-guest-row input")
+            await field.press_sequentially("a b!c")
+            assert await field.input_value() == "abc"
+
+            # A refused key is never entered, so the browser's own undo still
+            # has its history: "X" typed after a refused "!" is undone alone.
+            # (Rewriting the value after the fact left undo doing nothing.)
+            await field.fill("")
+            await field.press_sequentially("ab")
+            await field.press("ArrowLeft")
+            await field.press("!")
+            await field.press("X")
+            assert await field.input_value() == "aXb"
+            await field.press("ControlOrMeta+z")
+            assert await field.input_value() == "ab"
+
+            # A paste - here Playwright's insertText, which goes through the
+            # same beforeinput - keeps the allowed characters only.
+            await field.fill("")
+            await field.focus()
+            await page.keyboard.insert_text("Jo Jo")
+            assert await field.input_value() == "JoJo"
+
+            # Guest play is one field and one click. Too short is refused in
+            # a toast, and the field is marked invalid until the next edit.
             await page.fill(".first-run-guest-row input", "ab")
             await page.click(".first-run-guest-submit")
-            await page.wait_for_selector(".auth-error")
+            await page.locator(".app-toast.error").get_by_text(
+                "A name needs at least 3 characters."
+            ).wait_for()
+            assert await field.get_attribute("aria-invalid") == "true"
 
             await page.fill(".first-run-guest-row input", "Marta")
             await page.click(".first-run-guest-submit")

@@ -6,8 +6,9 @@
 /* ------------------------------------------------------------------- page */
 
 .gallery-page {
+  --page-width: 1008px;
   margin: 0 auto;
-  max-width: 1040px;
+  max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 64px;
 }
 
@@ -19,7 +20,7 @@
   font-family: var(--font-display);
   font-size: 27px;
   font-weight: 600;
-  margin: 4px 0 3px;
+  margin: 0 0 3px;
 }
 
 .gallery-head p {
@@ -357,8 +358,7 @@
   .gallery-spinner { animation: none; }
 }
 
-.gallery-end,
-.gallery-empty-state {
+.gallery-end {
   align-items: center;
   display: flex;
   flex-direction: column;
@@ -366,14 +366,6 @@
   padding: 22px 0 8px;
   text-align: center;
 }
-
-.gallery-empty-state {
-  border: 1.5px dashed var(--line-strong);
-  border-radius: var(--radius);
-  padding: 36px 16px;
-}
-
-.gallery-empty-state .btn { margin-top: 6px; }
 
 .gallery-end-title {
   font-family: var(--font-display);
@@ -387,13 +379,6 @@
   font-size: 14px;
   margin: 0;
   max-width: 40ch;
-}
-
-.gallery-empty {
-  color: var(--muted);
-  font-style: italic;
-  margin: 0;
-  padding: 8px 0;
 }
 
 /* Offered once the reader is past the top, over everything, in the corner

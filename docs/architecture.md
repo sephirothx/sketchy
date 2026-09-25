@@ -1933,9 +1933,10 @@ Files are named for their single concern; the directory says the role.
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
-| `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollbarWidth.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/components/ui/` | The shared recipes as components: `Avatar.tsx`, `AvatarPicture.tsx`, `BottomSheet.tsx`, `Button.tsx`, `Card.tsx` (with `SectionLabel`), `Chip.tsx`, `EmptyState.tsx`, `ModalShell.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
@@ -1951,22 +1952,31 @@ their import order says. A rule that must beat every surface goes in the `utilit
 layer ([`styles/utilities.css`](../frontend/src/styles/utilities.css)) rather than
 behind `!important`: a later layer beats any specificity in an earlier one.
 
-What the surfaces share is not restated in each either: the scales — four radii, two motion durations, one disabled opacity — are tokens in
+What the surfaces share is not restated in each either: the scales — four radii, two
+motion durations, one disabled opacity — are tokens in
 [`theme.css`](../frontend/src/styles/theme.css), and the two heading styles, the display
 panel title and the capitals eyebrow `.section-label`, are recipes in
 [`primitives.css`](../frontend/src/styles/primitives.css).
-[`styleScales.test.mjs`](../frontend/tests/styleScales.test.mjs) fails on a value off
-a scale, on a weight [`main.tsx`](../frontend/src/main.tsx) does not load (the browser
+[`styleScales.test.mjs`](../frontend/tests/styleScales.test.mjs) fails on a value off a
+scale, on a weight [`main.tsx`](../frontend/src/main.tsx) does not load (the browser
 would quietly draw the nearest one that is), and on capitals outside the recipe; its
 exceptions are listed there with the reason for each.
 
-A media query cannot read a custom property, so the breakpoints are a fixed set of widths rather than tokens, each named as
-the first width of the wider side — 481, 641, 721, 901, 1001, 1200, 1500 and 2100 as a
-`min-width`, one less as a `max-width`, so no width is on both sides. Components asking
-through `useMediaQuery` use the same numbers. They are listed in
+A media query cannot read a custom property, so the breakpoints are a fixed set of
+widths rather than tokens, each named as the first width of the wider side — 481, 641,
+721, 901, 1001, 1200, 1500 and 2100 as a `min-width`, one less as a `max-width`, so no
+width is on both sides. Components asking through `useMediaQuery` use the same numbers.
+They are listed in
 [`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css), and
 [`stylesheetScales.test.mjs`](../frontend/tests/stylesheetScales.test.mjs) fails on any
 other width except the few it names, each with its reason.
+
+A list with nothing in it says so through one component,
+[`components/ui/EmptyState.tsx`](../frontend/src/components/ui/EmptyState.tsx) — a
+dashed outline, a title, an optional line and at most one control, with a compact size
+for a list inside a panel — and a wait with no skeleton to draw is one `.loading-note`
+line (`styles/primitives.css`). There were four empty treatments and three loading ones
+on neighbouring pages, so the same situation read as different news on each.
 
 ### The phone layout
 
@@ -2111,6 +2121,67 @@ easier. The operator pages — operations, moderation, bug reports — take the 
 steps, and moderation gains a third column from 1500px with the eight newest
 decisions from the closed-cases stream (R-MOD-15), fetched only when the column
 is shown; opening one switches to the Closed queue, where the case is.
+
+The header is the exception to per-page widths: `AppHeader` spans the shell on
+every page, so the wordmark and the identity chip sit in the same place whether
+the page below is the 928px lobby, the 1008px Gallery or a 1240px library page.
+Each page declares its content column as `--page-width` beside its max-width,
+and `.lobby-header` (in
+[`styles/settings-shared.css`](../frontend/src/styles/settings-shared.css))
+reaches out of that column with negative margins — out to `--shell-width`, or
+the window's 16px gutter when that is nearer. The window is `100vw` less
+`--scrollbar-width`, which
+[`lib/scrollbarWidth.ts`](../frontend/src/lib/scrollbarWidth.ts) keeps on
+`:root` from `innerWidth - clientWidth`: `100vw` counts a classic scrollbar's
+lane, and CSS has no unit that does not. That keeps the bar 16px from the
+window's edge; where a classic scrollbar takes its lane only on a page that
+scrolls, the bar still moves by half a lane between that page and the pinned
+lobby, as every centred column does. A container that clips has to leave
+the header's sideways reach alone — the pinned lobby clips top to bottom only
+(`overflow-y: clip`), since `overflow: hidden` cut the wordmark and the chip
+off at laptop widths. The space under the bar is one value, `--header-space`
+(26px), on every page and at every width, with one exception: the invite page
+on a phone (600px and narrower) keeps 18px, because it is the one screen a
+first-time visitor lands on from a link and its Join button has to clear the
+fold. A layout that puts a gap of its own under the bar - the pinned lobby's
+flex gap - subtracts it from the bar's margin rather than adding to it. Rules is a reading page at 928px; its width is stated as
+`.ops-page.rules-page`, because `operator.css` arrives in the page's own chunk
+after the entry sheet, and a lone `.rules-page` lost that tie and ran to the
+shell. The wordmark is a link, not a heading: a player's page has one `<h1>`,
+its own name (the lobby's is visually hidden; a page that is only an empty
+state makes that state's title the heading), while the staff queues head the
+case that is open. `useDocumentTitle` names the tab after the page rather than
+after its heading — "Gallery · Sketchy", "My prompt lists · Sketchy", a room's
+own name in a room, the brand alone on the lobby.
+
+The bar also carries the site's pages, between the wordmark (and its crumb)
+and the flag and chip: the lobby, the Gallery (only with a session), the
+Community catalogue, Prompt stats and Rules, as `SiteNav` in
+[`components/AppHeader.tsx`](../frontend/src/components/AppHeader.tsx) — so
+every page that draws `AppHeader`, the staff pages and the invite page
+included. The link for the page you are on carries `aria-current="page"`, and
+the one for the section a nested page sits in (a Gallery drawing, a list's
+Prompt stats) `aria-current="true"`
+([`lib/siteNav.ts`](../frontend/src/lib/siteNav.ts)). How much of it shows is
+decided by space, not by breakpoints: named where the names fit, icons with a
+tooltip where only the icons do, and nothing (`hidden`, so out of the tab order
+and the accessibility tree) where neither does, a phone included. The nav's box
+takes `flex: 1 1 0` — only the room the rest of the bar leaves, which its own
+content never changes, so the wordmark's crumb, the flag and the chip never
+give way to it and the measurement cannot feed back on itself. What each mode
+needs is read off two invisible rulers, the row with and without its names, so
+no mode has to be drawn to learn whether it fits; `siteNavMode` picks the
+fullest that fits, with 8px of slack before growing so a bar on the line does
+not flicker. A ResizeObserver on the box and both rulers re-decides on a
+resize, new words or a web font landing, and the box clips its overflow so the
+frame before a decision cannot paint names over the flag. Two labels have
+header-only keys (`appHeader.communityLink`, `appHeader.promptStatsLink`):
+English and German use the page titles, and the languages whose titles would
+not fit beside a crumb at 1200px use shorter names for the same pages - Spanish
+*Stats de palabras* rather than *Estadísticas de palabras*, keeping the
+qualifier, since a bare *Estadísticas* is a profile's own heading. The lobby
+has no links of its own; the account menu keeps every entry, since on a narrow
+phone it is the way there.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 

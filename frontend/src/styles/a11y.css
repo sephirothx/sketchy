@@ -54,6 +54,15 @@ select:focus-visible {
   outline: none;
 }
 
+/* The name tag's field after a refused name keeps its red line while it has
+   the focus the form puts back in it: the rule above is in the utilities
+   layer and would otherwise turn it blue, so the one mark on the field went
+   the moment the player could act on it. `--tag-refused` is the tag's own
+   (account.css). */
+.first-run-guest-row input[aria-invalid="true"]:focus-visible {
+  border-color: var(--tag-refused);
+}
+
 .chat-input-box:focus-within {
   border-color: var(--focus-ring);
 }

@@ -6,8 +6,9 @@
    is the screen players arrive from, and a stranger's list and a stranger's
    room are the same kind of thing to choose between. */
 .community-catalogue-page {
+  --page-width: 1008px;
   margin: 0 auto;
-  max-width: 1040px;
+  max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 64px;
 }
 
@@ -19,7 +20,7 @@
   font-family: var(--font-display);
   font-size: 27px;
   font-weight: 600;
-  margin: 4px 0 3px;
+  margin: 0 0 3px;
 }
 
 .community-catalogue-head p {
@@ -77,16 +78,6 @@
 /* Nothing to choose from: the message is the page, not a card-width column
    beside an empty pane. */
 .community-catalogue-body.is-empty { grid-template-columns: minmax(0, 1fr); }
-
-.community-catalogue-body.is-empty .community-catalogue-empty {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  font-style: normal;
-  padding: 34px 24px;
-  text-align: center;
-}
 
 .community-catalogue-list {
   display: grid;
@@ -231,13 +222,6 @@
   display: flex;
   justify-content: center;
   padding-top: 10px;
-}
-
-.community-catalogue-empty {
-  color: var(--muted);
-  font-style: italic;
-  margin: 0;
-  padding: 8px 0;
 }
 
 /* ------------------------------------------------------------- the pane

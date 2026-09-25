@@ -473,11 +473,6 @@ export const PT: Catalogue = {
       `${p.percent} acertado`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Data do commit: ${p.commitDate} | Compilado: ${p.builtAt}`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, dígito ${p.index} de ${p.length}`,
@@ -577,7 +572,6 @@ export const PT: Catalogue = {
     asideForgot: "Vamos enviar uma ligação segura e com prazo para o e-mail confirmado da tua conta.",
     asideReset: "Escolhe uma palavra-passe que não uses em mais lado nenhum.",
     asideVerify: "Com um e-mail confirmado consegues voltar a entrar se algum dia te esqueceres da palavra-passe.",
-    accountHelp: "Ajuda com a conta",
     backLobby: "Voltar ao átrio",
     enterYourUsernameYourConfirmedEmail: "Introduz o teu nome de utilizador ou o teu e-mail confirmado. Se a\n              conta puder ser recuperada, já vai uma ligação a caminho.",
     usernameEmail: "Nome de utilizador ou e-mail",
@@ -695,6 +689,9 @@ export const PT: Catalogue = {
   appHeader: {
     playerSettings: "Definições do jogador",
     sketchyHome: "Ir para o átrio",
+    siteNav: "Páginas",
+    communityLink: "Catálogo",
+    promptStatsLink: "Stats de palavras",
   },
 
   bugReportDialog: {
@@ -829,7 +826,6 @@ export const PT: Catalogue = {
     couldNotDeleteThatPreset: "Não foi possível eliminar essa predefinição.",
     fixCustomPromptEntriesMarkedAbove: "Corrige as palavras próprias assinaladas acima antes de criares a sala.",
     failedCreateRoom: "Não foi possível criar a sala",
-    roomSetup: "Configuração da sala",
     createRoom: "Criar uma sala",
     startFromSavedPreset: "Começar a partir de uma predefinição guardada",
     startFromPreset: "Começar a partir de uma predefinição…",
@@ -980,6 +976,7 @@ export const PT: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameTooShort: (p: { min: number }) => `Um nome precisa de pelo menos ${p.min} caracteres.`,
     nameInUse: (p: { name: string }) =>
       `Alguém online já está a jogar como «${p.name}». Escolhe outro nome para continuar a jogar.`,
     couldNotSaveThatNamePlease: "Não foi possível guardar esse nome. Tenta de novo.",
@@ -1119,6 +1116,7 @@ export const PT: Catalogue = {
 
   lobbyBrowserPage: {
     quickPlay: "Jogo rápido",
+    lobby: "Átrio",
     quickPlayBusy: "À procura de uma sala…",
     couldNotFindOrOpenARoom: "Não foi possível encontrar ou abrir uma sala.",
     filterByLanguage: "Filtrar por idioma",
@@ -1146,7 +1144,8 @@ export const PT: Catalogue = {
     hideFullRooms: "Ocultar salas cheias",
     hideGamesProgress: "Ocultar partidas a decorrer",
     loadingPublicRooms: "A carregar salas públicas…",
-    noPublicRoomsYetCreateOne: "Ainda não há salas públicas. Cria uma!",
+    noPublicRoomsYet: "Ainda não há salas públicas",
+    noPublicRoomsYetBody: "O Jogo rápido abre uma para ti, ou cria a tua.",
     noPublicRoomsMatchYourSearch: "Nenhuma sala pública corresponde à tua procura.",
     createRoom2: "Criar uma sala",
     joinWithCode: "Entrar com um código",
@@ -1154,10 +1153,8 @@ export const PT: Catalogue = {
     couldNotSaveThatName: "Não foi possível guardar esse nome. Tenta de novo.",
     joinAsASpectator: "entrar como espectador",
     joinTheRoom: "entrar na sala",
-    loading: "A carregar…",
     showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
       `A mostrar ${p.filteredRoomsCount} de ${p.roomsCount}`,
-    n0Rooms: "0 salas",
     close: "Fechar",
     joining: "A entrar…",
     joinTheRoom2: "Entrar na sala",
@@ -1220,7 +1217,6 @@ export const PT: Catalogue = {
     nothingMatchesThoseFilters: "Nenhuma lista corresponde a esses filtros.",
     nothingPublishedYet: "Ainda não foi publicada nenhuma lista.",
     byOwner: (p: { owner: string }) => `de ${p.owner}`,
-    community: "Comunidade",
     starred: "Com estrela",
     tags: "Etiquetas",
     promptCount: (p: { count: number }) =>
@@ -1265,8 +1261,7 @@ export const PT: Catalogue = {
   galleryPage: {
     gallery: "Galeria",
     backToLobby: "Voltar ao átrio",
-    eyebrow: "Desenhos",
-    drawingsFromPublicGames: "Todos os desenhos de jogos públicos, para quem tiver sessão iniciada.",
+    drawingsFromPublicGames: "Todos os desenhos das partidas públicas.",
     loading: "A carregar…",
     sortBy: "Ordenar por",
     hot: "Em alta",
@@ -1276,9 +1271,9 @@ export const PT: Catalogue = {
     allTime: "Desde sempre",
     thisMonth: "Este mês",
     thisWeek: "Esta semana",
-    nothingThisWeek: "Ainda não há desenhos públicos esta semana. Joga uma partida pública e volta.",
-    nothingHereYet: "Ainda não há nada aqui. Joga um jogo público e volta.",
-    signInToSeeTheGallery: "A galeria é para jogadores com sessão iniciada. Inicia sessão ou continua como convidado a partir do átrio.",
+    nothingThisWeek: "Ainda nada esta semana.",
+    nothingHereYet: "Ainda não há desenhos",
+    signInToSeeTheGallery: "Inicia sessão para ver a galeria",
     couldNotLoadTheGallery: "Não foi possível carregar a galeria.",
     couldNotLoadThisDrawing: "Não foi possível carregar este desenho.",
     showMore: "Mostrar mais",
@@ -1296,8 +1291,8 @@ export const PT: Catalogue = {
     signIn: "Iniciar sessão",
     backToTop: "Voltar ao topo",
     topOfTheWeek: "Top da semana",
-    nothingHereYetBody: "Cada desenho guardado de uma partida pública acaba aqui.",
-    signInBody: "Inicia sessão, ou continua como convidado a partir do lobby, para ver todos os desenhos das partidas públicas.",
+    nothingHereYetBody: "Joga uma partida pública e os desenhos dela serão os primeiros aqui.",
+    signInBody: "Ou escolhe um nome no átrio para veres como convidado.",
     backToGallery: "Voltar à galeria",
     replay: "Reproduzir",
     pause: "Pausa",
@@ -1362,7 +1357,8 @@ export const PT: Catalogue = {
     yourLibrary: "A tua biblioteca",
     reusablePromptLists: "Listas de palavras reutilizáveis",
     newList: "Lista nova",
-    createAccountSaveReviseSharePrompt: "Cria uma conta para guardares, reveres e partilhares listas de palavras. As palavras rápidas de uma sala ficam locais e efémeras.",
+    promptListsNeedAnAccount: "As tuas listas de palavras precisam de uma conta",
+    promptListsNeedAnAccountBody: "Uma conta guarda as tuas listas, para jogares em qualquer sala que crias e publicares se quiseres. As palavras próprias escritas numa sala não ficam guardadas.",
     yourPromptLists: "As tuas listas de palavras",
     loading: "A carregar…",
     noSavedListsYet: "Ainda não há listas guardadas.",
@@ -1397,6 +1393,7 @@ export const PT: Catalogue = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Ninguém desenhou esta página",
+    pageNotFound: "Página não encontrada",
     thatLinkDoesnTLeadAnywhere: "Essa ligação não leva a lado nenhum no Sketchy.",
     backLobby: "Voltar ao átrio",
   },
@@ -1961,7 +1958,6 @@ export const PT: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "As regras",
     thisPage: "Nesta página",
     forExample: "Por exemplo",
@@ -2519,8 +2515,6 @@ export const PT: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `A mostrar ${p.shown} de ${p.onlineCount}`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Escolhe um nome com que jogar.",

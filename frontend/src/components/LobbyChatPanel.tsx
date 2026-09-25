@@ -14,6 +14,7 @@ import { ReportLobbyLineDialog } from "./ReportLobbyLineDialog";
 import { refusalText } from "../lib/refusals.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
+import { EmptyState } from "./ui/EmptyState";
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"
 without a new line arriving, which is the point of the label. */
@@ -116,7 +117,7 @@ export const LobbyChatPanel = memo(function LobbyChatPanel() {
           data-testid="lobby-chat-list"
         >
           {lines.length === 0 ? (
-            <p className="lobby-chat-empty">{ui.lobbyChatPanel.nobodyHasSaidAnythingYet}</p>
+            <EmptyState compact title={ui.lobbyChatPanel.nobodyHasSaidAnythingYet} />
           ) : (
             lines.map((line) => (
               <LobbyChatLineRow

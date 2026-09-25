@@ -483,11 +483,6 @@ export const EN = {
       `${p.percent} guessed`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Commit date: ${p.commitDate} | Built: ${p.builtAt}`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, digit ${p.index} of ${p.length}`,
@@ -585,7 +580,6 @@ export const EN = {
     asideForgot: "We'll send a secure, time-limited link to the confirmed email on your account.",
     asideReset: "Choose a password you don't use anywhere else.",
     asideVerify: "A confirmed email is your way back in if you ever forget your password.",
-    accountHelp: "Account help",
     backLobby: "Back to the lobby",
     enterYourUsernameYourConfirmedEmail: "Enter your username or your confirmed email address. If the\n              account can be recovered, a link is on its way.",
     usernameEmail: "Username or email",
@@ -705,6 +699,13 @@ export const EN = {
   appHeader: {
     playerSettings: "Player settings",
     sketchyHome: "Go to the lobby",
+    /** The header's site links (desktop), as one landmark. */
+    siteNav: "Pages",
+    /** The header's link names for two pages whose titles are long in some
+        languages. English keeps the page title; a language whose title
+        does not fit the bar at 1200px shortens it, still naming the page. */
+    communityLink: "Community catalogue",
+    promptStatsLink: "Prompt stats",
   },
 
   bugReportDialog: {
@@ -843,7 +844,6 @@ export const EN = {
     couldNotDeleteThatPreset: "Could not delete that preset.",
     fixCustomPromptEntriesMarkedAbove: "Fix the custom-prompt entries marked above before creating the room.",
     failedCreateRoom: "Failed to create room",
-    roomSetup: "Room setup",
     createRoom: "Create a room",
     startFromSavedPreset: "Start from a saved preset",
     startFromPreset: "Start from a preset…",
@@ -991,6 +991,8 @@ export const EN = {
   },
 
   firstRunIdentity: {
+    /** The name tag's one rule it can still break: its field only takes allowed characters. */
+    nameTooShort: (p: { min: number }) => `A name needs at least ${p.min} characters.`,
     nameInUse: (p: { name: string }) =>
       `Someone online is already playing as “${p.name}”. Choose another name to keep playing.`,
     couldNotSaveThatNamePlease: "Could not save that name. Please try again.",
@@ -1130,6 +1132,7 @@ export const EN = {
 
   lobbyBrowserPage: {
     quickPlay: "Quick play",
+    lobby: "Lobby",
     quickPlayBusy: "Finding a room…",
     couldNotFindOrOpenARoom: "Could not find or open a room.",
     filterByLanguage: "Filter by language",
@@ -1157,7 +1160,8 @@ export const EN = {
     hideFullRooms: "Hide full rooms",
     hideGamesProgress: "Hide games in progress",
     loadingPublicRooms: "Loading public rooms…",
-    noPublicRoomsYetCreateOne: "No public rooms yet. Create one!",
+    noPublicRoomsYet: "No public rooms yet",
+    noPublicRoomsYetBody: "Quick play opens one for you, or create your own.",
     noPublicRoomsMatchYourSearch: "No public rooms match your search criteria.",
     createRoom2: "Create a room",
     joinWithCode: "Join with a code",
@@ -1165,10 +1169,8 @@ export const EN = {
     couldNotSaveThatName: "Could not save that name. Please try again.",
     joinAsASpectator: "join as a spectator",
     joinTheRoom: "join the room",
-    loading: "Loading…",
     showingFilteredRoomsCountOfRoomsCount:
       (p: { filteredRoomsCount: number; roomsCount: number }) => `Showing ${p.filteredRoomsCount} of ${p.roomsCount}`,
-    n0Rooms: "0 rooms",
     close: "Close",
     joining: "Joining…",
     joinTheRoom2: "Join the room",
@@ -1231,7 +1233,6 @@ export const EN = {
     nothingMatchesThoseFilters: "No lists match those filters.",
     nothingPublishedYet: "Nobody has published a list yet.",
     byOwner: (p: { owner: string }) => `by ${p.owner}`,
-    community: "Community",
     starred: "Starred",
     tags: "Tags",
     promptCount: (p: { count: number }) =>
@@ -1276,8 +1277,7 @@ export const EN = {
   galleryPage: {
     gallery: "Gallery",
     backToLobby: "Back to lobby",
-    eyebrow: "Drawings",
-    drawingsFromPublicGames: "Every drawing from a public game, for anyone signed in.",
+    drawingsFromPublicGames: "Every drawing from a public game.",
     loading: "Loading…",
     sortBy: "Sort by",
     hot: "Hot",
@@ -1287,9 +1287,9 @@ export const EN = {
     allTime: "All time",
     thisMonth: "This month",
     thisWeek: "This week",
-    nothingThisWeek: "No public drawings this week yet. Play a public game and come back.",
-    nothingHereYet: "Nothing here yet. Play a public game and come back.",
-    signInToSeeTheGallery: "The gallery is for signed-in players. Sign in or continue as a guest from the lobby.",
+    nothingThisWeek: "Nothing yet this week.",
+    nothingHereYet: "No drawings yet",
+    signInToSeeTheGallery: "Sign in to see the gallery",
     couldNotLoadTheGallery: "Could not load the gallery.",
     couldNotLoadThisDrawing: "Could not load this drawing.",
     showMore: "Show more",
@@ -1307,8 +1307,8 @@ export const EN = {
     signIn: "Sign in",
     backToTop: "Back to top",
     topOfTheWeek: "Top of the week",
-    nothingHereYetBody: "Every drawing kept from a public game ends up here.",
-    signInBody: "Sign in, or continue as a guest from the lobby, to see every drawing from a public game.",
+    nothingHereYetBody: "Play a public game, and its drawings will be the first here.",
+    signInBody: "Or choose a name in the lobby to look around as a guest.",
     backToGallery: "Back to gallery",
     replay: "Replay",
     pause: "Pause",
@@ -1371,7 +1371,8 @@ export const EN = {
     yourLibrary: "Your library",
     reusablePromptLists: "Reusable prompt lists",
     newList: "New list",
-    createAccountSaveReviseSharePrompt: "Create an account to save, revise, and share prompt lists. Quick room prompts stay local and ephemeral.",
+    promptListsNeedAnAccount: "Your prompt lists need an account",
+    promptListsNeedAnAccountBody: "An account keeps your lists, to play in any room you host and to publish if you like. Custom prompts typed into a room aren't saved.",
     yourPromptLists: "Your prompt lists",
     loading: "Loading…",
     noSavedListsYet: "No saved lists yet.",
@@ -1405,6 +1406,7 @@ export const EN = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Nobody drew this page",
+    pageNotFound: "Page not found",
     thatLinkDoesnTLeadAnywhere: "That link doesn’t lead anywhere on Sketchy.",
     backLobby: "Back to lobby",
   },
@@ -1966,7 +1968,6 @@ export const EN = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "The rules",
     thisPage: "On this page",
     forExample: "For example",
@@ -2530,8 +2531,6 @@ export const EN = {
   lobbyPresence: {
     showingShownOfOnlineCount:
       (p: { shown: number; onlineCount: number }) => `Showing ${p.shown} of ${p.onlineCount}`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Choose a name to play under.",

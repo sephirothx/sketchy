@@ -1,7 +1,17 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FIRST_RUN_DOODLES, pickArt } from "../src/lib/firstRunArt.ts";
+import { readFileSync } from "node:fs";
+
+import {
+  FIRST_RUN_DOODLES,
+  MAX_DROP,
+  MAX_SCALE,
+  MAX_TILT,
+  MIN_SCALE,
+  cornerOverhang,
+  pickArt,
+} from "../src/lib/firstRunArt.ts";
 import { DOODLES } from "../src/lib/avatarDoodles.ts";
 
 /** A roll that walks a known sequence, so a deal can be asserted exactly. */
@@ -23,9 +33,9 @@ test("a deal is the same in the same order, and every tilt, drop and size is sma
   for (let seed = 0; seed < 50; seed += 1) {
     const art = pickArt(DOODLES, Math.random);
     for (const doodle of [...art.left, ...art.right]) {
-      assert.ok(Math.abs(doodle.rotate) <= 9, `tilt ${doodle.rotate}`);
-      assert.ok(Math.abs(doodle.shift) <= 14, `drop ${doodle.shift}`);
-      assert.ok(doodle.scale >= 0.85 && doodle.scale <= 1.15, `size ${doodle.scale}`);
+      assert.ok(Math.abs(doodle.rotate) <= MAX_TILT, `tilt ${doodle.rotate}`);
+      assert.ok(Math.abs(doodle.shift) <= MAX_DROP, `drop ${doodle.shift}`);
+      assert.ok(doodle.scale >= MIN_SCALE && doodle.scale <= MAX_SCALE, `size ${doodle.scale}`);
     }
   }
 });
@@ -56,4 +66,25 @@ test("it is not the same three every time", () => {
     deals.add([...art.left, ...art.right].map((d) => d.name).join(","));
   }
   assert.ok(deals.size > 5, `only ${deals.size} different deals in 40`);
+});
+
+test("the corner doodle's worst deal stays inside the card that clips it", () => {
+  // The inset and the box as the stylesheet states them, so moving either
+  // without the other fails here rather than showing half a kite.
+  const css = readFileSync(new URL("../src/styles/account.css", import.meta.url), "utf8");
+  const corner = css.match(/\.first-run-art\.is-left \{[^}]*?bottom: (\d+)px;[^}]*?right: (\d+)px;/);
+  assert.ok(corner, "the corner rule states its bottom and right insets in px");
+  const [bottom, right] = [Number(corner[1]), Number(corner[2])];
+  const box = css.match(/height: var\(--doodle-box, (\d+)px\)/);
+  assert.ok(box, "the doodle's box has a stated default size");
+
+  const overhang = cornerOverhang(Number(box[1]));
+  assert.ok(overhang.y <= bottom, `reaches ${overhang.y.toFixed(1)}px down, inset ${bottom}px`);
+  assert.ok(overhang.x <= right, `reaches ${overhang.x.toFixed(1)}px across, inset ${right}px`);
+});
+
+test("the overhang grows with every part of the deal", () => {
+  const { x, y } = cornerOverhang(96);
+  assert.ok(x > 0, "a tilted, enlarged square reaches past its own");
+  assert.equal(y - x, MAX_DROP);
 });

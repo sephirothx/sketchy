@@ -21,6 +21,7 @@ import { canAdminister } from "../lib/operatorAccess";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/operator.css";
 
 function formatWhen(value: string, dateTime: (date: Date) => string): string {
@@ -61,6 +62,7 @@ const FILTERS: { name: BugReportStatus; label: string }[] = [
  * for themselves, so this decides what to show rather than what to allow.
  */
 export function BugReportsPage() {
+  useDocumentTitle("Bug reports");
   const { dateTime } = useClock();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);

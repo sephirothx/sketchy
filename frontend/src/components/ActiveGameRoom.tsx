@@ -51,6 +51,7 @@ import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { kickedText, supersededText } from "../lib/roomNotices.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -69,6 +70,9 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const roomState = useGameStore((s) => s.roomState);
   const roomName = useGameStore((s) => s.name);
+  // The room's own name, which is what somebody with a room and the Gallery
+  // open side by side is looking for; the code until the name has arrived.
+  useDocumentTitle(roomName || code);
   const roomIsPublic = useGameStore((s) => s.isPublic);
   const phase = useGameStore((s) => s.phase);
   const scoringMode = useGameStore((s) => s.scoringMode);

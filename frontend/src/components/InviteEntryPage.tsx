@@ -7,9 +7,10 @@ import { RoomFacts } from "./RoomFacts";
 import { AuthDialog } from "./AccountMenu";
 import { EyeIcon, XIcon } from "./icons";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
-import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { useNameField } from "../hooks/useNameField";
 import { useBottomDock } from "../hooks/useBottomDock";
 import "../styles/lazy/toolbar.css";
 
@@ -47,6 +48,15 @@ export function InviteEntryPage({ code }: { code: string }) {
   const login = useAuthStore((store) => store.login);
   const register = useAuthStore((store) => store.register);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
+  // The same field as the first-run name tag's: only the name rule's
+  // characters get in (R-UX-13).
+  const { ref: nameRef, onChange: onNameChange } = useNameField((value) => {
+    setNameDraft(value);
+    // Also to the entry machine, which drops a refusal about the name once
+    // the name changes; otherwise the error and aria-invalid stay up over a
+    // name that is now fine.
+    setNicknameInput(value);
+  });
   // Nothing until the first GET /api/auth/me settles: a null user means "not
   // known yet" as well as "nobody", and a join in that window races the
   // provisioning request (see FirstRunIdentity).
@@ -56,6 +66,7 @@ export function InviteEntryPage({ code }: { code: string }) {
   const busy = state.status === "joining";
   const entryError = state.status === "preview" ? state.error : undefined;
   const notice = state.status === "preview" || state.status === "joining" ? state.notice : undefined;
+  useDocumentTitle(room?.name ?? code);
 
   return (
     <div className="invite-entry-page">
@@ -118,25 +129,19 @@ export function InviteEntryPage({ code }: { code: string }) {
                 {/* Search type suppresses Android Chrome's unrelated autofill
                     toolbar, matching every other name field in the app. */}
                 <input
+                  ref={nameRef}
                   id="invite-name"
                   className="invite-name-input"
                   type="search"
                   inputMode="text"
                   value={nameDraft}
-                  onChange={(event) => {
-                    setNameDraft(event.target.value);
-                    // Also to the entry machine, which drops a refusal about
-                    // the name once the name changes; otherwise the error and
-                    // aria-invalid stay up over a name that is now fine.
-                    setNicknameInput(event.target.value);
-                  }}
+                  onChange={onNameChange}
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !busy && !entryPending && !room.isFull) {
                       event.preventDefault();
                       void join("player");
                     }
                   }}
-                  maxLength={MAX_NICKNAME_LENGTH}
                   placeholder={ui.firstRunIdentity.whatShouldWeCallYou}
                   autoComplete="nickname"
                   autoCapitalize="off"

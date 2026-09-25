@@ -5,8 +5,32 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 16px;
-  margin-bottom: 26px;
+  /* A property so the site nav can cancel and restore it (lobby-page.css). */
+  --header-gap: 16px;
+  gap: var(--header-gap);
+  /* The space between the bar and the page under it, the same on every page
+     and at every width - but the invite page on a phone, which keeps 18px so
+     its Join button clears the fold (lobby-page.css). A layout that puts a
+     gap of its own under the bar (the pinned lobby's flex gap) takes that gap
+     off this, rather than adding to it: it used to, and the lobby's rooms
+     dropped 16px at 901px. */
+  --header-space: 26px;
+  margin-bottom: var(--header-space);
+  /* One bar on every page. Each page keeps its own content width (#581), and
+     the bar used to take whatever that was, so the wordmark and the identity
+     chip jumped sideways between the lobby, the Gallery, Create and Rules.
+     Now the bar reaches out of the page's column to the shell - or to the
+     window's 16px gutter when that is nearer - and sits in the same place on
+     every page.
+
+     The window is `100vw` less a classic scrollbar's lane
+     (`--scrollbar-width`, lib/scrollbarWidth.ts), which `100vw` counts: sized
+     from `100vw` alone the bar sat half a lane too close to the edge and moved
+     between pages that scroll and pages that do not. Where the page's column
+     already fills the window the reach is zero, and a page wider than the
+     shell - or one that runs the window's width - gets none either. */
+  --header-reach: calc((min(var(--shell-width), 100vw - var(--scrollbar-width) - 32px) - 100%) / 2);
+  margin-inline: calc(-1 * max(0px, var(--header-reach)));
 }
 
 .header-settings-button:hover {

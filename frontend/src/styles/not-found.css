@@ -4,11 +4,14 @@
    `.tool-button`'s metrics in toolbar.css without its interactive states. */
 .not-found-page {
   min-height: 100vh;
-  padding: 20px 16px 48px;
+  padding: 24px 16px 48px;
 }
 
+/* The page runs the window's width; the bar stops at the shell, where it sits
+   on every other page. */
 .not-found-page .lobby-header {
-  margin-bottom: 28px;
+  max-width: var(--shell-width);
+  margin: 0 auto var(--header-space);
 }
 
 .not-found-card {

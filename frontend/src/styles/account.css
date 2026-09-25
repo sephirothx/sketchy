@@ -639,6 +639,14 @@
   }
 }
 
+/* Inside the card, the corner doodle sits where the words' last lines run, so
+   the words keep clear of its corner rather than being drawn over. */
+@container first-run (min-width: 620px) and (max-width: 1079.98px) {
+  .first-run-say {
+    padding-right: 104px;
+  }
+}
+
 /* A guest who came back to find their name taken by somebody online who
    arrived first (R-ACCT-09): said above the field that fixes it. */
 .first-run-name-in-use,
@@ -670,6 +678,10 @@
   justify-self: center;
   max-width: 360px;
   width: 100%;
+  /* A refused name's line (below, and a11y.css while focused): the light
+     theme's `--danger`, written out, because the tag is white in both themes
+     and the dark theme's paler red is under 3:1 on white. */
+  --tag-refused: #c92a2a;
   border: 2px solid var(--tag-edge);
   border-radius: var(--radius-sm);
   box-shadow: 0 3px 0 rgba(20, 16, 10, 0.14);
@@ -716,10 +728,10 @@
   font-weight: 500;
 }
 
-.first-run-guest-row input:focus-visible {
-  border-bottom-color: var(--tag-edge, #c8102e);
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 3px;
+/* A name the form refused: the line it is written on turns red, while the
+   toast says why. */
+.first-run-guest-row input[aria-invalid="true"] {
+  border-bottom-color: var(--tag-refused);
 }
 
 /* Plainly a name, not a game: a secondary .btn, because what plays is Quick
@@ -728,8 +740,31 @@
   justify-self: center;
 }
 
-.first-run-tag .auth-error {
-  margin: 0 14px;
+
+/* The tag's fine print: the Rules, under the button. The tag is a white
+   sticker in both themes, so its ink is literal like the field's (#292520)
+   rather than a theme token that turns pale in the dark: this brown is
+   6.1:1 on the white. Quiet by size and weight, not by a contrast that
+   fails. */
+.first-run-rules {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  color: #6b6152;
+  display: inline-flex;
+  font-size: 12.5px;
+  font-weight: 700;
+  gap: 5px;
+  justify-self: center;
+  margin-top: -4px;
+  min-height: 24px;
+  padding: 0 6px;
+  text-decoration: none;
+}
+
+.first-run-rules:hover {
+  color: #292520;
+  text-decoration: underline;
+  text-underline-offset: 2px;
 }
 
 .first-run-say {
@@ -776,12 +811,18 @@
 
 /* Decoration, in the ink the doodle avatars use. One doodle in the card's
    corner at ordinary widths; a column of three where there is width to spare
-   (below); nothing at all on a phone. */
+   (below); nothing at all on a phone.
+
+   Seated wholly inside the corner. It used to hang 14px below the card's
+   edge, plus a random drop, in a card that clips - half a kite, which read as
+   an overflow bug rather than a peek. The inset covers the largest tilt, size
+   and drop the deal gives (`cornerOverhang` in lib/firstRunArt.ts, checked
+   against these two numbers by tests/firstRunArt.test.mjs). */
 .first-run-art.is-left {
-  bottom: -14px;
+  bottom: 22px;
   pointer-events: none;
   position: absolute;
-  right: 10px;
+  right: 18px;
   z-index: 0;
 }
 
@@ -859,8 +900,9 @@
 }
 
 @media (max-width: 900px) {
+  /* The same side inset as the lobby's other cards. */
   .first-run {
-    padding: 18px;
+    padding: 18px 24px 20px;
   }
 
   .first-run-heading {
@@ -899,7 +941,7 @@
   .lobby-header {
     align-items: center;
     flex-wrap: nowrap;
-    gap: 10px;
+    --header-gap: 10px;
   }
 
   .lobby-header-actions {
@@ -918,7 +960,7 @@
      390px, and an SVG with a fixed width overlapped the flag instead of
      shrinking. It scales down with the room the lead has. */
   .lobby-header-lead {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
   }
 

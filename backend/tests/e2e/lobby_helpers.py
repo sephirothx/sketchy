@@ -210,3 +210,39 @@ async def join_by_code(page, code: str, *, spectate: bool = False) -> None:
         if spectate
         else 'button:has-text("Join the room")'
     )
+
+
+async def open_public_rooms(browser, prefix: str, count: int) -> list:
+    """Open `count` public rooms, each with a host of its own; returns their
+    browser contexts, which the caller closes as soon as it is done with them.
+
+    The lobby offers search and filters only once six rooms are open
+    (`ROOM_FILTERS_FROM` in frontend/src/lib/lobbyControls.ts), and the shards
+    share one server, so how many other tests' rooms are open at any moment is
+    a coin flip. A test that needs the search box opens enough here to make it
+    certain. One after another rather than all at once: a shard is eight
+    workers on a two-core runner, and five pages loading together is the kind
+    of spike that starves the tests beside it.
+    """
+    contexts = []
+    try:
+        for index in range(count):
+            context = await browser.new_context()
+            contexts.append(context)
+            page = await context.new_page()
+            await use_guest_name(page, f"{prefix}Host{index}")
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".identity-chip")
+            await page.click(".lobby-rooms-actions .btn-primary")
+            await page.wait_for_selector(".create-room-page")
+            await page.fill(
+                'input[placeholder="Leave blank for a random name!"]', f"{prefix} room {index}"
+            )
+            await page.click(".create-room-submit")
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+    except BaseException:
+        # The caller never gets the list, so it cannot close what was opened.
+        for context in contexts:
+            await context.close()
+        raise
+    return contexts

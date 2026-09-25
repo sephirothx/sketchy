@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Squiggle, Wordmark } from "../components/icons";
-import { SectionLabel } from "../components/ui/Card";
 import {
   completePasswordReset,
   confirmEmailToken,
@@ -14,6 +13,7 @@ import { useEmailStateStore } from "../store/emailStateStore";
 import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 type Mode = "forgot" | "reset" | "verify";
 
@@ -152,6 +152,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           ? ui.accountRecoveryPage.thatLinkNoLongerWorks
           : ui.accountRecoveryPage.chooseANewPassword
         : ui.accountRecoveryPage.confirmingYourEmail;
+  useDocumentTitle(heading);
 
   return (
     <main className="recovery-page">
@@ -170,7 +171,6 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
         <section className="recovery-form">
         <Wordmark size={22} />
         <div className="recovery-heading">
-          <SectionLabel>{ui.accountRecoveryPage.accountHelp}</SectionLabel>
           <h1>{heading}</h1>
         </div>
 

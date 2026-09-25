@@ -1,9 +1,11 @@
 /* The profile page: identity header, stat tiles, and expandable game history. */
 
 .profile-page {
-  max-width: 900px;
+  --page-width: 868px;
+  max-width: calc(var(--page-width) + 32px);
   margin: 0 auto;
-  padding: 16px;
+  /* The same top as every other page, so the header does not move. */
+  padding: 24px 16px 16px;
 }
 
 
@@ -538,7 +540,7 @@
    table of prompts read across 1960px is harder to follow, not easier. */
 @media (min-width: 1200px) {
   .profile-page {
-    max-width: 1272px;
+    --page-width: 1240px;
   }
 
   .profile-columns {

@@ -9,6 +9,7 @@ import type { CommunityPromptListDetail, PublishedPromptEntry } from "../types";
 import { SearchIcon, XIcon } from "./icons";
 import { SegmentedControl } from "./RoomSetupControls";
 import { ui } from "../content/ui/index.ts";
+import { EmptyState } from "./ui/EmptyState";
 import "../styles/lazy/community-lists.css";
 
 type Order = "author" | "alphabetical";
@@ -122,7 +123,7 @@ export function CommunityPromptsDialog({
 
       <div className="community-prompts-dialog-body">
         {found.length === 0
-          ? <p className="community-catalogue-empty">{ui.communityCataloguePage.noPromptMatches({ query: query.trim() })}</p>
+          ? <EmptyState compact title={ui.communityCataloguePage.noPromptMatches({ query: query.trim() })} />
           : groups
             ? groups.map((group) => (
                 <section key={group.initial} className="community-prompts-group">

@@ -190,7 +190,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
       <p className="section-label waiting-card-kicker">{ui.roomSettingsEditor.hostSettings}</p>
       <h2 id="room-settings-title">{ui.roomSettingsEditor.editRoomRules}</h2>
     </div>
-    {loading ? <p>{ui.roomSettingsEditor.loadingSettings}</p> : (
+    {loading ? <p className="loading-note" role="status">{ui.roomSettingsEditor.loadingSettings}</p> : (
       <RoomSetupForm
         values={values}
         onChange={handleChange}

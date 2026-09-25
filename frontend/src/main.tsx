@@ -12,6 +12,7 @@ import { CrashPage } from './pages/CrashPage.tsx'
 import { installClientErrorLog } from './lib/clientErrorLog.ts'
 import { installCrashTestSeam } from './lib/crashTestSeam.ts'
 import { installChunkReload } from './lib/chunkReload.ts'
+import { installScrollbarWidth } from './lib/scrollbarWidth.ts'
 import { prefetchPlayRoutes, prefetchRouteFor } from './routeModules.ts'
 import { beforeFirstPaint } from './lib/startup.ts'
 import { useAuthStore } from './store/authStore.ts'
@@ -22,6 +23,8 @@ import { initialLocaleReady } from './store/settingsStore.ts'
 installClientErrorLog()
 installCrashTestSeam()
 installChunkReload()
+// Before the first paint, so the header is where it belongs from the start.
+installScrollbarWidth()
 
 // The page this address draws is a chunk of its own (#475): fetched now, while
 // the paint waits on the account below, rather than once it is over.

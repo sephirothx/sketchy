@@ -33,6 +33,7 @@ import {
   type LiveSnapshot,
   type RuntimeEventRow,
 } from "../lib/operations";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/operator.css";
 
 // The live numbers are re-read this often while the overview is on screen.
@@ -92,6 +93,7 @@ everything. Trends over days are not here: they are Prometheus's, from
 `sketchy_events_total`, and read in Grafana (#965) - the permanent daily totals
 this page used to chart were a second copy of that counter. */
 export function AdminOperationsPage() {
+  useDocumentTitle("Server operations");
   const { timeFormat, dateTime } = useClock();
   const [live, setLive] = useState<LiveSnapshot | null>(null);
   // Admission state, because the banner speaks for it. It used to say

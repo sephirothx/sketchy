@@ -51,6 +51,7 @@ import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 import { doodleNameOf, isUploadedPicture } from "../lib/avatarDoodles";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/operator.css";
 
 type Filter = "open" | "players" | "content" | "held" | "gallery" | "bans" | "closed";
@@ -430,6 +431,7 @@ function EvidenceLine({
 }
 
 export function ModerationPage() {
+  useDocumentTitle("Moderation");
   const { dateTime } = useClock();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);

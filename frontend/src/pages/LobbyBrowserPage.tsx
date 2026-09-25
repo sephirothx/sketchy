@@ -9,13 +9,13 @@ import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
 import { currentPlayerName } from "../store/authStore";
 import { PublicRoomCard } from "../components/PublicRoomCard";
-import { VersionBadge } from "../components/VersionBadge";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import { useRoomsStore } from "../store/roomsStore";
 import { useRoomEntryStore } from "../store/roomEntryStore";
 import { ModalShell } from "../components/ui/ModalShell";
 import { BottomSheet } from "../components/ui/BottomSheet";
+import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -31,7 +31,9 @@ import {
 } from "../components/LanguagePicker";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { showsRoomCount, showsRoomFilters } from "../lib/lobbyControls.ts";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
 
 const ROOM_CODE_LENGTH = 6;
@@ -149,6 +151,8 @@ function identityMessage(error: unknown): string {
 }
 
 export function LobbyBrowserPage() {
+  // The front door: the tab says the site's name and nothing else.
+  useDocumentTitle(null);
   const dockRef = useBottomDock();
   const navigate = useNavigate();
   const location = useLocation();
@@ -223,6 +227,24 @@ export function LobbyBrowserPage() {
   // sight in a sheet never looks like a list with nothing in it.
   const activeFilterCount =
     (languageFilter !== ANY_LANGUAGE ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
+  // From six rooms, while anything narrows the list, and for the rest of the
+  // page's life once shown (lib/lobbyControls.ts): the list changes every
+  // second, and the box must not unmount under somebody typing in it.
+  const [roomFiltersShown, setRoomFiltersShown] = useState(false);
+  const showRoomFilters = showsRoomFilters({
+    roomCount: rooms.length,
+    narrowing: activeFilterCount > 0 || searchQuery !== "",
+    alreadyShown: roomFiltersShown,
+  });
+  if (showRoomFilters && !roomFiltersShown) setRoomFiltersShown(true);
+  // Everything that narrows the list, the search included: what a list with
+  // nothing left in it offers to undo.
+  function clearRoomFilters() {
+    setSearchQuery("");
+    setLanguageFilter(ANY_LANGUAGE);
+    setHideFullRooms(false);
+    setHideInProgressRooms(false);
+  }
   // Nothing here works without a name: the server provisions on naming,
   // needs an account to open a room, and needs a valid nickname to seat
   // anybody. The first-run block above asks for it.
@@ -402,6 +424,10 @@ export function LobbyBrowserPage() {
   return (
     <div className="lobby-page">
       <AppHeader languageSwitch />
+      {/* The page's one heading. The wordmark above is a link, not a heading,
+          and the lobby shows its name nowhere else: every panel below has its
+          own. Out of the layout, so the grid and flex rows are untouched. */}
+      <h1 className="visually-hidden">{ui.lobbyBrowserPage.lobby}</h1>
 
       {criticalError && (
         <RemovedFromRoomDialog
@@ -419,14 +445,19 @@ export function LobbyBrowserPage() {
       <section className="surface-card panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
           <h2 className="panel-title">{ui.lobbyBrowserPage.publicRooms}</h2>
-          <span className="lobby-rooms-count">
-            {!roomsState.loaded ? ui.lobbyBrowserPage.loading : rooms.length > 0 ? ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length }) : ui.lobbyBrowserPage.n0Rooms}
-          </span>
+          {/* Only when it says something the list does not: how many a filter
+              left out. "0 rooms" beside "No public rooms yet", and "Showing 1
+              of 1" above one room, only repeated what was under them. */}
+          {showsRoomCount({ loaded: roomsState.loaded, shown: filteredRooms.length, total: rooms.length }) && (
+            <span className="lobby-rooms-count">
+              {ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length })}
+            </span>
+          )}
           {/* The two ways into a room, beside the list of rooms rather than in
               the header - the pair a phone's dock already holds, in the same
               order of weight. The header is left to the person: language,
               settings, account. The catalogue and the Gallery are in the
-              account menu. */}
+              header's site links where they fit, and in the account menu. */}
           {!isNarrow && (
             <div className="lobby-rooms-actions">
               {/* The fast one of the three, and the only one that is a game
@@ -462,7 +493,7 @@ export function LobbyBrowserPage() {
           )}
         </div>
 
-        {roomsState.loaded && rooms.length > 0 && (
+        {roomsState.loaded && showRoomFilters && (
           <div className="lobby-filter-bar">
             <span className="lobby-room-search">
               <SearchIcon size={15} />
@@ -532,7 +563,7 @@ export function LobbyBrowserPage() {
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => {
-                      setLanguageFilter("all");
+                      setLanguageFilter(ANY_LANGUAGE);
                       setHideFullRooms(false);
                       setHideInProgressRooms(false);
                     }}
@@ -589,13 +620,23 @@ export function LobbyBrowserPage() {
             and a socket that is down is what `ConnectionStatusBanner` is for.
             The only states left are "not told yet" and "told". */}
         {!roomsState.loaded ? (
-          <div className="room-list-loading" role="status">{ui.lobbyBrowserPage.loadingPublicRooms}</div>
+          <p className="loading-note" role="status">{ui.lobbyBrowserPage.loadingPublicRooms}</p>
         ) : rooms.length === 0 ? (
-          <p>{ui.lobbyBrowserPage.noPublicRoomsYetCreateOne}</p>
+          <EmptyState
+            title={ui.lobbyBrowserPage.noPublicRoomsYet}
+            body={ui.lobbyBrowserPage.noPublicRoomsYetBody}
+          />
         ) : filteredRooms.length === 0 ? (
-          <p className="lobby-no-matches">
-            {ui.lobbyBrowserPage.noPublicRoomsMatchYourSearch}
-          </p>
+          <EmptyState
+            compact
+            className="lobby-no-matches"
+            title={ui.lobbyBrowserPage.noPublicRoomsMatchYourSearch}
+            action={
+              <button type="button" className="btn btn-ghost btn-compact" onClick={clearRoomFilters}>
+                {ui.lobbyBrowserPage.clearFilters}
+              </button>
+            }
+          />
         ) : (
           <div className={`room-list${isWide ? " is-rows" : ""}`}>
             {/* Headings for the row's columns. Hidden from assistive tech:
@@ -644,15 +685,10 @@ export function LobbyBrowserPage() {
             <BoltIcon size={16} />
             {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
           </button>
+          {/* Join by code, then Create room: the order the desktop's row
+              beside the room list has them in, so the two layouts are one
+              sequence rather than a mirror image. */}
           <div className="lobby-dock-row">
-            <Button
-              variant="primary"
-              iconLeft={<PlusIcon size={15} />}
-              disabled={Boolean(pendingJoin)}
-              onClick={() => void handleOpenCreateRoom()}
-            >
-              {ui.lobbyBrowserPage.createRoom2}
-            </Button>
             <button
               type="button"
               className="btn btn-secondary lobby-dock-code"
@@ -661,6 +697,14 @@ export function LobbyBrowserPage() {
             >
               {ui.lobbyBrowserPage.joinWithCode}
             </button>
+            <Button
+              variant="primary"
+              iconLeft={<PlusIcon size={15} />}
+              disabled={Boolean(pendingJoin)}
+              onClick={() => void handleOpenCreateRoom()}
+            >
+              {ui.lobbyBrowserPage.createRoom2}
+            </Button>
           </div>
         </div>
       )}
@@ -714,7 +758,6 @@ export function LobbyBrowserPage() {
         </BottomSheet>
       )}
 
-      <VersionBadge />
     </div>
   );
 }
