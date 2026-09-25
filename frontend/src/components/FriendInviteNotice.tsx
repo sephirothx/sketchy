@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { parseFriendInvite, type FriendInvite } from "../lib/friends";
@@ -81,6 +81,35 @@ export function FriendInviteNotice() {
   // there is nothing to tidy up here beyond not drawing it.
   const entryPending = useRoomEntryStore((state) => state.pending !== null);
 
+  // The toasts sit in the same bottom-centre spot, and this component is also
+  // what announces friend requests - which landed on the card's own Join.
+  // So while the card is up it publishes how far it reaches above the page's
+  // dock (which it stands on itself), and the toast stack stands on both
+  // (R-UX-07). The card stays out of the stack: it is a question, not
+  // something that happened.
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const shown = invite !== null && myUserId !== null;
+  useLayoutEffect(() => {
+    const card = cardRef.current;
+    if (!shown || !card) return;
+    const root = document.documentElement;
+    const publish = () => {
+      // Its offset less the dock's, read together: the part that is the
+      // card's own, which does not change when the dock does.
+      const bottom = Number.parseFloat(getComputedStyle(card).bottom) || 0;
+      const dock = Number.parseFloat(getComputedStyle(root).getPropertyValue("--dock-clearance")) || 0;
+      root.style.setProperty("--friend-invite-clearance", `${bottom - dock + card.offsetHeight}px`);
+    };
+    publish();
+    // A long name wraps the card to a second line on a phone.
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
+    observer?.observe(card);
+    return () => {
+      observer?.disconnect();
+      root.style.setProperty("--friend-invite-clearance", "0px");
+    };
+  }, [shown]);
+
   if (!invite || !myUserId) return null;
 
   async function join() {
@@ -99,20 +128,20 @@ export function FriendInviteNotice() {
       });
       const session = sessionFrom(answer);
       if (!session) {
-        notify(refusalText(answer, ui.friendInviteNotice.couldNotJoinThatGame));
+        notify(refusalText(answer, ui.friendInviteNotice.couldNotJoinThatGame), "error");
         return;
       }
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify(ui.friendInviteNotice.thatGameCouldNotBeJoined);
+      notify(ui.friendInviteNotice.thatGameCouldNotBeJoined, "error");
     } finally {
       useRoomEntryStore.getState().end(token);
     }
   }
 
   return (
-    <div className="friend-invite-notice" role="status" data-testid="friend-invite">
+    <div ref={cardRef} className="friend-invite-notice" role="status" data-testid="friend-invite">
       <span className="friend-invite-text">
         <strong>{invite.displayName}</strong> {ui.friendInviteNotice.invitedYouTheirGame}
       </span>

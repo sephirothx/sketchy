@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { BugIcon, ImageIcon } from "./icons";
 import {
   BUG_AREAS,
@@ -70,6 +71,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
   const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: cancelRef });
+  useBackCloses(true, onClose);
 
   // A preview URL is a live handle on the blob; letting the dialog close
   // without releasing it leaks the whole screenshot for the tab's lifetime.
@@ -271,8 +273,8 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         {error && <p className="auth-error" role="alert">{error}</p>}
 
         <div className="confirmation-dialog-actions">
-          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.bugReportDialog.cancel}</button>
-          <button type="submit" className="modal-button" disabled={busy || !summary.trim() || !details.trim()}>{busy ? ui.bugReportDialog.sending : ui.bugReportDialog.sendReport}</button>
+          <button ref={cancelRef} type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>{ui.bugReportDialog.cancel}</button>
+          <button type="submit" className="btn btn-primary" disabled={busy || !summary.trim() || !details.trim()}>{busy ? ui.bugReportDialog.sending : ui.bugReportDialog.sendReport}</button>
         </div>
       </form>
     </div>

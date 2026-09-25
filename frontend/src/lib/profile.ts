@@ -1,6 +1,6 @@
 import { formatDateTime, type TimeFormat } from "./clock";
 import { apiBinaryRequest, apiRequest } from "./api";
-import type { ReactionTally } from "../types";
+import type { HintMode, ReactionTally, ScoringMode } from "../types";
 import type { ProfilePin } from "./pinnedDrawings";
 
 /**
@@ -56,12 +56,12 @@ export interface GameParticipant {
 export interface GameSummary {
   id: string;
   roomName: string;
-  scoringMode: string;
+  scoringMode: ScoringMode;
   scoringVersion: number;
   scoreLedgerVersion: number;
   ruleSnapshotVersion: number;
-  promptSourceMode: "legacy_unknown" | "curated" | "custom" | "mixed" | "builtin_fallback";
-  hintMode: string;
+  promptSourceMode: "curated" | "custom" | "mixed" | "builtin_fallback";
+  hintMode: HintMode;
   drawingSeconds: number;
   totalRounds: number;
   playerCount: number;
@@ -83,7 +83,7 @@ export interface TurnParticipantOutcome {
   eligible: boolean;
   eligibilityReason: "eligible" | "afk" | "disconnected" | "joined_late";
   outcome: "correct" | "incorrect" | "no_attempt" | "ineligible";
-  terminalState: "active" | "afk" | "disconnected" | "left" | "legacy_unknown";
+  terminalState: "active" | "afk" | "disconnected" | "left";
   correctGuessTimeSeconds: number | null;
   wrongGuessCount: number;
   nearMissCount: number;
@@ -117,7 +117,7 @@ export interface GameTurn {
   prompt: string;
   durationSeconds: number;
   promptVersionId: string | null;
-  promptSourceKind: "legacy_unknown" | "curated" | "custom" | "builtin_fallback";
+  promptSourceKind: "curated" | "custom" | "builtin_fallback";
   strokeCount: number;
   /** Absent for turns played before drawings were kept. */
   drawingStatus: "ready" | "unavailable" | "deleted" | "pending" | "failed" | null;

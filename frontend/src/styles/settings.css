@@ -16,10 +16,10 @@
 .settings-overlay {
   align-items: center;
   padding: 16px;
-  /* Above the email reminder (1090), a note that can wait and that would
-     otherwise sit across the sheet's header on a phone; below the connection
-     (1100) and deploy (1150) banners, which are worth interrupting for. */
-  z-index: 1095;
+  /* Over the banner stack, which would otherwise sit across the sheet's
+     header and its close button on a phone (R-UX-07); the banners are back
+     the moment it closes. The layers are in layout-primitives.css. */
+  z-index: var(--z-overlay);
 }
 
 .modal-card.settings-modal-card {
@@ -193,7 +193,7 @@
   border-top: 0;
 }
 
-@media (min-width: 640px) {
+@media (min-width: 641px) {
   /* The control takes what it needs and the label gets the rest, so a
      reason - or a revealed address - has the room to stay on one line. */
   .settings-row {
@@ -257,29 +257,6 @@
   max-width: 100%;
 }
 
-/* A value the player cannot change, shown as the value rather than as a
-   disabled field pretending to be editable. */
-.settings-readonly {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--ink);
-}
-
-/* An account-only row for a guest: the reason on the row, a lock in place of
-   the control (R-ACCT-05 is why the colour is one of them). */
-.settings-locked .settings-row-label b {
-  color: var(--muted);
-}
-
-.settings-locked-reason {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--faint);
-  font-size: 13px;
-  font-weight: 700;
-}
-
 /* ------------------------------------------------------------- name color */
 
 .settings-swatches {
@@ -327,7 +304,7 @@
 }
 
 .settings-email {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
   letter-spacing: 0.01em;
   color: var(--ink);
@@ -472,8 +449,9 @@
 
 /* --------------------------------------------------------------- toggles */
 
-/* The pane's own on/off control: the room form's track and thumb, driven by
-   a hidden input of ours, so the row keeps label-left and its reason visible. */
+/* The pane's own on/off control: the switch recipe's track and thumb, driven
+   by a hidden input of ours, so the row keeps label-left and its reason visible.
+   The checked, focus and hover looks come with the recipe (primitives.css). */
 .settings-toggle-row {
   cursor: pointer;
 }
@@ -494,19 +472,6 @@
   opacity: 0;
   cursor: pointer;
   z-index: 1;
-}
-
-.settings-toggle-input:checked ~ .m3-switch-track {
-  background: var(--primary);
-}
-
-.settings-toggle-input:checked ~ .m3-switch-track .m3-switch-thumb {
-  transform: translateX(18px);
-}
-
-.settings-toggle-input:focus-visible ~ .m3-switch-track {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
 }
 
 /* ------------------------------------------------------------ theme cards */
@@ -649,17 +614,13 @@
   transform: scale(1.06);
 }
 
-.settings-volume-control input[type="range"]:focus-visible {
-  outline: none;
-}
-
 .settings-volume-control input[type="range"]:focus-visible::-webkit-slider-thumb {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 .settings-volume-control input[type="range"]:focus-visible::-moz-range-thumb {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -755,8 +716,8 @@
 
 /* ------------------------------------------------------------- narrow */
 
-@media (max-width: 999px) {
-  /* Full-screen sheet below 1000 px: not a dialog with 900 px scrolling
+@media (max-width: 1000px) {
+  /* Full-screen sheet up to 1000 px: not a dialog with 900 px scrolling
      inside it. The rail is the same four sections in the same order; it
      scrolls sideways rather than becoming a different control. */
   .settings-overlay {
@@ -833,7 +794,7 @@
   padding: 6px 0 10px;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 640px) {
   .settings-you {
     grid-template-columns: minmax(0, 1fr);
     justify-items: center;
@@ -890,7 +851,7 @@
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
-  z-index: 2;
+  z-index: var(--z-popover);
   width: 180px;
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -994,7 +955,7 @@
   color: var(--primary-ink);
 }
 
-@media (max-width: 479px) {
+@media (max-width: 480px) {
   .doodle-picker-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
@@ -1018,7 +979,7 @@
   min-width: 0;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 640px) {
   .settings-you-name-line,
   .settings-you .settings-swatches {
     justify-content: center;
@@ -1162,7 +1123,7 @@
   width: 20px;
 }
 
-.picture-crop-card .modal-button {
+.picture-crop-card .btn-primary {
   margin-top: 8px;
   width: 100%;
 }
@@ -1185,7 +1146,7 @@
   font-variant-numeric: tabular-nums;
 }
 
-@media (max-width: 639px) {
+@media (max-width: 640px) {
   .settings-brush-sizes,
   .settings-brush-sizes .segmented-control-field,
   .settings-brush-sizes .segmented-control {

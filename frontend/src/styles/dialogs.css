@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: fadeInModal var(--dur-fast) ease-out;
 }
 
@@ -76,23 +76,6 @@
   line-height: 1.4;
 }
 
-.modal-button {
-  background: var(--primary);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 0 var(--primary-edge);
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: filter var(--dur-fast) ease;
-}
-
-.modal-button:hover {
-  filter: brightness(1.05);
-}
-
 .confirmation-dialog-icon {
   align-items: center;
   background: var(--danger-soft);
@@ -113,34 +96,6 @@
   justify-content: flex-end;
 }
 
-.confirmation-dialog-actions button {
-  border-radius: var(--radius-xs);
-  font-size: 0.95rem;
-  font-weight: 700;
-  padding: 10px 16px;
-}
-
-.confirmation-cancel-button {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  color: var(--ink);
-}
-
-.confirmation-danger-button {
-  background: var(--danger);
-  border: 1px solid var(--danger);
-  color: #fff;
-}
-
-.confirmation-danger-button:hover { filter: brightness(1.08); }
-.confirmation-dialog-actions button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
-
-/* This one dialog is opened from inside the mobile players drawer, which is
-   itself at 1200 - the highest layer the game has. Matching it would leave the
-   two ordered by which happens to come later in the DOM, so it clears it. */
-.modal-overlay.report-player-overlay {
-  z-index: 1250;
-}
 
 /* A select inside a dialog form, drawn like the textarea beside it. The
    report dialogs referred to a class nothing defined, so the control came
@@ -172,10 +127,10 @@
   text-align: left;
 }
 
-/* Above everything, including the drawer at 1200 and the report dialog at
-   1250: there is nothing behind this worth reaching. */
+/* Above every other dialog and drawer: there is nothing behind this worth
+   reaching. Only a toast goes over it (the layers, layout-primitives.css). */
 .modal-overlay.suspension-overlay {
-  z-index: 1300;
+  z-index: var(--z-blocking);
 }
 
 .suspension-card {
@@ -289,7 +244,7 @@
   grid-template-columns: 1fr 1fr;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .bug-report-row { grid-template-columns: 1fr; }
 }
 
@@ -345,7 +300,7 @@
 }
 
 .bug-report-shot-meta {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
   font-weight: 800;
   margin: 0 0 4px;
@@ -412,12 +367,12 @@
   margin-top: 2px;
 }
 
-/* The AFK check (#677). Above the room's own overlays: it is the room asking
-   a question, and an answer is what keeps the seat. Nothing else on screen
-   can be reached while it is open, which is honest — the room really is about
-   to carry on without them. */
+/* The AFK check (#677). A blocking notice, over the room's own drawers and
+   dialogs: it is the room asking a question, and an answer is what keeps the
+   seat. Nothing else on screen can be reached while it is open, which is
+   honest — the room really is about to carry on without them. */
 .modal-overlay.afk-check-overlay {
-  z-index: 1300;
+  z-index: var(--z-blocking);
 }
 
 .afk-check-countdown {

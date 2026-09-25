@@ -7,6 +7,7 @@ import {
 } from "../lib/communityLists";
 import type { CommunityPromptListDetail, PublishedPromptEntry } from "../types";
 import { SearchIcon, XIcon } from "./icons";
+import { SegmentedControl } from "./RoomSetupControls";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/community-lists.css";
 
@@ -108,18 +109,15 @@ export function CommunityPromptsDialog({
             {ui.communityCataloguePage.matchesOfTotal({ matches: found.length, total: list.prompts.length })}
           </span>}
         </label>
-        <span className="community-catalogue-sort" role="group" aria-label={ui.communityCataloguePage.order}>
-          <button
-            type="button"
-            aria-pressed={order === "author"}
-            onClick={() => setOrder("author")}
-          >{ui.communityCataloguePage.authorsOrder}</button>
-          <button
-            type="button"
-            aria-pressed={order === "alphabetical"}
-            onClick={() => setOrder("alphabetical")}
-          >{ui.communityCataloguePage.alphabetical}</button>
-        </span>
+        <SegmentedControl<Order>
+          label={ui.communityCataloguePage.order}
+          value={order}
+          options={[
+            { value: "author", label: ui.communityCataloguePage.authorsOrder },
+            { value: "alphabetical", label: ui.communityCataloguePage.alphabetical },
+          ]}
+          onChange={setOrder}
+        />
       </div>
 
       <div className="community-prompts-dialog-body">

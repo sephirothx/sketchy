@@ -1,5 +1,81 @@
 /* Layout shells */
 
+/* Stacking layers. Every z-index that has to clear another component's is one
+   of these; a bare 0-4 only orders siblings inside one component and stays
+   under all of them. Before these there were nineteen literals and the order
+   was whatever the last patch needed: dialogs at 1000 sat under Settings
+   (1095), the banners (1150) and the room's drawers (1200), so the report,
+   suspension and AFK dialogs were lifted one at a time (1250, 1300) - over the
+   toasts, which then reported a dialog's outcome under its scrim.
+   frontend/tests/stylesheetScales.test.mjs holds the order and the rule.
+
+   Bottom to top:
+
+   float     Over its own region's content: the chat's jump-to-latest, the
+             version badge, the gallery's back-to-top, the turn recap over a
+             desktop canvas, the verdict over the guess field.
+   dock      Bars held to an edge of the viewport or of a scroller: the phone
+             lobby's dock, the invite page's answer, Create room's footer, the
+             waiting room's Start, sticky sort and save bars. They are the
+             page's standing controls, so what floats goes under them.
+   notice    A notice laid over the page: the friend invite, and the paused
+             or offline stage's card over a room. Above the docks in case they
+             meet, but they should not: the invite and the toasts stand on
+             whatever is docked at the bottom (--dock-clearance, written by
+             useBottomDock), because a notice must not cover a control
+             (R-UX-07).
+   popover   Menus, pickers and tooltips a control opened. Above notices and
+             docks, because it is the thing the player just asked for - the
+             offline chip's explanation used to open under the offline card.
+   confetti  Decoration, and takes no input: over the page, under everything
+             that asks for attention.
+   banner    The top-of-page stack. Under every overlay and dialog, which start
+             at the top of the viewport: a banner above them sat across the
+             Settings sheet's header and its close button on a phone (R-UX-07).
+             The scratch pad starts below the banner instead (canvas.css), so
+             the banner that opened it can still say the connection is back.
+   overlay   Screens laid over a page: Settings, Friends, and a phone room's
+             game over and turn recap. A route overlay comes later in the DOM,
+             so the one the player opened lands over the one the game did.
+   sheet     Bottom sheets: the room's drawers (a centred dialog on a desktop).
+   modal     Dialogs. Over sheets because they are opened from them - report a
+             player from the players drawer. A dialog opened from a dialog is
+             nested in it or portaled after it, so the DOM puts it on top.
+   blocking  Notices that hold play until answered: suspension, warning, role
+             change, the AFK check. Nothing behind them is reachable.
+   toast     Over everything, dialogs included: a toast is often the only word
+             on what a dialog just did - a report sent, a request refused - and
+             under a scrim it was announced to a screen reader and seen by
+             nobody. It is small, passes, and never takes focus.
+
+   One trap: `position: fixed` and `sticky` make a stacking context whatever
+   the z-index, so inside the phone's playing shell (`.game-room-playing`)
+   these order the shell's own layers against each other, and the shell as a
+   whole paints at the page's base level - under the confetti, the invite and
+   the toasts. The report dialogs are portaled to <body> for that reason. */
+:root {
+  --z-float: 10;
+  --z-dock: 20;
+  --z-notice: 30;
+  --z-popover: 40;
+  --z-confetti: 50;
+  --z-banner: 60;
+  --z-overlay: 70;
+  --z-sheet: 80;
+  --z-modal: 90;
+  --z-blocking: 100;
+  --z-toast: 110;
+}
+
+/* Breakpoints. Custom properties cannot be used in a media query, so the
+   widths are a fixed set instead, each written as the first width of the
+   wider side: 481, 641, 721, 901, 1001, 1200, 1500, 2100. A `min-width` is
+   one of those; a `max-width` is one less (480, 640, 720, 900, 1000, ...), so
+   no width is ever on both sides. JavaScript queries (useMediaQuery) use the
+   same numbers. Heights: 521 (a landscape phone), 640 (a desktop window tall
+   enough to pin, R-UX-01), 781 (the game-over panel's fit).
+   frontend/tests/stylesheetScales.test.mjs lists the few measured exceptions. */
+
 /* The desktop width steps (#581). Every page used to be pinned to one column
    chosen for a 1440px laptop, so a 2560px monitor drew the same layout with
    more empty paper around it, and the drawing stayed at 632 x 474 on every
@@ -53,10 +129,6 @@
 }
 
 .panel {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 20px 24px;
   margin-bottom: 16px;
 }
@@ -83,18 +155,15 @@
   font-size: 15px;
 }
 
+/* A disabled field's colours are in utilities.css, where they beat every
+   surface's own field rule; the dimming stays here, so a control that hides
+   its input (a switch's checkbox) can still hide a disabled one. */
 select:disabled,
 input:disabled,
 textarea:disabled {
-  background-color: var(--track) !important;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
   opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 
-
-
-.create-room-lobby-copy { color: var(--muted); line-height: 1.5; margin: 8px 0 16px; font-size: 14px; }
 .lobby-action-error { background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); font-weight: 600; margin: 0 0 16px; padding: 10px 12px; }
 .room-list-loading { color: var(--muted); padding: 20px 0; text-align: center; }

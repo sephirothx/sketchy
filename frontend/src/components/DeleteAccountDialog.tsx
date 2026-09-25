@@ -117,7 +117,7 @@ export function DeleteAccountDialog({
           )}
           <button
             type="submit"
-            className="modal-button account-delete-confirm"
+            className="btn btn-danger"
             disabled={confirmation !== CONFIRMATION || deleting}
           >
             {deleting ? ui.deleteAccountDialog.deleting : ui.deleteAccountDialog.deleteForGood}

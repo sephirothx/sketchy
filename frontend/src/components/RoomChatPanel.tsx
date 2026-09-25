@@ -14,6 +14,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { chatLineText } from "../lib/announcements.ts";
 import { ui } from "../content/ui/index.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
+import { useBottomDock } from "../hooks/useBottomDock";
 import "../styles/lazy/toolbar.css";
 
 interface RoomChatPanelProps {
@@ -69,6 +70,8 @@ export function RoomChatPanel({
   guessBreakdown = null,
   guessPlace = null,
 }: RoomChatPanelProps) {
+  // The guess field is the bottom band of the phone's playing shell.
+  const composerRef = useBottomDock();
   const locale = useLocaleRerender();
   recordRender("chat");
   const inputPurpose = inputPurposeFor(mode, canGuess);
@@ -348,7 +351,7 @@ export function RoomChatPanel({
           )}
         </div>
         {isScrolledUp && unreadCount > 0 && (
-          <button type="button" className="chat-scroll-bottom-button" onClick={scrollToBottom}>
+          <button type="button" className="btn btn-primary btn-compact chat-scroll-bottom-button" onClick={scrollToBottom}>
             <ChevronDownIcon size={13} /> {ui.roomChatPanel.unreadMessages({ count: unreadCount })}
           </button>
         )}
@@ -375,6 +378,7 @@ export function RoomChatPanel({
       )}
       {inputVisible && (
         <form
+          ref={composerRef}
           className={`chat-input${mode === "waiting" ? " waiting-chat-form" : ""}${guessedPrompt && mode === "playing" ? " has-guessed" : ""}`}
           onSubmit={(event) => void handleSubmit(event)}
         >
@@ -447,7 +451,7 @@ export function RoomChatPanel({
                 enterKeyHint="send"
               />
             </div>
-            <button type="submit" className="chat-send-button" disabled={sending} aria-label={ui.roomChatPanel.send}>
+            <button type="submit" className="btn btn-primary chat-send-button" disabled={sending} aria-label={ui.roomChatPanel.send}>
               <ChevronRightIcon size={17} />
             </button>
           </div>

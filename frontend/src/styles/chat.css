@@ -31,31 +31,18 @@
   font-size: 13.5px;
 }
 
+/* A compact primary .btn, floated over the foot of the list: a pill, and
+   raised, because it hovers over messages rather than sitting in a row. */
 .chat-scroll-bottom-button {
   position: absolute;
   bottom: 8px;
   left: 50%;
   transform: translateX(-50%);
-  background: var(--primary);
-  color: #ffffff;
-  border: none;
   border-radius: var(--radius-pill);
-  padding: 6px 14px;
-  font-size: 12px;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: var(--shadow-raised);
-  z-index: 10;
-  display: flex;
-  align-items: center;
+  box-shadow: 0 2px 0 var(--primary-edge), var(--shadow-raised);
+  z-index: var(--z-float);
   gap: 4px;
-  transition: background-color var(--dur) ease, transform var(--dur) ease;
-  animation: popIn var(--dur) ease;
-}
-
-.chat-scroll-bottom-button:hover {
-  background: var(--primary-ink);
-  transform: translateX(-50%) translateY(-2px);
+  white-space: nowrap;
 }
 
 /* System lines read quietly, marked with a dot instead of a color. */
@@ -156,6 +143,11 @@
   margin-top: 8px;
   border-top: 1.5px solid var(--line);
   padding-top: 10px;
+  /* The verdict below floats outside this box, in the slot above it; on a
+     phone's playing shell the field is a dock (useBottomDock), and this is
+     the room it reserves so a friend invite or a toast stands above the
+     verdict rather than on it. The chip plus its gap. */
+  --dock-reserve: 44px;
 }
 
 /* The verdict on your own guess. It floats above the field rather than sitting
@@ -167,7 +159,7 @@
   left: 0;
   right: 0;
   bottom: calc(100% + 8px);
-  z-index: 30;
+  z-index: var(--z-float);
   margin: 0;
   padding: 8px 10px;
   border-radius: var(--radius-sm);
@@ -240,24 +232,12 @@
   color: var(--danger);
 }
 
+/* A primary .btn squared to the field beside it. */
 .chat-send-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
   width: 44px;
   height: 44px;
   flex: none;
-  background: var(--primary);
-  color: #fff;
-  border: none;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 0 var(--primary-edge);
-}
-
-.chat-send-button:disabled {
-  background: var(--faint);
-  box-shadow: none;
-  cursor: not-allowed;
+  padding: 0;
 }
 
 /* Shown on phones whether or not the keyboard is up: the desktop feed carries
@@ -310,4 +290,21 @@
 /* Once you have the word the field is for talking to the room, not guessing. */
 .chat-input.has-guessed .chat-input-box input {
   border-color: var(--success);
+}
+
+/* Below the room's two columns the chat is not a column of its own: it takes
+   the height of what it holds, up to a short feed. The playing shell restates
+   all of this for its dock (game-room.css), at a higher specificity. These
+   were in game-room.css, which loads before this sheet, so the ones this sheet
+   also sets (the feed's flex, the field's margin) never applied; they are gone
+   rather than moved, and the input already comes after the feed in the DOM. */
+@media (max-width: 900px) {
+  .room-chat-panel.guess-chat {
+    height: auto;
+  }
+
+  .chat-messages-container,
+  .chat-messages {
+    max-height: 200px;
+  }
 }

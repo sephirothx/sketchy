@@ -32,6 +32,7 @@ import {
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useBottomDock } from "../hooks/useBottomDock";
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -63,7 +64,7 @@ function RemovedFromRoomDialog({
       </div>
       <h3 id={titleId} className="modal-title">{ui.lobbyBrowserPage.removedFromRoom}</h3>
       <p id={descriptionId} className="modal-body">{message}</p>
-      <button ref={okButtonRef} type="button" className="modal-button" onClick={onDismiss}>
+      <button ref={okButtonRef} type="button" className="btn btn-primary" onClick={onDismiss}>
         {ui.lobbyBrowserPage.ok}
       </button>
     </ModalShell>
@@ -148,6 +149,7 @@ function identityMessage(error: unknown): string {
 }
 
 export function LobbyBrowserPage() {
+  const dockRef = useBottomDock();
   const navigate = useNavigate();
   const location = useLocation();
   const nameColor = useSettingsStore((s) => s.nameColor);
@@ -414,7 +416,7 @@ export function LobbyBrowserPage() {
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 
-      <section className="panel lobby-rooms-panel">
+      <section className="surface-card panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
           <h2 className="panel-title">{ui.lobbyBrowserPage.publicRooms}</h2>
           <span className="lobby-rooms-count">
@@ -481,7 +483,7 @@ export function LobbyBrowserPage() {
             {isNarrow ? (
               <button
                 type="button"
-                className={`lobby-filter-toggle lobby-filter-sheet-button${activeFilterCount > 0 ? " has-filters" : ""}`}
+                className="toggle-chip lobby-filter-sheet-button"
                 aria-pressed={activeFilterCount > 0}
                 onClick={() => setFilterSheetOpen(true)}
               >
@@ -499,7 +501,7 @@ export function LobbyBrowserPage() {
                 />
                 <button
                   type="button"
-                  className="lobby-filter-toggle"
+                  className="toggle-chip"
                   aria-pressed={hideFullRooms}
                   onClick={() => setHideFullRooms((v) => !v)}
                 >
@@ -507,7 +509,7 @@ export function LobbyBrowserPage() {
                 </button>
                 <button
                   type="button"
-                  className="lobby-filter-toggle"
+                  className="toggle-chip"
                   aria-pressed={hideInProgressRooms}
                   onClick={() => setHideInProgressRooms((v) => !v)}
                 >
@@ -563,7 +565,9 @@ export function LobbyBrowserPage() {
                 onClick={() => setHideFullRooms((v) => !v)}
               >
                 <span>{ui.lobbyBrowserPage.hideFullRooms}</span>
-                <span className={`lobby-filter-switch${hideFullRooms ? " is-on" : ""}`} aria-hidden="true" />
+                <span className={`switch-track${hideFullRooms ? " is-on" : ""}`} aria-hidden="true">
+                  <span className="switch-thumb" />
+                </span>
               </button>
               <button
                 type="button"
@@ -572,7 +576,9 @@ export function LobbyBrowserPage() {
                 onClick={() => setHideInProgressRooms((v) => !v)}
               >
                 <span>{ui.lobbyBrowserPage.hideGamesProgress}</span>
-                <span className={`lobby-filter-switch${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true" />
+                <span className={`switch-track${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true">
+                  <span className="switch-thumb" />
+                </span>
               </button>
             </div>
           </BottomSheet>
@@ -621,7 +627,7 @@ export function LobbyBrowserPage() {
           header controls a desktop gets: three actions beside the wordmark is
           what used to push this header onto two rows. */}
       {isNarrow && (
-        <div className="lobby-dock">
+        <div className="lobby-dock" ref={dockRef}>
           {/* The page-top alert is out of sight from down here, and behind the
               code sheet entirely, so on a phone the message follows the
               control. Only one of the three renders at a time. */}

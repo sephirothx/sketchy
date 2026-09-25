@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { waitingRequestCount } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { useOpenOverlay } from "../hooks/useOverlayRoute";
@@ -118,6 +119,8 @@ export function AccountMenu({ compact = false, inRoom = false }: {
   // keeps Tab inside, moves focus to the first item on open, and returns it to
   // the chip on close; the arrow keys are handled below.
   useFocusTrap(menuRef, { active: menuOpen });
+  // In a room, Back closes the menu as Escape does (R-UX-15); elsewhere a no-op.
+  useBackCloses(menuOpen, () => setMenuOpen(false));
 
   function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
@@ -197,7 +200,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
         }
       >
         <span
-          className={`identity-avatar avatar-player${
+          className={`identity-avatar ${isGuest ? "avatar-guest" : "avatar-player"}${
             !isGuest && user.avatarUrl && !doodleNameOf(user.avatarUrl) ? " has-picture" : ""
           }`}
           aria-hidden="true"
@@ -209,8 +212,18 @@ export function AccountMenu({ compact = false, inRoom = false }: {
             avatarInitial(shownName)
           )}
         </span>
-        {!compact && <span className="identity-name">{shownName}</span>}
-        {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}
+        {!compact && (
+          <span className={isGuest ? "identity-name is-guest" : "identity-name"}>{shownName}</span>
+        )}
+        {/* The button's own label already says the name is not saved, so the
+            dot stays silent to a screen reader; the title is for a pointer. */}
+        {isGuest && (
+          <span
+            className="identity-unclaimed"
+            aria-hidden="true"
+            title={ui.accountMenu.guestNameNotSaved}
+          />
+        )}
         {/* A dot on the chip, because the menu is the only way to the friends
             surface and a request that arrived while somebody was drawing has
             nowhere else to be seen. Silent to a screen reader — the count is
@@ -463,6 +476,7 @@ export function AuthDialog({
   const canUsePasskeys = passkeysAvailable();
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
+  useBackCloses(true, onClose);
   const isClaim = mode === "claim";
 
   async function submit(event: React.FormEvent) {
@@ -566,7 +580,7 @@ export function AuthDialog({
           <>
             <button
               type="button"
-              className="modal-button auth-passkey"
+              className="btn btn-primary auth-passkey"
               onClick={() => void signInWithPasskey()}
               disabled={busy}
             >
@@ -677,7 +691,7 @@ export function AuthDialog({
 
           {error && <p className="auth-error" role="alert">{error}</p>}
 
-          <button type="submit" className="modal-button" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? ui.accountMenu.pleaseWait : isClaim ? ui.accountMenu.createAccount : ui.accountMenu.logIn}
           </button>
           {/* Only when creating one: this is the moment an account starts,

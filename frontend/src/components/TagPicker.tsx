@@ -154,7 +154,7 @@ export function TagPicker({ vocabulary, chosen, max, onChange, nameOf }: TagPick
                 <button
                   key={tag.slug}
                   type="button"
-                  className={held ? "toggle-chip is-selected" : "toggle-chip"}
+                  className="toggle-chip is-small"
                   aria-pressed={held}
                   // At the cap the rest go quiet rather than disappearing:
                   // the vocabulary is the same either way, and a set that

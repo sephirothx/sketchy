@@ -3,15 +3,19 @@ import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { SectionLabel } from "../components/ui/Card";
 import { ApiError, apiRequest } from "../lib/api";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import { promptLanguageLabel, selectionForLanguage } from "../lib/promptLanguages";
 import {
   PROMPT_STATS_SORTS,
   coverageNote,
   isPromptStatsSort,
   matchingPrompts,
+  nothingRanked,
+  plainPromptNames,
+  searchExample,
   searchNote,
   statsRows,
 } from "../lib/promptStats";
+import { useSettingsStore } from "../store/settingsStore";
 import type {
   HintMode,
   PromptListSummary,
@@ -28,6 +32,8 @@ import "../styles/lazy/prompt-stats.css";
    thirty screens of scroll. Paged, with the count stated, so nothing is
    silently dropped either. */
 const PAGE_SIZE = 40;
+/* A list of bare names packs into columns, so a page of it can hold more. */
+const PLAIN_PAGE_SIZE = 120;
 
 const WINDOWS = [
   { value: "all", get label() { return ui.promptStatsPage.allTime; }, days: null },
@@ -40,12 +46,14 @@ const SCORING_FILTERS: Array<{ value: "all" | ScoringMode; label: string }> = [
   { value: "default", get label() { return ui.promptStatsPage.defaultScoring; } },
   { value: "pressure", get label() { return ui.promptStatsPage.pressureScoring; } },
 ];
+// The hint modes by the names the room setup gives them (GLOSSARY: Hint
+// mode), so a filter here reads as the setting it slices by.
 const HINT_FILTERS: Array<{ value: "all" | HintMode; label: string }> = [
   { value: "all", get label() { return ui.promptStatsPage.allHintModes; } },
-  { value: "none", get label() { return ui.promptStatsPage.noHints; } },
-  { value: "checkpoints", get label() { return ui.promptStatsPage.checkpointHints; } },
-  { value: "purchase", get label() { return ui.promptStatsPage.purchasedHints; } },
-  { value: "wheel", get label() { return ui.promptStatsPage.letterWheel; } },
+  { value: "none", get label() { return ui.roomSetup.noHints; } },
+  { value: "checkpoints", get label() { return ui.roomSetup.timedHints; } },
+  { value: "purchase", get label() { return ui.roomSetup.buyLetters; } },
+  { value: "wheel", get label() { return ui.roomSetup.wheelOfFortune; } },
 ];
 
 export function PromptStatsPage() {
@@ -53,18 +61,23 @@ export function PromptStatsPage() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [lists, setLists] = useState<PromptListSummary[]>([]);
+  const [lists, setLists] = useState<PromptListSummary[] | null>(null);
   const [stats, setStats] = useState<PromptStatsResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
-  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const [pages, setPages] = useState(1);
   const [query, setQuery] = useState("");
+  const playLanguage = useSettingsStore((state) => state.promptLanguage);
 
-  // No slug in the path means "whichever list comes first", which is only
-  // knowable once the lists have loaded - so the table waits rather than
-  // guessing at a name.
-  const [firstSlug, setFirstSlug] = useState<string | null>(null);
-  const slug = params.slug ?? firstSlug;
+  // No slug in the path means the Standard list of the language this player
+  // plays in, which is only knowable once the lists have loaded - so the
+  // table waits rather than guessing at a name. It used to be whichever list
+  // came first, and the lists come ordered by name, so an English reader
+  // landed on "Deutsch — Erweitert".
+  const defaultSlug = lists
+    ? selectionForLanguage(lists, playLanguage)[0] ?? lists[0]?.slug ?? null
+    : null;
+  const slug = params.slug ?? defaultSlug;
 
   const requested = searchParams.get("sort") ?? "hardest";
   const sort: PromptStatsSort = isPromptStatsSort(requested) ? requested : "hardest";
@@ -88,7 +101,6 @@ export function PromptStatsPage() {
         const loaded = await apiRequest<PromptListSummary[]>("/api/prompt-lists");
         if (cancelled) return;
         setLists(loaded);
-        setFirstSlug(loaded[0]?.slug ?? null);
         if (loaded.length === 0) setLoading(false);
       } catch {
         if (!cancelled) {
@@ -140,9 +152,15 @@ export function PromptStatsPage() {
     };
   }, [slug, sort, windowFilter, scoringMode, hintMode]);
 
-  const list = lists.find((entry) => entry.slug === slug) ?? null;
+  const list = lists?.find((entry) => entry.slug === slug) ?? null;
+  const listLanguage = list?.language ?? playLanguage;
   const matches = stats ? matchingPrompts(stats.prompts, query) : [];
-  const rows = statsRows(matches);
+  const plain = stats !== null && nothingRanked(stats);
+  const rows = plain ? [] : statsRows(matches);
+  const names = plain ? plainPromptNames(matches, listLanguage) : [];
+  const shownTotal = plain ? names.length : rows.length;
+  const visibleCount = pages * (plain ? PLAIN_PAGE_SIZE : PAGE_SIZE);
+  const example = stats ? searchExample(stats.prompts, listLanguage) : null;
 
   // Any change to what is being listed starts the paging over; keeping an old
   // offset across a new filter would show a slice of something else.
@@ -150,7 +168,7 @@ export function PromptStatsPage() {
   const [pagedKey, setPagedKey] = useState(rowsKey);
   if (pagedKey !== rowsKey) {
     setPagedKey(rowsKey);
-    setVisibleCount(PAGE_SIZE);
+    setPages(1);
   }
   const coverage = stats
     ? coverageNote(stats.ratedCount, stats.unratedCount, stats.minRatedGuessers)
@@ -183,7 +201,7 @@ export function PromptStatsPage() {
       </header>
 
       <div className="prompt-stats-controls">
-        {lists.length > 1 && (
+        {lists && lists.length > 1 && (
           <div className="prompt-stats-control">
             <label htmlFor="prompt-stats-list">{ui.promptStatsPage.promptList}</label>
             <select
@@ -193,7 +211,7 @@ export function PromptStatsPage() {
             >
               {lists.map((entry) => (
                 <option key={entry.slug} value={entry.slug}>
-                  {entry.name} — {promptLanguageLabel(entry.language)} ({entry.promptCount})
+                  {entry.name} ({entry.promptCount})
                 </option>
               ))}
             </select>
@@ -237,7 +255,7 @@ export function PromptStatsPage() {
             id="prompt-stats-search"
             type="search"
             value={query}
-            placeholder={ui.promptStatsPage.rollerCoaster}
+            placeholder={example ?? undefined}
             onChange={(event) => setQuery(event.target.value)}
           />
         </div>
@@ -250,10 +268,18 @@ export function PromptStatsPage() {
       )}
       {!loading && !error && found && <p className="prompt-stats-note">{found}</p>}
 
+      {!loading && !error && names.length > 0 && (
+        <ul className="prompt-stats-plain" lang={listLanguage}>
+          {names.slice(0, visibleCount).map((name) => <li key={name}>{name}</li>)}
+        </ul>
+      )}
+
       {!loading && !error && rows.length > 0 && (
         <div className="prompt-stats-table-scroll">
           <table className="prompt-stats-table">
-            <caption>
+            {/* For a screen reader moving between tables. On screen it only
+                restated the two selects above it. */}
+            <caption className="visually-hidden">
               {list ? `${list.name} (${promptLanguageLabel(list.language)}), ` : ""}
               {PROMPT_STATS_SORTS.find((option) => option.value === sort)
                 ?.label.toLowerCase()}
@@ -261,7 +287,7 @@ export function PromptStatsPage() {
             <thead>
               <tr>
                 <th scope="col" className="section-label">{ui.promptStatsPage.prompt}</th>
-                <th scope="col" className="section-label">{ui.promptStatsPage.howGoes}</th>
+                <th scope="col" className="section-label">{ui.promptStatsPage.howHard}</th>
                 <th scope="col" className="section-label">{ui.promptStatsPage.guessed}</th>
                 <th scope="col" className="section-label">{ui.promptStatsPage.picked}</th>
                 <th scope="col" className="section-label">{ui.promptStatsPage.drawn}</th>
@@ -291,20 +317,22 @@ export function PromptStatsPage() {
               ))}
             </tbody>
           </table>
-          {rows.length > visibleCount && (
-            <div className="prompt-stats-more">
-              <button
-                type="button"
-                className="btn btn-secondary"
-                onClick={() => setVisibleCount((count) => count + PAGE_SIZE)}
-              >
-                {ui.promptStatsPage.showMore({ count: Math.min(PAGE_SIZE, rows.length - visibleCount) })}
-              </button>
-              <p className="prompt-stats-note">
-                {ui.promptStatsPage.showingOf({ shown: visibleCount, total: rows.length })}
-              </p>
-            </div>
-          )}
+        </div>
+      )}
+      {!loading && !error && shownTotal > visibleCount && (
+        <div className="prompt-stats-more">
+          <button
+            type="button"
+            className="btn btn-secondary"
+            onClick={() => setPages((count) => count + 1)}
+          >
+            {ui.promptStatsPage.showMore({
+              count: Math.min(plain ? PLAIN_PAGE_SIZE : PAGE_SIZE, shownTotal - visibleCount),
+            })}
+          </button>
+          <p className="prompt-stats-note">
+            {ui.promptStatsPage.showingOf({ shown: visibleCount, total: shownTotal })}
+          </p>
         </div>
       )}
     </div>

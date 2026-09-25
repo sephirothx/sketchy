@@ -166,7 +166,7 @@ def build_session(seed: int, *, long_names: bool) -> dict[str, list[bytes]]:
                 if stroke % 4 == 0 and churn_index < len(churn_states):
                     add("room_state", json_event("room_state", churn_states[churn_index])); churn_index += 1
                 if stroke % 9 == 0:
-                    add("guess", json_event("correct_guess", {"playerId": f"p{stroke}", "nickname": f"Player_{stroke}", "points": 140}))
+                    add("guess", json_event("correct_guess", {"playerId": f"p{stroke}", "nickname": f"Player_{stroke}", "points": 140, "seconds": 12.3}))
 
     turn(first, churn[1:7], 0)
     add("turn", json_event("turn_ended", {"prompt": "snail", "drawerId": "p0", "scores": [{"playerId": f"p{i}", "points": i * 37} for i in range(16)], "reason": "time"}))

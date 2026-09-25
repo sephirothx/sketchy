@@ -1,5 +1,6 @@
 import type { GameHighlight, HighlightName } from "../types";
 import { ui } from "../content/ui/index.ts";
+import { formatGuessTime } from "./guessTime.ts";
 
 /**
  * One highlight reduced to what the final screen draws: a label, a headline
@@ -16,12 +17,6 @@ export interface HighlightPresentation {
   name?: HighlightName;
   /** Where in the recap the card can take you, when it is about a drawing. */
   drawingIndex?: number;
-}
-
-function seconds(value: number): string {
-  // One decimal reads as a stopwatch; two reads as a measurement, and the
-  // difference between 3.24s and 3.2s is not a thing anyone is comparing.
-  return `${value.toFixed(1)}s`;
 }
 
 function percent(ratio: number): string {
@@ -44,7 +39,9 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
       return {
         kind: highlight.kind,
         label: ui.gameHighlights.fastestGuess,
-        value: seconds(highlight.seconds),
+        // The chat line, the players panel and the results card's formatter,
+        // so the game's fastest guess reads as it did when it landed.
+        value: formatGuessTime(highlight.seconds),
         prompt: highlight.prompt,
         name: highlight,
       };
@@ -59,7 +56,7 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
       return {
         kind: highlight.kind,
         label: ui.gameHighlights.quickestOnAverage,
-        value: seconds(highlight.seconds),
+        value: formatGuessTime(highlight.seconds),
         name: highlight,
       };
     case "most_reacted_drawing":

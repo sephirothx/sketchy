@@ -31,7 +31,7 @@
   border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   display: grid;
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 11.5px;
   gap: 3px;
   line-height: 1.5;

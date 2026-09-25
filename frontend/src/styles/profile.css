@@ -39,8 +39,33 @@
   opacity: 0.75;
 }
 
+/* One heading pattern for every panel on the page: the panel's own padding
+   above the title, one 12px gap below it, and the lobby's 22px panel title.
+   Game history's title shares a row with its filter, so there the row keeps
+   the gap and the title keeps none - it used to take the browser's default
+   margins and float in 40px while the others sat against their content. */
+.profile-page .panel > h2,
+.profile-history-head {
+  margin: 0 0 12px;
+}
+
+.profile-history-head h2 {
+  font-size: 22px;
+  margin: 0;
+}
+
+/* A panel's one-line note sits in the heading's gap, not a paragraph's. */
+.profile-page .panel > .profile-note {
+  margin: 0;
+}
+
+/* Turn counts under the "no finished game yet" line, clear of it. */
+.profile-statistics .profile-note + .profile-stats-small {
+  padding-top: 12px;
+}
+
 .profile-claim p {
-  margin: 4px 0 12px;
+  margin: 0 0 12px;
   font-size: 14px;
 }
 
@@ -192,8 +217,7 @@
 
 /* The round table is the one element that cannot shrink to a phone: it scrolls
    inside its own box rather than widening the page. */
-.profile-turns,
-.profile-score-events {
+.profile-turns {
   width: 100%;
   border-collapse: collapse;
   font-size: 13px;
@@ -202,17 +226,14 @@
 }
 
 .profile-turns th,
-.profile-turns td,
-.profile-score-events th,
-.profile-score-events td {
+.profile-turns td {
   padding: 6px 10px;
   text-align: left;
   border-bottom: 1px solid var(--line);
   white-space: nowrap;
 }
 
-.profile-turns th,
-.profile-score-events th {
+.profile-turns th {
   color: var(--muted);
 }
 
@@ -278,11 +299,6 @@
   border-radius: var(--radius-sm);
   display: block;
   width: 100%;
-}
-
-.profile-shelf-open:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
 }
 
 .profile-shelf-canvas {
@@ -389,49 +405,13 @@
 
 
 
-/* The info link riding along with a prompt-list chip. */
+/* A prompt-list chip, with its "how this list plays" hint riding along. */
 .prompt-list-chip-group {
   align-items: center;
   display: inline-flex;
   gap: 2px;
 }
 
-/* The mark reads small, but the target it sits in is 24px square: below that
-   it fails WCAG 2.2 target-size, which the axe suite enforces. */
-.prompt-list-chip-info {
-  align-items: center;
-  color: var(--muted);
-  display: inline-flex;
-  height: 24px;
-  justify-content: center;
-  text-decoration: none;
-  width: 24px;
-}
-
-.prompt-list-chip-info > span {
-  align-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-pill);
-  display: inline-flex;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 11px;
-  font-style: italic;
-  font-weight: 700;
-  height: 18px;
-  justify-content: center;
-  line-height: 1;
-  width: 18px;
-}
-
-.prompt-list-chip-info:hover,
-.prompt-list-chip-info:focus-visible {
-  color: var(--primary);
-}
-
-.prompt-list-chip-info:hover > span,
-.prompt-list-chip-info:focus-visible > span {
-  border-color: var(--primary);
-}
 
 
 
@@ -463,7 +443,7 @@
 /* A game that stopped is labelled rather than hidden once it is shown, so the
    odd scores in it are explained instead of merely odd. */
 .profile-presence.is-online {
-  color: var(--color-success, #2e8b57);
+  color: var(--success-ink);
   font-weight: 600;
 }
 
@@ -494,13 +474,13 @@
   flex: none;
 }
 
-.profile-game-place.is-place-1 { background: color-mix(in srgb, var(--gold) 16%, transparent); color: var(--gold); }
-.profile-game-place.is-place-2 { background: color-mix(in srgb, var(--silver) 16%, transparent); color: var(--silver); }
-.profile-game-place.is-place-3 { background: color-mix(in srgb, var(--bronze) 16%, transparent); color: var(--bronze); }
+.profile-game-place.is-place-1 { background: var(--gold-soft); color: var(--gold); }
+.profile-game-place.is-place-2 { background: var(--silver-soft); color: var(--silver); }
+.profile-game-place.is-place-3 { background: var(--bronze-soft); color: var(--bronze); }
 
 /* The quieter second row of statistics. */
 .profile-stats-small {
-  display: flex !important;
+  display: flex;
   flex-wrap: wrap;
   gap: 8px 28px;
   padding: 6px 4px 0;

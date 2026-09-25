@@ -171,7 +171,7 @@ export function PromptDisplay({
           {hintSpend > 0 && (
             <span
               className="hint-spend-total"
-              title={ui.promptDisplay.deductedFromYourScoreIfYou}
+              title={ui.promptDisplay.hintSpendComesOutOfTurnPoints}
             >
               {ui.promptDisplay.hintSpendTotal({ spent: hintSpend })}
             </span>
