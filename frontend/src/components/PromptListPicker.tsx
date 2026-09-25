@@ -191,7 +191,7 @@ export function PromptListPicker({
             <span key={wl.slug} className="prompt-list-chip-group">
               <button
                 type="button"
-                className={`toggle-chip ${isSelected ? "is-selected" : ""}`}
+                className="toggle-chip"
                 aria-pressed={isSelected}
                 disabled={disabled || (isSelected && isOnlySelected)}
                 title={wl.description || ui.promptListPicker.namePromptCountPrompts({ name: wl.name, promptCount: wl.promptCount })}

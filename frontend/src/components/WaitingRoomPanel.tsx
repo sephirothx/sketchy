@@ -237,7 +237,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
 
       {/* The code, read at a glance or tapped to copy, and one way to send it.
           Six bordered cells and two buttons spent 237px on that. */}
-      <section className="waiting-card waiting-invite-card">
+      <section className="surface-card waiting-card waiting-invite-card">
         <p className="waiting-invite-kicker">{ui.waitingRoomPanel.inviteYourFriends}</p>
         {code && (
           <p className="waiting-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</p>
@@ -275,7 +275,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       {/* Who is here, as faces rather than a list in another column. The one
           thing you watch while waiting used to be the last thing on the page,
           below the chat card. */}
-      {isNarrow && <section className="waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
+      {isNarrow && <section className="surface-card waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
         <div className="waiting-roster-head">
           <h2 id="waiting-roster-title">{ui.waitingRoomPanel.inTheRoom}</h2>
           <span className="waiting-roster-count">
@@ -356,7 +356,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           said them in a different order and wording from every other place
           a room is described. On a phone the footer docks to the bottom of
           the screen, as Start did - it sat below the fold otherwise. */}
-      <section className="waiting-card waiting-rules-card" aria-labelledby="waiting-rules-title">
+      <section className="surface-card waiting-card waiting-rules-card" aria-labelledby="waiting-rules-title">
         <h2 id="waiting-rules-title" className="visually-hidden">{ui.inviteEntryPage.roomRules}</h2>
         <RoomFacts
           testId="waiting-facts"

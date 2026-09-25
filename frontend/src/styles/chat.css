@@ -313,3 +313,20 @@
 .chat-input.has-guessed .chat-input-box input {
   border-color: var(--success);
 }
+
+/* Below the room's two columns the chat is not a column of its own: it takes
+   the height of what it holds, up to a short feed. The playing shell restates
+   all of this for its dock (game-room.css), at a higher specificity. These
+   were in game-room.css, which loads before this sheet, so the ones this sheet
+   also sets (the feed's flex, the field's margin) never applied; they are gone
+   rather than moved, and the input already comes after the feed in the DOM. */
+@media (max-width: 900px) {
+  .room-chat-panel.guess-chat {
+    height: auto;
+  }
+
+  .chat-messages-container,
+  .chat-messages {
+    max-height: 200px;
+  }
+}

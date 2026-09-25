@@ -160,7 +160,7 @@ export function RoomSetupForm({
 
   return (
     <div className="create-room-sections">
-      <section className="form-section">
+      <section className="surface-card form-section">
         <div className="form-section-head">
           <h2>{ui.roomSetupForm.basics}</h2>
         </div>
@@ -259,7 +259,7 @@ export function RoomSetupForm({
         </div>
       </section>
 
-      <details className="form-section is-collapsible">
+      <details className="surface-card form-section is-collapsible">
         <summary>
           <h2>{ui.roomSetupForm.prompts}</h2>
           {promptsSummary && <span className="form-section-summary">{promptsSummary}</span>}
@@ -289,7 +289,7 @@ export function RoomSetupForm({
         </div>
       </details>
 
-      <details className="form-section is-collapsible">
+      <details className="surface-card form-section is-collapsible">
         <summary>
           <h2>{ui.roomSetupForm.drawing}</h2>
           <span className="form-section-summary">{drawingSummary}</span>
@@ -315,7 +315,7 @@ export function RoomSetupForm({
         </div>
       </details>
 
-      <details className="form-section is-collapsible">
+      <details className="surface-card form-section is-collapsible">
         <summary>
           <h2>{ui.roomSetupForm.scoringHints}</h2>
           <span className="form-section-summary">{scoringSummary}</span>

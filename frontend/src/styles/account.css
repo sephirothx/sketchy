@@ -331,7 +331,7 @@
   padding: 8px 12px;
 }
 .session-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.session-revoke-all { background: var(--danger); border-color: var(--danger) !important; color: var(--card); }
+.session-actions .session-revoke-all { background: var(--danger); border-color: var(--danger); color: var(--card); }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
 /* A session used from a browser it was not issued to. Given the warning
@@ -481,7 +481,7 @@
 
 .two-factor-choose { text-align: left; }
 .two-factor-choose .modal-hint { margin: 2px 0 0; }
-.two-factor-fallback { text-align: center; margin-top: 12px !important; }
+.two-factor-choose .two-factor-fallback { text-align: center; margin-top: 12px; }
 
 /* What the account can sign in with. A row each, because the point of the
    list is that there is more than one. */
@@ -564,7 +564,6 @@
 .account-data-heading-row { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
 .account-data-heading-row button,
 .account-export-list a,
-.account-danger-zone button,
 .account-data-actions button {
   border: 1px solid var(--line-strong);
   border-radius: 8px;
@@ -581,24 +580,18 @@
 .account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
 .account-export-note { color: var(--ink); line-height: 1.4; }
 .account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--card); text-decoration: none; }
-.account-danger-zone { border-color: var(--danger-soft); }
-.account-danger-zone > p { font-size: 14px; line-height: 1.5; }
-.account-delete-start, .account-delete-confirm { background: var(--danger); border-color: var(--danger) !important; color: var(--card) !important; }
+.account-delete-confirm { background: var(--danger); border-color: var(--danger); color: var(--card); }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
 .account-delete-form input { background: var(--card); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-size: 16px; padding: 9px 11px; }
-.account-delete-actions, .account-data-actions { display: flex; gap: 10px; justify-content: flex-end; }
+.account-data-actions { display: flex; gap: 10px; justify-content: flex-end; }
 .account-data-actions { margin-top: 18px; }
-.account-danger-zone button:disabled, .account-data-heading-row button:disabled { cursor: wait; opacity: .6; }
+.account-data-heading-row button:disabled { cursor: wait; opacity: .6; }
 
 /* First-run block (#588, #590): a name tag, the line of the visit beside it,
    and the account as one quiet line. One layout at every width - the tag, then
    the words - so the DOM and the screen agree and there is one code path. */
 .first-run {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   container: first-run / inline-size;
   margin-bottom: 16px;
   overflow: hidden;
@@ -867,36 +860,6 @@
   .first-run-heading {
     font-size: 22px;
   }
-}
-
-.settings-account-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-
-.settings-account-status {
-  font-size: 13px;
-  opacity: 0.85;
-}
-
-.settings-account-action {
-  border: 1px solid var(--line-strong);
-  background: transparent;
-  color: inherit;
-  border-radius: 8px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  min-height: 32px;
-}
-
-.settings-locked-hint {
-  margin: 0;
-  font-size: 13px;
-  opacity: 0.75;
 }
 
 /* Post-game claim prompt. */

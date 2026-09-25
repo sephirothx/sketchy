@@ -5,6 +5,7 @@ import { CommunityPromptsDialog } from "../components/CommunityPromptsDialog";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import { ANY_LANGUAGE, LanguagePicker } from "../components/LanguagePicker";
 import { PromptContentReportDialog } from "../components/PromptContentReportDialog";
+import { SegmentedControl } from "../components/RoomSetupControls";
 import {
   BackIcon,
   CopyIcon,
@@ -352,22 +353,19 @@ export function CommunityCataloguePage() {
 
         {/* Two orders, so both are on screen: a menu that has to be opened to
             find out it holds two things is a menu for nothing. */}
-        <span className="community-catalogue-sort" role="group" aria-label={ui.communityCataloguePage.sortBy}>
-          <button
-            type="button"
-            aria-pressed={filters.sort === "stars"}
-            onClick={() => applyFilters({ ...filters, sort: "stars" })}
-          >{ui.communityCataloguePage.mostStarred}</button>
-          <button
-            type="button"
-            aria-pressed={filters.sort === "newest"}
-            onClick={() => applyFilters({ ...filters, sort: "newest" })}
-          >{ui.communityCataloguePage.newest}</button>
-        </span>
+        <SegmentedControl
+          label={ui.communityCataloguePage.sortBy}
+          value={filters.sort}
+          options={[
+            { value: "stars", label: ui.communityCataloguePage.mostStarred },
+            { value: "newest", label: ui.communityCataloguePage.newest },
+          ]}
+          onChange={(sort) => applyFilters({ ...filters, sort })}
+        />
 
         {registered && <button
           type="button"
-          className="community-catalogue-pill"
+          className="toggle-chip"
           aria-pressed={filters.starred}
           aria-label={ui.communityCataloguePage.onlyOnesIStarred}
           onClick={() => applyFilters({ ...filters, starred: !filters.starred })}
@@ -381,7 +379,7 @@ export function CommunityCataloguePage() {
             filter nobody can see is a filter nobody can turn off. */}
         {vocabulary.length > 0 && <button
           type="button"
-          className="community-catalogue-pill"
+          className="toggle-chip"
           aria-pressed={tagsOpen}
           aria-expanded={tagsOpen}
           onClick={() => setTagsOpen(!tagsOpen)}
@@ -402,7 +400,7 @@ export function CommunityCataloguePage() {
           <button
             type="button"
             key={tag.slug}
-            className={filters.tags.includes(tag.slug) ? "toggle-chip is-selected" : "toggle-chip"}
+            className="toggle-chip is-small"
             aria-pressed={filters.tags.includes(tag.slug)}
             onClick={() => applyFilters(withTag(filters, tag.slug, vocabulary.map((entry) => entry.slug)))}
           >{tagName(tag.slug)}</button>
@@ -428,7 +426,7 @@ export function CommunityCataloguePage() {
                     const metaId = `${idPrefix}-${list.id}`;
                     return <li
                       key={list.id}
-                      className={selected ? "community-catalogue-card is-selected" : "community-catalogue-card"}
+                      className={selected ? "surface-card community-catalogue-card is-selected" : "surface-card community-catalogue-card"}
                     >
                       {/* The name is the card's one real control, stretched
                           over the card, and the star is raised above it: a
@@ -467,7 +465,7 @@ export function CommunityCataloguePage() {
         </div>
 
         <div className="community-catalogue-pane-slot">
-          {selectedId && detail ? <section className="panel community-catalogue-pane">
+          {selectedId && detail ? <section className="surface-card panel community-catalogue-pane">
             <button type="button" className="btn btn-ghost btn-compact community-catalogue-back" onClick={closeList}>
               <BackIcon size={15} />{ui.communityCataloguePage.allLists}
             </button>
@@ -561,14 +559,14 @@ export function CommunityCataloguePage() {
               // Said where the list would have been, with the way out beside
               // it. On a phone the cards are hidden while a list is named in
               // the address, so without this button the page is a dead end.
-              ? <section className="panel community-catalogue-pane is-failed">
+              ? <section className="surface-card panel community-catalogue-pane is-failed">
                   <p className="community-catalogue-failure" role="alert">{openFailed.sentence}</p>
                   <button type="button" className="btn btn-secondary btn-compact" onClick={closeList}>
                     <BackIcon size={15} />{ui.communityCataloguePage.allLists}
                   </button>
                 </section>
             : selectedId
-              ? <section className="panel community-catalogue-pane">
+              ? <section className="surface-card panel community-catalogue-pane">
                   <p className="community-catalogue-empty">{ui.communityCataloguePage.loading}</p>
                 </section>
               // Nothing chosen: ask, rather than open a list the reader did

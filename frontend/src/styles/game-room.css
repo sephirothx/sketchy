@@ -256,7 +256,10 @@
   .waiting-start-button,
   .custom-prompts-apply { width: 100%; }
   .waiting-card { padding: 16px; }
-  .waiting-room-actions { justify-content: flex-start; width: 100%; }
+  .waiting-room-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -538,16 +541,24 @@
   width: 100%;
 }
 .waiting-card {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 20px 22px;
 }
 .waiting-card h1,
-.waiting-card h2 { color: var(--ink); font-family: var(--font-display); font-weight: 600; margin: 0; }
+.waiting-card h2 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+}
 .waiting-card h2 { font-size: 18px; }
-.waiting-card-kicker { color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: .09em; margin: 0 0 5px; text-transform: uppercase; }
+.waiting-card-kicker {
+  color: var(--faint);
+  font-size: 11.5px;
+  font-weight: 800;
+  letter-spacing: .09em;
+  margin: 0 0 5px;
+  text-transform: uppercase;
+}
 
 /* Which room this is. Out of the invite card, which is about getting people
    into it rather than naming it. */
@@ -801,50 +812,253 @@
 }
 
 
-.waiting-ready-count { background: var(--well); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 800; padding: 4px 11px; white-space: nowrap; }
-.waiting-ready-count.is-ready { background: var(--success-soft); border-color: transparent; color: var(--success-ink); }
-.waiting-custom-prompts { border-top: 1.5px solid var(--line); margin-top: 16px; padding-top: 14px; }
-.waiting-custom-prompts > summary { align-items: center; color: var(--primary); cursor: pointer; display: flex; font-size: 14px; font-weight: 800; gap: 8px; list-style: none; width: fit-content; }
+.waiting-ready-count {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 11px;
+  white-space: nowrap;
+}
+.waiting-ready-count.is-ready {
+  background: var(--success-soft);
+  border-color: transparent;
+  color: var(--success-ink);
+}
+.waiting-custom-prompts {
+  border-top: 1.5px solid var(--line);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+.waiting-custom-prompts > summary {
+  align-items: center;
+  color: var(--primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 8px;
+  list-style: none;
+  width: fit-content;
+}
 .waiting-custom-prompts > summary::-webkit-details-marker { display: none; }
-.waiting-custom-prompts > summary::before { border-bottom: 2px solid currentColor; border-right: 2px solid currentColor; content: ""; height: 6px; transform: rotate(-45deg); transition: transform .16s ease; width: 6px; }
+.waiting-custom-prompts > summary::before {
+  border-bottom: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  content: "";
+  height: 6px;
+  transform: rotate(-45deg);
+  transition: transform .16s ease;
+  width: 6px;
+}
 .waiting-custom-prompts[open] > summary::before { transform: rotate(45deg) translate(-2px, -2px); }
-.waiting-custom-prompts-content { background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-sm); margin-top: 12px; padding: 14px; }
-.waiting-custom-prompts-content p { color: var(--muted); font-size: 13px; margin: 0; }
-.waiting-custom-prompts-heading { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
-.waiting-custom-prompts-heading strong { color: var(--ink); display: block; font-size: 14px; margin-bottom: 3px; }
-.waiting-custom-prompts-heading > span { background: var(--primary-soft); border-radius: 999px; color: var(--primary-ink); flex: 0 0 auto; font-size: 12px; font-weight: 800; padding: 4px 8px; }
-.waiting-custom-prompts-search { color: var(--muted); display: block; font-size: 12px; font-weight: 700; margin-top: 14px; }
-.waiting-custom-prompts-search span { display: block; margin-bottom: 5px; }
-.waiting-custom-prompts-search input { background: var(--field); border: 1.5px solid var(--line-strong); border-radius: var(--radius-sm); box-sizing: border-box; color: var(--ink); font: inherit; padding: 9px 10px; width: 100%; }
-.waiting-custom-prompts-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.waiting-custom-prompts-filters button { background: var(--card); border: 1.5px solid var(--line-strong); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 800; padding: 5px 11px; }
-.waiting-custom-prompts-filters button[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
-.waiting-custom-prompts-result-count { margin-top: 12px !important; }
-.waiting-custom-prompts-list { align-content: start; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; max-height: 190px; min-height: 48px; overflow-y: auto; padding: 9px; }
-.waiting-custom-prompts-list span { background: var(--primary-soft); border: 1px solid transparent; border-radius: 6px; color: var(--primary-ink); font-size: 13px; line-height: 1.3; padding: 5px 7px; }
-.waiting-custom-prompts-list span:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 1px; }
-.waiting-custom-prompts-list.is-virtualized { display: block; height: 190px; padding: 0; position: relative; }
-.waiting-custom-prompts-list.is-virtualized:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
-.waiting-custom-prompts-virtual-space { position: relative; width: 100%; }
-.waiting-custom-prompts-virtual-row { box-sizing: border-box; display: grid; gap: 6px; left: 0; padding: 3px 9px; position: absolute; top: 0; width: 100%; }
-.waiting-custom-prompts-virtual-row span { box-sizing: border-box; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.custom-prompt-full-text-tooltip { background: var(--ink); border-radius: 7px; box-shadow: var(--shadow-raised); box-sizing: border-box; color: var(--paper); font-size: 13px; font-weight: 600; line-height: 1.35; max-width: calc(100vw - 16px); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: fixed; width: max-content; z-index: 1000; }
-.waiting-custom-prompts-empty { background: var(--card); border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); margin-top: 6px !important; padding: 16px; text-align: center; }
+.waiting-custom-prompts-content {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-top: 12px;
+  padding: 14px;
+}
+.waiting-custom-prompts-content p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+.waiting-custom-prompts-heading {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.waiting-custom-prompts-heading strong {
+  color: var(--ink);
+  display: block;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+.waiting-custom-prompts-heading > span {
+  background: var(--primary-soft);
+  border-radius: 999px;
+  color: var(--primary-ink);
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+.waiting-custom-prompts-search {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 14px;
+}
+.waiting-custom-prompts-search span {
+  display: block;
+  margin-bottom: 5px;
+}
+.waiting-custom-prompts-search input {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 10px;
+  width: 100%;
+}
+.waiting-custom-prompts-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.waiting-custom-prompts-filters button {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: 999px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 11px;
+}
+.waiting-custom-prompts-filters button[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: #fff;
+}
+.waiting-custom-prompts-content .waiting-custom-prompts-result-count { margin-top: 12px; }
+.waiting-custom-prompts-list {
+  align-content: start;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 190px;
+  min-height: 48px;
+  overflow-y: auto;
+  padding: 9px;
+}
+.waiting-custom-prompts-list span {
+  background: var(--primary-soft);
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--primary-ink);
+  font-size: 13px;
+  line-height: 1.3;
+  padding: 5px 7px;
+}
+.waiting-custom-prompts-list span:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 1px;
+}
+.waiting-custom-prompts-list.is-virtualized {
+  display: block;
+  height: 190px;
+  padding: 0;
+  position: relative;
+}
+.waiting-custom-prompts-list.is-virtualized:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+.waiting-custom-prompts-virtual-space {
+  position: relative;
+  width: 100%;
+}
+.waiting-custom-prompts-virtual-row {
+  box-sizing: border-box;
+  display: grid;
+  gap: 6px;
+  left: 0;
+  padding: 3px 9px;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+.waiting-custom-prompts-virtual-row span {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The `.tooltip` recipe, placed by CustomPromptsPreview beside the chip. */
+.custom-prompt-full-text-tooltip {
+  max-width: calc(100vw - 16px);
+  position: fixed;
+  z-index: 1000;
+}
+.waiting-custom-prompts-content .waiting-custom-prompts-empty {
+  background: var(--card);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  padding: 16px;
+  text-align: center;
+}
 .waiting-custom-prompts-content .waiting-custom-prompts-error { color: var(--danger); }
 
 /* Start card. */
-.waiting-start-card { display: flex; justify-content: center; gap: 12px; align-items: center; flex-direction: column; }
-.waiting-start-waiting { color: var(--muted); font-size: 14px; font-weight: 700; margin: 0; text-align: center; }
-.waiting-room-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.waiting-host-actions { display: flex; flex: 0 0 auto; gap: 8px; }
-.waiting-start-error { color: var(--danger); margin: 8px 0 0; }
+.waiting-start-card {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  align-items: center;
+  flex-direction: column;
+}
+.waiting-start-waiting {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+.waiting-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.waiting-start-error {
+  color: var(--danger);
+  margin: 8px 0 0;
+}
 .waiting-start-button { flex: 0 0 auto; }
-.waiting-start-button:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
-.custom-prompts-apply { background: var(--primary); border: 0; border-radius: var(--radius-sm); box-shadow: 0 2px 0 var(--primary-edge); color: #fff; font-size: 14px; font-weight: 800; margin-top: 10px; padding: 10px 14px; }
-.custom-prompts-apply:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
-.waiting-chat-empty { color: var(--muted); font-style: italic; margin: 0; }
+.waiting-start-button:disabled {
+  background: var(--faint);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.custom-prompts-apply {
+  background: var(--primary);
+  border: 0;
+  border-radius: var(--radius-sm);
+  box-shadow: 0 2px 0 var(--primary-edge);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 800;
+  margin-top: 10px;
+  padding: 10px 14px;
+}
+.custom-prompts-apply:disabled {
+  background: var(--faint);
+  box-shadow: none;
+  cursor: not-allowed;
+}
+.waiting-chat-empty {
+  color: var(--muted);
+  font-style: italic;
+  margin: 0;
+}
 .waiting-chat-form { margin-top: 10px; }
-.waiting-chat-error { color: var(--danger); margin: 7px 0 0; }
+.waiting-chat-error {
+  color: var(--danger);
+  margin: 7px 0 0;
+}
 
 /* Host settings editor, shown in a modal from the waiting room. The dialog is
    the panel; the editor inside it draws no surface of its own. */
@@ -878,7 +1092,6 @@
 /* The editor renders the same `RoomSetupForm` as /create, so its fields are
    styled by create-room-page.css. What used to be here was a second, flatter
    arrangement of the same controls. */
-.room-settings-advanced { display: grid; gap: 14px; margin-top: 14px; }
 /* The draft is submitted, not dripped out, so this is a button rather than a
    status line reporting saves the host never asked for. */
 .room-settings-actions {
@@ -1172,7 +1385,10 @@
 
 @media (max-width: 900px) {
   .waiting-room { padding: 0 0 32px; }
-  .waiting-start-card { align-items: stretch; flex-direction: column; }
+  .waiting-start-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .room-shell {
     display: flex;
     flex-direction: column;
@@ -1185,9 +1401,18 @@
     gap: 4px;
   }
 
-  .sidebar-right { order: 2; width: 100%; }
-  .sidebar-left { order: 3; width: 100%; }
-  .room-shell-main { order: 1; width: 100%; }
+  .sidebar-right {
+    order: 2;
+    width: 100%;
+  }
+  .sidebar-left {
+    order: 3;
+    width: 100%;
+  }
+  .room-shell-main {
+    order: 1;
+    width: 100%;
+  }
   .room-shell-chat { order: 2; }
   .room-shell-players { order: 3; }
 
@@ -1236,7 +1461,10 @@
   .waiting-room-head h1 { font-size: 20px; }
 
   .waiting-invite-card { padding: 14px 14px 15px; }
-  .waiting-code { font-size: 30px; margin: 4px auto 10px; }
+  .waiting-code {
+    font-size: 30px;
+    margin: 4px auto 10px;
+  }
 
   /* Side by side: two full-width buttons would put back most of what the
      card just gave up. */
@@ -1261,32 +1489,6 @@
   }
 
   .room-settings-actions .btn { width: 100%; }
-
-  .guess-chat {
-    display: flex;
-    flex-direction: column;
-    height: auto !important;
-  }
-
-  /* The input reads below the messages, as it does in every other messaging
-     surface. It used to be order:-1 - you typed at the top and read below,
-     and each new message travelled away from the caret. */
-  .chat-input {
-    order: 0;
-    margin-top: 6px;
-    margin-bottom: 0;
-  }
-
-  .chat-messages-container {
-    flex: initial;
-    height: auto;
-    max-height: 200px;
-    min-height: 80px;
-  }
-
-  .chat-messages {
-    max-height: 200px;
-  }
 
   /*
    * ── The playing shell on a phone ───────────────────────────────────────
@@ -1565,9 +1767,8 @@
   /* Kills the desktop chat's fixed height without pinning the panel: this
      used to say `flex: 0 0 auto`, which outranked every attempt to let the
      panel shrink and was what sent the feed out through the top of its box. */
-  .game-room.game-room-playing .room-chat-panel.guess-chat,
-  .game-room.game-room-playing .guess-chat {
-    height: auto !important;
+  .game-room.game-room-playing .room-chat-panel.guess-chat {
+    height: auto;
     max-height: none;
     flex: 1 1 auto;
     min-height: 0;
@@ -1608,7 +1809,7 @@
   .game-room.guess-focused .sidebar-left,
   .game-room.guess-focused .room-chat-heading,
   .game-room.guess-focused .chat-scroll-bottom-button {
-    display: none !important;
+    display: none;
   }
 
   /* Everything that is not the drawing or the box you type into goes. The feed,
@@ -1657,7 +1858,7 @@
 
   .game-room.guess-focused .guess-chat {
     max-height: none;
-    height: auto !important;
+    height: auto;
     gap: 4px;
     overflow: visible;
   }
@@ -1724,10 +1925,6 @@
 }
 
 .sidebar-box {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 14px 12px;
 }
 
@@ -1763,6 +1960,11 @@
   line-height: 1;
 }
 
+/* Not the `.tooltip` recipe, though it has the role: it is a popover you move
+   into - it holds the promotion button - and it lists names in their owners'
+   own colours, which are chosen against the page's ground and would sink into
+   the dark popover surface in the light theme. So it is a raised card, like
+   the language picker's list. */
 .room-spectator-tooltip {
   background: var(--card);
   border: 1px solid var(--line-strong);

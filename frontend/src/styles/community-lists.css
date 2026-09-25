@@ -38,57 +38,6 @@
   margin-bottom: 14px;
 }
 
-/* Two orders, both on screen: the segmented control the room form already
-   uses for a choice of two, at the filter bar's height. */
-.community-catalogue-sort {
-  background: var(--track);
-  border-radius: 999px;
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-}
-
-.community-catalogue-sort button {
-  background: none;
-  border: 0;
-  border-radius: 999px;
-  color: var(--muted);
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  min-height: 36px;
-  padding: 6px 14px;
-}
-
-.community-catalogue-sort button[aria-pressed="true"] {
-  background: var(--card);
-  box-shadow: var(--shadow);
-  color: var(--ink);
-}
-
-.community-catalogue-pill {
-  align-items: center;
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
-  color: var(--muted);
-  cursor: pointer;
-  display: inline-flex;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  gap: 7px;
-  min-height: 42px;
-  padding: 9px 15px;
-}
-
-.community-catalogue-pill[aria-pressed="true"] {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-
 /* How many tags are on, on the control that hides them. */
 .community-catalogue-pill-count {
   background: var(--primary);
@@ -110,12 +59,6 @@
   gap: 7px;
   margin-bottom: 14px;
   padding: 11px 12px;
-}
-
-.community-catalogue-tags .toggle-chip {
-  font-size: 13px;
-  min-height: 34px;
-  padding: 5px 12px;
 }
 
 /* ---------------------------------------------------------------- results
@@ -154,10 +97,6 @@
 }
 
 .community-catalogue-card {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   display: grid;
   gap: 6px;
   padding: 12px 14px 11px 16px;
@@ -228,7 +167,7 @@
 .community-catalogue-meta > * { flex: none; }
 
 .community-catalogue-author {
-  flex: 0 1 auto !important;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -78,10 +78,6 @@
 }
 
 .ops-metric {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -122,10 +118,6 @@
 
 /* ------------------------------------------------------------- card scaffold */
 .ops-card {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 16px 18px;
 }
 
@@ -1294,11 +1286,11 @@
   padding: 10px 16px;
 }
 
-.bug-resolve-button {
-  background: var(--success-button) !important;
-  border-color: var(--success-button-edge) !important;
+.mod-case-actions .bug-resolve-button {
+  background: var(--success-button);
+  border-color: var(--success-button-edge);
   box-shadow: 0 2px 0 var(--success-button-edge);
-  color: #ffffff !important;
+  color: #ffffff;
 }
 
 

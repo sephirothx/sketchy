@@ -71,10 +71,6 @@
   text-align: center;
 }
 
-.turn-results-hint-debt {
-  color: var(--warning);
-}
-
 /* --------------------------------------------------------------- game over */
 .game-end-overlay {
   align-items: center;

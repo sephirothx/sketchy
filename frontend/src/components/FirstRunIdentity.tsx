@@ -99,7 +99,7 @@ export function FirstRunIdentity() {
   }
 
   return (
-    <section className="first-run" aria-labelledby={`${fieldId}-heading`}>
+    <section className="surface-card first-run" aria-labelledby={`${fieldId}-heading`}>
       {/* The card is the size container; its contents are the grid, because a
           card cannot answer a container query about itself. */}
       <div className="first-run-inner">

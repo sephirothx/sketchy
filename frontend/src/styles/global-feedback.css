@@ -143,13 +143,13 @@
 
 /* The one thing a toast may offer to do. Reads as a control rather than as
    the dismiss cross beside it, because it is the reason the toast lingers. */
-.app-toast-action {
+.app-toast .app-toast-action {
   font-weight: 700;
   font-size: 13px;
-  padding: 3px 10px !important;
-  border-radius: 999px !important;
-  background: var(--primary) !important;
-  color: var(--primary-ink) !important;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--primary);
+  color: var(--primary-ink);
   white-space: nowrap;
 }
 

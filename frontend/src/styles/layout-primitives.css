@@ -53,10 +53,6 @@
 }
 
 .panel {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 20px 24px;
   margin-bottom: 16px;
 }
@@ -83,18 +79,15 @@
   font-size: 15px;
 }
 
+/* A disabled field's colours are in utilities.css, where they beat every
+   surface's own field rule; the dimming stays here, so a control that hides
+   its input (a switch's checkbox) can still hide a disabled one. */
 select:disabled,
 input:disabled,
 textarea:disabled {
-  background-color: var(--track) !important;
-  color: var(--muted) !important;
-  border-color: var(--line) !important;
   opacity: 0.7;
   cursor: not-allowed;
 }
 
-
-
-.create-room-lobby-copy { color: var(--muted); line-height: 1.5; margin: 8px 0 16px; font-size: 14px; }
 .lobby-action-error { background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); font-weight: 600; margin: 0 0 16px; padding: 10px 12px; }
 .room-list-loading { color: var(--muted); padding: 20px 0; text-align: center; }

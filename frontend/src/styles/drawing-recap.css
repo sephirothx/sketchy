@@ -1,5 +1,5 @@
 .drawing-recap { display: flex; justify-content: center; padding: 8px 0 32px; width: 100%; }
-.drawing-recap-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-raised); box-sizing: border-box; max-width: 880px; padding: 22px; width: 100%; }
+.drawing-recap-card { background: var(--card); border: 1.5px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-raised); box-sizing: border-box; max-width: 880px; padding: 22px; width: 100%; }
 .drawing-recap-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 16px; }
 .drawing-recap-kicker { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .08em; margin: 0; text-transform: uppercase; }
 .drawing-recap-header h1 { color: var(--ink); font-size: 26px; margin: 4px 0; }

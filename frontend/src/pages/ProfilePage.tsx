@@ -707,7 +707,7 @@ function ProfileView({ userId }: { userId: string }) {
           )}
 
           {isOwnProfile && subject.isAnonymous && (
-            <section className="panel profile-claim">
+            <section className="surface-card panel profile-claim">
               <h2>{ui.profilePage.claimYourAccount}</h2>
               <p>
                 {ui.profilePage.yourGamesAreAlreadyBeingRecorded}
@@ -724,7 +724,7 @@ function ProfileView({ userId }: { userId: string }) {
               isOwner: isOwnProfile,
               count: pins.length,
             }) !== "absent" && (
-            <section className="panel" data-testid="pinned-drawings-panel">
+            <section className="surface-card panel" data-testid="pinned-drawings-panel">
               <h2>{ui.profilePage.pinnedDrawings}</h2>
               <PinnedDrawingsShelf
                 userId={userId}
@@ -750,7 +750,7 @@ function ProfileView({ userId }: { userId: string }) {
               long read, and the numbers stay in view while it scrolls. The
               statistics come first here, so they are still read first. */}
           <div className="profile-columns">
-          <section className="panel profile-statistics">
+          <section className="surface-card panel profile-statistics">
             <h2>{ui.profilePage.statistics}</h2>
             <div className="profile-stats">
               <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
@@ -770,7 +770,7 @@ function ProfileView({ userId }: { userId: string }) {
             </div>
           </section>
 
-          <section className="panel profile-history">
+          <section className="surface-card panel profile-history">
             <div className="profile-history-head">
               <h2>{ui.profilePage.gameHistory}</h2>
               <label className="profile-history-filter">

@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { GalleryPost, GalleryThumbnail } from "../components/GalleryDrawings";
 import { ReportDrawingDialog } from "../components/ReportDrawingDialog";
+import { SegmentedControl } from "../components/RoomSetupControls";
 import { ChevronUpIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
@@ -214,21 +215,14 @@ export function GalleryPage() {
     <div className="gallery-filters">
       {/* Three orders, all on screen: a menu that has to be opened to find
           out it holds three things is a menu for nothing. */}
-      <span
+      <SegmentedControl
         className="gallery-sort"
-        role="group"
-        aria-label={ui.galleryPage.sortBy}
-        data-testid="gallery-sort"
-      >
-        {SORTS.map((sort) => (
-          <button
-            key={sort}
-            type="button"
-            aria-pressed={filters.sort === sort}
-            onClick={() => applyFilters({ ...filters, sort })}
-          >{sortLabel[sort]}</button>
-        ))}
-      </span>
+        testId="gallery-sort"
+        label={ui.galleryPage.sortBy}
+        value={filters.sort}
+        options={SORTS.map((sort) => ({ value: sort, label: sortLabel[sort] }))}
+        onChange={(sort) => applyFilters({ ...filters, sort })}
+      />
       {/* The window only means something under Top (R-GAL-04); Hot has
           its own horizon and New is New. */}
       {filters.sort === "top" && (
@@ -242,7 +236,7 @@ export function GalleryPage() {
             <button
               key={window}
               type="button"
-              className="gallery-pill"
+              className="toggle-chip"
               aria-pressed={filters.window === window}
               onClick={() => applyFilters({ ...filters, window })}
             >{windowLabel[window]}</button>

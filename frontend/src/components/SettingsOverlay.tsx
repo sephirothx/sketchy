@@ -232,8 +232,8 @@ function ToggleRow({
           aria-label={label}
           onChange={(event) => onChange(event.target.checked)}
         />
-        <span className="m3-switch-track" aria-hidden="true">
-          <span className="m3-switch-thumb" />
+        <span className="switch-track" aria-hidden="true">
+          <span className="switch-thumb" />
         </span>
       </span>
     </label>

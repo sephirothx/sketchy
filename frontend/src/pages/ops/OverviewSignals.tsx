@@ -64,7 +64,7 @@ function SignalCard({
 }) {
   const healthy = !reasons.some((reason) => reason.card === card);
   return (
-    <section className={`ops-card${wide ? " ops-card-wide" : ""}`} aria-label={title}>
+    <section className={`surface-card ops-card${wide ? " ops-card-wide" : ""}`} aria-label={title}>
       <div className="ops-card-head">
         <div>
           <h2>{title}</h2>
