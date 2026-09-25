@@ -128,12 +128,12 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Das geht zu schnell. Versuch es gleich noch einmal.",
-  seat_changing_too_fast: "Dieser Raum wurde zu oft hintereinander neu geöffnet. Versuch es in einer Minute noch einmal.",
+  seat_changing_too_fast: "Du hast diesen Raum zu oft hintereinander neu geöffnet. Versuch es in einer Minute noch einmal.",
   joining_too_fast: "Du betrittst zu schnell Räume. Versuch es in einer Minute noch einmal.",
   room_quota: "Du hast bereits so viele Räume offen, wie gleichzeitig möglich sind.",
   room_full: "Dieser Raum ist voll.",
   spectators_full: "Dieser Raum nimmt keine weiteren Zuschauer auf.",
-  player_slots_full: "Alle Spielplätze sind belegt.",
+  player_slots_full: "Alle Spielerplätze sind belegt.",
 
   // Server and account state
   server_draining: "Sketchy startet neu. Versuch es gleich noch einmal.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Das Passwort konnte nicht geändert werden.",
   session_not_found: "Dieses Gerät ist nicht mehr angemeldet.",
-  session_replaced: "Dieser Browser wurde seit dem Laden der Seite neu angemeldet. Lade neu und versuch es noch einmal.",
+  session_replaced: "Deine Anmeldung in diesem Browser hat sich seit dem Laden der Seite geändert. Lade neu und versuch es noch einmal.",
   guest_progress_unlinked: "Der Gastfortschritt konnte nicht mit diesem Konto verknüpft werden.",
   not_taking_visitors: "Sketchy nimmt gerade keine neuen Besucher an. Bitte versuch es später noch einmal.",
   account_delete_refused: "Das Konto konnte gerade nicht gelöscht werden. Bitte versuch es noch einmal.",
@@ -619,7 +619,7 @@ export const DE: Catalogue = {
     leaveActiveGame: "Laufendes Spiel verlassen?",
     youReTheCurrentDrawer: "Du zeichnest gerade. Wenn du jetzt gehst, wird dein Zug unterbrochen und das Spiel geht für alle weiter.",
     theGameIsStillIn: "Das Spiel läuft noch. Du verlässt den Raum und gibst deinen Platz in diesem Spiel auf.",
-    backFromAfk: "Zurück von AFK",
+    backFromAfk: "Nicht mehr AFK",
     closePlayers: "Spieler schließen",
     acceptTheColorSuggestion: "den Farbvorschlag annehmen",
     dismissTheColorSuggestion: "den Farbvorschlag verwerfen",
@@ -1013,7 +1013,7 @@ export const DE: Catalogue = {
     friends: "Freunde",
     close: "Schließen",
     closeFriends: "Freunde schließen",
-    friendsNeedAnAccount: "Für Freunde braucht es ein Konto. Ein Gastname gehört zu diesem Browser und wird nach einem Monat ohne Spiel entfernt.",
+    friendsNeedAnAccount: "Für Freunde braucht es ein Konto, damit sie dich wiederfinden. Lege ein Konto an oder melde dich an, um Freunde hinzuzufügen.",
     loading: "Wird geladen …",
     noFriendsYetAddSomebodyFrom: "Noch keine Freunde. Füge jemanden aus der Lobby hinzu oder aus einer\n              Runde, in der ihr beide seid.",
     requests: "Anfragen",
@@ -1840,7 +1840,7 @@ export const DE: Catalogue = {
     saveImage: "Bild speichern",
     settings: "Einstellungen",
     leaveRoom: "Raum verlassen",
-    backFromAfk: "Zurück von AFK",
+    backFromAfk: "Nicht mehr AFK",
     goAfk: "AFK gehen",
   },
 
@@ -2616,7 +2616,7 @@ export const DE: Catalogue = {
   roomNotices: {
     kickedByVote: "Du wurdest per Abstimmung aus dem Raum geworfen.",
     roomClosed: "Ein Administrator hat diesen Raum geschlossen.",
-    removedByAdmin: "Ein Administrator hat dich entfernt.",
+    kickedByAdmin: "Ein Administrator hat dich aus dem Raum geworfen.",
     accountDeleted: "Dein Konto wurde gelöscht.",
     accountSuspended: "Dein Konto wurde gesperrt.",
     signedOut: "Du wurdest auf diesem Gerät abgemeldet.",

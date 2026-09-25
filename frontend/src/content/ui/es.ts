@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Vas demasiado rápido. Inténtalo de nuevo en un momento.",
-  seat_changing_too_fast: "Esta sala se ha vuelto a abrir demasiadas veces seguidas. Inténtalo dentro de un minuto.",
+  seat_changing_too_fast: "Has vuelto a abrir esta sala demasiadas veces seguidas. Inténtalo dentro de un minuto.",
   joining_too_fast: "Entras en salas demasiado rápido. Inténtalo dentro de un minuto.",
   room_quota: "Ya tienes tantas salas abiertas como puedes tener a la vez.",
   room_full: "Esta sala está llena.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "No se pudo cambiar la contraseña.",
   session_not_found: "Ese dispositivo ya no tiene la sesión iniciada.",
-  session_replaced: "Este navegador volvió a iniciar sesión después de cargar esta página. Recarga e inténtalo de nuevo.",
+  session_replaced: "Tu sesión en este navegador cambió desde que se cargó esta página. Recarga e inténtalo de nuevo.",
   guest_progress_unlinked: "No se pudo vincular el progreso de invitado a esta cuenta.",
   not_taking_visitors: "Sketchy no admite visitantes nuevos ahora mismo. Inténtalo más tarde.",
   account_delete_refused: "La cuenta no se pudo borrar ahora mismo. Inténtalo de nuevo.",
@@ -911,7 +911,7 @@ export const ES: Catalogue = {
     gameEndsIn: (p: { seconds: number }) =>
       p.seconds > 0 ? `Esta partida termina en ${counted(p.seconds, { one: "segundo", other: "segundos" })}.` : "Esta partida está terminando.",
     noNewGames: "No pueden empezar partidas nuevas hasta que vuelva el servidor.",
-    ok: "OK",
+    ok: "Vale",
     finalCountdown: (p: { seconds: number }) => `La partida termina en ${counted(p.seconds, { one: "segundo", other: "segundos" })}`,
   },
 
@@ -1013,7 +1013,7 @@ export const ES: Catalogue = {
     friends: "Amigos",
     close: "Cerrar",
     closeFriends: "Cerrar amigos",
-    friendsNeedAnAccount: "Para tener amigos hace falta una cuenta. Un nombre de invitado pertenece a este navegador y se borra tras un mes sin jugar.",
+    friendsNeedAnAccount: "Los amigos necesitan una cuenta para poder encontrarte de nuevo. Crea una cuenta o inicia sesión para añadir amigos.",
     loading: "Cargando…",
     noFriendsYetAddSomebodyFrom: "Aún no tienes amigos. Añade a alguien desde el vestíbulo o desde una\n              partida en la que estéis los dos.",
     requests: "Solicitudes",
@@ -2615,7 +2615,7 @@ export const ES: Catalogue = {
   roomNotices: {
     kickedByVote: "Te expulsaron de la sala por votación.",
     roomClosed: "Un administrador cerró esta sala.",
-    removedByAdmin: "Un administrador te sacó.",
+    kickedByAdmin: "Un administrador te expulsó de la sala.",
     accountDeleted: "Tu cuenta se eliminó.",
     accountSuspended: "Tu cuenta fue suspendida.",
     signedOut: "Se cerró tu sesión en este dispositivo.",

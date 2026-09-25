@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Stai andando troppo veloce. Riprova tra un attimo.",
-  seat_changing_too_fast: "Questa stanza è stata riaperta troppe volte di fila. Riprova tra un minuto.",
+  seat_changing_too_fast: "Hai riaperto questa stanza troppe volte di fila. Riprova tra un minuto.",
   joining_too_fast: "Entri nelle stanze troppo in fretta. Riprova tra un minuto.",
   room_quota: "Hai già tutte le stanze aperte che puoi avere insieme.",
   room_full: "Questa stanza è piena.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Non è stato possibile cambiare la password.",
   session_not_found: "Questo dispositivo non è più connesso.",
-  session_replaced: "Questo browser ha rifatto l’accesso dopo il caricamento della pagina. Ricarica e riprova.",
+  session_replaced: "Il tuo accesso su questo browser è cambiato da quando la pagina è stata caricata. Ricarica e riprova.",
   guest_progress_unlinked: "Non è stato possibile collegare i progressi da ospite a questo account.",
   not_taking_visitors: "Sketchy non accetta nuovi visitatori in questo momento. Riprova più tardi.",
   account_delete_refused: "Non è stato possibile eliminare l’account adesso. Riprova.",
@@ -1013,7 +1013,7 @@ export const IT: Catalogue = {
     friends: "Amici",
     close: "Chiudi",
     closeFriends: "Chiudi gli amici",
-    friendsNeedAnAccount: "Per gli amici serve un account. Un nome da ospite appartiene a questo browser e viene rimosso dopo un mese senza giocare.",
+    friendsNeedAnAccount: "Per gli amici serve un account, così possono ritrovarti. Crea un account o accedi per aggiungere amici.",
     loading: "Caricamento…",
     noFriendsYetAddSomebodyFrom: "Ancora nessun amico. Aggiungi qualcuno dalla lobby, o da una partita\n              in cui siete entrambi.",
     requests: "Richieste",
@@ -2617,7 +2617,7 @@ export const IT: Catalogue = {
   roomNotices: {
     kickedByVote: "Sei stato espulso dalla stanza con una votazione.",
     roomClosed: "Un amministratore ha chiuso questa stanza.",
-    removedByAdmin: "Un amministratore ti ha rimosso.",
+    kickedByAdmin: "Un amministratore ti ha espulso dalla stanza.",
     accountDeleted: "Il tuo account è stato eliminato.",
     accountSuspended: "Il tuo account è stato sospeso.",
     signedOut: "Sei stato disconnesso su questo dispositivo.",

@@ -130,7 +130,7 @@ keyboard that takes half the screen, and one thumb.
   you are — a live game included — and the number waiting for an answer sits on your
   account chip. A request that was declined is not announced: your list simply stops
   showing it.
-- Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
+- *Hide letter tiles*: a room option that hides the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
 - Scoring designed to resist "sandbagging": drawers can't game an easy prompt by stalling,

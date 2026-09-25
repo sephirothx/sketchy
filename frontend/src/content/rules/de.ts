@@ -113,7 +113,7 @@ export const RULES_DE: RulesDocument = {
           heading: "Schummeln",
           body: [
             "Gib den Begriff niemandem, der ihn erraten soll — nicht im Chat, nicht in der Zeichnung, nicht irgendwo außerhalb des Spiels. Und lass kein Programm für dich spielen.",
-            "Den Begriff auf die Leinwand zu schreiben zählt, als hättest du es gesagt.",
+            "Den Begriff auf die Leinwand zu schreiben zählt, als hättest du ihn gesagt.",
           ],
           examples: [
             "Den Begriff beim Zeichnen hinschreiben oder buchstabieren",

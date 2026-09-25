@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Tu vas trop vite. Réessaie dans un instant.",
-  seat_changing_too_fast: "Ce salon a été rouvert trop de fois d’affilée. Réessaie dans une minute.",
+  seat_changing_too_fast: "Tu as rouvert ce salon trop de fois d’affilée. Réessaie dans une minute.",
   joining_too_fast: "Tu rejoins des salons trop vite. Réessaie dans une minute.",
   room_quota: "Tu as déjà autant de salons ouverts que possible.",
   room_full: "Ce salon est complet.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Le mot de passe n’a pas pu être changé.",
   session_not_found: "Cet appareil n’est plus connecté.",
-  session_replaced: "Ce navigateur s’est reconnecté depuis le chargement de cette page. Recharge et réessaie.",
+  session_replaced: "Ta connexion sur ce navigateur a changé depuis le chargement de cette page. Recharge et réessaie.",
   guest_progress_unlinked: "La progression d’invité n’a pas pu être liée à ce compte.",
   not_taking_visitors: "Sketchy n’accepte pas de nouveaux visiteurs pour le moment. Réessaie plus tard.",
   account_delete_refused: "Le compte n’a pas pu être supprimé maintenant. Réessaie.",
@@ -1013,7 +1013,7 @@ export const FR: Catalogue = {
     friends: "Amis",
     close: "Fermer",
     closeFriends: "Fermer les amis",
-    friendsNeedAnAccount: "Les amis demandent un compte. Un nom d’invité appartient à ce navigateur et disparaît après un mois sans jouer.",
+    friendsNeedAnAccount: "Les amis demandent un compte, pour pouvoir te retrouver. Crée un compte ou connecte-toi pour ajouter des amis.",
     loading: "Chargement…",
     noFriendsYetAddSomebodyFrom: "Pas encore d’amis. Ajoute quelqu’un depuis le hall, ou depuis une partie\n              où vous êtes tous les deux.",
     requests: "Demandes",
@@ -2618,7 +2618,7 @@ export const FR: Catalogue = {
   roomNotices: {
     kickedByVote: "Tu as été exclu du salon par vote.",
     roomClosed: "Un administrateur a fermé ce salon.",
-    removedByAdmin: "Un administrateur t’a retiré.",
+    kickedByAdmin: "Un administrateur t’a exclu du salon.",
     accountDeleted: "Ton compte a été supprimé.",
     accountSuspended: "Ton compte a été suspendu.",
     signedOut: "Tu as été déconnecté sur cet appareil.",

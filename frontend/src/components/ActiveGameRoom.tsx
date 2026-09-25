@@ -44,7 +44,7 @@ import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
-import { kickedText, supersededText } from "../lib/roomNotices.ts";
+import { isKick, kickedText, supersededText } from "../lib/roomNotices.ts";
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -129,9 +129,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
       setExitingRoom(true);
       clearSession();
       reset();
-      // A closed room is not a kick: the lobby titles its notice accordingly.
       navigate("/", {
-        state: { criticalError: kickedText(data?.code), kicked: data?.code !== "room_closed" },
+        state: { criticalError: kickedText(data?.code), kicked: isKick(data?.code) },
       });
     }
     // One meaning, so nothing to read from the payload: its `message` is

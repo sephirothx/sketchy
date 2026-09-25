@@ -76,8 +76,10 @@ export function RoomEndedCard({ reason, onLeave }: { reason: RoomEndReason; onLe
           {reason === "kicked" ? ui.roomStageNotice.kickedFromRoom : ui.roomStageNotice.gameEnded}
         </h2>
         <p className="room-stage-body">
+          {/* A rejoin refused as kicked does not say who did it - a vote or
+              an administrator - so this says only what is known. */}
           {reason === "kicked"
-            ? kickedText("kicked_by_vote")
+            ? kickedText(undefined)
             : reason === "server-update"
               ? ui.roomStageNotice.endedServerUpdate
               : ui.roomStageNotice.endedRoomClosed}

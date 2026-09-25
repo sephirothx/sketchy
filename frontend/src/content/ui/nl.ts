@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Je gaat te snel. Probeer het zo nog eens.",
-  seat_changing_too_fast: "Deze kamer is te vaak achter elkaar opnieuw geopend. Probeer het over een minuut nog eens.",
+  seat_changing_too_fast: "Je hebt deze kamer te vaak achter elkaar opnieuw geopend. Probeer het over een minuut nog eens.",
   joining_too_fast: "Je stapt te snel kamers binnen. Probeer het over een minuut nog eens.",
   room_quota: "Je hebt al net zoveel kamers open als tegelijk kan.",
   room_full: "Deze kamer is vol.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Het wachtwoord kon niet gewijzigd worden.",
   session_not_found: "Dit apparaat is niet meer ingelogd.",
-  session_replaced: "Deze browser is opnieuw ingelogd sinds deze pagina laadde. Herlaad en probeer het nog eens.",
+  session_replaced: "Je inlog in deze browser is veranderd sinds deze pagina laadde. Herlaad en probeer het nog eens.",
   guest_progress_unlinked: "De gastvoortgang kon niet aan dit account gekoppeld worden.",
   not_taking_visitors: "Sketchy neemt op dit moment geen nieuwe bezoekers aan. Probeer het later nog eens.",
   account_delete_refused: "Het account kon nu niet verwijderd worden. Probeer het nog eens.",
@@ -911,7 +911,7 @@ export const NL: Catalogue = {
     gameEndsIn: (p: { seconds: number }) =>
       p.seconds > 0 ? `Dit spel eindigt over ${counted(p.seconds, { one: "seconde", other: "seconden" })}.` : "Dit spel eindigt nu.",
     noNewGames: "Er kunnen geen nieuwe spellen starten tot de server terug is.",
-    ok: "OK",
+    ok: "Oké",
     finalCountdown: (p: { seconds: number }) => `Spel eindigt over ${counted(p.seconds, { one: "seconde", other: "seconden" })}`,
   },
 
@@ -1013,7 +1013,7 @@ export const NL: Catalogue = {
     friends: "Vrienden",
     close: "Sluiten",
     closeFriends: "Vrienden sluiten",
-    friendsNeedAnAccount: "Voor vrienden heb je een account nodig. Een gastnaam hoort bij deze browser en verdwijnt na een maand zonder spelen.",
+    friendsNeedAnAccount: "Voor vrienden heb je een account nodig, zodat ze je terugvinden. Maak een account of log in om vrienden toe te voegen.",
     loading: "Laden…",
     noFriendsYetAddSomebodyFrom: "Nog geen vrienden. Voeg iemand toe vanuit de lobby, of vanuit een spel\n              waar jullie allebei in zitten.",
     requests: "Verzoeken",
@@ -2616,7 +2616,7 @@ export const NL: Catalogue = {
   roomNotices: {
     kickedByVote: "Je bent per stemming uit de kamer gezet.",
     roomClosed: "Een beheerder heeft deze kamer gesloten.",
-    removedByAdmin: "Een beheerder heeft je verwijderd.",
+    kickedByAdmin: "Een beheerder heeft je uit de kamer gezet.",
     accountDeleted: "Je account is verwijderd.",
     accountSuspended: "Je account is geschorst.",
     signedOut: "Je bent op dit apparaat uitgelogd.",

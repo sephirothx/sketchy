@@ -74,15 +74,6 @@
   gap: 16px;
 }
 
-.prompt-list-manager-heading p {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .07em;
-  margin: 0 0 4px;
-  text-transform: uppercase;
-}
-
 .prompt-list-manager-heading h1 { margin: 0; }
 
 .prompt-list-manager-layout {

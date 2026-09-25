@@ -18,7 +18,7 @@ import {
 } from "../lib/drawingRules";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useGameStore } from "../store/gameStore";
-import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
+import { formatKey, type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { recordRender } from "../lib/renderDiagnostics";
 import {
@@ -89,12 +89,13 @@ function onApplePlatform(): boolean {
 function undoKeys(bindings: KeyBindings): string {
   // Not copy: the Command key's symbol, the same in every language.
   const platformUndo = onApplePlatform() ? "\u2318Z" : `${ui.toolbar.ctrlKey}+Z`;
-  return [...bindings.undo.map((key) => key.toUpperCase()), platformUndo].join(" / ");
+  return [...bindings.undo.map(formatKey), platformUndo].join(" / ");
 }
 
-/** The keys that step the size down and up, from the player's bindings. */
+/** The keys that step the size down and up, from the player's bindings -
+    empty when both are unbound, and then the title names none. */
 function sizeKeys(bindings: KeyBindings): string {
-  return [...bindings.brushDecrease, ...bindings.brushIncrease].map((key) => key.toUpperCase()).join(" / ");
+  return [...bindings.brushDecrease, ...bindings.brushIncrease].map(formatKey).join(" / ");
 }
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
@@ -192,11 +193,11 @@ export const Toolbar = memo(function Toolbar({
 
   function getToolBadge(toolValue: DrawTool): string {
     const keys = toolKeys(keyBindings, toolValue);
-    return keys.length > 0 ? keys[0].toUpperCase() : "";
+    return keys.length > 0 ? formatKey(keys[0]) : "";
   }
 
   function getToolLabel(toolValue: DrawTool, name: string): string {
-    const keyStr = toolKeys(keyBindings, toolValue).map((k) => k.toUpperCase()).join(" / ");
+    const keyStr = toolKeys(keyBindings, toolValue).map(formatKey).join(" / ");
     return keyStr ? `${name} (${keyStr})` : name;
   }
 
@@ -573,7 +574,9 @@ export const Toolbar = memo(function Toolbar({
           aria-expanded={sizePickerOpen}
           aria-haspopup="true"
           aria-controls={sizePickerId}
-          title={ui.toolbar.sizeShortcutHint({ tool: labelPrefix, width: brushWidth, keys: sizeKeys(keyBindings) })}
+          title={sizeKeys(keyBindings)
+            ? ui.toolbar.sizeShortcutHint({ tool: labelPrefix, width: brushWidth, keys: sizeKeys(keyBindings) })
+            : ui.toolbar.sizeWithWidth({ tool: labelPrefix, width: brushWidth })}
         >
           {sizePreview}
           <span className="size-text-readout">{ui.toolbar.widthReadout({ width: brushWidth })}</span>

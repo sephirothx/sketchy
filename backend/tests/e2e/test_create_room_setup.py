@@ -116,7 +116,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await page.click('summary:has-text("Scoring and hints")')
             await page.get_by_role("button", name="No scoring").click()
             await page.check('label:has-text("Hide letter tiles") input')
-            assert await page.is_visible('text=Hints are off because blanks are hidden.')
+            assert await page.is_visible('text=Hints are off because letter tiles are hidden.')
             await page.evaluate(
                 """() => {
                     window.__inviteLoaderSeen = false;

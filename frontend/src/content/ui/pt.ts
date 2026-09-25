@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Estás a ir demasiado depressa. Tenta daqui a pouco.",
-  seat_changing_too_fast: "Esta sala foi reaberta demasiadas vezes seguidas. Tenta daqui a um minuto.",
+  seat_changing_too_fast: "Reabriste esta sala demasiadas vezes seguidas. Tenta daqui a um minuto.",
   joining_too_fast: "Estás a entrar em salas demasiado depressa. Tenta daqui a um minuto.",
   room_quota: "Já tens tantas salas abertas quantas podes ter ao mesmo tempo.",
   room_full: "Esta sala está cheia.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Não foi possível mudar a palavra-passe.",
   session_not_found: "Esse dispositivo já não tem sessão iniciada.",
-  session_replaced: "Este navegador voltou a iniciar sessão depois de esta página carregar. Recarrega e tenta de novo.",
+  session_replaced: "A tua sessão neste navegador mudou desde que esta página carregou. Recarrega e tenta de novo.",
   guest_progress_unlinked: "Não foi possível associar o progresso de convidado a esta conta.",
   not_taking_visitors: "O Sketchy não está a aceitar novos visitantes neste momento. Tenta mais tarde.",
   account_delete_refused: "Não foi possível eliminar a conta agora. Tenta de novo.",
@@ -1013,7 +1013,7 @@ export const PT: Catalogue = {
     friends: "Amigos",
     close: "Fechar",
     closeFriends: "Fechar os amigos",
-    friendsNeedAnAccount: "Para teres amigos é preciso uma conta. Um nome de convidado pertence a este navegador e é removido após um mês sem jogar.",
+    friendsNeedAnAccount: "Os amigos precisam de uma conta para te voltarem a encontrar. Cria uma conta ou inicia sessão para adicionar amigos.",
     loading: "A carregar…",
     noFriendsYetAddSomebodyFrom: "Ainda não tens amigos. Adiciona alguém a partir do átrio, ou de uma\n              partida onde estejam os dois.",
     requests: "Pedidos",
@@ -2615,7 +2615,7 @@ export const PT: Catalogue = {
   roomNotices: {
     kickedByVote: "Foste expulso da sala por votação.",
     roomClosed: "Um administrador fechou esta sala.",
-    removedByAdmin: "Um administrador removeu-te.",
+    kickedByAdmin: "Um administrador expulsou-te da sala.",
     accountDeleted: "A tua conta foi eliminada.",
     accountSuspended: "A tua conta foi suspensa.",
     signedOut: "A tua sessão foi terminada neste dispositivo.",

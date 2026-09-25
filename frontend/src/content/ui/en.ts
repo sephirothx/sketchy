@@ -140,7 +140,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "You are doing that too quickly. Try again in a moment.",
-  seat_changing_too_fast: "This room has been reopened too many times in a row. Try again in a minute.",
+  seat_changing_too_fast: "You have reopened this room too many times in a row. Try again in a minute.",
   joining_too_fast: "You are joining rooms too quickly. Try again in a minute.",
   room_quota: "You have as many rooms open as you can have at once.",
   room_full: "This room is full.",
@@ -247,7 +247,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Could not change the password.",
   session_not_found: "That device is no longer signed in.",
-  session_replaced: "This browser was signed in again since this page loaded. Reload and try again.",
+  session_replaced: "Your sign-in on this browser changed since this page loaded. Reload and try again.",
   guest_progress_unlinked: "Guest progress could not be linked to this account.",
   not_taking_visitors: "Sketchy is not taking new visitors right now. Please try again later.",
   account_delete_refused: "The account could not be deleted right now. Please try again.",
@@ -628,7 +628,7 @@ export const EN = {
     youReTheCurrentDrawer:
       "You're the current drawer. Leaving now will interrupt your turn and advance the game for everyone.",
     theGameIsStillIn:
-      "The game is still in progress. You'll leave the room and give up your place in this game.",
+      "The game is still in progress. You'll leave the room and give up your seat in this game.",
     backFromAfk: "Back from AFK",
     closePlayers: "Close players",
     acceptTheColorSuggestion: "accept the color suggestion",
@@ -1024,7 +1024,7 @@ export const EN = {
     friends: "Friends",
     close: "Close",
     closeFriends: "Close friends",
-    friendsNeedAnAccount: "Friends need an account. A guest name belongs to this browser, and is removed after a month without playing.",
+    friendsNeedAnAccount: "Friends need an account, so they can find you again. Create an account or sign in to add friends.",
     loading: "Loading…",
     noFriendsYetAddSomebodyFrom: "No friends yet. Add somebody from the lobby, or from a game you\n              are both in.",
     requests: "Requests",
@@ -2624,7 +2624,7 @@ export const EN = {
   roomNotices: {
     kickedByVote: "You were kicked from the room by vote.",
     roomClosed: "An administrator closed this room.",
-    removedByAdmin: "An administrator removed you.",
+    kickedByAdmin: "An administrator kicked you from the room.",
     accountDeleted: "Your account was deleted.",
     accountSuspended: "Your account was suspended.",
     signedOut: "You were signed out on this device.",

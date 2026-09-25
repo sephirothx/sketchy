@@ -444,7 +444,13 @@ const STYLE = [
 ];
 
 test("the English copy keeps one house style", () => {
-  const offenders = ENGLISH.flatMap((rel) => copyIn(rel)).flatMap(({ at, text }) =>
+  const copy = ENGLISH.flatMap((rel) => copyIn(rel));
+  // A scan that found nothing would pass every rule; make sure it reads both files.
+  for (const known of ["Sign in first.", "Rules"]) {
+    assert.ok(copy.some(({ text }) => text === known), `the style scan no longer reads ${JSON.stringify(known)}`);
+  }
+  assert.ok(copy.some(({ at }) => at.startsWith("content/rules/en.ts")), "the style scan no longer reads the rules");
+  const offenders = copy.flatMap(({ at, text }) =>
     STYLE.filter(([, breaks]) => breaks(text)).map(([rule]) => `${at} ${rule}: ${JSON.stringify(text.slice(0, 60))}`));
   assert.deepEqual(offenders, [], `the English catalogue has drifted from its style:\n${offenders.join("\n")}`);
 });

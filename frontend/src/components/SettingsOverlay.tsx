@@ -46,6 +46,7 @@ import { Avatar } from "./ui/Avatar";
 import {
   ACTION_LABELS,
   DEFAULT_KEY_BINDINGS,
+  formatKey,
   NAME_COLOR_PALETTE,
   getSystemTheme,
   useSettingsStore,
@@ -159,12 +160,6 @@ const BRUSH_SIZE_OPTIONS = BRUSH_SIZES.map((size) => ({
   label: String(size),
   get name() { return ui.toolbar.widthReadout({ width: size }); },
 }));
-
-function formatKey(key: string): string {
-  if (key === " ") return ui.settingsOverlay.space;
-  if (key.length === 1) return key.toUpperCase();
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
 
 /* ------------------------------------------------------------- primitives */
 

@@ -84,7 +84,7 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             assert await page.locator(".modal-overlay").count() == 0
             assert await page.is_visible('button:has-text("Create room")')
 
-            # A returning registered player can reach Log in without ever being
+            # A returning registered player can reach Sign in without ever being
             # asked to invent a guest name.
             assert await page.is_visible(".first-run-login")
             assert await page.is_visible(".first-run-signup")

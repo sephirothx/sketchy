@@ -50,6 +50,14 @@ export interface KeyBindings {
   undo: string[];
 }
 
+/** A bound key as a person reads it: `Z`, `Space`, `Escape` - the same in the
+Shortcuts settings and in every tooltip that names a shortcut. */
+export function formatKey(key: string): string {
+  if (key === " ") return ui.settingsOverlay.space;
+  if (key.length === 1) return key.toUpperCase();
+  return key.charAt(0).toUpperCase() + key.slice(1);
+}
+
 export const DEFAULT_KEY_BINDINGS: KeyBindings = {
   brush: ["p", "1"],
   fill: ["f", "2"],

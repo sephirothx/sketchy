@@ -104,7 +104,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             await full_room_page.goto(invite_url)
             await full_room_page.wait_for_selector("#invite-name")
             assert await full_room_page.is_disabled('button:has-text("Room full")')
-            assert await full_room_page.is_visible("text=Spectating is still open.")
+            assert await full_room_page.is_visible("text=No player seats open. You can still spectate.")
             await use_guest_name(full_room_page, "LateSpectator")
             await full_room_page.click('button:has-text("Spectate")')
             await full_room_page.wait_for_selector('[data-testid="room-header"]')
