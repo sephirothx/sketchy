@@ -1158,10 +1158,8 @@ export const NL: Catalogue = {
     couldNotSaveThatName: "Die naam kon niet worden opgeslagen. Probeer het nog eens.",
     joinAsASpectator: "als toeschouwer meedoen",
     joinTheRoom: "de kamer in gaan",
-    loading: "Laden…",
     showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
       `${p.filteredRoomsCount} van ${p.roomsCount} getoond`,
-    n0Rooms: "0 kamers",
     close: "Sluiten",
     joining: "Deelnemen…",
     joinTheRoom2: "De kamer in gaan",
@@ -2529,8 +2527,6 @@ export const NL: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `${p.shown} van ${p.onlineCount} getoond`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Kies een naam om onder te spelen.",

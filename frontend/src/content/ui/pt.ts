@@ -1158,10 +1158,8 @@ export const PT: Catalogue = {
     couldNotSaveThatName: "Não foi possível guardar esse nome. Tenta de novo.",
     joinAsASpectator: "entrar como espectador",
     joinTheRoom: "entrar na sala",
-    loading: "A carregar…",
     showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
       `A mostrar ${p.filteredRoomsCount} de ${p.roomsCount}`,
-    n0Rooms: "0 salas",
     close: "Fechar",
     joining: "A entrar…",
     joinTheRoom2: "Entrar na sala",
@@ -2528,8 +2526,6 @@ export const PT: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `A mostrar ${p.shown} de ${p.onlineCount}`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Escolhe um nome com que jogar.",

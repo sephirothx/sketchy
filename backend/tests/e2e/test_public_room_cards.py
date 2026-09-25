@@ -1,8 +1,40 @@
+import asyncio
+
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
+
+# The lobby offers search and filters only from this many open rooms
+# (ROOM_FILTERS_FROM in LobbyBrowserPage.tsx).
+ROOMS_FOR_SEARCH = 6
+
+
+async def open_public_rooms(browser, prefix: str, count: int) -> list:
+    """Open `count` more public rooms, each with a host of its own.
+
+    The lobby shows its search box only once six rooms are open, and the
+    shards share one server, so how many other tests' rooms are open at any
+    moment is a coin flip. Opening enough here makes the box certain rather
+    than likely. In parallel: each is a separate player."""
+    contexts = [await browser.new_context() for _ in range(count)]
+
+    async def open_one(index: int, context) -> None:
+        page = await context.new_page()
+        await use_guest_name(page, f"{prefix}Host{index}")
+        await page.goto(BASE_URL)
+        await page.wait_for_selector(".identity-chip")
+        await page.click('button:has-text("Create room")')
+        await page.wait_for_selector(".create-room-page")
+        await page.fill(
+            'input[placeholder="Leave blank for a random name!"]', f"{prefix} room {index}"
+        )
+        await page.click(".create-room-submit")
+        await page.wait_for_selector('[data-testid="waiting-room"]')
+
+    await asyncio.gather(*(open_one(i, c) for i, c in enumerate(contexts)))
+    return contexts
 
 
 async def test_public_room_cards_explain_status_settings_and_actions(
@@ -18,6 +50,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
         player = await player_context.new_page()
         visitor = await visitor_context.new_page()
         spectator = await spectator_context.new_page()
+        fillers = []
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "CardHost")
@@ -34,6 +67,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = await room_code(host)
+            fillers = await open_public_rooms(browser, "CardFiller", ROOMS_FOR_SEARCH - 1)
 
             await visitor.goto(BASE_URL)
             await use_guest_name(visitor, "CardVisitor")
@@ -134,6 +168,8 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await spectator_card.get_by_role("button", name="Spectate", exact=True).click()
             await spectator.wait_for_selector('.game-layout')
         finally:
+            for context in fillers:
+                await context.close()
             await host_context.close()
             await player_context.close()
             await visitor_context.close()

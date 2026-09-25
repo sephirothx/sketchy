@@ -69,6 +69,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
   // Friends first, then the order the server sent — see `withFriendsFirst`.
   // A friend the capped list left out is still here: they are told to this
   // account apart from it (#878).
+  const summary = presenceSummary(presence);
   const players = useMemo(
     () => withFriendsFirst(withOnlineFriends(presence.players, lists, onlineFriends), lists),
     [presence.players, lists, onlineFriends],
@@ -103,8 +104,8 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       <div className="lobby-rooms-heading">
         <h2 id="online-heading">{ui.onlinePlayersPanel.whoOnline}</h2>
         {/* The true total, not the number of rows: a cap must never read as a
-            quiet server (R-PRESENCE-04). */}
-        <span className="lobby-rooms-count">{presenceSummary(presence)}</span>
+            quiet server (R-PRESENCE-04). Nothing when the rows are everybody. */}
+        {summary && <span className="lobby-rooms-count">{summary}</span>}
       </div>
 
       {players.length === 0 ? (

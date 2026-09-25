@@ -38,6 +38,13 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 const ROOM_CODE_LENGTH = 6;
 
+/** How many open rooms it takes before the list offers search and filters.
+    With one room open a phone showed a search field, a Filters button and
+    "Showing 1 of 1" above a list that fit on the screen: three controls with
+    nothing to act on. Six is about where the list runs past a phone's first
+    screen, and where finding one room by name starts to beat reading. */
+const ROOM_FILTERS_FROM = 6;
+
 
 function normalizeRoomCodeInput(value: string): string {
   return value.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, ROOM_CODE_LENGTH);
@@ -226,6 +233,10 @@ export function LobbyBrowserPage() {
   // sight in a sheet never looks like a list with nothing in it.
   const activeFilterCount =
     (languageFilter !== ANY_LANGUAGE ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
+  // Kept while anything narrows the list, or a list that a filter took below
+  // the threshold would hide the very control that widens it again.
+  const showRoomFilters =
+    rooms.length >= ROOM_FILTERS_FROM || activeFilterCount > 0 || searchQuery.trim() !== "";
   // Everything that narrows the list, the search included: what a list with
   // nothing left in it offers to undo.
   function clearRoomFilters() {
@@ -434,9 +445,14 @@ export function LobbyBrowserPage() {
       <section className="panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
           <h2>{ui.lobbyBrowserPage.publicRooms}</h2>
-          <span className="lobby-rooms-count">
-            {!roomsState.loaded ? ui.lobbyBrowserPage.loading : rooms.length > 0 ? ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length }) : ui.lobbyBrowserPage.n0Rooms}
-          </span>
+          {/* Only when it says something the list does not: how many a filter
+              left out. "0 rooms" beside "No public rooms yet", and "Showing 1
+              of 1" above one room, only repeated what was under them. */}
+          {roomsState.loaded && filteredRooms.length < rooms.length && (
+            <span className="lobby-rooms-count">
+              {ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length })}
+            </span>
+          )}
           {/* The two ways into a room, beside the list of rooms rather than in
               the header - the pair a phone's dock already holds, in the same
               order of weight. The header is left to the person: language,
@@ -477,7 +493,7 @@ export function LobbyBrowserPage() {
           )}
         </div>
 
-        {roomsState.loaded && rooms.length > 0 && (
+        {roomsState.loaded && showRoomFilters && (
           <div className="lobby-filter-bar">
             <span className="lobby-room-search">
               <SearchIcon size={15} />

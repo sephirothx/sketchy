@@ -1169,10 +1169,8 @@ export const EN = {
     couldNotSaveThatName: "Could not save that name. Please try again.",
     joinAsASpectator: "join as a spectator",
     joinTheRoom: "join the room",
-    loading: "Loading…",
     showingFilteredRoomsCountOfRoomsCount:
       (p: { filteredRoomsCount: number; roomsCount: number }) => `Showing ${p.filteredRoomsCount} of ${p.roomsCount}`,
-    n0Rooms: "0 rooms",
     close: "Close",
     joining: "Joining…",
     joinTheRoom2: "Join the room",
@@ -2539,8 +2537,6 @@ export const EN = {
   lobbyPresence: {
     showingShownOfOnlineCount:
       (p: { shown: number; onlineCount: number }) => `Showing ${p.shown} of ${p.onlineCount}`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Choose a name to play under.",
