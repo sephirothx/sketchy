@@ -392,7 +392,7 @@
   min-width: 132px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .public-room-card {
     align-items: stretch;
     flex-direction: column;
@@ -573,34 +573,6 @@
   margin-top: 10px;
 }
 
-.invite-primary-button,
-.invite-secondary-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  border-radius: var(--radius-sm);
-  padding: 10px 16px;
-  font-size: 14.5px;
-  font-weight: 800;
-  font-family: var(--font-body);
-}
-
-.invite-primary-button {
-  border: 0;
-  background: var(--primary);
-  color: var(--on-primary);
-  box-shadow: 0 2px 0 var(--primary-edge);
-}
-
-.invite-secondary-button {
-  border: 1.5px solid var(--line-strong);
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-
 .invite-action-hint {
   margin: 9px 0 0;
   color: var(--muted);
@@ -646,7 +618,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .invite-entry-page {
     padding: 14px 12px 32px;
   }
@@ -686,7 +658,7 @@
     right: 0;
     bottom: 0;
     left: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     border-top: 1.5px solid var(--line);
     background: var(--card);
@@ -767,7 +739,7 @@
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   .lobby-dock .btn {
@@ -1612,13 +1584,14 @@ a.online-player-name:focus-visible {
 }
 
 /* An invitation asks a question, so it sits where a banner does rather than
-   passing by like a toast. */
+   passing by like a toast - above a phone page's dock rather than on it
+   (--dock-clearance, useBottomDock): it sat on Quick play and Create a room. */
 .friend-invite-notice {
   position: fixed;
   left: 50%;
-  bottom: 18px;
+  bottom: calc(18px + var(--dock-clearance));
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: var(--z-notice);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1686,7 +1659,7 @@ a.online-player-name:focus-visible {
   padding: 0.35rem;
   position: absolute;
   top: calc(100% + 4px);
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .online-player-menu-item {
@@ -1760,7 +1733,7 @@ a.online-player-name:focus-visible {
   grid-template-columns: 260px minmax(0, 1fr);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-layout {
     grid-template-columns: 1fr;
   }
@@ -1772,7 +1745,7 @@ a.online-player-name:focus-visible {
   top: 16px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-rail {
     position: static;
   }

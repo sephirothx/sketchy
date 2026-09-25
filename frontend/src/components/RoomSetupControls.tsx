@@ -1,3 +1,4 @@
+import { useLayoutEffect, useRef } from "react";
 import type { ReactNode } from "react";
 import { CheckIcon, PlusIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
@@ -35,21 +36,113 @@ function SegmentLabel({ children }: { children: ReactNode }) {
   );
 }
 
-export function FieldHint({ hint }: { hint: string }) {
+/** How far a shown tooltip keeps from the edge of whatever would cut it off. */
+const TOOLTIP_EDGE = 12;
+
+/** The horizontal span a tooltip may use: the viewport, narrowed to the
+    nearest ancestor that clips or scrolls (the room-settings dialog on a
+    phone ends a few pixels inside the viewport, and a tooltip past its edge
+    scrolls the dialog sideways). */
+function tooltipBounds(from: HTMLElement): { left: number; right: number } {
+  let left = 0;
+  let right = document.documentElement.clientWidth;
+  for (let node = from.parentElement; node && node !== document.body; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (/auto|scroll|hidden|clip/.test(`${style.overflowX} ${style.overflowY}`)) {
+      const rect = node.getBoundingClientRect();
+      left = Math.max(left, rect.left);
+      right = Math.min(right, rect.right);
+      break;
+    }
+  }
+  return { left: left + TOOLTIP_EDGE, right: right - TOOLTIP_EDGE };
+}
+
+/**
+ * The form's one help mark: a "?" with its sentence in a tooltip.
+ *
+ * With `href` it is a link rather than a button - the prompt-list picker's
+ * "how this list plays" goes to the stats page - drawn the same, so the form
+ * has one help affordance and not a "?" beside an "ⓘ".
+ */
+export function FieldHint({ hint, href }: { hint: string; href?: string }) {
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
+  const tipRef = useRef<HTMLSpanElement | null>(null);
+
+  /**
+   * Centred over its "?", shifted to stay inside what would cut it off.
+   *
+   * Computed from the "?" and the tooltip's own width rather than from where
+   * the tooltip is drawn: that box is transformed by the shift being decided,
+   * so measuring it mid-move settled on the wrong answer. Worked out ahead of
+   * time - on mount, when the "?" is first laid out (a closed section has no
+   * layout), and on resize or rotation - so a tooltip is never shown
+   * unplaced, and the pointer entering only confirms the value: changing it
+   * inside a touch's pointerenter swallowed that tap's click.
+   */
+  function place() {
+    const wrap = wrapRef.current;
+    const tip = tipRef.current;
+    if (!wrap || !tip) return;
+    const anchor = wrap.getBoundingClientRect();
+    if (anchor.width === 0) return; // Not laid out: inside a closed section.
+    // Hidden tooltips are out of the layout; lay this one out to measure it.
+    const hidden = tip.offsetWidth === 0;
+    if (hidden) tip.style.display = "block";
+    const width = tip.offsetWidth;
+    if (hidden) tip.style.removeProperty("display");
+    const centre = anchor.left + anchor.width / 2;
+    const bounds = tooltipBounds(wrap);
+    const left = centre - width / 2;
+    const shift = width > bounds.right - bounds.left
+      ? bounds.left - left
+      : left < bounds.left
+        ? bounds.left - left
+        : left + width > bounds.right ? bounds.right - (left + width) : 0;
+    const value = `${Math.round(shift)}px`;
+    if (tip.style.getPropertyValue("--tip-shift") !== value) {
+      tip.style.setProperty("--tip-shift", value);
+    }
+  }
+
+  useLayoutEffect(() => {
+    place();
+    const wrap = wrapRef.current;
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => place());
+    if (wrap) observer?.observe(wrap);
+    window.addEventListener("resize", place);
+    window.addEventListener("orientationchange", place);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", place);
+      window.removeEventListener("orientationchange", place);
+    };
+    // Again when the words change: they change the tooltip's width.
+  }, [hint]);
+
   return (
-    <span className="m3-switch-hint-wrap">
-      <button
-        type="button"
-        className="m3-switch-hint"
-        aria-label={hint}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-      >
-        ?
-      </button>
-      <span className="m3-switch-hint-tooltip" role="tooltip">
+    <span ref={wrapRef} className="m3-switch-hint-wrap" onPointerEnter={place} onFocus={place}>
+      {href ? (
+        // A new tab: the picker also lives in the waiting-room settings,
+        // where navigating away would discard a half-made edit. The target
+        // is 24px square, which WCAG 2.2 target-size asks for beside a chip.
+        <a className="m3-switch-hint-link" href={href} target="_blank" rel="noreferrer" aria-label={hint}>
+          <span className="m3-switch-hint" aria-hidden="true">?</span>
+        </a>
+      ) : (
+        <button
+          type="button"
+          className="m3-switch-hint"
+          aria-label={hint}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          ?
+        </button>
+      )}
+      <span ref={tipRef} className="m3-switch-hint-tooltip" role="tooltip">
         {hint}
       </span>
     </span>

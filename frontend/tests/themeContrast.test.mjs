@@ -225,6 +225,11 @@ const ANY_BACKGROUND = new RegExp(
 );
 const FOREGROUND = new RegExp(String.raw`(?:^|[;\s])color\s*:\s*` + COLOUR, "i");
 
+// Properties a stylesheet points at a theme token per variant rather than
+// declaring once: the podium's medal steps set --medal and --medal-soft on each
+// place. Their pairs are measured, place by place, in medalContrast.test.mjs.
+const MEASURED_ELSEWHERE = new Set(["--medal", "--medal-soft"]);
+
 /** Every rule in every stylesheet that sets `foreground` (a text colour, or a
     re-pointed focus ring), with the background it sets beside it, if any. */
 function paintedRules(foreground = FOREGROUND, background = BACKGROUND) {
@@ -238,6 +243,7 @@ function paintedRules(foreground = FOREGROUND, background = BACKGROUND) {
       const fg = body.match(foreground);
       if (!fg) continue;
       const token = (value) => (value.startsWith("var(") ? value.slice(4, -1) : value);
+      if (MEASURED_ELSEWHERE.has(token(fg[1])) || (bg && MEASURED_ELSEWHERE.has(token(bg[1])))) continue;
       rules.push({
         name: `${file} ${selector.trim().replace(/\s+/g, " ")}`,
         fg: token(fg[1]),

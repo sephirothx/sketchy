@@ -227,7 +227,8 @@ def room_traffic(players: int, rng: random.Random) -> dict[str, list[bytes]]:
             },
         ),
         "correct_guess": event_messages(
-            "correct_guess", {"playerId": "p5", "nickname": "Player_5", "points": 140}
+            "correct_guess",
+            {"playerId": "p5", "nickname": "Player_5", "points": 140, "seconds": 12.3},
         ),
         "room_state": event_messages("room_state", room_state),
     }

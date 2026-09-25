@@ -8,8 +8,12 @@
  *
  * #6b7280 is 4.83:1 on white; the dark-theme override is 5.7:1 or better. No
  * opacity - it would scale the contrast straight back down.
+ *
+ * The header chip's own name wears it too (GLOSSARY: Guest), so a guest reads
+ * the same in the chip as in every list.
  */
-.colored-player-name.is-guest {
+.colored-player-name.is-guest,
+.identity-name.is-guest {
   font-style: italic;
   font-weight: 600;
   color: #6b7280;
@@ -27,7 +31,8 @@
   padding-right: 0.22em;
 }
 
-[data-theme="dark"] .colored-player-name.is-guest {
+[data-theme="dark"] .colored-player-name.is-guest,
+[data-theme="dark"] .identity-name.is-guest {
   color: #94a3b8;
 }
 
@@ -58,7 +63,7 @@
   position: absolute;
   top: calc(100% + 8px);
   right: 0;
-  z-index: 20;
+  z-index: var(--z-popover);
   width: 216px;
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -132,8 +137,14 @@
   color: var(--ink);
 }
 
-.auth-form .modal-button {
+.auth-form .btn-primary {
   margin-top: 10px;
+}
+
+/* A footer row lines its buttons up by itself; the primary's gap above is for
+   a button standing alone under the fields. */
+.confirmation-dialog-actions > .btn {
+  margin-top: 0;
 }
 
 .auth-error {
@@ -230,7 +241,8 @@
 
 /*
  * Marks a name as not yet claimed. Purely supplementary - the chip's
- * aria-label says so in words, so nothing depends on seeing the dot.
+ * aria-label says so in words, and the dot's title says it to a pointer, so
+ * nothing depends on seeing it. The warning tone per theme, not a literal.
  */
 .identity-unclaimed {
   width: 7px;
@@ -364,7 +376,7 @@
   justify-content: center;
   margin-top: 16px;
 }
-.two-factor-decide .modal-button { margin: 0; }
+.two-factor-decide .btn-primary { margin: 0; }
 .two-factor-scan { min-width: 0; text-align: center; }
 .two-factor-scan .modal-hint { margin: 8px 0 0; }
 .two-factor-entry { margin-top: 0; min-width: 0; text-align: left; }
@@ -459,7 +471,7 @@
   justify-content: center;
   margin-top: 16px;
 }
-.role-notice-decide .modal-button { margin: 0; }
+.role-notice-decide .btn-primary { margin: 0; }
 
 /* The passkey route, above the fields it replaces. */
 .auth-passkey { margin-top: 14px; width: 100%; }
@@ -517,7 +529,8 @@
   margin: 4px 0 12px;
 }
 .two-factor-ack input { accent-color: var(--primary); height: 16px; width: 16px; }
-.two-factor-codes .modal-button { width: 100%; }
+/* Done, under the codes; the direct child, not the download beside Copy all. */
+.two-factor-codes > .btn-primary { width: 100%; }
 .two-factor-codes ul {
   display: grid;
   gap: 6px;
@@ -533,7 +546,7 @@
   text-align: center;
 }
 
-@media (max-width: 560px) {
+@media (max-width: 640px) {
   .two-factor-setup { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .two-factor-scan { margin: 0 auto; max-width: 190px; }
 }
@@ -583,7 +596,6 @@
 .account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--on-primary); text-decoration: none; }
 .account-danger-zone { border-color: var(--danger-soft); }
 .account-danger-zone > p { font-size: 14px; line-height: 1.5; }
-.account-delete-start, .account-delete-confirm { background: var(--danger-button); border-color: var(--danger-button) !important; color: var(--on-danger) !important; }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
 .account-delete-form input { background: var(--card); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-size: 16px; padding: 9px 11px; }
@@ -711,19 +723,16 @@
   font-weight: 500;
 }
 
-/* Plainly a name, not a game: what plays is Quick play, beside the room list. */
+.first-run-guest-row input:focus-visible {
+  border-bottom-color: var(--tag-edge, #c8102e);
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 3px;
+}
+
+/* Plainly a name, not a game: a secondary .btn, because what plays is Quick
+   play, beside the room list. */
 .first-run-guest-submit {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  box-shadow: var(--shadow);
-  color: var(--ink);
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 800;
   justify-self: center;
-  min-height: 40px;
-  padding: 0 18px;
 }
 
 .first-run-tag .auth-error {
@@ -890,12 +899,6 @@
   min-height: 32px;
 }
 
-.settings-locked-hint {
-  margin: 0;
-  font-size: 13px;
-  opacity: 0.75;
-}
-
 /* Post-game claim prompt. */
 .game-end-claim {
   display: flex;
@@ -915,18 +918,7 @@
   font-size: 14px;
 }
 
-.game-end-claim-action {
-  border: none;
-  background: var(--primary);
-  color: var(--on-primary);
-  border-radius: 8px;
-  padding: 9px 16px;
-  font-weight: 700;
-  cursor: pointer;
-  min-height: 40px;
-}
-
-@media (max-width: 560px) {
+@media (max-width: 480px) {
   .identity-name {
     max-width: 9ch;
   }
@@ -1087,11 +1079,6 @@
   margin: 0 0 12px;
 }
 
-.recovery-form .modal-button {
-  display: inline-block;
-  text-align: center;
-  text-decoration: none;
-}
 
 @media (max-width: 720px) {
   .recovery-card {
@@ -1118,12 +1105,6 @@
   padding-top: 6px;
 }
 
-
-/* Deleting the account has a dialog of its own (Settings > Account). */
-.account-delete-dialog .account-delete-confirm {
-  background: var(--danger-button);
-  box-shadow: none;
-}
 
 /* The identity chip and the profile disc show the uploaded picture too. */
 .identity-avatar.has-picture,

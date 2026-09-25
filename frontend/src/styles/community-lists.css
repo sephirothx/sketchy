@@ -301,16 +301,6 @@
   padding: 8px 0;
 }
 
-.community-catalogue-notice {
-  background: var(--success-soft);
-  border: 1px solid var(--success);
-  border-radius: var(--radius-sm);
-  color: var(--success-ink);
-  font-weight: 700;
-  margin: 0 0 14px;
-  padding: 10px 12px;
-}
-
 /* ------------------------------------------------------------- the pane
 
    Sticky on a wide screen: choosing between two lists should not mean
@@ -477,7 +467,7 @@
 
    No second column to stand a list in. The cards are the page; an open list
    replaces them, with a way back, rather than landing somewhere below them. */
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .community-catalogue-body { grid-template-columns: minmax(0, 1fr); }
   .community-catalogue-pane-slot { position: static; }
   .community-catalogue-page:not(.has-selection) .community-catalogue-pane-slot { display: none; }

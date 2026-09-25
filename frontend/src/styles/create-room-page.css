@@ -177,16 +177,18 @@ details.form-section > .form-section-body {
 /* The language sits with the name and the visibility, not with the lists:
    it is what the room is, and the lists answer to it. */
 .create-room-language-field {
+  align-items: flex-start;
   display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
 }
 
-
-.create-room-language-caption {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 700;
-  max-width: 320px;
+/* Worded like the room name's label beside it, which it sits level with. */
+.create-room-language-label {
+  color: var(--ink);
+  font-size: 14.5px;
+  font-weight: 800;
 }
 
 .visibility-caption {
@@ -341,6 +343,8 @@ details.form-section > .form-section-body {
 .custom-prompts-editor > label { display: flex; flex-direction: column; font-size: 14.5px; font-weight: 800; color: var(--ink); gap: 5px; }
 .custom-prompts-summary { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 13px; font-weight: 700; gap: 4px 12px; margin-top: 7px; }
 .custom-prompts-summary strong { color: var(--success-ink); }
+/* Nothing typed is nothing to celebrate: green is for a count that is there. */
+.custom-prompts-summary.is-empty strong { color: var(--muted); }
 .custom-prompts-summary.has-errors strong,
 .custom-prompts-summary.has-errors span { color: var(--danger); }
 .custom-prompts-error,
@@ -376,6 +380,23 @@ details.form-section > .form-section-body {
 
 .create-room-footer .create-room-submit {
   flex: none;
+}
+
+/* Nothing but the button to show (every rule is a new room's): the button
+   keeps its place on the right, and above the phone breakpoint loses the card
+   around it. A phone keeps it - there the footer is the fixed dock, whose
+   surface is what keeps the form from showing through. */
+.create-room-footer.is-bare {
+  justify-content: flex-end;
+}
+
+@media (min-width: 641px) {
+  .create-room-footer.is-bare {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
 }
 
 /* -------------------------------------------------- wide: form and preview */
@@ -664,7 +685,13 @@ details.form-section > .form-section-body {
   padding: 0;
   width: 16px;
 }
+/* Out of the layout until it is shown: an invisible tooltip still widens the
+   page, and one centred over a "?" near a phone's right edge made the whole
+   form scroll sideways. `--tip-shift` is set by `FieldHint` to keep a shown
+   one inside the viewport, or inside the nearest scrolling container when that
+   is narrower; the arrow moves back by as much, so it still points at its "?". */
 .m3-switch-hint-tooltip {
+  --tip-shift: 0px;
   background: var(--ink);
   border-radius: 8px;
   box-sizing: border-box;
@@ -680,25 +707,49 @@ details.form-section > .form-section-body {
   pointer-events: none;
   position: absolute;
   bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(4px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  display: none;
+  transform: translateX(calc(-50% + var(--tip-shift)));
+  /* Opacity only: a transition on the transform would slide a re-placed
+     tooltip across the edge it is being kept inside. */
+  transition: opacity 120ms ease;
   white-space: normal;
   width: max-content;
-  z-index: 20;
+  z-index: var(--z-popover);
 }
 .m3-switch-hint-tooltip::after {
   border: 5px solid transparent;
   border-top-color: var(--ink);
   content: "";
-  left: 50%;
+  left: calc(50% - var(--tip-shift));
   position: absolute;
   top: 100%;
   transform: translateX(-50%);
 }
 .m3-switch-hint-wrap:hover .m3-switch-hint-tooltip,
 .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
+  display: block;
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+}
+@starting-style {
+  .m3-switch-hint-wrap:hover .m3-switch-hint-tooltip,
+  .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
+    opacity: 0;
+  }
+}
+/* The link form (`FieldHint` with `href`): the same mark in a 24px target. */
+.m3-switch-hint-link {
+  align-items: center;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  text-decoration: none;
+  width: 24px;
+}
+.m3-switch-hint-link > .m3-switch-hint {
+  cursor: pointer;
+}
+.m3-switch-hint-link:hover > .m3-switch-hint {
+  color: var(--primary);
 }
 .m3-switch-label.is-disabled .m3-switch-hint-wrap {
   opacity: 1;
@@ -755,8 +806,8 @@ details.form-section > .form-section-body {
 @media (max-width: 640px) {
   .create-room-heading-row { align-items: stretch; flex-direction: column; }
   .room-preset-bar { justify-content: flex-start; }
-  /* The name takes the width; the language and the visibility share the line
-     under it, which is what the two of them are - one short answer each. */
+  /* The name takes the width; the language and the visibility wrap under it,
+     each on its own line on a phone once the language carries its label. */
   .create-room-name-row {
     align-items: flex-end;
     flex-wrap: wrap;
@@ -765,6 +816,14 @@ details.form-section > .form-section-body {
 
   .create-room-name-field {
     flex: 1 1 100%;
+  }
+
+  /* Its label goes beside the flag here rather than above it: the pair has a
+     line to itself, so a label above would only add a line. */
+  .create-room-language-field {
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
   }
 
   /* ── The three numbers ────────────────────────────────────────────────
@@ -842,7 +901,7 @@ details.form-section > .form-section-body {
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   .create-room-footer .create-room-submit {

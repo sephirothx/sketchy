@@ -194,7 +194,7 @@
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .ops-signals > .ops-card {
     grid-column: 1 / -1;
   }
@@ -210,7 +210,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .ops-sizes-row {
     grid-template-columns: 1fr;
   }
@@ -597,7 +597,7 @@
   grid-template-columns: 300px minmax(0, 1fr);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .mod-layout {
     grid-template-columns: 1fr;
   }
