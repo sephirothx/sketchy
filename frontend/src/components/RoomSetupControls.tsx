@@ -36,9 +36,27 @@ function SegmentLabel({ children }: { children: ReactNode }) {
   );
 }
 
-/** Keep a shown tooltip inside the viewport. It is centred over its "?",
-    and a "?" near the right edge of a phone put half of it past the edge. */
-const TOOLTIP_EDGE = 8;
+/** How far a shown tooltip keeps from the edge of whatever would cut it off. */
+const TOOLTIP_EDGE = 12;
+
+/** The horizontal span a tooltip may use: the viewport, narrowed to the
+    nearest ancestor that clips or scrolls (the room-settings dialog on a
+    phone ends a few pixels inside the viewport, and a tooltip past its edge
+    scrolls the dialog sideways). */
+function tooltipBounds(from: HTMLElement): { left: number; right: number } {
+  let left = 0;
+  let right = document.documentElement.clientWidth;
+  for (let node = from.parentElement; node && node !== document.body; node = node.parentElement) {
+    const style = getComputedStyle(node);
+    if (/auto|scroll|hidden|clip/.test(`${style.overflowX} ${style.overflowY}`)) {
+      const rect = node.getBoundingClientRect();
+      left = Math.max(left, rect.left);
+      right = Math.min(right, rect.right);
+      break;
+    }
+  }
+  return { left: left + TOOLTIP_EDGE, right: right - TOOLTIP_EDGE };
+}
 
 /**
  * The form's one help mark: a "?" with its sentence in a tooltip.
@@ -48,26 +66,42 @@ const TOOLTIP_EDGE = 8;
  * has one help affordance and not a "?" beside an "ⓘ".
  */
 export function FieldHint({ hint, href }: { hint: string; href?: string }) {
+  const wrapRef = useRef<HTMLSpanElement | null>(null);
   const tipRef = useRef<HTMLSpanElement | null>(null);
 
+  /**
+   * Centred over its "?", shifted to stay inside what would cut it off.
+   *
+   * Computed from the "?" and the tooltip's own width rather than from where
+   * the tooltip is drawn: that box is transformed by the shift being decided,
+   * so measuring it mid-move settled on the wrong answer. Synchronous, before
+   * the tooltip's first painted frame, so it is never shown unplaced - a
+   * tooltip drawn once past the edge of a phone widens its layout viewport
+   * for good.
+   */
   function place() {
+    const wrap = wrapRef.current;
     const tip = tipRef.current;
-    if (!tip) return;
-    tip.style.setProperty("--tip-shift", "0px");
-    // A frame later, once :hover or :focus-within has displayed it.
-    requestAnimationFrame(() => {
-      const rect = tip.getBoundingClientRect();
-      if (rect.width === 0) return;
-      const right = document.documentElement.clientWidth - TOOLTIP_EDGE;
-      const shift = rect.right > right
-        ? right - rect.right
-        : rect.left < TOOLTIP_EDGE ? TOOLTIP_EDGE - rect.left : 0;
-      tip.style.setProperty("--tip-shift", `${shift}px`);
-    });
+    if (!wrap || !tip) return;
+    // Hidden tooltips are out of the layout; lay this one out to measure it.
+    const hidden = tip.offsetWidth === 0;
+    if (hidden) tip.style.display = "block";
+    const width = tip.offsetWidth;
+    if (hidden) tip.style.removeProperty("display");
+    const anchor = wrap.getBoundingClientRect();
+    const centre = anchor.left + anchor.width / 2;
+    const bounds = tooltipBounds(wrap);
+    const left = centre - width / 2;
+    const shift = width > bounds.right - bounds.left
+      ? bounds.left - left
+      : left < bounds.left
+        ? bounds.left - left
+        : left + width > bounds.right ? bounds.right - (left + width) : 0;
+    tip.style.setProperty("--tip-shift", `${shift}px`);
   }
 
   return (
-    <span className="m3-switch-hint-wrap" onPointerEnter={place} onFocus={place}>
+    <span ref={wrapRef} className="m3-switch-hint-wrap" onPointerEnter={place} onFocus={place}>
       {href ? (
         // A new tab: the picker also lives in the waiting-room settings,
         // where navigating away would discard a half-made edit. The target

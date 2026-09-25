@@ -718,8 +718,10 @@ details.form-section > .form-section-body {
   position: absolute;
   bottom: calc(100% + 8px);
   display: none;
-  transform: translateX(calc(-50% + var(--tip-shift))) translateY(4px);
-  transition: opacity 120ms ease, transform 120ms ease;
+  transform: translateX(calc(-50% + var(--tip-shift)));
+  /* Opacity only: a transition on the transform would slide a re-placed
+     tooltip across the edge it is being kept inside. */
+  transition: opacity 120ms ease;
   white-space: normal;
   width: max-content;
   z-index: 20;
@@ -737,13 +739,11 @@ details.form-section > .form-section-body {
 .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
   display: block;
   opacity: 1;
-  transform: translateX(calc(-50% + var(--tip-shift))) translateY(0);
 }
 @starting-style {
   .m3-switch-hint-wrap:hover .m3-switch-hint-tooltip,
   .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
     opacity: 0;
-    transform: translateX(calc(-50% + var(--tip-shift))) translateY(4px);
   }
 }
 /* The link form (`FieldHint` with `href`): the same mark in a 24px target. */
