@@ -767,11 +767,6 @@
   text-underline-offset: 2px;
 }
 
-.first-run-rules:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 .first-run-say {
   display: grid;
   gap: 6px;
