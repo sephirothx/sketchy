@@ -647,7 +647,7 @@ export const DE: Catalogue = {
     passwordConfirmsItIsYou: "Dein Passwort bestätigt, dass du es bist: über diese Adresse wird das Konto wiederhergestellt.",
     enterYourPasswordToConfirm: "Gib dein Passwort ein, um die Änderung zu bestätigen.",
     close: "Schließen",
-    notNow: "Nicht jetzt",
+    notNow: "Jetzt nicht",
   },
 
   afkCheckDialog: {

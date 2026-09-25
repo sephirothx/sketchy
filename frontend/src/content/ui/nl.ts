@@ -647,7 +647,7 @@ export const NL: Catalogue = {
     passwordConfirmsItIsYou: "Je wachtwoord bevestigt dat jij het bent: via dit adres wordt het account hersteld.",
     enterYourPasswordToConfirm: "Voer je wachtwoord in om de wijziging te bevestigen.",
     close: "Sluiten",
-    notNow: "Niet nu",
+    notNow: "Nu niet",
   },
 
   afkCheckDialog: {
