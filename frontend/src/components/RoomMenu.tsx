@@ -99,14 +99,14 @@ function RoomMenuRows({ actions, run, asMenu }: {
           onClick={run(actions.onToggleAfk)}
         >
           <MoonIcon size={19} />
-          <span>{isAfk ? ui.roomMenuSheet.iMBack : ui.roomMenuSheet.goAwayForABit}</span>
+          <span>{isAfk ? ui.roomMenuSheet.backFromAfk : ui.roomMenuSheet.goAfk}</span>
         </button>
       </li>
       {isPlaying && (
         <li role={asMenu ? "none" : undefined}>
           <button type="button" role={role} className="sheet-menu-item" onClick={run(actions.onSaveImage)}>
             <DownloadIcon size={19} />
-            <span>{ui.roomMenuSheet.saveThisDrawing}</span>
+            <span>{ui.roomMenuSheet.saveImage}</span>
           </button>
         </li>
       )}
@@ -154,7 +154,12 @@ export function RoomMenuSheet({ actions, onDismiss }: {
     action();
   };
   return (
-    <BottomSheet title={ui.roomMenuSheet.room} onDismiss={onDismiss} testId="room-menu-sheet">
+    <BottomSheet
+      title={ui.roomMenuSheet.room}
+      closeLabel={ui.roomMenuSheet.close}
+      onDismiss={onDismiss}
+      testId="room-menu-sheet"
+    >
       <RoomMenuRows actions={actions} run={run} asMenu={false} />
     </BottomSheet>
   );

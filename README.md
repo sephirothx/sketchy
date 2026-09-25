@@ -130,7 +130,7 @@ keyboard that takes half the screen, and one thumb.
   you are — a live game included — and the number waiting for an answer sits on your
   account chip. A request that was declined is not announced: your list simply stops
   showing it.
-- Customization option to always hide the masked prompt's length and composition from guessers (forces hints off).
+- *Hide letter tiles*: a room option that hides the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
 - Scoring designed to resist "sandbagging": drawers can't game an easy prompt by stalling,
@@ -489,7 +489,7 @@ rejected until their matching semantics are implemented.
 Each room **declares** its **Prompt language**: the host chooses it when the
 room is created, it is fixed for the room's life, and every selected list must
 be in it. It is carried into exact and near-match game logic — for the room's
-own quick prompts as much as for list content, so a room typing its own German
+own custom prompts as much as for list content, so a room typing its own German
 prompts is no longer matched under English rules — and exposed in room
 payloads. Selecting a list never changes it: a list in another
 language is a visible validation failure against the prompt-list field, and an
@@ -538,10 +538,10 @@ content rating remain on the exact immutable prompt version where their
 meaning belongs. Community discovery — publishing a list, the community
 catalogue, stars, and forking — is specified in R-LIST-11…R-LIST-18 and is
 being built; the sections below describe what the server does today.
-Quick **Custom prompts** remain deliberately ephemeral room input: they are
+**Custom prompts** remain deliberately ephemeral room input: they are
 not auto-saved, do not acquire an implicit owner/list, and disappear with the
-in-memory room. A registered host can explicitly send usable quick prompts to
-**My prompt lists** and save them as a reusable Private list; nothing is stored
+in-memory room. A registered host can explicitly save usable custom prompts to
+**My prompt lists** as a Private prompt list; nothing is stored
 merely because it was typed. An account may own at most 25 lists and a saved
 list may contain at most 500 prompts. Editing uses optimistic concurrency and
 creates a new immutable revision instead of rewriting the revision a running or
@@ -553,7 +553,7 @@ vocabulary does not contain is refused by name rather than quietly dropped.
 
 Publishing a list puts it in the **Community catalogue**, where anyone can find
 and play it. It is a deliberate act with its own controls rather than a
-visibility setting: it needs a verified email address and no unread moderator
+visibility setting: it needs a confirmed email address and no unread moderator
 warning, it is rate-limited, it is recorded in the audit ledger, and editing a
 published list never takes it back out. Unpublishing does, at once, and leaves
 its stars where they are. Any published list can also be **forked** — copied into a private list
@@ -580,7 +580,7 @@ are never in the same listing. A host can pick a published list for a room
 directly, without copying it first — publishing is the owner saying so. It is admitted on the same check that runs
 again at Start, so a list unpublished or taken down in between refuses the room
 visibly rather than quietly shrinking the pool it draws from. A published list
-can be **starred** by anyone with a verified account; the list's owner sees how
+can be **starred** by anyone with a confirmed email address; the list's owner sees how
 many stars it has and never who gave them, and unpublishing leaves them where
 they are.
 
@@ -954,9 +954,9 @@ The **Email** row in **Settings → Account** is where an address is added,
 replaced or simply looked at. The weekly reminder is a prompt and nothing more;
 a prompt somebody has dismissed is not a place to go back to, so the row is
 always there. It shows the address masked one dot per letter (`s•••••o@e•••••e.com`) beside a
-**Verified** or **Not verified** mark, with a control to reveal it in full; the
-dialog behind it says what the account already has - a verified address, one
-waiting to be verified, or, on a deployment with no SMTP configured, that a lost
+**Confirmed** or **Not confirmed** mark, with a control to reveal it in full; the
+dialog behind it says what the account already has - a confirmed address, one
+waiting to be confirmed, or, on a deployment with no SMTP configured, that a lost
 password has to be reset by whoever runs the server. The recovery banner masks
 the address the same way, because it sits on every screen.
 
@@ -1309,8 +1309,8 @@ Session cookies contain opaque 256-bit random tokens. Only SHA-256 token hashes
 are stored; the database never contains a credential that can be replayed.
 Each server-side session records a coarse device label, creation, last use,
 expiry, rotation, and revocation. Tokens rotate halfway through their one-year
-maximum lifetime, logout revokes the current token immediately, and registered
-players can inspect and revoke individual devices or log out everywhere from
+maximum lifetime, signing out revokes the current token immediately, and registered
+players can inspect and revoke individual devices or sign out everywhere from
 the account menu. Socket.IO handshakes resolve the same revocable record as
 HTTP requests, and a revocation also reaches the sockets the revoked sessions
 opened - told, then closed - so a device signed out from elsewhere stops
@@ -1349,7 +1349,7 @@ in** appears once there is an account to sign in to. A guest who signs in from
 inside Settings is told once that the account's values took over.
 
 The identity menu is navigation only: Settings, profile, prompt stats, prompt
-lists, bug reports, log out. Account absorbs what the menu used to hold: the
+lists, bug reports, sign out. Account absorbs what the menu used to hold: the
 username and name color, the email, changing the password (its own dialog:
 current password, the new one twice, or a mailed link for somebody who has
 forgotten it — the change signs every other device out), signed-in devices,
@@ -2744,9 +2744,9 @@ A seated client checks with the server every five seconds that it still holds th
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
   home, and in a room the room's name, with a globe after it for a public room and a lock
   for a private one), what is going on (the round and the clock, a
-  server notice, and an *Away* chip while you are away), and you (your chip, whose menu opens
+  server notice, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
-  go away, save the drawing, start over, and Leave last in red - a dropdown on a
+  go AFK, save the image, start over, and Leave last in red - a dropdown on a
   desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the
   room's. A phone's round reads "Round 2/3", or "2/3" when the bar has no room for the word. A short window gives way in a fixed
   order: the room's name, then your chip's name (it becomes your round avatar); the wordmark,

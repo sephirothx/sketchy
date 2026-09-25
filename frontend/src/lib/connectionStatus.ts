@@ -50,6 +50,6 @@ Shared by the banner outside a room and the chip's popover inside one, so the
 two never describe the same outage in different words. */
 export function connectionStatusText(status: Exclude<ConnectionStatus, "connected">): string {
   if (status === "offline") return ui.connectionStatusBanner.youReDisconnectedCheckYour;
-  if (status === "failed") return ui.connectionStatusBanner.couldnTReconnectToYour;
+  if (status === "failed") return ui.connectionStatusBanner.couldNotReconnect;
   return ui.connectionStatusBanner.connectionLostReconnecting;
 }

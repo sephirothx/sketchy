@@ -77,11 +77,6 @@
   margin-bottom: 18px;
 }
 
-.prompt-list-manager-heading p {
-  color: var(--muted);
-  margin: 0 0 4px;
-}
-
 .prompt-list-manager-heading h1 {
   font-family: var(--font-display);
   font-size: 27px;

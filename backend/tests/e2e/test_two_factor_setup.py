@@ -91,8 +91,8 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             assert await codes.locator("li").count() == 10
 
             # Shown once, so the way past is a tick that says they were kept:
-            # until it is given, "Done" is disabled and Escape does nothing.
-            done = dialog.get_by_role("button", name="Done")
+            # until it is given, "OK" is disabled and Escape does nothing.
+            done = dialog.get_by_role("button", name="OK", exact=True)
             await expect(done).to_be_disabled()
             await page.keyboard.press("Escape")
             await expect(codes).to_be_visible()
@@ -103,7 +103,7 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             # signed out with it; this one, which proved a password and a code
             # one request ago, is handed a session for the role it now holds.
             await expect(dialog).to_contain_text("You are now a moderator")
-            await dialog.get_by_role("button", name="Done").click()
+            await dialog.get_by_role("button", name="OK", exact=True).click()
 
             # Signing in again, with the code - the one thing an account with
             # a second factor does that nothing else here does, and the thing

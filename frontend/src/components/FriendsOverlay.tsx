@@ -251,7 +251,7 @@ export function FriendsOverlay() {
         <ConfirmationDialog
           title={ui.friendsOverlay.declineThisRequest}
           description={ui.friendsOverlay.declineWarning({ name: confirming.entry.displayName })}
-          confirmLabel={ui.friendsOverlay.decline2}
+          confirmLabel={ui.friendsOverlay.decline}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             const userId = confirming.entry.userId;
@@ -264,7 +264,7 @@ export function FriendsOverlay() {
         <ConfirmationDialog
           title={ui.friendsOverlay.removeConfirm({ name: confirming.entry.displayName })}
           description={ui.friendsOverlay.youWillBothStopBeingAble}
-          confirmLabel={ui.friendsOverlay.remove2}
+          confirmLabel={ui.friendsOverlay.remove}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             const userId = confirming.entry.userId;

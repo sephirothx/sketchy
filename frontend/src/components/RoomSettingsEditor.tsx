@@ -163,7 +163,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         // The server settles dependent settings itself — a hint mode the
         // scoring rules out, say — so a refusal is not simply "put the old
         // value back"; the form reloads from what the room actually holds.
-        const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseSettings);
+        const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseRules);
         setError(message);
         notify(message, "error");
         return;
@@ -187,10 +187,9 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     aria-labelledby="room-settings-title"
   >
     <div className="room-settings-editor-heading">
-      <p className="section-label waiting-card-kicker">{ui.roomSettingsEditor.hostSettings}</p>
       <h2 id="room-settings-title">{ui.roomSettingsEditor.editRoomRules}</h2>
     </div>
-    {loading ? <p className="loading-note" role="status">{ui.roomSettingsEditor.loadingSettings}</p> : (
+    {loading ? <p className="loading-note" role="status">{ui.roomSettingsEditor.loadingRoomRules}</p> : (
       <RoomSetupForm
         values={values}
         onChange={handleChange}
@@ -214,7 +213,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         disabled={!dirty || saving || promptsError || loading}
         onClick={() => void save()}
       >
-        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveSettings : ui.roomSettingsEditor.saved}
+        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveRules : ui.roomSettingsEditor.saved}
       </button>
     </div>
   </section>;

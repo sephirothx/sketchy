@@ -144,8 +144,8 @@ export function RoomPlayersPanel({
         <div className="spectator-promotion" data-testid="spectator-promotion">
           <p>
             {playerSpaceAvailable
-              ? ui.roomPlayersPanel.aPlayerSlotIsAvailable
-              : ui.roomPlayersPanel.playerSlotsAreCurrentlyFull}
+              ? ui.roomPlayersPanel.aPlayerSeatIsOpen
+              : ui.roomPlayersPanel.noPlayerSeatsOpen}
           </p>
           <button
             type="button"

@@ -63,7 +63,7 @@ test("only the settings that differ from a new room's are named, in a fixed orde
   );
   assert.deepEqual(changedRoomRules({ ...standard, scoringMode: "none", hideMaskedPrompt: true }), [
     "No scoring",
-    "Hidden prompt",
+    "Letter tiles hidden",
   ]);
   assert.deepEqual(changedRoomRules({ ...standard, customPromptCount: 1, customPromptsOnly: true }), [
     "1 custom prompt only",

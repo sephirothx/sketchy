@@ -39,9 +39,7 @@ async def test_the_wordmark_and_a_round_avatar_stay_in_the_bar_down_to_a_phone()
                 page = await context.new_page()
                 await page.goto(BASE_URL)
                 await use_guest_name(page, f"Bar{tag}w{width}")
-                await page.click(
-                    'button:has-text("Create a room")' if mobile else 'button:has-text("Create room")'
-                )
+                await page.click('button:has-text("Create room")')
                 await page.wait_for_selector(".create-room-page")
                 await page.click('button:has-text("Create room")')
                 await page.wait_for_selector('[data-testid="waiting-room"]')
@@ -71,7 +69,7 @@ async def test_a_notice_takes_the_wordmark_s_room_on_a_narrow_phone_and_gives_it
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, f"Notice{tag}")
-            await page.click('button:has-text("Create a room")')
+            await page.click('button:has-text("Create room")')
             await page.wait_for_selector(".create-room-page")
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')

@@ -222,7 +222,7 @@ export function CreateRoomPage() {
   /** Quick prompts are room input, never stored settings. */
   function presetBlocker(): string | null {
     if (customPrompts.analysis.usableCount > 0) {
-      return ui.createRoomPage.saveQuickPromptsAsA;
+      return ui.createRoomPage.saveCustomPromptsAsAList;
     }
     return null;
   }
@@ -362,7 +362,7 @@ export function CreateRoomPage() {
       // A guest whose name somebody online took first (R-ACCT-09): the
       // first-run block this page shows for a missing name asks for another.
       if (response.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
-      setError(refusalText(response, ui.createRoomPage.failedCreateRoom));
+      setError(refusalText(response, ui.createRoomPage.couldNotCreateRoom));
     } catch (createError) {
       setError(socketRequestErrorMessage(createError, ui.createRoomPage.createTheRoom));
     } finally {
@@ -529,7 +529,7 @@ export function CreateRoomPage() {
           className="btn btn-primary custom-prompts-apply"
           onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
         >
-          {ui.createRoomPage.saveAsReusableList}
+          {ui.createRoomPage.saveAsPromptList}
         </button>
       ) : undefined}
       durationNote={isWide ? undefined : durationNote}

@@ -612,7 +612,6 @@
   margin: 0;
 }
 .waiting-card h2 { font-size: 18px; }
-.waiting-card-kicker { margin: 0 0 5px; }
 
 /* Which room this is. Out of the invite card, which is about getting people
    into it rather than naming it. */
@@ -1113,7 +1112,7 @@
   margin: 7px 0 0;
 }
 
-/* Host settings editor, shown in a modal from the waiting room. The dialog is
+/* Room rules editor, shown in a modal from the waiting room. The dialog is
    the panel; the editor inside it draws no surface of its own. */
 .modal-card.room-settings-modal-card {
   width: min(720px, calc(100vw - 32px));

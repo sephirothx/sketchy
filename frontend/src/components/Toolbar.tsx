@@ -18,7 +18,7 @@ import {
 } from "../lib/drawingRules";
 import { useCanvasBudgetStore } from "../store/canvasBudgetStore";
 import { useGameStore } from "../store/gameStore";
-import { type KeyBindings, useSettingsStore } from "../store/settingsStore";
+import { formatKey, type KeyBindings, useSettingsStore } from "../store/settingsStore";
 import type { DrawTool } from "../types";
 import { recordRender } from "../lib/renderDiagnostics";
 import {
@@ -73,6 +73,29 @@ function ColorSwatch({ color, selected, onSelect, variant, label, title }: Color
  */
 function toolKeys(bindings: KeyBindings, tool: DrawTool): string[] {
   return bindings[tool] ?? [];
+}
+
+/** Whether the platform's own undo is Command-Z rather than Ctrl-Z. */
+function onApplePlatform(): boolean {
+  if (typeof navigator === "undefined") return false;
+  const platform = (navigator as Navigator & { userAgentData?: { platform?: string } }).userAgentData?.platform
+    ?? navigator.platform ?? "";
+  return /mac|iphone|ipad/i.test(platform);
+}
+
+/** The keys that undo, as a title shows them: the player's own binding (they
+    are rebindable, so never a literal), then the platform's shortcut, which the
+    handler below always honours as well. */
+function undoKeys(bindings: KeyBindings): string {
+  // Not copy: the Command key's symbol, the same in every language.
+  const platformUndo = onApplePlatform() ? "\u2318Z" : `${ui.toolbar.ctrlKey}+Z`;
+  return [...bindings.undo.map(formatKey), platformUndo].join(" / ");
+}
+
+/** The keys that step the size down and up, from the player's bindings -
+    empty when both are unbound, and then the title names none. */
+function sizeKeys(bindings: KeyBindings): string {
+  return [...bindings.brushDecrease, ...bindings.brushIncrease].map(formatKey).join(" / ");
 }
 
 const TOOLS: { value: DrawTool; name: string; glyph: React.ReactNode }[] = [
@@ -170,11 +193,11 @@ export const Toolbar = memo(function Toolbar({
 
   function getToolBadge(toolValue: DrawTool): string {
     const keys = toolKeys(keyBindings, toolValue);
-    return keys.length > 0 ? keys[0].toUpperCase() : "";
+    return keys.length > 0 ? formatKey(keys[0]) : "";
   }
 
   function getToolLabel(toolValue: DrawTool, name: string): string {
-    const keyStr = toolKeys(keyBindings, toolValue).map((k) => k.toUpperCase()).join(" / ");
+    const keyStr = toolKeys(keyBindings, toolValue).map(formatKey).join(" / ");
     return keyStr ? `${name} (${keyStr})` : name;
   }
 
@@ -331,7 +354,7 @@ export const Toolbar = memo(function Toolbar({
           // The desktop habit for "put it back": the same as the button below.
           onDoubleClick={() => handleWidthChange(defaultSize)}
           className="vertical-brush-slider"
-          aria-label={ui.toolbar.sizeSnappingSlider({ tool: labelPrefix })}
+          aria-label={ui.toolbar.sizeSlider({ tool: labelPrefix })}
         />
         {/* Where the slider stops, with the default marked: a stop is a
             place the thumb lands, and the default is the one to find again. */}
@@ -420,8 +443,8 @@ export const Toolbar = memo(function Toolbar({
             <button
               type="button"
               className="toolbar-mobile-chip"
-              aria-label={ui.toolbar.undoLastStroke}
-              title={ui.toolbar.undo}
+              aria-label={ui.toolbar.undo}
+              title={ui.toolbar.undoWithShortcut({ keys: undoKeys(keyBindings) })}
               onClick={requestCanvasUndo}
             >
               <UndoIcon size={18} />
@@ -429,7 +452,7 @@ export const Toolbar = memo(function Toolbar({
             <button
               type="button"
               className="toolbar-mobile-chip toolbar-mobile-clear"
-              aria-label={ui.toolbar.clearCanvas}
+              aria-label={ui.toolbar.clear}
               title={ui.toolbar.clearCanvas}
               onClick={requestCanvasClear}
             >
@@ -551,7 +574,9 @@ export const Toolbar = memo(function Toolbar({
           aria-expanded={sizePickerOpen}
           aria-haspopup="true"
           aria-controls={sizePickerId}
-          title={ui.toolbar.sizeShortcutHint({ tool: labelPrefix, width: brushWidth })}
+          title={sizeKeys(keyBindings)
+            ? ui.toolbar.sizeShortcutHint({ tool: labelPrefix, width: brushWidth, keys: sizeKeys(keyBindings) })
+            : ui.toolbar.sizeWithWidth({ tool: labelPrefix, width: brushWidth })}
         >
           {sizePreview}
           <span className="size-text-readout">{ui.toolbar.widthReadout({ width: brushWidth })}</span>
@@ -594,7 +619,7 @@ export const Toolbar = memo(function Toolbar({
         <button
           className="toolbar-action-button undo-button"
           onClick={requestCanvasUndo}
-          title={ui.toolbar.undoLastStrokeCtrlZ}
+          title={ui.toolbar.undoWithShortcut({ keys: undoKeys(keyBindings) })}
           aria-label={ui.toolbar.undo}
         >
           <UndoIcon size={18} />

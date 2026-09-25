@@ -50,7 +50,7 @@ export const RULES_IT: RulesDocument = {
             "Provare a indovinare non è spam, per quanto assurdi diventino i tentativi — indovinare in fretta è tutto il senso della cosa.",
           ],
           examples: [
-            "Ripetere un messaggio finché nessuno riesce a seguire il round",
+            "Ripetere un messaggio finché nessuno riesce a seguire la partita",
             "Pubblicare link o inviti verso altrove",
             "Incollare lo stesso muro di testo in una stanza dopo l’altra",
           ],
@@ -118,7 +118,7 @@ export const RULES_IT: RulesDocument = {
           examples: [
             "Scrivere o sillabare la parola mentre la disegni",
             "Dire la parola a un amico per telefono o con un’altra app",
-            "Usare un secondo account per passarti le risposte",
+            "Usare un secondo account per passarti la parola",
           ],
         },
       ],

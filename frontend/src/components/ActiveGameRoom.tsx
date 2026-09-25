@@ -50,7 +50,7 @@ import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
-import { kickedText, supersededText } from "../lib/roomNotices.ts";
+import { isKick, kickedText, supersededText } from "../lib/roomNotices.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 export function ActiveGameRoom({ code }: { code: string }) {
@@ -129,7 +129,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       await navigator.clipboard.writeText(window.location.href);
       notify(ui.activeGameRoom.inviteLinkCopied, "success", 2500);
     } catch {
-      notify(ui.activeGameRoom.couldnTCopyLinkCopyFrom, "error");
+      notify(ui.activeGameRoom.couldNotCopyLink, "error");
     }
   }
 
@@ -147,7 +147,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
       clearSession();
       reset();
       exitRoomHistory(who, (replace) => {
-        navigate("/", { replace, state: { criticalError: kickedText(data?.code) } });
+        navigate("/", {
+          replace,
+          state: { criticalError: kickedText(data?.code), kicked: isKick(data?.code) },
+        });
       });
     }
     // One meaning, so nothing to read from the payload: its `message` is
@@ -447,7 +450,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               title={ui.activeGameRoom.backFromAfk}
             >
               <MoonIcon size={13} />
-              <span>{ui.roomMenuSheet.away}</span>
+              <span>{ui.roomMenuSheet.afk}</span>
             </button>
           )}
         </div>

@@ -29,14 +29,14 @@ async def test_going_offline_banners_and_refuses_a_join():
 
             await context.set_offline(True)
             await page.wait_for_selector(
-                '.connection-status-banner.offline:has-text("You\u2019re disconnected")'
+                ".connection-status-banner.offline:has-text(\"You're disconnected\")"
             )
             await join_by_code(page, "ABC123")
             await page.wait_for_selector('.lobby-action-error:has-text("Connection lost")')
             # The control that was refused, not the one that opened the sheet:
             # the header button is always enabled, so asserting on it would
             # pass whether or not the failed attempt released anything.
-            assert await page.is_enabled('button:has-text("Join the room")')
+            assert await page.is_enabled('[data-testid="lobby-code-sheet"] button:text-is("Join")')
             await context.set_offline(False)
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
         finally:
@@ -267,7 +267,7 @@ async def test_a_notice_never_covers_a_phone_room_header():
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "PhoneNotices")
-            await page.click('button:has-text("Create a room")')
+            await page.click('button:has-text("Create room")')
             await page.wait_for_selector(".create-room-page")
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
@@ -292,7 +292,7 @@ async def test_a_notice_never_covers_a_phone_room_header():
             assert hit, "something covers the room menu"
             await chip.click()
             await page.wait_for_selector(
-                '.room-notice-popover:has-text("You\u2019re disconnected")'
+                ".room-notice-popover:has-text(\"You're disconnected\")"
             )
             await context.set_offline(False)
             await chip.wait_for(state="detached", timeout=10000)

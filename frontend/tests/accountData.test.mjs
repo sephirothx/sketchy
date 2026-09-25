@@ -13,8 +13,8 @@ test("a live or ready job reads as its state", () => {
 test("a document past the server's ceiling is named as such, not as a fault", () => {
   const job = { status: "failed", failureCode: "too_large" };
   assert.equal(exportLabel(job), "Too large to prepare here");
-  assert.match(exportFailureNote(job), /larger than this server/);
-  assert.match(exportFailureNote(job), /operator/);
+  assert.match(exportFailureNote(job), /too large for this server/);
+  assert.match(exportFailureNote(job), /administrator/);
 });
 
 test("any other failure keeps the generic label and invites another request", () => {

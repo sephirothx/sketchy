@@ -134,7 +134,7 @@ export function FriendInviteNotice() {
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify(ui.friendInviteNotice.thatGameCouldNotBeJoined, "error");
+      notify(ui.friendInviteNotice.couldNotJoinThatGame, "error");
     } finally {
       useRoomEntryStore.getState().end(token);
     }

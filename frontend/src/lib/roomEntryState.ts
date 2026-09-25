@@ -231,7 +231,7 @@ export class RoomEntryMachine {
       const justFilled = mode === "player" && response.errorCode === "room_full";
       const room = justFilled ? { ...current.room, isFull: true } : current.room;
       const error = justFilled
-        ? ui.roomEntryState.thePlayerSlotsJustFilled
+        ? ui.roomEntryState.theLastPlayerSeatWasTaken
         : refusalText(response, ui.roomEntryState.couldNotJoinThisRoom);
       this.publish({
         ...this.snapshot,

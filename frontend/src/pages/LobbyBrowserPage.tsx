@@ -45,9 +45,13 @@ function normalizeRoomCodeInput(value: string): string {
 
 function RemovedFromRoomDialog({
   message,
+  kicked,
   onDismiss,
 }: {
   message: string;
+  /** Kicked, by a vote or an administrator - rather than a room that closed
+      or a seat another tab took, which are not a kick. */
+  kicked: boolean;
   onDismiss: () => void;
 }) {
   const okButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -64,7 +68,7 @@ function RemovedFromRoomDialog({
       <div className="modal-icon is-danger" aria-hidden="true">
         <AlertCircleIcon size={22} />
       </div>
-      <h3 id={titleId} className="modal-title">{ui.lobbyBrowserPage.removedFromRoom}</h3>
+      <h3 id={titleId} className="modal-title">{kicked ? ui.lobbyBrowserPage.kickedFromRoom : ui.lobbyBrowserPage.noLongerInRoom}</h3>
       <p id={descriptionId} className="modal-body">{message}</p>
       <button ref={okButtonRef} type="button" className="btn btn-primary" onClick={onDismiss}>
         {ui.lobbyBrowserPage.ok}
@@ -347,7 +351,7 @@ export function LobbyBrowserPage() {
 
   async function handleJoinByCode(asSpectator = false) {
     if (!joinCode.trim()) {
-      setError(ui.lobbyBrowserPage.pleaseEnterRoomCode);
+      setError(ui.lobbyBrowserPage.enterRoomCode);
       return;
     }
     await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code");
@@ -390,7 +394,7 @@ export function LobbyBrowserPage() {
         setSession(session);
         navigate(`/room/${session.code}`);
       } else {
-        setError(refusalText(res, ui.lobbyBrowserPage.failedJoinRoom));
+        setError(refusalText(res, ui.lobbyBrowserPage.couldNotJoinRoom));
       }
     } catch (joinError) {
       if (!mountedRef.current) return;
@@ -432,6 +436,7 @@ export function LobbyBrowserPage() {
       {criticalError && (
         <RemovedFromRoomDialog
           message={criticalError}
+          kicked={location.state?.kicked === true}
           onDismiss={() => setCriticalError(null)}
         />
       )}
@@ -554,6 +559,7 @@ export function LobbyBrowserPage() {
         {filterSheetOpen && (
           <BottomSheet
             title={ui.lobbyBrowserPage.filters}
+            closeLabel={ui.lobbyBrowserPage.close}
             testId="lobby-filter-sheet"
             onDismiss={() => setFilterSheetOpen(false)}
             footer={
@@ -695,7 +701,7 @@ export function LobbyBrowserPage() {
               disabled={Boolean(pendingJoin)}
               onClick={() => setCodeSheetOpen(true)}
             >
-              {ui.lobbyBrowserPage.joinWithCode}
+              {ui.lobbyBrowserPage.joinByCode}
             </button>
             <Button
               variant="primary"
@@ -703,7 +709,7 @@ export function LobbyBrowserPage() {
               disabled={Boolean(pendingJoin)}
               onClick={() => void handleOpenCreateRoom()}
             >
-              {ui.lobbyBrowserPage.createRoom2}
+              {ui.lobbyBrowserPage.createRoom}
             </Button>
           </div>
         </div>
@@ -711,7 +717,7 @@ export function LobbyBrowserPage() {
 
       {codeSheetOpen && (
         <BottomSheet
-          title={ui.lobbyBrowserPage.joinWithCode}
+          title={ui.lobbyBrowserPage.joinByCode}
           testId="lobby-code-sheet"
           closeLabel={ui.lobbyBrowserPage.close}
           onDismiss={() => setCodeSheetOpen(false)}
@@ -733,7 +739,7 @@ export function LobbyBrowserPage() {
                 disabled={Boolean(pendingJoin)}
                 onClick={() => void handleJoinByCode(false)}
               >
-                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? ui.lobbyBrowserPage.joining : ui.lobbyBrowserPage.joinTheRoom2}
+                {pendingJoin?.key === "private-code" && pendingJoin.mode === "join" ? ui.lobbyBrowserPage.joining : ui.lobbyBrowserPage.join}
               </Button>
               <button
                 type="button"
@@ -743,7 +749,7 @@ export function LobbyBrowserPage() {
               >
                 {pendingJoin?.key === "private-code" && pendingJoin.mode === "spectate"
                   ? ui.lobbyBrowserPage.joiningAsSpectator
-                  : ui.lobbyBrowserPage.watchWithoutPlaying}
+                  : ui.lobbyBrowserPage.spectate}
               </button>
             </>
           }

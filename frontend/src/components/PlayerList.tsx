@@ -115,7 +115,7 @@ export function PlayerList({
         notify(ui.playerList.friendRequestSent({ name: nickname }), "success");
       }
     } catch {
-      notify(ui.playerList.thatRequestCouldNotBeSent, "error");
+      notify(ui.playerList.requestCouldNotBeSent, "error");
     }
   }
   const listRef = useRef<HTMLUListElement>(null);
@@ -184,7 +184,9 @@ export function PlayerList({
         const status = isDrawer ? (
           <span className="player-status player-status-drawing">
             <PencilIcon size={12} />
-            {ui.playerList.drawing}
+            {/* The drawer holds the pen from the moment they are chosen, but
+                until they pick a prompt they are choosing, not drawing. */}
+            {phase === "choosing_prompt" ? ui.playerList.choosing : ui.playerList.drawing}
           </span>
         ) : guessedAt != null ? (
           <span className="player-status player-status-guessed">
@@ -492,8 +494,8 @@ function PlayerModerationMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        aria-label={ui.playerList.moderationFor({ name: player.nickname })}
-        title={canVote ? ui.playerList.voteAfkOrKickOr : ui.playerList.reportThisPlayer}
+        aria-label={ui.playerList.actionsFor({ name: player.nickname, canVote, canReport })}
+        title={ui.playerList.actionsFor({ name: player.nickname, canVote, canReport })}
         onClick={() => onOpenChange(!isOpen)}
       />
       {isOpen && (
@@ -502,7 +504,7 @@ function PlayerModerationMenu({
           id={menuId}
           className="player-vote-menu"
           role="menu"
-          aria-label={ui.playerList.moderationActionsFor({ name: player.nickname })}
+          aria-label={ui.playerList.whatToDoAbout({ name: player.nickname })}
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >

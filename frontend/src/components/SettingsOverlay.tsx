@@ -46,6 +46,7 @@ import { Avatar } from "./ui/Avatar";
 import {
   ACTION_LABELS,
   DEFAULT_KEY_BINDINGS,
+  formatKey,
   NAME_COLOR_PALETTE,
   getSystemTheme,
   useSettingsStore,
@@ -158,12 +159,6 @@ const BRUSH_SIZE_OPTIONS = BRUSH_SIZES.map((size) => ({
   label: String(size),
   get name() { return ui.toolbar.widthReadout({ width: size }); },
 }));
-
-function formatKey(key: string): string {
-  if (key === " ") return ui.settingsOverlay.space;
-  if (key.length === 1) return key.toUpperCase();
-  return key.charAt(0).toUpperCase() + key.slice(1);
-}
 
 /* ------------------------------------------------------------- primitives */
 
@@ -295,7 +290,7 @@ function EmailAddressStatus({
       </button>
       <span className={`settings-email-status ${verified ? "is-verified" : "is-unverified"}`}>
         {verified ? <CheckIcon size={12} /> : <ClockIcon size={12} />}
-        {verified ? ui.settingsOverlay.verified : ui.settingsOverlay.notVerified}
+        {verified ? ui.settingsOverlay.confirmed : ui.settingsOverlay.notConfirmed}
       </span>
     </span>
   );
@@ -1106,7 +1101,7 @@ function SoundPane() {
       <Group title={ui.settingsOverlay.sound}>
         <ToggleRow
           label={ui.settingsOverlay.soundEffects}
-          hint={ui.settingsOverlay.chimesCorrectGuessStartRoundLast}
+          hint={ui.settingsOverlay.chimesCorrectGuessStartTurnLast}
           checked={soundEffects}
           onChange={(next) => {
             setSoundEffects(next);
@@ -1114,7 +1109,7 @@ function SoundPane() {
           }}
         />
         {soundEffects && (
-          <Row label={ui.settingsOverlay.volume2}>
+          <Row label={ui.settingsOverlay.volume}>
             <span
               className="settings-volume-control"
               style={{ ["--volume-progress" as string]: `${volume * 100}%` }}

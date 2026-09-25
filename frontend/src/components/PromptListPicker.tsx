@@ -94,7 +94,7 @@ export function PromptListPicker({
         }
       } catch (err) {
         if (!cancelled) {
-          setFetchError(refusalText(err, ui.promptListPicker.failedLoadPromptLists));
+          setFetchError(refusalText(err, ui.promptListPicker.couldNotLoadPromptLists));
         }
       } finally {
         if (!cancelled) {

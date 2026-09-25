@@ -44,7 +44,7 @@ async def test_player_afk_and_disconnect_scenario():
             await page1.wait_for_selector('[data-testid="waiting-room"]')
 
             # Step 4: Player toggles AFK in Browser 2
-            await room_menu_action(page2, "Go away for a bit")
+            await room_menu_action(page2, "Go AFK")
 
             # Verify the AFK pill reflects the pressed state
             await page2.wait_for_selector(".game-header-away")

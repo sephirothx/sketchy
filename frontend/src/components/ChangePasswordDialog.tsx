@@ -109,7 +109,7 @@ export function ChangePasswordDialog({
         {mailed ? (
           <>
             <p className="modal-body">
-              {ui.changePasswordDialog.ifThatAccountHasVerifiedEmail}
+              {ui.changePasswordDialog.ifThatAccountHasConfirmedEmail}
             </p>
             <button type="button" className="btn btn-primary" onClick={onClose}>
               {ui.changePasswordDialog.done}

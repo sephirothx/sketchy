@@ -14,10 +14,18 @@ export function kickedText(code: unknown): string {
     case "room_closed":
       return ui.roomNotices.roomClosed;
     case "removed_by_admin":
-      return ui.roomNotices.removedByAdmin;
+      return ui.roomNotices.kickedByAdmin;
     default:
       return ui.activeGameRoom.youWereKickedFromThe;
   }
+}
+
+/** Whether a `kicked` event was a kick - by a vote or an administrator -
+rather than the room closing under the player, which is not one. The lobby's
+notice is titled by it; an unknown code is taken as a kick, the same general
+case `kickedText` falls back to. */
+export function isKick(code: unknown): boolean {
+  return code !== "room_closed";
 }
 
 export function supersededText(code: unknown): string {

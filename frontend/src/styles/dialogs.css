@@ -274,15 +274,13 @@
 
 .bug-report-shot-head strong { color: var(--ink); font-size: 13px; }
 
+/* "(optional)" reads the same beside every label it qualifies: quiet text,
+   not a badge. */
 .bug-report-optional {
-  background: var(--well);
-  border: 1px solid var(--line);
-  border-radius: var(--radius-pill);
   color: var(--muted);
   font-size: 12px;
-  font-weight: 800;
-  margin-left: auto;
-  padding: 4px 11px;
+  font-weight: 600;
+  margin-left: 4px;
 }
 
 .bug-report-shot-body {

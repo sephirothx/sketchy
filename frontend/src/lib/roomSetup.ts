@@ -29,7 +29,7 @@ export const HINT_OPTIONS: { value: HintMode; label: string; description: string
     get label() { return ui.roomSetup.timedHints; },
     get description() { return ui.roomSetup.lettersRevealToEveryoneAt; },
   },
-  { value: "none", get label() { return ui.roomSetup.noHints; }, get description() { return ui.roomSetup.blanksOnlyAllTurnLong; } },
+  { value: "none", get label() { return ui.roomSetup.noHints; }, get description() { return ui.roomSetup.emptyTilesAllTurnLong; } },
   {
     value: "purchase",
     get label() { return ui.roomSetup.buyLetters; },
@@ -81,6 +81,6 @@ export function scoringNameFor(mode: ScoringMode): string {
 
 export function hintLabelFor(hintMode: HintMode, hideMaskedPrompt: boolean) {
   return hideMaskedPrompt
-    ? ui.roomSetup.hiddenPrompt
+    ? ui.roomSetup.letterTilesHidden
     : HINT_OPTIONS.find((option) => option.value === hintMode)?.label ?? ui.roomSetup.timedHints;
 }

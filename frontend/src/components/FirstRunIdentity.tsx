@@ -178,7 +178,7 @@ export function FirstRunIdentity() {
           />
         </div>
         <button type="submit" className="btn btn-secondary first-run-guest-submit" disabled={busy}>
-          {busy ? "\u2026" : ui.firstRunIdentity.stickItOn}
+          {busy ? ui.firstRunIdentity.saving : ui.firstRunIdentity.stickItOn}
         </button>
         {/* The tag's fine print. Before a name there is no chip and its menu,
             and on a phone the header has no room for its site links, so

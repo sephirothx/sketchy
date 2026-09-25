@@ -121,7 +121,7 @@ game rules change — and changing an outcome-producing constant requires bumpin
 outlives the `Game`s played in it. `RoomManager` is the process-wide registry, held
 as a singleton in [`backend/app/state.py`](../backend/app/state.py) so REST routes and
 Socket.IO handlers see the same rooms. Room settings and the recap buffer live
-here, along with the room's own quick prompts; its **curated prompts do not**.
+here, along with the room's own custom prompts; its **curated prompts do not**.
 A room holds only what its selected lists were pinned to - the revision IDs, how
 many prompts they hold, and a letter histogram for wheel pricing - and the
 prompts themselves stay in the database until a game starts and draws the
@@ -964,7 +964,7 @@ obvious "other person" to privilege.
 ### Room ceilings
 
 Creating a room is the only ordinary socket command that allocates unbounded process
-memory — a `Room`, its `CanvasSession`, its recap buffer, its quick prompts — and
+memory — a `Room`, its `CanvasSession`, its recap buffer, its custom prompts — and
 claims a durable code reservation, on a server where one process owns all of it.
 `RoomQuotaService`
 ([`backend/app/services/room_quotas.py`](../backend/app/services/room_quotas.py))

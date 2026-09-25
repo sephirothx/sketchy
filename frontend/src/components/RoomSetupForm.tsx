@@ -352,8 +352,8 @@ export function RoomSetupForm({
               disabled: scoringMode === "none" && (option.value === "purchase" || option.value === "wheel"),
             }))}
           />
-          {hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.hintsAreOffBecauseBlanksAre}</p>}
-          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.pointPurchaseHintModesRequireScoring}</p>}
+          {hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.hintsAreOffBecauseTilesAreHidden}</p>}
+          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.buyLettersAndWheelNeedScoring}</p>}
           <div className="form-section-switch-row">
             <Switch
               label={ui.roomSetupForm.spectatorsCanSeePrompt}
@@ -361,7 +361,7 @@ export function RoomSetupForm({
               onChange={(checked) => onChange({ spectatorsSeePrompt: checked })}
             />
             <Switch
-              label={ui.roomSetupForm.hideBlanks}
+              label={ui.roomSetupForm.hideLetterTiles}
               hint={ui.roomSetupForm.alsoTurnsHintsOffWithNo}
               checked={hideMaskedPrompt}
               onChange={(checked) => onChange({
