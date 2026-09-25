@@ -251,7 +251,7 @@ export function PictureCropDialog({
         <button
           ref={useButtonRef}
           type="button"
-          className="modal-button"
+          className="btn btn-primary"
           disabled={!loaded || busy}
           onClick={() => void use()}
         >

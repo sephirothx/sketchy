@@ -99,7 +99,7 @@ export function ReportDrawingDialog({
               )}
               <button
                 type="submit"
-                className="modal-button"
+                className="btn btn-primary"
                 disabled={busy}
                 data-testid="report-drawing-send"
               >
@@ -110,7 +110,7 @@ export function ReportDrawingDialog({
         ) : (
           <>
             <p className="modal-body">{ui.reportDrawingDialog.sentWithTheDrawingAttached}</p>
-            <button type="button" className="modal-button" onClick={onClose}>
+            <button type="button" className="btn btn-primary" onClick={onClose}>
               {ui.reportDrawingDialog.done}
             </button>
           </>

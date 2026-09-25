@@ -177,7 +177,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
         {done ? (
           <>
             <p className="recovery-body">{done}</p>
-            <Link className="modal-button" to="/">
+            <Link className="btn btn-primary" to="/">
               {ui.accountRecoveryPage.backLobby}
             </Link>
           </>
@@ -205,7 +205,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
                 {error}
               </p>
             )}
-            <button type="submit" className="modal-button" disabled={busy}>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.sendAResetLink}
             </button>
           </form>
@@ -214,7 +214,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
             <p className="recovery-body">
               {ui.accountRecoveryPage.thatResetLinkHasExpiredHas}
             </p>
-            <Link className="modal-button" to="/forgot-password">
+            <Link className="btn btn-primary" to="/forgot-password">
               {ui.accountRecoveryPage.sendNewOne}
             </Link>
           </>
@@ -242,7 +242,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
                 {error}
               </p>
             )}
-            <button type="submit" className="modal-button" disabled={busy || !token}>
+            <button type="submit" className="btn btn-primary" disabled={busy || !token}>
               {busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.setPassword}
             </button>
           </form>
@@ -251,7 +251,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
             <p className="recovery-body">
               {error ?? (busy ? ui.accountRecoveryPage.oneMoment : ui.accountRecoveryPage.nothingToConfirm)}
             </p>
-            <Link className="modal-button" to="/">
+            <Link className="btn btn-primary" to="/">
               {ui.accountRecoveryPage.backLobby}
             </Link>
           </>

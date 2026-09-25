@@ -111,7 +111,7 @@ export function ChangePasswordDialog({
             <p className="modal-body">
               {ui.changePasswordDialog.ifThatAccountHasVerifiedEmail}
             </p>
-            <button type="button" className="modal-button" onClick={onClose}>
+            <button type="button" className="btn btn-primary" onClick={onClose}>
               {ui.changePasswordDialog.done}
             </button>
           </>
@@ -164,7 +164,7 @@ export function ChangePasswordDialog({
                   {error}
                 </p>
               )}
-              <button type="submit" className="modal-button" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy ? ui.changePasswordDialog.pleaseWait : ui.changePasswordDialog.changePassword}
               </button>
             </form>
