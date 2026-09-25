@@ -99,7 +99,7 @@ test("the stacking bugs stay fixed", () => {
   ];
   for (const [file, selector, name] of expected) {
     const { text } = cssFiles.find(({ path }) => basename(path) === file && !path.includes("lazy"));
-    const start = text.search(new RegExp(`(^|\\n)${selector.replace(/\./g, "\\.")} \\{`));
+    const start = text.search(new RegExp(`(^|\\n)${selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")} \\{`));
     assert.ok(start >= 0, `${selector} not found in ${file}`);
     const block = text.slice(start, text.indexOf("}", start));
     assert.match(block, new RegExp(`z-index: var\\(--z-${name}\\);`), `${selector} is not on --z-${name}`);
