@@ -46,8 +46,17 @@ import { FriendButton } from "../components/FriendButton";
 import { FriendMarkIcon } from "../components/icons";
 import { ui } from "../content/ui/index.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
+import { hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
 import "../styles/lazy/profile.css";
+
+/** A game's prompt source mode, named the way the glossary names it. */
+function promptSourceLabel(mode: GameSummary["promptSourceMode"]): string {
+  if (mode === "curated") return ui.profilePage.promptSourceCurated;
+  if (mode === "mixed") return ui.profilePage.promptSourceMixed;
+  if (mode === "builtin_fallback") return ui.profilePage.promptSourceBuiltinFallback;
+  return ui.profilePage.promptSourceCustom;
+}
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
@@ -210,7 +219,7 @@ function GameRow({
             })}
             {game.outcome !== "finished" && (
               <span className="profile-game-outcome">
-                {game.outcome === "abandoned" ? "abandoned" : ui.profilePage.cutShort}
+                {game.outcome === "abandoned" ? ui.profilePage.abandoned : ui.profilePage.cutShort}
               </span>
             )}
             {game.visibility === "private" && (
@@ -245,12 +254,14 @@ function GameRow({
       {expanded && (
         <div className="profile-game-body">
           <p className="profile-note">
+            {/* The same labels the room was set up with. The scoring version
+                is left out: it tells an operator which algorithm produced
+                the points, and a player nothing. */}
             {ui.profilePage.gameRules({
-              scoringMode: game.scoringMode,
-              scoringVersion: game.scoringVersion,
-              hintMode: game.hintMode,
+              scoring: scoringNameFor(game.scoringMode),
+              hints: hintLabelFor(game.hintMode, false),
               seconds: game.drawingSeconds,
-              promptSource: game.promptSourceMode.replaceAll("_", " "),
+              promptSource: promptSourceLabel(game.promptSourceMode),
             })}
           </p>
           {game.outcome !== "finished" && (
@@ -316,7 +327,9 @@ function GameRow({
               // Only games finished before a mid-turn arrival became an
               // ordinary guesser carry this reason.
               if (outcome.eligibilityReason === "joined_late") return ui.profilePage.joinedLate;
-              return ui.profilePage.notEligibleEligibilityReason({ eligibilityReason: outcome.eligibilityReason });
+              if (outcome.eligibilityReason === "afk") return ui.profilePage.notEligibleAfk;
+              if (outcome.eligibilityReason === "disconnected") return ui.profilePage.notEligibleDisconnected;
+              return ui.profilePage.notEligible;
             };
             // Every turn is offered, not only the ones with bytes to show: a
             // gallery that quietly skipped them would misreport how the game
@@ -421,7 +434,7 @@ function GameRow({
                               {named(outcome.seatId, ui.profilePage.unknownPlayer)} ({outcomeLabel(outcome)})
                             </span>
                           ))
-                        : "unknown"}
+                        : ui.profilePage.noGuessers}
                     </td>
                   </tr>
                 ))}

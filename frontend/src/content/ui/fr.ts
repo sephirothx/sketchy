@@ -573,7 +573,9 @@ export const FR: Catalogue = {
     thatConfirmationLinkCouldNotBe: "Ce lien de confirmation n’a pas pu être utilisé.",
     somethingWentWrongPleaseTryAgain: "Quelque chose s’est mal passé. Réessaie.",
     evenBestGuessersForgetSometimes: "Même les meilleurs devineurs oublient parfois.",
-    weRsquoLlSendSecureTime: "Nous enverrons un lien sécurisé et limité dans le temps à l’adresse\n            confirmée de ton compte.",
+    asideForgot: "Nous enverrons un lien sécurisé et limité dans le temps à l'adresse confirmée de ton compte.",
+    asideReset: "Choisis un mot de passe que tu n'utilises nulle part ailleurs.",
+    asideVerify: "Une adresse confirmée te permet de revenir si tu oublies un jour ton mot de passe.",
     accountHelp: "Aide sur le compte",
     backLobby: "Retour au hall",
     enterYourUsernameYourConfirmedEmail: "Saisis ton nom d’utilisateur ou ton adresse confirmée. Si le compte\n              peut être récupéré, un lien est en route.",
@@ -1045,6 +1047,8 @@ export const FR: Catalogue = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " et ",
     continueLabel: "Continuer",
     youFinished: (p: { points: number }) =>
       `Tu finis {place} avec ${counted(p.points, { one: "point", other: "points" })}.`,
@@ -1349,8 +1353,10 @@ export const FR: Catalogue = {
       `${counted(p.prompts, { one: "mot", other: "mots" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `Cette liste est ${p.state} et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l’examiner.`,
+    underReview: "En examen",
+    hidden: "Masqué",
+    listUnderReviewWarning: "Cette liste est en cours d'examen et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l'examiner.",
+    listHiddenWarning: "Cette liste est masquée et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l'examiner.",
     needsReview: (p: { count: number }) => `À examiner (${p.count})`,
     removePrompt: (p: { prompt: string }) => `Retirer ${p.prompt}`,
     couldNotLoadYourPromptLists: "Tes listes de mots n’ont pas pu être chargées.",
@@ -1475,16 +1481,8 @@ export const FR: Catalogue = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "manche", other: "manches" })} · ${counted(p.players, { one: "joueur", other: "joueurs" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} pts`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Règles : score ${p.scoringMode}${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (version ancienne inconnue)"
-      } · indices ${p.hintMode} · ${p.seconds} secondes · mots ${p.promptSource}`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Règles : ${p.scoring} · ${p.hints} · ${p.seconds} secondes · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Signaler ${p.name}`,
     privateRoom: "salon privé",
     thisGameDidNotFinishSo: "Cette partie n’est pas allée à son terme : voici donc les scores tels\n              qu’ils étaient à l’arrêt, et non un classement final.",
@@ -1520,10 +1518,17 @@ export const FR: Catalogue = {
     onlyThePlayersInThis: "Seuls les joueurs de cette partie peuvent voir ses tours.",
     couldNotLoadTheTurns: "Impossible de charger les tours de cette partie.",
     cutShort: "écourtée",
+    abandoned: "abandonnée",
     noAttempt: "aucune tentative",
     joinedLate: "arrivé en retard",
-    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
-      `non comptabilisé (${p.eligibilityReason})`,
+    notEligibleAfk: "non comptabilisé (AFK)",
+    notEligibleDisconnected: "non comptabilisé (déconnecté)",
+    notEligible: "non comptabilisé",
+    noGuessers: "personne ne devinait",
+    promptSourceCurated: "Mots sélectionnés",
+    promptSourceCustom: "Mots personnalisés",
+    promptSourceMixed: "Mots mixtes",
+    promptSourceBuiltinFallback: "Mots intégrés de secours",
     unknownPlayer: "Joueur inconnu",
     backToLobby: "Retour au hall",
     guestDisplayNameNotSaved: "Invité — nom affiché non enregistré",
@@ -1575,7 +1580,7 @@ export const FR: Catalogue = {
     pickSomethingDraw: "Choisis quelque chose à dessiner",
     autoPicksWhenTimeRunsOut: "Choix automatique à la fin du temps.",
     hintSpendLimitReached: "Limite de dépense en indices atteinte",
-    deductedFromYourScoreIfYou: "Déduit de ton score si tu trouves le mot",
+    hintSpendComesOutOfTurnPoints: "Retiré des points de ce tour si tu trouves le mot.",
     buyLetterRevealsEveryMatch: "Achète une lettre — révèle toutes ses occurrences",
     selectThePrompt: "choisir le mot",
     choosing: "Choix…",
@@ -1879,6 +1884,7 @@ export const FR: Catalogue = {
   },
 
   roomPlayersPanel: {
+    you: "(toi)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "spectateur", other: "spectateurs" }),
     spectatorsHeading: (p: { count: number }) => `Spectateurs (${p.count})`,
@@ -2337,10 +2343,6 @@ export const FR: Catalogue = {
     open: "Ouvrir",
     manyArrived: (p: { name: string; others: number }) =>
       `${p.name} et ${counted(p.others, { one: "une autre personne", other: "autres personnes" })} veulent devenir tes amis.`,
-  },
-
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
   },
 
   waitingRoomPanel: {

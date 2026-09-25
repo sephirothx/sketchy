@@ -1,6 +1,6 @@
 import { formatDateTime, type TimeFormat } from "./clock";
 import { apiBinaryRequest, apiRequest } from "./api";
-import type { ReactionTally } from "../types";
+import type { HintMode, ReactionTally, ScoringMode } from "../types";
 import type { ProfilePin } from "./pinnedDrawings";
 
 /**
@@ -56,12 +56,12 @@ export interface GameParticipant {
 export interface GameSummary {
   id: string;
   roomName: string;
-  scoringMode: string;
+  scoringMode: ScoringMode;
   scoringVersion: number;
   scoreLedgerVersion: number;
   ruleSnapshotVersion: number;
-  promptSourceMode: "legacy_unknown" | "curated" | "custom" | "mixed" | "builtin_fallback";
-  hintMode: string;
+  promptSourceMode: "curated" | "custom" | "mixed" | "builtin_fallback";
+  hintMode: HintMode;
   drawingSeconds: number;
   totalRounds: number;
   playerCount: number;
