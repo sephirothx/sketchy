@@ -850,8 +850,6 @@ export const IT: Catalogue = {
     deleteThisRoomSettingPreset: "Eliminare questa impostazione predefinita della stanza?",
     deletePresetDescription: "Le stanze che hai già creato con questa impostazione non cambiano.",
     createTheRoom: "creare la stanza",
-    noScoring: "Senza punteggio",
-    public: "Pubblica",
     private: "Privata",
     backToLobby: "Torna alla lobby",
     leaveBlankForARandom: "Lascia vuoto per un nome a caso!",
@@ -859,10 +857,6 @@ export const IT: Catalogue = {
     createRoom2: "Crea stanza",
     yourRoom: "La tua stanza",
     aRandomName: "Un nome casuale",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "giocatore", other: "giocatori" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "round", other: "round" }),
   },
 
   customPromptsEditor: {
@@ -1617,10 +1611,9 @@ export const IT: Catalogue = {
     scoring: "Punteggio",
     hints: "Indizi",
     findPrompt: "Trova una parola",
-    rollerCoaster: "montagne russe",
     loading: "Caricamento…",
     prompt: "Parola",
-    howGoes: "Come va",
+    howHard: "Quanto è difficile",
     guessed: "Indovinata",
     picked: "Scelta",
     drawn: "Disegnata",
@@ -1632,10 +1625,6 @@ export const IT: Catalogue = {
     defaultScoring: "Punteggio standard",
     pressureScoring: "Punteggio a pressione",
     allHintModes: "Tutte le modalità di indizi",
-    noHints: "Senza indizi",
-    checkpointHints: "Indizi a tempo",
-    purchasedHints: "Indizi acquistati",
-    letterWheel: "Ruota delle lettere",
     backToLobby: "Torna alla lobby",
   },
 
@@ -1915,7 +1904,7 @@ export const IT: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Lingua",
+    promptLanguage: "Lingua delle parole",
     visibility: "Visibilità",
     maxPlayers: "Numero massimo di giocatori",
     rounds: "Round",
@@ -2584,7 +2573,7 @@ export const IT: Catalogue = {
     colorblindSafe: "Adatti al daltonismo",
     colorsThatStayApartFor: "Colori che restano distinguibili per chi è daltonico.",
     blackAndWhite: "Bianco e nero",
-    blackAndWhiteOnly: "Solo bianco e nero.",
+    twoSwatchesNoCustomColors: "Solo due campioni; niente colori liberi.",
     allTools: "Tutti gli strumenti",
     onlyTool: (p: { tool: string }) =>
       `solo ${p.tool}`,

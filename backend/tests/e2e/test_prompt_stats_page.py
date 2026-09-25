@@ -21,6 +21,12 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await page.wait_for_url("**/prompt-lists")
             await page.get_by_role("heading", name="Prompt stats").wait_for()
 
+            # It opens on the Standard list of the language this reader plays
+            # in, not on whichever list sorts first by name ("Deutsch -
+            # Erweitert" for an English guest, before).
+            selected = await page.locator("#prompt-stats-list").input_value()
+            assert selected == "english_standard", f"opened on {selected}"
+
             # Every prompt in the list is reachable, not just the ranked ones.
             # The list is paged - rendering hundreds of rows is thirty screens
             # of scroll on a phone - so the count is asserted by paging to the
@@ -28,10 +34,16 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             # expect is read off the picker's own option rather than written
             # down here: the catalogue holds two lists per supported language
             # and each one's size is content, not a constant this test knows.
-            table = page.locator(".prompt-stats-table")
-            await table.wait_for()
-            rows = page.locator(".prompt-stats-table tbody tr")
-            selected = await page.locator("#prompt-stats-list").input_value()
+            #
+            # Two shapes, and which one is not ours to predict - the suite
+            # shares one server with tests playing games: a table once
+            # anything has been drawn, and the bare names until then.
+            listing = page.locator(".prompt-stats-table, .prompt-stats-plain")
+            await listing.first.wait_for()
+            plain = await page.locator(".prompt-stats-plain").count() > 0
+            rows = page.locator(
+                ".prompt-stats-plain li" if plain else ".prompt-stats-table tbody tr"
+            )
             label = await page.locator(
                 f"#prompt-stats-list option[value='{selected}']"
             ).inner_text()
@@ -43,10 +55,13 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             listed = await rows.count()
             assert listed == expected, f"listed {listed} of {expected} prompts"
 
-            # Which rows are ranked is not ours to predict - the suite shares
-            # one server with tests playing games - but a ranked row must show
-            # a measurement and an unranked one must not pretend to.
-            for index in range(listed):
+            # With nothing ranked, the page says so once instead of in every
+            # row. Otherwise a ranked row must show a measurement and an
+            # unranked one must not pretend to.
+            if plain:
+                await page.get_by_text("so none of them is ranked").wait_for()
+                assert await page.get_by_text("Not played enough").count() == 0
+            for index in range(listed if not plain else 0):
                 row = rows.nth(index)
                 cells = await row.locator("td").all_inner_texts()
                 band, guessed = cells[0], cells[1]
@@ -60,7 +75,7 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await page.fill("#prompt-stats-search", "zzzz-no-such-prompt")
             await page.get_by_text("No prompt matches").wait_for()
             await page.fill("#prompt-stats-search", "")
-            await table.wait_for()
+            await listing.first.wait_for()
 
             # The sort is in the URL, so a chosen view can be linked to.
             #
@@ -84,7 +99,7 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await page.wait_for_url("**scoringMode=pressure*")
             await page.select_option("#prompt-stats-hints", "wheel")
             await page.wait_for_url("**hintMode=wheel*")
-            await table.wait_for()
+            await listing.first.wait_for()
 
             # An unknown list says so rather than showing an empty table.
             await page.goto(f"{BASE_URL}/prompt-lists/not-a-real-list")

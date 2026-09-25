@@ -850,8 +850,6 @@ export const NL: Catalogue = {
     deleteThisRoomSettingPreset: "Deze kamervoorinstelling verwijderen?",
     deletePresetDescription: "Kamers die je er al mee hebt gemaakt, veranderen niet.",
     createTheRoom: "de kamer maken",
-    noScoring: "Zonder punten",
-    public: "Openbaar",
     private: "Privé",
     backToLobby: "Terug naar de lobby",
     leaveBlankForARandom: "Laat leeg voor een willekeurige naam!",
@@ -859,10 +857,6 @@ export const NL: Catalogue = {
     createRoom2: "Kamer maken",
     yourRoom: "Jouw kamer",
     aRandomName: "Een willekeurige naam",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "speler", other: "spelers" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "ronde", other: "rondes" }),
   },
 
   customPromptsEditor: {
@@ -1618,10 +1612,9 @@ export const NL: Catalogue = {
     scoring: "Punten",
     hints: "Hints",
     findPrompt: "Een woord vinden",
-    rollerCoaster: "achtbaan",
     loading: "Laden…",
     prompt: "Woord",
-    howGoes: "Hoe het loopt",
+    howHard: "Hoe moeilijk",
     guessed: "Geraden",
     picked: "Gekozen",
     drawn: "Getekend",
@@ -1633,10 +1626,6 @@ export const NL: Catalogue = {
     defaultScoring: "Standaardpunten",
     pressureScoring: "Drukpunten",
     allHintModes: "Alle hintmodi",
-    noHints: "Geen hints",
-    checkpointHints: "Hints op tijd",
-    purchasedHints: "Gekochte hints",
-    letterWheel: "Letterrad",
     backToLobby: "Terug naar de lobby",
   },
 
@@ -1914,7 +1903,7 @@ export const NL: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Taal",
+    promptLanguage: "Woordtaal",
     visibility: "Zichtbaarheid",
     maxPlayers: "Maximum aantal spelers",
     rounds: "Rondes",
@@ -2583,7 +2572,7 @@ export const NL: Catalogue = {
     colorblindSafe: "Kleurenblindvriendelijk",
     colorsThatStayApartFor: "Kleuren die voor kleurenblinde spelers goed te onderscheiden blijven.",
     blackAndWhite: "Zwart-wit",
-    blackAndWhiteOnly: "Alleen zwart en wit.",
+    twoSwatchesNoCustomColors: "Maar twee kleurstalen; geen eigen kleuren.",
     allTools: "Alle gereedschappen",
     onlyTool: (p: { tool: string }) =>
       `alleen ${p.tool}`,

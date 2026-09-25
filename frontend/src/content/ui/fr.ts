@@ -850,8 +850,6 @@ export const FR: Catalogue = {
     deleteThisRoomSettingPreset: "Supprimer ce préréglage de salon ?",
     deletePresetDescription: "Les salons déjà créés avec ce préréglage ne changent pas.",
     createTheRoom: "créer le salon",
-    noScoring: "Sans score",
-    public: "Public",
     private: "Privé",
     backToLobby: "Retour au hall",
     leaveBlankForARandom: "Laisse vide pour un nom au hasard !",
@@ -859,10 +857,6 @@ export const FR: Catalogue = {
     createRoom2: "Créer le salon",
     yourRoom: "Ton salon",
     aRandomName: "Un nom aléatoire",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "joueur", other: "joueurs" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "manche", other: "manches" }),
   },
 
   customPromptsEditor: {
@@ -1618,10 +1612,9 @@ export const FR: Catalogue = {
     scoring: "Score",
     hints: "Indices",
     findPrompt: "Trouver un mot",
-    rollerCoaster: "montagnes russes",
     loading: "Chargement…",
     prompt: "Mot",
-    howGoes: "Comment ça se passe",
+    howHard: "Difficulté",
     guessed: "Trouvé",
     picked: "Choisi",
     drawn: "Dessiné",
@@ -1633,10 +1626,6 @@ export const FR: Catalogue = {
     defaultScoring: "Score standard",
     pressureScoring: "Score sous pression",
     allHintModes: "Tous les modes d’indices",
-    noHints: "Sans indices",
-    checkpointHints: "Indices chronométrés",
-    purchasedHints: "Indices achetés",
-    letterWheel: "Roue des lettres",
     backToLobby: "Retour au hall",
   },
 
@@ -1916,7 +1905,7 @@ export const FR: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Langue",
+    promptLanguage: "Langue des mots",
     visibility: "Visibilité",
     maxPlayers: "Joueurs maximum",
     rounds: "Manches",
@@ -2585,7 +2574,7 @@ export const FR: Catalogue = {
     colorblindSafe: "Adapté au daltonisme",
     colorsThatStayApartFor: "Des couleurs qui restent distinctes pour les joueurs daltoniens.",
     blackAndWhite: "Noir et blanc",
-    blackAndWhiteOnly: "Noir et blanc seulement.",
+    twoSwatchesNoCustomColors: "Deux couleurs seulement ; pas de couleurs libres.",
     allTools: "Tous les outils",
     onlyTool: (p: { tool: string }) =>
       `${p.tool} uniquement`,
