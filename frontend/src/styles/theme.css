@@ -114,7 +114,7 @@
      (or, with none, reaches back into its frame's by negative margin):
        padding-inline-start: calc(<padding> - var(--ink-overhang));
        text-indent: var(--ink-overhang);
-     tests/inkOverhang.test.mjs holds every stylesheet to this (R-UX-15). */
+     tests/inkOverhang.test.mjs holds every stylesheet to this (R-UX-18). */
   --ink-overhang: 0.22em;
 
   /* visual-viewport vars written by useVisualViewportCssVars */
