@@ -649,10 +649,6 @@
   transform: scale(1.06);
 }
 
-.settings-volume-control input[type="range"]:focus-visible {
-  outline: none;
-}
-
 .settings-volume-control input[type="range"]:focus-visible::-webkit-slider-thumb {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;

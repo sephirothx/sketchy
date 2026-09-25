@@ -353,6 +353,13 @@
   z-index: 2;
 }
 
+/* The colour input is invisible inside its rainbow swatch, so the swatch
+   wears the focus ring for it. */
+.color-swatch-custom:has(input:focus-visible) {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+
 .color-swatch-custom input[type="color"] {
   position: absolute;
   inset: -4px;

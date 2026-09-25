@@ -102,7 +102,7 @@ function resolve(value, tokens) {
     const b = resolve(second.color, tokens);
     return a.map((channel, i) => channel * p + b[i] * (1 - p));
   }
-  throw new Error(`theme.css value this test cannot read: ${text}`);
+  throw new Error(`a colour this test cannot read: ${text}`);
 }
 
 /** Paint `top` over an opaque `ground`, the way a translucent wash renders. */
@@ -144,7 +144,7 @@ const TEXT_PAIRS = [
   ["--muted", "--paper", "secondary text on the page"],
   ["--muted", "--card", "secondary text on a card"],
   ["--on-primary", "--primary", "label on an indigo button, badge or toast action"],
-  ["#ffffff", "--success-button", "label on a go button, and the approved restart banner"],
+  ["--on-success", "--success-button", "label on a go button, and the approved restart banner"],
   ["--on-danger", "--danger-button", "label on a destructive button, and a kick"],
   ["--primary-ink", "--primary-soft", "indigo chip on a card"],
   ["--primary-ink", "--primary-soft", "indigo chip on the page", "--paper"],
@@ -206,10 +206,13 @@ const KNOWN_SHORT = {
 
 const STYLES = new URL("../src/styles/", import.meta.url);
 const COLOUR = String.raw`(var\(--[\w-]+\)|#[0-9a-f]{3}(?:[0-9a-f]{3})?)\s*(?:!important)?\s*;`;
-// A literal translucent fill is only read for a ring: which ground a text
-// rule's wash lands on is not in the rule, and --card is a guess.
-const ANY_COLOUR = String.raw`(var\(--[\w-]+\)|#[0-9a-f]{3}(?:[0-9a-f]{3})?|rgba?\([^)]*\))\s*(?:!important)?\s*;`;
-const RING = new RegExp(String.raw`(?:^|[;\s])--focus-ring\s*:\s*` + COLOUR, "i");
+// A ring and the surface it re-points for are read whatever they are written
+// as: resolve() understands var(), hex, rgb()/rgba() and color-mix(), and
+// throws on anything else, so a value this cannot measure fails the test
+// rather than being skipped. The text scan stays with var() and hex: which
+// ground a literal translucent wash lands on is not in the rule.
+const ANY_COLOUR = String.raw`([^;]+?)\s*(?:!important)?\s*;`;
+const RING = new RegExp(String.raw`(?:^|[;\s])--focus-ring\s*:\s*` + ANY_COLOUR, "i");
 const BACKGROUND = new RegExp(String.raw`(?:^|[;\s])background(?:-color)?\s*:\s*` + COLOUR, "i");
 const ANY_BACKGROUND = new RegExp(
   String.raw`(?:^|[;\s])background(?:-color)?\s*:\s*` + ANY_COLOUR,

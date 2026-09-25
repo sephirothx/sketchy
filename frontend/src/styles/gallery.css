@@ -561,8 +561,6 @@
   width: 18px;
 }
 
-.gallery-replay-track:focus-visible { outline: none; }
-
 .gallery-replay-track:focus-visible::-webkit-slider-thumb {
   box-shadow: 0 0 0 3px var(--focus-ring);
 }

@@ -1298,7 +1298,7 @@
   background: var(--success-button) !important;
   border-color: var(--success-button-edge) !important;
   box-shadow: 0 2px 0 var(--success-button-edge);
-  color: #ffffff !important;
+  color: var(--on-success) !important;
 }
 
 

@@ -343,14 +343,14 @@
 
 .restart-vote-banner.approved .restart-vote-copy strong {
   align-items: center;
-  color: #fff;
+  color: var(--on-success);
   display: flex;
   font-size: 18px;
   letter-spacing: .01em;
 }
 
 .restart-vote-banner.approved .restart-vote-copy > span {
-  color: #fff;
+  color: var(--on-success);
   font-size: 13px;
   font-weight: 700;
 }
@@ -374,7 +374,7 @@
   background: rgb(255 255 255 / 16%);
   border: 1px solid rgb(255 255 255 / 35%);
   border-radius: 8px;
-  color: #fff;
+  color: var(--on-success);
   display: flex;
   flex-direction: column;
   min-width: 64px;
@@ -428,7 +428,6 @@
 .restart-vote-tile {
   align-items: center;
   border-radius: 4px;
-  color: #fff;
   display: inline-flex;
   flex: 1 1 0;
   font-size: 15px;
@@ -439,8 +438,8 @@
 
 /* The button fills, not the status colours: those turn pale in the dark
    theme, and the white mark on them with it. */
-.restart-vote-tile.yes { background: var(--success-button); }
-.restart-vote-tile.no { background: var(--danger-button); }
+.restart-vote-tile.yes { background: var(--success-button); color: var(--on-success); }
+.restart-vote-tile.no { background: var(--danger-button); color: var(--on-danger); }
 .restart-vote-tile.pending { background: var(--line-strong); }
 
 .restart-vote-actions {
@@ -2388,7 +2387,7 @@ button.guess-pips {
   border: 1.5px solid var(--card);
   border-radius: 50%;
   bottom: -3px;
-  color: #fff;
+  color: var(--on-success);
   display: flex;
   font-size: 9px;
   font-weight: 900;

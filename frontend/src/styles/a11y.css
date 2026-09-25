@@ -14,13 +14,25 @@
 /* The one keyboard focus ring (--focus-ring, theme.css). A component does
    not restate it in another colour or width; a rule of its own is only for an
    element these selectors miss - a switch track standing in for its hidden
-   checkbox, a tabindex="-1" panel, a text field - and uses the same token. */
+   checkbox, a tabindex="-1" panel, a text field - and uses the same token.
+   The native controls are here too, or they fall back to the browser's own
+   blue ring. A control drawn by something else hides itself with opacity 0,
+   which hides this outline with it, and puts the ring on what it draws. */
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible,
+input:is([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):focus-visible,
 [tabindex]:not([tabindex="-1"]):focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
+}
+
+/* Two sliders ring their thumb instead of the whole track (gallery.css,
+   settings.css). Here, after the rule above, because a suppression in the
+   components layer loses to it; `input.` to match its specificity. */
+input.gallery-replay-track:focus-visible,
+.settings-volume-control input[type="range"]:focus-visible {
+  outline: none;
 }
 
 /* Text fields: the ring's colour on the border only — no outer halo. */
