@@ -95,8 +95,9 @@ async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
 
             # At 960 beside the crumb the names no longer fit, but the icons
             # do (measured with a name like this one: the names need a window
-            # of about 1160px here, the icons about 760px). The label is clipped to nothing - still the link's name -
-            # and the tooltip says it instead.
+            # of about 1160px here, the icons about 760px). The label is
+            # clipped to nothing - still the link's name - and the tooltip
+            # says it instead.
             await page.set_viewport_size({"width": 960, "height": 800})
             await expect(page.locator(".site-nav.is-icons")).to_have_count(1)
             await expect(lobby).to_have_attribute("title", "Lobby")
