@@ -149,6 +149,10 @@ export function LeaveIcon(p: IconProps) { return <IconBase {...p}><path d="M9 21
 export function BulbIcon(p: IconProps) { return <IconBase {...p}><path d="M9 18h6" /><path d="M10 22h4" /><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.4 1 2.3h6c0-.9.4-1.8 1-2.3A7 7 0 0 0 12 2Z" /></IconBase>; }
 export function TrophyIcon(p: IconProps) { return <IconBase {...p}><path d="M8 21h8" /><path d="M12 17v4" /><path d="M7 4h10v5a5 5 0 0 1-10 0V4Z" /><path d="M7 6H4a3 3 0 0 0 3 5" /><path d="M17 6h3a3 3 0 0 1-3 5" /></IconBase>; }
 export function ZapIcon(p: IconProps) { return <IconBase {...p}><path d="M13 2 4 14h6l-1 8 9-12h-6l1-8Z" /></IconBase>; }
+/** Prompt stats: three bars on a baseline. Its own mark rather than the
+    lightning bolt it used to share with Quick play, which is a button that
+    plays, not a page of numbers. */
+export function BarChartIcon(p: IconProps) { return <IconBase {...p}><path d="M4 20h16" /><path d="M7 16v-4" /><path d="M12 16V6" /><path d="M17 16V9" /></IconBase>; }
 /** The ferrule end sat at x=23.5 with a 2-unit stroke around it, so the tip
     was painted out to x=25.1 and the viewBox clipped it flat. The handle is
     the same drawing pulled 2.4 units back down its own 45° axis, which keeps

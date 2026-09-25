@@ -29,6 +29,7 @@ import {
 import { BugReportDialog } from "./BugReportDialog";
 import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import {
+  BarChartIcon,
   BugIcon,
   BulbIcon,
   InfoIcon,
@@ -42,7 +43,6 @@ import {
   UserIcon,
   UsersIcon,
   StarIcon,
-  ZapIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -282,7 +282,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 {ui.accountMenu.myProfile}
               </MenuItem>
               <MenuItem
-                icon={<ZapIcon size={16} />}
+                icon={<BarChartIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   navigate("/prompt-lists");
