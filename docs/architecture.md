@@ -306,8 +306,10 @@ surface's entry instead of pushing over it (`isSheetEntry`, read by `useOpenOver
 since the surface closes as the overlay opens: pushed, the entry would sit beneath the
 overlay for Back to step over and Forward to bounce off. Signing in or out in a room gives
 the seat up without leaving the page, so `authStore` rewinds the seat's entries to the
-base and navigates nowhere; the invite screen is then drawn on the entry the room was
-entered on. A browser may skip an entry pushed without a user
+base and navigates nowhere (`releaseRoomHistory`); the invite screen is then drawn on the
+entry the room was entered on. Signed in from Settings over the room, the entries are
+beneath the overlay and a rewind now would close it, so the rewind waits for the history
+to land back on one of them - which closing Settings does - and runs then. A browser may skip an entry pushed without a user
 gesture when Back is pressed (Chrome's history-manipulation intervention); the guard is
 pushed as the room mounts, just after the press that entered it, and if it were ever
 skipped Back would behave as it did before this rather than worse.

@@ -424,3 +424,40 @@ export function leaveRoomHistory(
   unlisten = port.listen(step);
   step();
 }
+
+/** Rewinds waiting for the history to come back to a seat's entries. */
+const deferredReleases = new WeakMap<HistoryPort, () => void>();
+
+/** Take a seat's entries off the stack without navigating anywhere - for a
+seat given up in place, by signing in or out, where the page stays on the
+room's URL and draws its invite screen.
+
+On one of the seat's entries that is `leaveRoomHistory` with nothing to
+finish. On an overlay drawn over the room - Settings, where a guest's card
+offers Sign in and Create account - the entries are beneath it and cannot be
+taken off without closing it, and closing Settings on somebody who has just
+signed in inside it would be the wrong answer. So the rewind waits for the
+history to land back on them, which is what closing the overlay does, and
+runs then. Landing on the room's URL any other way (a newer seat's guard, the
+base) means there is nothing of this seat's left to take, and the wait ends. */
+export function releaseRoomHistory(port: HistoryPort, who: RoomSeat): void {
+  deferredReleases.get(port)?.();
+  deferredReleases.delete(port);
+  const landing = locate(port.state(), port.pathname(), who);
+  if (landing.kind !== "elsewhere") {
+    leaveRoomHistory(port, who, () => {});
+    return;
+  }
+  const unlisten = port.listen(() => {
+    if (port.inFlight() > 0) return;
+    const now = locate(port.state(), port.pathname(), who);
+    if (now.kind === "elsewhere") return;
+    stop();
+    if (now.kind === "entry") leaveRoomHistory(port, who, () => {});
+  });
+  const stop = () => {
+    unlisten();
+    if (deferredReleases.get(port) === stop) deferredReleases.delete(port);
+  };
+  deferredReleases.set(port, stop);
+}

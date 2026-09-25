@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { apiRequest, onUnexpectedSignOut } from "../lib/api";
 import { assertPasskey } from "../lib/passkeys";
 import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
-import { historyPortFor, leaveRoomHistory } from "../lib/roomHistory";
+import { historyPortFor, releaseRoomHistory } from "../lib/roomHistory";
 import { useGameStore } from "./gameStore";
 import { isPaletteColor, useSettingsStore } from "./settingsStore";
 import { nicknameError } from "../lib/roomEntryState";
@@ -142,10 +142,12 @@ function releaseSeatBeforeIdentityChange(): void {
   useGameStore.getState().clearSession();
   // The seat's history entries go with it, as on any other way out (R-UX-15),
   // but nothing navigates: the page stays on the room's URL, now its invite
-  // screen, rewound to the entry the room was entered on. A rejoin from there
-  // puts a guard of its own over it, and a later leave leaves nothing behind.
+  // screen, rewound to the entry the room was entered on - at once, or, when
+  // this happened inside Settings over the room, once Settings closes. A
+  // rejoin from there puts a guard of its own over it, and a later leave
+  // leaves nothing behind.
   if (playerId && code && typeof window !== "undefined") {
-    leaveRoomHistory(historyPortFor(window), { code, seat: playerId }, () => {});
+    releaseRoomHistory(historyPortFor(window), { code, seat: playerId });
   }
 }
 

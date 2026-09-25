@@ -13,6 +13,7 @@ import {
   planPop,
   planReconcile,
   pushedState,
+  releaseRoomHistory,
 } from "../src/lib/roomHistory.ts";
 
 const CODE = "AB12CD";
@@ -566,7 +567,7 @@ test("a seat given up in place (signing in) rewinds without navigating", async (
   const { win, room, port } = await enterRoom();
   openSheet(room, "sign-in");
   await win.settle();
-  leaveRoomHistory(port, WHO, () => {});
+  releaseRoomHistory(port, WHO);
   await win.settle();
   room.stop();
   assert.equal(win.describe(), `/ [${ROOM}] ${ROOM}#0 ${ROOM}#1`);
@@ -581,6 +582,47 @@ test("a seat given up in place (signing in) rewinds without navigating", async (
   await win.settle();
   rejoined.stop();
   assert.equal(win.describe(), `/ [/] ${ROOM}#0`);
+});
+
+test("signing in inside Settings over the room rewinds once Settings closes", async () => {
+  // The guest card in Settings -> Account offers Sign in and Create account.
+  // The seat's entries are under the overlay, and Settings stays open over the
+  // invite screen until it is closed; then they go.
+  const { win, room, port } = await enterRoom();
+  win.navigate("/settings/account", { overlayBackground: ROOM });
+  releaseRoomHistory(port, WHO);
+  room.stop();
+  await win.settle();
+  assert.equal(win.describe(), `/ ${ROOM} ${ROOM}#0 [/settings/account]`);
+
+  // Settings closes (its close is navigate(-1), the same traversal as Back).
+  win.press(-1);
+  await win.settle();
+  assert.equal(win.describe(), `/ [${ROOM}] ${ROOM}#0 /settings/account`);
+
+  const signedIn = { code: CODE, seat: "seat-2" };
+  const rejoined = createRoomHistory(port, signedIn);
+  rejoined.start();
+  await win.settle();
+  leaveRoomHistory(port, signedIn, (replace) => win.navigate("/", null, { replace }));
+  await win.settle();
+  rejoined.stop();
+  assert.equal(win.describe(), `/ [/] ${ROOM}#0`);
+});
+
+test("a rewind waiting under an overlay ends once the room's URL is reached another way", async () => {
+  const { win, room, port } = await enterRoom();
+  win.navigate("/settings/account", { overlayBackground: ROOM });
+  releaseRoomHistory(port, WHO);
+  room.stop();
+  // Back past the guard to the base: nothing of this seat's above to take.
+  win.press(-2);
+  await win.settle();
+  assert.equal(win.describe(), `/ [${ROOM}] ${ROOM}#0 /settings/account`);
+  // And it does not fire later, on an entry reached after the wait ended.
+  win.press(1);
+  await win.settle();
+  assert.equal(win.describe(), `/ ${ROOM} [${ROOM}#0] /settings/account`);
 });
 
 test("outside the room's entries a leave is an ordinary push", async () => {
