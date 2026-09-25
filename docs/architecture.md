@@ -1899,17 +1899,17 @@ Files are named for their single concern; the directory says the role.
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
-`frontend/src/styles/` is one CSS file per surface. The controls more than one
-surface draws — buttons, chips, toggle chips, the segmented control, the switch, the
-tooltip and the card — are recipes in
+`frontend/src/styles/` is one CSS file per surface. The controls more than one surface
+draws — buttons, chips, toggle chips, the segmented control, the switch, the tooltip and
+the card — are recipes in
 [`styles/primitives.css`](../frontend/src/styles/primitives.css), the first sheet of the
 `components` layer, so a surface specialises a recipe rather than restating it; a card
-composes `surface-card` in its markup. Every other sheet, entry or lazy, comes after
-it, so a specialisation of the same specificity wins by order; a tie between two
-surface sheets is another matter, since the lazy ones load after the whole entry
-sheet whatever their import order says. A rule that must beat every surface goes in the `utilities` layer
-([`styles/utilities.css`](../frontend/src/styles/utilities.css)) rather than behind
-`!important`: a later layer beats any specificity in an earlier one.
+composes `surface-card` in its markup. Every other sheet, entry or lazy, comes after it,
+so a specialisation of the same specificity wins by order; a tie between two surface
+sheets is another matter, since the lazy ones load after the whole entry sheet whatever
+their import order says. A rule that must beat every surface goes in the `utilities`
+layer ([`styles/utilities.css`](../frontend/src/styles/utilities.css)) rather than
+behind `!important`: a later layer beats any specificity in an earlier one.
 
 ### The phone layout
 

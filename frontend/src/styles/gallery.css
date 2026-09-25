@@ -38,6 +38,13 @@
   margin-bottom: 18px;
 }
 
+/* Three short words: with the recipe's 88px floor per segment the sort was
+   278px wide, most of it padding. Equal columns as wide as the widest word
+   keep it near the size it was before it shared the recipe. */
+.gallery-sort .segmented-control {
+  grid-auto-columns: 1fr;
+}
+
 /* The window, only under Top: a second row of pills rather than a second
    segment, so the two controls do not read as one six-way choice. */
 .gallery-window {
