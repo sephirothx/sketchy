@@ -166,7 +166,6 @@
 /* The verdict on your own guess. It floats above the field rather than sitting
    in the feed, because on a phone the feed is one line — and with the keyboard
    up it is the only report you get. It stays until you type again. */
-
 .guess-focus-flash {
   display: none;
   position: absolute;
