@@ -39,14 +39,24 @@ player keeps when several notices land at once is worth being able to test
 without a browser. The evicted ones are returned so their timers can be
 cleared - a dropped toast whose timer still runs leaves an entry behind and
 fires a dismissal for something nobody can see. */
-export function keepRecentToasts<T>(current: T[], arriving: T): {
+export function keepRecentToasts<T>(
+  current: T[],
+  arriving: T,
+  same: (a: T, b: T) => boolean = () => false,
+): {
   kept: T[];
   evicted: T[];
 } {
+  // A notice that says what one already on screen says replaces it rather
+  // than stacking under it: pressing a button three times on a refused name
+  // stood three copies of one refusal, and pushed anything else off. The new
+  // one comes in fresh, so it is announced again and its timer restarts.
+  const repeated = current.filter((toast) => same(toast, arriving));
+  const others = current.filter((toast) => !same(toast, arriving));
   const room = Math.max(0, MAX_TOASTS - 1);
   return {
-    kept: [...current.slice(-room), arriving],
-    evicted: current.slice(0, Math.max(0, current.length - room)),
+    kept: [...others.slice(-room), arriving],
+    evicted: [...repeated, ...others.slice(0, Math.max(0, others.length - room))],
   };
 }
 
