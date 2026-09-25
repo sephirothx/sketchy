@@ -675,7 +675,7 @@ async def run_probe(
         done("prompt")
 
         drawer.label = viewer.label = "draw"
-        await drawer.emit("draw", DRAW_START_FRAME, [generation, sequence + 1])
+        await drawer.emit("draw", DRAW_START_FRAME, [generation, sequence + 1, 1])
         await drawer.emit("draw", DRAW_END_FRAME)
         seen = await viewer.expect("draw")
         if not seen.args or seen.args[0] != DRAW_START_FRAME:

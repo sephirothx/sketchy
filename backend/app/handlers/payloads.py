@@ -633,7 +633,8 @@ class DrawPayload:
     action_identity: tuple[int, int] | None
     # A number the client drew for this action and keeps across resends, so a
     # retransmitted opener and a fresh stroke reusing its sequence can be told
-    # apart (#1057). Optional: a client that sends none is judged by its opener.
+    # apart (#1057). Required with the identity: an identical opener - a dot
+    # tapped again on the same spot - is no evidence either way.
     action_nonce: int | None = None
 
 
@@ -684,19 +685,14 @@ def parse_draw_payload(data: Any, action_identity: Any = None) -> DrawPayload:
     if action_identity is not None:
         if (
             not isinstance(action_identity, list)
-            or len(action_identity) not in (2, 3)
+            or len(action_identity) != 3
             or (generation := _canvas_sequence(action_identity[0])) is None
             or (sequence := _canvas_sequence(action_identity[1])) is None
+            or isinstance(nonce := action_identity[2], bool)
+            or not isinstance(nonce, int)
+            or not 1 <= nonce <= MAX_ACTION_NONCE
         ):
             raise PayloadError("Invalid drawing action identity")
-        if len(action_identity) == 3:
-            nonce = action_identity[2]
-            if (
-                isinstance(nonce, bool)
-                or not isinstance(nonce, int)
-                or not 1 <= nonce <= MAX_ACTION_NONCE
-            ):
-                raise PayloadError("Invalid drawing action identity")
         identity = (generation, sequence)
     if starts_action and identity is None:
         raise PayloadError("Drawing action identity is required")

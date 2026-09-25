@@ -53,7 +53,7 @@ async def test_a_burst_of_stale_openings_costs_one_notice_and_no_dump(monkeypatc
     draw = sio.handlers["/"]["draw"]
     generation = room.game.canvas.generation
     for index in range(DRAWING.default.limit):
-        await draw("drawer-sid", OPENER, [generation + 1, 100 + index])
+        await draw("drawer-sid", OPENER, [generation + 1, 100 + index, 1])
     assert _events(sio, "sync_strokes") == [], "no history dump for a stale opening"
     notices = _events(sio, "canvas_stale")
     assert len(notices) == 1, "one notice per socket per resync window"
@@ -69,12 +69,12 @@ async def test_each_former_dump_path_is_a_notice_and_undo_answers_only_its_ackno
     generation = room.game.canvas.generation
     # A tool the room disallows.
     room.allowed_tools = ["brush"]
-    await draw("drawer-sid", encode_live_drawing("draw_fill", {"x": 0.5, "y": 0.5, "color": "#123456"}), [generation, 1])
+    await draw("drawer-sid", encode_live_drawing("draw_fill", {"x": 0.5, "y": 0.5, "color": "#123456"}), [generation, 1, 1])
     assert _events(sio, "canvas_stale")[-1].args[1][2] == "refused_tool"
     # A sequence at or below the committed one with no commit to replay.
     ctx.clear_command_budget("drawer-sid")
     room.game.canvas.sequence = 5
-    await draw("drawer-sid", OPENER, [generation, 3])
+    await draw("drawer-sid", OPENER, [generation, 3, 3])
     assert _events(sio, "canvas_stale")[-1].args[1][2] == "unknown_sequence"
     # A frame that does not decode.
     ctx.clear_command_budget("drawer-sid")
@@ -118,7 +118,7 @@ async def test_the_amplification_is_bounded_per_window_across_every_path():
     request = sio.handlers["/"]["request_sync_strokes"]
     generation = room.game.canvas.generation
     for index in range(40):
-        await draw("drawer-sid", OPENER, [generation + 1, 200 + index])
+        await draw("drawer-sid", OPENER, [generation + 1, 200 + index, 1])
     for _ in range(5):
         await ctx.game_flow._sync_player_view("drawer-sid", room, drawer)
     for _ in range(5):

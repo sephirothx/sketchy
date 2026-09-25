@@ -250,21 +250,6 @@ class PackedCanvasHistory(Sequence[CanvasAction]):
         self.data.extend(record)
         return len(self) - 1
 
-    def opens_like(self, index: int, *, x: float, y: float, color: int, width: int) -> bool:
-        """Whether the path at `index` began with exactly this opener.
-
-        Compared as stored - packed colour, width and first point - so a
-        retransmitted `draw_start`, which repeats the opener byte for byte,
-        matches, and a fresh stroke reusing the number almost never does
-        (#1057).
-        """
-        opening = _PATH_HEADER.pack(PATH_TAG, _packed_color(color), width) + _PATH_POINT.pack(
-            _pack_coordinate(x, CANVAS_WIDTH),
-            _pack_coordinate(y, CANVAS_HEIGHT),
-        )
-        record = self.record_bytes(index)
-        return record[0] == PATH_TAG and bytes(record[: len(opening)]) == opening
-
     def last_path_point(self, index: int) -> tuple[float, float]:
         """The last point of the path at `index`, in normalized coordinates.
 

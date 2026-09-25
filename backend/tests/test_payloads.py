@@ -77,14 +77,19 @@ def test_binary_drawing_and_undo_wire_shapes_are_typed_and_bounded():
     start = encode_live_drawing(
         "draw_start", {"x": 0.1, "y": 0.2, "color": "#000000", "width": 4}
     )
-    parsed = parse_draw_payload(start, [1, 1])
+    parsed = parse_draw_payload(start, [1, 1, 5])
     assert parsed.packet.event == "draw_start"
     assert parsed.action_identity == (1, 1)
+    assert parsed.action_nonce == 5
 
     with pytest.raises(PayloadError):
-        parse_draw_payload(start, [True, 1])
+        parse_draw_payload(start, [True, 1, 5])
     with pytest.raises(PayloadError):
-        parse_draw_payload(encode_live_drawing("draw_end"), [1, 1])
+        # The nonce is required: without it a resend and a fresh stroke with
+        # the same opener cannot be told apart (#1057).
+        parse_draw_payload(start, [1, 1])
+    with pytest.raises(PayloadError):
+        parse_draw_payload(encode_live_drawing("draw_end"), [1, 1, 5])
     with pytest.raises(PayloadError):
         parse_undo_payload([1, 2, True, 0])
 

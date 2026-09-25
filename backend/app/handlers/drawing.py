@@ -108,18 +108,16 @@ async def _draw(ctx: HandlerContext, sid, payload) -> str:
             if (
                 packet.event == "draw_start"
                 and sequence == room.game.canvas.active_draw_sequence
-                and room.game.canvas.is_active_path_opener(
-                    packet.payload, payload.action_nonce
-                )
+                and room.game.canvas.is_active_path_resend(payload.action_nonce)
             ):
-                # The same opener again: a retransmission, so the path starts
+                # The same action again: a retransmission, so the path starts
                 # over from it.
                 room.game.canvas.restart_active_path()
             elif (
                 packet.event == "draw_start"
                 and sequence == room.game.canvas.active_draw_sequence
             ):
-                # The open path's number on a *different* opener: a fresh
+                # The open path's number under a *different* nonce: a fresh
                 # stroke after the path's `draw_end` was lost and the rebind
                 # sync restarted the numbering (#1057). Restarting popped the
                 # partial path on the server alone - every viewer still held

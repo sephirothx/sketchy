@@ -79,7 +79,7 @@ async def test_a_stroke_replayed_at_its_original_cadence_is_cut_off_by_the_budge
         + [("draw_end", {})]
     )
     for index, (event, payload) in enumerate(frames):
-        await draw("drawer-sid", encode_live_drawing(event, payload), [generation, 1] if index == 0 else None)
+        await draw("drawer-sid", encode_live_drawing(event, payload), [generation, 1, 1] if index == 0 else None)
     rebroadcast = sum(1 for call in sio.emit.await_args_list if call.args[0] == "draw")
     assert len(frames) == 152 and rebroadcast == DRAWING.default.limit
     assert room.game.canvas.sequence == 0, "never committed"
@@ -90,7 +90,7 @@ async def test_the_same_stroke_repacked_commits_in_three_frames():
     room, sio = _game()
     draw = sio.handlers["/"]["draw"]
     generation = room.game.canvas.generation
-    await draw("drawer-sid", encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 6}), [generation, 1])
+    await draw("drawer-sid", encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 6}), [generation, 1, 1])
     await draw("drawer-sid", encode_live_drawing("draw_move", {"points": POINTS}), None)
     await draw("drawer-sid", encode_live_drawing("draw_end", {}), None)
     rebroadcast = [call for call in sio.emit.await_args_list if call.args[0] == "draw"]
@@ -107,7 +107,7 @@ async def test_a_resend_of_a_committed_stroke_gets_its_commit_back_not_a_sync():
     draw = sio.handlers["/"]["draw"]
     generation = room.game.canvas.generation
     frames = [
-        (encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 6}), [generation, 1]),
+        (encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 6}), [generation, 1, 1]),
         (encode_live_drawing("draw_move", {"points": POINTS}), None),
         (encode_live_drawing("draw_end", {}), None),
     ]

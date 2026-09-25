@@ -1262,7 +1262,7 @@ async def test_a_fresh_stroke_reusing_the_open_number_closes_the_torn_path():
     """#1057: back from a rebind, a *new* `draw_start` carried the open
     path's number. Taken for a retransmission, it popped the partial path on
     the server alone - every viewer still held it and failed the commit, and
-    the partial stroke was gone from the record. A different opener is a
+    the partial stroke was gone from the record. A new action nonce is a
     fresh stroke: the torn path is closed for the room, kept, and committed."""
     room, sio = _drawing_room()
     await _open_a_path(room, sio)
@@ -1273,7 +1273,7 @@ async def test_a_fresh_stroke_reusing_the_open_number_closes_the_torn_path():
     await draw(
         "drawer-sid",
         encode_live_drawing("draw_start", {"x": 0.7, "y": 0.7, "color": "#ff0000", "width": 9}),
-        canvas_action(room.game, 1),
+        canvas_action(room.game, 1, nonce=2),
     )
 
     assert canvas.active_draw_sequence is None
@@ -1292,8 +1292,8 @@ async def test_a_fresh_stroke_reusing_the_open_number_closes_the_torn_path():
 
 
 async def test_a_retransmitted_opener_still_restarts_the_open_path():
-    """The same opener, byte for byte, is the drawer re-sending the stroke it
-    was in the middle of: that path starts over, as it always did."""
+    """The same action nonce is the drawer re-sending the stroke it was in
+    the middle of: that path starts over, as it always did."""
     room, sio = _drawing_room()
     await _open_a_path(room, sio)
     canvas = room.game.canvas
@@ -1319,15 +1319,15 @@ async def test_the_action_nonce_decides_between_a_resend_and_a_fresh_stroke():
     draw = sio.handlers["/"]["draw"]
     dot = encode_live_drawing("draw_start", {"x": 0.3, "y": 0.3, "color": "#000000", "width": 4})
 
-    await draw("drawer-sid", dot, [*canvas_action(room.game, 1), 111])
+    await draw("drawer-sid", dot, canvas_action(room.game, 1, nonce=111))
     # The same action resent (its nonce kept): the path starts over.
-    await draw("drawer-sid", dot, [*canvas_action(room.game, 1), 111])
+    await draw("drawer-sid", dot, canvas_action(room.game, 1, nonce=111))
     assert canvas.active_draw_sequence == 1 and len(canvas.history) == 1
 
     # A new dot on the same spot, reusing the number after a lost draw_end:
     # a new nonce, so the open path is closed for the room, not restarted.
     sio.emit.reset_mock()
-    await draw("drawer-sid", dot, [*canvas_action(room.game, 1), 222])
+    await draw("drawer-sid", dot, canvas_action(room.game, 1, nonce=222))
     assert canvas.active_draw_sequence is None
     assert canvas.sequence == 1 and len(canvas.history) == 1
     [(notice,)] = [call.args[1:] for call in _emitted(sio, "canvas_stale")]
@@ -1342,7 +1342,8 @@ async def test_an_action_nonce_out_of_range_is_refused(nonce):
     with pytest.raises(PayloadError):
         parse_draw_payload(opener, [1, 1, nonce])
     assert parse_draw_payload(opener, [1, 1, 2**31 - 1]).action_nonce == 2**31 - 1
-    assert parse_draw_payload(opener, [1, 1]).action_nonce is None
+    with pytest.raises(PayloadError):
+        parse_draw_payload(opener, [1, 1])
 
 
 async def test_undo_of_the_open_path_forgets_that_it_was_open():
