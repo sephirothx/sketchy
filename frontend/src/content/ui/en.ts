@@ -1865,7 +1865,6 @@ export const EN = {
     playersScores: "Players and scores",
     copyInviteLink: "Copy the invite link",
     saveThisDrawing: "Save this drawing",
-    settings: "Settings",
     leaveRoom: "Leave the room",
     iMBack: "I’m back",
     goAwayForABit: "Go away for a bit",
@@ -2367,6 +2366,7 @@ export const EN = {
     inviteYourFriends: "Invite your friends",
     shareLink: "Share the link",
     copyCode: "Copy code",
+    copyLink: "Copy link",
     inTheRoom: "In the room",
     you: "(you)",
     host: "Host",
@@ -2382,6 +2382,7 @@ export const EN = {
     privateRoom: "Private room",
     betweenGames: "between games",
     waitingForPlayers: "waiting for players",
+    readyToStart: "ready to start",
     roomCode: "Room code",
     starting: "Starting…",
     rematch: "Rematch",
@@ -2467,6 +2468,10 @@ export const EN = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds:
       (p: { roundNumber: number; totalRounds: number }) => `Round ${p.roundNumber} of ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Round ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "The next player",

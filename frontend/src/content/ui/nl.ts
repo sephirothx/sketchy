@@ -1861,7 +1861,6 @@ export const NL: Catalogue = {
     playersScores: "Spelers en punten",
     copyInviteLink: "De uitnodigingslink kopiëren",
     saveThisDrawing: "Deze tekening opslaan",
-    settings: "Instellingen",
     leaveRoom: "De kamer verlaten",
     iMBack: "Ik ben terug",
     goAwayForABit: "Even weg",
@@ -2357,6 +2356,7 @@ export const NL: Catalogue = {
     inviteYourFriends: "Nodig je vrienden uit",
     shareLink: "Deel de link",
     copyCode: "Code kopiëren",
+    copyLink: "Link kopiëren",
     inTheRoom: "In de kamer",
     you: "(jij)",
     host: "Gastheer",
@@ -2372,6 +2372,7 @@ export const NL: Catalogue = {
     privateRoom: "Privékamer",
     betweenGames: "tussen spellen door",
     waitingForPlayers: "wacht op spelers",
+    readyToStart: "klaar om te starten",
     roomCode: "Kamercode",
     starting: "Starten…",
     rematch: "Revanche",
@@ -2454,6 +2455,10 @@ export const NL: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Ronde ${p.roundNumber} van ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Ronde ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "De volgende speler",

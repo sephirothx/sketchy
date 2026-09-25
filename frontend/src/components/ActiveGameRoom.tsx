@@ -28,7 +28,6 @@ import {
 import { useAfkCheck } from "../hooks/useAfkCheck";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
-import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { isSigningOut } from "../store/authStore";
@@ -50,7 +49,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
   const navigate = useNavigate();
   const { notify } = useToast();
-  const openSettings = useOpenSettings();
 
   const canvasRef = useRef<CanvasRef | null>(null);
   const exitingRoomRef = useRef(false);
@@ -307,7 +305,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
     onOpenPlayers: isMobile ? openPlayersSheet : undefined,
     onToggleAfk: handleToggleAfk,
     onSaveImage: () => canvasRef.current?.saveImage(),
-    onOpenSettings: () => openSettings(),
     onProposeRestart: () => void handleProposeRestart(),
     onLeave: handleLeave,
   };
@@ -362,6 +359,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         className={`game-header${isMobile ? " game-header-mobile" : ""}`}
         data-testid="room-header"
         data-room-code={code}
+        data-room-name={roomName || undefined}
       >
         <div className="game-header-start">
           {/* The way back to the lobby, which from a room is leaving it -

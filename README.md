@@ -2734,11 +2734,14 @@ A seated client checks with the server every five seconds that it still holds th
   home, and in a room the room's name), what is going on (the round and the clock, a
   server notice, and an *Away* chip while you are away), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
-  go away, save the drawing, start over, settings, and Leave last in red - a dropdown on a
-  desktop and the ⋯ sheet on a phone, with the same rows. A short window gives way in a fixed
+  go away, save the drawing, start over, and Leave last in red - a dropdown on a
+  desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the
+  room's. A phone's round reads "Round 2/3", or "2/3" on a bar too narrow for the word. A short window gives way in a fixed
   order: the room's name, then your chip's name (it becomes your round avatar); the wordmark,
   the clock, the menu and your avatar stay, down to a phone - where a notice on a narrow bar
-  borrows the wordmark's room until it ends. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
+  borrows the wordmark's room until it ends. The waiting room names the room once - in the bar on a desktop, as the stage's heading on a
+  phone, whose bar has no room for it - and says "ready to start" once Start would work.
+  On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card. An invite link shows the room the same six
   cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait" swaps

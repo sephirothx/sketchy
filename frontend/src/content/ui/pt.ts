@@ -1860,7 +1860,6 @@ export const PT: Catalogue = {
     playersScores: "Jogadores e pontos",
     copyInviteLink: "Copiar a ligação de convite",
     saveThisDrawing: "Guardar este desenho",
-    settings: "Definições",
     leaveRoom: "Sair da sala",
     iMBack: "Voltei",
     goAwayForABit: "Ausentar-me um bocado",
@@ -2356,6 +2355,7 @@ export const PT: Catalogue = {
     inviteYourFriends: "Convida os teus amigos",
     shareLink: "Partilha a ligação",
     copyCode: "Copiar o código",
+    copyLink: "Copiar ligação",
     inTheRoom: "Na sala",
     you: "(tu)",
     host: "Anfitrião",
@@ -2371,6 +2371,7 @@ export const PT: Catalogue = {
     privateRoom: "Sala privada",
     betweenGames: "entre jogos",
     waitingForPlayers: "à espera de jogadores",
+    readyToStart: "pronta para começar",
     roomCode: "Código da sala",
     starting: "A começar…",
     rematch: "Desforra",
@@ -2453,6 +2454,10 @@ export const PT: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Ronda ${p.roundNumber} de ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Ronda ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "O próximo jogador",

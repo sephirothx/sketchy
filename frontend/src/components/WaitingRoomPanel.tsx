@@ -227,11 +227,18 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   return (
     <main className="waiting-room" data-testid="waiting-room">
       {/* Which room this is, out of the invite card. It is the one thing on
-          the screen that is not about getting people into it. */}
+          the screen that is not about getting people into it. A desktop's bar
+          already names the room a few pixels above, so there the heading is
+          for a screen reader only; a phone's bar has no room for the name, so
+          this is the one place it is said. The status says whether the room
+          could start now, by the same rule as Start (R-ROOM-05): "waiting for
+          players" beside an enabled Start was wrong half the time. */}
       <header className="waiting-room-head">
-        <h1>{props.name}</h1>
+        <h1 className={isNarrow ? undefined : "visually-hidden"}>{props.name}</h1>
         <p className="section-label">
-          {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom} · {rematch ? ui.waitingRoomPanel.betweenGames : ui.waitingRoomPanel.waitingForPlayers}
+          {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom} · {rematch
+            ? ui.waitingRoomPanel.betweenGames
+            : canStart ? ui.waitingRoomPanel.readyToStart : ui.waitingRoomPanel.waitingForPlayers}
         </p>
       </header>
 
@@ -253,7 +260,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               iconLeft={<LinkIcon size={15} />}
               onClick={() => void copyToClipboard(window.location.href, ui.waitingRoomPanel.inviteLink)}
             >
-              {ui.roomMenuSheet.copyInviteLink}
+              {/* Half a phone's card wide, beside Copy code: the menu row's
+                  longer label ran into both of the button's edges there. */}
+              {isNarrow ? ui.waitingRoomPanel.copyLink : ui.roomMenuSheet.copyInviteLink}
             </Button>
           )}
           {/* A button of its own, not a link pretending to be one: it is the
