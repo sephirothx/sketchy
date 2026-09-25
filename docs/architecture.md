@@ -289,7 +289,8 @@ guard lands on the base, where the room pushes the guard again and runs its own 
 (which asks first during a game). A sheet closed by its own control takes its entry back
 with `history.go`, and the entries are counted rather than named, so one sheet handing
 over to another in a single render costs no traversal. Leaving rewinds to the base and
-replaces it with the lobby. `go` is asynchronous, which is where the edge cases are: the
+replaces it with the lobby, whichever way out it was — Leave, a kick, another tab, the
+crash page. `go` is asynchronous, which is where the edge cases are: the
 port counts the traversals it asked for so that their `popstate` is not read as Back,
 nothing is pushed while one is in flight, a leave waits for one already moving before
 counting its rewind, and one the browser drops is given up after a second. The rules and
@@ -300,10 +301,13 @@ the live room provides — so `BottomSheet` and `ModalShell` register every in-r
 and dialog, the room's dropdown menus register themselves, and all of them do nothing
 anywhere else. The overlays are unaffected: Settings and
 Friends are entries of the router's own, pushed on top, and closing one lands back on a
-room entry that asks for nothing. An overlay opened *from* a sheet leaves that sheet's
-entry beneath it; Back from the overlay steps over it to the guard, and a Forward after
-that bounces off it the same way. Harmless, and cheaper than overlays that know about
-rooms. A browser may skip an entry pushed without a user
+room entry that asks for nothing. An overlay opened *from* a sheet or menu replaces that
+surface's entry instead of pushing over it (`isSheetEntry`, read by `useOpenOverlay`),
+since the surface closes as the overlay opens: pushed, the entry would sit beneath the
+overlay for Back to step over and Forward to bounce off. Signing in or out in a room gives
+the seat up without leaving the page, so `authStore` rewinds the seat's entries to the
+base and navigates nowhere; the invite screen is then drawn on the entry the room was
+entered on. A browser may skip an entry pushed without a user
 gesture when Back is pressed (Chrome's history-manipulation intervention); the guard is
 pushed as the room mounts, just after the press that entered it, and if it were ever
 skipped Back would behave as it did before this rather than worse.

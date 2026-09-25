@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { apiRequest, onUnexpectedSignOut } from "../lib/api";
 import { assertPasskey } from "../lib/passkeys";
 import { emitTransient, reconnectWithCurrentIdentity, socket } from "../lib/socket";
+import { historyPortFor, leaveRoomHistory } from "../lib/roomHistory";
 import { useGameStore } from "./gameStore";
 import { isPaletteColor, useSettingsStore } from "./settingsStore";
 import { nicknameError } from "../lib/roomEntryState";
@@ -133,10 +134,19 @@ function reconnectSocketAsNewIdentity(): void {
  * account by the server; the in-memory seat still has to leave cleanly.
  */
 function releaseSeatBeforeIdentityChange(): void {
-  if (useGameStore.getState().playerId && socket.connected) {
+  // Read before the session is cleared, which is what forgets the seat.
+  const { playerId, code } = useGameStore.getState();
+  if (playerId && socket.connected) {
     emitTransient("leave_room");
   }
   useGameStore.getState().clearSession();
+  // The seat's history entries go with it, as on any other way out (R-UX-15),
+  // but nothing navigates: the page stays on the room's URL, now its invite
+  // screen, rewound to the entry the room was entered on. A rejoin from there
+  // puts a guard of its own over it, and a later leave leaves nothing behind.
+  if (playerId && code && typeof window !== "undefined") {
+    leaveRoomHistory(historyPortFor(window), { code, seat: playerId }, () => {});
+  }
 }
 
 /**

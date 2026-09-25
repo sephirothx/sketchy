@@ -7,6 +7,7 @@ import {
   exitStep,
   historyPortFor,
   isRoomPath,
+  isSheetEntry,
   leaveRoomHistory,
   locate,
   planPop,
@@ -438,7 +439,38 @@ test("a second way out during a leave is left to the first", async () => {
   assert.equal(win.describe(), `/ [/] ${ROOM}#0`);
 });
 
-test("an overlay opened from a sheet: Back from it steps over the sheet's stale entry", async () => {
+test("only a sheet's entry is one an overlay replaces", () => {
+  const mark = (depth, seat = "anyone") => ({ [ROOM_ENTRY_KEY]: { code: CODE, seat, depth } });
+  assert.equal(isSheetEntry(mark(1)), true);
+  assert.equal(isSheetEntry(mark(2, WHO.seat)), true);
+  // The guard stays under an overlay: replacing it would lose Back on the room.
+  assert.equal(isSheetEntry(mark(0)), false);
+  assert.equal(isSheetEntry({ usr: null, key: "a", idx: 1 }), false);
+  assert.equal(isSheetEntry(null), false);
+});
+
+test("an overlay opened from a menu takes its entry, so Back and Forward both work", async () => {
+  const { win, room, backs } = await enterRoom();
+  const menu = openSheet(room, "account-menu");
+  await win.settle();
+  // The menu's Settings row: useOpenOverlay replaces a sheet's entry.
+  menu.close();
+  win.navigate("/settings/account", { overlayBackground: ROOM }, {
+    replace: isSheetEntry(win.history.state),
+  });
+  await win.settle();
+  assert.equal(win.describe(), `/ ${ROOM} ${ROOM}#0 [/settings/account]`);
+
+  win.press(-1);
+  await win.settle();
+  assert.equal(win.describe(), `/ ${ROOM} [${ROOM}#0] /settings/account`);
+  win.press(1);
+  await win.settle();
+  assert.equal(win.describe(), `/ ${ROOM} ${ROOM}#0 [/settings/account]`);
+  assert.deepEqual(backs, []);
+});
+
+test("an overlay pushed over a sheet's stale entry: Back from it steps over the entry", async () => {
   const { win, room, backs } = await enterRoom();
   const menu = openSheet(room, "menu");
   await win.settle();
@@ -525,6 +557,30 @@ test("once a leave lands, the next room's history works on the same window", asy
   next.start();
   await win.settle();
   assert.match(win.describe(), /\[\/room\/ZZ99ZZ#0\]$/);
+});
+
+test("a seat given up in place (signing in) rewinds without navigating", async () => {
+  // Signing in or out in a room clears the seat and stays on the room's URL,
+  // now the invite screen. Rewound to the base, a rejoin there gets a guard
+  // of its own, and leaving that seat leaves no room entry under the lobby.
+  const { win, room, port } = await enterRoom();
+  openSheet(room, "sign-in");
+  await win.settle();
+  leaveRoomHistory(port, WHO, () => {});
+  await win.settle();
+  room.stop();
+  assert.equal(win.describe(), `/ [${ROOM}] ${ROOM}#0 ${ROOM}#1`);
+
+  const signedIn = { code: CODE, seat: "seat-2" };
+  const rejoined = createRoomHistory(port, signedIn);
+  rejoined.start();
+  await win.settle();
+  assert.equal(win.describe(), `/ ${ROOM} [${ROOM}#0]`);
+
+  leaveRoomHistory(port, signedIn, (replace) => win.navigate("/", null, { replace }));
+  await win.settle();
+  rejoined.stop();
+  assert.equal(win.describe(), `/ [/] ${ROOM}#0`);
 });
 
 test("outside the room's entries a leave is an ordinary push", async () => {

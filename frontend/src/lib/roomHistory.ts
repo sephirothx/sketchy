@@ -98,6 +98,16 @@ export function locate(state: unknown, pathname: string, who: RoomSeat): Landing
   return { kind: "base" };
 }
 
+/** Whether `state` is an open sheet's entry - any seat's, any room's.
+
+An overlay route opened from a sheet replaces this entry rather than pushing
+over it: the sheet closes as the overlay opens, so its entry would otherwise
+sit under the overlay, stepped over by Back and bounced off by Forward. */
+export function isSheetEntry(state: unknown): boolean {
+  const mark = markOf(state);
+  return mark !== null && mark.depth > 0;
+}
+
 /** The state for an entry pushed on top of `state`: the router's keys kept, so
 it still reads the same location, its index moved on by one as a push of its
 own would, and the mark added. */
