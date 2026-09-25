@@ -316,8 +316,9 @@ Four frontend conventions worth knowing:
    body that scrolls inside a card capped at 90% of the dynamic viewport, and the
    actions in a footer — right-aligned with the primary last, stacked full width on a
    phone. Left without `onDismiss` it is a **blocking notice** (the AFK check, a
-   suspension, a warning, a role change): no close button, Escape or scrim, and focus
-   still trapped. A form whose submit button sits in the footer reaches it through the
+   suspension, a warning, a role change): no close button and no scrim, focus still
+   trapped, and Escape claimed so it never reaches what is open underneath — swallowed,
+   or for the AFK check (`onEscape`) taken as the answer. A form whose submit button sits in the footer reaches it through the
    `form` attribute, so the button stays `type="submit"`. The two route overlays keep
    their own sheet and layer but draw the same `ModalHeader`; the room's sheets are
    [`BottomSheet`](../frontend/src/components/ui/BottomSheet.tsx). The dialogs used to
