@@ -144,9 +144,11 @@
    `.visually-hidden` declarations (a11y.css) copied on purpose, not drift: a
    class cannot be switched on at a breakpoint, and the component's own width
    check (900px) is not the bar's (1100px) - which left 901-1100px with no
-   name at all. One breakpoint for both, so no width says it twice or never. */
+   name at all. One breakpoint for both, so no width says it twice or never.
+   The whole head, not only its heading: out of the flow, it takes no row of
+   the waiting room's grid and so no gap above the invite card. */
 @media (min-width: 1101px) {
-  .waiting-room-head h1 {
+  .waiting-room-head {
     border: 0;
     clip: rect(0 0 0 0);
     clip-path: inset(50%);
@@ -598,7 +600,6 @@
   font-weight: 600;
   margin: 0;
 }
-.waiting-room-head .section-label { margin-top: 3px; }
 
 /* Invite-first center card: a kicker, the code, one way to send it. */
 .waiting-invite-card {

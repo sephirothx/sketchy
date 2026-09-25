@@ -2369,11 +2369,6 @@ export const IT: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Entra nella mia stanza di Sketchy: ${p.code}`,
     inviteLink: "Link d’invito",
-    publicRoom: "Stanza pubblica",
-    privateRoom: "Stanza privata",
-    betweenGames: "tra una partita e l’altra",
-    waitingForPlayers: "in attesa di giocatori",
-    readyToStart: "pronta per iniziare",
     roomCode: "Codice stanza",
     starting: "Avvio…",
     rematch: "Rivincita",

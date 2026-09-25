@@ -12,7 +12,6 @@ import { InviteFriendsList } from "./InviteFriendsList";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
-import { useServerNoticesStore } from "../store/serverNoticesStore";
 import type {
   PromptLanguage,
   ColorMode,
@@ -87,7 +86,6 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const host = players.find((player) => player.isHost);
   const me = players.find((player) => player.playerId === myPlayerId);
   const canStart = eligiblePlayers.length >= 2;
-  const draining = useServerNoticesStore((state) => state.shutdownNotice) !== null;
   const needsPlayers = Math.max(0, 2 - eligiblePlayers.length);
   // The button says how many are missing; the tooltip says what counts, which
   // is the part nobody needs until they wonder why a spectator is not enough.
@@ -232,19 +230,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           the screen that is not about getting people into it. Where the bar
           prints the room's name (above 1100px, game-room.css) the heading is
           for a screen reader only; below that the bar has no room for the
-          name, so this is the one place it is said. The status says whether
-          the room could start now, by the same rule as Start (R-ROOM-05):
-          "waiting for players" beside an enabled Start was wrong half the
-          time. During a drain it says neither: the server refuses a start
-          whoever is here, and the drain's own notice says so. */}
+          name, so this is the one place it is said. No status line under it:
+          "waiting for players" said what the whole screen says, and whether
+          the room can start is Start's own label ("Need 1 more player") -
+          and during a drain, the drain's notice. */}
       <header className="waiting-room-head">
         <h1>{props.name}</h1>
-        <p className="section-label">
-          {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom}
-          {!draining && <> · {rematch
-            ? ui.waitingRoomPanel.betweenGames
-            : canStart ? ui.waitingRoomPanel.readyToStart : ui.waitingRoomPanel.waitingForPlayers}</>}
-        </p>
       </header>
 
       {/* The code, read at a glance or tapped to copy, and one way to send it.
