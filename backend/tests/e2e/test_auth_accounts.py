@@ -375,3 +375,55 @@ async def test_player_can_download_then_delete_account_from_settings():
             assert current is None
         finally:
             await browser.close()
+
+
+async def test_log_out_everywhere_asks_before_signing_this_device_out():
+    """"Log out everywhere" reaches the device it is pressed on, so it asks.
+
+    A single revoke names the device it means; this one does not, and the
+    device holding the button is part of "everywhere". Cancelling leaves the
+    account signed in; confirming signs this browser out with the rest.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        page.set_default_timeout(10000)
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "EverywhereE2E")
+            await register_account(page, "EverywhereE2E")
+            await open_player_settings(page)
+            await page.wait_for_selector('[data-testid="settings"]')
+            await page.locator(".settings-row", has_text="Signed-in devices").get_by_role(
+                "button", name="Manage"
+            ).click()
+            devices = page.get_by_role("dialog", name="Signed-in devices")
+            await devices.locator(".session-list li").first.wait_for()
+
+            await devices.get_by_role("button", name="Log out everywhere").click()
+            confirm = page.get_by_role("alertdialog", name="Sign out everywhere?")
+            await expect(confirm).to_be_visible()
+            # Asking is the whole change: nothing has happened yet.
+            await confirm.get_by_role("button", name="Cancel").click()
+            await expect(confirm).to_have_count(0)
+            await expect(devices).to_be_visible()
+            me = await page.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json())?.username"
+            )
+            assert me == "EverywhereE2E"
+
+            await devices.get_by_role("button", name="Log out everywhere").click()
+            await confirm.get_by_role("button", name="Log out everywhere").click()
+            await expect(devices).to_have_count(0)
+            # Signed out here too: whatever this browser holds now, it is not
+            # the account it just ended every session of.
+            for _ in range(50):
+                me = await page.evaluate(
+                    "async () => (await (await fetch('/api/auth/me')).json())?.username ?? null"
+                )
+                if me != "EverywhereE2E":
+                    break
+                await asyncio.sleep(0.1)
+            assert me != "EverywhereE2E"
+        finally:
+            await browser.close()

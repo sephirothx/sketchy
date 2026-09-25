@@ -28,6 +28,7 @@ export function AddEmailDialog({
   const inputRef = useRef<HTMLInputElement | null>(null);
   const fieldId = useId();
   const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const state = useEmailStateStore((store) => store.state);
   const refresh = useEmailStateStore((store) => store.refresh);
   const [email, setEmail] = useState("");
@@ -44,6 +45,12 @@ export function AddEmailDialog({
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // The form goes once it has worked, and focus with it; Done is where it
+  // lands rather than on the page behind.
+  useEffect(() => {
+    if (sentTo) doneRef.current?.focus();
+  }, [sentTo]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -90,6 +97,7 @@ export function AddEmailDialog({
         footer={
           sentTo ? (
             <button
+              ref={doneRef}
               type="button"
               className="btn btn-primary"
               onClick={() => onSaved(sentTo)}

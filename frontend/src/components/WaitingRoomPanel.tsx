@@ -392,7 +392,8 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
 
       {settingsOpen && (
         <ModalShell
-          labelledBy="room-settings-title"
+          title={ui.roomSettingsEditor.editRoomRules}
+          eyebrow={ui.roomSettingsEditor.hostSettings}
           cardClassName="room-settings-modal-card"
           onDismiss={() => setSettingsOpen(false)}
         >

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ModalShell } from "./ui/ModalShell";
@@ -24,12 +24,19 @@ export function ReportDrawingDialog({
   onClose: () => void;
 }) {
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
-  const titleId = useId();
-  const formId = `${titleId}-form`;
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const [details, setDetails] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  // Sending swaps the form for the answer, and the submit button that held
+  // focus goes with it; focus follows to Done rather than dropping to the page.
+  useEffect(() => {
+    if (sent) doneRef.current?.focus();
+  }, [sent]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -73,7 +80,7 @@ export function ReportDrawingDialog({
             </button>
           </>
         ) : (
-          <button type="button" className="btn btn-primary" onClick={onClose}>
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
             {ui.reportDrawingDialog.done}
           </button>
         )
@@ -83,11 +90,11 @@ export function ReportDrawingDialog({
         <>
           <p className="modal-body">{ui.reportDrawingDialog.nothingHappensYet}</p>
           <form id={formId} onSubmit={submit} className="auth-form">
-            <label htmlFor={`${titleId}-details`}>
+            <label htmlFor={`${fieldId}-details`}>
               {ui.reportDrawingDialog.anythingElseOptional}
             </label>
             <textarea
-              id={`${titleId}-details`}
+              id={`${fieldId}-details`}
               ref={detailsRef}
               className="report-details"
               rows={3}

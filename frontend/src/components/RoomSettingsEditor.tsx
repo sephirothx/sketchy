@@ -180,16 +180,10 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     }
   }
 
-  // No card of its own: the dialog it opens in is already a panel, and two
-  // nested ones cost 90px of a phone's width in padding and borders alone.
-  return <section
-    className="room-settings-editor"
-    aria-labelledby="room-settings-title"
-  >
-    <div className="room-settings-editor-heading">
-      <p className="waiting-card-kicker">{ui.roomSettingsEditor.hostSettings}</p>
-      <h2 id="room-settings-title">{ui.roomSettingsEditor.editRoomRules}</h2>
-    </div>
+  // No card and no heading of its own: the dialog it opens in is already a
+  // panel, with the title and ✕ every dialog has, and two nested cards cost
+  // 90px of a phone's width in padding and borders alone.
+  return <section className="room-settings-editor">
     {loading ? <p>{ui.roomSettingsEditor.loadingSettings}</p> : (
       <RoomSetupForm
         values={values}

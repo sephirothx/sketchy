@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 import { ModalShell } from "./ui/ModalShell";
 import { changePassword, requestPasswordReset } from "../lib/accountRecovery";
@@ -37,6 +37,7 @@ export function ChangePasswordDialog({
   const currentRef = useRef<HTMLInputElement | null>(null);
   const fieldId = useId();
   const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const { notify } = useToast();
 
   const [current, setCurrent] = useState("");
@@ -45,6 +46,12 @@ export function ChangePasswordDialog({
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [mailed, setMailed] = useState(false);
+
+  // The form goes once it has worked, and focus with it; Done is where it
+  // lands rather than on the page behind.
+  useEffect(() => {
+    if (mailed) doneRef.current?.focus();
+  }, [mailed]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -92,7 +99,7 @@ export function ChangePasswordDialog({
       initialFocusRef={currentRef}
       footer={
         mailed ? (
-          <button type="button" className="btn btn-primary" onClick={onClose}>
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
             {ui.changePasswordDialog.done}
           </button>
         ) : (

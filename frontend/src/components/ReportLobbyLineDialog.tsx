@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ModalShell } from "./ui/ModalShell";
@@ -36,13 +36,20 @@ export function ReportLobbyLineDialog({
   onClose: () => void;
 }) {
   const reasonRef = useRef<HTMLSelectElement | null>(null);
-  const titleId = useId();
-  const formId = `${titleId}-form`;
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const [reason, setReason] = useState<ReportReason>("harassment");
   const [details, setDetails] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  // Sending swaps the form for the answer, and the submit button that held
+  // focus goes with it; focus follows to Done rather than dropping to the page.
+  useEffect(() => {
+    if (sent) doneRef.current?.focus();
+  }, [sent]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -94,7 +101,7 @@ export function ReportLobbyLineDialog({
             </button>
           </>
         ) : (
-          <button type="button" className="btn btn-primary" onClick={onClose}>
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
             {ui.reportLobbyLineDialog.done}
           </button>
         )
@@ -115,9 +122,9 @@ export function ReportLobbyLineDialog({
             {line.text}
           </blockquote>
           <form id={formId} onSubmit={submit} className="auth-form">
-            <label htmlFor={`${titleId}-reason`}>{ui.reportLobbyLineDialog.whatWrongWith}</label>
+            <label htmlFor={`${fieldId}-reason`}>{ui.reportLobbyLineDialog.whatWrongWith}</label>
             <select
-              id={`${titleId}-reason`}
+              id={`${fieldId}-reason`}
               ref={reasonRef}
               className="report-reason"
               value={reason}
@@ -130,9 +137,9 @@ export function ReportLobbyLineDialog({
               ))}
             </select>
 
-            <label htmlFor={`${titleId}-details`}>{ui.reportLobbyLineDialog.anythingElseOptional}</label>
+            <label htmlFor={`${fieldId}-details`}>{ui.reportLobbyLineDialog.anythingElseOptional}</label>
             <textarea
-              id={`${titleId}-details`}
+              id={`${fieldId}-details`}
               className="report-details"
               rows={3}
               maxLength={1000}

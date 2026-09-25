@@ -16,8 +16,9 @@ have to find the button; the button exists for a pointer already resting on
 the canvas, and for anybody driving the page by keyboard alone.
 
 Deliberately not dismissible by Escape or a click outside the way other
-dialogs are — both of those *are* input, so they answer it. So no `onDismiss`:
-ModalShell then draws no ✕ and leaves Escape and the scrim to the window. There is no way to
+dialogs are — both of those *are* input, so they answer it. So no `onDismiss`,
+and so no ✕; Escape is handed the answer directly, because the dialog claims
+the key before the window's listener would see it. There is no way to
 close this without answering it, which is right: closing it and staying is
 what answering it means. */
 export function AfkCheckDialog({
@@ -36,6 +37,7 @@ export function AfkCheckDialog({
       overlayClassName="afk-check-overlay"
       cardClassName="afk-check-dialog"
       initialFocusRef={answerRef}
+      onEscape={onAnswer}
       footer={
         <button
           ref={answerRef}

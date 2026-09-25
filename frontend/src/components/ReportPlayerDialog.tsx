@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ModalShell } from "./ui/ModalShell";
@@ -65,8 +65,9 @@ export function ReportPlayerDialog({
   onClose: () => void;
 }) {
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
-  const titleId = useId();
-  const formId = `${titleId}-form`;
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const [reason, setReason] = useState<ReportReason>(
     drawingOffered ? "offensive_drawing" : "harassment",
   );
@@ -87,6 +88,12 @@ export function ReportPlayerDialog({
     drawing: boolean;
     drawingRequested: boolean;
   } | null>(null);
+
+  // Sending swaps the form for the answer, and the submit button that held
+  // focus goes with it; focus follows to Done rather than dropping to the page.
+  useEffect(() => {
+    if (sent !== null) doneRef.current?.focus();
+  }, [sent]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -146,7 +153,7 @@ export function ReportPlayerDialog({
             </button>
           </>
         ) : (
-          <button type="button" className="btn btn-primary" onClick={onClose}>
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
             {ui.reportPlayerDialog.done}
           </button>
         )
@@ -158,9 +165,9 @@ export function ReportPlayerDialog({
             {ui.reportPlayerDialog.nothingHappensYet({ name: nickname })}
           </p>
           <form id={formId} onSubmit={submit} className="auth-form">
-            <label htmlFor={`${titleId}-reason`}>{ui.reportPlayerDialog.whatHappened}</label>
+            <label htmlFor={`${fieldId}-reason`}>{ui.reportPlayerDialog.whatHappened}</label>
             <select
-              id={`${titleId}-reason`}
+              id={`${fieldId}-reason`}
               className="report-reason"
               value={reason}
               onChange={(change) => setReason(change.target.value as ReportReason)}
@@ -172,9 +179,9 @@ export function ReportPlayerDialog({
               ))}
             </select>
 
-            <label htmlFor={`${titleId}-details`}>{ui.reportPlayerDialog.anythingElseOptional}</label>
+            <label htmlFor={`${fieldId}-details`}>{ui.reportPlayerDialog.anythingElseOptional}</label>
             <textarea
-              id={`${titleId}-details`}
+              id={`${fieldId}-details`}
               ref={detailsRef}
               className="report-details"
               rows={3}

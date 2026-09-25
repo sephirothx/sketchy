@@ -1982,8 +1982,8 @@ export const NL: Catalogue = {
     revoke: "Intrekken",
     loggingOut: "Uitloggen…",
     logOutEverywhere: "Overal uitloggen",
-    logOutEverywhereTitle: "Overal uitloggen?",
-    logOutEverywhereBody: "Elk apparaat dat met dit account is ingelogd, wordt uitgelogd, ook dit. Hier moet je daarna opnieuw inloggen.",
+    logOutEverywhereTitle: "Overal afmelden?",
+    logOutEverywhereBody: "Elk apparaat dat met dit account is aangemeld, wordt afgemeld, ook dit. Hier moet je je daarna opnieuw aanmelden.",
   },
 
   avatarDoodles: {

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { ModalShell } from "./ui/ModalShell";
@@ -42,8 +42,9 @@ export function ReportAccountDialog({
 }) {
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
   const reasonRef = useRef<HTMLSelectElement | null>(null);
-  const titleId = useId();
-  const formId = `${titleId}-form`;
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const reasons: { value: ReportReason; label: string }[] = [
     { value: "inappropriate_name", label: ui.reportAccountDialog.inappropriateName },
     // A doodle is our drawing rather than something the player put up, so
@@ -57,6 +58,12 @@ export function ReportAccountDialog({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
+
+  // Sending swaps the form for the answer, and the submit button that held
+  // focus goes with it; focus follows to Done rather than dropping to the page.
+  useEffect(() => {
+    if (sent) doneRef.current?.focus();
+  }, [sent]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -105,7 +112,7 @@ export function ReportAccountDialog({
             </button>
           </>
         ) : (
-          <button type="button" className="btn btn-primary" onClick={onClose}>
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
             {ui.reportAccountDialog.done}
           </button>
         )
@@ -130,9 +137,9 @@ export function ReportAccountDialog({
                 question with a single answer. */}
             {reasons.length > 1 ? (
               <>
-                <label htmlFor={`${titleId}-reason`}>{ui.reportAccountDialog.whatWrongWith}</label>
+                <label htmlFor={`${fieldId}-reason`}>{ui.reportAccountDialog.whatWrongWith}</label>
                 <select
-                  id={`${titleId}-reason`}
+                  id={`${fieldId}-reason`}
                   ref={reasonRef}
                   className="report-reason"
                   value={reason}
@@ -153,9 +160,9 @@ export function ReportAccountDialog({
               </p>
             )}
 
-            <label htmlFor={`${titleId}-details`}>{ui.reportAccountDialog.anythingElseOptional}</label>
+            <label htmlFor={`${fieldId}-details`}>{ui.reportAccountDialog.anythingElseOptional}</label>
             <textarea
-              id={`${titleId}-details`}
+              id={`${fieldId}-details`}
               ref={detailsRef}
               className="report-details"
               rows={3}

@@ -49,6 +49,7 @@ export function ModalHeader({
           onClick={onClose}
           aria-label={label}
           title={label}
+          data-skip-initial-focus=""
         >
           <XIcon size={16} />
         </button>
@@ -56,6 +57,9 @@ export function ModalHeader({
     </div>
   );
 }
+
+/** Escape, taken and dropped. */
+const swallow = () => {};
 
 interface ModalShellProps {
   role?: "dialog" | "alertdialog";
@@ -76,12 +80,12 @@ interface ModalShellProps {
   /**
    * How the dialog is set aside: the ✕, Escape and a click on the scrim.
    * Omitted for a blocking notice - one that is answered, never dismissed -
-   * which then has no ✕, ignores the scrim and does not close on Escape.
+   * which then has no ✕, ignores the scrim and swallows Escape.
    * Focus is trapped either way (R-A11Y-04).
    */
   onDismiss?: () => void;
   /** Escape's own handler, when it should differ from `onDismiss`; `false`
-      leaves Escape doing nothing. */
+      makes Escape do nothing. Escape never passes through to what is below. */
   onEscape?: (() => void) | false;
   /** Set false to keep the dialog open on backdrop clicks. */
   dismissOnBackdrop?: boolean;
@@ -133,7 +137,10 @@ export function ModalShell({
   const cardRef = useRef<HTMLDivElement | null>(null);
   const titleId = useId();
 
-  const escape = onEscape === false ? undefined : (onEscape ?? onDismiss);
+  // Escape is always claimed while a dialog is up. A blocking notice that
+  // left it unhandled let the key through to whatever was open beneath it -
+  // Settings closed behind a suspension notice.
+  const escape = onEscape === false ? swallow : (onEscape ?? onDismiss ?? swallow);
   useFocusTrap(cardRef, {
     onEscape: escape,
     initialFocusRef,

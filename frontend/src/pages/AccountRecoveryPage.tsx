@@ -11,7 +11,7 @@ import {
 } from "../lib/accountRecovery";
 import { useAuthStore } from "../store/authStore";
 import { useEmailStateStore } from "../store/emailStateStore";
-import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
+import { MIN_PASSWORD_LENGTH, passwordRule, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -231,8 +231,12 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
                 setError(null);
               }}
               autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              aria-describedby="recovery-password-rule"
               required
             />
+            {/* The floor, stated before it is broken (R-AUTH-19). */}
+            <p id="recovery-password-rule" className="auth-hint">{passwordRule()}</p>
             {error && (
               <p className="auth-error" role="alert">
                 {error}

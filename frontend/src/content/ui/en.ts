@@ -1988,7 +1988,7 @@ export const EN = {
     revoke: "Revoke",
     loggingOut: "Logging out…",
     logOutEverywhere: "Log out everywhere",
-    logOutEverywhereTitle: "Log out everywhere?",
+    logOutEverywhereTitle: "Sign out everywhere?",
     logOutEverywhereBody: "Every device signed in to this account is signed out, this one included. You will need to sign in again here.",
   },
 
