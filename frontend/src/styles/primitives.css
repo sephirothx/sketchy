@@ -491,7 +491,9 @@
   justify-items: center;
   line-height: 1.25;
   margin: 0;
-  overflow-wrap: anywhere;
+  /* Words wrap whole: RoomFacts picks a column count that gives the widest
+     one room. Broken only as a last resort, in a strip too narrow for two. */
+  overflow-wrap: break-word;
 }
 
 .room-fact-icon {
@@ -520,16 +522,42 @@
   margin: 10px 0 0;
 }
 
+/* How many to a row is RoomFacts' measure (`data-columns`), so that no word
+   breaks inside itself. Until it has measured, a phone's three. */
 @media (max-width: 720px) {
-  .room-facts {
+  .room-facts:not([data-columns]) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .room-fact:nth-child(4) {
+  .room-facts:not([data-columns]) .room-fact:nth-child(4) {
     border-left: 0;
   }
 
-  .room-fact:nth-child(n + 4) {
+  .room-facts:not([data-columns]) .room-fact:nth-child(n + 4) {
     border-top: 1px solid var(--line);
   }
+}
+
+.room-facts[data-columns="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.room-facts[data-columns="3"] .room-fact:nth-child(3n + 1) {
+  border-left: 0;
+}
+
+.room-facts[data-columns="3"] .room-fact:nth-child(n + 4) {
+  border-top: 1px solid var(--line);
+}
+
+.room-facts[data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.room-facts[data-columns="2"] .room-fact:nth-child(2n + 1) {
+  border-left: 0;
+}
+
+.room-facts[data-columns="2"] .room-fact:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
 }

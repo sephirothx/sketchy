@@ -2743,11 +2743,11 @@ A seated client checks with the server every five seconds that it still holds th
   borrows the wordmark's room until it ends. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
   that, where the bar has given the name up - with no status line under it: Start itself says
   what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
-  On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
+  On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card. An invite link shows the room the same six
   cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait"
-  ("Doodle" on a phone, where it shares a row with "Edit rules", or with "Waiting for Hosty to
+  ("Doodle" up to 1100px, where it shares a row with "Edit rules", or with "Waiting for Hosty to
   start" for everybody but the host) swaps
   the column for a scratch pad at a turn's size - only yours, like the one an outage shows,
   and the same drawing on both - with the room code (a chip that copies the invite link) and Start kept in a strip above it.
