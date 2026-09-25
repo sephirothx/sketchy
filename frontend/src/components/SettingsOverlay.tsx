@@ -309,7 +309,7 @@ function EmailAddressStatus({
       </button>
       <span className={`settings-email-status ${verified ? "is-verified" : "is-unverified"}`}>
         {verified ? <CheckIcon size={12} /> : <ClockIcon size={12} />}
-        {verified ? ui.settingsOverlay.verified : ui.settingsOverlay.notVerified}
+        {verified ? ui.settingsOverlay.confirmed : ui.settingsOverlay.notConfirmed}
       </span>
     </span>
   );
@@ -1135,7 +1135,7 @@ function SoundPane() {
       <Group title={ui.settingsOverlay.sound}>
         <ToggleRow
           label={ui.settingsOverlay.soundEffects}
-          hint={ui.settingsOverlay.chimesCorrectGuessStartRoundLast}
+          hint={ui.settingsOverlay.chimesCorrectGuessStartTurnLast}
           checked={soundEffects}
           onChange={(next) => {
             setSoundEffects(next);

@@ -218,7 +218,7 @@ export function CreateRoomPage() {
   /** Quick prompts are room input, never stored settings. */
   function presetBlocker(): string | null {
     if (customPrompts.analysis.usableCount > 0) {
-      return ui.createRoomPage.saveQuickPromptsAsA;
+      return ui.createRoomPage.saveCustomPromptsAsAList;
     }
     return null;
   }
@@ -518,7 +518,7 @@ export function CreateRoomPage() {
           className="custom-prompts-apply"
           onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
         >
-          {ui.createRoomPage.saveAsReusableList}
+          {ui.createRoomPage.saveAsPromptList}
         </button>
       ) : undefined}
       durationNote={isWide ? undefined : durationNote}

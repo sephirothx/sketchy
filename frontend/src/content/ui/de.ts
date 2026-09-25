@@ -67,7 +67,7 @@ function accountRequired(params: MessageParams): string {
     case "avatar":
       return "Lege ein Konto an, um ein Bild zu wählen.";
     case "prompt_lists":
-      return "Lege ein Konto an, um wiederverwendbare Begriffslisten zu speichern.";
+      return "Lege ein Konto an, um Begriffslisten zu speichern.";
     case "name_color":
       return "Lege ein Konto an, um eine Namensfarbe zu wählen.";
     case "password":
@@ -467,7 +467,7 @@ export const DE: Catalogue = {
     bestDrawer: "Beste Zeichnung",
     quickestOnAverage: "Im Schnitt am schnellsten",
     mostReactedDrawing: "Meiste Reaktionen",
-    guessedItOf: (p: { correct: number; total: number }) =>
+    gotItOf: (p: { correct: number; total: number }) =>
       plural(p.correct, { one: `${p.correct} von ${p.total} hat es erraten`, other: `${p.correct} von ${p.total} haben es erraten` }),
     percentGuessed: (p: { percent: string }) =>
       `${p.percent} erraten`,
@@ -562,7 +562,6 @@ export const DE: Catalogue = {
     pleaseWait: "Bitte warten …",
     alreadyRegistered: "Schon registriert? ",
     newHere: "Neu hier? ",
-    createAnAccount: "Konto anlegen",
     guestIdentity: (p: { name: string }) =>
       `${p.name}. Dein Anzeigename ist nicht gespeichert.`,
     signedInAs: (p: { name: string }) =>
@@ -747,7 +746,7 @@ export const DE: Catalogue = {
     twoNewPasswordsDoNotMatch: "Die beiden neuen Passwörter stimmen nicht überein.",
     passwordChangedEveryOtherDeviceHas: "Passwort geändert. Alle anderen Geräte wurden abgemeldet.",
     couldNotChangePasswordPleaseTry: "Das Passwort konnte nicht geändert werden. Bitte versuch es noch einmal.",
-    ifThatAccountHasVerifiedEmail: "Wenn dieses Konto eine bestätigte E-Mail-Adresse hat, ist ein Link für\n              ein neues Passwort unterwegs. Er funktioniert einmal und läuft ab.",
+    ifThatAccountHasConfirmedEmail: "Wenn dieses Konto eine bestätigte E-Mail-Adresse hat, ist ein Link für\n              ein neues Passwort unterwegs. Er funktioniert einmal und läuft ab.",
     done: "Fertig",
     everyDeviceSignsOutWhenPassword: "Beim Passwortwechsel werden alle Geräte abgemeldet, auch die, die du\n              nicht angemeldet lassen wolltest. Dieses bleibt.",
     currentPassword: "Aktuelles Passwort",
@@ -837,8 +836,8 @@ export const DE: Catalogue = {
     update: "Aktualisieren",
     delete: "Löschen",
     undo: "Rückgängig",
-    saveAsReusableList: "Als wiederverwendbare Liste speichern",
-    saveQuickPromptsAsA: "Speichere schnelle Begriffe als Liste, bevor du eine Vorlage speicherst.",
+    saveAsPromptList: "Als Begriffsliste speichern",
+    saveCustomPromptsAsAList: "Speichere die eigenen Begriffe als Begriffsliste, bevor du eine Vorlage speicherst.",
     appliedName: (p: { name: string }) =>
       `„${p.name}“ übernommen.`,
     savedName: (p: { name: string }) =>
@@ -927,7 +926,7 @@ export const DE: Catalogue = {
     gameEndsIn: (p: { seconds: number }) =>
       p.seconds > 0 ? `Diese Runde endet in ${counted(p.seconds, { one: "Sekunde", other: "Sekunden" })}.` : "Diese Runde endet jetzt.",
     noNewGames: "Neue Runden können erst wieder starten, wenn der Server zurück ist.",
-    gotIt: "Verstanden",
+    ok: "OK",
     finalCountdown: (p: { seconds: number }) => `Runde endet in ${counted(p.seconds, { one: "Sekunde", other: "Sekunden" })}`,
   },
 
@@ -1087,7 +1086,7 @@ export const DE: Catalogue = {
     backLobby: "Zurück zur Lobby",
     roomRules: "Raumregeln",
     thisGameAlreadyProgressJoiningAs: "Diese Runde läuft bereits. Als Spieler kommst du in einen späteren Zug.",
-    playerSlotsAreFullSpectatingStill: "Alle Spielplätze sind belegt. Zuschauen geht noch.",
+    noPlayerSeatsOpenSpectate: "Keine Spielerplätze frei. Zuschauen geht noch.",
     publicRoom: "Öffentlicher Raum",
     privateInvite: "Private Einladung",
     inProgress: "Läuft",
@@ -1096,7 +1095,7 @@ export const DE: Catalogue = {
     roomFull: "Raum voll",
     joining: "Trete bei …",
     joinGameInProgress: "Laufendem Spiel beitreten",
-    joinGame: "Spiel beitreten",
+    join: "Beitreten",
     spectate: "Zuschauen",
     customPromptsOnly: (p: { count: number }) =>
       `nur ${counted(p.count, { one: "eigener Begriff", other: "eigene Begriffe" })}`,
@@ -1127,7 +1126,8 @@ export const DE: Catalogue = {
       p.count > 0 ? `Filter · ${p.count}` : "Filter",
     showRooms: (p: { count: number }) =>
       `${counted(p.count, { one: "Raum", other: "Räume" })} zeigen`,
-    removedFromRoom: "Aus dem Raum entfernt",
+    kickedFromRoom: "Aus dem Raum geworfen",
+    noLongerInRoom: "Du bist nicht mehr im Raum",
     ok: "OK",
     roomCode: "Raumcode",
     abc123: "ABC123",
@@ -1149,8 +1149,6 @@ export const DE: Catalogue = {
     loadingPublicRooms: "Öffentliche Räume werden geladen …",
     noPublicRoomsYetCreateOne: "Noch keine öffentlichen Räume. Erstelle einen!",
     noPublicRoomsMatchYourSearch: "Keine öffentlichen Räume passen zu deiner Suche.",
-    createRoom2: "Raum erstellen",
-    joinWithCode: "Mit einem Code beitreten",
     paste: "Einfügen",
     couldNotSaveThatName: "Dieser Name konnte nicht gespeichert werden. Bitte versuch es noch einmal.",
     joinAsASpectator: "als Zuschauer beitreten",
@@ -1161,9 +1159,9 @@ export const DE: Catalogue = {
     n0Rooms: "0 Räume",
     close: "Schließen",
     joining: "Trete bei …",
-    joinTheRoom2: "Dem Raum beitreten",
+    join: "Beitreten",
     joiningAsSpectator: "Trete als Zuschauer bei …",
-    watchWithoutPlaying: "Zuschauen, ohne mitzuspielen",
+    spectate: "Zuschauen",
   },
 
   lobbyChatPanel: {
@@ -1358,11 +1356,9 @@ export const DE: Catalogue = {
     addAtLeastOnePromptBefore: "Füge mindestens einen Begriff hinzu, bevor du speicherst.",
     couldNotSaveThisPromptList: "Diese Begriffsliste konnte nicht gespeichert werden.",
     couldNotDeleteThisPromptList: "Diese Begriffsliste konnte nicht gelöscht werden.",
-    yourLibrary: "Deine Sammlung",
-    reusablePromptLists: "Wiederverwendbare Begriffslisten",
+    myPromptLists: "Meine Begriffslisten",
     newList: "Neue Liste",
     createAccountSaveReviseSharePrompt: "Lege ein Konto an, um Begriffslisten zu speichern, zu überarbeiten und zu teilen. Schnelle Raumbegriffe bleiben lokal und flüchtig.",
-    yourPromptLists: "Deine Begriffslisten",
     loading: "Wird geladen …",
     noSavedListsYet: "Noch keine gespeicherten Listen.",
     name: "Name",
@@ -1487,7 +1483,7 @@ export const DE: Catalogue = {
       } · Hinweise ${p.hintMode} · ${p.seconds} Sekunden · Begriffe ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
     privateRoom: "privater Raum",
-    thisGameDidNotFinishSo: "Diese Runde ist nicht zu Ende gegangen, das hier ist also der Punktestand\n              beim Abbruch und keine Endplatzierung.",
+    thisGameEndedEarly: "Dieses Spiel endete vorzeitig, das hier ist also der Punktestand beim Abbruch und keine Endplatzierung.",
     loadingTurns: "Züge werden geladen …",
     turnByTurn: "Zug für Zug",
     round: "Runde",
@@ -1836,7 +1832,7 @@ export const DE: Catalogue = {
     thisRoomHasEndedAsk: "Dieser Raum ist beendet. Bitte den Gastgeber um eine neue Einladung.",
     loadThisRoom: "diesen Raum laden",
     enterANicknameToContinue: "Gib einen Spitznamen ein, um weiterzumachen.",
-    thePlayerSlotsJustFilled: "Die Spielerplätze sind gerade voll geworden, aber du kannst noch zuschauen.",
+    theLastPlayerSeatWasTaken: "Der letzte Spielerplatz wurde gerade vergeben, aber du kannst noch zuschauen.",
     joinAsASpectator: "als Zuschauer beitreten",
     joinThisRoom: "diesem Raum beitreten",
     nicknameRule: "Nutze 3–16 Zeichen: Buchstaben, Ziffern, Bindestriche oder Unterstriche. Keine Leerzeichen.",
@@ -1854,17 +1850,17 @@ export const DE: Catalogue = {
   },
 
   roomMenuSheet: {
-    away: "Abwesend",
+    afk: "AFK",
     startTheGameOver: "Das Spiel neu starten",
     startOverCooldown: (p: { seconds: number }) => ` · in ${p.seconds}s`,
     room: "Raum",
     playersScores: "Spieler und Punkte",
     copyInviteLink: "Einladungslink kopieren",
-    saveThisDrawing: "Diese Zeichnung speichern",
+    saveImage: "Bild speichern",
     settings: "Einstellungen",
-    leaveRoom: "Den Raum verlassen",
-    iMBack: "Bin wieder da",
-    goAwayForABit: "Kurz weggehen",
+    leaveRoom: "Raum verlassen",
+    backFromAfk: "Zurück von AFK",
+    goAfk: "AFK gehen",
   },
 
   roomNoticeChips: {
@@ -1887,23 +1883,22 @@ export const DE: Catalogue = {
     finalStandings: "Endstand",
     players: "Spieler",
     joinAsAPlayer: "als Spieler beitreten",
-    aPlayerSlotIsAvailable: "Ein Spielerplatz ist frei.",
-    playerSlotsAreCurrentlyFull: "Die Spielerplätze sind gerade voll.",
+    aPlayerSeatIsOpen: "Ein Spielerplatz ist frei.",
+    noPlayerSeatsOpen: "Keine Spielerplätze frei.",
     joining: "Trete bei …",
     joinAsPlayer: "Als Spieler beitreten",
   },
 
   roomSettingsEditor: {
     couldNotLoadRoomRules: "Raumregeln konnten nicht geladen werden",
-    roomRefusedThoseSettings: "Der Raum hat diese Einstellungen abgelehnt.",
-    hostSettings: "Gastgeber-Einstellungen",
+    roomRefusedThoseRules: "Der Raum hat diese Regeln nicht angenommen.",
     editRoomRules: "Raumregeln bearbeiten",
-    loadingSettings: "Einstellungen werden geladen …",
+    loadingRoomRules: "Raumregeln werden geladen …",
     cancel: "Abbrechen",
     loadRoomRules: "die Raumregeln laden",
     saveRoomRules: "die Raumregeln speichern",
     saving: "Wird gespeichert …",
-    saveSettings: "Einstellungen speichern",
+    saveRules: "Raumregeln speichern",
     saved: "Gespeichert",
   },
 
@@ -1920,8 +1915,8 @@ export const DE: Catalogue = {
     scoring: "Punkte",
     hints: "Hinweise",
     spectatorsCanSeePrompt: "Zuschauer sehen den Begriff",
-    hideBlanks: "Lücken verbergen",
-    alsoTurnsHintsOffWithNo: "Schaltet auch Hinweise ab: ohne Lücken gibt es nichts aufzudecken.",
+    hideLetterTiles: "Buchstabenfelder verbergen",
+    alsoTurnsHintsOffWithNo: "Schaltet auch Hinweise ab: ohne Felder gibt es nichts aufzudecken.",
     promptTotal: (p: { count: number }) =>
       counted(p.count, { one: "Begriff", other: "Begriffe" }),
     basics: "Grundlagen",
@@ -1931,7 +1926,7 @@ export const DE: Catalogue = {
     prompts: "Begriffe",
     drawing: "Zeichnet",
     scoringHints: "Punkte und Hinweise",
-    hintsAreOffBecauseBlanksAre: "Hinweise sind aus, weil die Lücken verborgen sind.",
+    hintsAreOffBecauseTilesAreHidden: "Hinweise sind aus, weil die Buchstabenfelder verborgen sind.",
     pointPurchaseHintModesRequireScoring: "Hinweismodi mit Punktekauf brauchen eine Punktewertung.",
     allColors: "Alle Farben",
     noScoring: "Ohne Punkte",
@@ -1961,7 +1956,7 @@ export const DE: Catalogue = {
     gameEnded: "Diese Runde ist vorbei",
     endedServerUpdate: "Der Server wurde aktualisiert, und die laufende Runde konnte nicht weitergehen.",
     endedRoomClosed: "Der Raum wurde geschlossen, während du getrennt warst.",
-    removedByVote: "Aus dem Raum entfernt",
+    kickedFromRoom: "Aus dem Raum geworfen",
     backToLobby: "Zurück zur Lobby",
   },
 
@@ -1980,7 +1975,7 @@ export const DE: Catalogue = {
       `Am ${p.when} aus einem anderen Browser genutzt. Melde dieses Gerät ab, wenn du das nicht warst.`,
     couldNotLoadSignedDevices: "Angemeldete Geräte konnten nicht geladen werden.",
     couldNotRevokeDevice: "Das Gerät konnte nicht abgemeldet werden.",
-    couldNotLogOutEverywhere: "Abmelden auf allen Geräten nicht möglich.",
+    couldNotSignOutEverywhere: "Abmelden auf allen Geräten nicht möglich.",
     signedDevices: "Angemeldete Geräte",
     revokeAnyDeviceYouNoLonger: "Melde jedes Gerät ab, das du nicht mehr kennst. Gerätenamen sind grob und speichern keine Browserversionen.\n          Ein Gerät, das du nicht mehr nutzt, meldet sich nach neunzig Tagen selbst ab.",
     loadingDevices: "Geräte werden geladen …",
@@ -1988,8 +1983,8 @@ export const DE: Catalogue = {
     close: "Schließen",
     revoking: "Wird widerrufen …",
     revoke: "Widerrufen",
-    loggingOut: "Wird abgemeldet …",
-    logOutEverywhere: "Überall abmelden",
+    signingOut: "Wird abgemeldet …",
+    signOutEverywhere: "Überall abmelden",
   },
 
   avatarDoodles: {
@@ -2051,7 +2046,7 @@ export const DE: Catalogue = {
     theSizeTheBrushStartsEveryTurnAt: "Mit dieser Größe beginnt der Pinsel jede Runde. Auf dem Größenregler markiert.",
     brushCursorStyle: "Art des Pinselzeigers",
     soundEffects: "Soundeffekte",
-    chimesCorrectGuessStartRoundLast: "Töne für eine richtige Antwort, den Rundenbeginn, die letzten zehn Sekunden und für kommende und gehende Spieler.",
+    chimesCorrectGuessStartTurnLast: "Töne für eine richtige Antwort, den Beginn eines Zugs, die letzten zehn Sekunden und für kommende und gehende Spieler.",
     volume2: "Lautstärke",
     confetti: "Konfetti",
     burstWhenYouGuessRightAgain: "Ein Schwall, wenn du richtig rätst, und noch einmal für die Gewinnerin oder den Gewinner am Ende.",
@@ -2129,8 +2124,8 @@ export const DE: Catalogue = {
     showTheFullAddress: "Vollständige Adresse anzeigen",
     hide: "Ausblenden",
     showInFull: "Vollständig anzeigen",
-    verified: "Bestätigt",
-    notVerified: "Nicht bestätigt",
+    confirmed: "Bestätigt",
+    notConfirmed: "Nicht bestätigt",
     saving: "Wird gespeichert …",
     save: "Speichern",
     aGuestHasNothingTo: "Ein Gast hat nichts wiederherzustellen: Es gibt kein Passwort, das man vergessen könnte.",
@@ -2495,12 +2490,12 @@ export const DE: Catalogue = {
     timedHints: "Zeitgesteuerte Hinweise",
     lettersRevealToEveryoneAt: "Buchstaben werden zu festen Zeiten für alle aufgedeckt.",
     noHints: "Keine Hinweise",
-    blanksOnlyAllTurnLong: "Nur Lücken, den ganzen Zug lang.",
+    emptyTilesAllTurnLong: "Nur leere Buchstabenfelder, den ganzen Zug lang.",
     buyLetters: "Buchstaben kaufen",
     revealALetterSlotJust: "Deck einen Buchstaben nur für dich auf – bezahlt mit den Punkten dieses Zugs.",
     wheelOfFortune: "Glücksrad",
     pickALetterPayIts: "Wähl einen Buchstaben, zahl seinen Preis – Vokale kosten extra.",
-    hiddenPrompt: "Verborgener Begriff",
+    letterTilesHidden: "Buchstabenfelder verborgen",
     defaultScoring: "Standardpunkte",
     pressureScoring: "Druckpunkte",
   },
@@ -2612,8 +2607,8 @@ export const DE: Catalogue = {
     majorHardToPlayAround: "Schwer – kaum zu umgehen",
     minorWorthFixingOneDay: "Leicht – irgendwann mal beheben",
     notInARoom: "Nicht in einem Raum",
-    codeNotInARound: (p: { code: string }) =>
-      `${p.code} · nicht in einer Runde`,
+    codeNotInAGame: (p: { code: string }) =>
+      `${p.code} · nicht in einem Spiel`,
     codeRoundRoundOfTotal: (p: { code: string; round: number; total: number }) =>
       `${p.code} · Runde ${p.round} von ${p.total}`,
   },

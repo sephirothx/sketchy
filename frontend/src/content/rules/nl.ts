@@ -50,7 +50,7 @@ export const RULES_NL: RulesDocument = {
             "Gokken is geen spam, hoe wild de gokken ook worden — snel gokken is juist de bedoeling.",
           ],
           examples: [
-            "Een bericht herhalen tot niemand de ronde meer kan volgen",
+            "Een bericht herhalen tot niemand het spel meer kan volgen",
             "Links of uitnodigingen naar ergens anders plaatsen",
             "Dezelfde muur tekst in kamer na kamer plakken",
           ],
@@ -118,7 +118,7 @@ export const RULES_NL: RulesDocument = {
           examples: [
             "Het woord opschrijven of spellen terwijl je het tekent",
             "Een vriend het woord doorgeven via een gesprek of een andere app",
-            "Een tweede account gebruiken om jezelf antwoorden door te spelen",
+            "Een tweede account gebruiken om jezelf het woord door te spelen",
           ],
         },
       ],

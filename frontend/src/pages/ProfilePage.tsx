@@ -255,7 +255,7 @@ function GameRow({
           </p>
           {game.outcome !== "finished" && (
             <p className="profile-note">
-              {ui.profilePage.thisGameDidNotFinishSo}
+              {ui.profilePage.thisGameEndedEarly}
             </p>
           )}
           <ol className="profile-standings">

@@ -67,7 +67,7 @@ function accountRequired(params: MessageParams): string {
     case "avatar":
       return "Maak een account om een afbeelding te kiezen.";
     case "prompt_lists":
-      return "Maak een account om herbruikbare woordenlijsten te bewaren.";
+      return "Maak een account om woordenlijsten te bewaren.";
     case "name_color":
       return "Maak een account om een naamkleur te kiezen.";
     case "password":
@@ -391,7 +391,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   `${text(p.previous)} heet nu ${text(p.nickname)}.`,
   joined_as_player: (p) => `${text(p.nickname)} doet mee als speler.`,
   kicked_by_vote: (p) => `${text(p.nickname)} is er door een stemming uit gezet.`,
-  marked_afk_by_vote: (p) => `${text(p.nickname)} is door een stemming als afwezig gemarkeerd.`,
+  marked_afk_by_vote: (p) => `${text(p.nickname)} is door een stemming als AFK gemarkeerd.`,
 
   restart_vote_started: (p) =>
   `${text(p.nickname)} is een stemming over een herstart begonnen.`,
@@ -467,7 +467,7 @@ export const NL: Catalogue = {
     bestDrawer: "Beste tekenaar",
     quickestOnAverage: "Gemiddeld het snelst",
     mostReactedDrawing: "Tekening met de meeste reacties",
-    guessedItOf: (p: { correct: number; total: number }) =>
+    gotItOf: (p: { correct: number; total: number }) =>
       plural(p.correct, { one: `${p.correct} van ${p.total} raadde het`, other: `${p.correct} van ${p.total} raadden het` }),
     percentGuessed: (p: { percent: string }) =>
       `${p.percent} geraden`,
@@ -562,7 +562,6 @@ export const NL: Catalogue = {
     pleaseWait: "Even geduld…",
     alreadyRegistered: "Al geregistreerd? ",
     newHere: "Nieuw hier? ",
-    createAnAccount: "Account maken",
     guestIdentity: (p: { name: string }) =>
       `${p.name}. Je weergavenaam is niet opgeslagen.`,
     signedInAs: (p: { name: string }) =>
@@ -603,7 +602,7 @@ export const NL: Catalogue = {
 
   activeGameRoom: {
     leaveGame: "Spel verlaten",
-    markedAfkByRoomVote: "De kamer heeft je door een stemming als afwezig gemarkeerd.",
+    markedAfkByRoomVote: "De kamer heeft je door een stemming als AFK gemarkeerd.",
     inviteLinkCopied: "Uitnodigingslink gekopieerd.",
     couldnTCopyLinkCopyFrom: "De link kon niet gekopieerd worden. Kopieer hem uit de adresbalk.",
     couldNotStartGamePleaseTry: "Het spel kon niet gestart worden. Probeer het nog eens.",
@@ -634,7 +633,7 @@ export const NL: Catalogue = {
     restartVoteAvailableInRestartCooldownSeconds2: (p: { restartCooldownSeconds: number }) =>
       `Herstartstemming over ${p.restartCooldownSeconds} s`,
     proposeAVoteToRestart: "Een stemming voorstellen om het spel te herstarten",
-    backFromAfk: "Terug van afwezig",
+    backFromAfk: "Terug van AFK",
     goAfk: "Afwezig melden",
     closePlayers: "Spelers sluiten",
     acceptTheColorSuggestion: "de kleursuggestie accepteren",
@@ -670,7 +669,7 @@ export const NL: Catalogue = {
     secondsUnit: (p: { count: number }) =>
       plural(p.count, { one: "seconde", other: "seconden" }),
     stillThere: "Ben je er nog?",
-    youHaveBeenQuietWhileAnswer: "Je bent al een tijdje stil. Antwoord en je speelt door; anders zet de\n          kamer je op afwezig en gaat zonder jou verder.",
+    youHaveBeenQuietWhileAnswer: "Je bent al een tijdje stil. Antwoord en je speelt door; anders zet de\n          kamer je op AFK en gaat zonder jou verder.",
     stillTherePressButtonMoveMouse: "Ben je er nog? Druk op de knop, of beweeg de muis, om door te spelen.",
     iMHere: "Ik ben er",
   },
@@ -747,7 +746,7 @@ export const NL: Catalogue = {
     twoNewPasswordsDoNotMatch: "De twee nieuwe wachtwoorden komen niet overeen.",
     passwordChangedEveryOtherDeviceHas: "Wachtwoord gewijzigd. Elk ander apparaat is uitgelogd.",
     couldNotChangePasswordPleaseTry: "Het wachtwoord kon niet gewijzigd worden. Probeer het nog eens.",
-    ifThatAccountHasVerifiedEmail: "Als dat account een geverifieerd e-mailadres heeft, is er een link\n              onderweg om een nieuw wachtwoord in te stellen. Hij werkt één keer\n              en verloopt.",
+    ifThatAccountHasConfirmedEmail: "Als dat account een bevestigd e-mailadres heeft, is er een link\n              onderweg om een nieuw wachtwoord in te stellen. Hij werkt één keer\n              en verloopt.",
     done: "Klaar",
     everyDeviceSignsOutWhenPassword: "Bij een wachtwoordwijziging logt elk apparaat uit, ook de apparaten die\n              je niet ingelogd wilde laten. Dit apparaat blijft.",
     currentPassword: "Huidig wachtwoord",
@@ -837,8 +836,8 @@ export const NL: Catalogue = {
     update: "Bijwerken",
     delete: "Verwijderen",
     undo: "Ongedaan maken",
-    saveAsReusableList: "Opslaan als herbruikbare lijst",
-    saveQuickPromptsAsA: "Bewaar snelle woorden als lijst voordat je een voorinstelling opslaat.",
+    saveAsPromptList: "Opslaan als woordenlijst",
+    saveCustomPromptsAsAList: "Bewaar de eigen woorden als woordenlijst voordat je een voorinstelling opslaat.",
     appliedName: (p: { name: string }) =>
       `‘${p.name}’ toegepast.`,
     savedName: (p: { name: string }) =>
@@ -927,7 +926,7 @@ export const NL: Catalogue = {
     gameEndsIn: (p: { seconds: number }) =>
       p.seconds > 0 ? `Dit spel eindigt over ${counted(p.seconds, { one: "seconde", other: "seconden" })}.` : "Dit spel eindigt nu.",
     noNewGames: "Er kunnen geen nieuwe spellen starten tot de server terug is.",
-    gotIt: "Begrepen",
+    ok: "OK",
     finalCountdown: (p: { seconds: number }) => `Spel eindigt over ${counted(p.seconds, { one: "seconde", other: "seconden" })}`,
   },
 
@@ -986,7 +985,7 @@ export const NL: Catalogue = {
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
     couldNotSaveThatNamePlease: "Deze naam kon niet opgeslagen worden. Probeer het nog eens.",
-    createAccount: "Een account maken",
+    createAccount: "Account maken",
     logIn: "Inloggen",
     displayName: "Weergavenaam",
     whatShouldWeCallYou: "Hoe mogen we je noemen?",
@@ -1087,7 +1086,7 @@ export const NL: Catalogue = {
     backLobby: "Terug naar de lobby",
     roomRules: "Kamerregels",
     thisGameAlreadyProgressJoiningAs: "Dit spel is al bezig. Als speler kom je in een latere beurt aan de beurt.",
-    playerSlotsAreFullSpectatingStill: "De spelersplekken zijn vol. Toekijken kan nog wel.",
+    noPlayerSeatsOpenSpectate: "Geen spelersplekken vrij. Kijken kan nog wel.",
     publicRoom: "Openbare kamer",
     privateInvite: "Privé-uitnodiging",
     inProgress: "Bezig",
@@ -1096,7 +1095,7 @@ export const NL: Catalogue = {
     roomFull: "Kamer vol",
     joining: "Deelnemen…",
     joinGameInProgress: "Meedoen aan lopend spel",
-    joinGame: "Meedoen",
+    join: "Meedoen",
     spectate: "Kijken",
     customPromptsOnly: (p: { count: number }) =>
       `alleen ${counted(p.count, { one: "eigen woord", other: "eigen woorden" })}`,
@@ -1127,7 +1126,8 @@ export const NL: Catalogue = {
       p.count > 0 ? `Filters · ${p.count}` : "Filters",
     showRooms: (p: { count: number }) =>
       `${counted(p.count, { one: "kamer", other: "kamers" })} tonen`,
-    removedFromRoom: "Uit de kamer verwijderd",
+    kickedFromRoom: "Uit de kamer gezet",
+    noLongerInRoom: "Je bent niet meer in de kamer",
     ok: "Oké",
     roomCode: "Kamercode",
     abc123: "ABC123",
@@ -1149,8 +1149,6 @@ export const NL: Catalogue = {
     loadingPublicRooms: "Openbare kamers laden…",
     noPublicRoomsYetCreateOne: "Nog geen openbare kamers. Maak er een!",
     noPublicRoomsMatchYourSearch: "Geen openbare kamers passen bij je zoekopdracht.",
-    createRoom2: "Een kamer maken",
-    joinWithCode: "Meedoen met een code",
     paste: "Plakken",
     couldNotSaveThatName: "Die naam kon niet worden opgeslagen. Probeer het nog eens.",
     joinAsASpectator: "als toeschouwer meedoen",
@@ -1161,9 +1159,9 @@ export const NL: Catalogue = {
     n0Rooms: "0 kamers",
     close: "Sluiten",
     joining: "Deelnemen…",
-    joinTheRoom2: "De kamer in gaan",
+    join: "Meedoen",
     joiningAsSpectator: "Meedoen als toeschouwer…",
-    watchWithoutPlaying: "Kijken zonder te spelen",
+    spectate: "Kijken",
   },
 
   lobbyChatPanel: {
@@ -1358,11 +1356,9 @@ export const NL: Catalogue = {
     addAtLeastOnePromptBefore: "Voeg minstens één woord toe voordat je opslaat.",
     couldNotSaveThisPromptList: "Deze woordenlijst kon niet opgeslagen worden.",
     couldNotDeleteThisPromptList: "Deze woordenlijst kon niet verwijderd worden.",
-    yourLibrary: "Je bibliotheek",
-    reusablePromptLists: "Herbruikbare woordenlijsten",
+    myPromptLists: "Mijn woordenlijsten",
     newList: "Nieuwe lijst",
     createAccountSaveReviseSharePrompt: "Maak een account om woordenlijsten te bewaren, te herzien en te delen. Snelle kamerwoorden blijven lokaal en vluchtig.",
-    yourPromptLists: "Je woordenlijsten",
     loading: "Laden…",
     noSavedListsYet: "Nog geen opgeslagen lijsten.",
     name: "Naam",
@@ -1432,7 +1428,7 @@ export const NL: Catalogue = {
     thatRequestCouldNotBeSent: "Dit verzoek kon niet verstuurd worden.",
     drawing: "Tekent",
     gotIt: "Geraden ·",
-    afk: "Afwezig",
+    afk: "AFK",
     you: "(jij)",
     host: "Gastheer",
     friend: "Vriend",
@@ -1446,7 +1442,7 @@ export const NL: Catalogue = {
     reportThisPlayer: "Deze speler melden",
     undoVote: "Stem intrekken",
     vote: "Stemmen",
-    voteKindAfk: "Afwezig",
+    voteKindAfk: "AFK",
     voteKindKick: "Eruit",
     undoVoteFor: (p: { kind: string; nickname: string; count: number; required: number }) =>
       `Stem ${p.kind} voor ${p.nickname} intrekken, ${p.count} van ${p.required}`,
@@ -1487,7 +1483,7 @@ export const NL: Catalogue = {
       } · ${p.hintMode} hints · ${p.seconds} seconden · ${p.promptSource} woorden`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
     privateRoom: "privékamer",
-    thisGameDidNotFinishSo: "Dit spel is niet uitgespeeld, dus dit zijn de punten zoals ze stonden\n              toen het stopte en geen eindstand.",
+    thisGameEndedEarly: "Dit spel is voortijdig gestopt, dus dit zijn de punten zoals ze stonden toen het stopte en geen eindstand.",
     loadingTurns: "Beurten laden…",
     turnByTurn: "Beurt voor beurt",
     round: "Ronde",
@@ -1836,7 +1832,7 @@ export const NL: Catalogue = {
     thisRoomHasEndedAsk: "Deze kamer is afgelopen. Vraag de gastheer om een nieuwe uitnodiging.",
     loadThisRoom: "deze kamer laden",
     enterANicknameToContinue: "Vul een bijnaam in om verder te gaan.",
-    thePlayerSlotsJustFilled: "De spelersplekken zijn net vol, maar je kunt nog kijken.",
+    theLastPlayerSeatWasTaken: "De laatste spelersplek is net bezet, maar je kunt nog kijken.",
     joinAsASpectator: "als toeschouwer meedoen",
     joinThisRoom: "deze kamer in gaan",
     nicknameRule: "Gebruik 3–16 tekens: letters, cijfers, streepjes of lage streepjes. Geen spaties.",
@@ -1854,17 +1850,17 @@ export const NL: Catalogue = {
   },
 
   roomMenuSheet: {
-    away: "Afwezig",
+    afk: "AFK",
     startTheGameOver: "Het spel opnieuw beginnen",
     startOverCooldown: (p: { seconds: number }) => ` · over ${p.seconds}s`,
     room: "Kamer",
     playersScores: "Spelers en punten",
     copyInviteLink: "De uitnodigingslink kopiëren",
-    saveThisDrawing: "Deze tekening opslaan",
+    saveImage: "Afbeelding opslaan",
     settings: "Instellingen",
-    leaveRoom: "De kamer verlaten",
-    iMBack: "Ik ben terug",
-    goAwayForABit: "Even weg",
+    leaveRoom: "Kamer verlaten",
+    backFromAfk: "Terug van AFK",
+    goAfk: "AFK gaan",
   },
 
   roomNoticeChips: {
@@ -1887,23 +1883,22 @@ export const NL: Catalogue = {
     finalStandings: "Eindstand",
     players: "Spelers",
     joinAsAPlayer: "als speler meedoen",
-    aPlayerSlotIsAvailable: "Er is een spelersplek vrij.",
-    playerSlotsAreCurrentlyFull: "De spelersplekken zijn nu vol.",
+    aPlayerSeatIsOpen: "Er is een spelersplek vrij.",
+    noPlayerSeatsOpen: "Geen spelersplekken vrij.",
     joining: "Deelnemen…",
     joinAsPlayer: "Meedoen als speler",
   },
 
   roomSettingsEditor: {
     couldNotLoadRoomRules: "De kamerregels konden niet geladen worden",
-    roomRefusedThoseSettings: "De kamer weigerde die instellingen.",
-    hostSettings: "Gastheerinstellingen",
+    roomRefusedThoseRules: "De kamer accepteerde die regels niet.",
     editRoomRules: "Kamerregels bewerken",
-    loadingSettings: "Instellingen laden…",
+    loadingRoomRules: "Kamerregels laden…",
     cancel: "Annuleren",
     loadRoomRules: "de kamerregels laden",
     saveRoomRules: "de kamerregels opslaan",
     saving: "Opslaan…",
-    saveSettings: "Instellingen opslaan",
+    saveRules: "Kamerregels opslaan",
     saved: "Opgeslagen",
   },
 
@@ -1920,8 +1915,8 @@ export const NL: Catalogue = {
     scoring: "Punten",
     hints: "Hints",
     spectatorsCanSeePrompt: "Toeschouwers zien het woord",
-    hideBlanks: "Lege plekken verbergen",
-    alsoTurnsHintsOffWithNo: "Zet ook hints uit: zonder lege plekken valt er niets te onthullen.",
+    hideLetterTiles: "Lettervakjes verbergen",
+    alsoTurnsHintsOffWithNo: "Zet ook hints uit: zonder vakjes valt er niets te onthullen.",
     promptTotal: (p: { count: number }) =>
       counted(p.count, { one: "woord", other: "woorden" }),
     basics: "Basis",
@@ -1931,7 +1926,7 @@ export const NL: Catalogue = {
     prompts: "Woorden",
     drawing: "Tekent",
     scoringHints: "Punten en hints",
-    hintsAreOffBecauseBlanksAre: "Hints staan uit omdat de lege plekken verborgen zijn.",
+    hintsAreOffBecauseTilesAreHidden: "Hints staan uit omdat de lettervakjes verborgen zijn.",
     pointPurchaseHintModesRequireScoring: "Hintmodi met punten kosten vereisen puntentelling.",
     allColors: "Alle kleuren",
     noScoring: "Zonder punten",
@@ -1961,7 +1956,7 @@ export const NL: Catalogue = {
     gameEnded: "Dit spel is afgelopen",
     endedServerUpdate: "De server is bijgewerkt en het lopende spel kon niet doorgaan.",
     endedRoomClosed: "De kamer is gesloten terwijl je verbinding weg was.",
-    removedByVote: "Uit de kamer gezet",
+    kickedFromRoom: "Uit de kamer gezet",
     backToLobby: "Terug naar de lobby",
   },
 
@@ -1980,7 +1975,7 @@ export const NL: Catalogue = {
       `Gebruikt vanuit een andere browser op ${p.when}. Trek dit apparaat in als jij dat niet was.`,
     couldNotLoadSignedDevices: "De ingelogde apparaten konden niet geladen worden.",
     couldNotRevokeDevice: "Het apparaat kon niet ingetrokken worden.",
-    couldNotLogOutEverywhere: "Overal uitloggen lukte niet.",
+    couldNotSignOutEverywhere: "Overal uitloggen lukte niet.",
     signedDevices: "Ingelogde apparaten",
     revokeAnyDeviceYouNoLonger: "Trek elk apparaat in dat je niet meer herkent. Apparaatnamen zijn grof en bewaren geen browserversies.\n          Een apparaat dat je niet meer gebruikt, logt zichzelf na negentig dagen uit.",
     loadingDevices: "Apparaten laden…",
@@ -1988,8 +1983,8 @@ export const NL: Catalogue = {
     close: "Sluiten",
     revoking: "Intrekken…",
     revoke: "Intrekken",
-    loggingOut: "Uitloggen…",
-    logOutEverywhere: "Overal uitloggen",
+    signingOut: "Uitloggen…",
+    signOutEverywhere: "Overal uitloggen",
   },
 
   avatarDoodles: {
@@ -2051,7 +2046,7 @@ export const NL: Catalogue = {
     theSizeTheBrushStartsEveryTurnAt: "De grootte waarmee het penseel elke beurt begint. Gemarkeerd op de schuifregelaar.",
     brushCursorStyle: "Stijl van de penseelcursor",
     soundEffects: "Geluidseffecten",
-    chimesCorrectGuessStartRoundLast: "Tonen bij een goede gok, het begin van een ronde, de laatste tien seconden, en spelers die komen en gaan.",
+    chimesCorrectGuessStartTurnLast: "Tonen bij een goede gok, het begin van een beurt, de laatste tien seconden, en spelers die komen en gaan.",
     volume2: "Volume",
     confetti: "Confetti",
     burstWhenYouGuessRightAgain: "Een uitbarsting als je goed gokt, en nog een voor de winnaar aan het eind van een spel.",
@@ -2074,7 +2069,7 @@ export const NL: Catalogue = {
     themeSoundShortcutsCameFromAccount: "Het thema, geluid en de\n            sneltoetsen komen uit het account. Wat deze browser had blijft ongemoeid en\n            komt terug als je uitlogt.",
     dismiss: "Sluiten",
     playingAsGuest: "Je speelt als gast",
-    createAccount: "Een account maken",
+    createAccount: "Account maken",
     logIn: "Inloggen",
     you: "Jij",
     displayName: "Weergavenaam",
@@ -2129,8 +2124,8 @@ export const NL: Catalogue = {
     showTheFullAddress: "Volledig adres tonen",
     hide: "Verbergen",
     showInFull: "Volledig tonen",
-    verified: "Bevestigd",
-    notVerified: "Niet bevestigd",
+    confirmed: "Bevestigd",
+    notConfirmed: "Niet bevestigd",
     saving: "Opslaan…",
     save: "Opslaan",
     aGuestHasNothingTo: "Een gast heeft niets te herstellen: er is geen wachtwoord om te vergeten.",
@@ -2364,7 +2359,7 @@ export const NL: Catalogue = {
     invite: "Uitnodigen",
     viewHighlights: "Hoogtepunten bekijken",
     viewDrawings: "Tekeningen bekijken",
-    spectatorsAfkAndDisconnectedPlayers: "Toeschouwers, afwezige en losgekoppelde spelers tellen niet mee voor de twee actieve spelers die een spel nodig heeft.",
+    spectatorsAfkAndDisconnectedPlayers: "Toeschouwers, AFK- en losgekoppelde spelers tellen niet mee voor de twee actieve spelers die een spel nodig heeft.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Kom in mijn Sketchy-kamer: ${p.code}`,
     inviteLink: "Uitnodigingslink",
@@ -2495,12 +2490,12 @@ export const NL: Catalogue = {
     timedHints: "Hints op tijd",
     lettersRevealToEveryoneAt: "Letters worden op vaste momenten voor iedereen onthuld.",
     noHints: "Geen hints",
-    blanksOnlyAllTurnLong: "Alleen streepjes, de hele beurt lang.",
+    emptyTilesAllTurnLong: "Alleen lege lettervakjes, de hele beurt lang.",
     buyLetters: "Letters kopen",
     revealALetterSlotJust: "Onthul een letter alleen voor jou — betaald met de punten van die beurt.",
     wheelOfFortune: "Rad van fortuin",
     pickALetterPayIts: "Kies een letter, betaal de prijs — klinkers kosten extra.",
-    hiddenPrompt: "Verborgen woord",
+    letterTilesHidden: "Lettervakjes verborgen",
     defaultScoring: "Standaardpunten",
     pressureScoring: "Drukpunten",
   },
@@ -2612,8 +2607,8 @@ export const NL: Catalogue = {
     majorHardToPlayAround: "Ernstig — lastig omheen te spelen",
     minorWorthFixingOneDay: "Klein — ooit de moeite waard",
     notInARoom: "Niet in een kamer",
-    codeNotInARound: (p: { code: string }) =>
-      `${p.code} · niet in een ronde`,
+    codeNotInAGame: (p: { code: string }) =>
+      `${p.code} · niet in een spel`,
     codeRoundRoundOfTotal: (p: { code: string; round: number; total: number }) =>
       `${p.code} · ronde ${p.round} van ${p.total}`,
   },

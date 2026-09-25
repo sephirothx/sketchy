@@ -135,7 +135,7 @@ async def room_menu_action(page, label: str) -> None:
 
 async def leave_room(page) -> None:
     """Leave through the Room menu's last row; any confirmation is the caller's."""
-    await room_menu_action(page, "Leave the room")
+    await room_menu_action(page, "Leave room")
 
 
 async def open_player_settings(page) -> None:
@@ -190,15 +190,15 @@ async def join_by_code(page, code: str, *, spectate: bool = False) -> None:
     of those copies, and the step that is actually interesting to a test is
     "this player joined that room".
     """
-    # The rooms heading says "Join by code"; a phone has no heading actions and
-    # its thumb dock says "Join with a code". Whichever is on screen is the one.
-    await page.locator(
-        'button:visible:has-text("Join by code"), button:visible:has-text("Join with a code")'
-    ).first.click()
+    # The rooms heading holds "Join by code" on a wide screen and the thumb
+    # dock holds it on a phone; only one of the two is rendered at a time.
+    await page.locator('button:visible:has-text("Join by code")').first.click()
     await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
     await page.fill('input[placeholder="ABC123"]', code)
+    # Scoped to the sheet: the public room cards behind it carry a Join and a
+    # Spectate of their own.
     await page.click(
-        'button:has-text("Watch without playing")'
+        '[data-testid="lobby-code-sheet"] button:text-is("Spectate")'
         if spectate
-        else 'button:has-text("Join the room")'
+        else '[data-testid="lobby-code-sheet"] button:text-is("Join")'
     )

@@ -14,7 +14,7 @@ test("the hardest prompt reports the share that got it, not a ratio", () => {
     totalGuesserCount: 4,
   });
   assert.equal(presented.label, "Hardest prompt");
-  assert.equal(presented.value, "1 of 4 guessed it");
+  assert.equal(presented.value, "1 of 4 got it");
   assert.equal(presented.prompt, "roller coaster");
   assert.equal(presented.name, undefined);
 });

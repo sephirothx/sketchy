@@ -15,7 +15,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await page.goto(BASE_URL)
             # At this width the code field lives in the dock's sheet rather
             # than in a card above the room list.
-            await page.get_by_role("button", name="Join with a code").click()
+            await page.get_by_role("button", name="Join by code").click()
             await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
             room_code_input = page.locator('input[placeholder="ABC123"]')
             await assert_input_contract(room_code_input, {
@@ -56,7 +56,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
 
             # And the tap still closes it, which is what the handle is mostly for.
-            await page.get_by_role("button", name="Join with a code").click()
+            await page.get_by_role("button", name="Join by code").click()
             await page.wait_for_selector('[data-testid="lobby-code-sheet"]')
             await page.locator(".bottom-sheet-grab").click()
             await page.locator('[data-testid="lobby-code-sheet"]').wait_for(state="detached")
@@ -80,7 +80,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await nickname_input.fill("SetupHost")
             await page.click(".first-run-guest-submit")
             await page.wait_for_selector('.identity-name:has-text("SetupHost")')
-            await page.click('button:has-text("Create a room")')
+            await page.click('button:has-text("Create room")')
             await page.wait_for_url(f"{BASE_URL}/create")
             # History updates before React finishes the route swap; wait for the
             # create page before asserting lobby controls are gone.
@@ -115,7 +115,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await page.check('label:has-text("Only use custom prompts") input')
             await page.click('summary:has-text("Scoring and hints")')
             await page.get_by_role("button", name="No scoring").click()
-            await page.check('label:has-text("Hide blanks") input')
+            await page.check('label:has-text("Hide letter tiles") input')
             assert await page.is_visible('text=Hints are off because blanks are hidden.')
             await page.evaluate(
                 """() => {

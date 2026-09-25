@@ -76,7 +76,7 @@ test("account_required names the thing it refused", () => {
   const forAvatar = { errorCode: "account_required", params: { action: "avatar" } };
   const forLists = { errorCode: "account_required", params: { action: "prompt_lists" } };
   assert.equal(refusalText(forAvatar, "f"), "Create an account to choose a picture.");
-  assert.equal(refusalText(forLists, "f"), "Create an account to save reusable prompt lists.");
+  assert.equal(refusalText(forLists, "f"), "Create an account to save prompt lists.");
   assert.equal(refusalText({ errorCode: "account_required" }, "f"), "Create an account to do that.");
 });
 

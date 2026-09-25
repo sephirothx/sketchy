@@ -303,7 +303,7 @@ export function roomSummary(
   total: number | null | undefined,
 ): string {
   if (!code) return ui.bugReports.notInARoom;
-  if (!round || !total || round < 1 || total < 1) return ui.bugReports.codeNotInARound({ code });
+  if (!round || !total || round < 1 || total < 1) return ui.bugReports.codeNotInAGame({ code });
   return ui.bugReports.codeRoundRoundOfTotal({ code, round, total });
 }
 

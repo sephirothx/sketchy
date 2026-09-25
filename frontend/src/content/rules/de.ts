@@ -50,7 +50,7 @@ export const RULES_DE: RulesDocument = {
             "Raten ist kein Spam, egal wie wild die Vermutungen werden — schnell zu raten ist genau der Sinn der Sache.",
           ],
           examples: [
-            "Eine Nachricht so lange wiederholen, dass niemand der Runde folgen kann",
+            "Eine Nachricht so lange wiederholen, dass niemand dem Spiel folgen kann",
             "Links oder Einladungen zu etwas anderem posten",
             "Dieselbe Textwand in einen Raum nach dem anderen einfügen",
           ],
@@ -113,12 +113,12 @@ export const RULES_DE: RulesDocument = {
           heading: "Schummeln",
           body: [
             "Gib den Begriff niemandem, der ihn erraten soll — nicht im Chat, nicht in der Zeichnung, nicht irgendwo außerhalb des Spiels. Und lass kein Programm für dich spielen.",
-            "Das Wort auf die Leinwand zu schreiben zählt, als hättest du es gesagt.",
+            "Den Begriff auf die Leinwand zu schreiben zählt, als hättest du es gesagt.",
           ],
           examples: [
             "Den Begriff beim Zeichnen hinschreiben oder buchstabieren",
             "Einem Freund den Begriff per Anruf oder über eine andere App verraten",
-            "Ein zweites Konto benutzen, um dir selbst Antworten zuzuspielen",
+            "Ein zweites Konto benutzen, um dir selbst den Begriff zuzuspielen",
           ],
         },
       ],

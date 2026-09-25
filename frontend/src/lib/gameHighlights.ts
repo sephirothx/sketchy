@@ -34,7 +34,7 @@ export function presentHighlight(highlight: GameHighlight): HighlightPresentatio
       return {
         kind: highlight.kind,
         label: ui.gameHighlights.hardestPrompt,
-        value: ui.gameHighlights.guessedItOf({
+        value: ui.gameHighlights.gotItOf({
           correct: highlight.correctGuessCount,
           total: highlight.totalGuesserCount,
         }),

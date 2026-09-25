@@ -357,7 +357,7 @@ export function MyPromptListsPage() {
     <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
     <section className="prompt-list-manager-card">
       <div className="prompt-list-manager-heading">
-        <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
+        <div><h1>{ui.myPromptListsPage.myPromptLists}</h1></div>
         {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
       </div>
       {!user || user.isAnonymous ? (
@@ -366,7 +366,7 @@ export function MyPromptListsPage() {
         </div>
       ) : (
         <div className="prompt-list-manager-layout">
-          <aside aria-label={ui.myPromptListsPage.yourPromptLists}>
+          <aside aria-label={ui.myPromptListsPage.myPromptLists}>
             {loading && lists.length === 0 && <p>{ui.myPromptListsPage.loading}</p>}
             {listError
               ? <p className="prompt-list-alert is-error" role="alert"><AlertIcon size={14} /><span>{listError}</span></p>

@@ -129,7 +129,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
       setExitingRoom(true);
       clearSession();
       reset();
-      navigate("/", { state: { criticalError: kickedText(data?.code) } });
+      // A closed room is not a kick: the lobby titles its notice accordingly.
+      navigate("/", {
+        state: { criticalError: kickedText(data?.code), kicked: data?.code !== "room_closed" },
+      });
     }
     // One meaning, so nothing to read from the payload: its `message` is
     // English for a log.
@@ -392,7 +395,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               title={ui.activeGameRoom.backFromAfk}
             >
               <MoonIcon size={13} />
-              <span>{ui.roomMenuSheet.away}</span>
+              <span>{ui.roomMenuSheet.afk}</span>
             </button>
           )}
         </div>

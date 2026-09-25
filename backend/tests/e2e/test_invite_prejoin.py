@@ -68,7 +68,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
             )
             assert await spectator_promotion.is_visible()
             assert await spectator_promotion.locator(
-                "text=A player slot is available."
+                "text=A player seat is open."
             ).is_visible()
             await spectator_promotion.locator(
                 'button:has-text("Join as player")'
@@ -139,13 +139,13 @@ async def test_a_typed_name_is_enough_to_join_from_an_invite():
 
             # Join with no name is refused in place; typing again takes the
             # refusal back, rather than leaving the field marked invalid.
-            await visitor.click('button:has-text("Join game")')
+            await visitor.click('button:text-is("Join")')
             await visitor.wait_for_selector("#invite-entry-error")
             assert await visitor.get_attribute("#invite-name", "aria-invalid") == "true"
             await visitor.fill("#invite-name", "InviteDrafter")
             await visitor.wait_for_selector("#invite-entry-error", state="detached")
             assert await visitor.get_attribute("#invite-name", "aria-invalid") is None
-            await visitor.click('button:has-text("Join game")')
+            await visitor.click('button:text-is("Join")')
 
             await visitor.wait_for_selector('[data-testid="room-header"]')
             await host.get_by_text("InviteDrafter", exact=True).wait_for()

@@ -724,7 +724,7 @@ export function AuthDialog({
               onSwitchMode(isClaim ? "login" : "claim");
             }}
           >
-            {isClaim ? ui.accountMenu.logIn : ui.accountMenu.createAnAccount}
+            {isClaim ? ui.accountMenu.logIn : ui.accountMenu.createAccount}
           </button>
         </p>
 

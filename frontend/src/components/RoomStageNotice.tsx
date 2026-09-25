@@ -73,7 +73,7 @@ export function RoomEndedCard({ reason, onLeave }: { reason: RoomEndReason; onLe
     <div className="room-ended" data-testid="room-ended" data-reason={reason}>
       <div className="surface-card room-stage-card" role="alert">
         <h2 className="room-stage-title">
-          {reason === "kicked" ? ui.roomStageNotice.removedByVote : ui.roomStageNotice.gameEnded}
+          {reason === "kicked" ? ui.roomStageNotice.kickedFromRoom : ui.roomStageNotice.gameEnded}
         </h2>
         <p className="room-stage-body">
           {reason === "kicked"
@@ -133,7 +133,7 @@ export function RoomDrainCue({ playing }: { playing: boolean }) {
           </p>
           <div className="room-stage-actions">
             <Button variant="primary" onClick={dismiss}>
-              {ui.drainCue.gotIt}
+              {ui.drainCue.ok}
             </Button>
           </div>
         </div>

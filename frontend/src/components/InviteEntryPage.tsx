@@ -154,7 +154,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                 disabled={busy || entryPending || room.isFull || !hasResolved}
                 onClick={() => void join("player")}
               >
-                {room.isFull ? ui.inviteEntryPage.roomFull : busy ? ui.inviteEntryPage.joining : room.state === "playing" ? ui.inviteEntryPage.joinGameInProgress : ui.inviteEntryPage.joinGame}
+                {room.isFull ? ui.inviteEntryPage.roomFull : busy ? ui.inviteEntryPage.joining : room.state === "playing" ? ui.inviteEntryPage.joinGameInProgress : ui.inviteEntryPage.join}
               </button>
               <button
                 type="button"
@@ -166,7 +166,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                 {busy ? ui.inviteEntryPage.joining : ui.inviteEntryPage.spectate}
               </button>
             </div>
-            {room.isFull && <p className="invite-action-hint">{ui.inviteEntryPage.playerSlotsAreFullSpectatingStill}</p>}
+            {room.isFull && <p className="invite-action-hint">{ui.inviteEntryPage.noPlayerSeatsOpenSpectate}</p>}
           </div>
 
           {/* Somebody who has an account on another device should arrive as
