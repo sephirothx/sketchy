@@ -30,7 +30,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback((
     message: string,
-    tone: ToastTone = "info",
+    tone: ToastTone,
     durationMs = 5000,
     action?: ToastAction,
   ) => {

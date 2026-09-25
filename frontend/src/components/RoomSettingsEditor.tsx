@@ -187,7 +187,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     aria-labelledby="room-settings-title"
   >
     <div className="room-settings-editor-heading">
-      <p className="waiting-card-kicker">{ui.roomSettingsEditor.hostSettings}</p>
+      <p className="section-label waiting-card-kicker">{ui.roomSettingsEditor.hostSettings}</p>
       <h2 id="room-settings-title">{ui.roomSettingsEditor.editRoomRules}</h2>
     </div>
     {loading ? <p className="loading-note" role="status">{ui.roomSettingsEditor.loadingSettings}</p> : (

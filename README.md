@@ -24,7 +24,7 @@ keyboard that takes half the screen, and one thumb.
 
 - Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; it is also where a room you create starts. It is the language you *play* in, not the language you *read* in — two settings, side by side in **Settings → Appearance**, because reading in Dutch while playing an English room is perfectly ordinary. The language you read in is also a flag in the lobby header, at every width, since Settings is one more screen to find in a language you cannot read. Search and the filters appear once six rooms are open, and the list's count only when a filter has left some out. The header leads to the lobby, the Gallery (once you have a session), the Community catalogue, Prompt stats and the Rules from every page, the one you are on marked, so the pages are there before you have a name and an account menu to find them in. It shows as much as the bar has room for: the names where they fit (shortened in the header where a language's page title is too long, like Spanish *Catálogo* for *Catálogo de la comunidad*), icons where only they fit, and nothing where neither does - on a narrow phone the account menu is the way there, and before you have a name the name tag links the Rules.
 - The interface is written in all seven supported languages — English, German, Spanish, French, Italian, Dutch, Portuguese — and a language is offered only once its catalogue is **complete**: there is no screen that falls back to English halfway down, because offering a language and finishing it are the same act. Which one you read in comes from your account if you have one, from this browser if you have set it here, from your browser's own languages on a first visit, and English otherwise; it is applied before the first paint — only that language's words are downloaded, alongside the account lookup rather than after it, and a language that cannot be fetched leaves the page in English rather than blank — and `<html lang>` follows it so a screen reader picks the right voice. Dates and numbers follow the same language, while the **Time format** setting still decides 12- or 24-hour on top of it. The six non-English catalogues are machine-drafted and awaiting a native reader; the unreviewed count is reported per locale in CI.
-- Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped. A list is Private until its owner publishes it, and can be duplicated into a second list of your own - one you copied from somebody else excepted, so its credit stays. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
+- Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped. A list is Private until its owner publishes it, and can be duplicated into a second list of your own - one you copied from somebody else excepted, so its credit stays. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page, which opens on the Standard list of the language you play in. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned, and a list nobody has played yet says so once and lists its prompts by name. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
 - A **Community catalogue** of prompt lists players published for anyone to play. Browse by language and tag, read every prompt in a list before choosing it, and play it straight away — no account needed to browse or play. With one, **star** a list to keep it on a shortlist the room picker offers, **make a copy** of your own to edit, or report one. Publishing is moderated after the fact, with an operator switch that holds new publications for review instead.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools). A triangle is dragged from a base corner to its apex — both ends of the drag are corners of it — and the base lies on the row the drag started from, reaching as far past the apex as the start is short of it; drag downwards and the triangle is drawn upside down. A brush stroke is thinned as it is drawn: samples that would move the line by less than a quarter of a pixel are not sent, with the error bounded for the whole stroke, and the drawer's own canvas is painted from the same samples the viewers get, so everyone rasterizes one line. Points go out every 80 ms, each frame relative to the last point sent, the last batch of a stroke carrying its end, and a viewer plays each batch out over the next 80 ms at the screen's own rate rather than painting it in one step, so it sees ink smoothly, up to 80 ms behind the drawer's hand. A pressure-sensitive pen draws a thinner brush stroke under a lighter hand: the selected brush size is what full pressure draws and the stroke never gets wider, the thinnest is 2 px whatever the brush (a 1 px line does not hold a fill), so the largest brush spans everything the toolbar offers; the whole brush arrives at 70% of the pen's pressure range rather than at its end; pressure moves the width by ratio rather than by pixels, so the fine end of a large brush is not a sliver of the range; and the line swells and tapers smoothly, to the pixel, with no levels to see — what is sent is a few width keyframes riding the frames already going out, and every screen ramps the width between them along the path, with the pen's pressure smoothed first so the keyframes describe the hand and not the sensor's jitter, so a pen costs a few percent more than a mouse (+1–10% on the uplink by brush size) and a mouse costs nothing. The eraser keeps its size, and a mouse or a finger draws exactly as before. The brush starts each turn at the player's **default brush size** (Settings → Appearance, 6 px until changed); the size slider marks it among its stops and **Default** goes back to it in one tap, and on a phone the slider lies along the panel rather than standing in it. **Pen pressure** in Settings → Appearance turns it off; it is on by default, since it acts only for such a pen.
@@ -932,7 +932,9 @@ Claiming an account can offer an email address. It is optional, and stays
 optional: requiring one would break registration on every deployment with no
 SMTP configured, which includes the zero-configuration default this project
 documents. An account without one is reminded weekly that a forgotten password
-cannot be reset - a note that can be closed and returns, with the interval kept
+cannot be reset, the first time a week after signing up (or claiming a guest),
+since the form has only just called the address optional - a note that can be
+closed and returns, with the interval kept
 on the account so it neither restarts on each new device nor disappears when
 browser storage is cleared. It stays out of rooms entirely: a room lays itself
 out to the viewport rather than flowing beneath a banner, so the note landed on
@@ -1341,8 +1343,10 @@ changes and there is no Save: changes made together are merged into one write,
 success is silent, and a write the account refuses raises a notice while the
 value stays applied locally. The rows a server can refuse — the display name,
 the email address, the password — keep a button of their own. Guests see every
-section, with account-only rows locked and the reason on the row; a guest who
-logs in from inside Settings is told once that the account's values took over.
+section, but not the rows only an account has: the card at the top of Account,
+with **Create an account** and **Sign in**, is the one invitation, and **Signing
+in** appears once there is an account to sign in to. A guest who signs in from
+inside Settings is told once that the account's values took over.
 
 The identity menu is navigation only: Settings, profile, prompt stats, prompt
 lists, bug reports, log out. Account absorbs what the menu used to hold: the
@@ -1759,8 +1763,10 @@ frontend/
     lib/penStroke.ts Where a stroke's keyframes go in its frames, and what the drawer's canvas may already paint
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
     lib/pinnedDrawings.ts Pinned drawings: the shelf's presence rule, where Pin is offered, and its list arithmetic
+    lib/profileStats.ts Which profile statistics are drawn before a first finished game, and which wait for one
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
+    lib/roomHistory.ts  What Back does in a room: its own history entries, the guard and one per open sheet
     types.ts      Shared TypeScript types for all socket payloads
 ops/
   grafana/          Dashboards generated by generate.py, and their read-only provisioning
@@ -2736,19 +2742,32 @@ A seated client checks with the server every five seconds that it still holds th
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
   tab, a full server) stack in one box that the screens sized to the viewport make room for.
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
-  home, and in a room the room's name), what is going on (the round and the clock, a
+  home, and in a room the room's name, with a globe after it for a public room and a lock
+  for a private one), what is going on (the round and the clock, a
   server notice, and an *Away* chip while you are away), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
-  go away, save the drawing, start over, settings, and Leave last in red - a dropdown on a
-  desktop and the ⋯ sheet on a phone, with the same rows. A short window gives way in a fixed
+  go away, save the drawing, start over, and Leave last in red - a dropdown on a
+  desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the
+  room's. A phone's round reads "Round 2/3", or "2/3" when the bar has no room for the word. A short window gives way in a fixed
   order: the room's name, then your chip's name (it becomes your round avatar); the wordmark,
   the clock, the menu and your avatar stay, down to a phone - where a notice on a narrow bar
-  borrows the wordmark's room until it ends. On a desktop the waiting room's invite copies the link; a phone shares it. Below it, the room's rules read as six cells - players, rounds,
+  borrows the wordmark's room until it ends. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
+  that, where the bar has given the name up - with no status line under it: Start itself says
+  what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
+  On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
-  Edit and an orange Start in the same card. An invite link shows the room the same six
-  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait" swaps
+  Edit and an orange Start in the same card - on one line where the words fit, otherwise with
+  every row filled: Edit and the pad's button over a full-width Start. An invite link shows the room the same six
+  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait"
+  ("Doodle" up to 1100px, where it shares a row with "Edit rules", or with "Waiting for Hosty to
+  start" for everybody but the host) swaps
   the column for a scratch pad at a turn's size - only yours, like the one an outage shows,
   and the same drawing on both - with the room code (a chip that copies the invite link) and Start kept in a strip above it.
+- The browser's Back (or a phone's back gesture) in a room closes whatever is open over it
+  first - a sheet, a dialog, a menu, the drawings or the highlights - and otherwise is the room's
+  Leave: during a game it asks first, and Back again stays; in the waiting room it leaves at
+  once. It no longer walks out of a room with the seat still held, and after leaving, Back
+  from the lobby goes to wherever you came from rather than into the room you left.
 - Wide screens get a bigger game. The room widens in steps - a 1240px column, then 1600px
   from a 1500px window and 1960px from 2100px - and on a desktop it fills the window's
   height, with the players and chat running top to bottom. The canvas grows with it up to
@@ -2757,8 +2776,9 @@ A seated client checks with the server every five seconds that it still holds th
   the chat instead. From 1500px the lobby puts the rooms beside who is online and the chat,
   stacked in a column, with one room to a row: its open seats, how long a game
   will take, and any rules that differ from the defaults, lined up in columns; from 1200px Create a room keeps
-  a card beside the form with what you are about to create, how long it runs, and the
-  Create room button, in view however far down the form you are. A profile puts its game
+  a card beside the form with the room's name, how long it runs, any rules that differ
+  from a new room's (the ones its lobby row will show, and Private), and the Create room
+  button, in view however far down the form you are. A profile puts its game
   history beside its statistics, and moderators get the newest decisions in a column
   beside the case they are reading.
 - The header is the same on every page: it spans the widest column the window allows,

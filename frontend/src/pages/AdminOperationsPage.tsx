@@ -293,25 +293,25 @@ export function AdminOperationsPage() {
           </div>
 
           <section className="ops-metrics" aria-label="Live counts">
-            <div className="ops-metric">
+            <div className="surface-card ops-metric">
               <span className="ops-metric-label">Players online</span>
               <span className="ops-metric-value">{live.live.players}</span>
               <span className="ops-metric-note">
                 peak {live.peak.players} · resets on restart
               </span>
             </div>
-            <div className="ops-metric">
+            <div className="surface-card ops-metric">
               <span className="ops-metric-label">Live rooms</span>
               <span className="ops-metric-value">{live.live.rooms}</span>
               <span className="ops-metric-note">peak {live.peak.rooms}</span>
             </div>
-            <div className="ops-metric">
+            <div className="surface-card ops-metric">
               <span className="ops-metric-label">Games running</span>
               <span className="ops-metric-value">{live.live.activeGames}</span>
               <span className="ops-metric-note">peak {live.peak.activeGames}</span>
             </div>
             <div
-              className={`ops-metric${rate !== null && rate >= 25 ? " is-warning" : ""}`}
+              className={`surface-card ops-metric${rate !== null && rate >= 25 ? " is-warning" : ""}`}
             >
               <span className="ops-metric-label">Abandoned</span>
               <span className="ops-metric-value">
@@ -332,7 +332,7 @@ export function AdminOperationsPage() {
             <RetentionCard live={live} reasons={reasons} />
           </div>
 
-          <section className="ops-card ops-recorder" aria-label="Recorder health">
+          <section className="surface-card ops-card ops-recorder" aria-label="Recorder health">
             <div className="ops-card-head">
               <h2>Recorder health</h2>
               <Chip kind={recorderHealthy ? "success" : "warm"}>
@@ -402,7 +402,7 @@ export function AdminOperationsPage() {
       </OpsTabPanel>
 
       <OpsTabPanel id="activity" current={tab} idPrefix={TAB_IDS}>
-      <section className="ops-card ops-activity" aria-label="Recorded activity">
+      <section className="surface-card ops-card ops-activity" aria-label="Recorded activity">
         <div className="ops-card-head">
           <div>
             <h2>Recorded activity</h2>
@@ -478,7 +478,7 @@ export function AdminOperationsPage() {
       </OpsTabPanel>
 
       <OpsTabPanel id="audit" current={tab} idPrefix={TAB_IDS}>
-      <section className="ops-card ops-ledger" aria-label="Audit ledger">
+      <section className="surface-card ops-card ops-ledger" aria-label="Audit ledger">
         <div className="ops-card-head">
           <div>
             <h2>Audit ledger</h2>

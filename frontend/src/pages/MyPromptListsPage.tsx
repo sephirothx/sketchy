@@ -64,6 +64,14 @@ function visibilityLabel(visibility: OwnedPromptList["visibility"]): string {
     : ui.myPromptListsPage.private;
 }
 
+/** A moderation state as the glossary names it; Active is the state nobody
+    needs telling about, so it has no label. */
+function moderationLabel(state: OwnedPromptList["moderationState"] | undefined): string | null {
+  if (state === "under_review") return ui.myPromptListsPage.underReview;
+  if (state === "hidden") return ui.myPromptListsPage.hidden;
+  return null;
+}
+
 function draftFromList(promptList: OwnedPromptList): PromptListDraft {
   return {
     name: promptList.name,
@@ -366,7 +374,7 @@ export function MyPromptListsPage() {
     {/* The title sits on the page, as every other page's does; the card
         below is the editor, not the page. */}
     <div className="prompt-list-manager-heading">
-      <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
+      <div><p className="section-label">{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
       {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
     </div>
     {!user || user.isAnonymous ? (
@@ -400,10 +408,7 @@ export function MyPromptListsPage() {
                   {ui.myPromptListsPage.listSummary({
                     prompts: item.promptCount,
                     visibility: visibilityLabel(item.visibility),
-                    moderationState:
-                      item.moderationState !== "active"
-                        ? item.moderationState.replace("_", " ")
-                        : null,
+                    moderationState: moderationLabel(item.moderationState),
                   })}
                 </span>
             </button>)}
@@ -418,9 +423,9 @@ export function MyPromptListsPage() {
               deletedSentence={ui.myPromptListsPage.copiedFromADeletedList}
             />}
             {moderationState !== "active" && <p className="prompt-list-moderation-warning" role="status">
-              {ui.myPromptListsPage.listUnderReview({
-                state: moderationState.replace("_", " "),
-              })}
+              {moderationState === "hidden"
+                ? ui.myPromptListsPage.listHiddenWarning
+                : ui.myPromptListsPage.listUnderReviewWarning}
             </p>}
             {/* Name and language share a row when there is room for both, and
                 the language wraps under the name when there is not. */}
@@ -571,7 +576,7 @@ export function MyPromptListsPage() {
                           className={flagged ? "is-flagged" : undefined}
                         >
                           <span className="prompt-list-entry-text">{prompt.prompt}</span>
-                          {flagged && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId!]?.replace("_", " ")}</span>}
+                          {flagged && <span className="prompt-list-entry-moderation">{moderationLabel(promptModeration[prompt.conceptId!])}</span>}
                           <button type="button" aria-label={ui.myPromptListsPage.removePrompt({ prompt: prompt.prompt })} onClick={() => removePrompt(prompt.prompt)}><XIcon size={13} /></button>
                         </li>
                       );

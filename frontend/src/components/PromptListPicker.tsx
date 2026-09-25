@@ -5,7 +5,8 @@ import { listCommunityPromptLists, listOwnedPromptLists } from "../lib/promptLis
 import { readEveryPage } from "../lib/communityLists";
 import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary } from "../types";
-import { CheckIcon, InfoIcon, PlusIcon } from "./icons";
+import { CheckIcon, PlusIcon } from "./icons";
+import { FieldHint } from "./RoomSetupControls";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/prompt-lists.css";
@@ -191,7 +192,7 @@ export function PromptListPicker({
             <span key={wl.slug} className="prompt-list-chip-group">
               <button
                 type="button"
-                className={`toggle-chip ${isSelected ? "is-selected" : ""}`}
+                className="toggle-chip"
                 aria-pressed={isSelected}
                 disabled={disabled || (isSelected && isOnlySelected)}
                 title={wl.description || ui.promptListPicker.namePromptCountPrompts({ name: wl.name, promptCount: wl.promptCount })}
@@ -203,19 +204,10 @@ export function PromptListPicker({
                 <span className="toggle-chip-name">{wl.name}</span>
                 <span className="prompt-list-chip-count">{wl.promptCount}</span>
               </button>
-              {/* A new tab: this picker also lives in the waiting-room settings,
-                  where navigating away would discard settings the host is
-                  part-way through editing. */}
-              {wl.isBundled && <a
-                className="prompt-list-chip-info"
+              {wl.isBundled && <FieldHint
+                hint={ui.promptListPicker.howListPlays({ name: wl.name })}
                 href={`/prompt-lists/${wl.slug}`}
-                target="_blank"
-                rel="noreferrer"
-                title={ui.promptListPicker.howListPlays({ name: wl.name })}
-                aria-label={ui.promptListPicker.howListPlays({ name: wl.name })}
-              >
-                <span aria-hidden="true"><InfoIcon size={13} /></span>
-              </a>}
+              />}
             </span>
           );
   }

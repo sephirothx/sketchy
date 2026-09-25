@@ -33,7 +33,7 @@
      A percentage keeps the margin proportional at every width. */
   padding: 3.5%;
   border: 1.5px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
   margin-bottom: 16px;
   overflow: hidden;
@@ -71,7 +71,7 @@
   margin: 0 0 20px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .not-found-card {
     padding: 20px 16px;
   }

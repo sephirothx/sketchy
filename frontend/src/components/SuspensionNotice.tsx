@@ -146,7 +146,7 @@ export function SuspensionNotice() {
         )}
         <button
           type="button"
-          className="modal-button"
+          className="btn btn-primary"
           disabled={busy}
           onClick={() => void signOut()}
         >

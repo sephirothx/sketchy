@@ -15,6 +15,7 @@ import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { ConnectedPinControl } from "../components/ConnectedPinControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
+import { RoomVisibilityIcon } from "../components/RoomVisibilityIcon";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
 import { RoomMenuDropdown, RoomMenuSheet, type RoomMenuActions } from "../components/RoomMenu";
@@ -28,7 +29,12 @@ import {
 import { useAfkCheck } from "../hooks/useAfkCheck";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
-import { useOpenSettings } from "../hooks/useSettingsRoute";
+import {
+  exitRoomHistory,
+  RoomHistoryProvider,
+  useBackCloses,
+  useRoomHistory,
+} from "../hooks/useRoomHistory";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { isSigningOut } from "../store/authStore";
@@ -51,7 +57,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
   const navigate = useNavigate();
   const { notify } = useToast();
-  const openSettings = useOpenSettings();
 
   const canvasRef = useRef<CanvasRef | null>(null);
   const exitingRoomRef = useRef(false);
@@ -68,6 +73,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   // The room's own name, which is what somebody with a room and the Gallery
   // open side by side is looking for; the code until the name has arrived.
   useDocumentTitle(roomName || code);
+  const roomIsPublic = useGameStore((s) => s.isPublic);
   const phase = useGameStore((s) => s.phase);
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
@@ -128,12 +134,21 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }
 
   useEffect(() => {
+    // Whose history entries to take off: read before the session is cleared,
+    // which is what forgets the seat.
+    const heldSeat = () => ({
+      code: normalizedCode,
+      seat: useGameStore.getState().playerId ?? "",
+    });
     function onKicked(data: { code?: string }) {
+      const who = heldSeat();
       exitingRoomRef.current = true;
       setExitingRoom(true);
       clearSession();
       reset();
-      navigate("/", { state: { criticalError: kickedText(data?.code) } });
+      exitRoomHistory(who, (replace) => {
+        navigate("/", { replace, state: { criticalError: kickedText(data?.code) } });
+      });
     }
     // One meaning, so nothing to read from the payload: its `message` is
     // English for a log.
@@ -147,14 +162,18 @@ export function ActiveGameRoom({ code }: { code: string }) {
       // `logout` leaves the room itself, and a red "signed out" over a
       // chosen action is wrong.
       if (data?.code === "signed_out" && isSigningOut()) return;
+      const who = heldSeat();
       exitingRoomRef.current = true;
       setExitingRoom(true);
       clearSession();
       reset();
-      navigate("/", {
-        state: {
-          criticalError: supersededText(data?.code),
-        },
+      exitRoomHistory(who, (replace) => {
+        navigate("/", {
+          replace,
+          state: {
+            criticalError: supersededText(data?.code),
+          },
+        });
       });
     }
     socket.on("kicked", onKicked);
@@ -168,12 +187,16 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }, [clearSession, navigate, normalizedCode, notify, reset, setExitingRoom]);
 
   function performLeave() {
+    const who = { code: normalizedCode, seat: playerId ?? "" };
     exitingRoomRef.current = true;
     setExitingRoom(true);
     clearSession();
     emitTransient("leave_room");
     reset();
-    navigate("/");
+    // The room's history entries go with it, and the lobby takes the place of
+    // the entry the room was entered on: Back from the lobby then goes to
+    // wherever that was, not to a room this player has left.
+    exitRoomHistory(who, (replace) => navigate("/", { replace }));
   }
 
   function handleLeave() {
@@ -183,6 +206,17 @@ export function ActiveGameRoom({ code }: { code: string }) {
     }
     performLeave();
   }
+
+  // Back from the room is the Leave the room offers at that moment: the
+  // Room menu's, which asks during a game, or the ended card's, which does not.
+  function handleBackOnRoom() {
+    if (stage.kind === "ended") performLeave();
+    else handleLeave();
+  }
+  // Back is the room's own: a sheet on top closes, and Back on the room
+  // itself is Leave, which gives up the seat rather than walking away from it
+  // (R-UX-15).
+  const roomHistory = useRoomHistory(normalizedCode, playerId ?? "", handleBackOnRoom);
 
   function handleToggleAfk() {
     emitTransient("toggle_afk");
@@ -311,7 +345,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
     onOpenPlayers: isMobile ? openPlayersSheet : undefined,
     onToggleAfk: handleToggleAfk,
     onSaveImage: () => canvasRef.current?.saveImage(),
-    onOpenSettings: () => openSettings(),
     onProposeRestart: () => void handleProposeRestart(),
     onLeave: handleLeave,
   };
@@ -332,7 +365,17 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setHighlightsOpen(false);
   }
 
-  return (
+  // The two post-game panels take the stage rather than sitting over it, but
+  // they are opened and closed like sheets, so Back closes them like sheets.
+  const recapShown = recapOpen && drawingRecap.length > 0;
+  function closeRecap() {
+    setRecapOpen(false);
+    setRecapIndex(0);
+  }
+  useBackCloses(recapShown, closeRecap);
+  useBackCloses(highlightsOpen && !recapShown, () => setHighlightsOpen(false));
+
+  const room = (
     <div
       className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}`}
     >
@@ -366,6 +409,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         className={`game-header${isMobile ? " game-header-mobile" : ""}`}
         data-testid="room-header"
         data-room-code={code}
+        data-room-name={roomName || undefined}
       >
         <div className="game-header-start">
           {/* The way back to the lobby, which from a room is leaving it -
@@ -380,7 +424,14 @@ export function ActiveGameRoom({ code }: { code: string }) {
           >
             <Wordmark size={isMobile ? 22 : 24} decorative />
           </button>
-          {!isMobile && roomName && <span className="game-header-room-name">{roomName}</span>}
+          {/* Public or private beside the name, and gone with it when the bar
+              gives the name up: the waiting room's heading says it there. */}
+          {!isMobile && roomName && (
+            <span className="game-header-room-name">
+              <span className="game-header-room-name-text">{roomName}</span>
+              <RoomVisibilityIcon isPublic={roomIsPublic} />
+            </span>
+          )}
         </div>
         <div className="game-header-center">
           <GameHeaderStatus />
@@ -480,14 +531,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
             <ConnectedRoomPlayersPanel mode={roomView} />
           }
           main={
-            recapOpen && drawingRecap.length > 0 ? (
+            recapShown ? (
               <DrawingRecapGallery
                 entries={drawingRecap}
                 initialIndex={recapIndex}
-                onClose={() => {
-                  setRecapOpen(false);
-                  setRecapIndex(0);
-                }}
+                onClose={closeRecap}
                 loadEntry={loadRecapDrawing}
                 renderReactions={(entry) => (
                   <ConnectedDrawingReactionControl
@@ -547,4 +595,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       )}
     </div>
   );
+  // Every sheet in the room reaches the room's history through this, and
+  // only the room provides it: a sheet anywhere else leaves Back alone.
+  return <RoomHistoryProvider value={roomHistory}>{room}</RoomHistoryProvider>;
 }

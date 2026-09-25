@@ -7,6 +7,7 @@ import {
   hasPreviousOrder,
   rowStartOffsets,
 } from "../lib/standings";
+import { formatGuessTime } from "../lib/guessTime";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/reactions.css";
 import "../styles/lazy/game-results.css";
@@ -45,12 +46,6 @@ function rankChange(entry: TurnScoreEntry) {
   if (change > 0) return { symbol: "\u25B2", places: change, className: "rank-up" };
   if (change < 0) return { symbol: "\u25BC", places: -change, className: "rank-down" };
   return null;
-}
-
-function formatGuessTime(seconds: number) {
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes}:${(seconds % 60).toFixed(1).padStart(4, "0")}`;
 }
 
 export function TurnResultsOverlay({
@@ -127,7 +122,7 @@ export function TurnResultsOverlay({
       data-testid="turn-results-overlay"
     >
       <div className="turn-results-panel">
-        <h3 id="turn-results-title">{showScores ? ui.turnResultsOverlay.turnResults : ui.turnResultsOverlay.turnComplete}</h3>
+        <h3 id="turn-results-title" className="section-label">{showScores ? ui.turnResultsOverlay.turnResults : ui.turnResultsOverlay.turnComplete}</h3>
         <p className="turn-results-prompt">
           {ui.turnResultsOverlay.promptWas} <strong>{prompt}</strong>
         </p>

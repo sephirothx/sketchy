@@ -1,6 +1,7 @@
 """Registered-account preferences shared across devices."""
 from __future__ import annotations
 
+from datetime import datetime, timezone
 from typing import Literal
 from uuid import UUID
 
@@ -8,6 +9,8 @@ from fastapi import APIRouter, Request
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from app.request_text import ControlFreeModel
 from sqlalchemy import select
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
@@ -213,25 +216,65 @@ async def settings_of_registered_account(
         return user_settings_payload(settings)
 
 
+def _settings_insert(session: AsyncSession):
+    """The dialect's INSERT, for the ON CONFLICT clause both databases share."""
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        return postgresql_insert(UserSettings)
+    if dialect == "sqlite":
+        return sqlite_insert(UserSettings)
+    raise RuntimeError(f"Unsupported user-settings dialect: {dialect}")
+
+
 async def seed_user_settings(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     user_id: str,
     values: UserSettingsSeed,
 ) -> dict:
-    """Create once during registration; never overwrite an existing account."""
+    """Seed the account's settings from the browser, once, at registration.
+
+    Registration also starts the no-email reminder's clock (R-AUTH-15): the
+    form has just called the address optional, so the first reminder is due a
+    week after signing up rather than on the very next page.
+
+    The account is already claimed when this runs, so a tab still holding its
+    cookie can reach `settings_of_registered_account` and make the row first.
+    Read-then-insert lost that race with an IntegrityError - a 500 after the
+    account had been created - and doing nothing on the conflict would keep
+    that tab's defaults over the browser's values, breaking R-SET-03's "the
+    browser's copy becomes the account's, exactly once".
+
+    So the conflict updates the row, but only a row nobody has seeded: the
+    reminder stamp is what tells them apart. A row this function wrote carries
+    one from the moment it exists; a row made anywhere else starts without one.
+    The seed and the stamp land together, so a seeded account is never
+    overwritten by a second call and a running clock is never pushed back.
+    """
     db_user_id = UUID(user_id)
+    now = datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
             await _registered_user(session, db_user_id)
-            settings = await session.get(UserSettings, db_user_id)
-            if settings is None:
-                settings = UserSettings(
-                    user_id=db_user_id,
-                    **_settings_values(values),
+            seeded = _settings_values(values)
+            statement = _settings_insert(session).values(
+                user_id=db_user_id,
+                email_reminder_last_shown_at=now,
+                **seeded,
+            )
+            await session.execute(
+                statement.on_conflict_do_update(
+                    index_elements=["user_id"],
+                    set_={
+                        key: statement.excluded[key]
+                        for key in (*seeded, "email_reminder_last_shown_at")
+                    },
+                    where=UserSettings.email_reminder_last_shown_at.is_(None),
                 )
-                session.add(settings)
-                await session.flush()
+            )
+            settings = await session.get(
+                UserSettings, db_user_id, populate_existing=True
+            )
         return user_settings_payload(settings)
 
 

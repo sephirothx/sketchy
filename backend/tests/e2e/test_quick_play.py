@@ -9,7 +9,7 @@ not by whichever English room another test left waiting.
 import random
 
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import room_code, room_name as current_room_name, use_guest_name
 from tests.e2e.test_friends import SETTLE_MS, make_friends, sign_up, unique
 
 # Holds every outgoing room entry - `join_room`, `create_room`,
@@ -58,7 +58,7 @@ async def open_public_room(page, name: str) -> tuple[str, str]:
     await page.wait_for_selector(".create-room-page")
     await page.click(".create-room-submit")
     await page.wait_for_selector('[data-testid="waiting-room"]')
-    return await room_code(page), (await page.locator(".waiting-room-head h1").inner_text()).strip()
+    return await room_code(page), await current_room_name(page)
 
 
 async def test_quick_play_takes_the_room_that_is_waiting():
@@ -103,7 +103,7 @@ async def test_quick_play_opens_a_public_room_when_none_is_waiting():
             await page.click('[data-testid="quick-play"]')
 
             await page.wait_for_selector('[data-testid="waiting-room"]')
-            room_name = (await page.locator(".waiting-room-head h1").inner_text()).strip()
+            room_name = await current_room_name(page)
             # Public and on the standard rules, so the next visitor's Quick
             # play finds it: it is in the lobby's list, for somebody else.
             await watcher.goto(BASE_URL)

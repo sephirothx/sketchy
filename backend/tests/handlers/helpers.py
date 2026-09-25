@@ -172,6 +172,25 @@ async def settle_deferred(ctx):
         await asyncio.gather(*list(ctx.room_cleanups), return_exceptions=True)
 
 
+async def settle_capacity_closes(ctx):
+    """Wait for every socket turned away for capacity to be closed (#998).
+
+    The close is a task that sleeps `SERVER_FULL_CLOSE_SECONDS` from when it
+    first runs, not from when the handshake scheduled it. A fixed sleep of the
+    delay plus a margin raced it: on a loaded runner fifty tasks created in one
+    burst start late enough that the later ones were still asleep when the test
+    looked. Waited on here instead, with a deadline that only a close that never
+    comes would reach.
+    """
+    closes = set(ctx._capacity_closes)
+    if not closes:
+        return
+    done, pending = await asyncio.wait(closes, timeout=5.0)
+    assert not pending, f"{len(pending)} capacity closes still pending after 5 s"
+    for task in done:
+        task.result()
+
+
 async def replay_staged(ctx):
     """Run the handoff loop's work once: every staged game, replayed now.
 

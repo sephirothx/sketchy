@@ -140,7 +140,7 @@ export function DrawingRecapGallery({
       <section className="drawing-recap-card">
         <header className="drawing-recap-header">
           <div>
-            <p className="drawing-recap-kicker">{ui.drawingRecapGallery.drawingRecap}</p>
+            <p className="section-label drawing-recap-kicker">{ui.drawingRecapGallery.drawingRecap}</p>
             <h1 id="drawing-recap-title">{entry.prompt}</h1>
             <p className="drawing-recap-meta">
               {fill(ui.drawingRecapGallery.drawnBy, {

@@ -15,12 +15,6 @@
 }
 
 @media (max-width: 720px) {
-  /* The arrow alone. "Back to lobby" beside a wordmark and an identity chip is
-     what would not fit; the label stays as the accessible name. */
-  .header-back-label {
-    display: none;
-  }
-
   .lobby-header.has-back .header-back-button {
     flex: none;
     padding-inline: 10px;
@@ -36,11 +30,6 @@
   border-radius: var(--radius-sm);
   color: inherit;
   display: inline-flex;
-}
-
-.header-home-link:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 3px;
 }
 
 /* The way up from a nested page, after the wordmark, on a wide screen. */
@@ -195,42 +184,11 @@
   position: absolute;
 }
 
-.lobby-columns {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 720px) {
-  .lobby-columns {
-    grid-template-columns: 1fr;
-  }
-}
-
-.lobby-entry-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.lobby-entry-panel h2,
 .panel > h2 {
   /* 22px per the Main artboard; the browser default 1.5em read a size too
      large next to the body copy. Family and weight come from the base rule. */
   font-size: 22px;
   margin: 0;
-}
-
-.lobby-entry-panel .create-room-lobby-copy {
-  margin: 0;
-}
-
-.lobby-entry-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: auto;
 }
 
 /* --------------------------------------------------- segmented code input */
@@ -290,7 +248,7 @@
   width: 40px;
   height: 48px;
   border: 1.5px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--field);
   font-family: var(--font-display);
   font-weight: 600;
@@ -324,11 +282,6 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
-}
-
-.lobby-rooms-heading h2 {
-  font-size: 22px;
-  margin: 0;
 }
 
 .lobby-rooms-count {
@@ -397,38 +350,16 @@
 }
 
 .lobby-room-search:focus-within {
-  border-color: var(--focus-field-border, var(--primary));
+  border-color: var(--focus-ring);
 }
 
 .lobby-room-search > svg {
   flex: 0 0 auto;
 }
 
-.lobby-filter-toggle {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
-  padding: 9px 15px;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--muted);
-  min-height: 42px;
-}
-
-.lobby-filter-toggle[aria-pressed="true"] {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-
 /* --------------------------------------------------------------- room card */
 .public-room-card {
   align-items: center;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   display: flex;
   gap: 18px;
   justify-content: space-between;
@@ -511,7 +442,7 @@
   min-width: 132px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .public-room-card {
     align-items: stretch;
     flex-direction: column;
@@ -546,7 +477,7 @@
   margin: 0 auto;
   padding: 28px;
   border: 1.5px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   box-shadow: var(--shadow-raised);
 }
@@ -568,19 +499,10 @@
   line-height: 1.15;
 }
 
-.invite-eyebrow {
-  margin: 0;
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
 .invite-state-badge {
   flex: 0 0 auto;
   padding: 5px 11px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--success-soft);
   color: var(--success-ink);
   font-size: 12px;
@@ -694,34 +616,6 @@
   margin-top: 10px;
 }
 
-.invite-primary-button,
-.invite-secondary-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  border-radius: var(--radius-sm);
-  padding: 10px 16px;
-  font-size: 14.5px;
-  font-weight: 800;
-  font-family: var(--font-body);
-}
-
-.invite-primary-button {
-  border: 0;
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 2px 0 var(--primary-edge);
-}
-
-.invite-secondary-button {
-  border: 1.5px solid var(--line-strong);
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-
 .invite-action-hint {
   margin: 9px 0 0;
   color: var(--muted);
@@ -736,7 +630,7 @@
 }
 
 .invite-loading-card p,
-.invite-unavailable-card p:not(.invite-eyebrow) {
+.invite-unavailable-card p:not(.section-label) {
   color: var(--muted);
 }
 
@@ -767,7 +661,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .invite-entry-page {
     padding: 14px 12px 32px;
   }
@@ -809,11 +703,11 @@
     right: 0;
     bottom: 0;
     left: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     border-top: 1.5px solid var(--line);
     background: var(--card);
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
   }
 
   /* Beats the narrow rule below that stacks the two and turns Spectate into
@@ -882,7 +776,7 @@
     background: var(--card);
     border-top: 1.5px solid var(--line);
     bottom: 0;
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -890,7 +784,7 @@
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   .lobby-dock .btn {
@@ -933,32 +827,6 @@
   .lobby-rooms-panel {
     order: -1;
   }
-
-  /* Copy that reassures on a wide screen is just scroll on a narrow one. */
-  .lobby-entry-panel .create-room-lobby-copy {
-    display: none;
-  }
-
-  .lobby-entry-panel .btn-big,
-  .lobby-entry-actions > .btn-primary {
-    width: 100%;
-  }
-
-  /* Spectating is a real choice, just not the common one, and it should not
-     read as the twin of the button next to it. */
-  .lobby-entry-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .lobby-entry-actions > .btn-secondary {
-    background: none;
-    border: 0;
-    box-shadow: none;
-    min-height: 44px;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
 }
 
 
@@ -995,13 +863,7 @@
 
 /* ── Filters behind one chip ────────────────────────────────────────────
    The bar's three controls wrapped to three rows on a phone — about 110px of
-   filtering above the first room. */
-.lobby-filter-sheet-button.has-filters {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-
+   filtering above the first room. The chip is pressed while any filter is on. */
 .lobby-filter-sheet {
   display: flex;
   flex-direction: column;
@@ -1033,40 +895,6 @@
   cursor: pointer;
 }
 
-.lobby-filter-switch {
-  background: var(--line-strong);
-  border-radius: 999px;
-  flex: 0 0 auto;
-  height: 29px;
-  position: relative;
-  width: 48px;
-}
-
-.lobby-filter-switch::after {
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  content: "";
-  height: 23px;
-  left: 3px;
-  position: absolute;
-  top: 3px;
-  transition: left 140ms ease;
-  width: 23px;
-}
-
-.lobby-filter-switch.is-on {
-  background: var(--primary);
-}
-
-.lobby-filter-switch.is-on::after {
-  left: 22px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lobby-filter-switch::after { transition: none; }
-}
-
 @media (max-width: 720px) {
   /* Search and the chip share one row. */
   .lobby-filter-bar {
@@ -1096,7 +924,7 @@
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: inherit;
   cursor: pointer;
   display: inline-flex;
@@ -1113,7 +941,7 @@
 }
 
 .public-room-roster-toggle > svg:last-child {
-  transition: transform 140ms ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 .public-room-roster-toggle.is-open > svg:last-child {
@@ -1233,11 +1061,6 @@
   text-decoration-color: currentColor;
 }
 
-.lobby-chat-author:focus-visible {
-  outline: 2px solid var(--primary-edge-soft);
-  outline-offset: 1px;
-}
-
 /* A margin note, not part of the message: small, quiet, and out at the edge
    so a long line wraps under the name rather than under the time. */
 .lobby-chat-time {
@@ -1325,7 +1148,7 @@ a.online-player-name:focus-visible {
 .online-player-name.is-guest {
   color: var(--muted);
   font-style: italic;
-  font-weight: 500;
+  font-weight: 400;
   /* Room for the synthesised slant, which this row clips - see
      `.colored-player-name.is-guest` in account.css for the measurement. */
   padding-right: 0.22em;
@@ -1580,15 +1403,10 @@ a.online-player-name:focus-visible {
 }
 
 .room-list-columns {
-  color: var(--faint);
   column-gap: 18px;
   display: grid;
-  font-size: 11px;
-  font-weight: 800;
   grid-template-columns: var(--room-row-columns);
-  letter-spacing: 0.09em;
   padding: 0 20px;
-  text-transform: uppercase;
 }
 
 .public-room-card.is-row {
@@ -1614,7 +1432,7 @@ a.online-player-name:focus-visible {
 /* Says what the buttons will do, as the card's flags do: a full room has no
    Join, and joining one in progress puts you in a later turn. */
 .public-room-status {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 800;
   padding: 2px 9px;
@@ -1667,7 +1485,7 @@ a.online-player-name:focus-visible {
 }
 
 .public-room-seats small > svg {
-  transition: transform 140ms ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 .public-room-seats.is-open small > svg {
@@ -1769,13 +1587,14 @@ a.online-player-name:focus-visible {
 }
 
 /* An invitation asks a question, so it sits where a banner does rather than
-   passing by like a toast. */
+   passing by like a toast - above a phone page's dock rather than on it
+   (--dock-clearance, useBottomDock): it sat on Quick play and Create a room. */
 .friend-invite-notice {
   position: fixed;
   left: 50%;
-  bottom: 18px;
+  bottom: calc(18px + var(--dock-clearance));
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: var(--z-notice);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1827,17 +1646,13 @@ a.online-player-name:focus-visible {
   text-decoration: underline;
 }
 
-.online-player-trigger:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
-}
-
 /* The room's seat menu, restated for this list: two lists of people should
    not look like two different mechanisms. */
 .online-player-menu {
+  --focus-ring: var(--menu-ink);
   background: var(--menu);
   border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-raised);
   display: flex;
   flex-direction: column;
@@ -1847,13 +1662,13 @@ a.online-player-name:focus-visible {
   padding: 0.35rem;
   position: absolute;
   top: calc(100% + 4px);
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .online-player-menu-item {
   background: color-mix(in srgb, var(--menu-ink) 6%, transparent);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--menu-ink);
   cursor: pointer;
   display: block;
@@ -1924,7 +1739,7 @@ a.online-player-name:focus-visible {
   grid-template-columns: 260px minmax(0, 1fr);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-layout {
     grid-template-columns: 1fr;
   }
@@ -1936,7 +1751,7 @@ a.online-player-name:focus-visible {
   top: 16px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-rail {
     position: static;
   }
@@ -2051,12 +1866,7 @@ a.online-player-name:focus-visible {
 }
 
 .rules-examples-label {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
   margin: 0 0 6px;
-  text-transform: uppercase;
 }
 
 .rules-examples ul {

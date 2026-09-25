@@ -569,6 +569,7 @@ export const EN = {
     newHere: "New here? ",
     createAnAccount: "Create an account",
     guestIdentity: (p: { name: string }) => `${p.name}. Your display name is not saved.`,
+    guestNameNotSaved: "Guest name, not saved to an account",
     signedInAs: (p: { name: string }) => `Signed in as ${p.name}`,
   },
 
@@ -576,7 +577,9 @@ export const EN = {
     thatConfirmationLinkCouldNotBe: "That confirmation link could not be used.",
     somethingWentWrongPleaseTryAgain: "Something went wrong. Please try again.",
     evenBestGuessersForgetSometimes: "Even the best guessers forget sometimes.",
-    weRsquoLlSendSecureTime: "We&rsquo;ll send a secure, time-limited link to the confirmed email\n            on your account.",
+    asideForgot: "We'll send a secure, time-limited link to the confirmed email on your account.",
+    asideReset: "Choose a password you don't use anywhere else.",
+    asideVerify: "A confirmed email is your way back in if you ever forget your password.",
     backLobby: "Back to the lobby",
     enterYourUsernameYourConfirmedEmail: "Enter your username or your confirmed email address. If the\n              account can be recovered, a link is on its way.",
     usernameEmail: "Username or email",
@@ -859,8 +862,6 @@ export const EN = {
     deleteThisRoomSettingPreset: "Delete this room-setting preset?",
     deletePresetDescription: "Rooms you already created with it are not affected.",
     createTheRoom: "create the room",
-    noScoring: "No scoring",
-    public: "Public",
     private: "Private",
     backToLobby: "Back to lobby",
     leaveBlankForARandom: "Leave blank for a random name!",
@@ -868,10 +869,6 @@ export const EN = {
     createRoom2: "Create room",
     yourRoom: "Your room",
     aRandomName: "A random name",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "player", other: "players" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "round", other: "rounds" }),
   },
 
   customPromptsEditor: {
@@ -1044,7 +1041,7 @@ export const EN = {
     friends: "Friends",
     close: "Close",
     closeFriends: "Close friends",
-    friendsNeedAccountGuestNameBelongs: "Friends need an account. A guest name belongs to this browser\n              rather than to you, so there would be nobody left to be friends\n              with a month from now.",
+    friendsNeedAnAccount: "Friends need an account, so they can find you again. Create an account or sign in to add friends.",
     loading: "Loading…",
     noFriendsYetAddSomebodyFrom: "No friends yet. Add somebody from the lobby, or from a game you\n              are both in.",
     requests: "Requests",
@@ -1058,6 +1055,8 @@ export const EN = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " and ",
     continueLabel: "Continue",
     youFinished: (p: { points: number }) =>
       `You finished {place} with ${counted(p.points, { one: "point", other: "points" })}.`,
@@ -1358,8 +1357,10 @@ export const EN = {
       `${counted(p.prompts, { one: "prompt", other: "prompts" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `This list is ${p.state} and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.`,
+    underReview: "Under review",
+    hidden: "Hidden",
+    listUnderReviewWarning: "This list is under review and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.",
+    listHiddenWarning: "This list is hidden and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.",
     needsReview: (p: { count: number }) => `Needs review (${p.count})`,
     removePrompt: (p: { prompt: string }) => `Remove ${p.prompt}`,
     couldNotLoadYourPromptLists: "Could not load your prompt lists.",
@@ -1485,16 +1486,8 @@ export const EN = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "round", other: "rounds" })} · ${counted(p.players, { one: "player", other: "players" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} pts`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Rules: ${p.scoringMode} scoring${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (legacy version unknown)"
-      } · ${p.hintMode} hints · ${p.seconds} seconds · ${p.promptSource} prompts`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Rules: ${p.scoring} · ${p.hints} · ${p.seconds} seconds · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Report ${p.name}`,
     privateRoom: "private room",
     thisGameDidNotFinishSo: "This game did not finish, so these are the scores as they stood\n              when it stopped rather than a final placing.",
@@ -1516,7 +1509,8 @@ export const EN = {
     createAccount: "Create account",
     statistics: "Statistics",
     gameHistory: "Game history",
-    includeGamesThatFellApart: "Include games that fell apart",
+    includeAbandonedGames: "Include abandoned games",
+    winsAndScoresAppearAfterFirstGame: "Wins and scores appear after the first finished game.",
     notKept: "not kept",
     pinnedDrawings: "Pinned drawings",
     nothingPinnedYet: "Nothing pinned yet. Pin a drawing from a game's recap, or from a game in your history below.",
@@ -1530,13 +1524,20 @@ export const EN = {
     onlyThePlayersInThis: "Only the players in this game can see its turns.",
     couldNotLoadTheTurns: "Could not load the turns for this game.",
     cutShort: "cut short",
+    abandoned: "abandoned",
     noAttempt: "no attempt",
     joinedLate: "joined late",
-    notEligibleEligibilityReason:
-      (p: { eligibilityReason: string }) => `not eligible (${p.eligibilityReason})`,
+    notEligibleAfk: "not eligible (AFK)",
+    notEligibleDisconnected: "not eligible (disconnected)",
+    notEligible: "not eligible",
+    noGuessers: "no guessers",
+    promptSourceCurated: "Curated prompts",
+    promptSourceCustom: "Custom prompts",
+    promptSourceMixed: "Mixed prompts",
+    promptSourceBuiltinFallback: "Built-in fallback prompts",
     unknownPlayer: "Unknown player",
     backToLobby: "Back to lobby",
-    guestDisplayNameNotSaved: "Guest — display name not saved",
+    guest: "Guest",
     registeredPlayer: "Registered player",
     noFinishedGamesYetPlay: "No finished games yet. Play one and it will show up here.",
     noGamesToShowGames:
@@ -1585,7 +1586,7 @@ export const EN = {
     pickSomethingDraw: "Pick something to draw",
     autoPicksWhenTimeRunsOut: "Auto-picks when time runs out.",
     hintSpendLimitReached: "Hint spend limit reached",
-    deductedFromYourScoreIfYou: "Deducted from your score if you guess the prompt",
+    hintSpendComesOutOfTurnPoints: "Taken out of this turn's points if you guess the prompt.",
     buyLetterRevealsEveryMatch: "Buy a letter - reveals every match",
     selectThePrompt: "select the prompt",
     choosing: "Choosing…",
@@ -1623,10 +1624,9 @@ export const EN = {
     scoring: "Scoring",
     hints: "Hints",
     findPrompt: "Find a prompt",
-    rollerCoaster: "roller coaster",
     loading: "Loading…",
     prompt: "Prompt",
-    howGoes: "How it goes",
+    howHard: "How hard",
     guessed: "Guessed",
     picked: "Picked",
     drawn: "Drawn",
@@ -1638,10 +1638,6 @@ export const EN = {
     defaultScoring: "Default scoring",
     pressureScoring: "Pressure scoring",
     allHintModes: "All hint modes",
-    noHints: "No hints",
-    checkpointHints: "Checkpoint hints",
-    purchasedHints: "Purchased hints",
-    letterWheel: "Letter wheel",
     backToLobby: "Back to lobby",
   },
 
@@ -1867,7 +1863,6 @@ export const EN = {
     playersScores: "Players and scores",
     copyInviteLink: "Copy the invite link",
     saveThisDrawing: "Save this drawing",
-    settings: "Settings",
     leaveRoom: "Leave the room",
     iMBack: "I’m back",
     goAwayForABit: "Go away for a bit",
@@ -1883,6 +1878,7 @@ export const EN = {
   },
 
   roomPlayersPanel: {
+    you: "(you)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "spectator", other: "spectators" }),
     spectatorsHeading: (p: { count: number }) => `Spectators (${p.count})`,
@@ -1914,7 +1910,7 @@ export const EN = {
   },
 
   roomSetupForm: {
-    language: "Language",
+    promptLanguage: "Prompt language",
     visibility: "Visibility",
     maxPlayers: "Max players",
     rounds: "Rounds",
@@ -2065,7 +2061,6 @@ export const EN = {
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} lives in this browser only. An account keeps the name, your points and your history on every device, and lets you pick a color.`,
     systemThemeNow: (p: { theme: "dark" | "light" }) => `Now: ${p.theme}`,
-    needsAccount: "Needs an account",
     choosePicture: "Choose a picture",
     editPicture: "Edit picture",
     picture: "Picture",
@@ -2138,18 +2133,15 @@ export const EN = {
     notVerified: "Not verified",
     saving: "Saving…",
     save: "Save",
-    aGuestHasNothingTo: "A guest has nothing to recover: there is no password to forget.",
     withoutOneThereIsNo:
       "Without one there is no way back into this account if the password is forgotten.",
     addAnEmail: "Add an email",
-    guestsHaveNoPassword: "Guests have no password.",
     changingItSignsEveryOther: "Changing it signs every other device out.",
     setThisUpAndThe:
       (p: { pendingRole: string }) => `Set this up and the ${p.pendingRole} role you have been offered takes effect.`,
     anAuthenticatorAppSCode:
       "An authenticator app's code, on top of your password. Moderators and administrators must have one.",
     setUp: "Set up",
-    thisBrowserIsTheOnly: "This browser is the only place you exist.",
     everyBrowserStillHoldingA:
       "Every browser still holding a session, and a way to end any of them.",
     worksForAGuestToo: "Works for a guest too: the games you have played are yours.",
@@ -2348,18 +2340,21 @@ export const EN = {
       `${p.name} and ${counted(p.others, { one: "other", other: "others" })} want to be friends.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
+  roomVisibilityIcon: {
+    publicRoom: "Public room",
+    privateRoom: "Private room",
   },
 
   waitingRoomPanel: {
     editRoomRules: "Edit room rules",
+    editRules: "Edit rules",
+    doodle: "Doodle",
     roundCount: (p: { count: number }) =>
       counted(p.count, { one: "round", other: "rounds" }),
     needMorePlayers: (p: { count: number }) =>
       `Need ${counted(p.count, { one: "more player", other: "more players" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} will start the rematch" : "{host} will start the game",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Waiting for {host} to start the rematch" : "Waiting for {host} to start",
     copied: (p: { what: string }) => `${p.what} copied.`,
     couldNotCopy: (p: { what: string }) =>
       `Couldn’t copy the ${p.what}. Copy it from the address bar.`,
@@ -2368,6 +2363,7 @@ export const EN = {
     inviteYourFriends: "Invite your friends",
     shareLink: "Share the link",
     copyCode: "Copy code",
+    copyLink: "Copy link",
     inTheRoom: "In the room",
     you: "(you)",
     host: "Host",
@@ -2379,10 +2375,6 @@ export const EN = {
       "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.",
     joinMySketchyRoomCode: (p: { code: string }) => `Join my Sketchy room: ${p.code}`,
     inviteLink: "Invite link",
-    publicRoom: "Public room",
-    privateRoom: "Private room",
-    betweenGames: "between games",
-    waitingForPlayers: "waiting for players",
     roomCode: "Room code",
     starting: "Starting…",
     rematch: "Rematch",
@@ -2468,6 +2460,10 @@ export const EN = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds:
       (p: { roundNumber: number; totalRounds: number }) => `Round ${p.roundNumber} of ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Round ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "The next player",
@@ -2549,8 +2545,8 @@ export const EN = {
     drawerNicknameIsChoosingAPrompt:
       (p: { drawerNickname: string }) => `${p.drawerNickname} is choosing a prompt...`,
     thePromptWasPrompt: (p: { prompt: string }) => `The prompt was "${p.prompt}"`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} got it${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} got it · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} reconnected`,
     playerDisconnected: (p: { nickname: string }) =>
@@ -2588,7 +2584,7 @@ export const EN = {
     colorblindSafe: "Colorblind-safe",
     colorsThatStayApartFor: "Colors that stay apart for colorblind players.",
     blackAndWhite: "Black and white",
-    blackAndWhiteOnly: "Black and white only.",
+    twoSwatchesNoCustomColors: "Just two swatches; no custom colors.",
     allTools: "All tools",
     onlyTool: (p: { tool: string }) =>
       `${p.tool} only`,

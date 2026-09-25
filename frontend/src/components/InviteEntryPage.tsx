@@ -11,6 +11,7 @@ import { needsIdentity, useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useNameField } from "../hooks/useNameField";
+import { useBottomDock } from "../hooks/useBottomDock";
 import "../styles/lazy/toolbar.css";
 
 const INVITE_LOADING_DELAY_MS = 250;
@@ -34,6 +35,7 @@ function DelayedInviteLoader() {
 }
 
 export function InviteEntryPage({ code }: { code: string }) {
+  const dockRef = useBottomDock();
   const navigate = useNavigate();
   const { state, join, setNicknameInput } = useRoomEntry(code);
   // Another way into a room already in flight - a friend's invitation, say -
@@ -73,10 +75,10 @@ export function InviteEntryPage({ code }: { code: string }) {
       {state.status === "error" ? (
         <main className="invite-card invite-unavailable-card">
           <div className="invite-status-icon" aria-hidden="true"><XIcon size={20} /></div>
-          <p className="invite-eyebrow">{ui.inviteEntryPage.roomCode({ code })}</p>
+          <p className="section-label">{ui.inviteEntryPage.roomCode({ code })}</p>
           <h1>{ui.inviteEntryPage.roomUnavailable}</h1>
           <p>{state.message}</p>
-          <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>{ui.inviteEntryPage.backLobby}</button>
+          <button type="button" className="btn btn-primary invite-primary-button" onClick={() => navigate("/")}>{ui.inviteEntryPage.backLobby}</button>
         </main>
       ) : !room ? (
         <DelayedInviteLoader />
@@ -84,7 +86,7 @@ export function InviteEntryPage({ code }: { code: string }) {
         <main className="invite-card">
           <div className="invite-card-heading">
             <div>
-              <p className="invite-eyebrow">{room.isPublic ? ui.inviteEntryPage.publicRoom : ui.inviteEntryPage.privateInvite} · {room.code}</p>
+              <p className="section-label">{room.isPublic ? ui.inviteEntryPage.publicRoom : ui.inviteEntryPage.privateInvite} · {room.code}</p>
               <h1>{room.name}</h1>
             </div>
             <span className={`invite-state-badge ${room.state}`}>
@@ -113,7 +115,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               says; at the end of the card on a wider screen. A plain
               container, not a <form>: Enter in the field joins, and the
               account dialog brings its own form. */}
-          <div className="invite-join-form">
+          <div className="invite-join-form" ref={dockRef}>
             {asksForName && (
               <>
                 {user?.nameInUse && (
@@ -155,7 +157,7 @@ export function InviteEntryPage({ code }: { code: string }) {
             <div className="invite-actions">
               <button
                 type="button"
-                className="invite-primary-button"
+                className="btn btn-primary invite-primary-button"
                 disabled={busy || entryPending || room.isFull || !hasResolved}
                 onClick={() => void join("player")}
               >
@@ -163,7 +165,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               </button>
               <button
                 type="button"
-                className={room.isFull ? "invite-primary-button" : "invite-secondary-button"}
+                className={room.isFull ? "btn btn-primary invite-primary-button" : "btn btn-secondary invite-secondary-button"}
                 disabled={busy || entryPending || !hasResolved}
                 onClick={() => void join("spectator")}
               >

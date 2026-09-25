@@ -1,13 +1,3 @@
-:root {
-  --focus-ring: #2563eb;
-  --focus-field-border: #2563eb;
-}
-
-[data-theme="dark"] {
-  --focus-ring: #93c5fd;
-  --focus-field-border: #60a5fa;
-}
-
 .visually-hidden {
   border: 0;
   clip: rect(0 0 0 0);
@@ -21,15 +11,31 @@
   width: 1px;
 }
 
+/* The one keyboard focus ring (--focus-ring, theme.css). A component does
+   not restate it in another colour or width; a rule of its own is only for an
+   element these selectors miss - a switch track standing in for its hidden
+   checkbox, a tabindex="-1" panel, a text field - and uses the same token.
+   The native controls are here too, or they fall back to the browser's own
+   blue ring. A control drawn by something else hides itself with opacity 0,
+   which hides this outline with it, and puts the ring on what it draws. */
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible,
+input:is([type="checkbox"], [type="radio"], [type="range"], [type="color"], [type="file"]):focus-visible,
 [tabindex]:not([tabindex="-1"]):focus-visible {
   outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
-/* Text fields: blue border only — no outer halo. */
+/* Two sliders ring their thumb instead of the whole track (gallery.css,
+   settings.css). Here, after the rule above, because a suppression in the
+   components layer loses to it; `input.` to match its specificity. */
+input.gallery-replay-track:focus-visible,
+.settings-volume-control input[type="range"]:focus-visible {
+  outline: none;
+}
+
+/* Text fields: the ring's colour on the border only — no outer halo. */
 input:not(
     [type="button"],
     [type="submit"],
@@ -44,7 +50,7 @@ input:not(
   ):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  border-color: var(--focus-field-border);
+  border-color: var(--focus-ring);
   outline: none;
 }
 
@@ -58,12 +64,27 @@ select:focus-visible {
 }
 
 .chat-input-box:focus-within {
-  border-color: var(--focus-field-border);
+  border-color: var(--focus-ring);
 }
 
 .input-number:has(input:focus-visible) {
-  outline: 1px solid var(--focus-field-border);
+  outline: 1px solid var(--focus-ring);
   outline-offset: 0;
+}
+
+/* The reaction strip's circles sit 2px apart on a dark pill over the white
+   canvas, so an outset ring would land half on the canvas and on the next
+   circle; this one is drawn inside the circle, in the strip's white
+   (--focus-ring is re-pointed on .reaction-picker). */
+.reaction-option:focus-visible {
+  outline-offset: -3px;
+}
+
+/* The catalogue card's name stretches over the whole card, which wears the
+   ring instead (community-lists.css). Here rather than beside it, because a
+   suppression in the components layer loses to the global ring above. */
+.community-catalogue-card-open:focus-visible {
+  outline: none;
 }
 
 .chat-input-box input:focus-visible,

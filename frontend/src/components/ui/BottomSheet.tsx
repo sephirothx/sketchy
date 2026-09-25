@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { ReactNode, RefObject, TouchEvent } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useBackCloses } from "../../hooks/useRoomHistory";
 import { XIcon } from "../icons";
 
 interface BottomSheetProps {
@@ -70,6 +71,9 @@ export function BottomSheet({
     onEscape: onDismiss,
     initialFocusRef: initialFocusRef ?? (headerAction ? grabRef : closeRef),
   });
+  // In a room, Back closes the sheet as Escape does - on a phone it is the
+  // gesture people reach for first (R-UX-15).
+  useBackCloses(true, onDismiss);
 
   // The handle is the thing a thumb reaches for, so it both takes a tap and
   // follows a downward drag. Anything that reads as a vertical scroll rather

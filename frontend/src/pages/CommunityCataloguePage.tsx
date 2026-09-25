@@ -5,6 +5,7 @@ import { CommunityPromptsDialog } from "../components/CommunityPromptsDialog";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import { ANY_LANGUAGE, LanguagePicker } from "../components/LanguagePicker";
 import { PromptContentReportDialog } from "../components/PromptContentReportDialog";
+import { SegmentedControl } from "../components/RoomSetupControls";
 import {
   BackIcon,
   CopyIcon,
@@ -32,6 +33,7 @@ import {
   setPromptListStarred,
 } from "../lib/promptLists";
 import { refusalText } from "../lib/refusals.ts";
+import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import type {
   CommunityPromptList,
@@ -52,6 +54,7 @@ function tagName(slug: string): string {
 export function CommunityCataloguePage() {
   useDocumentTitle(ui.communityCataloguePage.communityCatalogue);
   const navigate = useNavigate();
+  const { notify } = useToast();
   const params = useParams<{ listId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
@@ -83,7 +86,6 @@ export function CommunityCataloguePage() {
   >(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<PromptTag[]>([]);
   // Bumped to ask for the rows again when a star landed against a view that
   // is no longer the one on screen. Nothing else re-reads then: the filters
@@ -305,14 +307,15 @@ export function CommunityCataloguePage() {
     if (!registered || busy) return;
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       await forkPromptList(list.id);
       const counted = <T extends CommunityPromptList>(row: T): T =>
         row.id === list.id ? { ...row, copyCount: row.copyCount + 1 } : row;
       setPage((held) => (held ? { ...held, lists: held.lists.map(counted) } : held));
       setLoaded((held) => (held && held.list.id === list.id ? { ...held, list: counted(held.list) } : held));
-      setNotice(ui.communityCataloguePage.copiedToYourLists);
+      // A toast, as Duplicate on the owner's own page says it (#817): a
+      // success is said where every other success is, and goes by itself.
+      notify(ui.communityCataloguePage.copiedToYourLists, "success");
     } catch (forkError) {
       setError(refusalText(forkError, ui.communityCataloguePage.couldNotCopyThatList));
     } finally {
@@ -334,7 +337,6 @@ export function CommunityCataloguePage() {
       </div>
 
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
-      {notice && <p className="community-catalogue-notice" role="status">{notice}</p>}
 
       <div className="community-catalogue-filters">
         {/* The app's one language control, as the lobby's room filter uses it.
@@ -354,22 +356,19 @@ export function CommunityCataloguePage() {
 
         {/* Two orders, so both are on screen: a menu that has to be opened to
             find out it holds two things is a menu for nothing. */}
-        <span className="community-catalogue-sort" role="group" aria-label={ui.communityCataloguePage.sortBy}>
-          <button
-            type="button"
-            aria-pressed={filters.sort === "stars"}
-            onClick={() => applyFilters({ ...filters, sort: "stars" })}
-          >{ui.communityCataloguePage.mostStarred}</button>
-          <button
-            type="button"
-            aria-pressed={filters.sort === "newest"}
-            onClick={() => applyFilters({ ...filters, sort: "newest" })}
-          >{ui.communityCataloguePage.newest}</button>
-        </span>
+        <SegmentedControl
+          label={ui.communityCataloguePage.sortBy}
+          value={filters.sort}
+          options={[
+            { value: "stars", label: ui.communityCataloguePage.mostStarred },
+            { value: "newest", label: ui.communityCataloguePage.newest },
+          ]}
+          onChange={(sort) => applyFilters({ ...filters, sort })}
+        />
 
         {registered && <button
           type="button"
-          className="community-catalogue-pill"
+          className="toggle-chip"
           aria-pressed={filters.starred}
           aria-label={ui.communityCataloguePage.onlyOnesIStarred}
           onClick={() => applyFilters({ ...filters, starred: !filters.starred })}
@@ -383,7 +382,7 @@ export function CommunityCataloguePage() {
             filter nobody can see is a filter nobody can turn off. */}
         {vocabulary.length > 0 && <button
           type="button"
-          className="community-catalogue-pill"
+          className="toggle-chip"
           aria-pressed={tagsOpen}
           aria-expanded={tagsOpen}
           onClick={() => setTagsOpen(!tagsOpen)}
@@ -404,7 +403,7 @@ export function CommunityCataloguePage() {
           <button
             type="button"
             key={tag.slug}
-            className={filters.tags.includes(tag.slug) ? "toggle-chip is-selected" : "toggle-chip"}
+            className="toggle-chip is-small"
             aria-pressed={filters.tags.includes(tag.slug)}
             onClick={() => applyFilters(withTag(filters, tag.slug, vocabulary.map((entry) => entry.slug)))}
           >{tagName(tag.slug)}</button>
@@ -430,7 +429,7 @@ export function CommunityCataloguePage() {
                     const metaId = `${idPrefix}-${list.id}`;
                     return <li
                       key={list.id}
-                      className={selected ? "community-catalogue-card is-selected" : "community-catalogue-card"}
+                      className={selected ? "surface-card community-catalogue-card is-selected" : "surface-card community-catalogue-card"}
                     >
                       {/* The name is the card's one real control, stretched
                           over the card, and the star is raised above it: a
@@ -469,7 +468,7 @@ export function CommunityCataloguePage() {
         </div>
 
         <div className="community-catalogue-pane-slot">
-          {selectedId && detail ? <section className="panel community-catalogue-pane">
+          {selectedId && detail ? <section className="surface-card panel community-catalogue-pane">
             <button type="button" className="btn btn-ghost btn-compact community-catalogue-back" onClick={closeList}>
               <BackIcon size={15} />{ui.communityCataloguePage.allLists}
             </button>
@@ -563,14 +562,14 @@ export function CommunityCataloguePage() {
               // Said where the list would have been, with the way out beside
               // it. On a phone the cards are hidden while a list is named in
               // the address, so without this button the page is a dead end.
-              ? <section className="panel community-catalogue-pane is-failed">
+              ? <section className="surface-card panel community-catalogue-pane is-failed">
                   <p className="community-catalogue-failure" role="alert">{openFailed.sentence}</p>
                   <button type="button" className="btn btn-secondary btn-compact" onClick={closeList}>
                     <BackIcon size={15} />{ui.communityCataloguePage.allLists}
                   </button>
                 </section>
             : selectedId
-              ? <section className="panel community-catalogue-pane">
+              ? <section className="surface-card panel community-catalogue-pane">
                   <p className="loading-note" role="status">{ui.communityCataloguePage.loading}</p>
                 </section>
               // Nothing chosen: ask, rather than open a list the reader did
@@ -592,7 +591,7 @@ export function CommunityCataloguePage() {
         onClose={() => setReporting(false)}
         onSubmitted={() => {
           setReporting(false);
-          setNotice(ui.communityCataloguePage.reportSent);
+          notify(ui.communityCataloguePage.reportSent, "success");
         }}
       />}
     </div>

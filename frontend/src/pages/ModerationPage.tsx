@@ -102,7 +102,7 @@ function DecisionCard({
   dateTime: (date: Date) => string;
 }) {
   return (
-    <section className="ops-card mod-decision" aria-label="Decision" data-testid="mod-decision">
+    <section className="surface-card ops-card mod-decision" aria-label="Decision" data-testid="mod-decision">
       <div className="mod-decision-head">
         <h2>Decision</h2>
         <OutcomeChip outcome={report.outcome} />
@@ -888,7 +888,7 @@ export function ModerationPage() {
       )}
 
       <div className="mod-layout">
-        <aside className="ops-card mod-queue" aria-label="Review queue">
+        <aside className="surface-card ops-card mod-queue" aria-label="Review queue">
           <div className="mod-queue-head">
             <div>
               <SectionLabel>Moderation</SectionLabel>
@@ -1047,7 +1047,7 @@ export function ModerationPage() {
               />
 
               <div className="mod-case-columns">
-                <section className="ops-card" aria-label="Reported evidence">
+                <section className="surface-card ops-card" aria-label="Reported evidence">
                   <ReportersPanel incident={playerCase} dateTime={dateTime} />
                   {playerCase.evidence.length > 0 && (
                     <>
@@ -1097,7 +1097,7 @@ export function ModerationPage() {
                         </p>
                       )}
                 </section>
-                <aside className="ops-card" aria-label="Account context">
+                <aside className="surface-card ops-card" aria-label="Account context">
                   <h2>Account context</h2>
                   {playerCase.reportedPlayer ? (
                     <>
@@ -1390,7 +1390,7 @@ export function ModerationPage() {
                 </div>
               </div>
 
-              <section className="ops-card" aria-label="Reported content">
+              <section className="surface-card ops-card" aria-label="Reported content">
                 <h2>Reported content</h2>
                 <blockquote className="mod-evidence">
                   <span>
@@ -1510,7 +1510,7 @@ export function ModerationPage() {
                 <p className="mod-held-description">{heldShown.description}</p>
               )}
 
-              <section className="ops-card" aria-label="The prompts">
+              <section className="surface-card ops-card" aria-label="The prompts">
                 <h2>The prompts</h2>
                 {/* Nobody complained about this list, so there is no evidence
                     panel and nothing to compare against: the prompts are the
@@ -1616,7 +1616,7 @@ export function ModerationPage() {
                 <Chip kind="warning">Waiting</Chip>
               </div>
 
-              <section className="ops-card" aria-label="The drawing">
+              <section className="surface-card ops-card" aria-label="The drawing">
                 <h2>The drawing</h2>
                 {/* Nobody complained about this drawing: it is on the way to
                     the lobby's front page because people liked it, and the
@@ -1718,7 +1718,7 @@ export function ModerationPage() {
                 </Chip>
               </div>
 
-              <section className="ops-card" aria-label="Suspension reason">
+              <section className="surface-card ops-card" aria-label="Suspension reason">
                 <h2>Why</h2>
                 <p className="mod-case-details">{banCase.reason}</p>
                 <p className="mod-evidence-caption">
@@ -1781,7 +1781,7 @@ export function ModerationPage() {
             to that queue, where the case is, rather than showing a closed case
             beside an open queue. */}
         {showsRecentDecisions && (
-          <aside className="ops-card mod-recent" aria-labelledby="mod-recent-title">
+          <aside className="surface-card ops-card mod-recent" aria-labelledby="mod-recent-title">
             <div className="mod-queue-head">
               <div>
                 <SectionLabel>Closed</SectionLabel>

@@ -140,7 +140,7 @@ export function RulesPage() {
                   ))}
                   {rule.examples.length > 0 && (
                     <div className="rules-examples">
-                      <p className="rules-examples-label">{ui.rulesPage.forExample}</p>
+                      <p className="section-label rules-examples-label">{ui.rulesPage.forExample}</p>
                       <ul>
                         {rule.examples.map((example) => (
                           <li key={example}>{example}</li>

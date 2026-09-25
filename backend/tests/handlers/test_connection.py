@@ -303,9 +303,12 @@ async def test_sync_game_restores_who_has_guessed_and_this_seats_receipt():
     assert room.game.current_drawer == drawer.id
     assert room.game.buy_hint_letter(second.id, 0) is True
     spend = room.game.hint_spend[second.id]
-    room.game.set_phase_deadline(DRAWING_SECONDS - 7)
+    # The clock is pinned rather than set as a deadline: the times travel in
+    # tenths, so a deadline would leave the test 50 ms of slack before 7.0
+    # read 7.1.
+    room.game.remaining_seconds = lambda: DRAWING_SECONDS - 7
     assert room.game.submit_guess(first.id, room.game.prompt)[0] is True
-    room.game.set_phase_deadline(DRAWING_SECONDS - 19)
+    room.game.remaining_seconds = lambda: DRAWING_SECONDS - 19
     correct, points = room.game.submit_guess(second.id, room.game.prompt)
     assert correct is True
 
@@ -322,7 +325,7 @@ async def test_sync_game_restores_who_has_guessed_and_this_seats_receipt():
         )
 
     guessed = await sync_for(second)
-    assert guessed["correctGuessers"] == [[first.id, 7], [second.id, 19]]
+    assert guessed["correctGuessers"] == [[first.id, 7.0], [second.id, 19.0]]
     assert guessed["guessed"] == {
         "prompt": room.game.prompt,
         "points": points,
@@ -331,7 +334,7 @@ async def test_sync_game_restores_who_has_guessed_and_this_seats_receipt():
     }
 
     still_guessing = await sync_for(waiting)
-    assert still_guessing["correctGuessers"] == [[first.id, 7], [second.id, 19]]
+    assert still_guessing["correctGuessers"] == [[first.id, 7.0], [second.id, 19.0]]
     assert still_guessing["guessed"] is None
 
 

@@ -17,7 +17,9 @@ export interface ToastAction {
 export interface ToastContextValue {
   notify: (
     message: string,
-    tone?: ToastTone,
+    // Required: a failure left on the default rendered as blue news with
+    // role="status" rather than red with role="alert", and nothing noticed.
+    tone: ToastTone,
     durationMs?: number,
     action?: ToastAction,
   ) => void;

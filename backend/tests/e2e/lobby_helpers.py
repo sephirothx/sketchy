@@ -117,6 +117,18 @@ async def room_code(page) -> str:
     return (await header.get_attribute("data-room-code") or "").strip()
 
 
+async def room_name(page) -> str:
+    """The current room's name, from the room bar's `data-room-name`.
+
+    A desktop's bar prints the name only above 1100px, and the waiting room's
+    heading shows it only on a phone (the bar says it there otherwise), so
+    the attribute is the one place that holds it at every width.
+    """
+    header = page.locator(f"{ROOM_HEADER}[data-room-name]")
+    await header.wait_for()
+    return (await header.get_attribute("data-room-name") or "").strip()
+
+
 async def open_room_menu(page):
     """Open the Room menu - the desktop dropdown or the phone's sheet, which
     share a test id and hold the same rows - and return it."""
@@ -140,14 +152,10 @@ async def leave_room(page) -> None:
 
 async def open_player_settings(page) -> None:
     """Open Player settings from the identity chip's menu, where the gear
-    folded in (#580). In a room on a phone the chip is not in the bar, so the
-    Room menu's Settings row is the way in there."""
-    chip = page.locator(".identity-chip").first
-    if await chip.is_visible():
-        await chip.click()
-        await page.locator(".header-settings-button").first.click()
-        return
-    await room_menu_action(page, "Settings")
+    folded in (#580). The chip is in every bar, a room's on a phone included,
+    and it is the only way in: the Room menu has no Settings row."""
+    await page.locator(".identity-chip").first.click()
+    await page.locator(".header-settings-button").first.click()
 
 
 async def open_room_settings(page) -> None:

@@ -85,7 +85,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       });
       const session = sessionFrom(answer);
       if (!session) {
-        notify(refusalText(answer, ui.onlinePlayersPanel.couldNotJoinThatGame));
+        notify(refusalText(answer, ui.onlinePlayersPanel.couldNotJoinThatGame), "error");
         return;
       }
       // The seat is already taken by the time this answers, so the page has
@@ -93,16 +93,16 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify(ui.onlinePlayersPanel.couldNotJoinThatGame);
+      notify(ui.onlinePlayersPanel.couldNotJoinThatGame, "error");
     } finally {
       useRoomEntryStore.getState().end(token);
     }
   }
 
   return (
-    <section className="panel lobby-online-panel" aria-labelledby="online-heading">
+    <section className="surface-card panel lobby-online-panel" aria-labelledby="online-heading">
       <div className="lobby-rooms-heading">
-        <h2 id="online-heading">{ui.onlinePlayersPanel.whoOnline}</h2>
+        <h2 id="online-heading" className="panel-title">{ui.onlinePlayersPanel.whoOnline}</h2>
         {/* The true total, not the number of rows: a cap must never read as a
             quiet server (R-PRESENCE-04). Nothing when the rows are everybody. */}
         {summary && <span className="lobby-rooms-count">{summary}</span>}

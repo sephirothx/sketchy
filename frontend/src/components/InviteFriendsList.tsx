@@ -46,12 +46,12 @@ export function InviteFriendsList() {
       );
       if (answer?.ok) {
         setInvited((current) => new Set(current).add(userId));
-        notify(ui.inviteFriendsList.invitationSent({ name: displayName }));
+        notify(ui.inviteFriendsList.invitationSent({ name: displayName }), "success");
       } else {
-        notify(refusalText(answer, ui.inviteFriendsList.invitationCouldNotBeSent));
+        notify(refusalText(answer, ui.inviteFriendsList.invitationCouldNotBeSent), "error");
       }
     } catch {
-      notify(ui.inviteFriendsList.thatInvitationCouldNotBeSent);
+      notify(ui.inviteFriendsList.thatInvitationCouldNotBeSent, "error");
     } finally {
       setSending(null);
     }
@@ -59,7 +59,7 @@ export function InviteFriendsList() {
 
   return (
     <div className="waiting-invite-friends">
-      <p className="waiting-invite-friends-label">{ui.inviteFriendsList.friendsLobby}</p>
+      <p className="section-label waiting-invite-friends-label">{ui.inviteFriendsList.friendsLobby}</p>
       <ul className="waiting-invite-friends-list" data-testid="invite-friends">
         {invitable.map((friend) => (
           <li key={friend.userId}>

@@ -167,7 +167,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
     const open = Math.max(0, room.maxPlayers - room.playerCount);
     const status = full ? "full" : playing ? "playing" : "waiting";
     return (
-      <article className="public-room-card is-row" data-testid="public-room-card">
+      <article className="surface-card public-room-card is-row" data-testid="public-room-card">
         <div className="public-room-row-room">
           {name}
           <span className={`public-room-status is-${status}`}>
@@ -223,7 +223,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
   }
 
   return (
-    <article className="public-room-card" data-testid="public-room-card">
+    <article className="surface-card public-room-card" data-testid="public-room-card">
       <div className="public-room-card-main">
         {name}
         <p className="public-room-facts">
