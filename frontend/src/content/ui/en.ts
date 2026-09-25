@@ -1274,7 +1274,6 @@ export const EN = {
     alphabetical: "A–Z",
     noPromptMatches: (p: { query: string }) => `No prompt contains “${p.query}”.`,
     allLists: "All lists",
-    close: "Close",
   },
   galleryPage: {
     gallery: "Gallery",
@@ -1806,7 +1805,7 @@ export const EN = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "You have been signed out on every device so the change can take\n            effect. Sign in again to carry on.",
     setUpNow: "Set it up now",
-    later: "Later",
+    notNow: "Not now",
     oneMoment: "One moment…",
     signInAgain: "Sign in again",
     understood: "Understood",

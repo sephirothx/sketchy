@@ -422,17 +422,6 @@
    come from there; only the row of destructive-ish actions is described. */
 .two-factor-manage { text-align: left; }
 
-/* An offer asks something, so it has two ways on rather than one
-   acknowledgement. Laid out like the setup dialog's pair, for the same
-   reason: the thing to do first reads first. */
-.role-notice-decide {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 16px;
-}
-.role-notice-decide .modal-button { margin: 0; }
 
 /* The passkey route, above the fields it replaces. */
 .auth-passkey { width: 100%; }

@@ -1261,7 +1261,6 @@ export const DE: Catalogue = {
     alphabetical: "A–Z",
     noPromptMatches: (p: { query: string }) => `Kein Begriff enthält „${p.query}“.`,
     allLists: "Alle Listen",
-    close: "Schließen",
   },
   galleryPage: {
     gallery: "Galerie",
@@ -1800,7 +1799,7 @@ export const DE: Catalogue = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Du wurdest auf allen Geräten abgemeldet, damit die Änderung greift.\n            Melde dich wieder an, um weiterzumachen.",
     setUpNow: "Jetzt einrichten",
-    later: "Später",
+    notNow: "Jetzt nicht",
     oneMoment: "Einen Moment …",
     signInAgain: "Erneut anmelden",
     understood: "Verstanden",

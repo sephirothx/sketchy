@@ -127,6 +127,11 @@ export function useFocusTrap(
       ?? getFocusableElements(container)[0]
       ?? container;
     initial.focus();
+    // The element asked for can refuse focus - a button still disabled while
+    // the dialog loads - which would leave focus on the page behind it.
+    if (!container.contains(document.activeElement)) {
+      (getFocusableElements(container)[0] ?? container).focus();
+    }
 
     const layer: TabLayer = { container };
     tabStack.push(layer);

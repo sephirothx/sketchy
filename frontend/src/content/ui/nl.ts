@@ -1261,7 +1261,6 @@ export const NL: Catalogue = {
     alphabetical: "A–Z",
     noPromptMatches: (p: { query: string }) => `Geen woord bevat ‘${p.query}’.`,
     allLists: "Alle lijsten",
-    close: "Sluiten",
   },
   galleryPage: {
     gallery: "Galerij",
@@ -1800,7 +1799,7 @@ export const NL: Catalogue = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Je bent op elk apparaat uitgelogd zodat de wijziging effect heeft.\n            Log opnieuw in om verder te gaan.",
     setUpNow: "Nu instellen",
-    later: "Later",
+    notNow: "Nu niet",
     oneMoment: "Een moment…",
     signInAgain: "Opnieuw inloggen",
     understood: "Begrepen",

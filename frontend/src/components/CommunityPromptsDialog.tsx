@@ -1,12 +1,12 @@
-import { useId, useMemo, useRef, useState } from "react";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useMemo, useRef, useState } from "react";
+import { ModalShell } from "./ui/ModalShell";
 import {
   findInPrompt,
   groupAlphabetically,
   type PromptMatch,
 } from "../lib/communityLists";
 import type { CommunityPromptListDetail, PublishedPromptEntry } from "../types";
-import { SearchIcon, XIcon } from "./icons";
+import { SearchIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/community-lists.css";
 
@@ -33,14 +33,11 @@ export function CommunityPromptsDialog({
   list: CommunityPromptListDetail;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const searchRef = useRef<HTMLInputElement | null>(null);
-  const titleId = useId();
   const [query, setQuery] = useState("");
   const [order, setOrder] = useState<Order>("author");
 
   // Focus starts in the search: the dialog exists to find something in it.
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: searchRef });
 
   const searching = query.trim().length > 0;
   const found = useMemo<Found[]>(() => {
@@ -66,76 +63,58 @@ export function CommunityPromptsDialog({
     </li>
   );
 
-  return <div className="modal-overlay" onMouseDown={(event) => {
-    if (event.target === event.currentTarget) onClose();
-  }}>
-    <div
-      ref={dialogRef}
-      className="modal-card community-prompts-dialog"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby={titleId}
-      tabIndex={-1}
-    >
-      <header className="community-prompts-dialog-head">
-        <div>
-          <p className="section-label">{list.name}</p>
-          <h2 id={titleId}>{ui.communityCataloguePage.allPrompts({ count: list.prompts.length })}</h2>
-        </div>
+  return <ModalShell
+    title={ui.communityCataloguePage.allPrompts({ count: list.prompts.length })}
+    eyebrow={list.name}
+    cardClassName="community-prompts-dialog"
+    onDismiss={onClose}
+    initialFocusRef={searchRef}
+  >
+    <div className="community-prompts-dialog-tools">
+      <label className="community-prompts-search">
+        <SearchIcon size={16} />
+        <input
+          ref={searchRef}
+          type="search"
+          value={query}
+          placeholder={ui.communityCataloguePage.searchPrompts}
+          aria-label={ui.communityCataloguePage.searchPrompts}
+          maxLength={32}
+          onChange={(event) => setQuery(event.target.value)}
+        />
+        {/* How many of the whole are left, so an empty grid is never a
+            question of whether the list is empty or the search is. */}
+        {searching && <span className="community-prompts-search-count" aria-live="polite">
+          {ui.communityCataloguePage.matchesOfTotal({ matches: found.length, total: list.prompts.length })}
+        </span>}
+      </label>
+      <span className="community-catalogue-sort" role="group" aria-label={ui.communityCataloguePage.order}>
         <button
           type="button"
-          className="btn btn-icon btn-compact"
-          aria-label={ui.communityCataloguePage.close}
-          onClick={onClose}
-        ><XIcon size={16} /></button>
-      </header>
-
-      <div className="community-prompts-dialog-tools">
-        <label className="community-prompts-search">
-          <SearchIcon size={16} />
-          <input
-            ref={searchRef}
-            type="search"
-            value={query}
-            placeholder={ui.communityCataloguePage.searchPrompts}
-            aria-label={ui.communityCataloguePage.searchPrompts}
-            maxLength={32}
-            onChange={(event) => setQuery(event.target.value)}
-          />
-          {/* How many of the whole are left, so an empty grid is never a
-              question of whether the list is empty or the search is. */}
-          {searching && <span className="community-prompts-search-count" aria-live="polite">
-            {ui.communityCataloguePage.matchesOfTotal({ matches: found.length, total: list.prompts.length })}
-          </span>}
-        </label>
-        <span className="community-catalogue-sort" role="group" aria-label={ui.communityCataloguePage.order}>
-          <button
-            type="button"
-            aria-pressed={order === "author"}
-            onClick={() => setOrder("author")}
-          >{ui.communityCataloguePage.authorsOrder}</button>
-          <button
-            type="button"
-            aria-pressed={order === "alphabetical"}
-            onClick={() => setOrder("alphabetical")}
-          >{ui.communityCataloguePage.alphabetical}</button>
-        </span>
-      </div>
-
-      <div className="community-prompts-dialog-body">
-        {found.length === 0
-          ? <p className="community-catalogue-empty">{ui.communityCataloguePage.noPromptMatches({ query: query.trim() })}</p>
-          : groups
-            ? groups.map((group) => (
-                <section key={group.initial} className="community-prompts-group">
-                  <h3 className="community-prompts-letter">{group.initial}</h3>
-                  <ul className="community-catalogue-prompts">{group.entries.map(cell)}</ul>
-                </section>
-              ))
-            : <ul className="community-catalogue-prompts">{found.map(cell)}</ul>}
-      </div>
+          aria-pressed={order === "author"}
+          onClick={() => setOrder("author")}
+        >{ui.communityCataloguePage.authorsOrder}</button>
+        <button
+          type="button"
+          aria-pressed={order === "alphabetical"}
+          onClick={() => setOrder("alphabetical")}
+        >{ui.communityCataloguePage.alphabetical}</button>
+      </span>
     </div>
-  </div>;
+
+    <div className="community-prompts-dialog-body">
+      {found.length === 0
+        ? <p className="community-catalogue-empty">{ui.communityCataloguePage.noPromptMatches({ query: query.trim() })}</p>
+        : groups
+          ? groups.map((group) => (
+              <section key={group.initial} className="community-prompts-group">
+                <h3 className="community-prompts-letter">{group.initial}</h3>
+                <ul className="community-catalogue-prompts">{group.entries.map(cell)}</ul>
+              </section>
+            ))
+          : <ul className="community-catalogue-prompts">{found.map(cell)}</ul>}
+    </div>
+  </ModalShell>;
 }
 
 /** A prompt with the part the search found marked, cut by code point so an
