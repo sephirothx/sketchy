@@ -192,6 +192,21 @@ def test_quickest_on_average_ignores_a_player_with_a_single_guess():
     assert quickest["seconds"] == 8.0
 
 
+def test_quickest_on_average_rounds_the_average_not_each_guess():
+    """Tenths are for the wire, not for the arithmetic: 3.04, 3.04 and 3.14
+    average 3.0733 and read 3.1s. Rounding each guess first would give 3.0."""
+    _, room, players, game = build(("Ana", False), ("Bo", False), ("Cy", False))
+    ana, bo, cy = players["Ana"].id, players["Bo"].id, players["Cy"].id
+    game.completed_turns = [
+        turn(ana, number=1, correct=2, total=2, guesses=(guess(bo, 3.04), guess(cy, 9.0))),
+        turn(ana, number=2, correct=2, total=2, guesses=(guess(bo, 3.04), guess(cy, 9.0))),
+        turn(cy, number=3, correct=1, total=2, guesses=(guess(bo, 3.14),)),
+    ]
+    quickest = only(build_game_highlights(room, game), "quickest_average")
+    assert quickest["nickname"] == "Bo"
+    assert quickest["seconds"] == 3.1
+
+
 def test_quickest_on_average_needs_two_players_to_rank():
     _, room, players, game = build(("Ana", False), ("Bo", False))
     ana, bo = players["Ana"].id, players["Bo"].id
