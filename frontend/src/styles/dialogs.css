@@ -27,6 +27,9 @@
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
   padding: 20px 24px;
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
   max-width: 420px;
   max-height: 90dvh;
   width: calc(100% - 32px);
@@ -155,7 +158,6 @@
   font-size: 12px;
   margin: 0;
 }
-
 
 /* A select inside a dialog form, drawn like the textarea beside it. The
    report dialogs referred to a class nothing defined, so the control came

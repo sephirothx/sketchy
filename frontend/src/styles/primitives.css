@@ -59,12 +59,6 @@
   font-size: 14px;
 }
 
-.btn-danger {
-  background: var(--danger-button);
-  color: #fff;
-  box-shadow: 0 2px 0 var(--danger-button-edge);
-}
-
 .btn-danger-ghost {
   background: transparent;
   color: var(--danger);
@@ -79,10 +73,6 @@
   background: var(--danger-button);
   color: #fff;
   box-shadow: 0 2px 0 var(--danger-button-edge);
-}
-
-.btn-danger:where(:active:not(:disabled)) {
-  box-shadow: 0 1px 0 var(--danger-button-edge);
 }
 
 .btn-icon {
@@ -266,11 +256,10 @@
   color: var(--primary-ink);
 }
 
-.toggle-chip:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
+/* Lighter than --opacity-disabled on purpose: the chip disabled here is
+   usually the only list still selected, which cannot be unselected. It is
+   locked on rather than unavailable, and has to keep reading as selected.
+   Where disabled does mean unavailable (the tag picker) the token applies. */
 .toggle-chip:disabled {
   cursor: default;
   opacity: 0.85;
@@ -503,11 +492,6 @@
   font-weight: 800;
 }
 
-.segmented-control button:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 /* The two copies stack in one cell: the hidden one is always bold, so the
    segment is as wide when it is off as when it is on and the row does not
    move under the pointer that just pressed it. */
@@ -573,7 +557,7 @@ input:checked ~ .switch-track .switch-thumb,
 }
 
 input:focus-visible ~ .switch-track {
-  outline: 3px solid var(--primary-edge-soft);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
