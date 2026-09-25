@@ -83,7 +83,7 @@ export interface TurnParticipantOutcome {
   eligible: boolean;
   eligibilityReason: "eligible" | "afk" | "disconnected" | "joined_late";
   outcome: "correct" | "incorrect" | "no_attempt" | "ineligible";
-  terminalState: "active" | "afk" | "disconnected" | "left" | "legacy_unknown";
+  terminalState: "active" | "afk" | "disconnected" | "left";
   correctGuessTimeSeconds: number | null;
   wrongGuessCount: number;
   nearMissCount: number;
@@ -117,7 +117,7 @@ export interface GameTurn {
   prompt: string;
   durationSeconds: number;
   promptVersionId: string | null;
-  promptSourceKind: "legacy_unknown" | "curated" | "custom" | "builtin_fallback";
+  promptSourceKind: "curated" | "custom" | "builtin_fallback";
   strokeCount: number;
   /** Absent for turns played before drawings were kept. */
   drawingStatus: "ready" | "unavailable" | "deleted" | "pending" | "failed" | null;

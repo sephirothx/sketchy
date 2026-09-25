@@ -1524,7 +1524,7 @@ export const ES: Catalogue = {
     notEligibleAfk: "no computa (AFK)",
     notEligibleDisconnected: "no computa (desconectado)",
     notEligible: "no computa",
-    noGuessers: "nadie adivinaba",
+    noGuessers: "nadie para adivinar",
     promptSourceCurated: "Palabras seleccionadas",
     promptSourceCustom: "Palabras propias",
     promptSourceMixed: "Palabras mixtas",

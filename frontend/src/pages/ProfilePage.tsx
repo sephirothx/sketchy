@@ -256,10 +256,15 @@ function GameRow({
           <p className="profile-note">
             {/* The same labels the room was set up with. The scoring version
                 is left out: it tells an operator which algorithm produced
-                the points, and a player nothing. */}
+                the points, and a player nothing. Whether the letter tiles
+                were hidden is only in the rule snapshot, so until the detail
+                arrives the hint mode stands on its own. */}
             {ui.profilePage.gameRules({
               scoring: scoringNameFor(game.scoringMode),
-              hints: hintLabelFor(game.hintMode, false),
+              hints: hintLabelFor(
+                game.hintMode,
+                Boolean(detail && "prompt" in detail.ruleSnapshot && detail.ruleSnapshot.prompt.hideMaskedPrompt),
+              ),
               seconds: game.drawingSeconds,
               promptSource: promptSourceLabel(game.promptSourceMode),
             })}

@@ -1354,7 +1354,7 @@ export const FR: Catalogue = {
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
     underReview: "En examen",
-    hidden: "Masqué",
+    hidden: "Invisible",
     listUnderReviewWarning: "Cette liste est en cours d'examen et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l'examiner.",
     listHiddenWarning: "Cette liste est masquée et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l'examiner.",
     needsReview: (p: { count: number }) => `À examiner (${p.count})`,
@@ -1524,7 +1524,7 @@ export const FR: Catalogue = {
     notEligibleAfk: "non comptabilisé (AFK)",
     notEligibleDisconnected: "non comptabilisé (déconnecté)",
     notEligible: "non comptabilisé",
-    noGuessers: "personne ne devinait",
+    noGuessers: "personne pour deviner",
     promptSourceCurated: "Mots sélectionnés",
     promptSourceCustom: "Mots personnalisés",
     promptSourceMixed: "Mots mixtes",
