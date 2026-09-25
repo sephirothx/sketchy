@@ -32,17 +32,11 @@ import {
 } from "../components/LanguagePicker";
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { showsRoomCount, showsRoomFilters } from "../lib/lobbyControls.ts";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 const ROOM_CODE_LENGTH = 6;
-
-/** How many open rooms it takes before the list offers search and filters.
-    With one room open a phone showed a search field, a Filters button and
-    "Showing 1 of 1" above a list that fit on the screen: three controls with
-    nothing to act on. Six is about where the list runs past a phone's first
-    screen, and where finding one room by name starts to beat reading. */
-const ROOM_FILTERS_FROM = 6;
 
 
 function normalizeRoomCodeInput(value: string): string {
@@ -232,10 +226,16 @@ export function LobbyBrowserPage() {
   // sight in a sheet never looks like a list with nothing in it.
   const activeFilterCount =
     (languageFilter !== ANY_LANGUAGE ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
-  // Kept while anything narrows the list, or a list that a filter took below
-  // the threshold would hide the very control that widens it again.
-  const showRoomFilters =
-    rooms.length >= ROOM_FILTERS_FROM || activeFilterCount > 0 || searchQuery.trim() !== "";
+  // From six rooms, while anything narrows the list, and for the rest of the
+  // page's life once shown (lib/lobbyControls.ts): the list changes every
+  // second, and the box must not unmount under somebody typing in it.
+  const [roomFiltersShown, setRoomFiltersShown] = useState(false);
+  const showRoomFilters = showsRoomFilters({
+    roomCount: rooms.length,
+    narrowing: activeFilterCount > 0 || searchQuery !== "",
+    alreadyShown: roomFiltersShown,
+  });
+  if (showRoomFilters && !roomFiltersShown) setRoomFiltersShown(true);
   // Everything that narrows the list, the search included: what a list with
   // nothing left in it offers to undo.
   function clearRoomFilters() {
@@ -447,7 +447,7 @@ export function LobbyBrowserPage() {
           {/* Only when it says something the list does not: how many a filter
               left out. "0 rooms" beside "No public rooms yet", and "Showing 1
               of 1" above one room, only repeated what was under them. */}
-          {roomsState.loaded && filteredRooms.length < rooms.length && (
+          {showsRoomCount({ loaded: roomsState.loaded, shown: filteredRooms.length, total: rooms.length }) && (
             <span className="lobby-rooms-count">
               {ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length })}
             </span>

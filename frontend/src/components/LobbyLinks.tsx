@@ -1,5 +1,6 @@
 import { Link } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
+import { linksToGallery } from "../lib/lobbyControls.ts";
 import { BarChartIcon, ImageIcon, InfoIcon, StarIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 
@@ -18,7 +19,7 @@ import { ui } from "../content/ui/index.ts";
  * refusal (R-GAL-02), and a link to a refusal is not a way anywhere.
  */
 export function LobbyLinks() {
-  const hasSession = useAuthStore((state) => state.user !== null);
+  const hasSession = useAuthStore((state) => linksToGallery(state.user));
   return (
     <nav className="lobby-links" aria-label={ui.lobbyBrowserPage.moreFromSketchy}>
       <ul>
