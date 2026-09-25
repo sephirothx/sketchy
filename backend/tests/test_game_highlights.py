@@ -135,7 +135,9 @@ def test_fastest_guess_names_the_player_and_the_prompt():
     fastest = only(build_game_highlights(room, game), "fastest_guess")
     assert fastest["nickname"] == "Ana"
     assert fastest["prompt"] == "dog"
-    assert fastest["seconds"] == 2.25
+    # Tenths, as correct_guess and the results card carry it: two places let
+    # the client round again and disagree with the chat (3.249 -> 3.25 -> 3.3s).
+    assert fastest["seconds"] == 2.2
 
 
 def test_no_correct_guesses_produces_no_guess_highlights():

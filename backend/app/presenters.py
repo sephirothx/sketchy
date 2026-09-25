@@ -126,6 +126,15 @@ def turn_payload(
     }
 
 
+def guess_time_on_wire(seconds: float) -> float:
+    """A guess time as every payload carries it: tenths of a second.
+
+    The client shows tenths, and a payload that sent more let it round a
+    second time - 3.249 went out as 3.25 on a highlight and read 3.3s there
+    while the chat said 3.2s. Rounded once, here, every surface agrees."""
+    return round(seconds, 1)
+
+
 def guess_seconds(game: Game, token: str) -> float:
     """How far into the drawing `token` guessed, as every surface shows it.
 
@@ -134,7 +143,7 @@ def guess_seconds(game: Game, token: str) -> float:
     each client used to time `correct_guess` on its own clock, rounded to
     whole seconds. Tenths, because that is what the results card shows and
     anything finer is noise in the event loop's own latency."""
-    return round(game.guess_times.get(token, 0.0), 1)
+    return guess_time_on_wire(game.guess_times.get(token, 0.0))
 
 
 def correct_guess_payload(game: Game, player: Player, points: int) -> dict:
