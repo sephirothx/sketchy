@@ -2050,7 +2050,10 @@ scrolls, the bar still moves by half a lane between that page and the pinned
 lobby, as every centred column does. A container that clips has to leave
 the header's sideways reach alone — the pinned lobby clips top to bottom only
 (`overflow-y: clip`), since `overflow: hidden` cut the wordmark and the chip
-off at laptop widths. Rules is a reading page at 928px; its width is stated as
+off at laptop widths. The space under the bar is one value, `--header-space`
+(26px), on every page and at every width; a layout that puts a gap of its own
+under the bar - the pinned lobby's flex gap - subtracts it from the bar's
+margin rather than adding to it. Rules is a reading page at 928px; its width is stated as
 `.ops-page.rules-page`, because `operator.css` arrives in the page's own chunk
 after the entry sheet, and a lone `.rules-page` lost that tie and ran to the
 shell. The wordmark is a link, not a heading: a player's page has one `<h1>`,

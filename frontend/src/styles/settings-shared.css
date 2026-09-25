@@ -6,7 +6,12 @@
   justify-content: space-between;
   align-items: flex-end;
   gap: 16px;
-  margin-bottom: 26px;
+  /* The space between the bar and the page under it, the same on every page
+     and at every width. A layout that puts a gap of its own under the bar
+     (the pinned lobby's flex gap) takes that gap off this, rather than
+     adding to it: it used to, and the lobby's rooms dropped 16px at 901px. */
+  --header-space: 26px;
+  margin-bottom: var(--header-space);
   /* One bar on every page. Each page keeps its own content width (#581), and
      the bar used to take whatever that was, so the wordmark and the identity
      chip jumped sideways between the lobby, the Gallery, Create and Rules.

@@ -516,7 +516,7 @@
    here rather than reaching out to it: the same place as on every other page. */
 .invite-entry-page .lobby-header {
   max-width: var(--shell-width);
-  margin: 0 auto 28px;
+  margin: 0 auto var(--header-space);
 }
 
 .invite-card {
@@ -1381,6 +1381,13 @@ a.online-player-name:focus-visible {
     margin-bottom: 0;
   }
 
+  /* The bar's space less the gap under it, so the rooms sit as far below
+     the bar as they do on a phone and on every other page: gap and margin
+     added up to 42px, and the rooms jumped 16px down at 901px. */
+  .lobby-page > .lobby-header {
+    margin-bottom: calc(var(--header-space) - 16px);
+  }
+
   /* Chrome keeps its height; only the lists give ground. */
   .lobby-page > .lobby-header,
   .lobby-page > .first-run,
@@ -1454,8 +1461,8 @@ a.online-player-name:focus-visible {
 
    Every row is placed by hand, because a gap would also open above a first-run
    block or an error that is not there. So the rows have no gap and each item
-   above the columns brings its own margin, the header keeping the 16px the
-   pinned lobby's gap added to its own 26. The chat comes first in the markup,
+   above the columns brings its own margin, the header its usual
+   `--header-space`. The chat comes first in the markup,
    which is the order a phone stacks them in; on this column the list of
    people is the short one, so it goes on top. */
 @media (min-width: 1500px) {
@@ -1472,7 +1479,7 @@ a.online-player-name:focus-visible {
   .lobby-page > .lobby-header {
     grid-column: 1 / -1;
     grid-row: 1;
-    margin-bottom: 42px;
+    margin-bottom: var(--header-space);
   }
 
   .lobby-page > .first-run {

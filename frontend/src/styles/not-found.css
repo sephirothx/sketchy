@@ -11,7 +11,7 @@
    on every other page. */
 .not-found-page .lobby-header {
   max-width: var(--shell-width);
-  margin: 0 auto 28px;
+  margin: 0 auto var(--header-space);
 }
 
 .not-found-card {
