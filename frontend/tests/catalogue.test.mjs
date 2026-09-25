@@ -303,6 +303,30 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
       ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken,
       ts.SyntaxKind.GreaterThanToken].includes(condition.operatorToken.kind)
     && [condition.left, condition.right].some((side) => ts.isNumericLiteral(side) && side.text === "1");
+  // `{outcome === "abandoned" ? "abandoned" : ui.x.cutShort}`: one lowercase
+  // word is what a class name or an enum value looks like, so the sentence
+  // test lets it through - but a value that lands between JSX tags is read,
+  // whatever it looks like. Followed up through the branches, fallbacks and
+  // parentheses that choose it, and not past anything else.
+  const renderedAsText = (node) => {
+    let child = node;
+    let parent = node.parent;
+    for (;;) {
+      if (ts.isParenthesizedExpression(parent)) {
+        // Nothing to check: the parentheses only group.
+      } else if (ts.isConditionalExpression(parent)) {
+        if (parent.condition === child) return false;
+      } else if (ts.isBinaryExpression(parent)) {
+        const op = parent.operatorToken.kind;
+        if (parent.right !== child || ![ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken,
+          ts.SyntaxKind.AmpersandAmpersandToken].includes(op)) return false;
+      } else {
+        return ts.isJsxExpression(parent) && !ts.isJsxAttribute(parent.parent);
+      }
+      child = parent;
+      parent = parent.parent;
+    }
+  };
   const wordOrNothing = (branch) => (ts.isStringLiteral(branch) || ts.isNoSubstitutionTemplateLiteral(branch))
     && /^[\p{L} ]*$/u.test(branch.text);
   const visit = (node) => {
@@ -319,6 +343,10 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
         const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
         found.push(`${relative(ROOT, path)}:${line} ${where} ${node.getText(source).slice(0, 50)}`);
       }
+    } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      && /[A-Za-z]{2}/.test(node.text) && renderedAsText(node) && !excused(node)) {
+      const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+      found.push(`${relative(ROOT, path)}:${line} rendered ${node.getText(source).slice(0, 50)}`);
     }
     ts.forEachChild(node, visit);
   };
@@ -362,6 +390,9 @@ test("the table scan would notice a sentence put back", () => {
     "parts.push(`${customPrompts.analysis.usableCount} custom`);",
     "const el = <span title={isAnonymous ? `${nickname} (guest)` : undefined} />;",
     "const highlight = { label: ui.x.y, value: `${correct} of ${total} guessed it` };",
+    // One lowercase word, rendered: what the profile's game history showed.
+    'const el = <span>{outcome === "abandoned" ? "abandoned" : ui.x.cutShort}</span>;',
+    'const el = <td>{rows.length > 0 ? rows : "unknown"}</td>;',
   ]) {
     assert.ok(probe(snippet), `the table scan cannot see: ${snippet}`);
   }
@@ -376,6 +407,8 @@ test("the table scan would notice a sentence put back", () => {
     'const size = place === 1 ? 52 : 42;',
     'const color = rank === 1 ? "var(--gold)" : null;',
     '// Not copy: a filename.\nconst f = "Sketchy recovery codes.txt";',
+    'const el = <div className={open ? "open" : "closed"} />;',
+    'const el = <span>{kind === "abandoned" ? ui.x.a : ui.x.b}</span>;',
   ]) {
     assert.ok(!probe(plumbing), `the table scan takes plumbing for words: ${plumbing}`);
   }

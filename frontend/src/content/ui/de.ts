@@ -573,7 +573,9 @@ export const DE: Catalogue = {
     thatConfirmationLinkCouldNotBe: "Dieser Bestätigungslink konnte nicht verwendet werden.",
     somethingWentWrongPleaseTryAgain: "Etwas ist schiefgelaufen. Bitte versuch es noch einmal.",
     evenBestGuessersForgetSometimes: "Auch die besten Ratenden vergessen mal etwas.",
-    weRsquoLlSendSecureTime: "Wir senden einen sicheren, zeitlich begrenzten Link an die bestätigte\n            E-Mail-Adresse deines Kontos.",
+    asideForgot: "Wir senden einen sicheren, zeitlich begrenzten Link an die bestätigte E-Mail-Adresse deines Kontos.",
+    asideReset: "Wähle ein Passwort, das du nirgendwo sonst verwendest.",
+    asideVerify: "Mit einer bestätigten E-Mail-Adresse kommst du wieder rein, falls du dein Passwort einmal vergisst.",
     accountHelp: "Kontohilfe",
     backLobby: "Zurück zur Lobby",
     enterYourUsernameYourConfirmedEmail: "Gib deinen Benutzernamen oder deine bestätigte E-Mail-Adresse ein. Wenn\n              das Konto wiederhergestellt werden kann, ist ein Link unterwegs.",
@@ -1045,6 +1047,8 @@ export const DE: Catalogue = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " und ",
     continueLabel: "Weiter",
     youFinished: (p: { points: number }) =>
       `Du wurdest {place} mit ${counted(p.points, { one: "Punkt", other: "Punkten" })}.`,
@@ -1349,8 +1353,10 @@ export const DE: Catalogue = {
       `${counted(p.prompts, { one: "Begriff", other: "Begriffe" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `Diese Liste ist ${p.state} und kann in neuen Runden nicht verwendet werden. Bearbeiten stellt sie nicht automatisch wieder her; ein Moderator muss sie prüfen.`,
+    underReview: "In Prüfung",
+    hidden: "Ausgeblendet",
+    listUnderReviewWarning: "Diese Liste wird geprüft und kann in neuen Runden nicht verwendet werden. Bearbeiten stellt sie nicht automatisch wieder her; ein Moderator muss sie prüfen.",
+    listHiddenWarning: "Diese Liste ist ausgeblendet und kann in neuen Runden nicht verwendet werden. Bearbeiten stellt sie nicht automatisch wieder her; ein Moderator muss sie prüfen.",
     needsReview: (p: { count: number }) => `Zu prüfen (${p.count})`,
     removePrompt: (p: { prompt: string }) => `${p.prompt} entfernen`,
     couldNotLoadYourPromptLists: "Deine Begriffslisten konnten nicht geladen werden.",
@@ -1475,16 +1481,8 @@ export const DE: Catalogue = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "Runde", other: "Runden" })} · ${counted(p.players, { one: "Spieler", other: "Spieler" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} Pkt.`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Regeln: Wertung ${p.scoringMode}${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (alte Version unbekannt)"
-      } · Hinweise ${p.hintMode} · ${p.seconds} Sekunden · Begriffe ${p.promptSource}`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Regeln: ${p.scoring} · ${p.hints} · ${p.seconds} Sekunden · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
     privateRoom: "privater Raum",
     thisGameDidNotFinishSo: "Diese Runde ist nicht zu Ende gegangen, das hier ist also der Punktestand\n              beim Abbruch und keine Endplatzierung.",
@@ -1520,10 +1518,17 @@ export const DE: Catalogue = {
     onlyThePlayersInThis: "Nur die Spieler dieses Spiels können seine Züge sehen.",
     couldNotLoadTheTurns: "Die Züge dieses Spiels konnten nicht geladen werden.",
     cutShort: "abgebrochen",
+    abandoned: "verlassen",
     noAttempt: "kein Versuch",
     joinedLate: "spät beigetreten",
-    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
-      `nicht gewertet (${p.eligibilityReason})`,
+    notEligibleAfk: "nicht gewertet (AFK)",
+    notEligibleDisconnected: "nicht gewertet (getrennt)",
+    notEligible: "nicht gewertet",
+    noGuessers: "keine Ratenden",
+    promptSourceCurated: "Kuratierte Begriffe",
+    promptSourceCustom: "Eigene Begriffe",
+    promptSourceMixed: "Gemischte Begriffe",
+    promptSourceBuiltinFallback: "Eingebaute Ersatzbegriffe",
     unknownPlayer: "Unbekannte Person",
     backToLobby: "Zurück zur Lobby",
     guestDisplayNameNotSaved: "Gast – Anzeigename nicht gespeichert",
@@ -1575,7 +1580,7 @@ export const DE: Catalogue = {
     pickSomethingDraw: "Wähle etwas zum Zeichnen",
     autoPicksWhenTimeRunsOut: "Wählt automatisch, wenn die Zeit abläuft.",
     hintSpendLimitReached: "Hinweis-Limit erreicht",
-    deductedFromYourScoreIfYou: "Wird von deinen Punkten abgezogen, wenn du den Begriff errätst",
+    hintSpendComesOutOfTurnPoints: "Wird von den Punkten dieses Zugs abgezogen, wenn du den Begriff errätst.",
     buyLetterRevealsEveryMatch: "Buchstaben kaufen – zeigt jedes Vorkommen",
     selectThePrompt: "den Begriff auswählen",
     choosing: "Wird gewählt …",
@@ -1877,6 +1882,7 @@ export const DE: Catalogue = {
   },
 
   roomPlayersPanel: {
+    you: "(du)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "Zuschauer", other: "Zuschauer" }),
     spectatorsHeading: (p: { count: number }) => `Zuschauer (${p.count})`,
@@ -2335,10 +2341,6 @@ export const DE: Catalogue = {
     open: "Öffnen",
     manyArrived: (p: { name: string; others: number }) =>
       `${p.name} und ${counted(p.others, { one: "eine weitere Person", other: "weitere Personen" })} wollen befreundet sein.`,
-  },
-
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
   },
 
   waitingRoomPanel: {
