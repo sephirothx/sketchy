@@ -36,6 +36,8 @@ import asyncpg
 from sqlalchemy.engine import make_url
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker, create_async_engine
 
+from tests.parallel_databases import drop_database
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 FIXTURE_PATH = REPO_ROOT / "fixtures" / "populated_upgrade.sql"
 # The revision the rows were written at. Moves only with a fold.
@@ -163,7 +165,7 @@ class ScratchDatabase:
     async def drop(self) -> None:
         connection = await asyncpg.connect(self._server())
         try:
-            await connection.execute(f'DROP DATABASE IF EXISTS "{self.name}" WITH (FORCE)')
+            await drop_database(connection, self.name)
         finally:
             await connection.close()
 

@@ -35,7 +35,6 @@ import {
 } from "../lib/roomSetup";
 import {
   availablePromptLanguages,
-  promptLanguageLabel,
   selectionForLanguage,
 } from "../lib/promptLanguages";
 import type { CustomPromptsAction, CustomPromptsState } from "../lib/customPrompts";
@@ -134,8 +133,10 @@ export function RoomSetupForm({
   const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
   const languageOptions = availablePromptLanguages(loadedLists, promptLanguage);
 
+  // No language in it: the official lists are named for theirs ("English —
+  // Standard"), and the field that sets it is labelled in Basics above.
   const promptsSummary = (() => {
-    const parts: string[] = [promptLanguageLabel(promptLanguage)];
+    const parts: string[] = [];
     if (selectedLists.length > 0) {
       const names = selectedLists.map((list) => list.name);
       parts.push(names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", "));
@@ -182,7 +183,13 @@ export function RoomSetupForm({
                 enterKeyHint="done"
               />
             </label>
+            {/* Labelled in words: the flag alone is the same picture as the
+                interface-language flag in the header, which means something
+                else (GLOSSARY: Prompt language, Interface locale). */}
             <div className="create-room-language-field">
+              <span className="create-room-language-label">
+                {ui.roomSetupForm.promptLanguage}
+              </span>
               {languageLocked ? (
                 // The same face the picker wears, without the mechanism: a room
                 // that cannot change its language still looks like the control
@@ -192,7 +199,7 @@ export function RoomSetupForm({
                 </span>
               ) : (
                 <LanguagePicker
-                  label={ui.roomSetupForm.language}
+                  label={ui.roomSetupForm.promptLanguage}
                   flagOnly
                   value={promptLanguage}
                   options={languageOptions}

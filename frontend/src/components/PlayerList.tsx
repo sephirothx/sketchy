@@ -8,6 +8,7 @@ import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { competitionRanks } from "../lib/standings";
+import { formatGuessTime } from "../lib/guessTime";
 import {
   canAttachDrawing,
   canCastModerationVote,
@@ -29,12 +30,9 @@ interface PlayerListProps {
   variant?: "waiting" | "playing" | "game-end";
   allowVoting?: boolean;
   moderation: ModerationState;
-  /** Per-player elapsed seconds for correct guesses this turn. */
+  /** Per-player seconds into the drawing of each correct guess this turn,
+      as the server timed them. */
   turnCorrectGuesses?: Record<string, number>;
-}
-
-function guessTime(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 
@@ -102,7 +100,7 @@ export function PlayerList({
         status?: string;
       }>("add_friend", { playerId });
       if (!answer?.ok) {
-        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent));
+        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent), "error");
         return;
       }
       // One outcome worth telling apart - they had already asked, so you
@@ -111,12 +109,12 @@ export function PlayerList({
       // "sent", so the reply never becomes a way to test for one (R-FRIEND-04,
       // #1002). The wording must not name any of them.
       if (answer.status === "accepted") {
-        notify(ui.playerList.nowFriends({ name: nickname }));
+        notify(ui.playerList.nowFriends({ name: nickname }), "success");
       } else {
-        notify(ui.playerList.friendRequestSent({ name: nickname }));
+        notify(ui.playerList.friendRequestSent({ name: nickname }), "success");
       }
     } catch {
-      notify(ui.playerList.thatRequestCouldNotBeSent);
+      notify(ui.playerList.thatRequestCouldNotBeSent, "error");
     }
   }
   const listRef = useRef<HTMLUListElement>(null);
@@ -190,7 +188,7 @@ export function PlayerList({
         ) : guessedAt != null ? (
           <span className="player-status player-status-guessed">
             <CheckIcon size={12} />
-            {ui.playerList.gotIt} <span className="player-status-time">{guessTime(guessedAt)}</span>
+            {ui.playerList.gotIt} <span className="player-status-time">{formatGuessTime(guessedAt)}</span>
           </span>
         ) : p.isAfk ? (
           <span className="player-status player-status-afk">

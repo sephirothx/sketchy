@@ -348,7 +348,7 @@ export function RoomChatPanel({
           )}
         </div>
         {isScrolledUp && unreadCount > 0 && (
-          <button type="button" className="chat-scroll-bottom-button" onClick={scrollToBottom}>
+          <button type="button" className="btn btn-primary btn-compact chat-scroll-bottom-button" onClick={scrollToBottom}>
             <ChevronDownIcon size={13} /> {ui.roomChatPanel.unreadMessages({ count: unreadCount })}
           </button>
         )}
@@ -447,7 +447,7 @@ export function RoomChatPanel({
                 enterKeyHint="send"
               />
             </div>
-            <button type="submit" className="chat-send-button" disabled={sending} aria-label={ui.roomChatPanel.send}>
+            <button type="submit" className="btn btn-primary chat-send-button" disabled={sending} aria-label={ui.roomChatPanel.send}>
               <ChevronRightIcon size={17} />
             </button>
           </div>

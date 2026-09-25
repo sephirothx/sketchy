@@ -203,7 +203,7 @@ export function ReportPlayerDialog({
                   {error}
                 </p>
               )}
-              <button type="submit" className="modal-button" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy ? ui.reportPlayerDialog.sending : ui.reportPlayerDialog.sendReport}
               </button>
             </form>
@@ -211,7 +211,7 @@ export function ReportPlayerDialog({
         ) : (
           <>
             <p className="modal-body">{sentSummary(sent)}</p>
-            <button type="button" className="modal-button" onClick={onClose}>
+            <button type="button" className="btn btn-primary" onClick={onClose}>
               {ui.reportPlayerDialog.done}
             </button>
           </>

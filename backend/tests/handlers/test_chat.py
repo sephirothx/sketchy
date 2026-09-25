@@ -9,6 +9,7 @@ from tests.handlers.helpers import SessionStore, build_context
 from app.game import DRAWING_SECONDS, MAX_GUESS_POINTS, MAX_HINT_SPEND, Game, Phase
 from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
 from app.rooms import RoomManager
+from app.presenters import turn_ended_payload, turn_payload
 from app.prompts import MAX_PROMPT_LENGTH
 
 
@@ -620,6 +621,46 @@ async def test_pressure_room_credits_the_decayed_points():
     )
     assert correct_guess.args[1]["points"] == 235
     assert guesser.score == opening_balance + 235
+
+
+async def test_correct_guess_carries_the_server_time_every_surface_shows():
+    """The chat line and the players panel used to time a guess on each
+    client's own clock, in whole seconds, while the results card showed the
+    server's tenths - one guess read 0:04 and 3.6s (B1, R-CONN-13). The
+    broadcast now names the server's time, and a resync and the results card
+    carry the same number."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    other = room_manager.add_player(room, "Other")
+    for player in (drawer, guesser, other):
+        player.sid = f"{player.nickname}-sid"
+    room.state = "playing"
+    room.game = Game(turn_order=list(room.players), prompt_pool=["panda"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "panda")
+    room.game.remaining_seconds = lambda: DRAWING_SECONDS - 3.64
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(
+        return_value={"room_id": room.id, "player_id": guesser.id}
+    )
+    sio.emit = AsyncMock()
+
+    await sio.handlers["/"]["guess"]("Guesser-sid", {"text": "panda"})
+
+    broadcast = next(
+        call.args[1] for call in sio.emit.await_args_list if call.args[0] == "correct_guess"
+    )
+    assert broadcast == {
+        "playerId": guesser.id,
+        "nickname": guesser.nickname,
+        "points": room.game.guess_points[guesser.id],
+        "seconds": 3.6,
+    }
+    assert turn_payload(room.game, other)["correctGuessers"] == [[guesser.id, 3.6]]
+    assert [g["seconds"] for g in turn_ended_payload(room)["guesses"]] == [3.6]
 
 
 def _guessing_room():

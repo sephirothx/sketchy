@@ -47,12 +47,44 @@
 }
 
 .game-header-room-name {
+  align-items: center;
+  display: inline-flex;
   font-weight: 800;
   font-size: 16px;
   color: var(--ink);
+  min-width: 0;
+}
+
+/* The name gives way to an ellipsis; the public/private icon after it does
+   not, so a long name still says which kind of room this is. */
+.game-header-room-name-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Public or private, beside the room's name (RoomVisibilityIcon). Sized in
+   ems to whichever text it follows - the bar's name, the waiting room's
+   heading - and muted, since it is a fact about the name, not a control. The
+   box is no taller than the text's own line, so the bar keeps its height. */
+.room-visibility-icon {
+  color: var(--muted);
+  display: inline-flex;
+  flex: none;
+  margin-left: 0.35em;
+  vertical-align: -0.08em;
+}
+
+.room-visibility-icon svg {
+  height: 0.8em;
+  width: 0.8em;
+}
+
+/* Beside the bar's 16px name 0.8em read faint; the headings' larger text
+   carries the smaller ratio. */
+.game-header-room-name .room-visibility-icon svg {
+  height: 0.9em;
+  width: 0.9em;
 }
 
 .game-header-center {
@@ -139,6 +171,29 @@
   }
 }
 
+/* Where the bar does print the name, the waiting room's heading would say it
+   again a few pixels below: it stays for a screen reader only. These are the
+   `.visually-hidden` declarations (a11y.css) copied on purpose, not drift: a
+   class cannot be switched on at a breakpoint, and the component's own width
+   check (900px) is not the bar's (1100px) - which left 901-1100px with no
+   name at all. One breakpoint for both, so no width says it twice or never.
+   The whole head, not only its heading: out of the flow, it takes no row of
+   the waiting room's grid and so no gap above the invite card. */
+@media (min-width: 1101px) {
+  .waiting-room-head {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+}
+
 /* The phone's bar: the round and the clock, any notice, and the Room menu -
    one control. What it replaces lined up eight icon buttons in a 44px strip,
    with a red Leave one thumb-width from Settings. */
@@ -167,6 +222,24 @@
   .game-header-mobile:has(.room-notice-chip, .game-header-away) .game-header-home {
     display: none;
   }
+}
+
+/* The phone's round: "Round 2/3" where the bar has room for the word, "2/3"
+   where it does not. GameHeaderStatus renders both and measures the bar to
+   choose; the full label stays laid out, unseen and out of the flow, so it
+   can be measured while the short one shows. */
+.game-header-round-short {
+  display: none;
+}
+
+.game-header-round.is-short .game-header-round-long {
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
+}
+
+.game-header-round.is-short .game-header-round-short {
+  display: inline;
 }
 
 .game-header-mobile .game-header-center {
@@ -559,7 +632,6 @@
   font-weight: 600;
   margin: 0;
 }
-.waiting-room-head .section-label { margin-top: 3px; }
 
 /* Invite-first center card: a kicker, the code, one way to send it. */
 .waiting-invite-card {
@@ -692,16 +764,52 @@
   margin-left: auto;
 }
 
-/* On the phone's dock Start takes the width Edit leaves. */
-@media (max-width: 900px) {
+/* The host's footer never leaves a row half empty. Up to 1100px - the
+   phone's dock, and the rules card in the 340px column of 901-1100px - it is
+   two rows: Edit rules and Doodle (short labels, WaitingRoomPanel) sharing
+   the first, Start the whole second. Above it the long labels, and every row
+   the wrap makes fills: one line where the three fit, and where they do not
+   (up to about 1270px in English, 1200px in German) Start grows to its own
+   row under the other two - or, for German's and French's longest labels,
+   three full rows. Without the growth the wrapped buttons kept their widths,
+   Start right-aligned alone under a gap. */
+.waiting-rules-footer .waiting-rules-edit,
+.waiting-rules-footer .waiting-draw-button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.waiting-rules-footer .waiting-start-button {
+  flex: 1 0 auto;
+}
+
+@media (max-width: 1100px) {
   .waiting-rules-footer .waiting-start-button {
-    flex: 1 1 auto;
+    flex: 1 0 100%;
     width: auto;
   }
 }
 
+/* Everybody but the host: one row at every width - the wait for the host
+   on the left, wrapping onto a second line of text before it ever pushes
+   Doodle onto a row of its own, and the pad's button on the right. A centred
+   line over a lone button (a phone's dock, and 901-1100px) read as if
+   something were missing. After the stacked rules, which it outranks for
+   the pad's button by coming later. */
 .waiting-rules-footer .waiting-start-waiting {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: left;
+}
+
+.waiting-rules-footer .waiting-start-waiting + .waiting-draw-button {
+  flex: none;
+}
+
+/* Alone - the phone's dock while the pad is open, where the button is in the
+   strip above - the wait is centred, as the dock's only line. */
+.waiting-rules-footer .waiting-start-waiting:only-child {
+  text-align: center;
 }
 
 /* The scratch pad in place of the column (#591): one strip - back, the code,
@@ -839,9 +947,7 @@
 .waiting-host-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 .waiting-start-error { color: var(--danger); margin: 8px 0 0; }
 .waiting-start-button { flex: 0 0 auto; }
-.waiting-start-button:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
-.custom-prompts-apply { background: var(--primary); border: 0; border-radius: var(--radius-sm); box-shadow: 0 2px 0 var(--primary-edge); color: #fff; font-size: 14px; font-weight: 800; margin-top: 10px; padding: 10px 14px; }
-.custom-prompts-apply:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
+.custom-prompts-apply { margin-top: 10px; }
 .waiting-chat-empty { color: var(--muted); font-style: italic; margin: 0; }
 .waiting-chat-form { margin-top: 10px; }
 .waiting-chat-error { color: var(--danger); margin: 7px 0 0; }
@@ -1224,9 +1330,12 @@
     z-index: 30;
   }
 
-  /* Room for the dock, so the chat card is never under it. */
+  /* Room for the dock, so the chat card is never under it: the dock's own
+     height, which WaitingRoomPanel measures onto the shell, plus a gap. The
+     value here stands until the first measure. */
   .room-shell-waiting {
-    padding-bottom: 84px;
+    --waiting-dock-height: 68px;
+    padding-bottom: calc(var(--waiting-dock-height) + 16px);
   }
 
   .waiting-start-button {
@@ -1834,22 +1943,8 @@
   margin: 0 0 8px;
 }
 
-.spectator-promotion button {
-  background: var(--primary);
-  border: 0;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 0 var(--primary-edge);
-  color: #fff;
-  font: inherit;
-  font-weight: 800;
-  padding: 7px 9px;
+.spectator-promotion .btn {
   width: 100%;
-}
-
-.spectator-promotion button:disabled {
-  background: var(--faint);
-  box-shadow: none;
-  cursor: not-allowed;
 }
 
 .spectator-promotion-error {

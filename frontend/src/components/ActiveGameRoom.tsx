@@ -15,6 +15,7 @@ import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { ConnectedPinControl } from "../components/ConnectedPinControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
+import { RoomVisibilityIcon } from "../components/RoomVisibilityIcon";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
 import { RoomMenuDropdown, RoomMenuSheet, type RoomMenuActions } from "../components/RoomMenu";
@@ -28,7 +29,6 @@ import {
 import { useAfkCheck } from "../hooks/useAfkCheck";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
-import { useOpenSettings } from "../hooks/useSettingsRoute";
 import { useVisualViewportCssVars } from "../hooks/useVisualViewportCssVars";
 import { emitTransient, emitWithAck, socket, socketRequestErrorMessage } from "../lib/socket";
 import { isSigningOut } from "../store/authStore";
@@ -50,7 +50,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
   const navigate = useNavigate();
   const { notify } = useToast();
-  const openSettings = useOpenSettings();
 
   const canvasRef = useRef<CanvasRef | null>(null);
   const exitingRoomRef = useRef(false);
@@ -64,6 +63,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const roomState = useGameStore((s) => s.roomState);
   const roomName = useGameStore((s) => s.name);
+  const roomIsPublic = useGameStore((s) => s.isPublic);
   const phase = useGameStore((s) => s.phase);
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
@@ -307,7 +307,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
     onOpenPlayers: isMobile ? openPlayersSheet : undefined,
     onToggleAfk: handleToggleAfk,
     onSaveImage: () => canvasRef.current?.saveImage(),
-    onOpenSettings: () => openSettings(),
     onProposeRestart: () => void handleProposeRestart(),
     onLeave: handleLeave,
   };
@@ -362,6 +361,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         className={`game-header${isMobile ? " game-header-mobile" : ""}`}
         data-testid="room-header"
         data-room-code={code}
+        data-room-name={roomName || undefined}
       >
         <div className="game-header-start">
           {/* The way back to the lobby, which from a room is leaving it -
@@ -376,7 +376,14 @@ export function ActiveGameRoom({ code }: { code: string }) {
           >
             <Wordmark size={isMobile ? 22 : 24} decorative />
           </button>
-          {!isMobile && roomName && <span className="game-header-room-name">{roomName}</span>}
+          {/* Public or private beside the name, and gone with it when the bar
+              gives the name up: the waiting room's heading says it there. */}
+          {!isMobile && roomName && (
+            <span className="game-header-room-name">
+              <span className="game-header-room-name-text">{roomName}</span>
+              <RoomVisibilityIcon isPublic={roomIsPublic} />
+            </span>
+          )}
         </div>
         <div className="game-header-center">
           <GameHeaderStatus />

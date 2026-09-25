@@ -14,9 +14,8 @@ import { useGameStore } from "../store/gameStore";
 import { currentPlayerName } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse } from "../types";
-import { refusalCode, refusalText } from "../lib/refusals.ts";
+import { refusalCode } from "../lib/refusals.ts";
 import { useServerNoticesStore } from "../store/serverNoticesStore";
-import { ui } from "../content/ui/index.ts";
 
 /** How long a rebind waits for the socket. Longer when the server said it was
 restarting (#872): a deploy is its drain plus a boot, and the ordinary 8 s
@@ -130,7 +129,9 @@ export function useRoomSessionReconnect() {
         setRoomBindingStatus("ready");
         return;
       }
-      throw new Error(refusalText(response, ui.useRoomSessionReconnect.joinRoomFailed));
+      // Never shown: every caller catches this and retries or gives up
+      // quietly, so the refusal code is for a debugger, not a player.
+      throw new Error(`join_room refused: ${refused ?? "no code"}`);
     }
 
     async function rebindSession(

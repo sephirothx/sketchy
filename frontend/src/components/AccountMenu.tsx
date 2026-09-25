@@ -576,7 +576,7 @@ export function AuthDialog({
           <>
             <button
               type="button"
-              className="modal-button auth-passkey"
+              className="btn btn-primary auth-passkey"
               onClick={() => void signInWithPasskey()}
               disabled={busy}
             >
@@ -687,7 +687,7 @@ export function AuthDialog({
 
           {error && <p className="auth-error" role="alert">{error}</p>}
 
-          <button type="submit" className="modal-button" disabled={busy}>
+          <button type="submit" className="btn btn-primary" disabled={busy}>
             {busy ? ui.accountMenu.pleaseWait : isClaim ? ui.accountMenu.createAccount : ui.accountMenu.logIn}
           </button>
           {/* Only when creating one: this is the moment an account starts,

@@ -83,12 +83,13 @@ async def test_a_short_quiet_return_rebinds_nothing_and_a_silent_one_does():
             # player arriving is a `room_state` for everyone in the room.
             await asyncio.sleep(0.5)
             before = len(sent(guest_log, "join_room"))
+            away_from = guest_log.mark()
             await guest.evaluate(HIDE)
             await late.goto(BASE_URL)
             await use_guest_name(late, f"VisLate{tag}")
             await join_by_code(late, code)
             await late.wait_for_selector("canvas.drawing-canvas, [data-testid='waiting-room']")
-            await guest_log.wait_for("room_state")
+            await guest_log.wait_for("room_state", since=away_from)
             await guest.evaluate(SHOW)
             await asyncio.sleep(1)
             assert len(sent(guest_log, "join_room")) == before, (

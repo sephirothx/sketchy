@@ -374,6 +374,16 @@ export interface TurnEndedPayload {
   scores: TurnScoreEntry[];
 }
 
+/** `correct_guess`: one seat guessed the prompt. `points` are net of the hints
+    it bought; `seconds` is how far into the drawing it guessed, timed by the
+    server — the same number `sync_game` and `turn_ended` carry for it. */
+export interface CorrectGuessPayload {
+  playerId: string;
+  nickname: string;
+  points: number;
+  seconds: number;
+}
+
 /**
  * How one player's turn score was arrived at: hints are bought on credit and
  * settled against the guess, so the gross figure can't be recovered from the
