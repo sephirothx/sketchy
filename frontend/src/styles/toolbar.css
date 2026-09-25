@@ -140,7 +140,7 @@
   bottom: calc(100% + 8px);
   left: 50%;
   transform: translateX(-50%);
-  z-index: 100;
+  z-index: var(--z-popover);
   background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: 12px;
@@ -550,7 +550,7 @@
   bottom: calc(100% + 8px);
   left: 0;
   right: 0;
-  z-index: 120;
+  z-index: var(--z-popover);
   box-sizing: border-box;
   max-height: min(40vh, 280px);
   overflow: auto;
@@ -677,7 +677,7 @@
 
 /* Width floor for the same reason as the shell's landscape block: a portrait
    phone with the keyboard up also reports landscape. */
-@media (orientation: landscape) and (min-width: 600px) and (max-width: 900px) {
+@media (orientation: landscape) and (min-width: 481px) and (max-width: 900px) {
   .toolbar-mobile-popover {
     max-height: min(40vh, 200px);
   }

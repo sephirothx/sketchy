@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
@@ -11,6 +11,7 @@ import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useBottomDock } from "../hooks/useBottomDock";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import type {
@@ -88,12 +89,20 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // says more than a grid of faces can, so rendering both would put every
   // nickname on the page twice.
   const isNarrow = useMediaQuery("(max-width: 900px)");
+  const dockRef = useBottomDock();
   // Up to where the bar gives the room's name back (1100px) the rules card's
   // footer is a column about 340px wide on a desktop and a dock on a phone:
   // Edit and the pad's button share a row there only with the short labels.
   // Above it the long labels, and the footer's rows fill (game-room.css).
   const shortFooterLabels = useMediaQuery("(max-width: 1100px)");
   const footerRef = useRef<HTMLDivElement | null>(null);
+  // One element, two readers: the room shell's reserve under the chat card
+  // (reserveDock, above) and the page-wide clearance the toasts and the
+  // friend invite stand above (useBottomDock).
+  const footerDockRef = useCallback((element: HTMLDivElement | null) => {
+    footerRef.current = element;
+    dockRef(element);
+  }, [dockRef]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The scratch pad in place of the column (#591). Focus follows the swap:
   // the control that made it lands on the one that undoes it, and back.
@@ -253,7 +262,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         {/* A phone docks Start at the bottom of the screen, as the room view
             does, rather than wrapping it onto a line of its own in the strip. */}
         {isNarrow && (
-          <div ref={footerRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
+          <div ref={footerDockRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
             {isHost ? startButton(true) : waitingForHost}
           </div>
         )}
@@ -408,7 +417,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             playerCount: activePlayers.length,
           }}
         />
-        <div ref={footerRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
+        <div ref={footerDockRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
           {isHost ? (
             <>
               <button

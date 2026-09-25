@@ -21,7 +21,7 @@
 .drawing-recap-navigation button:disabled { cursor: not-allowed; opacity: .45; }
 .drawing-recap-navigation strong { color: var(--ink); font-size: 14px; }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .drawing-recap-card { border-radius: 12px; padding: 14px; }
   .drawing-recap-header { align-items: stretch; flex-direction: column; }
   .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }

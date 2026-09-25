@@ -32,6 +32,7 @@ import {
 } from "../lib/roomPresets";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useBottomDock } from "../hooks/useBottomDock";
 import { fill } from "../content/ui/slots.tsx";
 
 const EMPTY_LISTS: PromptListSummary[] = [];
@@ -41,6 +42,7 @@ const EMPTY_LISTS: PromptListSummary[] = [];
 const createRequests = createRequestIds(mintRequestId);
 
 export function CreateRoomPage() {
+  const dockRef = useBottomDock();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setSession = useGameStore((state) => state.setSession);
@@ -551,7 +553,7 @@ export function CreateRoomPage() {
     </div>
 
     {!isWide && (
-      <div className={`create-room-footer${changedRules.length > 0 ? "" : " is-bare"}`}>
+      <div className={`create-room-footer${changedRules.length > 0 ? "" : " is-bare"}`} ref={dockRef}>
         {changedRules.length > 0 && (
           <div className="create-room-footer-info">
             <span className="create-room-footer-summary">{changedRules.join(" · ")}</span>

@@ -7,7 +7,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
+  z-index: var(--z-modal);
   animation: fadeInModal 0.15s ease-out;
 }
 
@@ -98,13 +98,6 @@
 
 .confirmation-dialog-actions button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
-/* This one dialog is opened from inside the mobile players drawer, which is
-   itself at 1200 - the highest layer the game has. Matching it would leave the
-   two ordered by which happens to come later in the DOM, so it clears it. */
-.modal-overlay.report-player-overlay {
-  z-index: 1250;
-}
-
 /* A select inside a dialog form, drawn like the textarea beside it. The
    report dialogs referred to a class nothing defined, so the control came
    out native beside a styled textarea. Scoped to the form rather than to a
@@ -135,10 +128,10 @@
   text-align: left;
 }
 
-/* Above everything, including the drawer at 1200 and the report dialog at
-   1250: there is nothing behind this worth reaching. */
+/* Above every other dialog and drawer: there is nothing behind this worth
+   reaching. Only a toast goes over it (the layers, layout-primitives.css). */
 .modal-overlay.suspension-overlay {
-  z-index: 1300;
+  z-index: var(--z-blocking);
 }
 
 .suspension-card {
@@ -252,7 +245,7 @@
   grid-template-columns: 1fr 1fr;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .bug-report-row { grid-template-columns: 1fr; }
 }
 
@@ -375,12 +368,12 @@
   margin-top: 2px;
 }
 
-/* The AFK check (#677). Above the room's own overlays: it is the room asking
-   a question, and an answer is what keeps the seat. Nothing else on screen
-   can be reached while it is open, which is honest — the room really is about
-   to carry on without them. */
+/* The AFK check (#677). A blocking notice, over the room's own drawers and
+   dialogs: it is the room asking a question, and an answer is what keeps the
+   seat. Nothing else on screen can be reached while it is open, which is
+   honest — the room really is about to carry on without them. */
 .modal-overlay.afk-check-overlay {
-  z-index: 1300;
+  z-index: var(--z-blocking);
 }
 
 .afk-check-countdown {

@@ -145,7 +145,7 @@
   right: 0;
   top: calc(100% + 8px);
   width: 264px;
-  z-index: 60;
+  z-index: var(--z-popover);
 }
 
 .room-menu-dropdown .sheet-menu-item {
@@ -295,7 +295,7 @@
   position: absolute;
   top: calc(100% + 8px);
   width: max-content;
-  z-index: 40;
+  z-index: var(--z-popover);
 }
 
 .room-notice-popover p {
@@ -320,7 +320,7 @@
   width: auto;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .waiting-start-card {
     align-items: stretch;
     flex-direction: column;
@@ -558,7 +558,7 @@
   outline-offset: 2px;
 }
 
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .colorblind-safe-suggestion {
     align-items: stretch;
     flex-direction: column;
@@ -936,7 +936,7 @@
 .waiting-custom-prompts-virtual-space { position: relative; width: 100%; }
 .waiting-custom-prompts-virtual-row { box-sizing: border-box; display: grid; gap: 6px; left: 0; padding: 3px 9px; position: absolute; top: 0; width: 100%; }
 .waiting-custom-prompts-virtual-row span { box-sizing: border-box; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.custom-prompt-full-text-tooltip { background: var(--ink); border-radius: 7px; box-shadow: var(--shadow-raised); box-sizing: border-box; color: var(--paper); font-size: 13px; font-weight: 600; line-height: 1.35; max-width: calc(100vw - 16px); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: fixed; width: max-content; z-index: 1000; }
+.custom-prompt-full-text-tooltip { background: var(--ink); border-radius: 7px; box-shadow: var(--shadow-raised); box-sizing: border-box; color: var(--paper); font-size: 13px; font-weight: 600; line-height: 1.35; max-width: calc(100vw - 16px); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: fixed; width: max-content; z-index: var(--z-popover); }
 .waiting-custom-prompts-empty { background: var(--card); border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); margin-top: 6px !important; padding: 16px; text-align: center; }
 .waiting-custom-prompts-content .waiting-custom-prompts-error { color: var(--danger); }
 
@@ -1022,7 +1022,7 @@
   justify-content: center;
   padding: 16px;
   position: absolute;
-  z-index: 50;
+  z-index: var(--z-notice);
 }
 
 .room-stage-card {
@@ -1327,7 +1327,7 @@
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   /* Room for the dock, so the chat card is never under it: the dock's own
@@ -1433,11 +1433,13 @@
     flex-direction: column;
     overflow: hidden;
     overscroll-behavior: none;
-    /* Deliberately no z-index. A positioned element with one creates a
-       stacking context, which trapped every overlay inside this shell below
-       the confetti canvas at the root - the turn recap included, which is
-       exactly when confetti fires. Fixed positioning already lifts the shell
-       above the page. */
+    /* Deliberately no z-index. `position: fixed` already makes this shell a
+       stacking context whatever its z-index, so the drawers, the turn recap
+       and any dialog rendered in place are ordered only against each other,
+       and the shell as a whole paints at the page's base level: the confetti,
+       the friend invite and the toasts, which live outside it, go over it.
+       A z-index would only lift the whole shell over those too. A dialog that
+       has to clear the shell is portaled to <body> (the report dialogs). */
   }
 
   /* Status band. */
@@ -1890,7 +1892,7 @@
   transform: translateY(-3px);
   transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
   visibility: hidden;
-  z-index: 120;
+  z-index: var(--z-popover);
 }
 
 .room-spectator-tooltip::after {
@@ -2529,13 +2531,16 @@ button.guess-pips {
    become a rail on the holding side, the feed a narrow column, and the canvas
    takes everything between them.
 
-   `min-width: 600px` is what makes this landscape rather than merely wide.
+   `min-width: 481px` is what makes this landscape rather than merely wide.
    `orientation` is a property of the viewport, not of the phone: a portrait
    handset whose soft keyboard eats half the screen reports landscape too, and
    without the width floor a 360x340 Android with the keyboard up got the
-   two-column rail layout and a 76px-wide guess field. No phone is under 600px
-   across when it is actually turned sideways, and none is over it in portrait. */
-@media (orientation: landscape) and (max-height: 520px) and (min-width: 600px) {
+   two-column rail layout and a 76px-wide guess field. Phones in portrait are
+   almost all 430px or less across - a few folding ones reach about 540, and
+   with the keyboard up those would take this layout - and none is under 481
+   turned sideways: the 568px of the smallest iPhones, which the old floor of
+   600 left in portrait, included. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 481px) {
   .game-room.game-room-playing {
     padding: 0;
   }

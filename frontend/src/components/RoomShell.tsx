@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { recordRender } from "../lib/renderDiagnostics";
+import { useBottomDock } from "../hooks/useBottomDock";
 import "../styles/lazy/toolbar.css";
 
 export type RoomShellMode = "waiting" | "playing" | "game-end";
@@ -16,6 +17,7 @@ interface RoomShellProps {
 
 export function RoomShell({ mode, players, main, chat, inert = false, overlay = null }: RoomShellProps) {
   recordRender("roomShell");
+  const dockRef = useBottomDock();
   return (
     <div
       className={`room-shell room-shell-${mode}${mode === "playing" ? " game-layout" : ""}`}
@@ -39,7 +41,7 @@ export function RoomShell({ mode, players, main, chat, inert = false, overlay = 
           here (see Toolbar), so the palette sits at the bottom of the screen
           under the thumb rather than in a strip between canvas and chat.
           Empty and inert on desktop, where the toolbar stays in the column. */}
-      <div className="room-shell-dock" id="room-shell-dock" inert={inert} />
+      <div className="room-shell-dock" id="room-shell-dock" inert={inert} ref={dockRef} />
 
       {/* Outside the inert regions, so its own buttons still work. */}
       {overlay}

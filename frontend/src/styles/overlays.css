@@ -8,7 +8,7 @@
   justify-content: center;
   background: var(--scrim);
   border-radius: 10px;
-  z-index: 10;
+  z-index: var(--z-float);
 }
 
 /* A column, so the standings can take the space that is left and scroll
@@ -500,7 +500,7 @@
   .game-end-overlay {
     position: fixed;
     inset: 0;
-    z-index: 1150;
+    z-index: var(--z-overlay);
     align-items: center;
     background: rgba(30, 27, 22, 0.42);
     min-height: 0;
@@ -549,7 +549,7 @@
 .bottom-sheet-scrim {
   position: fixed;
   inset: 0;
-  z-index: 1200;
+  z-index: var(--z-sheet);
   background: var(--scrim);
   display: flex;
   align-items: center;
@@ -738,7 +738,7 @@
     background: rgba(30, 27, 22, 0.28);
     border-radius: 0;
     padding: 0;
-    z-index: 1150;
+    z-index: var(--z-overlay);
   }
 
   .turn-results-panel {

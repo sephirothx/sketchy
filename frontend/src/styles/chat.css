@@ -40,9 +40,9 @@
   transform: translateX(-50%);
   border-radius: 999px;
   box-shadow: 0 2px 0 var(--primary-edge), var(--shadow-raised);
+  z-index: var(--z-float);
   gap: 4px;
   white-space: nowrap;
-  z-index: 10;
 }
 
 /* System lines read quietly, marked with a dot instead of a color. */
@@ -143,6 +143,11 @@
   margin-top: 8px;
   border-top: 1.5px solid var(--line);
   padding-top: 10px;
+  /* The verdict below floats outside this box, in the slot above it; on a
+     phone's playing shell the field is a dock (useBottomDock), and this is
+     the room it reserves so a friend invite or a toast stands above the
+     verdict rather than on it. The chip plus its gap. */
+  --dock-reserve: 44px;
 }
 
 /* The verdict on your own guess. It floats above the field rather than sitting
@@ -154,7 +159,7 @@
   left: 0;
   right: 0;
   bottom: calc(100% + 8px);
-  z-index: 30;
+  z-index: var(--z-float);
   margin: 0;
   padding: 8px 10px;
   border-radius: 10px;
