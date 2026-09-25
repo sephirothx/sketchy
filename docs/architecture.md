@@ -2013,7 +2013,9 @@ the Create page's own per-turn allowance so the two never disagree. Every row of
 placed by hand with no row gap, because a gap would open above a first-run
 block or an error that is not there. Create a room does not widen its form,
 which is read down a column: from 1200px the summary strip under it becomes a
-sticky card beside it — the chips, the running-time estimate and Create room —
+sticky card beside it — the name, the running-time estimate, a chip for each
+rule that differs from a new room's (`changedRoomRules`, the lobby row's own list,
+plus Private) and Create room —
 and the page renders one or the other (`useMediaQuery`), so there is never a
 second Create button.
 

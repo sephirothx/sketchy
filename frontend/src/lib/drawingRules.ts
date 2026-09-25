@@ -108,7 +108,7 @@ export const COLOR_MODE_OPTIONS: {
     get label() { return ui.drawingRules.colorblindSafe; },
     get description() { return ui.drawingRules.colorsThatStayApartFor; },
   },
-  { value: "black_and_white", get label() { return ui.drawingRules.blackAndWhite; }, get description() { return ui.drawingRules.blackAndWhiteOnly; } },
+  { value: "black_and_white", get label() { return ui.drawingRules.blackAndWhite; }, get description() { return ui.drawingRules.twoSwatchesNoCustomColors; } },
 ];
 
 /** The swatches a mode offers. Every mode keeps white: it is the eraser. */

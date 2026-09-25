@@ -39,8 +39,16 @@ export function gameLength(
 /** The rules this room plays by that differ from a new room's defaults, as
     short labels, in a fixed order: scoring, hints, drawing, prompts, then
     spectators. Empty for a room on standard settings, which the row says once
-    rather than as six grey chips that would hide the room that is unusual. */
-export function changedRoomRules(room: RoomSummary): string[] {
+    rather than as six grey chips that would hide the room that is unusual.
+    The Create page's "Your room" card lists the same ones, so a room is
+    described the same way before it exists as in the lobby afterwards. */
+export type ChangedRulesInput = Pick<
+  RoomSummary,
+  | "scoringMode" | "hintMode" | "hideMaskedPrompt" | "allowedTools" | "colorMode"
+  | "customPromptCount" | "customPromptsOnly" | "spectatorsSeePrompt"
+>;
+
+export function changedRoomRules(room: ChangedRulesInput): string[] {
   const rules: string[] = [];
   if (room.scoringMode === "pressure") rules.push(ui.roomSetup.pressureScoring);
   if (room.scoringMode === "none") rules.push(ui.roomSetup.noScoring);

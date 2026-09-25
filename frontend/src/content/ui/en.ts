@@ -859,8 +859,6 @@ export const EN = {
     deleteThisRoomSettingPreset: "Delete this room-setting preset?",
     deletePresetDescription: "Rooms you already created with it are not affected.",
     createTheRoom: "create the room",
-    noScoring: "No scoring",
-    public: "Public",
     private: "Private",
     backToLobby: "Back to lobby",
     leaveBlankForARandom: "Leave blank for a random name!",
@@ -868,10 +866,6 @@ export const EN = {
     createRoom2: "Create room",
     yourRoom: "Your room",
     aRandomName: "A random name",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "player", other: "players" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "round", other: "rounds" }),
   },
 
   customPromptsEditor: {
@@ -1621,10 +1615,9 @@ export const EN = {
     scoring: "Scoring",
     hints: "Hints",
     findPrompt: "Find a prompt",
-    rollerCoaster: "roller coaster",
     loading: "Loading…",
     prompt: "Prompt",
-    howGoes: "How it goes",
+    howHard: "How hard",
     guessed: "Guessed",
     picked: "Picked",
     drawn: "Drawn",
@@ -1636,10 +1629,6 @@ export const EN = {
     defaultScoring: "Default scoring",
     pressureScoring: "Pressure scoring",
     allHintModes: "All hint modes",
-    noHints: "No hints",
-    checkpointHints: "Checkpoint hints",
-    purchasedHints: "Purchased hints",
-    letterWheel: "Letter wheel",
     backToLobby: "Back to lobby",
   },
 
@@ -1912,7 +1901,7 @@ export const EN = {
   },
 
   roomSetupForm: {
-    language: "Language",
+    promptLanguage: "Prompt language",
     visibility: "Visibility",
     maxPlayers: "Max players",
     rounds: "Rounds",
@@ -2589,7 +2578,7 @@ export const EN = {
     colorblindSafe: "Colorblind-safe",
     colorsThatStayApartFor: "Colors that stay apart for colorblind players.",
     blackAndWhite: "Black and white",
-    blackAndWhiteOnly: "Black and white only.",
+    twoSwatchesNoCustomColors: "Just two swatches; no custom colors.",
     allTools: "All tools",
     onlyTool: (p: { tool: string }) =>
       `${p.tool} only`,

@@ -402,11 +402,11 @@
   gap: 2px;
 }
 
-/* The mark reads small, but the target it sits in is 24px square: below that
-   it fails WCAG 2.2 target-size, which the axe suite enforces. */
+/* The mark is the form's "?" (`.m3-switch-hint`, create-room-page.css), but
+   the target it sits in is 24px square: below that it fails WCAG 2.2
+   target-size beside the chip, which the axe suite enforces. */
 .prompt-list-chip-info {
   align-items: center;
-  color: var(--muted);
   display: inline-flex;
   height: 24px;
   justify-content: center;
@@ -414,29 +414,12 @@
   width: 24px;
 }
 
-.prompt-list-chip-info > span {
-  align-items: center;
-  border: 1px solid var(--line-strong);
-  border-radius: 999px;
-  display: inline-flex;
-  font-family: Georgia, "Times New Roman", serif;
-  font-size: 11px;
-  font-style: italic;
-  font-weight: 700;
-  height: 18px;
-  justify-content: center;
-  line-height: 1;
-  width: 18px;
+.prompt-list-chip-info > .m3-switch-hint {
+  cursor: pointer;
 }
 
-.prompt-list-chip-info:hover,
-.prompt-list-chip-info:focus-visible {
+.prompt-list-chip-info:hover > .m3-switch-hint {
   color: var(--primary);
-}
-
-.prompt-list-chip-info:hover > span,
-.prompt-list-chip-info:focus-visible > span {
-  border-color: var(--primary);
 }
 
 

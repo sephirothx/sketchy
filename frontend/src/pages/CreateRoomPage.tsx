@@ -8,7 +8,8 @@ import { ClockIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import type { PromptListSummary } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
-import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringNameFor } from "../lib/roomSetup";
+import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE } from "../lib/roomSetup";
+import { changedRoomRules } from "../lib/roomCardFacts";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitEntry, socketRequestErrorMessage } from "../lib/socket";
 import { createRequestIds, mintRequestId } from "../lib/createRequests";
@@ -367,17 +368,25 @@ export function CreateRoomPage() {
     }
   }
 
-  // The form's own collapsed summaries live with the form. What is left here
-  // is the one the dock carries, which is about the room as a whole.
-  const summaryParts = [
-    isPublic ? ui.createRoomPage.public : ui.createRoomPage.private,
-    ui.createRoomPage.playerCount({ count: maxPlayers }),
-    ui.createRoomPage.roundCount({ count: rounds }),
-    `${drawingSeconds}s`,
-    scoringMode === "none" ? ui.createRoomPage.noScoring : scoringNameFor(scoringMode),
-    hintLabelFor(hintMode, hideMaskedPrompt),
+  // What the card and the dock say about the room: only what differs from a
+  // new room's defaults. They used to list all six settings, so four of the
+  // chips restated the steppers beside them and the one unusual rule was
+  // hidden among them. The three numbers are said by the running-time
+  // estimate; the rest are the rules the lobby row will show for this room
+  // (`changedRoomRules`), plus Private, which a lobby row never needs.
+  const changedRules = [
+    ...(isPublic ? [] : [ui.createRoomPage.private]),
+    ...changedRoomRules({
+      scoringMode,
+      hintMode,
+      hideMaskedPrompt,
+      allowedTools,
+      colorMode,
+      customPromptCount: customPrompts.analysis.usableCount,
+      customPromptsOnly: customPrompts.only,
+      spectatorsSeePrompt,
+    }),
   ];
-  const footerSummary = summaryParts.join(" · ");
 
   // A rough but honest running-time estimate: each turn is the drawing time
   // plus prompt choice and results, and every player draws once per round.
@@ -530,9 +539,11 @@ export function CreateRoomPage() {
         <p className={`create-room-preview-name${roomName.trim() ? "" : " is-random"}`}>
           {roomName.trim() || ui.createRoomPage.aRandomName}
         </p>
-        <ul className="create-room-preview-chips">
-          {summaryParts.map((part) => <li key={part} className="chip chip-neutral">{part}</li>)}
-        </ul>
+        {changedRules.length > 0 && (
+          <ul className="create-room-preview-chips">
+            {changedRules.map((rule) => <li key={rule} className="chip chip-neutral">{rule}</li>)}
+          </ul>
+        )}
         {durationNote}
         {submitButton}
       </aside>
@@ -542,7 +553,9 @@ export function CreateRoomPage() {
     {!isWide && (
       <div className="create-room-footer">
         <div className="create-room-footer-info">
-          <span className="create-room-footer-summary">{footerSummary}</span>
+          {changedRules.length > 0 && (
+            <span className="create-room-footer-summary">{changedRules.join(" · ")}</span>
+          )}
         </div>
         {submitButton}
       </div>

@@ -848,8 +848,6 @@ export const PT: Catalogue = {
     deleteThisRoomSettingPreset: "Eliminar esta predefinição de sala?",
     deletePresetDescription: "As salas que já criaste com esta predefinição não são afetadas.",
     createTheRoom: "criar a sala",
-    noScoring: "Sem pontuação",
-    public: "Pública",
     private: "Privada",
     backToLobby: "Voltar ao átrio",
     leaveBlankForARandom: "Deixa em branco para um nome aleatório!",
@@ -857,10 +855,6 @@ export const PT: Catalogue = {
     createRoom2: "Criar sala",
     yourRoom: "A tua sala",
     aRandomName: "Um nome aleatório",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "jogador", other: "jogadores" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "ronda", other: "rondas" }),
   },
 
   customPromptsEditor: {
@@ -1612,10 +1606,9 @@ export const PT: Catalogue = {
     scoring: "Pontuação",
     hints: "Pistas",
     findPrompt: "Encontrar uma palavra",
-    rollerCoaster: "montanha-russa",
     loading: "A carregar…",
     prompt: "Palavra",
-    howGoes: "Como corre",
+    howHard: "Quão difícil",
     guessed: "Adivinhada",
     picked: "Escolhida",
     drawn: "Desenhada",
@@ -1627,10 +1620,6 @@ export const PT: Catalogue = {
     defaultScoring: "Pontuação padrão",
     pressureScoring: "Pontuação sob pressão",
     allHintModes: "Todos os modos de pistas",
-    noHints: "Sem pistas",
-    checkpointHints: "Pistas temporizadas",
-    purchasedHints: "Pistas compradas",
-    letterWheel: "Roda de letras",
     backToLobby: "Voltar ao átrio",
   },
 
@@ -1907,7 +1896,7 @@ export const PT: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Idioma",
+    promptLanguage: "Idioma das palavras",
     visibility: "Visibilidade",
     maxPlayers: "Máximo de jogadores",
     rounds: "Rondas",
@@ -2580,7 +2569,7 @@ export const PT: Catalogue = {
     colorblindSafe: "Próprias para daltonismo",
     colorsThatStayApartFor: "Cores que continuam distintas para jogadores daltónicos.",
     blackAndWhite: "Preto e branco",
-    blackAndWhiteOnly: "Só preto e branco.",
+    twoSwatchesNoCustomColors: "Só duas amostras; sem cores livres.",
     allTools: "Todas as ferramentas",
     onlyTool: (p: { tool: string }) =>
       `só ${p.tool}`,

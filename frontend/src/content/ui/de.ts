@@ -848,8 +848,6 @@ export const DE: Catalogue = {
     deleteThisRoomSettingPreset: "Diese Raumvorlage löschen?",
     deletePresetDescription: "Räume, die du damit schon erstellt hast, bleiben unverändert.",
     createTheRoom: "den Raum erstellen",
-    noScoring: "Ohne Punkte",
-    public: "Öffentlich",
     private: "Privat",
     backToLobby: "Zurück zur Lobby",
     leaveBlankForARandom: "Leer lassen für einen Zufallsnamen!",
@@ -857,10 +855,6 @@ export const DE: Catalogue = {
     createRoom2: "Raum erstellen",
     yourRoom: "Dein Raum",
     aRandomName: "Ein zufälliger Name",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "Spieler", other: "Spieler" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "Runde", other: "Runden" }),
   },
 
   customPromptsEditor: {
@@ -1613,10 +1607,9 @@ export const DE: Catalogue = {
     scoring: "Punkte",
     hints: "Hinweise",
     findPrompt: "Begriff finden",
-    rollerCoaster: "Achterbahn",
     loading: "Wird geladen …",
     prompt: "Begriff",
-    howGoes: "Wie es läuft",
+    howHard: "Wie schwer",
     guessed: "Erraten",
     picked: "Gewählt",
     drawn: "Gezeichnet",
@@ -1628,10 +1621,6 @@ export const DE: Catalogue = {
     defaultScoring: "Standardpunkte",
     pressureScoring: "Druckpunkte",
     allHintModes: "Alle Hinweismodi",
-    noHints: "Keine Hinweise",
-    checkpointHints: "Zeitgesteuerte Hinweise",
-    purchasedHints: "Gekaufte Hinweise",
-    letterWheel: "Buchstabenrad",
     backToLobby: "Zurück zur Lobby",
   },
 
@@ -1908,7 +1897,7 @@ export const DE: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Sprache",
+    promptLanguage: "Begriffssprache",
     visibility: "Sichtbarkeit",
     maxPlayers: "Maximale Spielerzahl",
     rounds: "Runden",
@@ -2581,7 +2570,7 @@ export const DE: Catalogue = {
     colorblindSafe: "Farbenblindensicher",
     colorsThatStayApartFor: "Farben, die für farbenblinde Spieler unterscheidbar bleiben.",
     blackAndWhite: "Schwarz-Weiß",
-    blackAndWhiteOnly: "Nur Schwarz und Weiß.",
+    twoSwatchesNoCustomColors: "Nur zwei Farbfelder; keine eigenen Farben.",
     allTools: "Alle Werkzeuge",
     onlyTool: (p: { tool: string }) =>
       `nur ${p.tool}`,

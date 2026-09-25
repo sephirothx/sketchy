@@ -5,7 +5,7 @@ import { listCommunityPromptLists, listOwnedPromptLists } from "../lib/promptLis
 import { readEveryPage } from "../lib/communityLists";
 import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary } from "../types";
-import { CheckIcon, InfoIcon, PlusIcon } from "./icons";
+import { CheckIcon, PlusIcon } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/prompt-lists.css";
@@ -205,17 +205,24 @@ export function PromptListPicker({
               </button>
               {/* A new tab: this picker also lives in the waiting-room settings,
                   where navigating away would discard settings the host is
-                  part-way through editing. */}
-              {wl.isBundled && <a
-                className="prompt-list-chip-info"
-                href={`/prompt-lists/${wl.slug}`}
-                target="_blank"
-                rel="noreferrer"
-                title={ui.promptListPicker.howListPlays({ name: wl.name })}
-                aria-label={ui.promptListPicker.howListPlays({ name: wl.name })}
-              >
-                <span aria-hidden="true"><InfoIcon size={13} /></span>
-              </a>}
+                  part-way through editing. Drawn as the form's one help mark,
+                  the "?" of `FieldHint`, with the same tooltip: the form had
+                  a "?" and an "ⓘ" for the same idea. It stays a link, in a
+                  24px target, because it goes somewhere. */}
+              {wl.isBundled && <span className="m3-switch-hint-wrap">
+                <a
+                  className="prompt-list-chip-info"
+                  href={`/prompt-lists/${wl.slug}`}
+                  target="_blank"
+                  rel="noreferrer"
+                  aria-label={ui.promptListPicker.howListPlays({ name: wl.name })}
+                >
+                  <span className="m3-switch-hint" aria-hidden="true">?</span>
+                </a>
+                <span className="m3-switch-hint-tooltip" role="tooltip">
+                  {ui.promptListPicker.howListPlays({ name: wl.name })}
+                </span>
+              </span>}
             </span>
           );
   }

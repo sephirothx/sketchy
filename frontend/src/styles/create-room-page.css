@@ -177,16 +177,18 @@ details.form-section > .form-section-body {
 /* The language sits with the name and the visibility, not with the lists:
    it is what the room is, and the lists answer to it. */
 .create-room-language-field {
+  align-items: flex-start;
   display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
 }
 
-
-.create-room-language-caption {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 700;
-  max-width: 320px;
+/* Worded like the room name's label beside it, which it sits level with. */
+.create-room-language-label {
+  color: var(--ink);
+  font-size: 14.5px;
+  font-weight: 800;
 }
 
 .visibility-caption {
@@ -341,6 +343,8 @@ details.form-section > .form-section-body {
 .custom-prompts-editor > label { display: flex; flex-direction: column; font-size: 14.5px; font-weight: 800; color: var(--ink); gap: 5px; }
 .custom-prompts-summary { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 13px; font-weight: 700; gap: 4px 12px; margin-top: 7px; }
 .custom-prompts-summary strong { color: var(--success-ink); }
+/* Nothing typed is nothing to celebrate: green is for a count that is there. */
+.custom-prompts-summary.is-empty strong { color: var(--muted); }
 .custom-prompts-summary.has-errors strong,
 .custom-prompts-summary.has-errors span { color: var(--danger); }
 .custom-prompts-error,
@@ -775,6 +779,14 @@ details.form-section > .form-section-body {
 
   .create-room-name-field {
     flex: 1 1 100%;
+  }
+
+  /* Its label goes beside the flag here rather than above it: above, the
+     label's width pushed the visibility onto a line of its own. */
+  .create-room-language-field {
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
   }
 
   /* ── The three numbers ────────────────────────────────────────────────

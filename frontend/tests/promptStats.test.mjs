@@ -7,7 +7,10 @@ import {
   difficultyBand,
   isPromptStatsSort,
   matchingPrompts,
+  nothingRanked,
+  plainPromptNames,
   ratioLabel,
+  searchExample,
   searchNote,
   statsRows,
 } from "../src/lib/promptStats.ts";
@@ -123,4 +126,25 @@ test("the search note says how many matched, or that none did", () => {
   assert.ok(searchNote("cat", 2)?.includes("2 prompts"));
   assert.ok(searchNote("cat", 1)?.includes("1 prompt "));
   assert.ok(searchNote("zzz", 0)?.includes("No prompt"));
+});
+
+test("a slice with nothing ranked is told apart from an empty or a ranked one", () => {
+  assert.equal(nothingRanked({ ratedCount: 0, unratedCount: 40 }), true);
+  assert.equal(nothingRanked({ ratedCount: 1, unratedCount: 40 }), false);
+  // An empty list has nothing to list plainly either.
+  assert.equal(nothingRanked({ ratedCount: 0, unratedCount: 0 }), false);
+});
+
+test("an unranked list is named alphabetically in its own language", () => {
+  // A code-point sort would put "Äpfel" after "Zebra"; German files it under A.
+  const prompts = [prompt("Zebra"), prompt("Äpfel"), prompt("birne"), prompt("Banane")];
+  assert.deepEqual(plainPromptNames(prompts, "de"), ["Äpfel", "Banane", "birne", "Zebra"]);
+});
+
+test("the search example is a prompt from the list, whatever order it arrives in", () => {
+  const listed = [prompt("cat"), prompt("roller coaster"), prompt("ant")];
+  const example = searchExample(listed, "en");
+  assert.equal(example, "cat");
+  assert.equal(searchExample([...listed].reverse(), "en"), example);
+  assert.equal(searchExample([], "en"), null);
 });
