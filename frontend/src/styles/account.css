@@ -634,6 +634,14 @@
   }
 }
 
+/* Inside the card, the corner doodle sits where the words' last lines run, so
+   the words keep clear of its corner rather than being drawn over. */
+@container first-run (min-width: 620px) and (max-width: 1079.98px) {
+  .first-run-say {
+    padding-right: 104px;
+  }
+}
+
 /* A guest who came back to find their name taken by somebody online who
    arrived first (R-ACCT-09): said above the field that fixes it. */
 .first-run-name-in-use,
@@ -777,12 +785,17 @@
 
 /* Decoration, in the ink the doodle avatars use. One doodle in the card's
    corner at ordinary widths; a column of three where there is width to spare
-   (below); nothing at all on a phone. */
+   (below); nothing at all on a phone.
+
+   Seated wholly inside the corner. It used to hang 14px below the card's
+   edge, plus a random drop, in a card that clips - half a kite, which read as
+   an overflow bug rather than a peek. The inset covers the largest tilt, size
+   and drop the deal gives (`MAX_DROP` in lib/firstRunArt.ts). */
 .first-run-art.is-left {
-  bottom: -14px;
+  bottom: 18px;
   pointer-events: none;
   position: absolute;
-  right: 10px;
+  right: 18px;
   z-index: 0;
 }
 
@@ -860,8 +873,9 @@
 }
 
 @media (max-width: 900px) {
+  /* The same side inset as the lobby's other cards. */
   .first-run {
-    padding: 18px;
+    padding: 18px 24px 20px;
   }
 
   .first-run-heading {

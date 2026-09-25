@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { FIRST_RUN_DOODLES, pickArt } from "../src/lib/firstRunArt.ts";
+import { FIRST_RUN_DOODLES, MAX_DROP, pickArt } from "../src/lib/firstRunArt.ts";
 import { DOODLES } from "../src/lib/avatarDoodles.ts";
 
 /** A roll that walks a known sequence, so a deal can be asserted exactly. */
@@ -20,11 +20,13 @@ test("three different doodles, dealt to the two sides of the tag", () => {
 });
 
 test("a deal is the same in the same order, and every tilt, drop and size is small", () => {
+  // Small enough that the corner doodle stays inside a card that clips.
+  assert.ok(MAX_DROP <= 6, `drop allowance ${MAX_DROP}`);
   for (let seed = 0; seed < 50; seed += 1) {
     const art = pickArt(DOODLES, Math.random);
     for (const doodle of [...art.left, ...art.right]) {
       assert.ok(Math.abs(doodle.rotate) <= 9, `tilt ${doodle.rotate}`);
-      assert.ok(Math.abs(doodle.shift) <= 14, `drop ${doodle.shift}`);
+      assert.ok(Math.abs(doodle.shift) <= MAX_DROP, `drop ${doodle.shift}`);
       assert.ok(doodle.scale >= 0.85 && doodle.scale <= 1.15, `size ${doodle.scale}`);
     }
   }

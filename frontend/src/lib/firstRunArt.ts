@@ -22,7 +22,7 @@ export interface FirstRunDoodle {
   name: string;
   /** Degrees, -9 to 9. */
   rotate: number;
-  /** Pixels up or down off the middle, -14 to 14. Drawn, not laid out. */
+  /** Pixels up or down off the middle, -6 to 6. Drawn, not laid out. */
   shift: number;
   /** 0.85 to 1.15 of the size the card gives it. Drawn, not laid out. */
   scale: number;
@@ -37,6 +37,14 @@ export interface FirstRunArt {
 
 /** How many doodles the card holds when it is wide enough for them. */
 export const FIRST_RUN_DOODLES = 3;
+
+/** How far a doodle may sit off the middle, up or down. It was 14, which on
+    top of a corner doodle placed 14px *below* the card's edge put half of it
+    out of sight: in a card that clips, it read as an overflow bug rather than
+    a peek. The corner now keeps the doodle inside (`.first-run-art.is-left`),
+    and the drop is small enough to stay there with the largest tilt and size
+    the deal can give it. */
+export const MAX_DROP = 6;
 
 const range = (roll: number, from: number, to: number) => from + roll * (to - from);
 
@@ -57,7 +65,7 @@ export function pickArt(pool: readonly string[], roll: () => number): FirstRunAr
     const doodle: FirstRunDoodle = {
       name,
       rotate: Math.round(range(roll(), -9, 9) * 2) / 2,
-      shift: Math.round(range(roll(), -14, 14)),
+      shift: Math.round(range(roll(), -MAX_DROP, MAX_DROP)),
       scale: Math.round(range(roll(), 0.85, 1.15) * 100) / 100,
     };
     (index < leftCount ? left : right).push(doodle);
