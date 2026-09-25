@@ -56,8 +56,10 @@ test("a toast arriving on a screen below the cap evicts nothing", () => {
 // a failure - a refusal sentence, a socket error, a caught error, or a
 // key or literal that says it could not, cannot, failed, went wrong or was refused -
 // sent with a tone that cannot be "error". A message held in a `const` in the
-// same file is followed to what it was set to; a conditional tone passes when
-// one of its branches is "error", since the message then usually branches too.
+// same file is followed to what it was set to. A conditional tone is read
+// branch by branch: when the message branches on the same condition, each
+// message branch is held to its own tone; otherwise every branch the failure
+// can reach has to be "error".
 const ROOT = "src";
 const FAILURE_CALLS = new Set(["refusalText", "refusalSentence", "socketRequestErrorMessage"]);
 const FAILURE_KEY = /could\s?n[o']?t|cannot|failed|went\s?wrong|refused/i;
@@ -73,15 +75,7 @@ function sourceFiles(dir = ROOT, out = []) {
   return out;
 }
 
-function mayBeError(tone) {
-  if (!tone) return false;
-  if (ts.isParenthesizedExpression(tone)) return mayBeError(tone.expression);
-  if (ts.isStringLiteralLike(tone)) return tone.text === "error";
-  if (ts.isConditionalExpression(tone)) {
-    return mayBeError(tone.whenTrue) || mayBeError(tone.whenFalse);
-  }
-  return false;
-}
+const unwrap = (node) => (node && ts.isParenthesizedExpression(node) ? unwrap(node.expression) : node);
 
 function misTonedFailures(path, text = readFileSync(path, "utf8")) {
   const source = ts.createSourceFile(
@@ -127,12 +121,27 @@ function misTonedFailures(path, text = readFileSync(path, "utf8")) {
     return failure;
   };
 
+  // Whether a failure in `message` can be drawn in a tone other than "error".
+  const misToned = (messageNode, toneNode) => {
+    const message = unwrap(messageNode);
+    const tone = unwrap(toneNode);
+    if (tone && ts.isConditionalExpression(tone)) {
+      const sameCondition = ts.isConditionalExpression(message)
+        && unwrap(message.condition).getText(source) === unwrap(tone.condition).getText(source);
+      return sameCondition
+        ? misToned(message.whenTrue, tone.whenTrue) || misToned(message.whenFalse, tone.whenFalse)
+        : misToned(message, tone.whenTrue) || misToned(message, tone.whenFalse);
+    }
+    if (!saysFailure(message)) return false;
+    return !(tone && ts.isStringLiteralLike(tone) && tone.text === "error");
+  };
+
   const found = [];
   const visit = (node) => {
     if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)
       && node.expression.text === "notify" && node.arguments.length > 0) {
       const [message, tone] = node.arguments;
-      if (saysFailure(message) && !mayBeError(tone)) {
+      if (misToned(message, tone)) {
         const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
         found.push(`${relative(ROOT, path)}:${line}`);
       }
@@ -161,6 +170,9 @@ test("the scan catches a failure toast sent with a tone that is not error", () =
     notify(\`Couldn't reach \${what}.\`, "info");
     notify(ui.x.cannotJoin, "info");
     notify("Report copied as Markdown.", "success");
+    notify(ui.x.couldNotSave, ok ? "error" : "success");
+    notify(ok ? ui.x.couldNotSave : ui.x.saved, ok ? "success" : "error");
+    notify(!ok ? ui.x.couldNotSave : ui.x.saved, !ok ? "error" : "success");
   `;
   assert.deepEqual(misTonedFailures("src/snippet.ts", snippet), [
     "snippet.ts:2",
@@ -174,6 +186,8 @@ test("the scan catches a failure toast sent with a tone that is not error", () =
     "snippet.ts:14",
     "snippet.ts:15",
     "snippet.ts:16",
+    "snippet.ts:18",
+    "snippet.ts:19",
   ]);
 });
 
