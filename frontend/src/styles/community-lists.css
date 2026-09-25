@@ -93,7 +93,7 @@
 .community-catalogue-pill-count {
   background: var(--primary);
   border-radius: 999px;
-  color: #fff;
+  color: var(--on-primary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   padding: 1px 7px;
@@ -195,10 +195,8 @@
   position: absolute;
 }
 
-.community-catalogue-card-open:focus-visible { outline: none; }
-
 .community-catalogue-card:has(.community-catalogue-card-open:focus-visible) {
-  outline: 3px solid var(--primary-edge-soft);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -284,11 +282,6 @@
 }
 
 .community-catalogue-star.is-on svg { fill: var(--warm); stroke: var(--warm); }
-
-.community-catalogue-star:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
 
 .community-catalogue-star:disabled { cursor: default; opacity: 0.6; }
 
@@ -541,7 +534,7 @@
   padding: 0 12px;
 }
 
-.community-prompts-search:focus-within { border-color: var(--primary); }
+.community-prompts-search:focus-within { border-color: var(--focus-ring); }
 
 .community-prompts-search input {
   background: none;
@@ -626,8 +619,6 @@
 .community-catalogue-credit a:focus-visible,
 .prompt-list-credit a:focus-visible {
   border-radius: 3px;
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
 }
 
 /* In the editor it opens the form, so it gets the room a field would. */

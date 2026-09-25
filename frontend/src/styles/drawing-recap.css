@@ -6,7 +6,7 @@
 .drawing-recap-meta { color: var(--muted); margin: 0; }
 .drawing-recap-header-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 .drawing-recap-close, .drawing-recap-download, .drawing-recap-navigation button, .drawing-recap-status button { background: var(--well); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-weight: 800; padding: 9px 13px; }
-.drawing-recap-download { background: var(--primary); border-color: var(--primary); color: var(--card); }
+.drawing-recap-download { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .drawing-recap-download:disabled { cursor: not-allowed; opacity: .5; }
 .drawing-recap-canvas { align-items: center; aspect-ratio: 4 / 3; background: var(--well); border-radius: 10px; display: flex; justify-content: center; overflow: hidden; width: 100%; }
 .drawing-recap-canvas .canvas-wrapper, .drawing-recap-canvas .canvas-stack { max-width: none; width: 100%; }

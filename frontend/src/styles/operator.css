@@ -357,7 +357,7 @@
 
 .ops-size-table th[scope="row"] {
   color: var(--ink);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-weight: 700;
   text-align: left;
 }
@@ -368,7 +368,7 @@
 }
 
 .ops-loop-name {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 12.5px;
 }
 
@@ -574,7 +574,7 @@
 }
 
 .ops-identifier {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
 }
 
@@ -635,7 +635,7 @@
    columns rather than one long scroll between the reviewer and the buttons. */
 .mod-held-description {
   margin: 0 0 12px;
-  color: var(--text-muted);
+  color: var(--muted);
 }
 
 .mod-held-prompts {
@@ -655,7 +655,7 @@
 }
 
 .mod-held-aliases {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: 0.85em;
 }
 
@@ -1228,7 +1228,7 @@
 }
 
 .bug-diagnostic.is-wide dd {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -1298,7 +1298,7 @@
   background: var(--success-button) !important;
   border-color: var(--success-button-edge) !important;
   box-shadow: 0 2px 0 var(--success-button-edge);
-  color: #ffffff !important;
+  color: var(--on-success) !important;
 }
 
 
@@ -1352,7 +1352,7 @@
    but only from the keyboard, or clicking a tab would outline the whole page. */
 .ops-tabpanel:focus { outline: none; }
 .ops-tabpanel:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 4px;
   border-radius: var(--radius-sm);
 }
@@ -1631,7 +1631,7 @@
    somebody's words rather than the app's. */
 .mod-prior-note {
   border-left: 2px solid color-mix(in srgb, var(--warning) 45%, transparent);
-  color: var(--ink-soft, var(--ink));
+  color: var(--ink);
   font-size: 13px;
   font-style: italic;
   margin: 0;
@@ -1644,8 +1644,8 @@
    because a picture already removed is usually the moderator's own work
    rather than something to be warned about. */
 .mod-picture-note {
-  background: var(--surface-sunk, color-mix(in srgb, var(--ink) 4%, transparent));
-  border: 1px solid var(--rule, color-mix(in srgb, var(--ink) 12%, transparent));
+  background: var(--well);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   margin-bottom: 12px;
   padding: 10px 13px;

@@ -120,6 +120,9 @@
 /* The strip: a dark pill of emoji and nothing else, like a chat app's. The
    same dark in both themes, because it sits over a white canvas. */
 .reaction-picker {
+  /* The app's ring in white, the one colour that reads on this strip in
+     both themes. */
+  --focus-ring: #ffffff;
   position: absolute;
   right: 0;
   bottom: calc(var(--reaction-height) + 8px);
@@ -155,11 +158,12 @@
   -webkit-appearance: none;
 }
 
-/* A cue, not a movement: the glyph stays put and its circle lights up. */
+/* A cue, not a movement: the glyph stays put and its circle lights up. The
+   keyboard also gets the app's focus ring, drawn inside the circle (a11y.css):
+   the wash alone is too faint to be the only sign of focus. */
 .reaction-option:hover:not(:disabled),
 .reaction-option:focus-visible {
   background: rgba(255, 255, 255, 0.16);
-  outline: none;
 }
 
 .reaction-option.is-mine {
@@ -196,7 +200,7 @@
   border: 0;
   border-radius: 9px;
   background: var(--primary);
-  color: var(--card);
+  color: var(--on-primary);
   font: inherit;
   font-weight: 800;
   cursor: pointer;

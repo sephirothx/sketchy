@@ -311,11 +311,6 @@
   width: 100%;
 }
 
-.profile-shelf-open:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 .profile-shelf-canvas {
   aspect-ratio: 4 / 3;
   background: var(--well);
@@ -458,7 +453,7 @@
 /* A game that stopped is labelled rather than hidden once it is shown, so the
    odd scores in it are explained instead of merely odd. */
 .profile-presence.is-online {
-  color: var(--color-success, #2e8b57);
+  color: var(--success-ink);
   font-weight: 600;
 }
 

@@ -274,7 +274,7 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--primary);
-  color: var(--primary-ink);
+  color: var(--on-primary);
   font-size: 10px;
   font-weight: 800;
   line-height: 16px;
@@ -300,7 +300,7 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--primary);
-  color: var(--primary-ink);
+  color: var(--on-primary);
   font-size: 11px;
   font-weight: 800;
   line-height: 18px;
@@ -343,7 +343,7 @@
   padding: 8px 12px;
 }
 .session-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.session-revoke-all { background: var(--danger); border-color: var(--danger) !important; color: var(--card); }
+.session-revoke-all { background: var(--danger-button); border-color: var(--danger-button) !important; color: var(--on-danger); }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
 /* A session used from a browser it was not issued to. Given the warning
@@ -420,7 +420,7 @@
   padding: 6px 6px 6px 10px;
 }
 .two-factor-secret code, .two-factor-codes code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   letter-spacing: 0.06em;
   overflow-wrap: anywhere;
@@ -441,7 +441,7 @@
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
   color: var(--ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 18px;
   min-width: 0;
   padding: 0;
@@ -593,7 +593,7 @@
 .account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
 .account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
 .account-export-note { color: var(--ink); line-height: 1.4; }
-.account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--card); text-decoration: none; }
+.account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--on-primary); text-decoration: none; }
 .account-danger-zone { border-color: var(--danger-soft); }
 .account-danger-zone > p { font-size: 14px; line-height: 1.5; }
 .account-delete-form { display: grid; gap: 12px; }
@@ -669,12 +669,15 @@
 /* The tag itself: a red banner, a dashed rule to write on, and the button
    that sticks it on. Tilted a degree and a half, because a sticker is. */
 .first-run-tag {
+  /* White in both themes, so the dark theme's lifted ring (2.7:1 here) gives
+     way to the indigo edge, which is dark in both. */
+  --focus-ring: var(--primary-edge);
   background: #fff;
   /* A name tag is a name tag: it never runs the width of the card. */
   justify-self: center;
   max-width: 360px;
   width: 100%;
-  border: 2px solid var(--tag-edge, #c8102e);
+  border: 2px solid var(--tag-edge);
   border-radius: 12px;
   box-shadow: 0 3px 0 rgba(20, 16, 10, 0.14);
   display: grid;
@@ -684,7 +687,7 @@
 }
 
 .first-run-tag-top {
-  background: var(--tag-edge, #c8102e);
+  background: var(--tag-edge);
   /* The card's radius less its border, so the banner ends where the card
      curves instead of poking two square corners past it. */
   border-radius: 10px 10px 0 0;
@@ -905,9 +908,9 @@
   flex-wrap: wrap;
   margin: 12px 0;
   padding: 12px 16px;
-  border: 1px solid rgba(245, 158, 11, 0.5);
+  border: 1px solid var(--warning-edge);
   border-radius: 12px;
-  background: rgba(245, 158, 11, 0.08);
+  background: var(--warning-soft);
 }
 
 .game-end-claim-copy {

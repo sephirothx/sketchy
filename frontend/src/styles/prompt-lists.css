@@ -246,8 +246,6 @@
   text-underline-offset: 2px;
 }
 
-.prompt-list-alert-action:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
-
 /* Publication reads as a state with one action, not a value in a select: it is
    an act with a gate behind it, and the only way a list stops being private. */
 .prompt-list-publication {
@@ -391,8 +389,6 @@
 
 .tag-picker-trigger:hover,
 .tag-picker-trigger[aria-expanded="true"] { border-color: var(--primary); }
-.tag-picker-remove:focus-visible,
-.tag-picker-trigger:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* The count changes as you pick, so it is tabular: 1 and 3 are different
    widths in this face, and the number would otherwise shift under the eye. */

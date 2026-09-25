@@ -312,7 +312,7 @@
 }
 
 .settings-email {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
   letter-spacing: 0.01em;
   color: var(--ink);
@@ -490,7 +490,7 @@
 }
 
 .settings-toggle-input:focus-visible ~ .m3-switch-track {
-  outline: 3px solid var(--primary-edge-soft);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -634,17 +634,13 @@
   transform: scale(1.06);
 }
 
-.settings-volume-control input[type="range"]:focus-visible {
-  outline: none;
-}
-
 .settings-volume-control input[type="range"]:focus-visible::-webkit-slider-thumb {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
 .settings-volume-control input[type="range"]:focus-visible::-moz-range-thumb {
-  outline: 3px solid #93c5fd;
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 

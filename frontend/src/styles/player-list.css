@@ -160,7 +160,10 @@
   width: 100%;
 }
 
+/* The focus ring is re-pointed at the menu's ink: the indigo ring is under
+   3:1 on this dark popover in the light theme. */
 .player-vote-menu {
+  --focus-ring: var(--menu-ink);
   background: var(--menu);
   border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
   border-radius: 8px;
@@ -209,24 +212,26 @@
 
 .player-vote-action.player-vote-afk .player-vote-action-kind,
 .player-vote-action.player-vote-afk .player-vote-action-count {
-  color: #fcd34d;
+  color: var(--menu-warning);
 }
 
 .player-vote-action.player-vote-kick .player-vote-action-kind,
 .player-vote-action.player-vote-kick .player-vote-action-count {
-  color: #fca5a5;
+  color: var(--menu-danger);
 }
 
+/* A cast vote fills its row with its own tint and writes on it in the
+   menu's ground colour. */
 .player-vote-action.is-cast {
-  color: #0f172a;
+  color: var(--menu);
 }
 
 .player-vote-action.player-vote-afk.is-cast {
-  background: #f59e0b;
+  background: var(--menu-warning);
 }
 
 .player-vote-action.player-vote-kick.is-cast {
-  background: #ef4444;
+  background: var(--menu-danger);
 }
 
 .player-vote-action.is-cast .player-vote-action-kind,
@@ -285,8 +290,8 @@ button.player-vote-chip-afk:focus-visible {
 
 button.player-vote-chip-kick:hover,
 button.player-vote-chip-kick:focus-visible {
-  background: var(--danger);
-  color: #fff;
+  background: var(--danger-button);
+  color: var(--on-danger);
 }
 
 .player-vote-chip-afk {
@@ -306,7 +311,7 @@ button.player-vote-chip-kick:focus-visible {
 /* Report sits with the votes and reads like them, but carries no tally: it
    asks a moderator to look rather than needing a majority. */
 .player-vote-action.player-vote-report .player-vote-action-kind {
-  color: #fdba74;
+  color: var(--menu-warm);
 }
 
 

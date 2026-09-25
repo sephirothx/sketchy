@@ -364,6 +364,9 @@ function PictureEditChip({
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="settings-picture-input"
+        // Out of the tab order: it is invisible, and the Edit picture menu
+        // below is the keyboard's way to it (it calls click() on this).
+        tabIndex={-1}
         aria-label={ui.settingsOverlay.choosePicture}
         onChange={(event) => {
           onChoose(event.target.files?.[0]);

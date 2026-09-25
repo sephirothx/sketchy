@@ -780,7 +780,11 @@ function ProfileView({ userId }: { userId: string }) {
               <p>
                 {ui.profilePage.yourGamesAreAlreadyBeingRecorded}
               </p>
-              <button type="button" onClick={() => setAuthMode("claim")}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setAuthMode("claim")}
+              >
                 {ui.profilePage.createAccount}
               </button>
             </section>
