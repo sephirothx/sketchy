@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { waitingRequestCount } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { useOpenOverlay } from "../hooks/useOverlayRoute";
@@ -463,6 +464,7 @@ export function AuthDialog({
   const canUsePasskeys = passkeysAvailable();
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
+  useBackCloses(true, onClose);
   const isClaim = mode === "claim";
 
   async function submit(event: React.FormEvent) {

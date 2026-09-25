@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState, type FormEvent } from "react";
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { BugIcon, ImageIcon } from "./icons";
 import {
   BUG_AREAS,
@@ -70,6 +71,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
   const strokeAvailable = useCanvasBudgetStore((state) => state.strokeAvailable);
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: cancelRef });
+  useBackCloses(true, onClose);
 
   // A preview URL is a live handle on the blob; letting the dialog close
   // without releasing it leaks the whole screenshot for the tab's lifetime.

@@ -2,6 +2,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { ActiveGameRoom } from "../components/ActiveGameRoom";
 import { CrashBoundary } from "../components/CrashBoundary";
 import { InviteEntryPage } from "../components/InviteEntryPage";
+import { exitRoomHistory } from "../hooks/useRoomHistory";
 import { emitTransient } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { CrashPage } from "./CrashPage";
@@ -34,7 +35,8 @@ export function GameRoomPage() {
     clearSession();
     emitTransient("leave_room");
     reset();
-    navigate("/");
+    // The crashed room's history entries go too, as Leave takes them (R-UX-15).
+    exitRoomHistory(normalizedCode, (replace) => navigate("/", { replace }));
   }
 
   // On the way out the session is already cleared but the route has not
