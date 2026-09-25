@@ -103,10 +103,14 @@
   --shadow-raised: 0 10px 30px rgba(20, 16, 10, 0.14);
 
   /* motion. Two speeds: --dur-fast for a control answering the pointer
-     (hover, press, selection), --dur for something that moves across the
-     screen or opens (a sheet, a thumb, a chevron). A transition that smooths
-     a clock's tick is tied to that clock's cadence instead, and keeps its own
-     number. Reduced motion switches all of them off in a11y.css. */
+     (hover, press, selection) and for a light thing appearing where the
+     pointer already is (a popover, a picker, a dialog's scrim fading in);
+     --dur for something that travels or unfolds (a sheet, a dialog card, a
+     thumb, a chevron). A transition that smooths a clock's tick keeps that
+     clock's cadence instead, and an animation whose length is what it shows
+     (a spinner's turn, a reaction's float) keeps its own number: both are
+     named, with their reasons, in frontend/tests/styleScales.test.mjs.
+     Reduced motion switches all of them off in a11y.css. */
   --dur-fast: 120ms;
   --dur: 180ms;
 

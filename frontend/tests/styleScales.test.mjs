@@ -93,7 +93,7 @@ test("transitions and animations name their properties and use the motion tokens
     ["choosing-prompt-pulse", "a looping pulse's period"],
     ["reaction-float", "how long a reaction drifts up the canvas before it fades"],
     ["restart-approved-emphasis", "the approved banner's one beat of emphasis"],
-    ["rank-change-pop", "delayed 2550ms to land after the results rows settle"],
+    ["rank-change-pop", "a 300ms pop delayed 2550ms, both timed against the results rows' 420/600ms entrance so it lands as they settle"],
   ]);
   const literal = (value) =>
     value.split(",").filter((part) => /(?<![\w-])\d*\.?\d+m?s\b/.test(part));
