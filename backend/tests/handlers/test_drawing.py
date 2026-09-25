@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock
@@ -1306,6 +1307,42 @@ async def test_a_retransmitted_opener_still_restarts_the_open_path():
 
     assert canvas.active_draw_sequence == 1
     assert len(canvas.history) == 1 and canvas.history[0].points == [(0.1, 0.1)]
+
+
+async def test_the_action_nonce_decides_between_a_resend_and_a_fresh_stroke():
+    """#1057 review: a dot tapped again on the same spot with the same brush
+    has the open path's very opener, which the wire alone cannot tell from a
+    retransmission. The client's action nonce, kept across resends and new
+    for each action, can."""
+    room, sio = _drawing_room()
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+    dot = encode_live_drawing("draw_start", {"x": 0.3, "y": 0.3, "color": "#000000", "width": 4})
+
+    await draw("drawer-sid", dot, [*canvas_action(room.game, 1), 111])
+    # The same action resent (its nonce kept): the path starts over.
+    await draw("drawer-sid", dot, [*canvas_action(room.game, 1), 111])
+    assert canvas.active_draw_sequence == 1 and len(canvas.history) == 1
+
+    # A new dot on the same spot, reusing the number after a lost draw_end:
+    # a new nonce, so the open path is closed for the room, not restarted.
+    sio.emit.reset_mock()
+    await draw("drawer-sid", dot, [*canvas_action(room.game, 1), 222])
+    assert canvas.active_draw_sequence is None
+    assert canvas.sequence == 1 and len(canvas.history) == 1
+    [(notice,)] = [call.args[1:] for call in _emitted(sio, "canvas_stale")]
+    assert notice[2] == "dropped_frame"
+
+
+@pytest.mark.parametrize("nonce", [0, -1, 2**31, True, "7", 1.5])
+async def test_an_action_nonce_out_of_range_is_refused(nonce):
+    from app.handlers.payloads import PayloadError, parse_draw_payload
+
+    opener = encode_live_drawing("draw_start", {"x": 0.3, "y": 0.3, "color": "#000000", "width": 4})
+    with pytest.raises(PayloadError):
+        parse_draw_payload(opener, [1, 1, nonce])
+    assert parse_draw_payload(opener, [1, 1, 2**31 - 1]).action_nonce == 2**31 - 1
+    assert parse_draw_payload(opener, [1, 1]).action_nonce is None
 
 
 async def test_undo_of_the_open_path_forgets_that_it_was_open():

@@ -779,7 +779,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `dismiss_colorblind_suggestion` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `start_game` | `EmptyPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
 | `select_prompt` | `SelectPromptPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
-| `draw` | binary frame + optional `[generation, sequence]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
+| `draw` | binary frame + optional `[generation, sequence, nonce?]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `request_sync_strokes` | `[requestId]`, or `[requestId, generation, actionCount, historyHash]` | `{ok: true}` once the reply is on its way; `not_in_game` with `retryAfterMs` when there is no canvas; `too_fast` from the resync budget | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `send_chat` | `TextPayload` | ✓ | [`chat.py`](../backend/app/handlers/chat.py) |
@@ -1686,7 +1686,7 @@ them. Four numbers keep the two canvases reconcilable.
 
 ```
 drawer                                     server                       everyone else
-  │  draw(frame, [generation, sequence])      │
+  │  draw(frame, [gen, sequence, nonce])      │
   │──────────────────────────────────────────▶│  validate rules, generation, sequence
   │                                           │  CanvasSession.record_stroke(...)
   │                                           │  commit_sequence(...) if it closes one
@@ -1694,9 +1694,12 @@ drawer                                     server                       everyone
   │◀──── canvas_commit [gen, seq, rev, hash] ─│
 ```
 
-- Only the frame that **starts** an action carries `[generation, sequence]`. Path
+- Only the frame that **starts** an action carries `[generation, sequence, nonce]`. Path
   points and the path-end frame carry none — the parser refuses an identity on those
-  and requires one on the others.
+  and requires one on the others. The **nonce** (1..2³¹−1) is drawn once per action
+  and kept across every resend of it, so a retransmitted opener and a fresh stroke that
+  reuses its sequence differ even when their openers are identical (#1057); it is
+  optional, and an identity without one is judged by its opener.
 - A path is committed on `draw_end`, using the sequence its `draw_start` carried. A
   shape or fill commits immediately. A clear commits immediately.
 - The rebroadcast to other clients is the drawer's **exact wire bytes**, never a
@@ -1726,7 +1729,7 @@ drawer                                     server                       everyone
 | `generation` is stale | `canvas_stale … stale_generation` |
 | `sequence` ≤ committed | replay the stored `canvas_commit` to that socket if the recorded mutation matches, else `canvas_stale … unknown_sequence` |
 | `sequence` > expected (a gap) | `request_canvas_actions [generation, expected, received]` |
-| A new action arrives while a path is still open | a `draw_start` repeating the open sequence **and the open path's own opener** (first point, colour, width) is a retransmission and restarts that path; one repeating the sequence with a different opener is a fresh stroke after a lost `draw_end`, and closes the torn path the way the next committed sequence does (#1057); an action carrying the **next committed** sequence — the drawer's `draw_end` went with its connection, and the sync after the rebind restarted its numbering where the committed history ends (#999) — closes the open path for the room with a `draw_end` carrying its commit, discards the action and sends `canvas_stale … dropped_frame`, so the drawer resyncs and does it again (asking for the open sequence looped: the client re-sent the very action it held under it; the number is spent by the path's commit, and a commit under the next one would reach a client holding the action under this one); anything else is `request_canvas_actions`, and a refused `draw_start`'s trailing frames are dropped rather than appended to the open path |
+| A new action arrives while a path is still open | a `draw_start` repeating the open sequence **and the open path's nonce** (or, without one, its opener: first point, colour, width) is a retransmission and restarts that path; one repeating the sequence with a different nonce or opener is a fresh stroke after a lost `draw_end`, and closes the torn path the way the next committed sequence does (#1057); an action carrying the **next committed** sequence — the drawer's `draw_end` went with its connection, and the sync after the rebind restarted its numbering where the committed history ends (#999) — closes the open path for the room with a `draw_end` carrying its commit, discards the action and sends `canvas_stale … dropped_frame`, so the drawer resyncs and does it again (asking for the open sequence looped: the client re-sent the very action it held under it; the number is spent by the path's commit, and a commit under the next one would reach a client holding the action under this one); anything else is `request_canvas_actions`, and a refused `draw_start`'s trailing frames are dropped rather than appended to the open path |
 | A refused tool or color | `canvas_stale … refused_tool` |
 | A frame that does not decode | `canvas_stale … invalid_frame` (the acknowledgement body never leaves the server: nobody awaits a `draw`) |
 | A final batch (tag 8) past the point budget | dropped whole, nothing committed, the path stays open; the drawer's one-byte `draw_end` that follows closes it, and its completion watch covers the case where nothing does |

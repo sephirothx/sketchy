@@ -66,6 +66,8 @@ class CanvasSession:
     commits: list[tuple[int, int, str]] = field(default_factory=list, repr=False, compare=False)
     commit_base_sequence: int = field(default=1, repr=False, compare=False)
     active_draw_sequence: int | None = field(default=None, repr=False, compare=False)
+    # The open path's action nonce, when its client sent one (#1057).
+    active_draw_nonce: int | None = field(default=None, repr=False, compare=False)
     discarding_draw_sequence: bool = field(default=False, repr=False, compare=False)
     active_path_index: int | None = field(default=None, repr=False, compare=False)
     point_count: int = field(default=0, repr=False, compare=False)
@@ -253,12 +255,20 @@ class CanvasSession:
             return None
         return self.commits[index]
 
-    def is_active_path_opener(self, payload: dict) -> bool:
+    def is_active_path_opener(self, payload: dict, nonce: int | None = None) -> bool:
         """Whether a `draw_start` repeats the open path's own opener - a
         retransmission - rather than beginning a new stroke that reuses its
-        number after the path's `draw_end` was lost (#1057)."""
+        number after the path's `draw_end` was lost (#1057).
+
+        Decided by the action nonce when both sides have one: a resend keeps
+        its action's nonce and a fresh stroke draws a new one, which an
+        identical opener - a dot tapped again on the same spot with the same
+        brush - cannot tell apart. Without one, by the opener as stored.
+        """
         if self.active_path_index is None or self.history.last_is_clear():
             return False
+        if nonce is not None and self.active_draw_nonce is not None:
+            return nonce == self.active_draw_nonce
         try:
             return self.history.opens_like(
                 self.active_path_index,

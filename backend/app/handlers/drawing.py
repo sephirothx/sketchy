@@ -108,7 +108,9 @@ async def _draw(ctx: HandlerContext, sid, payload) -> str:
             if (
                 packet.event == "draw_start"
                 and sequence == room.game.canvas.active_draw_sequence
-                and room.game.canvas.is_active_path_opener(packet.payload)
+                and room.game.canvas.is_active_path_opener(
+                    packet.payload, payload.action_nonce
+                )
             ):
                 # The same opener again: a retransmission, so the path starts
                 # over from it.
@@ -207,6 +209,7 @@ async def _draw(ctx: HandlerContext, sid, payload) -> str:
     if packet.event == "draw_start":
         room.game.canvas.discarding_draw_sequence = False
         room.game.canvas.active_draw_sequence = sequence
+        room.game.canvas.active_draw_nonce = payload.action_nonce
     # The action is committed before the frame goes out, so the frame can carry
     # the commit that closes it. Nothing observable is reordered: both used to
     # be decided inside this call, and the state a rebroadcast describes is now
