@@ -68,6 +68,8 @@ test("a repeat is the same words in the same tone, with nothing to act on", () =
   assert.equal(sameToast(refusal, offer), false);
   assert.equal(sameToast(offer, refusal), false);
   assert.equal(sameToast(offer, offer), false);
+});
+
 // A failure sent with any tone but "error" renders as a blue info (or green,
 // or amber) toast with role="status": it looks like news rather than a
 // problem, and a screen reader waits its turn to say it. Eight friend and

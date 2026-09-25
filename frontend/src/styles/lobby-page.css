@@ -143,11 +143,6 @@
   color: var(--ink);
 }
 
-.site-nav-link:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 .site-nav-link > svg {
   flex: none;
 }

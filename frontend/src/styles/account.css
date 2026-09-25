@@ -734,12 +734,6 @@
   border-bottom-color: var(--tag-refused);
 }
 
-.first-run-guest-row input:focus-visible {
-  border-bottom-color: var(--tag-edge, #c8102e);
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 3px;
-}
-
 /* Plainly a name, not a game: a secondary .btn, because what plays is Quick
    play, beside the room list. */
 .first-run-guest-submit {
