@@ -57,6 +57,27 @@ interface WaitingRoomPanelProps {
 }
 
 
+/**
+ * A phone docks the rules card's footer over the bottom of the screen, so the
+ * room shell keeps that much room free under the chat card. Measured rather
+ * than fixed: the dock is one row or two (the host's Start under Edit and the
+ * pad, an error line, a wait that wraps), and the fixed 84px it replaced was
+ * shorter than the host's two rows, which left the chat's last lines under it.
+ * Above 900px the footer is in the card and the reserve is not applied.
+ */
+function reserveDock(dock: HTMLDivElement | null) {
+  const shell = dock?.closest<HTMLElement>(".room-shell");
+  if (!dock || !shell) return;
+  const measure = () => shell.style.setProperty("--waiting-dock-height", `${dock.offsetHeight}px`);
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(dock, { box: "border-box" });
+  return () => {
+    observer.disconnect();
+    shell.style.removeProperty("--waiting-dock-height");
+  };
+}
+
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
@@ -67,6 +88,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // says more than a grid of faces can, so rendering both would put every
   // nickname on the page twice.
   const isNarrow = useMediaQuery("(max-width: 900px)");
+  // Up to where the bar gives the room's name back (1100px) the rules card's
+  // footer is a column about 340px wide on a desktop and a dock on a phone:
+  // Edit and the pad's button share a row there only with the short labels.
+  const shortFooterLabels = useMediaQuery("(max-width: 1100px)");
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The scratch pad in place of the column (#591). Focus follows the swap:
   // the control that made it lands on the one that undoes it, and back.
@@ -160,8 +185,8 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         : ui.waitingRoomPanel.waitingForAHost}
     </p>
   );
-  // A phone's dock puts this button on one row with Edit (the host's) or
-  // with the wait for the host (everybody else's), so there it has the short
+  // Up to 1100px this button shares one row with Edit (the host's) or with
+  // the wait for the host (everybody else's), so there it has the short
   // label; the accessible name is the visible one either way (WCAG 2.5.3).
   const drawButton = (
     <button
@@ -172,7 +197,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       onClick={() => swapTo(true)}
     >
       <BrushIcon size={15} />
-      {isNarrow ? ui.waitingRoomPanel.doodle : ui.scratchPad.drawWhileYouWait}
+      {shortFooterLabels ? ui.waitingRoomPanel.doodle : ui.scratchPad.drawWhileYouWait}
     </button>
   );
 
@@ -220,7 +245,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         {/* A phone docks Start at the bottom of the screen, as the room view
             does, rather than wrapping it onto a line of its own in the strip. */}
         {isNarrow && (
-          <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+          <div ref={reserveDock} className="waiting-rules-footer waiting-start-card" aria-live="polite">
             {isHost ? startButton(true) : waitingForHost}
           </div>
         )}
@@ -375,7 +400,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             playerCount: activePlayers.length,
           }}
         />
-        <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+        <div ref={reserveDock} className="waiting-rules-footer waiting-start-card" aria-live="polite">
           {isHost ? (
             <>
               <button
@@ -384,7 +409,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 onClick={() => setSettingsOpen(true)}
               >
                 <PencilIcon size={15} />
-                {isNarrow ? ui.waitingRoomPanel.editRules : ui.waitingRoomPanel.editRoomRules}
+                {shortFooterLabels ? ui.waitingRoomPanel.editRules : ui.waitingRoomPanel.editRoomRules}
               </button>
               {props.startError && <p className="waiting-start-error">{props.startError}</p>}
               {drawButton}

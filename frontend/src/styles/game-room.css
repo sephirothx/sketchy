@@ -80,6 +80,13 @@
   width: 0.8em;
 }
 
+/* Beside the bar's 16px name 0.8em read faint; the headings' larger text
+   carries the smaller ratio. */
+.game-header-room-name .room-visibility-icon svg {
+  height: 0.9em;
+  width: 0.9em;
+}
+
 .game-header-center {
   align-items: center;
   display: flex;
@@ -772,10 +779,17 @@
   flex: none;
 }
 
-/* The host's phone dock is two rows: Edit rules and Doodle sharing the first
-   (short labels, WaitingRoomPanel), Start the whole second. It was three
-   rows, the long labels too wide to sit side by side. */
-@media (max-width: 900px) {
+/* Alone - the phone's dock while the pad is open, where the button is in the
+   strip above - the wait is centred, as the dock's only line. */
+.waiting-rules-footer .waiting-start-waiting:only-child {
+  text-align: center;
+}
+
+/* Up to 1100px the host's footer is two rows: Edit rules and Doodle sharing
+   the first (short labels, WaitingRoomPanel), Start the whole second - the
+   phone's dock, and the rules card in the 340px column of 901-1100px. It was
+   three rows, staggered, the long labels too wide to sit side by side. */
+@media (max-width: 1100px) {
   .waiting-rules-footer .waiting-start-button {
     flex: 1 0 100%;
     width: auto;
@@ -1308,9 +1322,12 @@
     z-index: 30;
   }
 
-  /* Room for the dock, so the chat card is never under it. */
+  /* Room for the dock, so the chat card is never under it: the dock's own
+     height, which WaitingRoomPanel measures onto the shell, plus a gap. The
+     value here stands until the first measure. */
   .room-shell-waiting {
-    padding-bottom: 84px;
+    --waiting-dock-height: 68px;
+    padding-bottom: calc(var(--waiting-dock-height) + 16px);
   }
 
   .waiting-start-button {
