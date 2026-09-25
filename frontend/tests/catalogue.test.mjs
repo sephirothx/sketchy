@@ -303,6 +303,30 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
       ts.SyntaxKind.EqualsEqualsToken, ts.SyntaxKind.ExclamationEqualsToken,
       ts.SyntaxKind.GreaterThanToken].includes(condition.operatorToken.kind)
     && [condition.left, condition.right].some((side) => ts.isNumericLiteral(side) && side.text === "1");
+  // `{outcome === "abandoned" ? "abandoned" : ui.x.cutShort}`: one lowercase
+  // word is what a class name or an enum value looks like, so the sentence
+  // test lets it through - but a value that lands between JSX tags is read,
+  // whatever it looks like. Followed up through the branches, fallbacks and
+  // parentheses that choose it, and not past anything else.
+  const renderedAsText = (node) => {
+    let child = node;
+    let parent = node.parent;
+    for (;;) {
+      if (ts.isParenthesizedExpression(parent)) {
+        // Nothing to check: the parentheses only group.
+      } else if (ts.isConditionalExpression(parent)) {
+        if (parent.condition === child) return false;
+      } else if (ts.isBinaryExpression(parent)) {
+        const op = parent.operatorToken.kind;
+        if (parent.right !== child || ![ts.SyntaxKind.BarBarToken, ts.SyntaxKind.QuestionQuestionToken,
+          ts.SyntaxKind.AmpersandAmpersandToken].includes(op)) return false;
+      } else {
+        return ts.isJsxExpression(parent) && !ts.isJsxAttribute(parent.parent);
+      }
+      child = parent;
+      parent = parent.parent;
+    }
+  };
   const wordOrNothing = (branch) => (ts.isStringLiteral(branch) || ts.isNoSubstitutionTemplateLiteral(branch))
     && /^[\p{L} ]*$/u.test(branch.text);
   const visit = (node) => {
@@ -319,6 +343,10 @@ function tableLiteralsIn(path, text = readFileSync(path, "utf8")) {
         const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
         found.push(`${relative(ROOT, path)}:${line} ${where} ${node.getText(source).slice(0, 50)}`);
       }
+    } else if ((ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node))
+      && /[A-Za-z]{2}/.test(node.text) && renderedAsText(node) && !excused(node)) {
+      const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+      found.push(`${relative(ROOT, path)}:${line} rendered ${node.getText(source).slice(0, 50)}`);
     }
     ts.forEachChild(node, visit);
   };
@@ -362,6 +390,9 @@ test("the table scan would notice a sentence put back", () => {
     "parts.push(`${customPrompts.analysis.usableCount} custom`);",
     "const el = <span title={isAnonymous ? `${nickname} (guest)` : undefined} />;",
     "const highlight = { label: ui.x.y, value: `${correct} of ${total} guessed it` };",
+    // One lowercase word, rendered: what the profile's game history showed.
+    'const el = <span>{outcome === "abandoned" ? "abandoned" : ui.x.cutShort}</span>;',
+    'const el = <td>{rows.length > 0 ? rows : "unknown"}</td>;',
   ]) {
     assert.ok(probe(snippet), `the table scan cannot see: ${snippet}`);
   }
@@ -376,6 +407,8 @@ test("the table scan would notice a sentence put back", () => {
     'const size = place === 1 ? 52 : 42;',
     'const color = rank === 1 ? "var(--gold)" : null;',
     '// Not copy: a filename.\nconst f = "Sketchy recovery codes.txt";',
+    'const el = <div className={open ? "open" : "closed"} />;',
+    'const el = <span>{kind === "abandoned" ? ui.x.a : ui.x.b}</span>;',
   ]) {
     assert.ok(!probe(plumbing), `the table scan takes plumbing for words: ${plumbing}`);
   }
@@ -393,6 +426,110 @@ test("no catalogue entry is blank", () => {
     .filter(([, value]) => typeof value === "string" && value.trim() === "")
     .map(([key]) => key);
   assert.deepEqual(blank, [], `blank entries render as nothing at all: ${blank}`);
+});
+
+/* The house style of the English copy, checked rather than remembered.
+
+Each rule was broken in a dozen places before it was a test (the beta polish
+list's C7): curly and straight quotes side by side, "..." beside "…", "Failed
+to" and "Couldn't" beside the house "Could not …", errors with no full stop,
+and British spellings in an American catalogue. English only, on purpose: the
+other six write their own typography (French spaces its colons, German and
+Dutch phrase "Could not" differently), and a rule that fits English would be
+wrong in each of them. */
+const ENGLISH = ["content/ui/en.ts", "content/rules/en.ts"];
+
+/** Every piece of text in a source file's string and template literals, with
+    its line - the words, not the keys or the code around them. */
+function copyIn(rel) {
+  const path = join(ROOT, rel);
+  const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const found = [];
+  const visit = (node) => {
+    let text = null;
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) text = node.text;
+    else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) text = node.text;
+    // A string in a type, an import, a `case` or a comparison is code.
+    const code = text !== null && (ts.isLiteralTypeNode(node.parent) || ts.isImportDeclaration(node.parent)
+      || ts.isCaseClause(node.parent)
+      || (ts.isBinaryExpression(node.parent) && node.parent.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken));
+    if (text !== null && !code) {
+      const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+      found.push({ at: `${rel}:${line}`, text, node });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+// Spelled the American way in UI copy. *Catalogue* is not here: it is the
+// name of the Community catalogue, recorded in GLOSSARY's Known drift.
+const BRITISH = /\b(colour\w*|behaviour\w*|favour\w*|honour\w*|(recogn|organ|real|apolog|custom)is(e|ed|es|ing)|centre\w*|licence|cancell(ed|ing)|travell(ed|ing)|labell(ed|ing)|towards|enrol|enrolment|whilst|amongst|grey|judgement)\b/i;
+
+const STYLE = [
+  ["a curly quote or apostrophe (the copy uses ' and \")", (text) => /[‘’“”]/.test(text)],
+  ["three dots for an ellipsis (use …)", (text) => text.includes("...")],
+  ["\"Failed to\" (errors say \"Could not …\")", (text) => /\bFailed to\b/.test(text)],
+  ["\"Couldn't\" (errors say \"Could not …\")", (text) => /\bCouldn't\b/i.test(text)],
+  ["a double space", (text) => /\S {2,}\S/.test(text.replace(/\n\s*/g, " "))],
+  ["a British spelling", (text) => BRITISH.test(text)],
+];
+
+test("the English copy keeps one house style", () => {
+  const copy = ENGLISH.flatMap((rel) => copyIn(rel));
+  // A scan that found nothing would pass every rule; make sure it reads both files.
+  for (const known of ["Sign in first.", "Rules"]) {
+    assert.ok(copy.some(({ text }) => text === known), `the style scan no longer reads ${JSON.stringify(known)}`);
+  }
+  assert.ok(copy.some(({ at }) => at.startsWith("content/rules/en.ts")), "the style scan no longer reads the rules");
+  const offenders = copy.flatMap(({ at, text }) =>
+    STYLE.filter(([, breaks]) => breaks(text)).map(([rule]) => `${at} ${rule}: ${JSON.stringify(text.slice(0, 60))}`));
+  assert.deepEqual(offenders, [], `the English catalogue has drifted from its style:\n${offenders.join("\n")}`);
+});
+
+// A "Could not …" that is a heading or a status label rather than a sentence.
+const NOT_A_SENTENCE = new Set([
+  "roomStageNotice.couldNotRejoin", // the title of the card over a room it could not rejoin
+  "accountData.couldNotPrepare", // an export's status, beside Queued and Ready
+]);
+
+test("an error is a sentence, and ends like one", () => {
+  // Every refusal, however the server phrased it, reads as a whole sentence.
+  const unfinished = Object.entries(EN.refusals)
+    .map(([code, sentence]) => [code, typeof sentence === "function" ? sentence({}) : sentence])
+    .filter(([, sentence]) => !/[.!?]$/.test(sentence))
+    .map(([code, sentence]) => `refusals.${code}: ${JSON.stringify(sentence)}`);
+  // And so does every "Could not …" in the catalogue, wherever it is filed.
+  for (const { at, text, node } of copyIn("content/ui/en.ts")) {
+    if (!/^Could not\b/.test(text)) continue;
+    let key = node.parent;
+    while (key && !ts.isPropertyAssignment(key)) key = key.parent;
+    const group = key?.parent?.parent;
+    const path = `${group && ts.isPropertyAssignment(group) ? `${group.name.getText()}.` : ""}${key?.name.getText()}`;
+    if (NOT_A_SENTENCE.has(path)) continue;
+    // A template's sentence ends in its last literal part.
+    const template = ts.isTemplateHead(node) ? node.parent : null;
+    const ending = template ? template.templateSpans.at(-1).literal.text : text;
+    if (!/[.!?]$/.test(ending)) unfinished.push(`${at} ${path}: ${JSON.stringify(text)}`);
+  }
+  assert.deepEqual(unfinished, [], `these errors stop short of a full stop:\n${unfinished.join("\n")}`);
+});
+
+test("the style check would notice a slip", () => {
+  const breaks = (text) => STYLE.filter(([, rule]) => rule(text)).map(([name]) => name);
+  for (const slip of [
+    "Couldn’t copy the link.", "Type a message...", "Failed to load", "Couldn't copy.",
+    "Two  spaces.", "Your behaviour was reviewed.", "The vote was cancelled.", "Ask them to help you enrol.",
+  ]) {
+    assert.ok(breaks(slip).length > 0, `the style check cannot see: ${slip}`);
+  }
+  for (const fine of [
+    "Could not copy the link.", "Type a message…", "Community catalogue", "Every signed-in device, including any you did\n              not recognize.",
+    "Kick vote, AFK vote or report Ana", "Otherwise the room carries on.",
+  ]) {
+    assert.deepEqual(breaks(fine), [], `the style check takes good copy for a slip: ${fine}`);
+  }
 });
 
 // Groups nobody names directly, each for a stated reason.

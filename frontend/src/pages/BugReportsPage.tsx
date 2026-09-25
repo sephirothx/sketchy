@@ -21,6 +21,7 @@ import { canAdminister } from "../lib/operatorAccess";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/operator.css";
 
 function formatWhen(value: string, dateTime: (date: Date) => string): string {
@@ -61,6 +62,7 @@ const FILTERS: { name: BugReportStatus; label: string }[] = [
  * for themselves, so this decides what to show rather than what to allow.
  */
 export function BugReportsPage() {
+  useDocumentTitle("Bug reports");
   const { dateTime } = useClock();
   const user = useAuthStore((state) => state.user);
   const hasResolved = useAuthStore((state) => state.hasResolved);
@@ -165,7 +167,7 @@ export function BugReportsPage() {
       {error && <p className="auth-error" role="alert">{error}</p>}
 
       <div className="mod-layout">
-        <aside className="ops-card mod-queue" aria-label="Bug report queue">
+        <aside className="surface-card ops-card mod-queue" aria-label="Bug report queue">
           <div className="mod-queue-head">
             <div>
               <SectionLabel>Administrators only</SectionLabel>
@@ -250,7 +252,7 @@ export function BugReportsPage() {
               </div>
 
               <div className={`bug-case-grid${active.screenshot.status === "none" ? " is-single" : ""}`}>
-                <section className="ops-card">
+                <section className="surface-card ops-card">
                   <h2>What happened</h2>
                   <p className="bug-case-details">{active.details}</p>
                   {clientErrors.length > 0 && (
@@ -272,7 +274,7 @@ export function BugReportsPage() {
                 </section>
 
                 {active.screenshot.status !== "none" && (
-                  <aside className="ops-card">
+                  <aside className="surface-card ops-card">
                     <div className="bug-shot-head">
                       <h2>Screenshot</h2>
                       <Chip kind="neutral">{bytes(active.screenshot.byteSize)}</Chip>
@@ -313,7 +315,7 @@ export function BugReportsPage() {
                   They sit below the report itself: what the player wrote and
                   what they photographed is the case, and the machine detail is
                   what you turn to once you know what you are looking for. */}
-              <section className="ops-card bug-diagnostics-card">
+              <section className="surface-card ops-card bug-diagnostics-card">
                 <h2>Diagnostics</h2>
                 <dl className="bug-diagnostics">
                   {highlights(active).map(([label, shown, wide]) => (
@@ -372,7 +374,7 @@ export function BugReportsPage() {
                   </div>
                 </>
               ) : (
-                <section className="ops-card">
+                <section className="surface-card ops-card">
                   <h2>{humanizeBugValue(active.status)}</h2>
                   <p className="mod-case-meta">{active.reviewedAt ? formatWhen(active.reviewedAt, dateTime) : ""}</p>
                   <p className="bug-case-details">{active.resolutionNote}</p>

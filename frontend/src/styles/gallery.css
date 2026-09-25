@@ -6,8 +6,9 @@
 /* ------------------------------------------------------------------- page */
 
 .gallery-page {
+  --page-width: 1008px;
   margin: 0 auto;
-  max-width: 1040px;
+  max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 64px;
 }
 
@@ -19,7 +20,7 @@
   font-family: var(--font-display);
   font-size: 27px;
   font-weight: 600;
-  margin: 4px 0 3px;
+  margin: 0 0 3px;
 }
 
 .gallery-head p {
@@ -38,31 +39,11 @@
   margin-bottom: 18px;
 }
 
-.gallery-sort {
-  background: var(--track);
-  border-radius: 999px;
-  display: inline-flex;
-  gap: 2px;
-  padding: 3px;
-}
-
-.gallery-sort button {
-  background: none;
-  border: 0;
-  border-radius: 999px;
-  color: var(--muted);
-  cursor: pointer;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  min-height: 36px;
-  padding: 6px 14px;
-}
-
-.gallery-sort button[aria-pressed="true"] {
-  background: var(--card);
-  box-shadow: var(--shadow);
-  color: var(--ink);
+/* Three short words: with the recipe's 88px floor per segment the sort was
+   278px wide, most of it padding. Equal columns as wide as the widest word
+   keep it near the size it was before it shared the recipe. */
+.gallery-sort .segmented-control {
+  grid-auto-columns: 1fr;
 }
 
 /* The window, only under Top: a second row of pills rather than a second
@@ -71,28 +52,6 @@
   display: inline-flex;
   flex-wrap: wrap;
   gap: 8px;
-}
-
-.gallery-pill {
-  align-items: center;
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
-  color: var(--muted);
-  cursor: pointer;
-  display: inline-flex;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  gap: 7px;
-  min-height: 36px;
-  padding: 6px 14px;
-}
-
-.gallery-pill[aria-pressed="true"] {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
 }
 
 /* ----------------------------------------------------------------- layout
@@ -127,14 +86,10 @@
   padding: 8px 0;
   position: sticky;
   top: var(--banner-height);
-  z-index: 2;
+  z-index: var(--z-dock);
 }
 
 .gallery-sticky-sort .gallery-filters { margin-bottom: 0; }
-
-.gallery-sticky-sort .gallery-sort { display: flex; }
-
-.gallery-sticky-sort .gallery-sort button { flex: 1 1 0; }
 
 /* Stuck under whatever banner the app is showing (its height is published
    as --banner-height by AppBanners), not under the banner. */
@@ -170,7 +125,7 @@
 
 .gallery-rail-head h2 {
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
   margin: 0;
 }
 
@@ -187,7 +142,7 @@
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   cursor: pointer;
   display: flex;
@@ -199,18 +154,13 @@
   width: 100%;
 }
 
-.gallery-rail-item:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
 .gallery-rail-thumb {
   display: block;
   flex: 0 0 64px;
   width: 64px;
 }
 
-.gallery-rail-thumb .gallery-card-canvas { border-radius: 8px; }
+.gallery-rail-thumb .gallery-card-canvas { border-radius: var(--radius-xs); }
 
 .gallery-rail-text {
   display: flex;
@@ -270,19 +220,14 @@
 .gallery-post-open {
   background: none;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: block;
   padding: 0;
   width: 100%;
 }
 
-.gallery-post-open:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 2px;
-}
-
-.gallery-post-open .gallery-card-canvas { border-radius: 10px; }
+.gallery-post-open .gallery-card-canvas { border-radius: var(--radius-sm); }
 
 .gallery-post-open:hover .gallery-card-canvas { border-color: var(--primary-ink); }
 
@@ -340,7 +285,7 @@
   aspect-ratio: 4 / 3;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   justify-content: center;
   overflow: hidden;
@@ -369,7 +314,7 @@
 .gallery-post-skeleton {
   aspect-ratio: 4 / 3;
   background: var(--track);
-  border-radius: 14px;
+  border-radius: var(--radius);
   width: 100%;
 }
 
@@ -413,8 +358,7 @@
   .gallery-spinner { animation: none; }
 }
 
-.gallery-end,
-.gallery-empty-state {
+.gallery-end {
   align-items: center;
   display: flex;
   flex-direction: column;
@@ -422,14 +366,6 @@
   padding: 22px 0 8px;
   text-align: center;
 }
-
-.gallery-empty-state {
-  border: 1.5px dashed var(--line-strong);
-  border-radius: 14px;
-  padding: 36px 16px;
-}
-
-.gallery-empty-state .btn { margin-top: 6px; }
 
 .gallery-end-title {
   font-family: var(--font-display);
@@ -445,13 +381,6 @@
   max-width: 40ch;
 }
 
-.gallery-empty {
-  color: var(--muted);
-  font-style: italic;
-  margin: 0;
-  padding: 8px 0;
-}
-
 /* Offered once the reader is past the top, over everything, in the corner
    the thumb reaches; the icon button's recipe, raised. */
 .gallery-back-to-top {
@@ -459,7 +388,7 @@
   box-shadow: var(--shadow-raised);
   position: fixed;
   right: 24px;
-  z-index: 3;
+  z-index: var(--z-float);
 }
 
 @media (max-width: 480px) {
@@ -499,7 +428,7 @@
 .gallery-drawing-canvas .canvas-stack {
   aspect-ratio: 4 / 3;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -529,25 +458,25 @@
   min-width: 0;
 }
 
-.gallery-replay-track:disabled { cursor: default; opacity: 0.5; }
+.gallery-replay-track:disabled { cursor: default; opacity: var(--opacity-disabled); }
 
 /* The part behind the thumb is filled; WebKit has no progress pseudo, so
    the fill is painted from the input's own --replay-fill. */
 .gallery-replay-track::-webkit-slider-runnable-track {
   background: linear-gradient(90deg, var(--primary) var(--replay-fill), var(--track) var(--replay-fill));
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 6px;
 }
 
 .gallery-replay-track::-moz-range-track {
   background: var(--track);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 6px;
 }
 
 .gallery-replay-track::-moz-range-progress {
   background: var(--primary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 6px;
 }
 
@@ -571,14 +500,12 @@
   width: 18px;
 }
 
-.gallery-replay-track:focus-visible { outline: none; }
-
 .gallery-replay-track:focus-visible::-webkit-slider-thumb {
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 .gallery-replay-track:focus-visible::-moz-range-thumb {
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  box-shadow: 0 0 0 3px var(--focus-ring);
 }
 
 @media (max-width: 480px) {

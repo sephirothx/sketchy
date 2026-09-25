@@ -72,9 +72,9 @@ export function RoomPlayersPanel({
     <section className="room-players-panel" aria-labelledby="room-players-title">
       <div className="room-panel-heading">
         <div>
-          {showFinalStandings && <p className="room-panel-kicker">{ui.roomPlayersPanel.finalStandings}</p>}
+          {showFinalStandings && <p className="section-label room-panel-kicker">{ui.roomPlayersPanel.finalStandings}</p>}
           <div className="room-players-title-row">
-            <h2 id="room-players-title">{ui.roomPlayersPanel.players}</h2>
+            <h2 id="room-players-title" className="panel-title">{ui.roomPlayersPanel.players}</h2>
             <span
               className="room-player-occupancy"
               aria-label={ui.roomPlayersPanel.playersOfCapacity({ here: activePlayers.length, capacity: maxPlayers })}
@@ -84,7 +84,11 @@ export function RoomPlayersPanel({
           </div>
         </div>
         <div className="room-panel-actions">
-          {mode === "waiting" && (
+          {/* Only when it says something the count beside the heading does
+              not: somebody seated who is away or disconnected, and so does
+              not count towards a start. "2/8" and "2 ready" said one fact
+              twice the rest of the time. */}
+          {mode === "waiting" && eligiblePlayers.length !== activePlayers.length && (
             <span className={`waiting-ready-count ${eligiblePlayers.length >= 2 ? "is-ready" : ""}`}>
               {ui.roomPlayersPanel.readyCount({ count: eligiblePlayers.length })}
             </span>
@@ -115,7 +119,7 @@ export function RoomPlayersPanel({
                       >
                         {spectator.nickname}
                       </span>
-                      {spectator.playerId === myPlayerId ? " (you)" : ""}
+                      {spectator.playerId === myPlayerId ? ` ${ui.roomPlayersPanel.you}` : ""}
                     </li>
                   ))}
                 </ul>
@@ -140,11 +144,12 @@ export function RoomPlayersPanel({
         <div className="spectator-promotion" data-testid="spectator-promotion">
           <p>
             {playerSpaceAvailable
-              ? ui.roomPlayersPanel.aPlayerSlotIsAvailable
-              : ui.roomPlayersPanel.playerSlotsAreCurrentlyFull}
+              ? ui.roomPlayersPanel.aPlayerSeatIsOpen
+              : ui.roomPlayersPanel.noPlayerSeatsOpen}
           </p>
           <button
             type="button"
+            className="btn btn-primary btn-compact"
             disabled={!playerSpaceAvailable || promotionBusy}
             onClick={() => void becomePlayer()}
           >

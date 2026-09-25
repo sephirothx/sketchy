@@ -71,9 +71,9 @@ export function useFriendArrivalNotices(): void {
     // Nothing to do about an acceptance - it is already a friendship - so
     // this one is only read, and keeps the ordinary length.
     if (accepted.length === 1) {
-      notify(ui.useFriendArrivalNotices.acceptedYourRequest({ name: accepted[0].displayName }));
+      notify(ui.useFriendArrivalNotices.acceptedYourRequest({ name: accepted[0].displayName }), "info");
     } else if (accepted.length > 1) {
-      notify(ui.useFriendArrivalNotices.severalAccepted({ count: accepted.length }));
+      notify(ui.useFriendArrivalNotices.severalAccepted({ count: accepted.length }), "info");
     }
     // Told, so it is not told again - and only the ones this message named,
     // so an acceptance that landed since the read keeps its turn. After the

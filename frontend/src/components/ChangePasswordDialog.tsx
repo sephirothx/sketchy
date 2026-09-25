@@ -116,7 +116,7 @@ export function ChangePasswordDialog({
     >
       {mailed ? (
         <p className="modal-body">
-          {ui.changePasswordDialog.ifThatAccountHasVerifiedEmail}
+          {ui.changePasswordDialog.ifThatAccountHasConfirmedEmail}
         </p>
       ) : (
         <>

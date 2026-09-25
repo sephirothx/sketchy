@@ -50,7 +50,7 @@ export const RULES_FR: RulesDocument = {
             "Deviner n’est pas du spam, aussi farfelues que soient les propositions — deviner vite, c’est tout l’intérêt.",
           ],
           examples: [
-            "Répéter un message jusqu’à ce que plus personne ne puisse suivre la manche",
+            "Répéter un message jusqu’à ce que plus personne ne puisse suivre la partie",
             "Publier des liens ou des invitations vers ailleurs",
             "Coller le même pavé de texte dans un salon après l’autre",
           ],
@@ -118,7 +118,7 @@ export const RULES_FR: RulesDocument = {
           examples: [
             "Écrire ou épeler le mot pendant que tu le dessines",
             "Donner le mot à un ami par appel ou par une autre application",
-            "Utiliser un second compte pour te souffler les réponses",
+            "Utiliser un second compte pour te souffler le mot",
           ],
         },
       ],

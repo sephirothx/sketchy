@@ -30,7 +30,7 @@ async def _join_invite(page, code: str, name: str, *, spectator: bool = False):
     await page.goto(f"{BASE_URL}/room/{code}")
     await use_guest_name(page, name)
     await page.get_by_role(
-        "button", name="Spectate" if spectator else "Join game", exact=True
+        "button", name="Spectate" if spectator else "Join", exact=True
     ).click()
     await page.get_by_test_id("waiting-room").wait_for()
 

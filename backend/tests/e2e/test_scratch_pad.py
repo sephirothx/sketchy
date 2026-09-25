@@ -17,7 +17,7 @@ INKED_PIXELS = """(canvas) => {
 
 
 CLEAR = ".clear-button, .toolbar-mobile-clear"
-UNDO = ".undo-button, .toolbar-mobile-chip[aria-label='Undo last stroke']"
+UNDO = ".undo-button, .toolbar-mobile-chip[aria-label='Undo']"
 
 
 async def scribble(page: Page, pad_selector: str) -> None:
@@ -210,7 +210,7 @@ async def test_the_pad_fits_the_narrowest_phone():
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
 
             # And in place of the waiting room's column, strip and all.
-            await page.click('button:has-text("Create a room")')
+            await page.click('button:has-text("Create room")')
             await page.wait_for_selector(".create-room-page")
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')

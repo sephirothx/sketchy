@@ -13,11 +13,13 @@ import { useCloseOverlay } from "../hooks/useOverlayRoute";
 import { useFocusTrap } from "../hooks/useFocusTrap";
 import { useAuthStore } from "../store/authStore";
 import { useFriendsStore } from "../store/friendsStore";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
+import { AuthDialog } from "./AccountMenu";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { ConfirmationDialog } from "./ConfirmationDialog";
 import { ModalHeader } from "./ui/ModalShell";
-import { UsersIcon } from "./icons";
+import { KeyIcon, PlusIcon, UsersIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/friends.css";
 import "../styles/lazy/settings.css";
@@ -52,6 +54,10 @@ export function FriendsOverlay() {
   const titleId = useId();
 
   const isGuest = useAuthStore((state) => state.user?.isAnonymous ?? true);
+  const guestName = useAuthStore((state) => state.user?.displayName ?? "");
+  const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const lists = useFriendsStore((state) => state.lists);
   const loaded = useFriendsStore((state) => state.loaded);
   const pending = useFriendsStore((state) => state.pending);
@@ -134,12 +140,23 @@ export function FriendsOverlay() {
 
         <div className="friends-modal-body">
           {/* A guest reaching this by URL. The menu does not offer it to them,
-              and the endpoint answers 403, so the honest screen says why
-              rather than showing an empty list that looks like a fault. */}
+              and the endpoint answers 403, so the honest screen says what it
+              takes and offers it - the same two ways in as Settings' guest
+              card - rather than an explanation with nothing to press. */}
           {isGuest ? (
-            <p className="friends-empty">
-              {ui.friendsOverlay.friendsNeedAccountGuestNameBelongs}
-            </p>
+            <div className="friends-guest">
+              <p className="friends-empty">{ui.friendsOverlay.friendsNeedAnAccount}</p>
+              <div className="settings-guest-actions">
+                <button type="button" className="btn btn-primary" onClick={() => setAuthMode("claim")}>
+                  <PlusIcon size={15} />
+                  {ui.settingsOverlay.createAccount}
+                </button>
+                <button type="button" className="btn btn-secondary" onClick={() => setAuthMode("login")}>
+                  <KeyIcon size={15} />
+                  {ui.settingsOverlay.logIn}
+                </button>
+              </div>
+            </div>
           ) : !loaded ? (
             <p className="friends-empty">{ui.friendsOverlay.loading}</p>
           ) : friendsSurfaceIsEmpty(surface) && suggestions.length === 0 ? (
@@ -215,6 +232,16 @@ export function FriendsOverlay() {
         </div>
       </div>
 
+      {authMode && (
+        <AuthDialog
+          mode={authMode}
+          suggestedUsername={guestName}
+          onClose={() => setAuthMode(null)}
+          onSwitchMode={setAuthMode}
+          onSubmit={authSubmitter(authMode, login, register)}
+        />
+      )}
+
       {/* Both of these are asked about because both are hard to undo, and for
           different reasons. A decline is kept, so the person who was refused
           can never ask again - the only way back is asking them yourself.
@@ -224,7 +251,7 @@ export function FriendsOverlay() {
         <ConfirmationDialog
           title={ui.friendsOverlay.declineThisRequest}
           description={ui.friendsOverlay.declineWarning({ name: confirming.entry.displayName })}
-          confirmLabel={ui.friendsOverlay.decline2}
+          confirmLabel={ui.friendsOverlay.decline}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             const userId = confirming.entry.userId;
@@ -237,7 +264,7 @@ export function FriendsOverlay() {
         <ConfirmationDialog
           title={ui.friendsOverlay.removeConfirm({ name: confirming.entry.displayName })}
           description={ui.friendsOverlay.youWillBothStopBeingAble}
-          confirmLabel={ui.friendsOverlay.remove2}
+          confirmLabel={ui.friendsOverlay.remove}
           onCancel={() => setConfirming(null)}
           onConfirm={() => {
             const userId = confirming.entry.userId;
@@ -271,7 +298,7 @@ function FriendsSection({
   if (entries.length === 0) return null;
   return (
     <section className="friends-section">
-      <h4 className="friends-section-heading">
+      <h4 className="section-label friends-section-heading">
         {title} <span className="friends-section-count">{count}</span>
       </h4>
       <ul className="friends-list" data-testid={testId}>
@@ -312,7 +339,7 @@ function RecentPlayersSection({ players }: { players: RecentPlayer[] }) {
   if (players.length === 0) return null;
   return (
     <section className="friends-section">
-      <h4 className="friends-section-heading">{ui.friendsOverlay.recentlyPlayedWith}</h4>
+      <h4 className="section-label friends-section-heading">{ui.friendsOverlay.recentlyPlayedWith}</h4>
       <ul className="friends-list" data-testid="friends-recent">
         {players.map((player) => (
           <li key={player.userId} className="friends-row">

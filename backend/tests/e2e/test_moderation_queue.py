@@ -121,8 +121,8 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
 
             # Decide it, then find it again under Closed.
             await moderator_page.locator(".mod-note textarea").fill("Looked, and it was fine.")
-            # Scoped to the case's own actions: the email reminder banner
-            # carries a Dismiss of its own.
+            # Scoped to the case's own actions: other notes on the page (the
+            # email reminder, once it is due) carry a Dismiss of their own.
             await moderator_page.locator(".mod-actions").get_by_role(
                 "button", name="Dismiss"
             ).click()
@@ -402,7 +402,7 @@ async def test_escape_does_not_reach_past_a_warning():
             notice = target.get_by_role("alertdialog", name="A moderator warning")
             await expect(notice).to_be_visible()
             # Focus is inside the notice, on its one answer.
-            await expect(notice.get_by_role("button", name="Understood")).to_be_focused()
+            await expect(notice.get_by_role("button", name="OK", exact=True)).to_be_focused()
 
             await target.keyboard.press("Escape")
             await target.wait_for_timeout(300)
@@ -410,7 +410,7 @@ async def test_escape_does_not_reach_past_a_warning():
             await expect(settings).to_be_visible()
 
             # Answering it is the way on, and Settings is still there after.
-            await notice.get_by_role("button", name="Understood").click()
+            await notice.get_by_role("button", name="OK", exact=True).click()
             await expect(notice).to_have_count(0)
             await expect(settings).to_be_visible()
         finally:

@@ -52,9 +52,17 @@ class FrameLog:
         """The point from which the next assertions read."""
         return len(self.frames)
 
-    async def wait_for(self, event: str) -> None:
+    async def wait_for(self, *events: str, since: int) -> None:
+        """Until any of `events` arrives at or after the mark `since`.
+
+        The mark is required: an event of the same name received earlier -
+        the join's own `room_state`, say - would otherwise answer at once, and
+        the wait would prove nothing. Five seconds is for an answer to
+        something that has already happened on a live socket; a wait that
+        spans a reconnect waits for the new socket first, on its own bound.
+        """
         async with asyncio.timeout(5):
-            while not _named(self.frames, event):
+            while not any(_named(self.frames[since:], event) for event in events):
                 self._arrived.clear()
                 await self._arrived.wait()
 
@@ -141,7 +149,7 @@ async def test_a_viewer_gets_its_commits_on_the_frame_and_never_resyncs():
             # a viewer two commits behind refuses this and asks for a full
             # resync, while a viewer that read them off the frames accepts it.
             await drawing.click("button.undo-button")
-            await viewer_frames.wait_for("canvas_undo")
+            await viewer_frames.wait_for("canvas_undo", since=watch_from)
             # A resync is requested the moment the undo is refused, so a short
             # settle is enough for one to show up if it is going to. Proving an
             # event *absent* needs a window; this is that window.

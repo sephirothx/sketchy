@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { waitingRequestCount } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { useOpenOverlay } from "../hooks/useOverlayRoute";
@@ -30,6 +31,7 @@ import { BugReportDialog } from "./BugReportDialog";
 import { MIN_PASSWORD_LENGTH, passwordRule, passwordTooShort } from "../lib/passwordPolicy";
 import { ModalShell } from "./ui/ModalShell";
 import {
+  BarChartIcon,
   BugIcon,
   BulbIcon,
   InfoIcon,
@@ -43,7 +45,6 @@ import {
   UserIcon,
   UsersIcon,
   StarIcon,
-  ZapIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -119,6 +120,8 @@ export function AccountMenu({ compact = false, inRoom = false }: {
   // keeps Tab inside, moves focus to the first item on open, and returns it to
   // the chip on close; the arrow keys are handled below.
   useFocusTrap(menuRef, { active: menuOpen });
+  // In a room, Back closes the menu as Escape does (R-UX-15); elsewhere a no-op.
+  useBackCloses(menuOpen, () => setMenuOpen(false));
 
   function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
@@ -198,7 +201,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
         }
       >
         <span
-          className={`identity-avatar avatar-player${
+          className={`identity-avatar ${isGuest ? "avatar-guest" : "avatar-player"}${
             !isGuest && user.avatarUrl && !doodleNameOf(user.avatarUrl) ? " has-picture" : ""
           }`}
           aria-hidden="true"
@@ -210,8 +213,18 @@ export function AccountMenu({ compact = false, inRoom = false }: {
             avatarInitial(shownName)
           )}
         </span>
-        {!compact && <span className="identity-name">{shownName}</span>}
-        {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}
+        {!compact && (
+          <span className={isGuest ? "identity-name is-guest" : "identity-name"}>{shownName}</span>
+        )}
+        {/* The button's own label already says the name is not saved, so the
+            dot stays silent to a screen reader; the title is for a pointer. */}
+        {isGuest && (
+          <span
+            className="identity-unclaimed"
+            aria-hidden="true"
+            title={ui.accountMenu.guestNameNotSaved}
+          />
+        )}
         {/* A dot on the chip, because the menu is the only way to the friends
             surface and a request that arrived while somebody was drawing has
             nowhere else to be seen. Silent to a screen reader — the count is
@@ -283,7 +296,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 {ui.accountMenu.myProfile}
               </MenuItem>
               <MenuItem
-                icon={<ZapIcon size={16} />}
+                icon={<BarChartIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   navigate("/prompt-lists");
@@ -755,7 +768,7 @@ export function AuthDialog({
             onSwitchMode(isClaim ? "login" : "claim");
           }}
         >
-          {isClaim ? ui.accountMenu.logIn : ui.accountMenu.createAnAccount}
+          {isClaim ? ui.accountMenu.logIn : ui.accountMenu.createAccount}
         </button>
       </p>
     </ModalShell>

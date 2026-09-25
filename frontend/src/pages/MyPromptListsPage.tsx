@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AddEmailDialog } from "../components/AddEmailDialog";
 import { AppHeader } from "../components/AppHeader";
+import { AuthDialog } from "../components/AccountMenu";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { LanguageFace, LanguagePicker } from "../components/LanguagePicker";
 import { TagPicker } from "../components/TagPicker";
 import { AlertIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
+import { EmptyState } from "../components/ui/EmptyState";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
@@ -27,12 +29,14 @@ import {
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
 import { maskEmail } from "../lib/accountRecovery";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { useEmailStateStore } from "../store/emailStateStore";
 import type { CopiedFrom, OwnedPromptList, PromptLanguage, PromptTag } from "../types";
 import { refusalCode, refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/community-lists.css";
 import "../styles/lazy/prompt-lists.css";
 
@@ -60,6 +64,14 @@ function visibilityLabel(visibility: OwnedPromptList["visibility"]): string {
     : ui.myPromptListsPage.private;
 }
 
+/** A moderation state as the glossary names it; Active is the state nobody
+    needs telling about, so it has no label. */
+function moderationLabel(state: OwnedPromptList["moderationState"] | undefined): string | null {
+  if (state === "under_review") return ui.myPromptListsPage.underReview;
+  if (state === "hidden") return ui.myPromptListsPage.hidden;
+  return null;
+}
+
 function draftFromList(promptList: OwnedPromptList): PromptListDraft {
   return {
     name: promptList.name,
@@ -75,10 +87,14 @@ function draftFromList(promptList: OwnedPromptList): PromptListDraft {
 }
 
 export function MyPromptListsPage() {
+  useDocumentTitle(ui.accountMenu.myPromptLists);
   const location = useLocation();
   const user = useAuthStore((state) => state.user);
   const userId = user?.id;
   const isAnonymous = user?.isAnonymous;
+  const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const arrival = location.state as { quickPrompts?: string; openListId?: string } | null;
   const initialQuickPrompts = arrival?.quickPrompts;
   const { notify } = useToast();
@@ -355,22 +371,32 @@ export function MyPromptListsPage() {
 
   return <main className="prompt-list-manager-page">
     <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
-    <section className="prompt-list-manager-card">
-      <div className="prompt-list-manager-heading">
-        <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
-        {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
-      </div>
-      {!user || user.isAnonymous ? (
-        <div className="prompt-list-manager-empty">
-          <p>{ui.myPromptListsPage.createAccountSaveReviseSharePrompt}</p>
-        </div>
-      ) : (
+    {/* The title sits on the page, as every other page's does; the card
+        below is the editor, not the page. */}
+    <div className="prompt-list-manager-heading">
+      <h1>{ui.myPromptListsPage.myPromptLists}</h1>
+      {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
+    </div>
+    {!user || user.isAnonymous ? (
+      // Saved lists are a registered player's (R-LIST-01), so a guest has
+      // none - and the way to have some is one press away, not a sentence.
+      <EmptyState
+        title={ui.myPromptListsPage.promptListsNeedAnAccount}
+        body={ui.myPromptListsPage.promptListsNeedAnAccountBody}
+        action={
+          <button type="button" className="btn btn-primary" onClick={() => setAuthMode("claim")}>
+            {ui.accountMenu.createAccount}
+          </button>
+        }
+      />
+    ) : (
+      <section className="prompt-list-manager-card">
         <div className="prompt-list-manager-layout">
-          <aside aria-label={ui.myPromptListsPage.yourPromptLists}>
-            {loading && lists.length === 0 && <p>{ui.myPromptListsPage.loading}</p>}
+          <aside aria-label={ui.myPromptListsPage.myPromptLists}>
+            {loading && lists.length === 0 && <p className="loading-note" role="status">{ui.myPromptListsPage.loading}</p>}
             {listError
               ? <p className="prompt-list-alert is-error" role="alert"><AlertIcon size={14} /><span>{listError}</span></p>
-              : lists.length === 0 && !loading && <p>{ui.myPromptListsPage.noSavedListsYet}</p>}
+              : lists.length === 0 && !loading && <EmptyState compact title={ui.myPromptListsPage.noSavedListsYet} />}
             {lists.map((item) => <button
               type="button"
               key={item.id}
@@ -382,10 +408,7 @@ export function MyPromptListsPage() {
                   {ui.myPromptListsPage.listSummary({
                     prompts: item.promptCount,
                     visibility: visibilityLabel(item.visibility),
-                    moderationState:
-                      item.moderationState !== "active"
-                        ? item.moderationState.replace("_", " ")
-                        : null,
+                    moderationState: moderationLabel(item.moderationState),
                   })}
                 </span>
             </button>)}
@@ -400,9 +423,9 @@ export function MyPromptListsPage() {
               deletedSentence={ui.myPromptListsPage.copiedFromADeletedList}
             />}
             {moderationState !== "active" && <p className="prompt-list-moderation-warning" role="status">
-              {ui.myPromptListsPage.listUnderReview({
-                state: moderationState.replace("_", " "),
-              })}
+              {moderationState === "hidden"
+                ? ui.myPromptListsPage.listHiddenWarning
+                : ui.myPromptListsPage.listUnderReviewWarning}
             </p>}
             {/* Name and language share a row when there is room for both, and
                 the language wraps under the name when there is not. */}
@@ -508,7 +531,7 @@ export function MyPromptListsPage() {
             </div>
             <div className="prompt-list-collection">
             {draft.prompts.length === 0 ? (
-              <p className="prompt-list-manager-empty">{ui.myPromptListsPage.noPromptsYetPasteSomeAbove}</p>
+              <EmptyState compact className="prompt-list-manager-empty" title={ui.myPromptListsPage.noPromptsYetPasteSomeAbove} />
             ) : (
               <>
                 <div className="prompt-list-entry-filters">
@@ -542,7 +565,7 @@ export function MyPromptListsPage() {
                   </span>
                 </div>
                 {visiblePrompts.length === 0 ? (
-                  <p className="prompt-list-manager-empty">{ui.myPromptListsPage.nothingMatchesThatSearch}</p>
+                  <EmptyState compact className="prompt-list-manager-empty" title={ui.myPromptListsPage.nothingMatchesThatSearch} />
                 ) : (
                   <ul className="prompt-list-entry-editor">
                     {visiblePrompts.map((prompt, index) => {
@@ -553,7 +576,7 @@ export function MyPromptListsPage() {
                           className={flagged ? "is-flagged" : undefined}
                         >
                           <span className="prompt-list-entry-text">{prompt.prompt}</span>
-                          {flagged && <span className="prompt-list-entry-moderation">{promptModeration[prompt.conceptId!]?.replace("_", " ")}</span>}
+                          {flagged && <span className="prompt-list-entry-moderation">{moderationLabel(promptModeration[prompt.conceptId!])}</span>}
                           <button type="button" aria-label={ui.myPromptListsPage.removePrompt({ prompt: prompt.prompt })} onClick={() => removePrompt(prompt.prompt)}><XIcon size={13} /></button>
                         </li>
                       );
@@ -585,8 +608,8 @@ export function MyPromptListsPage() {
             </div>
           </form>
         </div>
-      )}
-    </section>
+      </section>
+    )}
     {confirmingDelete && <ConfirmationDialog
       title={ui.myPromptListsPage.deleteListTitle({ name: lists.find((item) => item.id === selectedId)?.name ?? draft.name })}
       description={ui.myPromptListsPage.deleteListDescription}
@@ -597,6 +620,13 @@ export function MyPromptListsPage() {
     {addingEmail && <AddEmailDialog
       onClose={() => setAddingEmail(false)}
       onSaved={() => setAddingEmail(false)}
+    />}
+    {authMode && <AuthDialog
+      mode={authMode}
+      suggestedUsername={authMode === "claim" && user?.isAnonymous ? user.displayName : ""}
+      onClose={() => setAuthMode(null)}
+      onSwitchMode={setAuthMode}
+      onSubmit={authSubmitter(authMode, login, register)}
     />}
   </main>;
 }

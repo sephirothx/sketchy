@@ -165,10 +165,10 @@ test("a room outside a round says so rather than inventing round 0 of 0", () => 
   // Both counters default to zero before a game starts. "round 0 of 0" reads as
   // gameplay state rather than the absence of it, which misleads exactly the
   // reader trying to work out what the player was doing.
-  assert.equal(roomSummary("BQ7F2K", 0, 0), "BQ7F2K · not in a round");
-  assert.equal(roomSummary("BQ7F2K", null, null), "BQ7F2K · not in a round");
-  assert.equal(roomSummary("BQ7F2K", 0, 3), "BQ7F2K · not in a round");
-  assert.equal(roomSummary("BQ7F2K", Number.NaN, Number.NaN), "BQ7F2K · not in a round");
+  assert.equal(roomSummary("BQ7F2K", 0, 0), "BQ7F2K · not in a game");
+  assert.equal(roomSummary("BQ7F2K", null, null), "BQ7F2K · not in a game");
+  assert.equal(roomSummary("BQ7F2K", 0, 3), "BQ7F2K · not in a game");
+  assert.equal(roomSummary("BQ7F2K", Number.NaN, Number.NaN), "BQ7F2K · not in a game");
 });
 
 test("a room mid-round names the round", () => {

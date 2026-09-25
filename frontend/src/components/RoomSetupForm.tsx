@@ -35,7 +35,6 @@ import {
 } from "../lib/roomSetup";
 import {
   availablePromptLanguages,
-  promptLanguageLabel,
   selectionForLanguage,
 } from "../lib/promptLanguages";
 import type { CustomPromptsAction, CustomPromptsState } from "../lib/customPrompts";
@@ -134,8 +133,10 @@ export function RoomSetupForm({
   const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
   const languageOptions = availablePromptLanguages(loadedLists, promptLanguage);
 
+  // No language in it: the official lists are named for theirs ("English —
+  // Standard"), and the field that sets it is labelled in Basics above.
   const promptsSummary = (() => {
-    const parts: string[] = [promptLanguageLabel(promptLanguage)];
+    const parts: string[] = [];
     if (selectedLists.length > 0) {
       const names = selectedLists.map((list) => list.name);
       parts.push(names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", "));
@@ -160,7 +161,7 @@ export function RoomSetupForm({
 
   return (
     <div className="create-room-sections">
-      <section className="form-section">
+      <section className="surface-card form-section">
         <div className="form-section-head">
           <h2>{ui.roomSetupForm.basics}</h2>
         </div>
@@ -182,7 +183,13 @@ export function RoomSetupForm({
                 enterKeyHint="done"
               />
             </label>
+            {/* Labelled in words: the flag alone is the same picture as the
+                interface-language flag in the header, which means something
+                else (GLOSSARY: Prompt language, Interface locale). */}
             <div className="create-room-language-field">
+              <span className="create-room-language-label">
+                {ui.roomSetupForm.promptLanguage}
+              </span>
               {languageLocked ? (
                 // The same face the picker wears, without the mechanism: a room
                 // that cannot change its language still looks like the control
@@ -192,7 +199,7 @@ export function RoomSetupForm({
                 </span>
               ) : (
                 <LanguagePicker
-                  label={ui.roomSetupForm.language}
+                  label={ui.roomSetupForm.promptLanguage}
                   flagOnly
                   value={promptLanguage}
                   options={languageOptions}
@@ -259,7 +266,7 @@ export function RoomSetupForm({
         </div>
       </section>
 
-      <details className="form-section is-collapsible">
+      <details className="surface-card form-section is-collapsible">
         <summary>
           <h2>{ui.roomSetupForm.prompts}</h2>
           {promptsSummary && <span className="form-section-summary">{promptsSummary}</span>}
@@ -289,7 +296,7 @@ export function RoomSetupForm({
         </div>
       </details>
 
-      <details className="form-section is-collapsible">
+      <details className="surface-card form-section is-collapsible">
         <summary>
           <h2>{ui.roomSetupForm.drawing}</h2>
           <span className="form-section-summary">{drawingSummary}</span>
@@ -315,7 +322,7 @@ export function RoomSetupForm({
         </div>
       </details>
 
-      <details className="form-section is-collapsible">
+      <details className="surface-card form-section is-collapsible">
         <summary>
           <h2>{ui.roomSetupForm.scoringHints}</h2>
           <span className="form-section-summary">{scoringSummary}</span>
@@ -345,8 +352,8 @@ export function RoomSetupForm({
               disabled: scoringMode === "none" && (option.value === "purchase" || option.value === "wheel"),
             }))}
           />
-          {hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.hintsAreOffBecauseBlanksAre}</p>}
-          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.pointPurchaseHintModesRequireScoring}</p>}
+          {hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.hintsAreOffBecauseTilesAreHidden}</p>}
+          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.buyLettersAndWheelNeedScoring}</p>}
           <div className="form-section-switch-row">
             <Switch
               label={ui.roomSetupForm.spectatorsCanSeePrompt}
@@ -354,7 +361,7 @@ export function RoomSetupForm({
               onChange={(checked) => onChange({ spectatorsSeePrompt: checked })}
             />
             <Switch
-              label={ui.roomSetupForm.hideBlanks}
+              label={ui.roomSetupForm.hideLetterTiles}
               hint={ui.roomSetupForm.alsoTurnsHintsOffWithNo}
               checked={hideMaskedPrompt}
               onChange={(checked) => onChange({

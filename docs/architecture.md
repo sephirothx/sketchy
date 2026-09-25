@@ -121,7 +121,7 @@ game rules change — and changing an outcome-producing constant requires bumpin
 outlives the `Game`s played in it. `RoomManager` is the process-wide registry, held
 as a singleton in [`backend/app/state.py`](../backend/app/state.py) so REST routes and
 Socket.IO handlers see the same rooms. Room settings and the recap buffer live
-here, along with the room's own quick prompts; its **curated prompts do not**.
+here, along with the room's own custom prompts; its **curated prompts do not**.
 A room holds only what its selected lists were pinned to - the revision IDs, how
 many prompts they hold, and a letter histogram for wheel pricing - and the
 prompts themselves stay in the database until a game starts and draws the
@@ -274,6 +274,45 @@ history state naming the page underneath — is
 [`lib/overlayRoutes.ts`](../frontend/src/lib/overlayRoutes.ts) and
 [`hooks/useOverlayRoute.ts`](../frontend/src/hooks/useOverlayRoute.ts); a third
 overlay adds a pattern there rather than a second copy of the mechanism.
+
+A live room also keeps **history entries of its own**, because Back is the router's
+otherwise and the router's Back unmounts the room without `leave_room` (R-UX-15). There
+is still no router migration and no blocker: the room pushes entries on its own URL
+with `history.pushState`, told apart by a mark in `history.state` beside the router's
+keys, so the router sees the same location throughout and the room never remounts. The
+mark names the seat as well as the room: entries a leave leaves in the forward history
+can be reached again with Forward, and a player who rejoins there holds a new seat on an
+old mark, which has to count as the base so a fresh guard goes over it.
+Over the entry the room was entered on (the *base*) sits a **guard**, and over that one
+entry per open sheet. Back from a sheet's entry closes the topmost sheet; Back from the
+guard lands on the base, where the room pushes the guard again and runs its own Leave
+(which asks first during a game). A sheet closed by its own control takes its entry back
+with `history.go`, and the entries are counted rather than named, so one sheet handing
+over to another in a single render costs no traversal. Leaving rewinds to the base and
+replaces it with the lobby, whichever way out it was — Leave, a kick, another tab, the
+crash page. `go` is asynchronous, which is where the edge cases are: the
+port counts the traversals it asked for so that their `popstate` is not read as Back,
+nothing is pushed while one is in flight, a leave waits for one already moving before
+counting its rewind, and one the browser drops is given up after a second. The rules and
+that port are [`lib/roomHistory.ts`](../frontend/src/lib/roomHistory.ts), tested against
+a simulated history; the React half is
+[`hooks/useRoomHistory.ts`](../frontend/src/hooks/useRoomHistory.ts), whose context only
+the live room provides — so `BottomSheet` and `ModalShell` register every in-room sheet
+and dialog, the room's dropdown menus register themselves, and all of them do nothing
+anywhere else. The overlays are unaffected: Settings and
+Friends are entries of the router's own, pushed on top, and closing one lands back on a
+room entry that asks for nothing. An overlay opened *from* a sheet or menu replaces that
+surface's entry instead of pushing over it (`isSheetEntry`, read by `useOpenOverlay`),
+since the surface closes as the overlay opens: pushed, the entry would sit beneath the
+overlay for Back to step over and Forward to bounce off. Signing in or out in a room gives
+the seat up without leaving the page, so `authStore` rewinds the seat's entries to the
+base and navigates nowhere (`releaseRoomHistory`); the invite screen is then drawn on the
+entry the room was entered on. Signed in from Settings over the room, the entries are
+beneath the overlay and a rewind now would close it, so the rewind waits for the history
+to land back on one of them - which closing Settings does - and runs then. A browser may skip an entry pushed without a user
+gesture when Back is pressed (Chrome's history-manipulation intervention); the guard is
+pushed as the room mounts, just after the press that entered it, and if it were ever
+skipped Back would behave as it did before this rather than worse.
 
 A URL that matches none of the others is served the same shell, so the client can
 draw `NotFoundPage`, but **with a 404 status** — otherwise every typo tells a crawler
@@ -946,7 +985,7 @@ obvious "other person" to privilege.
 ### Room ceilings
 
 Creating a room is the only ordinary socket command that allocates unbounded process
-memory — a `Room`, its `CanvasSession`, its recap buffer, its quick prompts — and
+memory — a `Room`, its `CanvasSession`, its recap buffer, its custom prompts — and
 claims a durable code reservation, on a server where one process owns all of it.
 `RoomQuotaService`
 ([`backend/app/services/room_quotas.py`](../backend/app/services/room_quotas.py))
@@ -1545,8 +1584,9 @@ drawer: draw / undo_stroke      (binary; see wire-protocol.md)
 
 guessers: guess          (volatile, acknowledged; a retry carrying a seen id stops here)
   └─ handlers/chat.py  →  Game.submit_guess
-       ├─ correct  → emit correct_guess (room); the receipt and the guesser's own
-       │             line ride the guess's acknowledgement (#884)
+       ├─ correct  → emit correct_guess (room), with the server's guess time;
+       │             the receipt and the guesser's own line ride the
+       │             guess's acknowledgement (#884)
        ├─ near miss→ the line reaches the prompt-aware seats; the guesser's own
        │             line and the verdict ride the acknowledgement (#884)
        └─ wrong    → emit chat_message                                    → room
@@ -1914,13 +1954,50 @@ Files are named for their single concern; the directory says the role.
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
-| `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `VersionBadge.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollbarWidth.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/components/ui/` | The shared recipes as components: `Avatar.tsx`, `AvatarPicture.tsx`, `BottomSheet.tsx`, `Button.tsx`, `Card.tsx` (with `SectionLabel`), `Chip.tsx`, `EmptyState.tsx`, `ModalShell.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
-`frontend/src/styles/` is one CSS file per surface.
+`frontend/src/styles/` is one CSS file per surface. The controls more than one surface
+draws — buttons, chips, toggle chips, the segmented control, the switch, the tooltip and
+the card — are recipes in
+[`styles/primitives.css`](../frontend/src/styles/primitives.css), the first sheet of the
+`components` layer, so a surface specialises a recipe rather than restating it; a card
+composes `surface-card` in its markup. Every other sheet, entry or lazy, comes after it,
+so a specialisation of the same specificity wins by order; a tie between two surface
+sheets is another matter, since the lazy ones load after the whole entry sheet whatever
+their import order says. A rule that must beat every surface goes in the `utilities`
+layer ([`styles/utilities.css`](../frontend/src/styles/utilities.css)) rather than
+behind `!important`: a later layer beats any specificity in an earlier one.
+
+What the surfaces share is not restated in each either: the scales — four radii, two
+motion durations, one disabled opacity — are tokens in
+[`theme.css`](../frontend/src/styles/theme.css), and the two heading styles, the display
+panel title and the capitals eyebrow `.section-label`, are recipes in
+[`primitives.css`](../frontend/src/styles/primitives.css).
+[`styleScales.test.mjs`](../frontend/tests/styleScales.test.mjs) fails on a value off a
+scale, on a weight [`main.tsx`](../frontend/src/main.tsx) does not load (the browser
+would quietly draw the nearest one that is), and on capitals outside the recipe; its
+exceptions are listed there with the reason for each.
+
+A media query cannot read a custom property, so the breakpoints are a fixed set of
+widths rather than tokens, each named as the first width of the wider side — 481, 641,
+721, 901, 1001, 1200, 1500 and 2100 as a `min-width`, one less as a `max-width`, so no
+width is on both sides. Components asking through `useMediaQuery` use the same numbers.
+They are listed in
+[`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css), and
+[`stylesheetScales.test.mjs`](../frontend/tests/stylesheetScales.test.mjs) fails on any
+other width except the few it names, each with its reason.
+
+A list with nothing in it says so through one component,
+[`components/ui/EmptyState.tsx`](../frontend/src/components/ui/EmptyState.tsx) — a
+dashed outline, a title, an optional line and at most one control, with a compact size
+for a list inside a panel — and a wait with no skeleton to draw is one `.loading-note`
+line (`styles/primitives.css`). There were four empty treatments and three loading ones
+on neighbouring pages, so the same situation read as different news on each.
 
 ### The phone layout
 
@@ -1968,9 +2045,26 @@ leave, via `100cqh` on `.canvas-wrapper` — with `aspect-ratio` deriving the
 other side. A definite `height` would stop `aspect-ratio` applying and stretch
 the drawing.
 
-`.game-room-playing` deliberately carries no `z-index`: a positioned element
-with one creates a stacking context, which would trap every overlay inside the
-shell below the confetti canvas at the root. Overlays are bottom sheets
+What stacks over what is one scale of named layers, `--z-float` up to `--z-toast`,
+declared in order in
+[`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css) with the
+reason for each; a bare `z-index` of 0–4 only orders one component's own children.
+Dialogs sit over the route overlays, the room's sheets and the banners, blocking notices
+(suspension, warning, role change, the AFK check) over every other dialog, and toasts
+over everything, because a toast is often the only word on what a dialog just did;
+[`stylesheetScales.test.mjs`](../frontend/tests/stylesheetScales.test.mjs) holds the
+order. What floats bottom-centre — the friend invite and the toasts — stands above a
+phone page's docked controls rather than on them: each dock publishes how far it reaches
+as `--dock-clearance` ([`useBottomDock`](../frontend/src/hooks/useBottomDock.ts)), the
+way the banner stack publishes `--banner-height`, and the invite adds its own reach as
+`--friend-invite-clearance` for the toasts (R-UX-07). Before the layers there were
+nineteen literals and the report, suspension and AFK dialogs had each been lifted past
+the drawers by hand. The shell is the one place the scale does not reach: `position:
+fixed` makes `.game-room-playing` a stacking context whatever its `z-index`, so its
+sheets and turn recap are ordered only against each other and the whole shell paints at
+the page's base level, under the confetti, the friend invite and the toasts. It carries
+no `z-index` so that stays true; a dialog that has to clear it is portaled to `<body>`,
+as the report dialogs are. Overlays are bottom sheets
 (`BottomSheet`, which the stylesheet centres as an ordinary dialog above the
 breakpoint), and the drawing dock renders through a portal into
 `#room-shell-dock` in `RoomShell` so the palette lands after the chat region,
@@ -2034,7 +2128,9 @@ the Create page's own per-turn allowance so the two never disagree. Every row of
 placed by hand with no row gap, because a gap would open above a first-run
 block or an error that is not there. Create a room does not widen its form,
 which is read down a column: from 1200px the summary strip under it becomes a
-sticky card beside it — the chips, the running-time estimate and Create room —
+sticky card beside it — the name, the running-time estimate, a chip for each
+rule that differs from a new room's (`changedRoomRules`, the lobby row's own list,
+plus Private) and Create room —
 and the page renders one or the other (`useMediaQuery`), so there is never a
 second Create button.
 
@@ -2046,6 +2142,67 @@ easier. The operator pages — operations, moderation, bug reports — take the 
 steps, and moderation gains a third column from 1500px with the eight newest
 decisions from the closed-cases stream (R-MOD-15), fetched only when the column
 is shown; opening one switches to the Closed queue, where the case is.
+
+The header is the exception to per-page widths: `AppHeader` spans the shell on
+every page, so the wordmark and the identity chip sit in the same place whether
+the page below is the 928px lobby, the 1008px Gallery or a 1240px library page.
+Each page declares its content column as `--page-width` beside its max-width,
+and `.lobby-header` (in
+[`styles/settings-shared.css`](../frontend/src/styles/settings-shared.css))
+reaches out of that column with negative margins — out to `--shell-width`, or
+the window's 16px gutter when that is nearer. The window is `100vw` less
+`--scrollbar-width`, which
+[`lib/scrollbarWidth.ts`](../frontend/src/lib/scrollbarWidth.ts) keeps on
+`:root` from `innerWidth - clientWidth`: `100vw` counts a classic scrollbar's
+lane, and CSS has no unit that does not. That keeps the bar 16px from the
+window's edge; where a classic scrollbar takes its lane only on a page that
+scrolls, the bar still moves by half a lane between that page and the pinned
+lobby, as every centred column does. A container that clips has to leave
+the header's sideways reach alone — the pinned lobby clips top to bottom only
+(`overflow-y: clip`), since `overflow: hidden` cut the wordmark and the chip
+off at laptop widths. The space under the bar is one value, `--header-space`
+(26px), on every page and at every width, with one exception: the invite page
+on a phone (600px and narrower) keeps 18px, because it is the one screen a
+first-time visitor lands on from a link and its Join button has to clear the
+fold. A layout that puts a gap of its own under the bar - the pinned lobby's
+flex gap - subtracts it from the bar's margin rather than adding to it. Rules is a reading page at 928px; its width is stated as
+`.ops-page.rules-page`, because `operator.css` arrives in the page's own chunk
+after the entry sheet, and a lone `.rules-page` lost that tie and ran to the
+shell. The wordmark is a link, not a heading: a player's page has one `<h1>`,
+its own name (the lobby's is visually hidden; a page that is only an empty
+state makes that state's title the heading), while the staff queues head the
+case that is open. `useDocumentTitle` names the tab after the page rather than
+after its heading — "Gallery · Sketchy", "My prompt lists · Sketchy", a room's
+own name in a room, the brand alone on the lobby.
+
+The bar also carries the site's pages, between the wordmark (and its crumb)
+and the flag and chip: the lobby, the Gallery (only with a session), the
+Community catalogue, Prompt stats and Rules, as `SiteNav` in
+[`components/AppHeader.tsx`](../frontend/src/components/AppHeader.tsx) — so
+every page that draws `AppHeader`, the staff pages and the invite page
+included. The link for the page you are on carries `aria-current="page"`, and
+the one for the section a nested page sits in (a Gallery drawing, a list's
+Prompt stats) `aria-current="true"`
+([`lib/siteNav.ts`](../frontend/src/lib/siteNav.ts)). How much of it shows is
+decided by space, not by breakpoints: named where the names fit, icons with a
+tooltip where only the icons do, and nothing (`hidden`, so out of the tab order
+and the accessibility tree) where neither does, a phone included. The nav's box
+takes `flex: 1 1 0` — only the room the rest of the bar leaves, which its own
+content never changes, so the wordmark's crumb, the flag and the chip never
+give way to it and the measurement cannot feed back on itself. What each mode
+needs is read off two invisible rulers, the row with and without its names, so
+no mode has to be drawn to learn whether it fits; `siteNavMode` picks the
+fullest that fits, with 8px of slack before growing so a bar on the line does
+not flicker. A ResizeObserver on the box and both rulers re-decides on a
+resize, new words or a web font landing, and the box clips its overflow so the
+frame before a decision cannot paint names over the flag. Two labels have
+header-only keys (`appHeader.communityLink`, `appHeader.promptStatsLink`):
+English and German use the page titles, and the languages whose titles would
+not fit beside a crumb at 1200px use shorter names for the same pages - Spanish
+*Stats de palabras* rather than *Estadísticas de palabras*, keeping the
+qualifier, since a bare *Estadísticas* is a profile's own heading. The lobby
+has no links of its own; the account menu keeps every entry, since on a narrow
+phone it is the way there.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 

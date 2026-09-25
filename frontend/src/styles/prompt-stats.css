@@ -3,9 +3,11 @@
    loaded in that order; fetched with the page (#475) they can arrive in either,
    so the page keeps its rules in one file, in the order they were written. */
 .prompt-stats-page {
+  --page-width: 868px;
   margin: 0 auto;
-  max-width: 900px;
-  padding: 16px;
+  max-width: calc(var(--page-width) + 32px);
+  /* The same top as every other page, so the header does not move. */
+  padding: 24px 16px 16px;
 }
 
 .prompt-stats-header h1 {
@@ -46,6 +48,24 @@
   overflow-x: auto;
 }
 
+/* A list with nothing ranked: the names alone, in columns. Every row of the
+   table would have read "Not played enough", a dash, a dash and a count. */
+.prompt-stats-plain {
+  color: var(--ink);
+  columns: 11rem auto;
+  column-gap: 24px;
+  font-weight: 600;
+  line-height: 1.4;
+  list-style: none;
+  margin: 16px 0 0;
+  padding: 0;
+}
+
+.prompt-stats-plain li {
+  break-inside: avoid;
+  padding: 3px 0;
+}
+
 .prompt-stats-table {
   border-collapse: collapse;
   min-width: 480px;
@@ -68,9 +88,6 @@
 
 .prompt-stats-table thead th {
   color: var(--muted);
-  font-size: 12px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
 }
 
 .prompt-stats-table th:first-child,
@@ -105,7 +122,7 @@
 
 @media (min-width: 1200px) {
 .prompt-stats-page {
-    max-width: 1272px;
+    --page-width: 1240px;
   }
 
 }
@@ -127,7 +144,7 @@
   display: inline-block;
   width: 64px;
   height: 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--line);
   overflow: hidden;
   flex: none;

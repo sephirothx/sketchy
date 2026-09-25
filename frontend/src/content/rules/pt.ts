@@ -50,7 +50,7 @@ export const RULES_PT: RulesDocument = {
             "Tentar adivinhar não é spam, por mais loucos que sejam os palpites — adivinhar depressa é o objetivo.",
           ],
           examples: [
-            "Repetir uma mensagem até ninguém conseguir acompanhar a ronda",
+            "Repetir uma mensagem até ninguém conseguir acompanhar o jogo",
             "Publicar ligações ou convites para outro sítio",
             "Colar a mesma parede de texto numa sala atrás da outra",
           ],
@@ -118,7 +118,7 @@ export const RULES_PT: RulesDocument = {
           examples: [
             "Escrever ou soletrar a palavra enquanto a desenhas",
             "Dizer a palavra a um amigo por chamada ou por outra aplicação",
-            "Usar uma segunda conta para te passares respostas a ti próprio",
+            "Usar uma segunda conta para te passares a palavra a ti próprio",
           ],
         },
       ],

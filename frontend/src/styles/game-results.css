@@ -128,7 +128,7 @@
 
 .turn-results-progress-track {
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--line);
   overflow: hidden;
 }

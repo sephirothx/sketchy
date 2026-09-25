@@ -118,7 +118,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
                     }).observe(document.body, { childList: true, subtree: true });
                 }"""
             )
-            await player_page.click('button:has-text("Join the room")')
+            await player_page.click('[data-testid="lobby-code-sheet"] button:text-is("Join")')
             await player_page.wait_for_selector('[data-testid="waiting-room"]')
             assert not await player_page.evaluate("window.__inviteLoaderSeen")
             # The room's facts as cells (#580): two rounds of 90s here.
@@ -139,7 +139,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await host_page.fill('.room-settings-editor label:has-text("Rounds") input', "4")
             await open_settings_section(host_page, "Prompts")
             await host_page.fill('#custom-prompts', "artichoke\nzeppelin")
-            assert await host_page.inner_text('.room-settings-save') == "Save settings"
+            assert await host_page.inner_text('.room-settings-save') == "Save room rules"
             # Nothing has left the host's screen yet.
             assert await facts.locator('[data-fact="rounds"] .room-fact-text').inner_text() == "2"
 
@@ -167,7 +167,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             await waiting_chat_input.press("Enter")
             await host_page.wait_for_selector('text=Hello from the lobby')
 
-            await room_menu_action(player_page, "Go away for a bit")
+            await room_menu_action(player_page, "Go AFK")
             await host_page.wait_for_selector('.player-row.is-afk:has-text("LobbyPlayer")')
             assert await host_page.is_disabled('.waiting-start-button')
         finally:

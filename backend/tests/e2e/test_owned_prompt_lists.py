@@ -17,7 +17,7 @@ async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
             await owner.locator(".identity-chip").click()
             await owner.get_by_role("menuitem", name="My prompt lists").click()
             await owner.wait_for_url("**/my-prompt-lists")
-            await owner.get_by_role("heading", name="Reusable prompt lists").wait_for()
+            await owner.get_by_role("heading", name="My prompt lists").wait_for()
 
             # A list is private or published, and publishing is the only way
             # between them (R-LIST-02): there is no visibility field to set.
