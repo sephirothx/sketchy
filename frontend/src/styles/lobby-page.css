@@ -750,6 +750,8 @@
     padding: 14px 12px 32px;
   }
 
+  /* The one exception to `--header-space`: the screen a first-time visitor
+     lands on from a link, where the Join button has to clear the fold. */
   .invite-entry-page .lobby-header {
     margin-bottom: 18px;
   }
