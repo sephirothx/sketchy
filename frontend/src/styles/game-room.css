@@ -865,16 +865,10 @@
    styled by create-room-page.css. What used to be here was a second, flatter
    arrangement of the same controls. */
 .room-settings-advanced { display: grid; gap: 14px; margin-top: 14px; }
-/* The draft is submitted, not dripped out, so this is a button rather than a
-   status line reporting saves the host never asked for. */
-.room-settings-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.room-settings-actions .room-settings-save { min-width: 148px; }
+/* The draft is submitted, not dripped out, so Save is a button rather than a
+   status line reporting saves the host never asked for; sized so its label
+   changing between "Save settings" and "Saved" does not move Cancel. */
+.room-settings-save { min-width: 148px; }
 
 .room-shell {
   display: grid;
@@ -1241,12 +1235,6 @@
      chat card in the next one, and it was 32px of clearance for a start card
      that is fixed now. Everything is spaced the same. */
   .waiting-room { padding-bottom: 0; }
-
-  .room-settings-actions {
-    flex-direction: column-reverse;
-  }
-
-  .room-settings-actions .btn { width: 100%; }
 
   .guess-chat {
     display: flex;
