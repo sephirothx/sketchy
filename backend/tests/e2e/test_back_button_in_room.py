@@ -161,7 +161,8 @@ async def test_back_during_a_game_closes_sheets_then_asks_before_leaving():
             assert phone.url == room_url
 
             # Settings, opened from that sheet: an overlay route of its own,
-            # which Back closes without asking anything.
+            # which Back closes without asking anything. It takes the sheet's
+            # entry, so Forward reopens it rather than bouncing off the sheet's.
             await room_menu_action(phone, "Settings")
             overlay = phone.locator(".settings-overlay")
             await overlay.wait_for()
@@ -169,6 +170,12 @@ async def test_back_during_a_game_closes_sheets_then_asks_before_leaving():
             await expect(overlay).to_have_count(0)
             await room_history_at(phone, 0)
             await expect(phone.locator(ALERT)).to_have_count(0)
+            assert phone.url == room_url
+            await phone.go_forward()
+            await overlay.wait_for()
+            await phone.go_back()
+            await expect(overlay).to_have_count(0)
+            await room_history_at(phone, 0)
             assert phone.url == room_url
 
             # Nothing open: Back is Leave, and during a game Leave asks.
