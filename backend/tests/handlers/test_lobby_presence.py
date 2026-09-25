@@ -24,7 +24,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.protocol import PROTOCOL_VERSION
 from app.rooms import RoomManager
 from app.services.presence import LOBBY_CHANNEL, STATUS_PLAYING
-from tests.handlers.helpers import SessionStore
+from tests.handlers.helpers import SessionStore, settle_capacity_closes
 
 
 def build_stack(room_manager: RoomManager, **kwargs):
@@ -114,8 +114,6 @@ async def test_coming_online_and_going_offline_are_stamped_on_the_account(monkey
     """`last_seen_at` is what a profile shows when the player is not here
     (#469): written when the first socket opens and when the last one closes,
     and not for the tabs in between."""
-    import asyncio
-
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
     ctx.user_repo = _SeenRecorder()
@@ -149,8 +147,6 @@ async def test_a_visitor_who_has_not_chosen_a_name_is_not_in_the_list(monkeypatc
 async def test_a_socket_refused_for_capacity_leaves_nothing_behind(monkeypatch):
     """It is told, held counted for the moment the notice needs to land, and
     closed (#998); the close is what releases it, and nothing else is left."""
-    from app.protocol import SERVER_FULL_CLOSE_SECONDS
-
     room_manager = RoomManager()
     ctx, sio, _ = build_stack(room_manager)
     account_cookies(monkeypatch, {"tok-ada": "user-ada"})
@@ -164,7 +160,7 @@ async def test_a_socket_refused_for_capacity_leaves_nothing_behind(monkeypatch):
 
     assert ctx.presence.online_accounts == 0
     assert ctx.room_capacity.open_sockets == 1, "held to the ceiling until it closes"
-    await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
+    await settle_capacity_closes(ctx)
     assert ctx.room_capacity.open_sockets == 0
     assert_balanced(ctx)
 
