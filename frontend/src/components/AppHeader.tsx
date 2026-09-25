@@ -55,8 +55,9 @@ import { useLocaleRerender } from "../hooks/useLocaleRerender";
  * one you are on marked. They were reachable only from the chip's menu. The
  * nav takes only the room the rest of the bar leaves, and shows as much of
  * itself as fits there (`SiteNav`); the chip's menu keeps every entry, since
- * on a narrow phone it is the only way there - and a visitor with no name yet,
- * who has no chip, reaches those pages there once they have chosen one.
+ * on a narrow phone it is the only way there. A visitor with no name yet has
+ * no chip: the first-run name tag links the Rules (`FirstRunIdentity`), and
+ * the other pages come once they have chosen a name.
  *
  * A page's own actions are not the chrome's and do not live here: the lobby's
  * *Create room* and *Join by code* sit beside its room list (#594), and a phone

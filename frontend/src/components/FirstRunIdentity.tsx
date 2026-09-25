@@ -1,4 +1,5 @@
 import { useId, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
@@ -8,6 +9,7 @@ import { firstRunLine } from "../lib/firstRunLines";
 import { DOODLE_SPRITE } from "../lib/avatarDoodles";
 import { firstRunArt, type FirstRunDoodle } from "../lib/firstRunArt";
 import { ui } from "../content/ui/index.ts";
+import { InfoIcon } from "./icons";
 
 /**
  * Shown only until the visitor has an account or a name of their own.
@@ -150,6 +152,15 @@ export function FirstRunIdentity() {
         {error && (
           <p id={`${fieldId}-error`} className="auth-error" role="alert">{error}</p>
         )}
+        {/* The tag's fine print. Before a name there is no chip and its menu,
+            and on a phone the header has no room for its site links, so
+            without this a visitor could not read the rules of a game they
+            were about to join. Small and plain under the button, so it never
+            reads as a second thing to press. */}
+        <Link to="/rules" className="first-run-rules">
+          <InfoIcon size={13} />
+          {ui.accountMenu.rules}
+        </Link>
       </form>
 
       <div className="first-run-say">

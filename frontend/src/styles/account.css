@@ -741,6 +741,37 @@
   margin: 0 14px;
 }
 
+/* The tag's fine print: the Rules, under the button. The tag is a white
+   sticker in both themes, so its ink is literal like the field's (#292520)
+   rather than a theme token that turns pale in the dark: this brown is
+   6.1:1 on the white. Quiet by size and weight, not by a contrast that
+   fails. */
+.first-run-rules {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  color: #6b6152;
+  display: inline-flex;
+  font-size: 12.5px;
+  font-weight: 700;
+  gap: 5px;
+  justify-self: center;
+  margin-top: -4px;
+  min-height: 24px;
+  padding: 0 6px;
+  text-decoration: none;
+}
+
+.first-run-rules:hover {
+  color: #292520;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.first-run-rules:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
 .first-run-say {
   display: grid;
   gap: 6px;
