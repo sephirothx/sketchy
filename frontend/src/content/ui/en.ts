@@ -696,6 +696,10 @@ export const EN = {
   appHeader: {
     playerSettings: "Player settings",
     sketchyHome: "Go to the lobby",
+    /** The header's site links (desktop), as one landmark. */
+    siteNav: "Pages",
+    /** The Community catalogue's short name in those links; the full name is the link's accessible name. */
+    community: "Community",
   },
 
   bugReportDialog: {

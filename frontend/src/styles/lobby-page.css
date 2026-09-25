@@ -76,6 +76,103 @@
   text-decoration: underline;
 }
 
+/* ── The site's pages, in the bar ────────────────────────────────────────
+   A desktop's way around the site (AppHeader's `SiteNav`), after the wordmark
+   and before the flag and the chip. Quiet until it is where you are: muted
+   words, and the current page - or the section a nested page sits in - in ink
+   on the track, which is also what a hover shows. The track rather than the
+   well: the bar sits on the paper, and in the light theme `--well` is the
+   paper's own colour, so the mark was only a change of text colour - too
+   little to find with icons alone. None on a phone, whose bar has no room for
+   it; the lobby's foot row is the way there instead. */
+.site-nav {
+  display: none;
+}
+
+@media (min-width: 901px) {
+  /* The width the bar has left, whatever the links inside need: SiteNav
+     compares the two to decide whether the labels fit. */
+  .site-nav {
+    align-self: center;
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+  }
+
+  /* The flag and the chip stay whole, on one row; the nav is what gives. */
+  .lobby-header-actions {
+    flex: none;
+    flex-wrap: nowrap;
+  }
+
+  /* Up against the wordmark, not centred between it and the chip: the links
+     belong to the site the wordmark names. */
+  .site-nav > ul {
+    display: flex;
+    gap: 4px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+  }
+
+  .site-nav-link {
+    align-items: center;
+    border-radius: var(--radius-sm);
+    color: var(--muted);
+    display: inline-flex;
+    font-size: 15px;
+    font-weight: 700;
+    gap: 7px;
+    justify-content: center;
+    min-height: 40px;
+    min-width: 40px;
+    padding: 8px 10px;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .site-nav-link:hover,
+  .site-nav-link[aria-current] {
+    background: var(--track);
+    color: var(--ink);
+  }
+
+  .site-nav-link:focus-visible {
+    outline: 3px solid var(--primary-edge-soft);
+    outline-offset: 2px;
+  }
+
+  .site-nav-link > svg {
+    flex: none;
+  }
+
+  /* Icons alone below 1200px: five labels beside a crumb, the flag and a
+     long name are what would push the chip off the row. The words stay in
+     the link for its accessible name, and the link's tooltip says them. */
+  .site-nav-label {
+    clip-path: inset(50%);
+    height: 1px;
+    overflow: hidden;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+}
+
+@media (min-width: 1200px) {
+  .site-nav:not(.is-crowded) .site-nav-label {
+    clip-path: none;
+    height: auto;
+    overflow: visible;
+    position: static;
+    width: auto;
+  }
+
+  .site-nav:not(.is-crowded) .site-nav-link {
+    padding-inline: 12px;
+  }
+}
+
 .lobby-columns {
   display: grid;
   grid-template-columns: 1.15fr 1fr;
@@ -1247,7 +1344,7 @@ a.online-player-name:focus-visible {
    a short desktop window: below it the panels would each be a few rows tall,
    which is less usable than the ordinary page, so the ordinary page is what
    it falls back to. */
-@media (min-width: 900px) and (min-height: 640px) {
+@media (min-width: 901px) and (min-height: 640px) {
   /* A visitor who has not chosen a name yet gets a page that can grow: the
      first-run block, the rooms and the social column together can outgrow a
      short window, and pinning the viewport around them left the rooms panel a
@@ -1287,14 +1384,8 @@ a.online-player-name:focus-visible {
   /* Chrome keeps its height; only the lists give ground. */
   .lobby-page > .lobby-header,
   .lobby-page > .first-run,
-  .lobby-page > .lobby-action-error,
-  .lobby-page > .lobby-links {
+  .lobby-page > .lobby-action-error {
     flex: none;
-  }
-
-  /* The pinned page's gap already sits above the row; a little of it back. */
-  .lobby-page > .lobby-links {
-    margin-top: -6px;
   }
 
   /* The rooms take whatever is left after the social row, so they are still
@@ -1371,7 +1462,7 @@ a.online-player-name:focus-visible {
   .lobby-page {
     display: grid;
     grid-template-columns: minmax(0, 1fr) var(--lobby-people-width);
-    grid-template-rows: auto auto auto minmax(0, 1fr) auto;
+    grid-template-rows: auto auto auto minmax(0, 1fr);
     column-gap: 16px;
     row-gap: 0;
     --page-width: var(--shell-width);
@@ -1397,12 +1488,6 @@ a.online-player-name:focus-visible {
   .lobby-page > .lobby-rooms-panel {
     grid-column: 1;
     grid-row: 4;
-  }
-
-  .lobby-page > .lobby-links {
-    grid-column: 1 / -1;
-    grid-row: 5;
-    margin-top: 10px;
   }
 
   .lobby-page > .lobby-social {
@@ -1964,6 +2049,14 @@ a.online-player-name:focus-visible {
   color: var(--ink);
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+
+/* From 901px the header's own links (`.site-nav`) are on every page, this
+   one included, so the lobby's row would only say them twice. */
+@media (min-width: 901px) {
+  .lobby-links {
+    display: none;
+  }
 }
 
 @media (max-width: 720px) {

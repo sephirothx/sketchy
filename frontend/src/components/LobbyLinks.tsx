@@ -11,9 +11,9 @@ import { ui } from "../content/ui/index.ts";
  * The Gallery, the Community catalogue, Prompt stats and Rules were reachable
  * only from the identity chip's menu - eleven rows for a registered player -
  * and a visitor who had not chosen a name has no chip, so for them those pages
- * did not exist. The row is on the page rather than in the header, which is
- * left to where you are and who you are (R-UX-11); the menu keeps its entries,
- * Rules included (R-RULES-01).
+ * did not exist. This row is the phone's way there (below 901px): from 901px
+ * the header carries the same links on every page (`SiteNav` in AppHeader), and
+ * CSS hides this one. The menu keeps its entries, Rules included (R-RULES-01).
  *
  * The Gallery only once there is a session: without one it is not a page but a
  * refusal (R-GAL-02), and a link to a refusal is not a way anywhere.

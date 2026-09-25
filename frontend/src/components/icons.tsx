@@ -153,6 +153,8 @@ export function ZapIcon(p: IconProps) { return <IconBase {...p}><path d="M13 2 4
     lightning bolt it used to share with Quick play, which is a button that
     plays, not a page of numbers. */
 export function BarChartIcon(p: IconProps) { return <IconBase {...p}><path d="M4 20h16" /><path d="M7 16v-4" /><path d="M12 16V6" /><path d="M17 16V9" /></IconBase>; }
+/** The lobby, in the header's site links: a house, the way home. */
+export function HomeIcon(p: IconProps) { return <IconBase {...p}><path d="M3 10.5 12 3l9 7.5" /><path d="M5 9v10.5a1.5 1.5 0 0 0 1.5 1.5H10v-6h4v6h3.5a1.5 1.5 0 0 0 1.5-1.5V9" /></IconBase>; }
 /** The ferrule end sat at x=23.5 with a 2-unit stroke around it, so the tip
     was painted out to x=25.1 and the viewBox clipped it flat. The handle is
     the same drawing pulled 2.4 units back down its own 45° axis, which keeps

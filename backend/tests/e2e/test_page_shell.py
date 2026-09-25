@@ -46,3 +46,47 @@ async def test_the_lobby_header_is_whole_and_where_every_page_has_it():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
+    """From 901px the bar carries the site's pages (R-UX-11, R-UX-16): the
+    lobby, the Gallery with a session, the Community catalogue, Prompt stats
+    and Rules, with the current one marked. The lobby's foot row says the same
+    only on a phone, so on a desktop it is hidden. A visitor who has not chosen
+    a name has no session, and the Gallery would only refuse them (R-GAL-02),
+    so their bar does not offer it."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        named = await browser.new_context(viewport={"width": 1280, "height": 800})
+        nameless = await browser.new_context(viewport={"width": 1280, "height": 800})
+        try:
+            page = await named.new_page()
+            await use_guest_name(page, unique("Nav"))
+            await page.goto(BASE_URL)
+            await page.locator(".lobby-header .identity-chip").wait_for()
+            nav = page.get_by_role("navigation", name="Pages")
+            lobby = nav.get_by_role("link", name="Lobby", exact=True)
+            gallery = nav.get_by_role("link", name="Gallery", exact=True)
+            await expect(lobby).to_have_attribute("aria-current", "page")
+            await expect(gallery).not_to_have_attribute("aria-current", "page")
+            await expect(nav.get_by_role("link", name="Community catalogue")).to_be_visible()
+            await expect(nav.get_by_role("link", name="Prompt stats")).to_be_visible()
+            await expect(nav.get_by_role("link", name="Rules", exact=True)).to_be_visible()
+            await expect(page.locator(".lobby-links")).to_be_hidden()
+
+            # A click is a way there, and the mark follows.
+            await gallery.click()
+            await page.wait_for_url(f"{BASE_URL}/gallery")
+            await expect(gallery).to_have_attribute("aria-current", "page")
+            await expect(lobby).not_to_have_attribute("aria-current", "page")
+
+            visitor = await nameless.new_page()
+            await visitor.goto(BASE_URL)
+            await visitor.locator(".first-run").wait_for()
+            visitor_nav = visitor.get_by_role("navigation", name="Pages")
+            await expect(visitor_nav.get_by_role("link", name="Rules", exact=True)).to_be_visible()
+            await expect(visitor_nav.get_by_role("link", name="Gallery", exact=True)).to_have_count(0)
+        finally:
+            await named.close()
+            await nameless.close()
+            await browser.close()

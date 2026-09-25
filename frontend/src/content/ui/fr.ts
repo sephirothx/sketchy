@@ -686,6 +686,8 @@ export const FR: Catalogue = {
   appHeader: {
     playerSettings: "Paramètres du joueur",
     sketchyHome: "Aller au hall",
+    siteNav: "Pages",
+    community: "Communauté",
   },
 
   bugReportDialog: {

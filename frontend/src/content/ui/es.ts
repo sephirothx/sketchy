@@ -686,6 +686,8 @@ export const ES: Catalogue = {
   appHeader: {
     playerSettings: "Ajustes del jugador",
     sketchyHome: "Ir al vestíbulo",
+    siteNav: "Páginas",
+    community: "Comunidad",
   },
 
   bugReportDialog: {

@@ -686,6 +686,8 @@ export const NL: Catalogue = {
   appHeader: {
     playerSettings: "Spelerinstellingen",
     sketchyHome: "Naar de lobby",
+    siteNav: "Pagina's",
+    community: "Community",
   },
 
   bugReportDialog: {

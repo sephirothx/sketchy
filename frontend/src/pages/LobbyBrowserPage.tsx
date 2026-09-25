@@ -456,7 +456,8 @@ export function LobbyBrowserPage() {
               the header - the pair a phone's dock already holds, in the same
               order of weight. The header is left to the person: language,
               settings, account. The catalogue and the Gallery are in the
-              links at the foot of the page, and in the account menu. */}
+              header's site links on a desktop, the links at the foot of the
+              page on a phone, and the account menu on both. */}
           {!isNarrow && (
             <div className="lobby-rooms-actions">
               {/* The fast one of the three, and the only one that is a game
@@ -660,7 +661,9 @@ export function LobbyBrowserPage() {
       </div>
 
       {/* The rest of the site, from the page rather than only from the chip's
-          menu, which a visitor with no name does not have yet. */}
+          menu, which a visitor with no name does not have yet. A phone's
+          only: from 901px the header's site links say the same (CSS hides
+          this row there). */}
       <LobbyLinks />
 
       {/* The way in is a fixed bar under the thumb on a phone, rather than the
