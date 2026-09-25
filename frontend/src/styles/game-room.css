@@ -764,22 +764,30 @@
   margin-left: auto;
 }
 
-/* The host's footer stacked: Edit rules and Doodle sharing the first row
-   (short labels), Start the whole second. WaitingRoomPanel sets `is-stacked`
-   up to 1100px - the phone's dock, and the rules card in the 340px column of
-   901-1100px - and above it wherever the long labels and Start do not fit
-   one line, which is the words' length and so the language's. Unstacked,
-   three buttons that did not fit wrapped into a staggered two or three rows
-   with Start right-aligned alone. */
-.waiting-rules-footer.is-stacked .waiting-start-button {
-  flex: 1 0 100%;
-  width: auto;
-}
-
-.waiting-rules-footer.is-stacked .waiting-rules-edit,
-.waiting-rules-footer.is-stacked .waiting-draw-button {
+/* The host's footer never leaves a row half empty. Up to 1100px - the
+   phone's dock, and the rules card in the 340px column of 901-1100px - it is
+   two rows: Edit rules and Doodle (short labels, WaitingRoomPanel) sharing
+   the first, Start the whole second. Above it the long labels, and every row
+   the wrap makes fills: one line where the three fit, and where they do not
+   (up to about 1270px in English, 1200px in German) Start grows to its own
+   row under the other two - or, for German's and French's longest labels,
+   three full rows. Without the growth the wrapped buttons kept their widths,
+   Start right-aligned alone under a gap. */
+.waiting-rules-footer .waiting-rules-edit,
+.waiting-rules-footer .waiting-draw-button {
   flex: 1 1 auto;
   white-space: nowrap;
+}
+
+.waiting-rules-footer .waiting-start-button {
+  flex: 1 0 auto;
+}
+
+@media (max-width: 1100px) {
+  .waiting-rules-footer .waiting-start-button {
+    flex: 1 0 100%;
+    width: auto;
+  }
 }
 
 /* Everybody but the host: one row at every width - the wait for the host

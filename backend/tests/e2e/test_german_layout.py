@@ -87,11 +87,13 @@ async def test_german_does_not_push_any_screen_sideways(viewport):
             await browser.close()
 
 
-# Every word of the room's facts, and how many lines each is laid over: a
-# word on two lines is a word broken inside itself ("Zeitgesteu|erte").
+# Every word of the room's fact values, and how many lines each is laid over:
+# a word on two lines is a word broken inside itself ("Zeitgesteu|erte").
+# Values only: they are the text allowed to wrap (overflow-wrap), and the
+# labels under them never break inside a word.
 _BROKEN_FACT_WORDS = """() => {
   const broken = [];
-  for (const el of document.querySelectorAll('.room-fact-text, .room-fact-label')) {
+  for (const el of document.querySelectorAll('.room-fact-text')) {
     const node = el.firstChild;
     if (!node) continue;
     let at = 0;
@@ -135,7 +137,7 @@ async def test_german_room_facts_keep_their_words_whole_on_a_phone():
             # After the fonts: the count is measured again once they load.
             await page.evaluate("document.fonts.ready")
             await expect(facts).to_have_attribute("data-columns", "2")
-            assert await page.evaluate(_BROKEN_FACT_WORDS) == [], "a room fact breaks inside a word"
+            assert await page.evaluate(_BROKEN_FACT_WORDS) == [], "a room fact's value breaks inside a word"
         finally:
             await context.close()
             await browser.close()

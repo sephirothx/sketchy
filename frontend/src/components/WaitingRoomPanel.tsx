@@ -11,7 +11,6 @@ import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import { textWidth } from "../lib/textWidth";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import type {
@@ -79,52 +78,6 @@ function reserveDock(dock: HTMLDivElement | null) {
   };
 }
 
-/** A button's width at its natural size with `label` in it: its padding and
-    border, its icon and the gap after it, and the text. Worked out rather
-    than read, because the button may be showing its other label, or be
-    stretched across its row. */
-function buttonWidth(button: HTMLElement, label: string): number {
-  const style = getComputedStyle(button);
-  const icon = button.querySelector("svg");
-  return parseFloat(style.paddingLeft) + parseFloat(style.paddingRight)
-    + parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth)
-    + (icon ? icon.getBoundingClientRect().width + (parseFloat(style.columnGap) || 0) : 0)
-    + textWidth(label, button);
-}
-
-/** What fits on one line of the host's footer with the long labels. */
-interface FooterFit {
-  /** Edit, the pad's button and Start: the footer is one row. */
-  row: boolean;
-  /** Edit and the pad's button: stacked over Start, they keep the long labels. */
-  pair: boolean;
-}
-
-/**
- * What of the host's footer fits on one line with the long labels. Asked of
- * the words rather than of a breakpoint, because the words are the
- * language's: English holds all three on one line from about 1280px and the
- * two long buttons side by side from 1101px; German's "Raumregeln bearbeiten"
- * and "Zeichnen, während du wartest" are not side by side until about 1160px.
- * Growing back to a line asks for a pixel more than staying on it, so a width
- * on the threshold does not flip the footer back and forth; two more cover
- * canvas-versus-layout rounding.
- */
-function footerFit(footer: HTMLElement, longLabels: [string, string], now: FooterFit): FooterFit {
-  const edit = footer.querySelector<HTMLElement>(".waiting-rules-edit");
-  const draw = footer.querySelector<HTMLElement>(".waiting-draw-button");
-  const start = footer.querySelector<HTMLElement>(".waiting-start-button");
-  if (!edit || !draw || !start) return now;
-  const style = getComputedStyle(footer);
-  const room = footer.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
-  const gap = parseFloat(style.columnGap) || 0;
-  const pair = buttonWidth(edit, longLabels[0]) + buttonWidth(draw, longLabels[1]) + gap + 2;
-  const row = pair + gap + buttonWidth(start, start.textContent ?? "");
-  const fits = (needed: number, fitsNow: boolean) => room >= needed + (fitsNow ? 0 : 1);
-  const next = { row: fits(row, now.row), pair: fits(pair, now.pair) };
-  return next.row === now.row && next.pair === now.pair ? now : next;
-}
-
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
@@ -138,12 +91,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // Up to where the bar gives the room's name back (1100px) the rules card's
   // footer is a column about 340px wide on a desktop and a dock on a phone:
   // Edit and the pad's button share a row there only with the short labels.
-  // Above it the host's footer is one line - Edit, the pad's button, Start -
-  // wherever the long labels fit, and stacked like a phone's where they do
-  // not: Start full width under the two, not right-aligned under a gap.
-  const narrowFooter = useMediaQuery("(max-width: 1100px)");
+  // Above it the long labels, and the footer's rows fill (game-room.css).
+  const shortFooterLabels = useMediaQuery("(max-width: 1100px)");
   const footerRef = useRef<HTMLDivElement | null>(null);
-  const [footerFitNow, setFooterFitNow] = useState<FooterFit>({ row: true, pair: true });
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The scratch pad in place of the column (#591). Focus follows the swap:
   // the control that made it lands on the one that undoes it, and back.
@@ -159,16 +109,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     swapped.current = true;
     setDrawing(nextDrawing);
   }
-  // The phone's dock, fixed over the page: the room shell keeps its height free.
-  useLayoutEffect(() => reserveDock(footerRef.current), [drawing]);
-  const measureFooterRow = isHost && !drawing && !narrowFooter;
-  const footerStacked = narrowFooter || (isHost && !footerFitNow.row);
-  // The short labels only where the long ones cannot sit side by side: up to
-  // 1100px, and above it for the host only while the words are too long for
-  // the column (German, French at 1101px). Everybody else's pad button shares
-  // its row with the wait for the host, which wraps instead.
-  const shortEditLabel = narrowFooter || !footerFitNow.pair;
-  const shortDrawLabel = isHost ? shortEditLabel : narrowFooter;
+  // The phone's dock, fixed over the page: the room shell keeps its height
+  // free. Which footer is the dock changes with the pad (`drawing`) and, while
+  // it is open, with the width: its footer exists only on a phone.
+  useLayoutEffect(() => reserveDock(footerRef.current), [drawing, isNarrow]);
   const activePlayers = players.filter((player) => !player.isSpectator);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const host = players.find((player) => player.isHost);
@@ -220,29 +164,6 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     : canStart
       ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
       : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers });
-  // Measured on mount, on every change of the footer's width, when the font
-  // arrives and when Start's words change ("Need 1 more player" is longer
-  // than "Start game"). A state update, so a resize may show the old layout
-  // for a frame before it follows.
-  const editLongLabel = ui.waitingRoomPanel.editRoomRules;
-  const drawLongLabel = ui.scratchPad.drawWhileYouWait;
-  useLayoutEffect(() => {
-    const footer = footerRef.current;
-    if (!measureFooterRow || !footer) return;
-    const longLabels: [string, string] = [editLongLabel, drawLongLabel];
-    const fit = () => setFooterFitNow((now) => footerFit(footer, longLabels, now));
-    fit();
-    let live = true;
-    void document.fonts?.ready.then(() => {
-      if (live) fit();
-    });
-    const resizes = new ResizeObserver(fit);
-    resizes.observe(footer);
-    return () => {
-      live = false;
-      resizes.disconnect();
-    };
-  }, [measureFooterRow, startLabel, editLongLabel, drawLongLabel]);
 
   const startButton = (big: boolean) => (
     <button
@@ -272,10 +193,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         : ui.waitingRoomPanel.waitingForAHost}
     </p>
   );
-  // Where this button shares a narrow row with Edit (the host's) or with the
-  // wait for the host (everybody else's) it has the short label - up to
-  // 1100px, and for the host wherever the long pair does not fit; the
-  // accessible name is the visible one either way (WCAG 2.5.3).
+  // Up to 1100px this button shares a narrow row with Edit (the host's) or
+  // with the wait for the host (everybody else's), so there it has the short
+  // label; the accessible name is the visible one either way (WCAG 2.5.3).
   const drawButton = (
     <button
       ref={drawButtonRef}
@@ -285,7 +205,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       onClick={() => swapTo(true)}
     >
       <BrushIcon size={15} />
-      {shortDrawLabel ? ui.waitingRoomPanel.doodle : ui.scratchPad.drawWhileYouWait}
+      {shortFooterLabels ? ui.waitingRoomPanel.doodle : ui.scratchPad.drawWhileYouWait}
     </button>
   );
 
@@ -333,7 +253,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         {/* A phone docks Start at the bottom of the screen, as the room view
             does, rather than wrapping it onto a line of its own in the strip. */}
         {isNarrow && (
-          <div ref={footerRef} className="waiting-rules-footer waiting-start-card is-stacked" aria-live="polite">
+          <div ref={footerRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
             {isHost ? startButton(true) : waitingForHost}
           </div>
         )}
@@ -488,11 +408,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             playerCount: activePlayers.length,
           }}
         />
-        <div
-          ref={footerRef}
-          className={`waiting-rules-footer waiting-start-card${footerStacked ? " is-stacked" : ""}`}
-          aria-live="polite"
-        >
+        <div ref={footerRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
           {isHost ? (
             <>
               <button
@@ -501,7 +417,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 onClick={() => setSettingsOpen(true)}
               >
                 <PencilIcon size={15} />
-                {shortEditLabel ? ui.waitingRoomPanel.editRules : ui.waitingRoomPanel.editRoomRules}
+                {shortFooterLabels ? ui.waitingRoomPanel.editRules : ui.waitingRoomPanel.editRoomRules}
               </button>
               {props.startError && <p className="waiting-start-error">{props.startError}</p>}
               {drawButton}
