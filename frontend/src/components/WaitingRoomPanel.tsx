@@ -12,6 +12,7 @@ import { InviteFriendsList } from "./InviteFriendsList";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
+import { useServerNoticesStore } from "../store/serverNoticesStore";
 import type {
   PromptLanguage,
   ColorMode,
@@ -86,6 +87,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const host = players.find((player) => player.isHost);
   const me = players.find((player) => player.playerId === myPlayerId);
   const canStart = eligiblePlayers.length >= 2;
+  const draining = useServerNoticesStore((state) => state.shutdownNotice) !== null;
   const needsPlayers = Math.max(0, 2 - eligiblePlayers.length);
   // The button says how many are missing; the tooltip says what counts, which
   // is the part nobody needs until they wonder why a spectator is not enough.
@@ -227,18 +229,20 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   return (
     <main className="waiting-room" data-testid="waiting-room">
       {/* Which room this is, out of the invite card. It is the one thing on
-          the screen that is not about getting people into it. A desktop's bar
-          already names the room a few pixels above, so there the heading is
-          for a screen reader only; a phone's bar has no room for the name, so
-          this is the one place it is said. The status says whether the room
-          could start now, by the same rule as Start (R-ROOM-05): "waiting for
-          players" beside an enabled Start was wrong half the time. */}
+          the screen that is not about getting people into it. Where the bar
+          prints the room's name (above 1100px, game-room.css) the heading is
+          for a screen reader only; below that the bar has no room for the
+          name, so this is the one place it is said. The status says whether
+          the room could start now, by the same rule as Start (R-ROOM-05):
+          "waiting for players" beside an enabled Start was wrong half the
+          time. Never "ready" during a drain, when the server refuses a start
+          and the drain notice says so. */}
       <header className="waiting-room-head">
-        <h1 className={isNarrow ? undefined : "visually-hidden"}>{props.name}</h1>
+        <h1>{props.name}</h1>
         <p className="section-label">
           {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom} · {rematch
             ? ui.waitingRoomPanel.betweenGames
-            : canStart ? ui.waitingRoomPanel.readyToStart : ui.waitingRoomPanel.waitingForPlayers}
+            : canStart && !draining ? ui.waitingRoomPanel.readyToStart : ui.waitingRoomPanel.waitingForPlayers}
         </p>
       </header>
 

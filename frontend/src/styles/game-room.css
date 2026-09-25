@@ -139,6 +139,25 @@
   }
 }
 
+/* Where the bar does print the name, the waiting room's heading would say it
+   again a few pixels below: it stays for a screen reader only (the
+   `.visually-hidden` recipe, a11y.css). One breakpoint for both, so there is
+   no width with the name twice or not at all. */
+@media (min-width: 1101px) {
+  .waiting-room-head h1 {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
+  }
+}
+
 /* The phone's bar: the round and the clock, any notice, and the Room menu -
    one control. What it replaces lined up eight icon buttons in a 44px strip,
    with a red Leave one thumb-width from Settings. */
@@ -170,43 +189,21 @@
 }
 
 /* The phone's round: "Round 2/3" where the bar has room for the word, "2/3"
-   where it does not (GameHeaderStatus renders both, and says the long one's
-   length in `data-round-chars`, 9 to 12). The word is the first thing on the
-   bar to go - before the wordmark, which is where you are, and never pushing
-   it or the clock. The widths are the bar's content box the long chip needs
-   beside the wordmark (102px), the ring (40px), the Room menu and the avatar
-   (90px) and three 10px gaps - 262px - plus the widest label of that length
-   in the seven interface languages ("Round 9/9" 87px, "Manche 9/9" 96px,
-   "Round 10/10" 100px, "Manche 10/10" 109px), plus 6px of slack. A notice or
-   the Away chip takes the word on any phone-sized bar: it is the round's
-   neighbour, and a word matters less than either. */
+   where it does not. GameHeaderStatus renders both and measures the bar to
+   choose; the full label stays laid out, unseen and out of the flow, so it
+   can be measured while the short one shows. */
 .game-header-round-short {
   display: none;
 }
 
-@container room-bar (max-width: 355px) {
-  .game-header-round .game-header-round-long { display: none; }
-  .game-header-round .game-header-round-short { display: inline; }
+.game-header-round.is-short .game-header-round-long {
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
 }
 
-@container room-bar (max-width: 364px) {
-  .game-header-round:not([data-round-chars="9"]) .game-header-round-long { display: none; }
-  .game-header-round:not([data-round-chars="9"]) .game-header-round-short { display: inline; }
-}
-
-@container room-bar (max-width: 368px) {
-  .game-header-round:is([data-round-chars="11"], [data-round-chars="12"]) .game-header-round-long { display: none; }
-  .game-header-round:is([data-round-chars="11"], [data-round-chars="12"]) .game-header-round-short { display: inline; }
-}
-
-@container room-bar (max-width: 377px) {
-  .game-header-round[data-round-chars="12"] .game-header-round-long { display: none; }
-  .game-header-round[data-round-chars="12"] .game-header-round-short { display: inline; }
-}
-
-@container room-bar (max-width: 600px) {
-  .game-header-mobile:has(.room-notice-chip, .game-header-away) .game-header-round-long { display: none; }
-  .game-header-mobile:has(.room-notice-chip, .game-header-away) .game-header-round-short { display: inline; }
+.game-header-round.is-short .game-header-round-short {
+  display: inline;
 }
 
 .game-header-mobile .game-header-center {
