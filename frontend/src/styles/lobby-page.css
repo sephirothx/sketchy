@@ -97,6 +97,14 @@
     display: block;
     flex: 1 1 0;
     min-width: 0;
+    /* Clipped, so the one frame between crossing 1200px and SiteNav finding
+       the labels do not fit never paints them over the flag. The padding,
+       taken back by the margin, is room for a link's focus ring inside the
+       clip; `overflow-clip-margin` would say it more directly, but Safari
+       does not support it. */
+    margin: -6px;
+    overflow: clip;
+    padding: 6px;
   }
 
   /* The flag and the chip stay whole, on one row; the nav is what gives. */

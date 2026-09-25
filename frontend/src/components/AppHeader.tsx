@@ -171,7 +171,8 @@ export function AppHeader({
  * its own content never changes that width, so the check cannot flip back and
  * forth), and when the labelled row is wider than that it falls back to icons
  * (`is-crowded`). The labelled width is remembered from the last time the
- * labels were shown, and measured again whenever the words change.
+ * labels were shown, and measured again whenever the words change or a web
+ * font finishes loading.
  */
 function SiteNav() {
   const { pathname } = useLocation();
@@ -194,13 +195,30 @@ function SiteNav() {
     if (!wide || !nav || !(list instanceof HTMLElement)) return;
     const check = () => {
       if (!nav.classList.contains("is-crowded")) labelledWidth.current = list.scrollWidth;
-      setCrowdedFor(labelledWidth.current > nav.clientWidth ? words : null);
+      setCrowdedFor(labelledWidth.current > list.clientWidth ? words : null);
     };
     check();
-    if (typeof ResizeObserver === "undefined") return;
-    const observer = new ResizeObserver(check);
-    observer.observe(nav);
-    return () => observer.disconnect();
+    // A web font that arrives after this pass changes the labels' width
+    // without resizing the nav, so nothing above would notice. Once it has
+    // loaded: measure again, and if the row was already icons, show the
+    // labels for one pass so that pass measures them in the real font. Only
+    // while fonts are still loading - `ready` also resolves at once when they
+    // are not, and un-crowding on that would loop.
+    let live = true;
+    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
+    if (fonts && fonts.status === "loading") {
+      void fonts.ready.then(() => {
+        if (!live) return;
+        if (nav.classList.contains("is-crowded")) setCrowdedFor(null);
+        else check();
+      });
+    }
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check);
+    observer?.observe(nav);
+    return () => {
+      live = false;
+      observer?.disconnect();
+    };
   }, [wide, words, crowded]);
 
   const pages: { to: string; label: string; icon: ReactNode }[] = [
