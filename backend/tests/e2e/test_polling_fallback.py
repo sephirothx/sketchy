@@ -135,8 +135,8 @@ async def test_a_browser_that_cannot_open_websockets_plays_over_polling():
             assert await _pixel_is_dark(guest, CANVAS_WIDTH // 2, CANVAS_HEIGHT // 2)
 
             # And the guest can speak: a guess goes out and comes back as a line.
-            await guest.fill('input[placeholder="Type your guess..."]', "a polling guess")
-            await guest.press('input[placeholder="Type your guess..."]', "Enter")
+            await guest.fill('input[placeholder="Type your guess…"]', "a polling guess")
+            await guest.press('input[placeholder="Type your guess…"]', "Enter")
             await guest.wait_for_selector("text=a polling guess", timeout=30_000)
             await host.wait_for_selector("text=a polling guess", timeout=30_000)
 

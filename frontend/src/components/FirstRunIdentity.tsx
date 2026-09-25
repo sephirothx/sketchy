@@ -1,13 +1,17 @@
 import { useId, useState, type CSSProperties } from "react";
+import { Link } from "react-router-dom";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
-import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { MIN_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { useNameField } from "../hooks/useNameField";
+import { useToast } from "../lib/toast";
 import { refusalText } from "../lib/refusals.ts";
 import { firstRunLine } from "../lib/firstRunLines";
 import { DOODLE_SPRITE } from "../lib/avatarDoodles";
 import { firstRunArt, type FirstRunDoodle } from "../lib/firstRunArt";
 import { ui } from "../content/ui/index.ts";
+import { InfoIcon } from "./icons";
 
 /**
  * Shown only until the visitor has an account or a name of their own.
@@ -61,8 +65,16 @@ export function FirstRunIdentity() {
   // this form's own button means the same thing.
   const name = useAuthStore((s) => s.nameDraft);
   const setName = useAuthStore((s) => s.setNameDraft);
-  const [error, setError] = useState<string | null>(null);
+  const { notify } = useToast();
+  // Whether the name on the field was just refused: its line turns red and it
+  // is aria-invalid until the next edit. The message itself is a toast (R-UX-13).
+  const [refused, setRefused] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Only the name rule's characters get in, however they arrive.
+  const { ref: nameRef, onChange: onNameChange, element: nameElement } = useNameField((value) => {
+    setName(value);
+    setRefused(false);
+  });
 
   // Nothing until the initial GET /api/auth/me settles. A null user means
   // "not known yet" as well as "nobody", and offering these controls in that
@@ -77,29 +89,52 @@ export function FirstRunIdentity() {
   if (!needsIdentity(user)) return null;
   const takenName = user?.nameInUse ? user.displayName : null;
 
+  /** Say why, in a toast, and mark the field that fixes it. On a desktop the
+      player is put back in it. With a touch screen they are not: the toast
+      is fixed to the bottom of the layout viewport, and iOS Safari lays the
+      keyboard over that rather than resizing it (it ignores
+      `interactive-widget=resizes-content`), so a refocused field kept the
+      keyboard up and the toast under it - the refusal went unread. There
+      the keyboard is let go, and the red line says which field to tap. */
+  function refuse(message: string) {
+    setRefused(true);
+    notify(message, "error");
+    const field = nameElement.current;
+    if (!field) return;
+    if (window.matchMedia?.("(pointer: coarse)").matches) {
+      if (document.activeElement === field) field.blur();
+    } else {
+      field.focus();
+    }
+  }
+
   async function nameMe(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
     const chosen = name.trim();
-    const invalid = nicknameError(chosen);
+    // The field only takes the rule's characters, so short (or reserved) is
+    // all a name here can still be, and saying just that is shorter and truer
+    // than the whole rule.
+    const invalid =
+      chosen.length < MIN_NICKNAME_LENGTH
+        ? ui.firstRunIdentity.nameTooShort({ min: MIN_NICKNAME_LENGTH })
+        : nicknameError(chosen);
     if (invalid) {
-      setError(invalid);
+      refuse(invalid);
       return;
     }
     setBusy(true);
     try {
       await setDisplayName(chosen);
     } catch (saveError) {
-      setError(
-        refusalText(saveError, ui.firstRunIdentity.couldNotSaveThatNamePlease),
-      );
+      refuse(refusalText(saveError, ui.firstRunIdentity.couldNotSaveThatNamePlease));
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="first-run" aria-labelledby={`${fieldId}-heading`}>
+    <section className="surface-card first-run" aria-labelledby={`${fieldId}-heading`}>
       {/* The card is the size container; its contents are the grid, because a
           card cannot answer a container query about itself. */}
       <div className="first-run-inner">
@@ -123,33 +158,37 @@ export function FirstRunIdentity() {
         </label>
         <div className="first-run-guest-row">
           {/* Search type suppresses Android Chrome's unrelated autofill toolbar,
-              matching every other name field in the app. */}
+              matching every other name field in the app. No `maxLength`: the
+              length is `useNameField`'s to cap, after the characters it
+              drops, or a paste with spaces in it lost letters to the limit. */}
           <input
+            ref={nameRef}
             id={`${fieldId}-name`}
             type="search"
             inputMode="text"
             value={name}
-            onChange={(event) => {
-              setName(event.target.value);
-              setError(null);
-            }}
-            maxLength={MAX_NICKNAME_LENGTH}
+            onChange={onNameChange}
             placeholder={ui.firstRunIdentity.displayName}
             autoComplete="nickname"
             autoCapitalize="off"
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="done"
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? `${fieldId}-error` : undefined}
+            aria-invalid={refused ? true : undefined}
           />
         </div>
-        <button type="submit" className="first-run-guest-submit" disabled={busy}>
-          {busy ? "\u2026" : ui.firstRunIdentity.stickItOn}
+        <button type="submit" className="btn btn-secondary first-run-guest-submit" disabled={busy}>
+          {busy ? ui.firstRunIdentity.saving : ui.firstRunIdentity.stickItOn}
         </button>
-        {error && (
-          <p id={`${fieldId}-error`} className="auth-error" role="alert">{error}</p>
-        )}
+        {/* The tag's fine print. Before a name there is no chip and its menu,
+            and on a phone the header has no room for its site links, so
+            without this a visitor could not read the rules of a game they
+            were about to join. Small and plain under the button, so it never
+            reads as a second thing to press. */}
+        <Link to="/rules" className="first-run-rules">
+          <InfoIcon size={13} />
+          {ui.accountMenu.rules}
+        </Link>
       </form>
 
       <div className="first-run-say">

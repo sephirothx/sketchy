@@ -169,12 +169,15 @@ export function applyDelta(
   };
 }
 
-/** "8 online", or "Showing 100 of 412" when the list did not fit.
+/** "Showing 100 of 412" when the list did not fit, and nothing otherwise.
 
 Without the total a cap is indistinguishable from a quiet server, which is
-the one reading that would make the panel actively misleading. */
-export function presenceSummary(state: PresenceState): string {
+the one reading that would make the panel actively misleading (R-PRESENCE-04).
+When the list is everybody, the total is the list: "0 online" beside
+"Nobody else is here right now", or "3 online" above three rows, only said
+again what was under it. */
+export function presenceSummary(state: PresenceState): string | null {
   const shown = state.players.length;
   if (state.onlineCount > shown) return ui.lobbyPresence.showingShownOfOnlineCount({ shown, onlineCount: state.onlineCount });
-  return ui.lobbyPresence.onlineCount({ count: state.onlineCount });
+  return null;
 }

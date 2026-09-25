@@ -50,7 +50,7 @@ export const RULES_ES: RulesDocument = {
             "Adivinar no es spam, por muy disparatados que sean los intentos — adivinar rápido es justo de lo que va esto.",
           ],
           examples: [
-            "Repetir un mensaje hasta que nadie pueda seguir la ronda",
+            "Repetir un mensaje hasta que nadie pueda seguir la partida",
             "Publicar enlaces o invitaciones a otro sitio",
             "Pegar el mismo muro de texto en una sala tras otra",
           ],
@@ -118,7 +118,7 @@ export const RULES_ES: RulesDocument = {
           examples: [
             "Escribir o deletrear la palabra mientras la dibujas",
             "Decirle la palabra a un amigo por una llamada u otra aplicación",
-            "Usar una segunda cuenta para pasarte respuestas a ti mismo",
+            "Usar una segunda cuenta para pasarte la palabra a ti mismo",
           ],
         },
       ],

@@ -144,9 +144,9 @@ async def take_up_the_offer(page, password: str = "a-good-password") -> str:
     # button to press.
     await type_code(dialog, code_at(secret, current_step(time.time())))
     await dialog.locator(".two-factor-ack input").check()
-    await dialog.get_by_role("button", name="Done").click()
+    await dialog.get_by_role("button", name="OK", exact=True).click()
     # And the role that was waiting has begun.
-    await dialog.get_by_role("button", name="Done").click()
+    await dialog.get_by_role("button", name="OK", exact=True).click()
     return secret
 
 

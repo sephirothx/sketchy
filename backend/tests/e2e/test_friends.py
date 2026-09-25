@@ -607,10 +607,10 @@ async def test_signing_in_does_not_announce_requests_that_were_already_there():
 
             await fresh.goto(BASE_URL)
             await fresh.click(".first-run-login")
-            login = fresh.get_by_role("dialog", name="Log in")
+            login = fresh.get_by_role("dialog", name="Sign in")
             await login.get_by_label("Username").fill(owner_name)
             await login.get_by_label("Password").fill(password)
-            await login.get_by_role("button", name="Log in", exact=True).click()
+            await login.get_by_role("button", name="Sign in", exact=True).click()
             await login.wait_for(state="hidden")
 
             # The backlog is counted, which is how it should be learned about.

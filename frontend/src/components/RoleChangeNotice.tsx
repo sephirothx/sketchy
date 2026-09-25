@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useState } from "react";
+import { Suspense, lazy, useEffect, useRef, useState } from "react";
 
 import {
   pendingRoleFromPayload,
@@ -13,6 +13,7 @@ import {
 } from "../lib/roleNotices";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
+import { ModalShell } from "./ui/ModalShell";
 import { ui } from "../content/ui/index.ts";
 
 // The same chunk Settings pulls, and for the same reason: the QR encoder is
@@ -52,6 +53,8 @@ export function RoleChangeNotice() {
   // Straight from the notice into the thing it asks for, rather than sending
   // somebody to find a setting they have never opened.
   const [enrolling, setEnrolling] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const primaryRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     // A guest cannot hold a role, so there can be no notice waiting for one -
@@ -92,6 +95,7 @@ export function RoleChangeNotice() {
       // browser's session with it.
       setSignedOutByTheChange(!pushed.pending);
       setNotice(pushed);
+      setFailed(false);
       // Deliberately no `applyRole` here any more. It existed to make the menu
       // match the new role without a reload, and there is no longer a
       // signed-in menu to correct: this browser's session went with the role
@@ -132,6 +136,7 @@ export function RoleChangeNotice() {
     }
     const settling = notice.id;
     setBusy(true);
+    setFailed(false);
     try {
       await acknowledgeRoleNotice(settling);
       // Only the notice that was acknowledged. A second change can land on the
@@ -140,40 +145,42 @@ export function RoleChangeNotice() {
       setNotice((current) => noticeAfterAcknowledgement(current, settling));
     } catch {
       // Leave the notice up: closing it without the receipt landing would
-      // bring it back on the next visit, and the button can simply be pressed
-      // again.
+      // bring it back on the next visit. Said, so a button that did nothing
+      // is not a mystery, and pressing it again is the way on.
+      setFailed(true);
     } finally {
       setBusy(false);
     }
   }
 
+  // `dialog` rather than `alertdialog`: a suspension or a warning is an
+  // urgent interruption a player has to read, and this is news. Answered
+  // rather than dismissed, like them - no ✕, no Escape, no scrim - because
+  // the answer is the receipt.
   return (
-    <div className="modal-overlay suspension-overlay">
-      {/* `dialog` rather than `alertdialog`: a suspension or a warning is an
-          urgent interruption a player has to read, and this is news. */}
-      <div
-        className="modal-card suspension-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="role-notice-title"
-      >
-        <h3 className="modal-title" id="role-notice-title">
-          {title}
-        </h3>
-        <p className="modal-body">{body}</p>
-        {signedOutByTheChange && (
-          <p className="modal-body">
-            {ui.roleChangeNotice.youHaveBeenSignedOutEvery}
-          </p>
-        )}
-        {notice.pending ? (
-          // Two ways on, because this one asks for something. "Later" still
-          // acknowledges: they were told, and what is outstanding is the
-          // offer itself, which the account carries until it is taken up.
-          <div className="role-notice-decide">
+    <ModalShell
+      title={title}
+      overlayClassName="suspension-overlay"
+      cardClassName="suspension-card"
+      initialFocusRef={primaryRef}
+      footer={
+        notice.pending ? (
+          // Two ways on, because this one asks for something. "Not now"
+          // still acknowledges: they were told, and what is outstanding is
+          // the offer itself, which the account carries until it is taken up.
+          <>
             <button
               type="button"
-              className="modal-button"
+              className="btn btn-secondary"
+              disabled={busy}
+              onClick={() => void dismiss()}
+            >
+              {ui.roleChangeNotice.notNow}
+            </button>
+            <button
+              ref={primaryRef}
+              type="button"
+              className="btn btn-primary"
               disabled={busy}
               onClick={() => {
                 setEnrolling(true);
@@ -182,19 +189,12 @@ export function RoleChangeNotice() {
             >
               {ui.roleChangeNotice.setUpNow}
             </button>
-            <button
-              type="button"
-              className="btn btn-ghost"
-              disabled={busy}
-              onClick={() => void dismiss()}
-            >
-              {ui.roleChangeNotice.later}
-            </button>
-          </div>
+          </>
         ) : (
           <button
+            ref={primaryRef}
             type="button"
-            className="modal-button"
+            className="btn btn-primary"
             disabled={busy}
             onClick={() => void dismiss()}
           >
@@ -204,8 +204,20 @@ export function RoleChangeNotice() {
                 ? ui.roleChangeNotice.signInAgain
                 : ui.roleChangeNotice.understood}
           </button>
-        )}
-      </div>
-    </div>
+        )
+      }
+    >
+      <p className="modal-body">{body}</p>
+      {signedOutByTheChange && (
+        <p className="modal-body">
+          {ui.roleChangeNotice.youHaveBeenSignedOutEvery}
+        </p>
+      )}
+      {failed && (
+        <p className="auth-error" role="alert">
+          {ui.dialog.couldNotSave}
+        </p>
+      )}
+    </ModalShell>
   );
 }

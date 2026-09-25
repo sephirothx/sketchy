@@ -17,7 +17,7 @@ INKED_PIXELS = """(canvas) => {
 
 
 CLEAR = ".clear-button, .toolbar-mobile-clear"
-UNDO = ".undo-button, .toolbar-mobile-chip[aria-label='Undo last stroke']"
+UNDO = ".undo-button, .toolbar-mobile-chip[aria-label='Undo']"
 
 
 async def scribble(page: Page, pad_selector: str) -> None:
@@ -64,7 +64,7 @@ async def test_the_lobby_offers_the_pad_while_offline_and_keeps_it_when_the_conn
             assert await inked(page, pad) == 0
             await page.locator(pad).locator(UNDO).click()
             assert await inked(page, pad) == drawn
-            await page.click('.scratch-pad-dialog button:has-text("Close")')
+            await page.click('.scratch-pad-dialog .modal-close')
             await page.wait_for_selector(".scratch-pad-dialog", state="detached")
         finally:
             await context.close()
@@ -205,12 +205,12 @@ async def test_the_pad_fits_the_narrowest_phone():
             assert overflow["page"] <= 320, overflow
             assert overflow["right"] <= 320, overflow
             assert overflow["narrowest"] >= 44, overflow
-            await page.click('.scratch-pad-dialog button:has-text("Close")')
+            await page.click('.scratch-pad-dialog .modal-close')
             await context.set_offline(False)
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
 
             # And in place of the waiting room's column, strip and all.
-            await page.click('button:has-text("Create a room")')
+            await page.click('button:has-text("Create room")')
             await page.wait_for_selector(".create-room-page")
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')

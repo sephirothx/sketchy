@@ -1,6 +1,6 @@
 import { useId, useRef, useState } from "react";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import { deleteAccount } from "../lib/accountData";
 import { useAuthStore } from "../store/authStore";
 import { refusalText } from "../lib/refusals.ts";
@@ -25,17 +25,15 @@ export function DeleteAccountDialog({
   isGuest: boolean;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const firstFieldRef = useRef<HTMLInputElement | null>(null);
-  const titleId = useId();
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
   const logout = useAuthStore((state) => state.logout);
 
   const [password, setPassword] = useState("");
   const [confirmation, setConfirmation] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
-
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: firstFieldRef });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -56,77 +54,76 @@ export function DeleteAccountDialog({
     }
   }
 
+  // Held open while the request is out: closing it then would leave the
+  // account's fate unannounced.
+  const dismiss = () => {
+    if (!deleting) onClose();
+  };
+
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget && !deleting) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card account-delete-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">
-          {isGuest ? ui.deleteAccountDialog.deleteThisGuest : ui.deleteAccountDialog.deleteYourAccount}
-        </h3>
-        <p className="modal-body">
-          {ui.deleteAccountDialog.whatIsRemoved({ isGuest })}
-        </p>
-        <form onSubmit={(event) => void submit(event)} className="auth-form account-delete-form">
-          {!isGuest && (
-            <>
-              <label htmlFor={`${titleId}-password`}>{ui.deleteAccountDialog.password}</label>
-              <input
-                id={`${titleId}-password`}
-                ref={firstFieldRef}
-                type="password"
-                value={password}
-                onChange={(event) => {
-                  setPassword(event.target.value);
-                  setError(null);
-                }}
-                autoComplete="current-password"
-                required
-              />
-            </>
-          )}
-          <label htmlFor={`${titleId}-confirm`}>{ui.deleteAccountDialog.typeToConfirm({ word: CONFIRMATION })}</label>
-          <input
-            id={`${titleId}-confirm`}
-            ref={isGuest ? firstFieldRef : undefined}
-            type="text"
-            value={confirmation}
-            onChange={(event) => {
-              setConfirmation(event.target.value);
-              setError(null);
-            }}
-            autoComplete="off"
-            autoCapitalize="characters"
-            spellCheck={false}
-            required
-          />
-          {error && (
-            <p className="auth-error" role="alert">
-              {error}
-            </p>
-          )}
+    <ModalShell
+      title={isGuest ? ui.deleteAccountDialog.deleteThisGuest : ui.deleteAccountDialog.deleteYourAccount}
+      cardClassName="account-delete-dialog"
+      onDismiss={dismiss}
+      initialFocusRef={firstFieldRef}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" onClick={dismiss} disabled={deleting}>
+            {ui.dialog.cancel}
+          </button>
           <button
             type="submit"
-            className="modal-button account-delete-confirm"
+            form={formId}
+            className="btn btn-danger account-delete-confirm"
             disabled={confirmation !== CONFIRMATION || deleting}
           >
             {deleting ? ui.deleteAccountDialog.deleting : ui.deleteAccountDialog.deleteForGood}
           </button>
-        </form>
-        <button type="button" className="modal-dismiss" onClick={onClose} disabled={deleting}>
-          {isGuest ? ui.deleteAccountDialog.keepPlaying : ui.deleteAccountDialog.keepMyAccount}
-        </button>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <p className="modal-body">
+        {ui.deleteAccountDialog.whatIsRemoved({ isGuest })}
+      </p>
+      <form id={formId} onSubmit={(event) => void submit(event)} className="auth-form account-delete-form">
+        {!isGuest && (
+          <>
+            <label htmlFor={`${fieldId}-password`}>{ui.deleteAccountDialog.password}</label>
+            <input
+              id={`${fieldId}-password`}
+              ref={firstFieldRef}
+              type="password"
+              value={password}
+              onChange={(event) => {
+                setPassword(event.target.value);
+                setError(null);
+              }}
+              autoComplete="current-password"
+              required
+            />
+          </>
+        )}
+        <label htmlFor={`${fieldId}-confirm`}>{ui.deleteAccountDialog.typeToConfirm({ word: CONFIRMATION })}</label>
+        <input
+          id={`${fieldId}-confirm`}
+          ref={isGuest ? firstFieldRef : undefined}
+          type="text"
+          value={confirmation}
+          onChange={(event) => {
+            setConfirmation(event.target.value);
+            setError(null);
+          }}
+          autoComplete="off"
+          autoCapitalize="characters"
+          spellCheck={false}
+          required
+        />
+        {error && (
+          <p className="auth-error" role="alert">
+            {error}
+          </p>
+        )}
+      </form>
+    </ModalShell>
   );
 }

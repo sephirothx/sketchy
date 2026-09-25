@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState, type PointerEvent as ReactPointerEvent } from "react";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import {
   clampCrop,
   cropRect,
@@ -40,10 +40,8 @@ export function PictureCropDialog({
   onUse: (base64: string) => Promise<void>;
   onCancel: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const viewportRef = useRef<HTMLDivElement | null>(null);
   const useButtonRef = useRef<HTMLButtonElement | null>(null);
-  const titleId = useId();
   const sliderId = useId();
 
   const [loaded, setLoaded] = useState<LoadedPicture | null>(null);
@@ -52,8 +50,6 @@ export function PictureCropDialog({
   const [busy, setBusy] = useState(false);
   const [dragging, setDragging] = useState(false);
   const drag = useRef<{ pointerId: number; x: number; y: number; from: CropState } | null>(null);
-
-  useFocusTrap(dialogRef, { onEscape: onCancel, initialFocusRef: useButtonRef });
 
   useEffect(() => {
     let picture: LoadedPicture | null = null;
@@ -176,91 +172,87 @@ export function PictureCropDialog({
     return () => viewport.removeEventListener("wheel", wheel);
   }, [loaded, width, height]);
 
+  // Held while the upload is out, so the answer lands somewhere.
+  const dismiss = () => {
+    if (!busy) onCancel();
+  };
+
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onCancel();
-      }}
+    <ModalShell
+      title={ui.pictureCropDialog.frameYourPicture}
+      cardClassName="picture-crop-card"
+      onDismiss={dismiss}
+      initialFocusRef={useButtonRef}
+      footer={
+        <>
+          <button type="button" className="btn btn-secondary" disabled={busy} onClick={dismiss}>
+            {ui.pictureCropDialog.cancel}
+          </button>
+          <button
+            ref={useButtonRef}
+            type="button"
+            className="btn btn-primary"
+            disabled={!loaded || busy}
+            onClick={() => void use()}
+          >
+            {busy ? ui.pictureCropDialog.uploading : ui.pictureCropDialog.usePicture}
+          </button>
+        </>
+      }
     >
+      <p className="modal-body">
+        {ui.pictureCropDialog.dragMoveZoomGetCloserCircle}
+      </p>
+
       <div
-        ref={dialogRef}
-        className="modal-card picture-crop-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
+        ref={viewportRef}
+        className="picture-crop-viewport"
+        style={{ width: CROP_VIEWPORT, height: CROP_VIEWPORT }}
+        role="img"
+        aria-label={ui.pictureCropDialog.pictureFramedArrowKeysMovePlus}
+        tabIndex={loaded ? 0 : -1}
+        data-dragging={dragging ? "" : undefined}
+        onPointerDown={startDrag}
+        onPointerMove={moveDrag}
+        onPointerUp={endDrag}
+        onPointerCancel={endDrag}
+        onKeyDown={keyFrame}
       >
-        <h3 id={titleId} className="modal-title">
-          {ui.pictureCropDialog.frameYourPicture}
-        </h3>
-        <p className="modal-body">
-          {ui.pictureCropDialog.dragMoveZoomGetCloserCircle}
-        </p>
-
-        <div
-          ref={viewportRef}
-          className="picture-crop-viewport"
-          style={{ width: CROP_VIEWPORT, height: CROP_VIEWPORT }}
-          role="img"
-          aria-label={ui.pictureCropDialog.pictureFramedArrowKeysMovePlus}
-          tabIndex={loaded ? 0 : -1}
-          data-dragging={dragging ? "" : undefined}
-          onPointerDown={startDrag}
-          onPointerMove={moveDrag}
-          onPointerUp={endDrag}
-          onPointerCancel={endDrag}
-          onKeyDown={keyFrame}
-        >
-          {loaded && (
-            <img
-              src={loaded.image.src}
-              alt=""
-              draggable={false}
-              style={{
-                width: width * placement.scale,
-                height: height * placement.scale,
-                left: placement.left,
-                top: placement.top,
-              }}
-            />
-          )}
-          <span className="picture-crop-mask" aria-hidden="true" />
-        </div>
-
-        <div className="picture-crop-zoom">
-          <label htmlFor={sliderId}>{ui.pictureCropDialog.zoom}</label>
-          <input
-            id={sliderId}
-            type="range"
-            min={1}
-            max={maxZoom}
-            step={0.01}
-            value={crop.zoom}
-            disabled={!loaded || maxZoom <= 1}
-            onChange={(event) => frame({ ...crop, zoom: Number(event.target.value) })}
+        {loaded && (
+          <img
+            src={loaded.image.src}
+            alt=""
+            draggable={false}
+            style={{
+              width: width * placement.scale,
+              height: height * placement.scale,
+              left: placement.left,
+              top: placement.top,
+            }}
           />
-        </div>
-
-        {error && (
-          <p className="auth-error" role="alert">
-            {error}
-          </p>
         )}
-
-        <button
-          ref={useButtonRef}
-          type="button"
-          className="modal-button"
-          disabled={!loaded || busy}
-          onClick={() => void use()}
-        >
-          {busy ? ui.pictureCropDialog.uploading : ui.pictureCropDialog.usePicture}
-        </button>
-        <button type="button" className="modal-dismiss" disabled={busy} onClick={onCancel}>
-          {ui.pictureCropDialog.cancel}
-        </button>
+        <span className="picture-crop-mask" aria-hidden="true" />
       </div>
-    </div>
+
+      <div className="picture-crop-zoom">
+        <label htmlFor={sliderId}>{ui.pictureCropDialog.zoom}</label>
+        <input
+          id={sliderId}
+          type="range"
+          min={1}
+          max={maxZoom}
+          step={0.01}
+          value={crop.zoom}
+          disabled={!loaded || maxZoom <= 1}
+          onChange={(event) => frame({ ...crop, zoom: Number(event.target.value) })}
+        />
+      </div>
+
+      {error && (
+        <p className="auth-error" role="alert">
+          {error}
+        </p>
+      )}
+    </ModalShell>
   );
 }

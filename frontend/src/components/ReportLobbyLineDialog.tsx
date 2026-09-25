@@ -1,11 +1,9 @@
-import { useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ReportDialog } from "./ReportDialog";
 import type { LobbyChatLine } from "../lib/lobbyChat";
 import { submitPlayerReport, type ReportReason } from "../lib/moderation";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
-import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
 /** The reasons a line of chat can be reported for. A line is words, so the
@@ -35,135 +33,41 @@ export function ReportLobbyLineDialog({
   retainedMessageId: string;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const reasonRef = useRef<HTMLSelectElement | null>(null);
-  const titleId = useId();
   const [reason, setReason] = useState<ReportReason>("harassment");
-  const [details, setDetails] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
 
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: reasonRef });
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await submitPlayerReport({
-        reportedUserId: line.userId,
-        reason,
-        // Sent as typed, empty included: the line itself is the complaint,
-        // and the queue says "no details given" rather than reading a
-        // stand-in as the reporter's words.
-        details: details.trim(),
-        messageIds: [retainedMessageId],
-      });
-      setSent(true);
-    } catch (problem) {
-      setError(
-        refusalText(problem, ui.reportLobbyLineDialog.thatReportCouldNotBeSent),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // Portalled like the room's report dialog, and given its overlay class so it
-  // sits on the same layer.
-  return createPortal(
-    <div
-      className="modal-overlay report-player-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
+  return (
+    <ReportDialog
+      title={ui.reportLobbyLineDialog.reportDisplayName({ displayName: line.displayName })}
+      intro={ui.reportLobbyLineDialog.nothingHappensYet({ name: line.displayName })}
+      testId="report-lobby-line-dialog"
+      quoted={
+        <blockquote className="report-quoted-line" data-testid="report-quoted-line">
+          <strong
+            className={playerNameClass(line.isAnonymous)}
+            style={playerNameStyle(line.nameColor ?? undefined, line.isAnonymous)}
+          >
+            {line.displayName}:{" "}
+          </strong>
+          {line.text}
+        </blockquote>
+      }
+      reason={{
+        label: ui.reportLobbyLineDialog.whatWrongWith,
+        choices: REASONS,
+        value: reason,
+        onChange: setReason,
       }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        data-testid="report-lobby-line-dialog"
-      >
-        <h3 id={titleId} className="modal-title">
-          {sent ? ui.reportLobbyLineDialog.reportSent : ui.reportLobbyLineDialog.reportDisplayName({ displayName: line.displayName })}
-        </h3>
-
-        {!sent ? (
-          <>
-            <p className="modal-body">
-              {ui.reportLobbyLineDialog.nothingHappensYet({ name: line.displayName })}
-            </p>
-            <blockquote className="report-quoted-line" data-testid="report-quoted-line">
-              <strong
-                className={playerNameClass(line.isAnonymous)}
-                style={playerNameStyle(line.nameColor ?? undefined, line.isAnonymous)}
-              >
-                {line.displayName}:{" "}
-              </strong>
-              {line.text}
-            </blockquote>
-            <form onSubmit={submit} className="auth-form">
-              <label htmlFor={`${titleId}-reason`}>{ui.reportLobbyLineDialog.whatWrongWith}</label>
-              <select
-                id={`${titleId}-reason`}
-                ref={reasonRef}
-                className="report-reason"
-                value={reason}
-                onChange={(change) => setReason(change.target.value as ReportReason)}
-              >
-                {REASONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <label htmlFor={`${titleId}-details`}>{ui.reportLobbyLineDialog.anythingElseOptional}</label>
-              <textarea
-                id={`${titleId}-details`}
-                className="report-details"
-                rows={3}
-                maxLength={1000}
-                value={details}
-                onChange={(change) => {
-                  setDetails(change.target.value);
-                  setError(null);
-                }}
-                placeholder={ui.reportLobbyLineDialog.anythingModeratorShouldKnow}
-              />
-              <p className="auth-hint">
-                {ui.reportLobbyLineDialog.thisLineAttachedWithWhatLobby}
-              </p>
-
-              {error && (
-                <p className="auth-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button type="submit" className="modal-button" disabled={busy}>
-                {busy ? ui.reportLobbyLineDialog.sending : ui.reportLobbyLineDialog.sendReport}
-              </button>
-            </form>
-          </>
-        ) : (
-          <>
-            <p className="modal-body">{ui.reportLobbyLineDialog.sentWithLineWhatWasSaid}</p>
-            <button type="button" className="modal-button" onClick={onClose}>
-              {ui.reportLobbyLineDialog.done}
-            </button>
-          </>
-        )}
-
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sent ? ui.reportLobbyLineDialog.close : ui.reportLobbyLineDialog.cancel}
-        </button>
-      </div>
-    </div>,
-    document.body,
+      attachedHint={ui.reportLobbyLineDialog.thisLineAttachedWithWhatLobby}
+      onSend={async (details) => {
+        await submitPlayerReport({
+          reportedUserId: line.userId,
+          reason,
+          details,
+          messageIds: [retainedMessageId],
+        });
+        return ui.reportLobbyLineDialog.sentWithLineWhatWasSaid;
+      }}
+      onClose={onClose}
+    />
   );
 }

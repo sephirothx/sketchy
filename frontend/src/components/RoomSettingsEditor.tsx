@@ -1,5 +1,6 @@
-import { useCallback, useEffect, useMemo, useReducer, useState } from "react";
+import { useCallback, useEffect, useMemo, useReducer, useRef, useState } from "react";
 import { RoomSetupForm, type RoomSetupValues } from "./RoomSetupForm";
+import { ModalShell } from "./ui/ModalShell";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE } from "../lib/roomSetup";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
@@ -48,8 +49,8 @@ function toFormValues(settings: EditableRoomSettings): RoomSetupValues {
 
 interface RoomSettingsEditorProps {
   /** Called after the room has accepted the whole draft. */
-  onSaved?: () => void;
-  onCancel?: () => void;
+  onSaved: () => void;
+  onCancel: () => void;
 }
 
 /**
@@ -63,7 +64,7 @@ interface RoomSettingsEditorProps {
  * a decision, and every intermediate value on the way to "6 rounds" was being
  * broadcast to everyone waiting.
  */
-export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProps = {}) {
+export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProps) {
   const [values, setValues] = useState<RoomSetupValues>(toFormValues(emptySettings));
   const [baseline, setBaseline] = useState<RoomSetupValues>(toFormValues(emptySettings));
   const [loadedLists, setLoadedLists] = useState<PromptListSummary[]>([]);
@@ -93,6 +94,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const sectionRef = useRef<HTMLElement | null>(null);
   const { notify } = useToast();
 
   useEffect(() => {
@@ -163,14 +165,14 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         // The server settles dependent settings itself — a hint mode the
         // scoring rules out, say — so a refusal is not simply "put the old
         // value back"; the form reloads from what the room actually holds.
-        const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseSettings);
+        const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseRules);
         setError(message);
         notify(message, "error");
         return;
       }
       setBaseline(values);
       setPromptsBaseline({ value: customPrompts.value, only: customPrompts.only });
-      onSaved?.();
+      onSaved();
     } catch (saveError) {
       const message = socketRequestErrorMessage(saveError, ui.roomSettingsEditor.saveRoomRules);
       setError(message);
@@ -180,42 +182,48 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     }
   }
 
-  // No card of its own: the dialog it opens in is already a panel, and two
-  // nested ones cost 90px of a phone's width in padding and borders alone.
-  return <section
-    className="room-settings-editor"
-    aria-labelledby="room-settings-title"
-  >
-    <div className="room-settings-editor-heading">
-      <p className="waiting-card-kicker">{ui.roomSettingsEditor.hostSettings}</p>
-      <h2 id="room-settings-title">{ui.roomSettingsEditor.editRoomRules}</h2>
-    </div>
-    {loading ? <p>{ui.roomSettingsEditor.loadingSettings}</p> : (
-      <RoomSetupForm
-        values={values}
-        onChange={handleChange}
-        customPrompts={customPrompts}
-        dispatchCustomPrompts={dispatchCustomPrompts}
-        onListsLoaded={setLoadedLists}
-        loadedLists={loadedLists}
-        languageLocked
-      />
-    )}
-    {error && <p className="create-room-error" role="alert">{error}</p>}
-    <div className="room-settings-actions">
-      {onCancel && (
-        <button type="button" className="btn btn-ghost" onClick={onCancel}>
-          {ui.roomSettingsEditor.cancel}
-        </button>
-      )}
+  // Loading, the body holds nothing to focus and the dialog starts on its ✕;
+  // once the form arrives, focus moves to its first field rather than staying
+  // up there while the host starts reading.
+  useEffect(() => {
+    if (loading) return;
+    sectionRef.current?.querySelector<HTMLInputElement>(".create-room-name-field input")?.focus();
+  }, [loading]);
+
+  // Its own dialog, so the actions sit in the footer and stay in reach while
+  // the form scrolls on a phone. No card of its own inside it: two nested
+  // ones cost 90px of a phone's width in padding and borders alone.
+  return <ModalShell
+    title={ui.roomSettingsEditor.editRoomRules}
+    cardClassName="room-settings-modal-card"
+    onDismiss={onCancel}
+    footer={<>
+      <button type="button" className="btn btn-secondary" onClick={onCancel}>
+        {ui.roomSettingsEditor.cancel}
+      </button>
       <button
         type="button"
         className="btn btn-primary room-settings-save"
         disabled={!dirty || saving || promptsError || loading}
         onClick={() => void save()}
       >
-        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveSettings : ui.roomSettingsEditor.saved}
+        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveRules : ui.roomSettingsEditor.saved}
       </button>
-    </div>
-  </section>;
+    </>}
+  >
+    <section ref={sectionRef} className="room-settings-editor">
+      {loading ? <p className="loading-note" role="status">{ui.roomSettingsEditor.loadingRoomRules}</p> : (
+        <RoomSetupForm
+          values={values}
+          onChange={handleChange}
+          customPrompts={customPrompts}
+          dispatchCustomPrompts={dispatchCustomPrompts}
+          onListsLoaded={setLoadedLists}
+          loadedLists={loadedLists}
+          languageLocked
+        />
+      )}
+      {error && <p className="create-room-error" role="alert">{error}</p>}
+    </section>
+  </ModalShell>;
 }

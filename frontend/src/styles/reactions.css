@@ -26,7 +26,7 @@
   align-items: center;
   background: var(--danger-soft);
   border: 1.5px solid var(--danger);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow-raised);
   color: var(--danger);
   display: inline-flex;
@@ -58,7 +58,7 @@
   height: var(--reaction-height);
   padding: 0 8px;
   border: 1px solid rgba(0, 0, 0, 0.08);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(255, 255, 255, 0.9);
   color: #3a3a40;
   font: inherit;
@@ -120,6 +120,9 @@
 /* The strip: a dark pill of emoji and nothing else, like a chat app's. The
    same dark in both themes, because it sits over a white canvas. */
 .reaction-picker {
+  /* The app's ring in white, the one colour that reads on this strip in
+     both themes. */
+  --focus-ring: #ffffff;
   position: absolute;
   right: 0;
   bottom: calc(var(--reaction-height) + 8px);
@@ -127,11 +130,11 @@
   align-items: center;
   gap: 2px;
   padding: 3px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: rgba(32, 32, 36, 0.94);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
   z-index: 4;
-  animation: reaction-picker-in 140ms ease-out;
+  animation: reaction-picker-in var(--dur-fast) ease-out;
 }
 
 .reaction-control-panel .reaction-picker {
@@ -155,11 +158,12 @@
   -webkit-appearance: none;
 }
 
-/* A cue, not a movement: the glyph stays put and its circle lights up. */
+/* A cue, not a movement: the glyph stays put and its circle lights up. The
+   keyboard also gets the app's focus ring, drawn inside the circle (a11y.css):
+   the wash alone is too faint to be the only sign of focus. */
 .reaction-option:hover:not(:disabled),
 .reaction-option:focus-visible {
   background: rgba(255, 255, 255, 0.16);
-  outline: none;
 }
 
 .reaction-option.is-mine {
@@ -177,7 +181,7 @@
   align-items: stretch;
   min-width: 190px;
   padding: 10px 12px;
-  border-radius: 14px;
+  border-radius: var(--radius);
   background: var(--card);
   border: 1.5px solid var(--line);
   box-shadow: var(--shadow-raised);
@@ -194,9 +198,9 @@
   width: 100%;
   padding: 7px 10px;
   border: 0;
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   background: var(--primary);
-  color: var(--card);
+  color: var(--on-primary);
   font: inherit;
   font-weight: 800;
   cursor: pointer;

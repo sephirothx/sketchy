@@ -6,6 +6,7 @@ import {
   overlayBackgroundOf,
   type OverlayLocationState,
 } from "../lib/overlayRoutes";
+import { isSheetEntry } from "../lib/roomHistory";
 
 /** Opening and closing an overlay route - the two halves both overlays share.
 
@@ -20,7 +21,11 @@ sections visited. Opening one from a page pushes, so Back closes it.
 
 An overlay opened while another is already open keeps the page underneath
 rather than recording the first overlay as its background - closing the second
-would otherwise reopen the first over a page nobody asked for. */
+would otherwise reopen the first over a page nobody asked for.
+
+Opened from a sheet or menu in a room, it takes the place of that surface's
+history entry (R-UX-15): the menu closes as the overlay opens, and an entry
+left beneath would make Back step over it and Forward bounce off it. */
 export function useOpenOverlay(): (
   path: string,
   options?: { replace?: boolean },
@@ -36,7 +41,7 @@ export function useOpenOverlay(): (
         return;
       }
       navigate(path, {
-        replace: options?.replace ?? false,
+        replace: options?.replace ?? isSheetEntry(window.history.state),
         state: { overlayBackground: from } satisfies OverlayLocationState,
       });
     },

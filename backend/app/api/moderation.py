@@ -18,6 +18,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
 
 from app.api.errors import Refusal
+from app.message_limits import MAX_REPORT_DETAILS
 from app.refusals import ErrorCode
 from app.auth.avatars import avatar_url, uploaded_avatar_key
 from app.services.avatars import remove_avatar
@@ -103,7 +104,6 @@ from app.domain_values import (
 logger = logging.getLogger(__name__)
 
 MAX_REPORT_CONTEXT_BYTES = 32_768
-MAX_REPORT_DETAILS = 2_000
 MAX_RESOLUTION_NOTE = 2_000
 MAX_REPORT_MESSAGES = 20
 # How many decided reports one message names at once. A reporter with more
@@ -181,15 +181,15 @@ class PromptContentReportBody(ControlFreeModel):
     prompt_list_id: UUID = Field(alias="promptListId")
     prompt_version_id: UUID | None = Field(default=None, alias="promptVersionId")
     reason: PromptContentReportReason
-    details: str = Field(min_length=1, max_length=MAX_REPORT_DETAILS)
+    # Optional, as on every other report: the reported list or prompt is the
+    # evidence, and its snapshot goes with the report. Required words here
+    # made one of five report dialogs refuse a complaint the others accept.
+    details: str = Field(default="", max_length=MAX_REPORT_DETAILS)
 
     @field_validator("details")
     @classmethod
     def clean_details(cls, value: str) -> str:
-        cleaned = value.strip()
-        if not cleaned:
-            raise ValueError("details cannot be blank")
-        return cleaned
+        return value.strip()
 
 
 class GalleryReportBody(ControlFreeModel):

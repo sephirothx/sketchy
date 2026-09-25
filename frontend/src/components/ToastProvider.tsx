@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import {
   ToastContext,
   keepRecentToasts,
+  sameToast,
   type ToastAction,
   type ToastTone,
 } from "../lib/toast";
@@ -29,18 +30,17 @@ export function ToastProvider({ children }: { children: ReactNode }) {
 
   const notify = useCallback((
     message: string,
-    tone: ToastTone = "info",
+    tone: ToastTone,
     durationMs = 5000,
     action?: ToastAction,
   ) => {
     const id = nextIdRef.current++;
     setToasts((current) => {
-      const { kept, evicted } = keepRecentToasts(current, {
-        id,
-        message,
-        tone,
-        action,
-      });
+      const { kept, evicted } = keepRecentToasts(
+        current,
+        { id, message, tone, action },
+        sameToast,
+      );
       // A toast that fell off the stack still has a timer running against it.
       for (const gone of evicted) {
         const timer = timersRef.current.get(gone.id);

@@ -83,7 +83,7 @@ async def test_a_passkey_is_set_up_once_and_then_signs_in_on_its_own():
 
             # And the role that was waiting has begun.
             await expect(dialog).to_contain_text("You are now a moderator")
-            await dialog.get_by_role("button", name="Done").click()
+            await dialog.get_by_role("button", name="OK", exact=True).click()
 
             # Signed out everywhere else; this browser carries on as staff.
             await page.goto(BASE_URL)

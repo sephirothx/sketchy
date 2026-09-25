@@ -1,8 +1,12 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, open_public_rooms, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
+
+# The lobby offers search and filters only from this many open rooms
+# (ROOM_FILTERS_FROM in frontend/src/lib/lobbyControls.ts).
+ROOMS_FOR_SEARCH = 6
 
 
 async def test_public_room_cards_explain_status_settings_and_actions(
@@ -18,6 +22,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
         player = await player_context.new_page()
         visitor = await visitor_context.new_page()
         spectator = await spectator_context.new_page()
+        fillers = []
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "CardHost")
@@ -34,6 +39,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = await room_code(host)
+            fillers = await open_public_rooms(browser, "CardFiller", ROOMS_FOR_SEARCH - 1)
 
             await visitor.goto(BASE_URL)
             await use_guest_name(visitor, "CardVisitor")
@@ -51,6 +57,10 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             assert not await card.is_visible()
             await room_search.fill("Room cards")
             await card.wait_for()
+            # The search is proven; the rooms that made it appear are not needed.
+            for context in fillers:
+                await context.close()
+            fillers = []
             # The card carries what decides whether to tap, and nothing else:
             # name, prompt language, how full, and how long a game runs. The
             # room rules it used to list as a chip apiece are one tap away on
@@ -134,6 +144,8 @@ async def test_public_room_cards_explain_status_settings_and_actions(
             await spectator_card.get_by_role("button", name="Spectate", exact=True).click()
             await spectator.wait_for_selector('.game-layout')
         finally:
+            for context in fillers:
+                await context.close()
             await host_context.close()
             await player_context.close()
             await visitor_context.close()

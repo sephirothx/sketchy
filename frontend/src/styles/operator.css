@@ -4,8 +4,9 @@
 /* The operator pages follow the shell steps (#581): their tables, charts and
    master-detail layouts are what a wide monitor is for. */
 .ops-page {
+  --page-width: var(--shell-width);
   margin: 0 auto;
-  max-width: calc(var(--shell-width) + 32px);
+  max-width: calc(var(--page-width) + 32px);
   padding: 24px 16px 48px;
 }
 
@@ -78,10 +79,6 @@
 }
 
 .ops-metric {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -122,10 +119,6 @@
 
 /* ------------------------------------------------------------- card scaffold */
 .ops-card {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 16px 18px;
 }
 
@@ -194,7 +187,7 @@
   }
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .ops-signals > .ops-card {
     grid-column: 1 / -1;
   }
@@ -210,7 +203,7 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
-@media (max-width: 800px) {
+@media (max-width: 900px) {
   .ops-sizes-row {
     grid-template-columns: 1fr;
   }
@@ -303,7 +296,7 @@
 .ops-sizes h3 {
   color: var(--faint);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.06em;
   margin-bottom: 4px;
   text-transform: uppercase;
@@ -357,7 +350,7 @@
 
 .ops-size-table th[scope="row"] {
   color: var(--ink);
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-weight: 700;
   text-align: left;
 }
@@ -368,7 +361,7 @@
 }
 
 .ops-loop-name {
-  font-family: var(--font-mono, monospace);
+  font-family: var(--font-mono);
   font-size: 12.5px;
 }
 
@@ -432,7 +425,7 @@
 .ops-attention h3 {
   color: var(--ink);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   margin-top: 14px;
 }
 
@@ -576,7 +569,7 @@
 }
 
 .ops-identifier {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
 }
 
@@ -599,7 +592,7 @@
   grid-template-columns: 300px minmax(0, 1fr);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .mod-layout {
     grid-template-columns: 1fr;
   }
@@ -637,7 +630,7 @@
    columns rather than one long scroll between the reviewer and the buttons. */
 .mod-held-description {
   margin: 0 0 12px;
-  color: var(--text-muted);
+  color: var(--muted);
 }
 
 .mod-held-prompts {
@@ -657,7 +650,7 @@
 }
 
 .mod-held-aliases {
-  color: var(--text-muted);
+  color: var(--muted);
   font-size: 0.85em;
 }
 
@@ -698,7 +691,7 @@
 .mod-filter-pill {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   cursor: pointer;
   font-family: var(--font-body);
@@ -991,7 +984,7 @@
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   display: inline-flex;
   font-size: 11.5px;
@@ -1006,7 +999,7 @@
    thread still reads as a conversation. */
 .mod-evidence-cites {
   background: color-mix(in srgb, var(--danger) 18%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--ink);
   font-size: 11px;
   font-weight: 800;
@@ -1232,7 +1225,7 @@
 }
 
 .bug-diagnostic.is-wide dd {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12px;
   line-height: 1.5;
 }
@@ -1274,7 +1267,7 @@
 
 .bug-shot {
   border: 1.5px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   display: block;
   height: auto;
   margin-top: 10px;
@@ -1298,11 +1291,11 @@
   padding: 10px 16px;
 }
 
-.bug-resolve-button {
-  background: var(--success-button) !important;
-  border-color: var(--success-button-edge) !important;
+.mod-case-actions .bug-resolve-button {
+  background: var(--success-button);
+  border-color: var(--success-button-edge);
   box-shadow: 0 2px 0 var(--success-button-edge);
-  color: #ffffff !important;
+  color: var(--on-success);
 }
 
 
@@ -1356,7 +1349,7 @@
    but only from the keyboard, or clicking a tab would outline the whole page. */
 .ops-tabpanel:focus { outline: none; }
 .ops-tabpanel:focus-visible {
-  outline: 2px solid var(--primary);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 4px;
   border-radius: var(--radius-sm);
 }
@@ -1545,7 +1538,7 @@
   gap: 8px;
   flex-wrap: wrap;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
@@ -1576,7 +1569,7 @@
   height: 40px;
   border-radius: 50%;
   overflow: hidden;
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 /* A doodle is ours, not the player's, so it is shown for context on a plain
@@ -1600,7 +1593,7 @@
 
 .mod-context-avatar:hover {
   transform: scale(3);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   position: relative;
   z-index: 2;
 }
@@ -1635,7 +1628,7 @@
    somebody's words rather than the app's. */
 .mod-prior-note {
   border-left: 2px solid color-mix(in srgb, var(--warning) 45%, transparent);
-  color: var(--ink-soft, var(--ink));
+  color: var(--ink);
   font-size: 13px;
   font-style: italic;
   margin: 0;
@@ -1648,8 +1641,8 @@
    because a picture already removed is usually the moderator's own work
    rather than something to be warned about. */
 .mod-picture-note {
-  background: var(--surface-sunk, color-mix(in srgb, var(--ink) 4%, transparent));
-  border: 1px solid var(--rule, color-mix(in srgb, var(--ink) 12%, transparent));
+  background: var(--well);
+  border: 1px solid var(--line);
   border-radius: var(--radius-sm);
   margin-bottom: 12px;
   padding: 10px 13px;

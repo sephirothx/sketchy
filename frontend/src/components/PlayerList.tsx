@@ -8,12 +8,14 @@ import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { competitionRanks } from "../lib/standings";
+import { formatGuessTime } from "../lib/guessTime";
 import {
   canAttachDrawing,
   canCastModerationVote,
   eligibleModerationVotes,
 } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { fittedNameFontSize, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
@@ -29,12 +31,9 @@ interface PlayerListProps {
   variant?: "waiting" | "playing" | "game-end";
   allowVoting?: boolean;
   moderation: ModerationState;
-  /** Per-player elapsed seconds for correct guesses this turn. */
+  /** Per-player seconds into the drawing of each correct guess this turn,
+      as the server timed them. */
   turnCorrectGuesses?: Record<string, number>;
-}
-
-function guessTime(seconds: number): string {
-  return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, "0")}`;
 }
 
 
@@ -110,7 +109,7 @@ export function PlayerList({
         status?: string;
       }>("add_friend", { playerId });
       if (!answer?.ok) {
-        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent));
+        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent), "error");
         return;
       }
       // One outcome worth telling apart - they had already asked, so you
@@ -119,12 +118,12 @@ export function PlayerList({
       // "sent", so the reply never becomes a way to test for one (R-FRIEND-04,
       // #1002). The wording must not name any of them.
       if (answer.status === "accepted") {
-        notify(ui.playerList.nowFriends({ name: nickname }));
+        notify(ui.playerList.nowFriends({ name: nickname }), "success");
       } else {
-        notify(ui.playerList.friendRequestSent({ name: nickname }));
+        notify(ui.playerList.friendRequestSent({ name: nickname }), "success");
       }
     } catch {
-      notify(ui.playerList.thatRequestCouldNotBeSent);
+      notify(ui.playerList.requestCouldNotBeSent, "error");
     }
   }
   const listRef = useRef<HTMLUListElement>(null);
@@ -193,12 +192,14 @@ export function PlayerList({
         const status = isDrawer ? (
           <span className="player-status player-status-drawing">
             <PencilIcon size={12} />
-            {ui.playerList.drawing}
+            {/* The drawer holds the pen from the moment they are chosen, but
+                until they pick a prompt they are choosing, not drawing. */}
+            {phase === "choosing_prompt" ? ui.playerList.choosing : ui.playerList.drawing}
           </span>
         ) : guessedAt != null ? (
           <span className="player-status player-status-guessed">
             <CheckIcon size={12} />
-            {ui.playerList.gotIt} <span className="player-status-time">{guessTime(guessedAt)}</span>
+            {ui.playerList.gotIt} <span className="player-status-time">{formatGuessTime(guessedAt)}</span>
           </span>
         ) : p.isAfk ? (
           <span className="player-status player-status-afk">
@@ -444,6 +445,7 @@ function PlayerModerationMenu({
 
   useEscapeLayer(isOpen, () => onOpenChange(false));
   useFocusTrap(menuRef, { active: isOpen });
+  useBackCloses(isOpen, () => onOpenChange(false));
 
   useEffect(() => {
     if (!isOpen) return;
@@ -500,8 +502,8 @@ function PlayerModerationMenu({
         aria-haspopup="menu"
         aria-expanded={isOpen}
         aria-controls={menuId}
-        aria-label={ui.playerList.moderationFor({ name: player.nickname })}
-        title={canVote ? ui.playerList.voteAfkOrKickOr : ui.playerList.reportThisPlayer}
+        aria-label={ui.playerList.actionsFor({ name: player.nickname, canVote, canReport })}
+        title={ui.playerList.actionsFor({ name: player.nickname, canVote, canReport })}
         onClick={() => onOpenChange(!isOpen)}
       />
       {isOpen && (
@@ -510,7 +512,7 @@ function PlayerModerationMenu({
           id={menuId}
           className="player-vote-menu"
           role="menu"
-          aria-label={ui.playerList.moderationActionsFor({ name: player.nickname })}
+          aria-label={ui.playerList.whatToDoAbout({ name: player.nickname })}
           tabIndex={-1}
           onKeyDown={handleMenuKeyDown}
         >

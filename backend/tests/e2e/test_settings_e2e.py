@@ -203,10 +203,10 @@ async def test_registered_player_settings_follow_login_to_a_fresh_device():
             try:
                 await fresh_page.goto(BASE_URL)
                 await fresh_page.click(".first-run-login")
-                login = fresh_page.get_by_role("dialog", name="Log in")
+                login = fresh_page.get_by_role("dialog", name="Sign in")
                 await login.get_by_label("Username").fill(username)
                 await login.get_by_label("Password").fill(password)
-                await login.get_by_role("button", name="Log in", exact=True).click()
+                await login.get_by_role("button", name="Sign in", exact=True).click()
                 await login.wait_for(state="hidden")
 
                 await fresh_page.wait_for_function(
@@ -305,7 +305,7 @@ async def test_the_email_row_masks_the_address_and_shows_where_it_stands():
             # the row says so as a symbol and two words, not only a sentence.
             status = dialog.locator(".settings-email-status")
             assert "is-unverified" in (await status.get_attribute("class") or "")
-            assert (await status.inner_text()).strip() == "Not verified"
+            assert (await status.inner_text()).strip() == "Not confirmed"
             # Masking is presentation only: the reveal control shows it whole
             # for somebody who needs to read it back, and hides it again.
             await dialog.get_by_role("button", name="Show the full address").click()
@@ -332,10 +332,10 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             # A second signed-in device, to prove the change evicts it.
             await elsewhere.goto(BASE_URL)
             await elsewhere.click(".first-run-login")
-            login = elsewhere.get_by_role("dialog", name="Log in")
+            login = elsewhere.get_by_role("dialog", name="Sign in")
             await login.get_by_label("Username").fill(username)
             await login.get_by_label("Password").fill("a-good-password")
-            await login.get_by_role("button", name="Log in", exact=True).click()
+            await login.get_by_role("button", name="Sign in", exact=True).click()
             await login.wait_for(state="hidden")
 
             await open_player_settings(page)

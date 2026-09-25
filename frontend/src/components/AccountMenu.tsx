@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { waitingRequestCount } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { useOpenOverlay } from "../hooks/useOverlayRoute";
@@ -27,8 +28,10 @@ import {
   useFocusTrap,
 } from "../hooks/useFocusTrap";
 import { BugReportDialog } from "./BugReportDialog";
-import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
+import { MIN_PASSWORD_LENGTH, passwordRule, passwordTooShort } from "../lib/passwordPolicy";
+import { ModalShell } from "./ui/ModalShell";
 import {
+  BarChartIcon,
   BugIcon,
   BulbIcon,
   InfoIcon,
@@ -42,7 +45,6 @@ import {
   UserIcon,
   UsersIcon,
   StarIcon,
-  ZapIcon,
 } from "./icons";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -118,6 +120,8 @@ export function AccountMenu({ compact = false, inRoom = false }: {
   // keeps Tab inside, moves focus to the first item on open, and returns it to
   // the chip on close; the arrow keys are handled below.
   useFocusTrap(menuRef, { active: menuOpen });
+  // In a room, Back closes the menu as Escape does (R-UX-15); elsewhere a no-op.
+  useBackCloses(menuOpen, () => setMenuOpen(false));
 
   function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
@@ -197,7 +201,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
         }
       >
         <span
-          className={`identity-avatar avatar-player${
+          className={`identity-avatar ${isGuest ? "avatar-guest" : "avatar-player"}${
             !isGuest && user.avatarUrl && !doodleNameOf(user.avatarUrl) ? " has-picture" : ""
           }`}
           aria-hidden="true"
@@ -209,8 +213,18 @@ export function AccountMenu({ compact = false, inRoom = false }: {
             avatarInitial(shownName)
           )}
         </span>
-        {!compact && <span className="identity-name">{shownName}</span>}
-        {isGuest && <span className="identity-unclaimed" aria-hidden="true" />}
+        {!compact && (
+          <span className={isGuest ? "identity-name is-guest" : "identity-name"}>{shownName}</span>
+        )}
+        {/* The button's own label already says the name is not saved, so the
+            dot stays silent to a screen reader; the title is for a pointer. */}
+        {isGuest && (
+          <span
+            className="identity-unclaimed"
+            aria-hidden="true"
+            title={ui.accountMenu.guestNameNotSaved}
+          />
+        )}
         {/* A dot on the chip, because the menu is the only way to the friends
             surface and a request that arrived while somebody was drawing has
             nowhere else to be seen. Silent to a screen reader — the count is
@@ -282,7 +296,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 {ui.accountMenu.myProfile}
               </MenuItem>
               <MenuItem
-                icon={<ZapIcon size={16} />}
+                icon={<BarChartIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   navigate("/prompt-lists");
@@ -443,9 +457,9 @@ export function AuthDialog({
       went into `login`'s third parameter, which is not `code`. */
   onSubmit: (credentials: AuthCredentials) => Promise<unknown>;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const usernameRef = useRef<HTMLInputElement | null>(null);
-  const titleId = useId();
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
   const [username, setUsername] = useState(suggestedUsername ?? "");
   const [password, setPassword] = useState("");
   const [email, setEmail] = useState("");
@@ -456,13 +470,15 @@ export function AuthDialog({
   // factor - and so this form never has to guess which accounts are staff.
   const [code, setCode] = useState("");
   const [codeWanted, setCodeWanted] = useState(false);
+  // A recovery code has letters in it, so it gets a field a phone can type
+  // letters into; the authenticator's six digits get the number pad (A7).
+  const [useRecovery, setUseRecovery] = useState(false);
   // Offered from the start on a browser that can do it, because a passkey
   // sign-in needs neither of the fields below (R-AUTH-23) - and forced when
   // the server says the account has no code to type.
   const [passkeyOnly, setPasskeyOnly] = useState(false);
   const canUsePasskeys = passkeysAvailable();
 
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
   const isClaim = mode === "claim";
 
   async function submit(event: React.FormEvent) {
@@ -532,206 +548,229 @@ export function AuthDialog({
     }
   }
 
+  // Not `hidden`: that attribute is a user-agent default, and
+  // `.auth-form { display: flex }` beats it - the form stayed on screen
+  // inviting a second attempt at a password route the server has just said
+  // cannot finish. Rendering the decision leaves no room for a stylesheet to
+  // disagree with it. The two links below sit outside the form, so the way on
+  // is still there.
+  const showForm = !(passkeyOnly && !isClaim);
+
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">
-          {isClaim ? ui.accountMenu.createYourAccount : ui.accountMenu.logIn}
-        </h3>
-        {isClaim && (
-          <p className="modal-body">
-            {suggestedUsername
-              ? ui.accountMenu.createAnAccountToKeep({ suggestedUsername })
-              : ui.accountMenu.keepYourUsernameAndYour}
-          </p>
-        )}
-
-        {/* Signing in, not claiming: a passkey belongs to an account that
-            already exists. Above the fields because it is the shorter route
-            for the accounts that hold one, and because a staff account may
-            have nothing else to offer. */}
-        {!isClaim && canUsePasskeys && (
-          <>
-            <button
-              type="button"
-              className="modal-button auth-passkey"
-              onClick={() => void signInWithPasskey()}
-              disabled={busy}
-            >
-              {busy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.signInWithAPasskey}
-            </button>
-            {passkeyOnly ? (
-              <p className="modal-hint">
-                {ui.accountMenu.thisAccountSignsWithPasskey}
-              </p>
-            ) : (
-              <p className="auth-divider"><span>{ui.accountMenu.or}</span></p>
-            )}
-          </>
-        )}
-        {/* Not `hidden`: that attribute is a user-agent default, and
-            `.auth-form { display: flex }` beats it - the form stayed on
-            screen inviting a second attempt at a password route the server
-            has just said cannot finish. Rendering the decision leaves no
-            room for a stylesheet to disagree with it. The two links below
-            sit outside the form, so the way on is still there. */}
-        {!(passkeyOnly && !isClaim) && (
-        <form onSubmit={submit} className="auth-form">
-          <label htmlFor={`${titleId}-username`}>{ui.accountMenu.username}</label>
-          {/* Pre-filled from the guest name but editable: this is where a typo
-              gets fixed, and where you pick another if yours is taken. */}
-          <input
-            id={`${titleId}-username`}
-            ref={usernameRef}
-            value={username}
-            onChange={(event) => {
-              setUsername(event.target.value);
-              setError(null);
-            }}
-            maxLength={MAX_NICKNAME_LENGTH}
-            inputMode="text"
-            autoComplete="username"
-            autoCapitalize="off"
-            autoCorrect="off"
-            spellCheck={false}
-            enterKeyHint="next"
-            required
-          />
-
-          <label htmlFor={`${titleId}-password`}>{ui.accountMenu.password}</label>
-          <input
-            id={`${titleId}-password`}
-            type="password"
-            value={password}
-            onChange={(event) => {
-              setPassword(event.target.value);
-              setError(null);
-            }}
-            autoComplete={isClaim ? "new-password" : "current-password"}
-            required
-          />
-
-          {codeWanted && (
-            <>
-              <label htmlFor={`${titleId}-code`}>
-                {ui.accountMenu.codeFromYourAuthenticatorApp}
-              </label>
-              <input
-                id={`${titleId}-code`}
-                value={code}
-                onChange={(event) => {
-                  setCode(event.target.value);
-                  setError(null);
-                }}
-                inputMode="numeric"
-                autoComplete="one-time-code"
-                maxLength={64}
-                autoFocus
-                required
-              />
-              <p className="modal-hint">
-                {ui.accountMenu.recoveryCodeWorksHereTooCan}
-              </p>
-            </>
-          )}
-
-          {isClaim && (
-            <>
-              <label htmlFor={`${titleId}-email`}>
-                {ui.accountMenu.email} <span className="auth-optional">{ui.accountMenu.optional}</span>
-              </label>
-              {/* The only way back into an account whose password is lost. Not
-                  required, because a deployment with no mail server would then
-                  be one nobody could register on at all. */}
-              <input
-                id={`${titleId}-email`}
-                type="email"
-                value={email}
-                onChange={(event) => {
-                  setEmail(event.target.value);
-                  setError(null);
-                }}
-                maxLength={MAX_EMAIL_LENGTH}
-                autoComplete="email"
-                autoCapitalize="off"
-                autoCorrect="off"
-                spellCheck={false}
-              />
-              <p className="auth-hint">
-                {ui.accountMenu.letsYouResetYourPasswordLater}
-              </p>
-            </>
-          )}
-
-          {error && <p className="auth-error" role="alert">{error}</p>}
-
-          <button type="submit" className="modal-button" disabled={busy}>
+    <ModalShell
+      title={isClaim ? ui.accountMenu.createYourAccount : ui.accountMenu.logIn}
+      onDismiss={onClose}
+      initialFocusRef={usernameRef}
+      footer={showForm && (
+        <>
+          {/* Claiming is a deferral - the guest plays on and can claim later -
+              so it keeps "Not now"; signing in abandons an action. */}
+          <button type="button" className="btn btn-secondary" onClick={onClose}>
+            {isClaim ? ui.accountMenu.notNow : ui.dialog.cancel}
+          </button>
+          <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>
             {busy ? ui.accountMenu.pleaseWait : isClaim ? ui.accountMenu.createAccount : ui.accountMenu.logIn}
           </button>
-          {/* Only when creating one: this is the moment an account starts,
-              and the expectation is worth setting before anybody plays
-              rather than after they are reported (R-RULES-01). Not on the
-              log-in form, where it would be noise. */}
-          {isClaim && (
-            <p className="auth-hint auth-rules-note">
-              {fill(ui.accountMenu.agreeToRules, {
-                rules: (
-                  <a href="/rules" target="_blank" rel="noreferrer">
-                    {ui.accountMenu.rules2}
-                  </a>
-                ),
-              })}
-            </p>
-          )}
-        </form>
-        )}
+        </>
+      )}
+    >
+      {isClaim && (
+        <p className="modal-body">
+          {suggestedUsername
+            ? ui.accountMenu.createAnAccountToKeep({ suggestedUsername })
+            : ui.accountMenu.keepYourUsernameAndYour}
+        </p>
+      )}
 
-        {!isClaim && (
-          <p className="auth-switch">
-            <Link className="auth-link" to="/forgot-password" onClick={onClose}>
-              {ui.accountMenu.forgotYourPassword}
-            </Link>
+      {/* Signing in, not claiming: a passkey belongs to an account that
+          already exists. Above the fields because it is the shorter route
+          for the accounts that hold one, and because a staff account may
+          have nothing else to offer. */}
+      {!isClaim && canUsePasskeys && (
+        <>
+          <button
+            type="button"
+            className={`btn ${passkeyOnly ? "btn-primary" : "btn-secondary"} auth-passkey`}
+            onClick={() => void signInWithPasskey()}
+            disabled={busy}
+          >
+            {busy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.signInWithAPasskey}
+          </button>
+          {passkeyOnly ? (
+            <p className="modal-hint">
+              {ui.accountMenu.thisAccountSignsWithPasskey}
+            </p>
+          ) : (
+            <p className="auth-divider"><span>{ui.accountMenu.or}</span></p>
+          )}
+        </>
+      )}
+      {showForm && (
+      <form id={formId} onSubmit={submit} className="auth-form">
+        <label htmlFor={`${fieldId}-username`}>{ui.accountMenu.username}</label>
+        {/* Pre-filled from the guest name but editable: this is where a typo
+            gets fixed, and where you pick another if yours is taken. */}
+        <input
+          id={`${fieldId}-username`}
+          ref={usernameRef}
+          value={username}
+          onChange={(event) => {
+            setUsername(event.target.value);
+            setError(null);
+          }}
+          maxLength={MAX_NICKNAME_LENGTH}
+          inputMode="text"
+          autoComplete="username"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="next"
+          required
+        />
+
+        <label htmlFor={`${fieldId}-password`}>{ui.accountMenu.password}</label>
+        <input
+          id={`${fieldId}-password`}
+          type="password"
+          value={password}
+          onChange={(event) => {
+            setPassword(event.target.value);
+            setError(null);
+          }}
+          autoComplete={isClaim ? "new-password" : "current-password"}
+          minLength={isClaim ? MIN_PASSWORD_LENGTH : undefined}
+          aria-describedby={isClaim ? `${fieldId}-password-rule` : undefined}
+          required
+        />
+        {/* The rule before the refusal: a new password is chosen here, and
+            the floor is worth reading before it is broken rather than after. */}
+        {isClaim && (
+          <p id={`${fieldId}-password-rule`} className="auth-hint">
+            {passwordRule()}
           </p>
         )}
 
-        <p className="auth-switch">
-          {isClaim ? ui.accountMenu.alreadyRegistered : ui.accountMenu.newHere}
-          <button
-            type="button"
-            className="auth-link"
-            onClick={() => {
-              setError(null);
-              // Both of these are answers about one account and one attempt,
-              // and this starts another. Cleared here rather than from an
-              // effect watching `mode`: this button is the only thing that
-              // changes it in place - reaching the dialog any other way
-              // mounts it afresh - so the reset belongs where the change is
-              // made, where nothing has rendered on the old answers yet.
-              setPasskeyOnly(false);
-              setCodeWanted(false);
-              onSwitchMode(isClaim ? "login" : "claim");
-            }}
-          >
-            {isClaim ? ui.accountMenu.logIn : ui.accountMenu.createAnAccount}
-          </button>
-        </p>
+        {codeWanted && (
+          <>
+            <label htmlFor={`${fieldId}-code`}>
+              {useRecovery
+                ? ui.stepUpDialog.recoveryCode
+                : ui.accountMenu.codeFromYourAuthenticatorApp}
+            </label>
+            {/* Two keyboards for two kinds of code. The app's is six digits,
+                so a phone offers its number pad; a recovery code has letters
+                in it, which a number pad cannot type - the same choice the
+                step-up prompt offers, for the same reason. Keyed, so the
+                swap lands focus in the new field. */}
+            <input
+              key={useRecovery ? "recovery" : "app"}
+              id={`${fieldId}-code`}
+              value={code}
+              onChange={(event) => {
+                setCode(event.target.value);
+                setError(null);
+              }}
+              inputMode={useRecovery ? "text" : "numeric"}
+              autoCapitalize={useRecovery ? "characters" : "off"}
+              autoCorrect="off"
+              spellCheck={false}
+              autoComplete="one-time-code"
+              maxLength={64}
+              autoFocus
+              required
+            />
+            <button
+              type="button"
+              className="auth-link auth-code-swap"
+              onClick={() => {
+                setUseRecovery((current) => !current);
+                setCode("");
+                setError(null);
+              }}
+            >
+              {useRecovery ? ui.stepUpDialog.useYourAuthenticatorApp : ui.stepUpDialog.useARecoveryCode}
+            </button>
+          </>
+        )}
 
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {ui.accountMenu.notNow}
+        {isClaim && (
+          <>
+            <label htmlFor={`${fieldId}-email`}>
+              {ui.accountMenu.email} <span className="auth-optional">{ui.accountMenu.optional}</span>
+            </label>
+            {/* The only way back into an account whose password is lost. Not
+                required, because a deployment with no mail server would then
+                be one nobody could register on at all. */}
+            <input
+              id={`${fieldId}-email`}
+              type="email"
+              value={email}
+              onChange={(event) => {
+                setEmail(event.target.value);
+                setError(null);
+              }}
+              maxLength={MAX_EMAIL_LENGTH}
+              autoComplete="email"
+              autoCapitalize="off"
+              autoCorrect="off"
+              spellCheck={false}
+            />
+            <p className="auth-hint">
+              {ui.accountMenu.letsYouResetYourPasswordLater}
+            </p>
+          </>
+        )}
+
+        {error && <p className="auth-error" role="alert">{error}</p>}
+
+        {/* Only when creating one: this is the moment an account starts,
+            and the expectation is worth setting before anybody plays
+            rather than after they are reported (R-RULES-01). Not on the
+            log-in form, where it would be noise. */}
+        {isClaim && (
+          <p className="auth-hint auth-rules-note">
+            {fill(ui.accountMenu.agreeToRules, {
+              rules: (
+                <a className="auth-link" href="/rules" target="_blank" rel="noreferrer">
+                  {ui.accountMenu.rules2}
+                </a>
+              ),
+            })}
+          </p>
+        )}
+      </form>
+      )}
+
+      {!isClaim && (
+        <p className="auth-switch">
+          <Link className="auth-link" to="/forgot-password" onClick={onClose}>
+            {ui.accountMenu.forgotYourPassword}
+          </Link>
+        </p>
+      )}
+
+      <p className="auth-switch">
+        {isClaim ? ui.accountMenu.alreadyRegistered : ui.accountMenu.newHere}
+        <button
+          type="button"
+          className="auth-link"
+          onClick={() => {
+            setError(null);
+            // Both of these are answers about one account and one attempt,
+            // and this starts another. Cleared here rather than from an
+            // effect watching `mode`: this button is the only thing that
+            // changes it in place - reaching the dialog any other way
+            // mounts it afresh - so the reset belongs where the change is
+            // made, where nothing has rendered on the old answers yet.
+            setPasskeyOnly(false);
+            setCodeWanted(false);
+            setUseRecovery(false);
+            onSwitchMode(isClaim ? "login" : "claim");
+          }}
+        >
+          {isClaim ? ui.accountMenu.logIn : ui.accountMenu.createAccount}
         </button>
-      </div>
-    </div>
+      </p>
+    </ModalShell>
   );
 }

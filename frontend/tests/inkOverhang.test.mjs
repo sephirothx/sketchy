@@ -53,8 +53,6 @@ const REVIEWED = {
     "a list of prompt chips, each padded 12px at its start by `.prompt-list-entry-editor > li`",
   "lobby-page.css: .public-room-rules > .chip": "a chip of room rules, padded 11px by `.chip`",
   "operator.css: .ops-size-table th[scope=\"row\"]": "a staff table's cell, padded 8px",
-  "community-lists.css: .modal-card.community-prompts-dialog":
-    "the dialog's frame; its head, tools and body are each padded 20px either side",
   "prompt-stats.css: .prompt-stats-meter": "a bar, with no text",
   // Fields with no text of anybody's to clip.
   "create-room-page.css: .input-number input": "a number, centred in its stepper; digits have no overhang",

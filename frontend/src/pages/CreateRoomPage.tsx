@@ -3,12 +3,12 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { RoomSetupForm } from "../components/RoomSetupForm";
-import { SectionLabel } from "../components/ui/Card";
 import { ClockIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import type { PromptListSummary } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
-import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE, hintLabelFor, scoringNameFor } from "../lib/roomSetup";
+import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE } from "../lib/roomSetup";
+import { changedRoomRules } from "../lib/roomCardFacts";
 import { createCustomPromptsState, customPromptsReducer } from "../lib/customPrompts";
 import { emitEntry, socketRequestErrorMessage } from "../lib/socket";
 import { createRequestIds, mintRequestId } from "../lib/createRequests";
@@ -31,7 +31,9 @@ import {
 } from "../lib/roomPresets";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useBottomDock } from "../hooks/useBottomDock";
 import { fill } from "../content/ui/slots.tsx";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 const EMPTY_LISTS: PromptListSummary[] = [];
 
@@ -40,6 +42,8 @@ const EMPTY_LISTS: PromptListSummary[] = [];
 const createRequests = createRequestIds(mintRequestId);
 
 export function CreateRoomPage() {
+  useDocumentTitle(ui.createRoomPage.createRoom);
+  const dockRef = useBottomDock();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const setSession = useGameStore((state) => state.setSession);
@@ -218,7 +222,7 @@ export function CreateRoomPage() {
   /** Quick prompts are room input, never stored settings. */
   function presetBlocker(): string | null {
     if (customPrompts.analysis.usableCount > 0) {
-      return ui.createRoomPage.saveQuickPromptsAsA;
+      return ui.createRoomPage.saveCustomPromptsAsAList;
     }
     return null;
   }
@@ -358,7 +362,7 @@ export function CreateRoomPage() {
       // A guest whose name somebody online took first (R-ACCT-09): the
       // first-run block this page shows for a missing name asks for another.
       if (response.errorCode === "name_in_use") useAuthStore.getState().markNameInUse();
-      setError(refusalText(response, ui.createRoomPage.failedCreateRoom));
+      setError(refusalText(response, ui.createRoomPage.couldNotCreateRoom));
     } catch (createError) {
       setError(socketRequestErrorMessage(createError, ui.createRoomPage.createTheRoom));
     } finally {
@@ -367,17 +371,25 @@ export function CreateRoomPage() {
     }
   }
 
-  // The form's own collapsed summaries live with the form. What is left here
-  // is the one the dock carries, which is about the room as a whole.
-  const summaryParts = [
-    isPublic ? ui.createRoomPage.public : ui.createRoomPage.private,
-    ui.createRoomPage.playerCount({ count: maxPlayers }),
-    ui.createRoomPage.roundCount({ count: rounds }),
-    `${drawingSeconds}s`,
-    scoringMode === "none" ? ui.createRoomPage.noScoring : scoringNameFor(scoringMode),
-    hintLabelFor(hintMode, hideMaskedPrompt),
+  // What the card and the dock say about the room: only what differs from a
+  // new room's defaults. They used to list all six settings, so four of the
+  // chips restated the steppers beside them and the one unusual rule was
+  // hidden among them. The three numbers are said by the running-time
+  // estimate; the rest are the rules the lobby row will show for this room
+  // (`changedRoomRules`), plus Private, which a lobby row never needs.
+  const changedRules = [
+    ...(isPublic ? [] : [ui.createRoomPage.private]),
+    ...changedRoomRules({
+      scoringMode,
+      hintMode,
+      hideMaskedPrompt,
+      allowedTools,
+      colorMode,
+      customPromptCount: customPrompts.analysis.usableCount,
+      customPromptsOnly: customPrompts.only,
+      spectatorsSeePrompt,
+    }),
   ];
-  const footerSummary = summaryParts.join(" · ");
 
   // A rough but honest running-time estimate: each turn is the drawing time
   // plus prompt choice and results, and every player draws once per round.
@@ -424,7 +436,6 @@ export function CreateRoomPage() {
     <AppHeader backLabel={ui.createRoomPage.backToLobby} />
     <div className="create-room-heading-row">
       <div className="create-room-heading">
-        <SectionLabel>{ui.createRoomPage.roomSetup}</SectionLabel>
         <h1>{ui.createRoomPage.createRoom}</h1>
       </div>
       {authUser && !authUser.isAnonymous && (
@@ -515,24 +526,27 @@ export function CreateRoomPage() {
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (
         <button
           type="button"
-          className="custom-prompts-apply"
+          className="btn btn-primary custom-prompts-apply"
           onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
         >
-          {ui.createRoomPage.saveAsReusableList}
+          {ui.createRoomPage.saveAsPromptList}
         </button>
       ) : undefined}
       durationNote={isWide ? undefined : durationNote}
     />
 
+    {/* Named rather than headed: an eyebrow reading "Your room" over the
+        room's name said the same thing twice to everyone who can see it. */}
     {isWide && (
-      <aside className="create-room-preview" aria-labelledby="create-room-preview-title">
-        <SectionLabel id="create-room-preview-title">{ui.createRoomPage.yourRoom}</SectionLabel>
+      <aside className="create-room-preview" aria-label={ui.createRoomPage.yourRoom}>
         <p className={`create-room-preview-name${roomName.trim() ? "" : " is-random"}`}>
           {roomName.trim() || ui.createRoomPage.aRandomName}
         </p>
-        <ul className="create-room-preview-chips">
-          {summaryParts.map((part) => <li key={part} className="chip chip-neutral">{part}</li>)}
-        </ul>
+        {changedRules.length > 0 && (
+          <ul className="create-room-preview-chips">
+            {changedRules.map((rule) => <li key={rule} className="chip chip-neutral">{rule}</li>)}
+          </ul>
+        )}
         {durationNote}
         {submitButton}
       </aside>
@@ -540,10 +554,12 @@ export function CreateRoomPage() {
     </div>
 
     {!isWide && (
-      <div className="create-room-footer">
-        <div className="create-room-footer-info">
-          <span className="create-room-footer-summary">{footerSummary}</span>
-        </div>
+      <div className={`create-room-footer${changedRules.length > 0 ? "" : " is-bare"}`} ref={dockRef}>
+        {changedRules.length > 0 && (
+          <div className="create-room-footer-info">
+            <span className="create-room-footer-summary">{changedRules.join(" · ")}</span>
+          </div>
+        )}
         {submitButton}
       </div>
     )}

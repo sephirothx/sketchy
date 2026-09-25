@@ -18,6 +18,12 @@ from tests.e2e.test_canvas_commit_fanout import FrameLog, _draw_stroke, _named
 BASE_URL = "http://localhost:8000"
 CANVAS_PNG = "() => document.querySelector('canvas.drawing-canvas').toDataURL()"
 
+# Long enough for a reconnect whose first attempt fails: in the client's
+# backoff (`frontend/src/lib/reconnectPolicy.ts`) the first retry lands within
+# 1.5 s and the second within 3 s, and `CONNECT_TIMEOUT_MS`
+# (`frontend/src/lib/socket.ts`) gives each 6 s to open - 16.5 s in all.
+RECONNECT_BOUND_MS = (1_500 + 6_000) + (3_000 + 6_000)
+
 
 def _full_syncs(frames) -> list:
     # `sync_strokes_tail` contains `sync_strokes`; count the full reply alone.
@@ -78,12 +84,25 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             # The viewer's connection drops and comes back on a new socket. It
             # holds a verified prefix, so the answer is a tail, never a dump.
             viewer_log = logs[id(viewing)]
+            old_socket = await viewing.evaluate("() => window.__SKETCHY_SOCKET__.id")
             watch_from = viewer_log.mark()
             await viewing.evaluate("() => window.__SKETCHY_SOCKET__.io.engine.close()")
-            await viewer_log.wait_for("sync_strokes_tail")
+            # The client comes back on its own backoff, not at once: waiting on
+            # the tail alone gave a reconnect the tail's five seconds, which a
+            # failed first attempt on a loaded runner overran.
+            await viewing.wait_for_function(
+                "(old) => { const s = window.__SKETCHY_SOCKET__; return s.connected && s.id !== old; }",
+                arg=old_socket,
+                polling=100,
+                timeout=RECONNECT_BOUND_MS,
+            )
+            # Either shape of reply, so a dump fails on the assertion below
+            # rather than as a wait for a tail that never comes.
+            await viewer_log.wait_for("sync_strokes_tail", "sync_strokes", since=watch_from)
+            await _same_canvas(drawing, viewing)
             after = viewer_log.frames[watch_from:]
             assert _full_syncs(after) == [], "a reconnect with a verified prefix got a full dump"
-            await _same_canvas(drawing, viewing)
+            assert _named(after, "sync_strokes_tail"), "a reconnect was never sent its tail"
 
             # And it keeps up afterwards: the next stroke reaches it as usual.
             await _draw_stroke(drawing, box, 260)

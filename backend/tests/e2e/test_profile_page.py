@@ -111,6 +111,12 @@ async def test_finished_game_shows_up_on_the_profile_page():
 
             prompts = await lobby.locator(".profile-turn-prompt").all_inner_texts()
             assert sorted(prompts) == sorted([first_prompt, second_prompt])
+
+            # The rules read the way the room was set up, not as the stored
+            # enums: "none scoring v3 · checkpoints hints" was the old line.
+            rules = await game_row.locator(".profile-note", has_text="Rules:").inner_text()
+            assert rules.startswith("Rules: Default scoring · "), rules
+            assert rules.endswith(" · Custom prompts"), rules
             assert await lobby.get_by_text("ProfileGuest").first.is_visible()
 
             # A guest's own profile offers the claim funnel.

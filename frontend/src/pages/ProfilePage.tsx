@@ -7,6 +7,8 @@ import { AppHeader } from "../components/AppHeader";
 import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "../components/icons";
 import { ReportAccountDialog } from "../components/ReportAccountDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
+import { formatDate } from "../lib/clock";
+import { statisticsLayout, type TurnStat } from "../lib/profileStats";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
@@ -46,19 +48,77 @@ import { FriendButton } from "../components/FriendButton";
 import { FriendMarkIcon } from "../components/icons";
 import { ui } from "../content/ui/index.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
+import { hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { EmptyState } from "../components/ui/EmptyState";
 import "../styles/lazy/profile.css";
+
+/** A game's prompt source mode, named the way the glossary names it. */
+function promptSourceLabel(mode: GameSummary["promptSourceMode"]): string {
+  if (mode === "curated") return ui.profilePage.promptSourceCurated;
+  if (mode === "mixed") return ui.profilePage.promptSourceMixed;
+  if (mode === "builtin_fallback") return ui.profilePage.promptSourceBuiltinFallback;
+  return ui.profilePage.promptSourceCustom;
+}
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
   return reactions.map((reaction) => ({ playerId: reaction.seatId, emoji: reaction.emoji }));
 }
 
+/** The label of a per-turn count, read at render so a locale switch reaches it. */
+function turnStatLabel(key: TurnStat): string {
+  switch (key) {
+    case "turnsPlayed":
+      return ui.profilePage.turnsPlayed;
+    case "promptsGuessed":
+      return ui.profilePage.promptsGuessed;
+    case "drawingsMade":
+      return ui.profilePage.drawingsMade;
+    case "reactionsReceived":
+      return ui.profilePage.reactionsReceived;
+  }
+}
+
+/** The numbers, drawn only where they say something (`lib/profileStats.ts`). */
+function StatisticsPanel({ stats }: { stats: ProfileStats }) {
+  const statsLayout = statisticsLayout(stats);
+  return (
+    <section className="surface-card panel profile-statistics">
+      <h2>{ui.profilePage.statistics}</h2>
+      {statsLayout.gameStats ? (
+        <div className="profile-stats">
+          <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
+          <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
+          <StatTile
+            label={ui.profilePage.winRate}
+            value={`${Math.round(stats.winRate * 100)}%`}
+          />
+          <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
+        </div>
+      ) : (
+        <p className="profile-note">{ui.profilePage.winsAndScoresAppearAfterFirstGame}</p>
+      )}
+      {(statsLayout.gameStats || statsLayout.turnStats.length > 0) && (
+        <div className="profile-stats profile-stats-small">
+          {statsLayout.turnStats.map((key) => (
+            <StatTile key={key} label={turnStatLabel(key)} value={String(stats[key])} />
+          ))}
+          {statsLayout.gameStats && (
+            <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
+          )}
+        </div>
+      )}
+    </section>
+  );
+}
+
 function StatTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="profile-stat">
       <span className="profile-stat-value">{value}</span>
-      <span className="profile-stat-label">{label}</span>
+      <span className="section-label profile-stat-label">{label}</span>
     </div>
   );
 }
@@ -210,7 +270,7 @@ function GameRow({
             })}
             {game.outcome !== "finished" && (
               <span className="profile-game-outcome">
-                {game.outcome === "abandoned" ? "abandoned" : ui.profilePage.cutShort}
+                {game.outcome === "abandoned" ? ui.profilePage.abandoned : ui.profilePage.cutShort}
               </span>
             )}
             {game.visibility === "private" && (
@@ -245,17 +305,24 @@ function GameRow({
       {expanded && (
         <div className="profile-game-body">
           <p className="profile-note">
+            {/* The same labels the room was set up with. The scoring version
+                is left out: it tells an operator which algorithm produced
+                the points, and a player nothing. Whether the letter tiles
+                were hidden is only in the rule snapshot, so until the detail
+                arrives the hint mode stands on its own. */}
             {ui.profilePage.gameRules({
-              scoringMode: game.scoringMode,
-              scoringVersion: game.scoringVersion,
-              hintMode: game.hintMode,
+              scoring: scoringNameFor(game.scoringMode),
+              hints: hintLabelFor(
+                game.hintMode,
+                Boolean(detail && "prompt" in detail.ruleSnapshot && detail.ruleSnapshot.prompt.hideMaskedPrompt),
+              ),
               seconds: game.drawingSeconds,
-              promptSource: game.promptSourceMode.replaceAll("_", " "),
+              promptSource: promptSourceLabel(game.promptSourceMode),
             })}
           </p>
           {game.outcome !== "finished" && (
             <p className="profile-note">
-              {ui.profilePage.thisGameDidNotFinishSo}
+              {ui.profilePage.thisGameEndedEarly}
             </p>
           )}
           <ol className="profile-standings">
@@ -283,7 +350,7 @@ function GameRow({
           </ol>
 
           {detailError && <p className="profile-note">{detailError}</p>}
-          {!detail && !detailError && <p className="profile-note">{ui.profilePage.loadingTurns}</p>}
+          {!detail && !detailError && <p className="loading-note" role="status">{ui.profilePage.loadingTurns}</p>}
 
           {detail && (() => {
             // The rounds carry ids, the standings carry the colors: joining
@@ -316,7 +383,9 @@ function GameRow({
               // Only games finished before a mid-turn arrival became an
               // ordinary guesser carry this reason.
               if (outcome.eligibilityReason === "joined_late") return ui.profilePage.joinedLate;
-              return ui.profilePage.notEligibleEligibilityReason({ eligibilityReason: outcome.eligibilityReason });
+              if (outcome.eligibilityReason === "afk") return ui.profilePage.notEligibleAfk;
+              if (outcome.eligibilityReason === "disconnected") return ui.profilePage.notEligibleDisconnected;
+              return ui.profilePage.notEligible;
             };
             // Every turn is offered, not only the ones with bytes to show: a
             // gallery that quietly skipped them would misreport how the game
@@ -370,13 +439,13 @@ function GameRow({
               <caption className="visually-hidden">{ui.profilePage.turnByTurn}</caption>
               <thead>
                 <tr>
-                  <th scope="col">{ui.profilePage.round}</th>
-                  <th scope="col">{ui.profilePage.prompt}</th>
-                  <th scope="col">{ui.profilePage.drawnBy}</th>
-                  <th scope="col">{ui.profilePage.time}</th>
-                  <th scope="col">{ui.profilePage.drawing}</th>
-                  <th scope="col">{ui.profilePage.reactions}</th>
-                  <th scope="col">{ui.profilePage.guesserOutcomes}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.round}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.prompt}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.drawnBy}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.time}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.drawing}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.reactions}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.guesserOutcomes}</th>
                 </tr>
               </thead>
               <tbody>
@@ -421,7 +490,7 @@ function GameRow({
                               {named(outcome.seatId, ui.profilePage.unknownPlayer)} ({outcomeLabel(outcome)})
                             </span>
                           ))
-                        : "unknown"}
+                        : ui.profilePage.noGuessers}
                     </td>
                   </tr>
                 ))}
@@ -449,9 +518,9 @@ export function ProfilePage() {
     return (
       <div className="profile-page">
         <AppHeader backLabel={ui.profilePage.backToLobby} />
-        <p className="profile-note">
-          {hasResolved ? ui.profilePage.noSuchProfile : ui.profilePage.loading}
-        </p>
+        {hasResolved
+          ? <EmptyState heading title={ui.profilePage.noSuchProfile} />
+          : <p className="loading-note" role="status">{ui.profilePage.loading}</p>}
       </div>
     );
   }
@@ -465,7 +534,6 @@ export function ProfilePage() {
 
 
 function ProfileView({ userId }: { userId: string }) {
-  const { timeFormat } = useClock();
   const currentUser = useAuthStore((s) => s.user);
   const [subject, setSubject] = useState<PublicProfile | null>(null);
   // Ownership is decided by the resolved subject, not the route: a history
@@ -482,6 +550,9 @@ function ProfileView({ userId }: { userId: string }) {
   // falling apart should still be findable.
   const [includeAbandoned, setIncludeAbandoned] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Nobody behind this id: the page is that fact, as a heading, rather than a
+  // red alert over nothing.
+  const [missing, setMissing] = useState(false);
   // `null` until the shelf has been asked for; a signed-out viewer never asks.
   const [pins, setPins] = useState<ProfilePin[] | null>(null);
   const myTurnIds = usePinsStore((s) => s.turnIds);
@@ -539,11 +610,8 @@ function ProfileView({ userId }: { userId: string }) {
         }
       } catch (loadError) {
         if (cancelled) return;
-        setError(
-          loadError instanceof ApiError && loadError.status === 404
-            ? ui.profilePage.noSuchProfile
-            : ui.profilePage.couldNotLoadProfile,
-        );
+        if (loadError instanceof ApiError && loadError.status === 404) setMissing(true);
+        else setError(ui.profilePage.couldNotLoadProfile);
       }
     })();
     return () => {
@@ -592,12 +660,14 @@ function ProfileView({ userId }: { userId: string }) {
   }, [userId, games.length, includeAbandoned, loadingMore]);
 
   const shownName = subject?.displayName ?? "";
+  useDocumentTitle(shownName || null);
 
   return (
     <div className="profile-page">
       <AppHeader backLabel={ui.profilePage.backToLobby} />
 
-      {!subject && !error && <p className="profile-note">{ui.profilePage.loading}</p>}
+      {!subject && !error && !missing && <p className="loading-note" role="status">{ui.profilePage.loading}</p>}
+      {missing && !subject && <EmptyState heading title={ui.profilePage.noSuchProfile} />}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 
       {subject && stats && (
@@ -610,7 +680,7 @@ function ProfileView({ userId }: { userId: string }) {
                 is 56px with the page's own type scale on it. */}
             <span className="avatar-frame" aria-hidden="true">
             <span
-              className={`profile-avatar avatar avatar-player${
+              className={`profile-avatar avatar ${subject.isAnonymous ? "avatar-guest" : "avatar-player"}${
                 !subject.isAnonymous && subject.avatarUrl && !doodleNameOf(subject.avatarUrl)
                   ? " has-picture"
                   : ""
@@ -648,9 +718,11 @@ function ProfileView({ userId }: { userId: string }) {
                 />
               </h1>
               <p className="profile-subtitle">
-                {subject.isAnonymous ? ui.profilePage.guestDisplayNameNotSaved : ui.profilePage.registeredPlayer}
+                {subject.isAnonymous ? ui.profilePage.guest : ui.profilePage.registeredPlayer}
+                {/* The day, not the minute: when somebody joined is a fact
+                    about them, not an appointment. */}
                 {subject.createdAt
-                  && ` · ${ui.profilePage.joinedOn({ date: formatTimestamp(subject.createdAt, timeFormat) })}`}
+                  && ` · ${ui.profilePage.joinedOn({ date: formatDate(new Date(subject.createdAt)) })}`}
                 {lastSeenLabel(subject) && (
                   <>
                     {" · "}
@@ -707,12 +779,16 @@ function ProfileView({ userId }: { userId: string }) {
           )}
 
           {isOwnProfile && subject.isAnonymous && (
-            <section className="panel profile-claim">
+            <section className="surface-card panel profile-claim">
               <h2>{ui.profilePage.claimYourAccount}</h2>
               <p>
                 {ui.profilePage.yourGamesAreAlreadyBeingRecorded}
               </p>
-              <button type="button" onClick={() => setAuthMode("claim")}>
+              <button
+                type="button"
+                className="btn btn-primary"
+                onClick={() => setAuthMode("claim")}
+              >
                 {ui.profilePage.createAccount}
               </button>
             </section>
@@ -724,7 +800,7 @@ function ProfileView({ userId }: { userId: string }) {
               isOwner: isOwnProfile,
               count: pins.length,
             }) !== "absent" && (
-            <section className="panel" data-testid="pinned-drawings-panel">
+            <section className="surface-card panel" data-testid="pinned-drawings-panel">
               <h2>{ui.profilePage.pinnedDrawings}</h2>
               <PinnedDrawingsShelf
                 userId={userId}
@@ -750,27 +826,9 @@ function ProfileView({ userId }: { userId: string }) {
               long read, and the numbers stay in view while it scrolls. The
               statistics come first here, so they are still read first. */}
           <div className="profile-columns">
-          <section className="panel profile-statistics">
-            <h2>{ui.profilePage.statistics}</h2>
-            <div className="profile-stats">
-              <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
-              <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
-              <StatTile
-                label={ui.profilePage.winRate}
-                value={`${Math.round(stats.winRate * 100)}%`}
-              />
-              <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
-            </div>
-            <div className="profile-stats profile-stats-small">
-              <StatTile label={ui.profilePage.turnsPlayed} value={String(stats.turnsPlayed)} />
-              <StatTile label={ui.profilePage.promptsGuessed} value={String(stats.promptsGuessed)} />
-              <StatTile label={ui.profilePage.drawingsMade} value={String(stats.drawingsMade)} />
-              <StatTile label={ui.profilePage.reactionsReceived} value={String(stats.reactionsReceived)} />
-              <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
-            </div>
-          </section>
+          <StatisticsPanel stats={stats} />
 
-          <section className="panel profile-history">
+          <section className="surface-card panel profile-history">
             <div className="profile-history-head">
               <h2>{ui.profilePage.gameHistory}</h2>
               <label className="profile-history-filter">
@@ -779,15 +837,16 @@ function ProfileView({ userId }: { userId: string }) {
                   checked={includeAbandoned}
                   onChange={(change) => setIncludeAbandoned(change.target.checked)}
                 />
-                {ui.profilePage.includeGamesThatFellApart}
+                {ui.profilePage.includeAbandonedGames}
               </label>
             </div>
             {games.length === 0 ? (
-              <p className="profile-note">
-                {isOwnProfile
+              <EmptyState
+                compact
+                title={isOwnProfile
                   ? ui.profilePage.noFinishedGamesYetPlay
                   : ui.profilePage.noGamesToShowGames}
-              </p>
+              />
             ) : (
               <ul className="profile-games">
                 {games.map((game) => (

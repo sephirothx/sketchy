@@ -22,7 +22,7 @@ export function ChoosingPromptOverlay({
           <span />
           <span />
         </div>
-        <p className="choosing-prompt-kicker">{ui.choosingPromptOverlay.nextTurn}</p>
+        <p className="section-label choosing-prompt-kicker">{ui.choosingPromptOverlay.nextTurn}</p>
         <p className="choosing-prompt-message">
           {fill(ui.choosingPromptOverlay.isChoosingPrompt, {
             drawer: (

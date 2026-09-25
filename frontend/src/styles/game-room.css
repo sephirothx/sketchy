@@ -41,20 +41,47 @@
   padding: 2px;
 }
 
-.game-header-home:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 .game-header-room-name {
+  align-items: center;
+  display: inline-flex;
   font-weight: 800;
   font-size: 16px;
   color: var(--ink);
+  min-width: 0;
+}
+
+/* The name gives way to an ellipsis; the public/private icon after it does
+   not, so a long name still says which kind of room this is. */
+.game-header-room-name-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   padding-inline: var(--ink-overhang);
   margin-inline: calc(-1 * var(--ink-overhang));
+}
+
+/* Public or private, beside the room's name (RoomVisibilityIcon). Sized in
+   ems to whichever text it follows - the bar's name, the waiting room's
+   heading - and muted, since it is a fact about the name, not a control. The
+   box is no taller than the text's own line, so the bar keeps its height. */
+.room-visibility-icon {
+  color: var(--muted);
+  display: inline-flex;
+  flex: none;
+  margin-left: 0.35em;
+  vertical-align: -0.08em;
+}
+
+.room-visibility-icon svg {
+  height: 0.8em;
+  width: 0.8em;
+}
+
+/* Beside the bar's 16px name 0.8em read faint; the headings' larger text
+   carries the smaller ratio. */
+.game-header-room-name .room-visibility-icon svg {
+  height: 0.9em;
+  width: 0.9em;
 }
 
 .game-header-center {
@@ -82,7 +109,7 @@
   align-items: center;
   background: var(--warning-soft);
   border: 1.5px solid var(--warning-edge);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--warning);
   cursor: pointer;
   display: inline-flex;
@@ -108,14 +135,14 @@
 .room-menu-dropdown {
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   padding: 6px;
   position: absolute;
   right: 0;
   top: calc(100% + 8px);
   width: 264px;
-  z-index: 60;
+  z-index: var(--z-popover);
 }
 
 .room-menu-dropdown .sheet-menu-item {
@@ -138,6 +165,29 @@
 @media (max-width: 1100px) {
   .game-header-room-name {
     display: none;
+  }
+}
+
+/* Where the bar does print the name, the waiting room's heading would say it
+   again a few pixels below: it stays for a screen reader only. These are the
+   `.visually-hidden` declarations (a11y.css) copied on purpose, not drift: a
+   class cannot be switched on at a breakpoint, and the component's own width
+   check (900px) is not the bar's (1100px) - which left 901-1100px with no
+   name at all. One breakpoint for both, so no width says it twice or never.
+   The whole head, not only its heading: out of the flow, it takes no row of
+   the waiting room's grid and so no gap above the invite card. */
+@media (min-width: 1101px) {
+  .waiting-room-head {
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    position: absolute;
+    white-space: nowrap;
+    width: 1px;
   }
 }
 
@@ -169,6 +219,24 @@
   .game-header-mobile:has(.room-notice-chip, .game-header-away) .game-header-home {
     display: none;
   }
+}
+
+/* The phone's round: "Round 2/3" where the bar has room for the word, "2/3"
+   where it does not. GameHeaderStatus renders both and measures the bar to
+   choose; the full label stays laid out, unseen and out of the flow, so it
+   can be measured while the short one shows. */
+.game-header-round-short {
+  display: none;
+}
+
+.game-header-round.is-short .game-header-round-long {
+  pointer-events: none;
+  position: absolute;
+  visibility: hidden;
+}
+
+.game-header-round.is-short .game-header-round-short {
+  display: inline;
 }
 
 .game-header-mobile .game-header-center {
@@ -224,7 +292,7 @@
   position: absolute;
   top: calc(100% + 8px);
   width: max-content;
-  z-index: 40;
+  z-index: var(--z-popover);
 }
 
 .room-notice-popover p {
@@ -249,7 +317,7 @@
   width: auto;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .waiting-start-card {
     align-items: stretch;
     flex-direction: column;
@@ -258,7 +326,10 @@
   .waiting-start-button,
   .custom-prompts-apply { width: 100%; }
   .waiting-card { padding: 16px; }
-  .waiting-room-actions { justify-content: flex-start; width: 100%; }
+  .waiting-room-actions {
+    justify-content: flex-start;
+    width: 100%;
+  }
 }
 
 @media (max-width: 480px) {
@@ -272,7 +343,7 @@
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: grid;
   gap: 12px;
   grid-template-columns: minmax(220px, 1fr) minmax(180px, .8fr) auto;
@@ -284,7 +355,7 @@
   align-items: center;
   background: var(--primary-soft);
   border: 1px solid var(--primary-edge-soft);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   gap: 16px;
   justify-content: space-between;
@@ -315,9 +386,9 @@
 }
 
 .colorblind-safe-suggestion-actions button {
-  background: #fff;
+  background: var(--card);
   border: 1px solid var(--faint);
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   font: inherit;
   font-size: 12px;
@@ -329,38 +400,35 @@
 .colorblind-safe-suggestion-actions button.primary {
   background: var(--primary);
   border-color: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
 }
 
 .colorblind-safe-suggestion-actions button:disabled {
   cursor: not-allowed;
-  opacity: .55;
+  opacity: var(--opacity-disabled);
 }
 
-.colorblind-safe-suggestion-actions button:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
+/* Approved: the go-button green, the same in both themes, so the white
+   type on it holds in both; the halo is the theme's own success colour. */
 .restart-vote-banner.approved {
   animation: restart-approved-emphasis 500ms ease-out;
-  background: linear-gradient(135deg, #047857, #059669);
-  border: 2px solid #34d399;
-  box-shadow: 0 8px 24px rgb(5 150 105 / 30%), 0 0 0 3px rgb(52 211 153 / 18%);
+  background: var(--success-button);
+  border: 2px solid var(--success);
+  box-shadow: 0 8px 24px color-mix(in srgb, var(--success-button) 30%, transparent), 0 0 0 3px var(--success-soft);
   grid-template-columns: minmax(220px, 1fr) minmax(180px, .7fr) auto;
   padding-block: 14px;
 }
 
 .restart-vote-banner.approved .restart-vote-copy strong {
   align-items: center;
-  color: #fff;
+  color: var(--on-success);
   display: flex;
   font-size: 18px;
   letter-spacing: .01em;
 }
 
 .restart-vote-banner.approved .restart-vote-copy > span {
-  color: #d1fae5;
+  color: var(--on-success);
   font-size: 13px;
   font-weight: 700;
 }
@@ -368,8 +436,8 @@
 .restart-approved-check {
   align-items: center;
   background: #fff;
-  border-radius: 999px;
-  color: #047857;
+  border-radius: var(--radius-pill);
+  color: var(--success-button);
   display: inline-flex;
   flex: 0 0 auto;
   font-size: 17px;
@@ -383,8 +451,8 @@
   align-items: center;
   background: rgb(255 255 255 / 16%);
   border: 1px solid rgb(255 255 255 / 35%);
-  border-radius: 8px;
-  color: #fff;
+  border-radius: var(--radius-xs);
+  color: var(--on-success);
   display: flex;
   flex-direction: column;
   min-width: 64px;
@@ -438,17 +506,18 @@
 .restart-vote-tile {
   align-items: center;
   border-radius: 4px;
-  color: #fff;
   display: inline-flex;
   flex: 1 1 0;
   font-size: 15px;
-  font-weight: 900;
+  font-weight: 800;
   justify-content: center;
   min-width: 18px;
 }
 
-.restart-vote-tile.yes { background: var(--success); }
-.restart-vote-tile.no { background: var(--danger); }
+/* The button fills, not the status colours: those turn pale in the dark
+   theme, and the white mark on them with it. */
+.restart-vote-tile.yes { background: var(--success-button); color: var(--on-success); }
+.restart-vote-tile.no { background: var(--danger-button); color: var(--on-danger); }
 .restart-vote-tile.pending { background: var(--line-strong); }
 
 .restart-vote-actions {
@@ -457,9 +526,9 @@
 }
 
 .restart-vote-actions button {
-  background: #fff;
+  background: var(--card);
   border: 1px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   font: inherit;
   font-size: 12px;
@@ -482,12 +551,7 @@
   color: var(--danger);
 }
 
-.restart-vote-actions button:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
-@media (max-width: 760px) {
+@media (max-width: 720px) {
   .colorblind-safe-suggestion {
     align-items: stretch;
     flex-direction: column;
@@ -540,16 +604,16 @@
   width: 100%;
 }
 .waiting-card {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 20px 22px;
 }
 .waiting-card h1,
-.waiting-card h2 { color: var(--ink); font-family: var(--font-display); font-weight: 600; margin: 0; }
+.waiting-card h2 {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-weight: 600;
+  margin: 0;
+}
 .waiting-card h2 { font-size: 18px; }
-.waiting-card-kicker { color: var(--faint); font-size: 11.5px; font-weight: 800; letter-spacing: .09em; margin: 0 0 5px; text-transform: uppercase; }
 
 /* Which room this is. Out of the invite card, which is about getting people
    into it rather than naming it. */
@@ -561,7 +625,6 @@
   font-weight: 600;
   margin: 0;
 }
-.waiting-room-head .section-label { margin-top: 3px; }
 
 /* Invite-first center card: a kicker, the code, one way to send it. */
 .waiting-invite-card {
@@ -573,11 +636,6 @@
 
 .waiting-invite-kicker {
   color: var(--primary-ink);
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  margin: 0;
-  text-transform: uppercase;
 }
 
 /* The code at a size people can read aloud across a room. Not a control:
@@ -615,11 +673,6 @@
   gap: 10px;
   justify-content: space-between;
   margin-bottom: 12px;
-}
-
-.waiting-roster-head h2 {
-  font-size: 15px;
-  margin: 0;
 }
 
 .waiting-roster-count {
@@ -697,16 +750,52 @@
   margin-left: auto;
 }
 
-/* On the phone's dock Start takes the width Edit leaves. */
-@media (max-width: 900px) {
+/* The host's footer never leaves a row half empty. Up to 1100px - the
+   phone's dock, and the rules card in the 340px column of 901-1100px - it is
+   two rows: Edit rules and Doodle (short labels, WaitingRoomPanel) sharing
+   the first, Start the whole second. Above it the long labels, and every row
+   the wrap makes fills: one line where the three fit, and where they do not
+   (up to about 1270px in English, 1200px in German) Start grows to its own
+   row under the other two - or, for German's and French's longest labels,
+   three full rows. Without the growth the wrapped buttons kept their widths,
+   Start right-aligned alone under a gap. */
+.waiting-rules-footer .waiting-rules-edit,
+.waiting-rules-footer .waiting-draw-button {
+  flex: 1 1 auto;
+  white-space: nowrap;
+}
+
+.waiting-rules-footer .waiting-start-button {
+  flex: 1 0 auto;
+}
+
+@media (max-width: 1100px) {
   .waiting-rules-footer .waiting-start-button {
-    flex: 1 1 auto;
+    flex: 1 0 100%;
     width: auto;
   }
 }
 
+/* Everybody but the host: one row at every width - the wait for the host
+   on the left, wrapping onto a second line of text before it ever pushes
+   Doodle onto a row of its own, and the pad's button on the right. A centred
+   line over a lone button (a phone's dock, and 901-1100px) read as if
+   something were missing. After the stacked rules, which it outranks for
+   the pad's button by coming later. */
 .waiting-rules-footer .waiting-start-waiting {
-  flex: 1 1 auto;
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: left;
+}
+
+.waiting-rules-footer .waiting-start-waiting + .waiting-draw-button {
+  flex: none;
+}
+
+/* Alone - the phone's dock while the pad is open, where the button is in the
+   strip above - the wait is centred, as the dock's only line. */
+.waiting-rules-footer .waiting-start-waiting:only-child {
+  text-align: center;
 }
 
 /* The scratch pad in place of the column (#591): one strip - back, the code,
@@ -732,7 +821,7 @@
   align-items: center;
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   cursor: pointer;
   display: inline-flex;
@@ -743,7 +832,7 @@
   letter-spacing: 0.08em;
   min-height: 38px;
   padding: 6px 14px;
-  transition: border-color 0.15s ease, color 0.15s ease;
+  transition: border-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 
 .room-copy-button svg {
@@ -806,70 +895,236 @@
 }
 
 
-.waiting-ready-count { background: var(--well); border: 1px solid var(--line); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 800; padding: 4px 11px; white-space: nowrap; }
-.waiting-ready-count.is-ready { background: var(--success-soft); border-color: transparent; color: var(--success-ink); }
-.waiting-custom-prompts { border-top: 1.5px solid var(--line); margin-top: 16px; padding-top: 14px; }
-.waiting-custom-prompts > summary { align-items: center; color: var(--primary); cursor: pointer; display: flex; font-size: 14px; font-weight: 800; gap: 8px; list-style: none; width: fit-content; }
+.waiting-ready-count {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 11px;
+  white-space: nowrap;
+}
+.waiting-ready-count.is-ready {
+  background: var(--success-soft);
+  border-color: transparent;
+  color: var(--success-ink);
+}
+.waiting-custom-prompts {
+  border-top: 1.5px solid var(--line);
+  margin-top: 16px;
+  padding-top: 14px;
+}
+.waiting-custom-prompts > summary {
+  align-items: center;
+  color: var(--primary);
+  cursor: pointer;
+  display: flex;
+  font-size: 14px;
+  font-weight: 800;
+  gap: 8px;
+  list-style: none;
+  width: fit-content;
+}
 .waiting-custom-prompts > summary::-webkit-details-marker { display: none; }
-.waiting-custom-prompts > summary::before { border-bottom: 2px solid currentColor; border-right: 2px solid currentColor; content: ""; height: 6px; transform: rotate(-45deg); transition: transform .16s ease; width: 6px; }
+.waiting-custom-prompts > summary::before {
+  border-bottom: 2px solid currentColor;
+  border-right: 2px solid currentColor;
+  content: "";
+  height: 6px;
+  transform: rotate(-45deg);
+  transition: transform var(--dur) ease;
+  width: 6px;
+}
 .waiting-custom-prompts[open] > summary::before { transform: rotate(45deg) translate(-2px, -2px); }
-.waiting-custom-prompts-content { background: var(--well); border: 1px solid var(--line); border-radius: var(--radius-sm); margin-top: 12px; padding: 14px; }
-.waiting-custom-prompts-content p { color: var(--muted); font-size: 13px; margin: 0; }
-.waiting-custom-prompts-heading { align-items: start; display: flex; gap: 12px; justify-content: space-between; }
-.waiting-custom-prompts-heading strong { color: var(--ink); display: block; font-size: 14px; margin-bottom: 3px; }
-.waiting-custom-prompts-heading > span { background: var(--primary-soft); border-radius: 999px; color: var(--primary-ink); flex: 0 0 auto; font-size: 12px; font-weight: 800; padding: 4px 8px; }
-.waiting-custom-prompts-search { color: var(--muted); display: block; font-size: 12px; font-weight: 700; margin-top: 14px; }
-.waiting-custom-prompts-search span { display: block; margin-bottom: 5px; }
-.waiting-custom-prompts-search input { background: var(--field); border: 1.5px solid var(--line-strong); border-radius: var(--radius-sm); box-sizing: border-box; color: var(--ink); font: inherit; padding: 9px 10px; padding-inline-start: calc(10px - var(--ink-overhang)); text-indent: var(--ink-overhang); width: 100%; }
-.waiting-custom-prompts-filters { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
-.waiting-custom-prompts-filters button { background: var(--card); border: 1.5px solid var(--line-strong); border-radius: 999px; color: var(--muted); font-size: 12px; font-weight: 800; padding: 5px 11px; }
-.waiting-custom-prompts-filters button[aria-pressed="true"] { background: var(--primary); border-color: var(--primary); color: #fff; }
-.waiting-custom-prompts-result-count { margin-top: 12px !important; }
-.waiting-custom-prompts-list { align-content: start; background: var(--card); border: 1px solid var(--line); border-radius: var(--radius-sm); display: flex; flex-wrap: wrap; gap: 6px; margin-top: 6px; max-height: 190px; min-height: 48px; overflow-y: auto; padding: 9px; }
-.waiting-custom-prompts-list span { background: var(--primary-soft); border: 1px solid transparent; border-radius: 6px; color: var(--primary-ink); font-size: 13px; line-height: 1.3; padding: 5px 7px; }
-.waiting-custom-prompts-list span:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 1px; }
-.waiting-custom-prompts-list.is-virtualized { display: block; height: 190px; padding: 0; position: relative; }
-.waiting-custom-prompts-list.is-virtualized:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
-.waiting-custom-prompts-virtual-space { position: relative; width: 100%; }
-.waiting-custom-prompts-virtual-row { box-sizing: border-box; display: grid; gap: 6px; left: 0; padding: 3px 9px; position: absolute; top: 0; width: 100%; }
-.waiting-custom-prompts-virtual-row span { box-sizing: border-box; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.custom-prompt-full-text-tooltip { background: var(--ink); border-radius: 7px; box-shadow: var(--shadow-raised); box-sizing: border-box; color: var(--paper); font-size: 13px; font-weight: 600; line-height: 1.35; max-width: calc(100vw - 16px); overflow-wrap: anywhere; padding: 7px 9px; pointer-events: none; position: fixed; width: max-content; z-index: 1000; }
-.waiting-custom-prompts-empty { background: var(--card); border: 1px dashed var(--line-strong); border-radius: var(--radius-sm); margin-top: 6px !important; padding: 16px; text-align: center; }
+.waiting-custom-prompts-content {
+  background: var(--well);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  margin-top: 12px;
+  padding: 14px;
+}
+.waiting-custom-prompts-content p {
+  color: var(--muted);
+  font-size: 13px;
+  margin: 0;
+}
+.waiting-custom-prompts-heading {
+  align-items: start;
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+}
+.waiting-custom-prompts-heading strong {
+  color: var(--ink);
+  display: block;
+  font-size: 14px;
+  margin-bottom: 3px;
+}
+.waiting-custom-prompts-heading > span {
+  background: var(--primary-soft);
+  border-radius: var(--radius-pill);
+  color: var(--primary-ink);
+  flex: 0 0 auto;
+  font-size: 12px;
+  font-weight: 800;
+  padding: 4px 8px;
+}
+.waiting-custom-prompts-search {
+  color: var(--muted);
+  display: block;
+  font-size: 12px;
+  font-weight: 700;
+  margin-top: 14px;
+}
+.waiting-custom-prompts-search span {
+  display: block;
+  margin-bottom: 5px;
+}
+.waiting-custom-prompts-search input {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  color: var(--ink);
+  font: inherit;
+  padding: 9px 10px;
+  padding-inline-start: calc(10px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
+  width: 100%;
+}
+.waiting-custom-prompts-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.waiting-custom-prompts-filters button {
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  padding: 5px 11px;
+}
+.waiting-custom-prompts-filters button[aria-pressed="true"] {
+  background: var(--primary);
+  border-color: var(--primary);
+  color: var(--on-primary);
+}
+.waiting-custom-prompts-content .waiting-custom-prompts-result-count { margin-top: 12px; }
+.waiting-custom-prompts-list {
+  align-content: start;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+  max-height: 190px;
+  min-height: 48px;
+  overflow-y: auto;
+  padding: 9px;
+}
+.waiting-custom-prompts-list span {
+  background: var(--primary-soft);
+  border: 1px solid transparent;
+  border-radius: var(--radius-xs);
+  color: var(--primary-ink);
+  font-size: 13px;
+  line-height: 1.3;
+  padding: 5px 7px;
+}
+.waiting-custom-prompts-list.is-virtualized {
+  display: block;
+  height: 190px;
+  padding: 0;
+  position: relative;
+}
+.waiting-custom-prompts-virtual-space {
+  position: relative;
+  width: 100%;
+}
+.waiting-custom-prompts-virtual-row {
+  box-sizing: border-box;
+  display: grid;
+  gap: 6px;
+  left: 0;
+  padding: 3px 9px;
+  position: absolute;
+  top: 0;
+  width: 100%;
+}
+.waiting-custom-prompts-virtual-row span {
+  box-sizing: border-box;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The `.tooltip` recipe, placed by CustomPromptsPreview beside the chip. */
+.custom-prompt-full-text-tooltip {
+  max-width: calc(100vw - 16px);
+  position: fixed;
+  z-index: var(--z-popover);
+}
+.waiting-custom-prompts-content .waiting-custom-prompts-empty {
+  background: var(--card);
+  border: 1px dashed var(--line-strong);
+  border-radius: var(--radius-sm);
+  margin-top: 6px;
+  padding: 16px;
+  text-align: center;
+}
 .waiting-custom-prompts-content .waiting-custom-prompts-error { color: var(--danger); }
 
 /* Start card. */
-.waiting-start-card { display: flex; justify-content: center; gap: 12px; align-items: center; flex-direction: column; }
-.waiting-start-waiting { color: var(--muted); font-size: 14px; font-weight: 700; margin: 0; text-align: center; }
-.waiting-room-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.waiting-host-actions { display: flex; flex: 0 0 auto; gap: 8px; }
-.waiting-start-error { color: var(--danger); margin: 8px 0 0; }
+.waiting-start-card {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+  align-items: center;
+  flex-direction: column;
+}
+.waiting-start-waiting {
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 700;
+  margin: 0;
+  text-align: center;
+}
+.waiting-room-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.waiting-start-error {
+  color: var(--danger);
+  margin: 8px 0 0;
+}
 .waiting-start-button { flex: 0 0 auto; }
-.waiting-start-button:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
-.custom-prompts-apply { background: var(--primary); border: 0; border-radius: var(--radius-sm); box-shadow: 0 2px 0 var(--primary-edge); color: #fff; font-size: 14px; font-weight: 800; margin-top: 10px; padding: 10px 14px; }
-.custom-prompts-apply:disabled { background: var(--faint); box-shadow: none; cursor: not-allowed; }
-.waiting-chat-empty { color: var(--muted); font-style: italic; margin: 0; }
+.custom-prompts-apply {
+  margin-top: 10px;
+}
+.waiting-chat-empty {
+  color: var(--muted);
+  font-style: italic;
+  margin: 0;
+}
 .waiting-chat-form { margin-top: 10px; }
-.waiting-chat-error { color: var(--danger); margin: 7px 0 0; }
+.waiting-chat-error {
+  color: var(--danger);
+  margin: 7px 0 0;
+}
 
-/* Host settings editor, shown in a modal from the waiting room. The dialog is
+/* Room rules editor, shown in a modal from the waiting room. The dialog is
    the panel; the editor inside it draws no surface of its own. */
 .modal-card.room-settings-modal-card {
   width: min(720px, calc(100vw - 32px));
   max-width: 720px;
-  text-align: left;
   max-height: min(86vh, 900px);
-  overflow-y: auto;
-}
-.room-settings-editor-heading { margin-bottom: 14px; }
-/* The editor is no longer a `.waiting-card`, which is where this heading used
-   to get its face from. Scoped to the heading block so the form's own section
-   headings keep theirs. */
-.room-settings-editor-heading h2 {
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
 }
 
 @media (max-width: 640px) {
@@ -883,17 +1138,10 @@
 /* The editor renders the same `RoomSetupForm` as /create, so its fields are
    styled by create-room-page.css. What used to be here was a second, flatter
    arrangement of the same controls. */
-.room-settings-advanced { display: grid; gap: 14px; margin-top: 14px; }
-/* The draft is submitted, not dripped out, so this is a button rather than a
-   status line reporting saves the host never asked for. */
-.room-settings-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.room-settings-actions .room-settings-save { min-width: 148px; }
+/* The draft is submitted, not dripped out, so Save is a button rather than a
+   status line reporting saves the host never asked for; sized so its label
+   changing between "Save settings" and "Saved" does not move Cancel. */
+.room-settings-save { min-width: 148px; }
 
 .room-shell {
   display: grid;
@@ -921,7 +1169,7 @@
   justify-content: center;
   padding: 16px;
   position: absolute;
-  z-index: 50;
+  z-index: var(--z-notice);
 }
 
 .room-stage-card {
@@ -983,7 +1231,7 @@
 }
 
 .room-shell-main-transition {
-  animation: room-main-enter 160ms ease-out;
+  animation: room-main-enter var(--dur) ease-out;
   min-width: 0;
 }
 
@@ -1018,13 +1266,14 @@
   min-height: 42px;
 }
 
-.room-panel-heading h2 {
-  color: var(--ink);
-  font-size: 14px;
-  font-weight: 800;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  margin: 0;
+/* The lobby's panel title a size down. The room's side columns are 250 and
+   300px wide, and a title here shares its row with a count, the ready chip
+   and the spectator eye - at the lobby's 22px "Chatte, während du wartest"
+   no longer fits on one line. The phone's roster card is the same panel, so
+   it takes the same size. */
+.room-panel-heading .panel-title,
+.waiting-roster-head .panel-title {
+  font-size: 18px;
 }
 
 .room-players-title-row {
@@ -1041,12 +1290,7 @@
 }
 
 .room-panel-kicker {
-  color: var(--faint);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .07em;
   margin: 0 0 3px;
-  text-transform: uppercase;
 }
 
 .room-chat-panel.guess-chat {
@@ -1177,7 +1421,10 @@
 
 @media (max-width: 900px) {
   .waiting-room { padding: 0 0 32px; }
-  .waiting-start-card { align-items: stretch; flex-direction: column; }
+  .waiting-start-card {
+    align-items: stretch;
+    flex-direction: column;
+  }
   .room-shell {
     display: flex;
     flex-direction: column;
@@ -1190,9 +1437,18 @@
     gap: 4px;
   }
 
-  .sidebar-right { order: 2; width: 100%; }
-  .sidebar-left { order: 3; width: 100%; }
-  .room-shell-main { order: 1; width: 100%; }
+  .sidebar-right {
+    order: 2;
+    width: 100%;
+  }
+  .sidebar-left {
+    order: 3;
+    width: 100%;
+  }
+  .room-shell-main {
+    order: 1;
+    width: 100%;
+  }
   .room-shell-chat { order: 2; }
   .room-shell-players { order: 3; }
 
@@ -1221,17 +1477,20 @@
     border-radius: 0;
     border-top: 1.5px solid var(--line);
     bottom: 0;
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.08);
+    box-shadow: var(--shadow-sheet);
     left: 0;
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
-  /* Room for the dock, so the chat card is never under it. */
+  /* Room for the dock, so the chat card is never under it: the dock's own
+     height, which WaitingRoomPanel measures onto the shell, plus a gap. The
+     value here stands until the first measure. */
   .room-shell-waiting {
-    padding-bottom: 84px;
+    --waiting-dock-height: 68px;
+    padding-bottom: calc(var(--waiting-dock-height) + 16px);
   }
 
   .waiting-start-button {
@@ -1241,7 +1500,10 @@
   .waiting-room-head h1 { font-size: 20px; }
 
   .waiting-invite-card { padding: 14px 14px 15px; }
-  .waiting-code { font-size: 30px; margin: 4px auto 10px; }
+  .waiting-code {
+    font-size: 30px;
+    margin: 4px auto 10px;
+  }
 
   /* Side by side: two full-width buttons would put back most of what the
      card just gave up. */
@@ -1261,37 +1523,6 @@
      that is fixed now. Everything is spaced the same. */
   .waiting-room { padding-bottom: 0; }
 
-  .room-settings-actions {
-    flex-direction: column-reverse;
-  }
-
-  .room-settings-actions .btn { width: 100%; }
-
-  .guess-chat {
-    display: flex;
-    flex-direction: column;
-    height: auto !important;
-  }
-
-  /* The input reads below the messages, as it does in every other messaging
-     surface. It used to be order:-1 - you typed at the top and read below,
-     and each new message travelled away from the caret. */
-  .chat-input {
-    order: 0;
-    margin-top: 6px;
-    margin-bottom: 0;
-  }
-
-  .chat-messages-container {
-    flex: initial;
-    height: auto;
-    max-height: 200px;
-    min-height: 80px;
-  }
-
-  .chat-messages {
-    max-height: 200px;
-  }
 
   /*
    * ── The playing shell on a phone ───────────────────────────────────────
@@ -1329,11 +1560,13 @@
     flex-direction: column;
     overflow: hidden;
     overscroll-behavior: none;
-    /* Deliberately no z-index. A positioned element with one creates a
-       stacking context, which trapped every overlay inside this shell below
-       the confetti canvas at the root - the turn recap included, which is
-       exactly when confetti fires. Fixed positioning already lifts the shell
-       above the page. */
+    /* Deliberately no z-index. `position: fixed` already makes this shell a
+       stacking context whatever its z-index, so the drawers, the turn recap
+       and any dialog rendered in place are ordered only against each other,
+       and the shell as a whole paints at the page's base level: the confetti,
+       the friend invite and the toasts, which live outside it, go over it.
+       A z-index would only lift the whole shell over those too. A dialog that
+       has to clear the shell is portaled to <body> (the report dialogs). */
   }
 
   /* Status band. */
@@ -1564,7 +1797,7 @@
     border: 0;
     border-top: 1.5px solid var(--line);
     border-radius: 0;
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.05);
+    box-shadow: var(--shadow-sheet);
     margin: 0;
     padding: 8px 12px calc(10px + env(safe-area-inset-bottom, 0px));
   }
@@ -1572,9 +1805,8 @@
   /* Kills the desktop chat's fixed height without pinning the panel: this
      used to say `flex: 0 0 auto`, which outranked every attempt to let the
      panel shrink and was what sent the feed out through the top of its box. */
-  .game-room.game-room-playing .room-chat-panel.guess-chat,
-  .game-room.game-room-playing .guess-chat {
-    height: auto !important;
+  .game-room.game-room-playing .room-chat-panel.guess-chat {
+    height: auto;
     max-height: none;
     flex: 1 1 auto;
     min-height: 0;
@@ -1615,7 +1847,7 @@
   .game-room.guess-focused .sidebar-left,
   .game-room.guess-focused .room-chat-heading,
   .game-room.guess-focused .chat-scroll-bottom-button {
-    display: none !important;
+    display: none;
   }
 
   /* Everything that is not the drawing or the box you type into goes. The feed,
@@ -1664,7 +1896,7 @@
 
   .game-room.guess-focused .guess-chat {
     max-height: none;
-    height: auto !important;
+    height: auto;
     gap: 4px;
     overflow: visible;
   }
@@ -1731,10 +1963,6 @@
 }
 
 .sidebar-box {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 14px 12px;
 }
 
@@ -1749,7 +1977,7 @@
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--faint);
   cursor: help;
   display: inline-flex;
@@ -1760,24 +1988,24 @@
   position: relative;
 }
 
-.room-spectator-indicator:focus-visible {
-  outline: 3px solid #93c5fd;
-  outline-offset: 2px;
-}
-
 .room-spectator-icon {
   display: inline-flex;
   line-height: 1;
 }
 
+/* Not the `.tooltip` recipe, though it has the role: it is a popover you move
+   into - it holds the promotion button - and it lists names in their owners'
+   own colours, which are chosen against the page's ground and would sink into
+   the dark popover surface in the light theme. So it is a raised card, like
+   the language picker's list. */
 .room-spectator-tooltip {
   background: var(--card);
   border: 1px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   color: var(--ink);
   font-size: 13px;
-  font-weight: 500;
+  font-weight: 400;
   min-width: 180px;
   opacity: 0;
   padding: 12px 14px;
@@ -1786,9 +2014,9 @@
   right: 0;
   top: calc(100% + 5px);
   transform: translateY(-3px);
-  transition: opacity 120ms ease, transform 120ms ease, visibility 120ms;
+  transition: opacity var(--dur-fast) ease, transform var(--dur-fast) ease, visibility var(--dur-fast);
   visibility: hidden;
-  z-index: 120;
+  z-index: var(--z-popover);
 }
 
 .room-spectator-tooltip::after {
@@ -1841,22 +2069,8 @@
   margin: 0 0 8px;
 }
 
-.spectator-promotion button {
-  background: var(--primary);
-  border: 0;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 0 var(--primary-edge);
-  color: #fff;
-  font: inherit;
-  font-weight: 800;
-  padding: 7px 9px;
+.spectator-promotion .btn {
   width: 100%;
-}
-
-.spectator-promotion button:disabled {
-  background: var(--faint);
-  box-shadow: none;
-  cursor: not-allowed;
 }
 
 .spectator-promotion-error {
@@ -1899,7 +2113,7 @@
 .turn-bar-clock {
   flex: 0 0 auto;
   font-size: 19px;
-  font-weight: 900;
+  font-weight: 800;
   color: var(--warm-ink);
   font-variant-numeric: tabular-nums;
   letter-spacing: -0.02em;
@@ -1936,7 +2150,7 @@
   display: block;
   width: 100%;
   height: 6px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--track);
   overflow: hidden;
 }
@@ -1944,8 +2158,10 @@
 .timer-bar-fill {
   display: block;
   height: 100%;
-  border-radius: 999px;
-  transition: width 250ms linear, background-color 400ms ease;
+  border-radius: var(--radius-pill);
+  /* The width is recomputed every 250ms (Timer.tsx), and the transition only
+     joins those steps: it follows the clock's cadence, not the motion scale. */
+  transition: width 250ms linear, background-color var(--dur) ease;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1989,7 +2205,7 @@
 .prompt-choice-card {
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-raised);
   padding: 22px 26px;
   margin: 0 auto;
@@ -2066,7 +2282,7 @@
   justify-content: center;
   width: clamp(19px, 2.7vw, 26px);
   height: clamp(26px, 3.6vw, 34px);
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   background: var(--card);
   border: 1.5px solid var(--line-strong);
   font-family: var(--font-display);
@@ -2164,7 +2380,7 @@
 .hint-wheel-label {
   color: var(--muted);
   font-size: 12px;
-  font-weight: 500;
+  font-weight: 400;
   letter-spacing: normal;
   margin: 0 0 4px;
 }
@@ -2188,7 +2404,7 @@
   min-height: 44px;
   padding: 4px;
   border: 1.5px solid var(--primary-edge-soft);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: var(--card);
   color: var(--primary);
   cursor: pointer;
@@ -2208,9 +2424,8 @@
 
 .wheel-letter-btn:disabled {
   border-color: var(--line);
-  color: var(--faint);
   cursor: not-allowed;
-  opacity: 0.7;
+  opacity: var(--opacity-disabled);
 }
 
 
@@ -2250,7 +2465,7 @@
   aspect-ratio: 4 / 3;
   background: white;
   border: 1.5px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   box-shadow: var(--shadow);
 }
@@ -2276,7 +2491,7 @@
 .choosing-prompt-card {
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-raised);
   max-width: 360px;
   padding: 24px 28px;
@@ -2310,11 +2525,7 @@
 
 .choosing-prompt-kicker {
   color: var(--primary);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: .08em;
   margin: 0 0 6px;
-  text-transform: uppercase;
 }
 
 .choosing-prompt-message {
@@ -2413,10 +2624,10 @@ button.guess-pips {
   border: 1.5px solid var(--card);
   border-radius: 50%;
   bottom: -3px;
-  color: #fff;
+  color: var(--on-success);
   display: flex;
   font-size: 9px;
-  font-weight: 900;
+  font-weight: 800;
   height: 15px;
   justify-content: center;
   position: absolute;
@@ -2441,13 +2652,16 @@ button.guess-pips {
    become a rail on the holding side, the feed a narrow column, and the canvas
    takes everything between them.
 
-   `min-width: 600px` is what makes this landscape rather than merely wide.
+   `min-width: 481px` is what makes this landscape rather than merely wide.
    `orientation` is a property of the viewport, not of the phone: a portrait
    handset whose soft keyboard eats half the screen reports landscape too, and
    without the width floor a 360x340 Android with the keyboard up got the
-   two-column rail layout and a 76px-wide guess field. No phone is under 600px
-   across when it is actually turned sideways, and none is over it in portrait. */
-@media (orientation: landscape) and (max-height: 520px) and (min-width: 600px) {
+   two-column rail layout and a 76px-wide guess field. Phones in portrait are
+   almost all 430px or less across - a few folding ones reach about 540, and
+   with the keyboard up those would take this layout - and none is under 481
+   turned sideways: the 568px of the smallest iPhones, which the old floor of
+   600 left in portrait, included. */
+@media (orientation: landscape) and (max-height: 520px) and (min-width: 481px) {
   .game-room.game-room-playing {
     padding: 0;
   }
@@ -2613,10 +2827,6 @@ button.guess-pips {
 .waiting-invite-friends-label {
   margin: 0 0 8px;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .waiting-invite-friends-list {

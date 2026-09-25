@@ -3,6 +3,7 @@ import { AppHeader } from "../components/AppHeader";
 import { BrushIcon, FillIcon, RectIcon, UndoIcon } from "../components/icons";
 import { NOT_FOUND_PATHS, NOT_FOUND_VIEWBOX } from "../components/notFoundArt";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 /** What a URL with no page behind it shows.
 
@@ -42,6 +43,7 @@ function NotFoundDoodle() {
 }
 
 export function NotFoundPage() {
+  useDocumentTitle(ui.notFoundPage.pageNotFound);
   const navigate = useNavigate();
 
   return (

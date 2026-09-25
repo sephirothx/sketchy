@@ -79,7 +79,7 @@ function accountRequired(params: MessageParams): string {
     case "avatar":
       return "Create an account to choose a picture.";
     case "prompt_lists":
-      return "Create an account to save reusable prompt lists.";
+      return "Create an account to save prompt lists.";
     case "name_color":
       return "Create an account to choose a name color.";
     case "password":
@@ -139,8 +139,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   empty_message: "Type something first.",
 
   // Rate and capacity
-  too_fast: "You are doing that too quickly. Slow down a moment.",
-  seat_changing_too_fast: "This seat is changing hands too quickly. Try again in a minute.",
+  too_fast: "You are doing that too quickly. Try again in a moment.",
+  seat_changing_too_fast: "Your seat in this room has moved between tabs or connections too often. Try again in a minute.",
   joining_too_fast: "You are joining rooms too quickly. Try again in a minute.",
   room_quota: "You have as many rooms open as you can have at once.",
   room_full: "This room is full.",
@@ -161,7 +161,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   room_not_found: "Room not found.",
   room_ended: "This room has ended.",
   could_not_create_room: "Could not create the room.",
-  no_session_to_resume: "There is no session of yours to resume in this room.",
+  no_session_to_resume: "You're no longer in this room. Join it again.",
   host_only: "Only the host can do that.",
   players_only: "Only players can do that.",
   waiting_room_only: "That is only available in the waiting room.",
@@ -225,7 +225,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Moderation, from the reporter's side
   reporting_unavailable: "Reporting is unavailable on this server.",
-  no_such_player: "No such player.",
+  no_such_player: "Player not found.",
   cannot_report: "That player cannot be reported.",
   already_reported: "You have already reported this, and a moderator has not reviewed it yet.",
 
@@ -247,7 +247,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Could not change the password.",
   session_not_found: "That device is no longer signed in.",
-  session_replaced: "This session has been replaced. Reload and try again.",
+  session_replaced: "Your sign-in on this browser changed since this page loaded. Reload and try again.",
   guest_progress_unlinked: "Guest progress could not be linked to this account.",
   not_taking_visitors: "Sketchy is not taking new visitors right now. Please try again later.",
   account_delete_refused: "The account could not be deleted right now. Please try again.",
@@ -257,14 +257,14 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   second_factor_required: "Enter the code from your authenticator app.",
   second_factor_passkey_only: "Sign in with your passkey.",
   second_factor_not_enrolled:
-  "This account needs two-factor authentication before it can sign in. Ask an administrator to help you enrol.",
+  "This account needs two-factor authentication before it can sign in. Ask an administrator to help you set it up.",
   second_factor_not_set_up: "Two-factor authentication is not set up.",
   second_factor_code_wrong: "That code is not right.",
-  second_factor_throttled: "Too many codes were wrong. Please wait and try again.",
+  second_factor_throttled: "Too many codes were wrong. Try again later.",
   step_up_required: "Confirm it is you before doing that.",
   passkey_sign_in_required: "Sign in with your passkey.",
   passkey_not_registered: "That passkey is not registered here.",
-  passkey_not_found: "No such passkey.",
+  passkey_not_found: "Passkey not found.",
   passkey_refused:
   "Passkeys are for moderator and administrator accounts. You will be asked to set one up if you are ever offered a role.",
   last_factor: "That is the only way you can prove it is you. Add another before removing this one.",
@@ -288,15 +288,15 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   export_refused: "That export could not be started. Please try again.",
 
   // Rate limits reached over HTTP
-  too_many_attempts: "Too many attempts. Please wait and try again.",
-  too_many_requests: "Too many requests. Please wait and try again.",
-  too_many_reports: "Too many reports. Please wait before sending another.",
-  too_many_bug_reports: "Too many bug reports. Please wait before sending another.",
-  too_many_pictures: "Too many pictures. Please wait and try again.",
+  too_many_attempts: "Too many attempts. Try again later.",
+  too_many_requests: "Too many requests. Try again later.",
+  too_many_reports: "Too many reports. Try again later.",
+  too_many_bug_reports: "Too many bug reports. Try again later.",
+  too_many_pictures: "Too many pictures. Try again later.",
 
   // Pictures
   unsupported_picture_type: "That is not a WebP or PNG picture.",
-  picture_not_found: "No such picture.",
+  picture_not_found: "Picture not found.",
   picture_refused: "That picture cannot be used here.",
 
   // Bug reports
@@ -311,8 +311,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   that_is_you: "That is you.",
 
   // Profiles and history
-  no_such_game: "No such game.",
-  no_such_drawing: "No such drawing.",
+  no_such_game: "Game not found.",
+  no_such_drawing: "Drawing not found.",
   drawing_unreadable: "That drawing could not be read.",
   pinned_drawings_full: "Your pinned drawings are full. Unpin one from your profile first.",
 
@@ -328,11 +328,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   email_verification_required: (params: Record<string, unknown>) => {
     switch (params.action) {
       case "publish":
-        return "Verify your email address before publishing a list.";
+        return "Confirm your email address before publishing a list.";
       case "star":
-        return "Verify your email address before starring a list.";
+        return "Confirm your email address before starring a list.";
       default:
-        return "Verify your email address to do that.";
+        return "Confirm your email address to do that.";
     }
   },
   warning_unread: (params: Record<string, unknown>) => {
@@ -348,7 +348,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   prompt_list_hidden: "This list is hidden, so it cannot be published. A moderator has to review it first.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
-    return `“${tag}” is not one of the tags a list can carry.`;
+    return `"${tag}" is not one of the tags a list can carry.`;
   },
   unknown_sort: "Sketchy cannot sort by that.",
   timezone_required: "Include a timezone with that date.",
@@ -371,7 +371,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   setting_refused: "That setting could not be saved.",
 
   // Role notices
-  no_such_notice: "No such notice.",
+  no_such_notice: "Notice not found.",
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "You cannot report yourself.",
@@ -381,21 +381,21 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       ? "A list you copied from somebody else cannot be duplicated, so its credit stays with it."
       : "A list a moderator is reviewing or has hidden cannot be duplicated.",
   cannot_report_own_prompt_list: "You cannot report your own prompt list.",
-  no_reportable_prompt_list: "No reportable prompt list found.",
+  no_reportable_prompt_list: "Prompt list not found.",
   prompt_not_in_list: "That prompt does not belong to this list.",
   no_picture_to_report: "That player has no picture to report.",
-  no_such_game_context: "No such game context.",
-  no_such_turn_context: "No such turn context.",
+  no_such_game_context: "Game not found.",
+  no_such_turn_context: "Turn not found.",
   turn_not_in_game: "The turn does not belong to that game.",
   evidence_unavailable: "One or more selected messages are unavailable.",
   evidence_mixed_scopes: "Lobby and room messages cannot be mixed in one report.",
   evidence_several_rooms: "Selected messages must come from one room instance.",
-  evidence_not_theirs: "Evidence must be authored by the reported player.",
+  evidence_not_theirs: "Only messages the reported player sent can be attached.",
   evidence_not_received: "You cannot select a message you did not receive.",
   evidence_not_in_game: "Selected message does not belong to that game.",
   evidence_not_in_turn: "Selected message does not belong to that turn.",
-  no_such_warning: "No such warning.",
-  no_drawing: "No drawing.",};
+  no_such_warning: "Warning not found.",
+  no_drawing: "Drawing not found.",};
 
 /** What the room says about itself. One entry per `AnnouncementCode`. */
 const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string> = {
@@ -412,8 +412,8 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   restart_vote_rejected: () => "The restart vote was rejected.",
   restart_vote_expired: () => "The restart vote expired without passing.",
   restart_vote_abandoned: () =>
-  "The restart vote was cancelled because fewer than two active players remain.",
-  restart_cancelled: (p) => `The restart was cancelled because ${cancelReason(p.reason)}.`,
+  "The restart vote was canceled because fewer than two active players remain.",
+  restart_cancelled: (p) => `The restart was canceled because ${cancelReason(p.reason)}.`,
   game_restarted_by_vote: () => "The game was restarted by player vote.",
   game_ended_too_few_players: () => "The game ended: fewer than two players remain.",
 
@@ -477,15 +477,10 @@ export const EN = {
     bestDrawer: "Best drawer",
     quickestOnAverage: "Quickest on average",
     mostReactedDrawing: "Most reacted drawing",
-    guessedItOf: (p: { correct: number; total: number }) =>
-      `${p.correct} of ${p.total} guessed it`,
+    gotItOf: (p: { correct: number; total: number }) =>
+      `${p.correct} of ${p.total} got it`,
     percentGuessed: (p: { percent: string }) =>
       `${p.percent} guessed`,
-  },
-
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Commit date: ${p.commitDate} | Built: ${p.builtAt}`,
   },
 
   segmentedCodeInput: {
@@ -500,7 +495,7 @@ export const EN = {
 
   guessPips: {
     playerGuessState: (p: { nickname: string; isFriend: boolean; guessed: boolean }) =>
-      `${p.nickname}${p.isFriend ? " (friend)" : ""} ${p.guessed ? "guessed it" : "is still guessing"}`,
+      `${p.nickname}${p.isFriend ? " (friend)" : ""} ${p.guessed ? "got it" : "is still guessing"}`,
     gotOfGuessersCountGuessed:
       (p: { got: number; guessersCount: number }) => `${p.got} of ${p.guessersCount} guessed`,
     summaryOpenPlayersAndScores:
@@ -508,8 +503,8 @@ export const EN = {
   },
 
   accountDataDialog: {
-    requestedOn: (p: { when: string; schemaVersion: number }) =>
-      `Requested ${p.when} · format v${p.schemaVersion}`,
+    requestedOn: (p: { when: string }) =>
+      `Requested ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
       p.nextAllowed
         ? `One export a week; ready exports expire after seven days. You can request another on ${p.nextAllowed}.`
@@ -517,12 +512,11 @@ export const EN = {
     couldNotLoadYourDataExports: "Could not load your data exports.",
     couldNotRequestYourDataExport: "Could not request your data export.",
     yourData: "Your data",
-    downloadPrivateJsonCopyYourAccount: "Download a private JSON copy of your account and gameplay data. Other players’ profiles and messages are not included.",
+    downloadPrivateJsonCopyYourAccount: "Download a private JSON copy of your account and gameplay data. Other players' profiles and messages are not included.",
     dataExports: "Data exports",
     loadingExports: "Loading exports…",
     youHaveNotRequestedExportYet: "You have not requested an export yet.",
     download: "Download",
-    close: "Close",
     requesting: "Requesting…",
     requestExport: "Request export",
   },
@@ -544,10 +538,10 @@ export const EN = {
     myProfile: "My profile",
     promptStats: "Prompt stats",
     createAccount: "Create account",
-    logIn: "Log in",
+    logIn: "Sign in",
     myPromptLists: "My prompt lists",
     rules: "Rules",
-    logOut: "Log out",
+    logOut: "Sign out",
     thatDoesNotLookLikeEmail: "That does not look like an email address.",
     somethingWentWrongPleaseTryAgain: "Something went wrong. Please try again.",
     thatPasskeyWasNotAccepted: "That passkey was not accepted.",
@@ -556,9 +550,8 @@ export const EN = {
     username: "Username",
     password: "Password",
     codeFromYourAuthenticatorApp: "Code from your authenticator app",
-    recoveryCodeWorksHereTooCan: "A recovery code works here too, and can be used once.",
     email: "Email",
-    optional: "optional",
+    optional: "(optional)",
     letsYouResetYourPasswordLater: "Lets you reset your password later. Used for nothing else.",
     rules2: "rules",
     forgotYourPassword: "Forgot your password?",
@@ -572,8 +565,8 @@ export const EN = {
     pleaseWait: "Please wait…",
     alreadyRegistered: "Already registered? ",
     newHere: "New here? ",
-    createAnAccount: "Create an account",
     guestIdentity: (p: { name: string }) => `${p.name}. Your display name is not saved.`,
+    guestNameNotSaved: "Guest name, not saved to an account",
     signedInAs: (p: { name: string }) => `Signed in as ${p.name}`,
   },
 
@@ -581,15 +574,16 @@ export const EN = {
     thatConfirmationLinkCouldNotBe: "That confirmation link could not be used.",
     somethingWentWrongPleaseTryAgain: "Something went wrong. Please try again.",
     evenBestGuessersForgetSometimes: "Even the best guessers forget sometimes.",
-    weRsquoLlSendSecureTime: "We&rsquo;ll send a secure, time-limited link to the confirmed email\n            on your account.",
-    accountHelp: "Account help",
-    backLobby: "Back to the lobby",
+    asideForgot: "We'll send a secure, time-limited link to the confirmed email on your account.",
+    asideReset: "Choose a password you don't use anywhere else.",
+    asideVerify: "A confirmed email is your way back in if you ever forget your password.",
+    backLobby: "Back to lobby",
     enterYourUsernameYourConfirmedEmail: "Enter your username or your confirmed email address. If the\n              account can be recovered, a link is on its way.",
     usernameEmail: "Username or email",
     thatResetLinkHasExpiredHas: "That reset link has expired or has already been used. Reset links\n              work once and last an hour.",
     sendNewOne: "Send a new one",
     checkingThatLink: "Checking that link…",
-    everySignedDeviceWillBeSigned: "Every signed-in device will be signed out, including any you did\n              not recognise.",
+    everySignedDeviceWillBeSigned: "Every signed-in device will be signed out, including any you did\n              not recognize.",
     newPassword: "New password",
     addressIsConfirmedYouCan:
       (p: { address: string }) => `${p.address} is confirmed. You can now recover this account.`,
@@ -603,7 +597,6 @@ export const EN = {
     pleaseWait: "Please wait…",
     sendAResetLink: "Send a reset link",
     setPassword: "Set password",
-    oneMoment: "One moment…",
     nothingToConfirm: "Nothing to confirm.",
     resetLinkOnItsWay:
       "If that account exists and has a confirmed email address, a reset link is on its way.",
@@ -613,19 +606,12 @@ export const EN = {
     leaveGame: "Leave game",
     markedAfkByRoomVote: "You were marked AFK by room vote.",
     inviteLinkCopied: "Invite link copied.",
-    couldnTCopyLinkCopyFrom: "Couldn’t copy the link. Copy it from the address bar.",
+    couldNotCopyLink: "Could not copy the link. Copy it from the address bar.",
     couldNotStartGamePleaseTry: "Could not start the game. Please try again.",
     couldNotStartRestartVote: "Could not start a restart vote.",
     couldNotRecordYourRestartVote: "Could not record your restart vote.",
-    copyRoomInviteLink: "Copy the room invite link",
-    clickCopyRoomInviteLink: "Click to copy room invite link",
     roomMenu: "Room menu",
-    afk: "AFK",
-    saveImage: "Save image",
-    saveDrawnImageFile: "Save drawn image to file",
-    playerSettings: "Player settings",
     leaveRoom: "Leave room",
-    leave: "Leave",
     players: "Players",
     youWereKickedFromThe: "You were kicked from the room.",
     thisRoomWasOpenedIn: "This room was opened in another tab.",
@@ -635,17 +621,10 @@ export const EN = {
     leaveDuringYourTurn: "Leave during your turn?",
     leaveActiveGame: "Leave active game?",
     youReTheCurrentDrawer:
-      "You’re the current drawer. Leaving now will interrupt your turn and advance the game for everyone.",
+      "You're the current drawer. Leaving now will interrupt your turn and advance the game for everyone.",
     theGameIsStillIn:
-      "The game is still in progress. You’ll leave the room and give up your place in this game.",
-    restartVoteAvailableInRestartCooldownSeconds:
-      (p: { restartCooldownSeconds: number }) => `Restart vote available in ${p.restartCooldownSeconds} seconds`,
-    proposeRestartingTheGame: "Propose restarting the game",
-    restartVoteAvailableInRestartCooldownSeconds2:
-      (p: { restartCooldownSeconds: number }) => `Restart vote available in ${p.restartCooldownSeconds}s`,
-    proposeAVoteToRestart: "Propose a vote to restart the game",
+      "The game is still in progress. You'll leave the room and give up your seat in this game.",
     backFromAfk: "Back from AFK",
-    goAfk: "Go AFK",
     closePlayers: "Close players",
     acceptTheColorSuggestion: "accept the color suggestion",
     dismissTheColorSuggestion: "dismiss the color suggestion",
@@ -660,7 +639,7 @@ export const EN = {
       }`,
     thatDoesNotLookLikeEmail: "That does not look like an email address.",
     somethingWentWrongPleaseTryAgain: "Something went wrong. Please try again.",
-    done: "Done",
+    done: "OK",
     usedOnlyResetYourPasswordTell: "Used only to reset your password and to tell you if your account\n              or something you shared is actioned. Nothing else is ever sent\n              here.",
     checkYourInbox: "Check your inbox",
     changeYourEmailAddress: "Change your email address",
@@ -672,7 +651,6 @@ export const EN = {
     yourPassword: "Your password",
     passwordConfirmsItIsYou: "Your password confirms it is you: this address is how the account is recovered.",
     enterYourPasswordToConfirm: "Enter your password to confirm the change.",
-    close: "Close",
     notNow: "Not now",
   },
 
@@ -682,7 +660,7 @@ export const EN = {
     stillThere: "Still there?",
     youHaveBeenQuietWhileAnswer: "You have been quiet for a while. Answer and you keep playing;\n          otherwise the room will mark you AFK and carry on without you.",
     stillTherePressButtonMoveMouse: "Still there? Press the button, or move the mouse, to keep playing.",
-    iMHere: "I’m here",
+    iMHere: "I'm here",
   },
 
   app: {
@@ -702,6 +680,13 @@ export const EN = {
   appHeader: {
     playerSettings: "Player settings",
     sketchyHome: "Go to the lobby",
+    /** The header's site links (desktop), as one landmark. */
+    siteNav: "Pages",
+    /** The header's link names for two pages whose titles are long in some
+        languages. English keeps the page title; a language whose title
+        does not fit the bar at 1200px shortens it, still naming the page. */
+    communityLink: "Community catalogue",
+    promptStatsLink: "Prompt stats",
   },
 
   bugReportDialog: {
@@ -722,7 +707,7 @@ export const EN = {
     whatHappened: "What happened",
     whatYouDidWhatYouExpected: "What you did, what you expected, what happened instead.",
     screenshot: "Screenshot",
-    optional: "Optional",
+    optional: "(optional)",
     screenshotThatWillBeSentWith: "The screenshot that will be sent with this report",
     thisDialogHidesItselfWhileShot: "This dialog hides itself while the shot is taken, so you get the page behind it. Look at it before you send — you chose what to share.",
     replace: "Replace",
@@ -758,8 +743,8 @@ export const EN = {
     twoNewPasswordsDoNotMatch: "The two new passwords do not match.",
     passwordChangedEveryOtherDeviceHas: "Password changed. Every other device has been signed out.",
     couldNotChangePasswordPleaseTry: "Could not change the password. Please try again.",
-    ifThatAccountHasVerifiedEmail: "If that account has a verified email address, a link to set a new\n              password is on its way. It works once, and it expires.",
-    done: "Done",
+    ifThatAccountHasConfirmedEmail: "If that account has a confirmed email address, a link to set a new\n              password is on its way. It works once, and it expires.",
+    done: "OK",
     everyDeviceSignsOutWhenPassword: "Every device signs out when the password changes, including any you\n              did not mean to leave signed in. This one stays.",
     currentPassword: "Current password",
     newPassword: "New password",
@@ -769,7 +754,6 @@ export const EN = {
     changeYourPassword: "Change your password",
     pleaseWait: "Please wait…",
     changePassword: "Change password",
-    close: "Close",
     cancel: "Cancel",
   },
 
@@ -787,6 +771,14 @@ export const EN = {
     notNow: "Not now",
   },
 
+  /** Words every dialog shares: its ✕, and the line a notice shows when
+      its acknowledgement did not land. */
+  dialog: {
+    close: "Close",
+    cancel: "Cancel",
+    couldNotSave: "Could not save. Try again.",
+  },
+
   confirmationDialog: {
     cancel: "Cancel",
   },
@@ -797,7 +789,7 @@ export const EN = {
     helpUsSquash: "Help us squash it",
     reportReadySendErrorWhatThis: "A report is ready to send: the error, and what this tab knows about itself.\n            It reaches the people who run Sketchy — never other players.",
     whatWereYouDoing: "What were you doing?",
-    optional: "Optional",
+    optional: "(optional)",
     lastThingYouClickedTypedIf: "The last thing you clicked or typed, if you remember.",
     recentClientErrorsNewestFirst: "Recent client errors, newest first",
     sendMyDescriptionOnly: "Send my description only",
@@ -813,9 +805,9 @@ export const EN = {
     browser: "Browser",
     connection: "Connection",
     thisRoomSScreenHit:
-      "This room’s screen hit an error and had to stop. Your seat is held for a moment: send the report below, then reload to pick it back up or go back to the lobby.",
+      "This room's screen hit an error and had to stop. Your seat is held for a moment: send the report below, then reload to pick it back up or go back to the lobby.",
     thisScreenHitAnError:
-      "This screen hit an error and had to stop. Your account and settings are safe. Send the report below, and you’ll be on your way.",
+      "This screen hit an error and had to stop. Your account and settings are safe. Send the report below, and you'll be on your way.",
     whatWeAreLeavingOut: "What we are leaving out",
     whatWeSendWithThis: "What we send with this",
     noneOfThisIsBeing: "None of this is being sent — only your description above.",
@@ -839,8 +831,7 @@ export const EN = {
     couldNotUpdateThatPreset: "Could not update that preset.",
     couldNotDeleteThatPreset: "Could not delete that preset.",
     fixCustomPromptEntriesMarkedAbove: "Fix the custom-prompt entries marked above before creating the room.",
-    failedCreateRoom: "Failed to create room",
-    roomSetup: "Room setup",
+    couldNotCreateRoom: "Could not create the room.",
     createRoom: "Create a room",
     startFromSavedPreset: "Start from a saved preset",
     startFromPreset: "Start from a preset…",
@@ -851,16 +842,14 @@ export const EN = {
     update: "Update",
     delete: "Delete",
     undo: "Undo",
-    saveAsReusableList: "Save as reusable list",
-    saveQuickPromptsAsA: "Save quick prompts as a list before storing a preset.",
-    appliedName: (p: { name: string }) => `Applied “${p.name}”.`,
-    savedName: (p: { name: string }) => `Saved “${p.name}”.`,
-    updatedName: (p: { name: string }) => `Updated “${p.name}”.`,
+    saveAsPromptList: "Save as a prompt list",
+    saveCustomPromptsAsAList: "Save the custom prompts as a prompt list before saving a preset.",
+    appliedName: (p: { name: string }) => `Applied "${p.name}".`,
+    savedName: (p: { name: string }) => `Saved "${p.name}".`,
+    updatedName: (p: { name: string }) => `Updated "${p.name}".`,
     deleteThisRoomSettingPreset: "Delete this room-setting preset?",
     deletePresetDescription: "Rooms you already created with it are not affected.",
     createTheRoom: "create the room",
-    noScoring: "No scoring",
-    public: "Public",
     private: "Private",
     backToLobby: "Back to lobby",
     leaveBlankForARandom: "Leave blank for a random name!",
@@ -868,10 +857,6 @@ export const EN = {
     createRoom2: "Create room",
     yourRoom: "Your room",
     aRandomName: "A random name",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "player", other: "players" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "round", other: "rounds" }),
   },
 
   customPromptsEditor: {
@@ -896,7 +881,7 @@ export const EN = {
       counted(p.count, { one: "custom prompt", other: "custom prompts" }),
     inspectPrompts: (p: { count: number }) =>
       `Inspect ${counted(p.count, { one: "custom prompt", other: "custom prompts" })}`,
-    couldNotLoadCustomPrompts: "Could not load the custom prompts",
+    couldNotLoadCustomPrompts: "Could not load the custom prompts.",
     loadingCustomPrompts: "Loading custom prompts…",
     roomPromptCollection: "Room prompt collection",
     readOnlyListSuppliedByRoom: "Read-only list supplied by the room host.",
@@ -921,7 +906,7 @@ export const EN = {
         p.isGuest
           ? "The name, the points and the history kept against this browser are removed."
           : "Your name is removed from the games you played."
-      } The scores and drawings stay, under “Deleted player”, because they are other people’s games too. This cannot be undone.`,
+      } The scores and drawings stay, under "Deleted player", because they are other people's games too. This cannot be undone.`,
     typeToConfirm: (p: { word: string }) => `Type ${p.word} to confirm`,
     couldNotDeleteAccount: "Could not delete the account.",
     password: "Password",
@@ -929,8 +914,6 @@ export const EN = {
     deleteYourAccount: "Delete your account",
     deleting: "Deleting…",
     deleteForGood: "Delete for good",
-    keepPlaying: "Keep playing",
-    keepMyAccount: "Keep my account",
   },
 
   drainCue: {
@@ -938,7 +921,7 @@ export const EN = {
     gameEndsIn: (p: { seconds: number }) =>
       p.seconds > 0 ? `This game ends in ${counted(p.seconds, { one: "second", other: "seconds" })}.` : "This game is ending now.",
     noNewGames: "No new games can start until the server is back.",
-    gotIt: "Got it",
+    ok: "OK",
     finalCountdown: (p: { seconds: number }) => `Game ends in ${counted(p.seconds, { one: "second", other: "seconds" })}`,
   },
 
@@ -974,7 +957,7 @@ export const EN = {
     saveImage: "Save image",
     close: "Close",
     thisDrawingWasNotKept: "This drawing was not kept.",
-    roomRanOutRoomLaterTurns: "The room ran out of room for it. Later turns were kept instead.",
+    earlierDrawingsFilledTheSpace: "This game's earlier drawings used up the space the room keeps for them.",
     tryAgain: "Try again",
     loadingDrawing: "Loading drawing…",
     noDrawingWasCapturedThisTurn: "No drawing was captured for this turn.",
@@ -994,16 +977,19 @@ export const EN = {
   },
 
   firstRunIdentity: {
+    /** The name tag's one rule it can still break: its field only takes allowed characters. */
+    nameTooShort: (p: { min: number }) => `A name needs at least ${p.min} characters.`,
     nameInUse: (p: { name: string }) =>
-      `Someone online is already playing as “${p.name}”. Choose another name to keep playing.`,
+      `Someone online is already playing as "${p.name}". Choose another name to keep playing.`,
     couldNotSaveThatNamePlease: "Could not save that name. Please try again.",
-    createAccount: "Create an account",
-    logIn: "Log in",
+    createAccount: "Create account",
+    logIn: "Sign in",
     displayName: "Display name",
     whatShouldWeCallYou: "What should we call you?",
     beenHereBefore: "Been here before?",
     helloMyNameIs: "Hello, my name is",
     stickItOn: "Stick it on",
+    saving: "Saving…",
     oneLineExplainer: "One player draws, everybody else tries to guess. No account, no install, no talent required.",
     /* One is picked per visit (lib/firstRunLines.ts). Not a translation of
        the English pool: the misread-drawing joke needs a pair of words that
@@ -1026,7 +1012,6 @@ export const EN = {
 
   friendInviteNotice: {
     couldNotJoinThatGame: "That game could not be joined.",
-    thatGameCouldNotBeJoined: "That game could not be joined.",
     invitedYouTheirGame: "invited you to their game.",
     join: "Join",
     dismissInvitation: "Dismiss invitation",
@@ -1035,14 +1020,11 @@ export const EN = {
   friendsOverlay: {
     declineWarning: (p: { name: string }) =>
       `${p.name} will not be able to ask again. You can still send them a request yourself later.`,
-    decline2: "Decline",
     youWillBothStopBeingAble: "You will both stop being able to join each other's games without an invitation. Either of you can ask again.",
-    remove2: "Remove",
     removeConfirm: (p: { name: string }) => `Remove ${p.name}?`,
     friends: "Friends",
-    close: "Close",
     closeFriends: "Close friends",
-    friendsNeedAccountGuestNameBelongs: "Friends need an account. A guest name belongs to this browser\n              rather than to you, so there would be nobody left to be friends\n              with a month from now.",
+    friendsNeedAnAccount: "Friends need an account, so they can find you again. Create an account or sign in to add friends.",
     loading: "Loading…",
     noFriendsYetAddSomebodyFrom: "No friends yet. Add somebody from the lobby, or from a game you\n              are both in.",
     requests: "Requests",
@@ -1056,6 +1038,8 @@ export const EN = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " and ",
     continueLabel: "Continue",
     youFinished: (p: { points: number }) =>
       `You finished {place} with ${counted(p.points, { one: "point", other: "points" })}.`,
@@ -1065,7 +1049,7 @@ export const EN = {
     gameOver: "Game over",
     you: "you",
     friend: "Friend",
-    noScoresThisTimeJustRoom: "No scores this time—just a room full of sketches and guesses.",
+    noScoresThisTimeJustRoom: "No scores this time — just a room full of sketches and guesses.",
     keep: "Keep",
     asYourUsername: "as your username",
     createAccount: "Create account",
@@ -1098,7 +1082,7 @@ export const EN = {
     backLobby: "Back to lobby",
     roomRules: "Room rules",
     thisGameAlreadyProgressJoiningAs: "This game is already in progress. Joining as a player adds you to a future turn.",
-    playerSlotsAreFullSpectatingStill: "Player slots are full. Spectating is still open.",
+    noPlayerSeatsOpenSpectate: "No player seats open. You can still spectate.",
     publicRoom: "Public room",
     privateInvite: "Private invite",
     inProgress: "In progress",
@@ -1107,7 +1091,7 @@ export const EN = {
     roomFull: "Room full",
     joining: "Joining…",
     joinGameInProgress: "Join game in progress",
-    joinGame: "Join game",
+    join: "Join",
     spectate: "Spectate",
     customPromptsOnly: (p: { count: number }) =>
       `${counted(p.count, { one: "custom prompt", other: "custom prompts" })} only`,
@@ -1118,7 +1102,6 @@ export const EN = {
   inviteFriendsList: {
     invitationCouldNotBeSent: "That invitation could not be sent.",
     invitationSent: (p: { name: string }) => `Invitation sent to ${p.name}.`,
-    thatInvitationCouldNotBeSent: "That invitation could not be sent.",
     friendsLobby: "Friends in the lobby",
     invited: "Invited",
     invite: "Invite",
@@ -1131,6 +1114,7 @@ export const EN = {
 
   lobbyBrowserPage: {
     quickPlay: "Quick play",
+    lobby: "Lobby",
     quickPlayBusy: "Finding a room…",
     couldNotFindOrOpenARoom: "Could not find or open a room.",
     filterByLanguage: "Filter by language",
@@ -1138,14 +1122,15 @@ export const EN = {
       p.count > 0 ? `Filters · ${p.count}` : "Filters",
     showRooms: (p: { count: number }) =>
       `Show ${counted(p.count, { one: "room", other: "rooms" })}`,
-    removedFromRoom: "Removed from room",
+    kickedFromRoom: "Kicked from the room",
+    noLongerInRoom: "You're no longer in the room",
     ok: "OK",
     roomCode: "Room code",
     abc123: "ABC123",
     thereNoRoomCodeClipboard: "There is no room code on the clipboard.",
     sketchyCouldNotReadClipboardPaste: "Sketchy could not read the clipboard. Paste into the boxes instead.",
-    pleaseEnterRoomCode: "Please enter a room code",
-    failedJoinRoom: "Failed to join room",
+    enterRoomCode: "Enter a room code.",
+    couldNotJoinRoom: "Could not join the room.",
     joinByCode: "Join by code",
     createRoom: "Create room",
     publicRooms: "Public rooms",
@@ -1158,23 +1143,20 @@ export const EN = {
     hideFullRooms: "Hide full rooms",
     hideGamesProgress: "Hide games in progress",
     loadingPublicRooms: "Loading public rooms…",
-    noPublicRoomsYetCreateOne: "No public rooms yet. Create one!",
+    noPublicRoomsYet: "No public rooms yet",
+    noPublicRoomsYetBody: "Quick play opens one for you, or create your own.",
     noPublicRoomsMatchYourSearch: "No public rooms match your search criteria.",
-    createRoom2: "Create a room",
-    joinWithCode: "Join with a code",
     paste: "Paste",
     couldNotSaveThatName: "Could not save that name. Please try again.",
     joinAsASpectator: "join as a spectator",
     joinTheRoom: "join the room",
-    loading: "Loading…",
     showingFilteredRoomsCountOfRoomsCount:
       (p: { filteredRoomsCount: number; roomsCount: number }) => `Showing ${p.filteredRoomsCount} of ${p.roomsCount}`,
-    n0Rooms: "0 rooms",
     close: "Close",
     joining: "Joining…",
-    joinTheRoom2: "Join the room",
+    join: "Join",
     joiningAsSpectator: "Joining as spectator…",
-    watchWithoutPlaying: "Watch without playing",
+    spectate: "Spectate",
   },
 
   lobbyChatPanel: {
@@ -1184,7 +1166,7 @@ export const EN = {
     lobbyChat: "Lobby chat",
     nobodyHasSaidAnythingYet: "Nobody has said anything yet.",
     chooseNameChat: "Choose a name to chat",
-    saySomethingLobby: "Say something to the lobby...",
+    saySomethingLobby: "Say something to the lobby…",
     lobbyChatMessage: "Lobby chat message",
     send: "Send",
     couldNotSaveThatName: "Could not save that name. Please try again.",
@@ -1232,7 +1214,6 @@ export const EN = {
     nothingMatchesThoseFilters: "No lists match those filters.",
     nothingPublishedYet: "Nobody has published a list yet.",
     byOwner: (p: { owner: string }) => `by ${p.owner}`,
-    community: "Community",
     starred: "Starred",
     tags: "Tags",
     promptCount: (p: { count: number }) =>
@@ -1253,7 +1234,6 @@ export const EN = {
     couldNotChangeTheStar: "Could not change your star.",
     copiedToYourLists: "Copied to your prompt lists.",
     couldNotCopyThatList: "Could not copy that list.",
-    reportSent: "Report sent.",
     // The count is part of the name: a screen reader hears one control, so it
     // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
@@ -1261,24 +1241,22 @@ export const EN = {
     chooseAList: "Choose a list to see what is in it",
     chooseAListBody: "Its tags and every prompt in it.",
     promptsHeading: "Prompts",
-    inTheAuthorsOrder: "In the author’s order",
+    inTheAuthorsOrder: "In the author's order",
     shownOfTotal: (p: { shown: number; total: number }) => `${number(p.shown)} of ${number(p.total)} shown`,
     exploreAll: (p: { count: number }) => `Explore all ${counted(p.count, { one: "prompt", other: "prompts" })}`,
     allPrompts: (p: { count: number }) => `All ${counted(p.count, { one: "prompt", other: "prompts" })}`,
     searchPrompts: "Search prompts",
     matchesOfTotal: (p: { matches: number; total: number }) => `${number(p.matches)} of ${number(p.total)}`,
     order: "Order",
-    authorsOrder: "Author’s order",
+    authorsOrder: "Author's order",
     alphabetical: "A–Z",
-    noPromptMatches: (p: { query: string }) => `No prompt contains “${p.query}”.`,
+    noPromptMatches: (p: { query: string }) => `No prompt contains "${p.query}".`,
     allLists: "All lists",
-    close: "Close",
   },
   galleryPage: {
     gallery: "Gallery",
     backToLobby: "Back to lobby",
-    eyebrow: "Drawings",
-    drawingsFromPublicGames: "Every drawing from a public game, for anyone signed in.",
+    drawingsFromPublicGames: "Every drawing from a public game.",
     loading: "Loading…",
     sortBy: "Sort by",
     hot: "Hot",
@@ -1288,15 +1266,14 @@ export const EN = {
     allTime: "All time",
     thisMonth: "This month",
     thisWeek: "This week",
-    nothingThisWeek: "No public drawings this week yet. Play a public game and come back.",
-    nothingHereYet: "Nothing here yet. Play a public game and come back.",
-    signInToSeeTheGallery: "The gallery is for signed-in players. Sign in or continue as a guest from the lobby.",
+    nothingThisWeek: "Nothing yet this week.",
+    nothingHereYet: "No drawings yet",
+    signInToSeeTheGallery: "Sign in to see the gallery",
     couldNotLoadTheGallery: "Could not load the gallery.",
     couldNotLoadThisDrawing: "Could not load this drawing.",
     showMore: "Show more",
     tryAgain: "Try again",
-    openDrawing: (p: { prompt: string; drawer: string }) => `Open “${p.prompt}” by ${p.drawer}`,
-    byDrawer: (p: { drawer: string }) => `by ${p.drawer}`,
+    openDrawing: (p: { prompt: string; drawer: string }) => `Open "${p.prompt}" by ${p.drawer}`,
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: p.unit, other: `${p.unit}s` })} ago`,
     justNow: "just now",
     byDrawerPrefix: "by",
@@ -1305,11 +1282,10 @@ export const EN = {
     endOfTheRest: "Nothing more this way.",
     tryTopOverAllTime: "Try Top over all time for the rest",
     findARoom: "Find a room",
-    signIn: "Sign in",
     backToTop: "Back to top",
     topOfTheWeek: "Top of the week",
-    nothingHereYetBody: "Every drawing kept from a public game ends up here.",
-    signInBody: "Sign in, or continue as a guest from the lobby, to see every drawing from a public game.",
+    nothingHereYetBody: "Play a public game, and its drawings will be the first here.",
+    signInBody: "Or choose a name in the lobby to look around as a guest.",
     backToGallery: "Back to gallery",
     replay: "Replay",
     pause: "Pause",
@@ -1333,7 +1309,7 @@ export const EN = {
     changeEmail: "Change email",
     duplicate: "Duplicate",
     duplicateName: (p: { name: string }) => `${p.name} (duplicate)`,
-    listDuplicated: (p: { name: string }) => `Duplicated as “${p.name}”.`,
+    listDuplicated: (p: { name: string }) => `Duplicated as "${p.name}".`,
     couldNotDuplicateThisList: "Could not duplicate this list.",
     reload: "Reload",
     starCount: (p: { count: number }) =>
@@ -1358,8 +1334,10 @@ export const EN = {
       `${counted(p.prompts, { one: "prompt", other: "prompts" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `This list is ${p.state} and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.`,
+    underReview: "Under review",
+    hidden: "Hidden",
+    listUnderReviewWarning: "This list is under review and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.",
+    listHiddenWarning: "This list is hidden and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.",
     needsReview: (p: { count: number }) => `Needs review (${p.count})`,
     removePrompt: (p: { prompt: string }) => `Remove ${p.prompt}`,
     couldNotLoadYourPromptLists: "Could not load your prompt lists.",
@@ -1367,11 +1345,10 @@ export const EN = {
     addAtLeastOnePromptBefore: "Add at least one prompt before saving.",
     couldNotSaveThisPromptList: "Could not save this prompt list.",
     couldNotDeleteThisPromptList: "Could not delete this prompt list.",
-    yourLibrary: "Your library",
-    reusablePromptLists: "Reusable prompt lists",
+    myPromptLists: "My prompt lists",
     newList: "New list",
-    createAccountSaveReviseSharePrompt: "Create an account to save, revise, and share prompt lists. Quick room prompts stay local and ephemeral.",
-    yourPromptLists: "Your prompt lists",
+    promptListsNeedAnAccount: "Your prompt lists need an account",
+    promptListsNeedAnAccountBody: "An account keeps your lists, to play in any room you host and to publish if you like. Custom prompts typed into a room aren't saved.",
     loading: "Loading…",
     noSavedListsYet: "No saved lists yet.",
     name: "Name",
@@ -1387,7 +1364,7 @@ export const EN = {
     nothingMatchesThatSearch: "Nothing matches that search.",
     deleteList: "Delete list…",
     promptListSaved: "Prompt list saved.",
-    deleteListTitle: (p: { name: string }) => `Delete “${p.name}”?`,
+    deleteListTitle: (p: { name: string }) => `Delete "${p.name}"?`,
     deleteListDescription: "It leaves your lists, and the community catalogue if it is published. Games already played keep the prompts they used.",
     deleteListConfirm: "Delete list",
     promptListDeleted: "Prompt list deleted.",
@@ -1404,7 +1381,8 @@ export const EN = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Nobody drew this page",
-    thatLinkDoesnTLeadAnywhere: "That link doesn’t lead anywhere on Sketchy.",
+    pageNotFound: "Page not found",
+    thatLinkDoesnTLeadAnywhere: "That link doesn't lead anywhere on Sketchy.",
     backLobby: "Back to lobby",
   },
 
@@ -1435,9 +1413,11 @@ export const EN = {
     nowFriends: (p: { name: string }) => `You and ${p.name} are now friends.`,
     friendRequestSent: (p: { name: string }) => `Friend request sent to ${p.name}.`,
     rank: (p: { rank: number }) => `Rank ${p.rank}`,
-    moderationFor: (p: { name: string }) => `Moderation for ${p.name}`,
-    moderationActionsFor: (p: { name: string }) => `Moderation actions for ${p.name}`,
-    thatRequestCouldNotBeSent: "That request could not be sent.",
+    actionsFor: (p: { name: string; canVote: boolean; canReport: boolean }) =>
+      p.canVote
+        ? p.canReport ? `Kick vote, AFK vote or report ${p.name}` : `Kick vote or AFK vote for ${p.name}`
+        : `Report ${p.name}`,
+    whatToDoAbout: (p: { name: string }) => `What to do about ${p.name}`,
     drawing: "Drawing",
     gotIt: "Got it ·",
     afk: "AFK",
@@ -1450,8 +1430,7 @@ export const EN = {
     sendRequest: "Send a request",
     report: "Report",
     toAModerator: "To a moderator",
-    voteAfkOrKickOr: "Vote AFK or kick, or report",
-    reportThisPlayer: "Report this player",
+    choosing: "Choosing",
     undoVote: "Undo vote",
     vote: "Vote",
     voteKindAfk: "AFK",
@@ -1483,19 +1462,11 @@ export const EN = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "round", other: "rounds" })} · ${counted(p.players, { one: "player", other: "players" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} pts`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Rules: ${p.scoringMode} scoring${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (legacy version unknown)"
-      } · ${p.hintMode} hints · ${p.seconds} seconds · ${p.promptSource} prompts`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Rules: ${p.scoring} · ${p.hints} · ${p.seconds} seconds · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Report ${p.name}`,
     privateRoom: "private room",
-    thisGameDidNotFinishSo: "This game did not finish, so these are the scores as they stood\n              when it stopped rather than a final placing.",
+    thisGameEndedEarly: "This game ended early, so these are the scores as they stood when it stopped rather than a final placing.",
     loadingTurns: "Loading turns…",
     turnByTurn: "Turn by turn",
     round: "Round",
@@ -1514,7 +1485,8 @@ export const EN = {
     createAccount: "Create account",
     statistics: "Statistics",
     gameHistory: "Game history",
-    includeGamesThatFellApart: "Include games that fell apart",
+    includeAbandonedGames: "Include abandoned games",
+    winsAndScoresAppearAfterFirstGame: "Wins and scores appear after the first finished game.",
     notKept: "not kept",
     pinnedDrawings: "Pinned drawings",
     nothingPinnedYet: "Nothing pinned yet. Pin a drawing from a game's recap, or from a game in your history below.",
@@ -1528,13 +1500,20 @@ export const EN = {
     onlyThePlayersInThis: "Only the players in this game can see its turns.",
     couldNotLoadTheTurns: "Could not load the turns for this game.",
     cutShort: "cut short",
+    abandoned: "abandoned",
     noAttempt: "no attempt",
     joinedLate: "joined late",
-    notEligibleEligibilityReason:
-      (p: { eligibilityReason: string }) => `not eligible (${p.eligibilityReason})`,
+    notEligibleAfk: "not eligible (AFK)",
+    notEligibleDisconnected: "not eligible (disconnected)",
+    notEligible: "not eligible",
+    noGuessers: "no guessers",
+    promptSourceCurated: "Curated prompts",
+    promptSourceCustom: "Custom prompts",
+    promptSourceMixed: "Mixed prompts",
+    promptSourceBuiltinFallback: "Built-in fallback prompts",
     unknownPlayer: "Unknown player",
     backToLobby: "Back to lobby",
-    guestDisplayNameNotSaved: "Guest — display name not saved",
+    guest: "Guest",
     registeredPlayer: "Registered player",
     noFinishedGamesYetPlay: "No finished games yet. Play one and it will show up here.",
     noGamesToShowGames:
@@ -1551,21 +1530,17 @@ export const EN = {
 
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Report ${p.name}`,
-    couldNotSendReport: "Could not send the report.",
     reportsAreReviewedAfterSubmissionList: "Reports are reviewed after submission. The list stays available unless a moderator hides it.",
+    sentWithTheListAttached: "Sent, with a copy of the list as it reads now.",
     content: "Content",
     entireList: "Entire list",
     reason: "Reason",
-    whatShouldModeratorKnow: "What should the moderator know?",
-    cancel: "Cancel",
     inappropriateContent: "Inappropriate content",
     hatefulOrAbusiveContent: "Hateful or abusive content",
     sexualContent: "Sexual content",
     violence: "Violence",
     spam: "Spam",
     other: "Other",
-    sending: "Sending…",
-    sendReport: "Send report",
   },
 
   promptDisplay: {
@@ -1583,8 +1558,8 @@ export const EN = {
     pickSomethingDraw: "Pick something to draw",
     autoPicksWhenTimeRunsOut: "Auto-picks when time runs out.",
     hintSpendLimitReached: "Hint spend limit reached",
-    deductedFromYourScoreIfYou: "Deducted from your score if you guess the prompt",
-    buyLetterRevealsEveryMatch: "Buy a letter - reveals every match",
+    hintSpendComesOutOfTurnPoints: "Taken out of this turn's points if you guess the prompt.",
+    buyLetterRevealsEveryMatch: "Buy a letter — reveals every match",
     selectThePrompt: "select the prompt",
     choosing: "Choosing…",
     buyTheHint: "buy the hint",
@@ -1599,7 +1574,7 @@ export const EN = {
     noListsInLanguage: (p: { language: string }) =>
       `No prompt lists in ${p.language} yet — this room draws on its own custom prompts.`,
     howListPlays: (p: { name: string }) => `How ${p.name} prompts play`,
-    failedLoadPromptLists: "Failed to load prompt lists",
+    couldNotLoadPromptLists: "Could not load the prompt lists.",
     loadingCuratedPromptLists: "Loading curated prompt lists…",
     promptLists: "Prompt lists",
     namePromptCountPrompts:
@@ -1621,10 +1596,9 @@ export const EN = {
     scoring: "Scoring",
     hints: "Hints",
     findPrompt: "Find a prompt",
-    rollerCoaster: "roller coaster",
     loading: "Loading…",
     prompt: "Prompt",
-    howGoes: "How it goes",
+    howHard: "How hard",
     guessed: "Guessed",
     picked: "Picked",
     drawn: "Drawn",
@@ -1636,10 +1610,6 @@ export const EN = {
     defaultScoring: "Default scoring",
     pressureScoring: "Pressure scoring",
     allHintModes: "All hint modes",
-    noHints: "No hints",
-    checkpointHints: "Checkpoint hints",
-    purchasedHints: "Purchased hints",
-    letterWheel: "Letter wheel",
     backToLobby: "Back to lobby",
   },
 
@@ -1652,7 +1622,7 @@ export const EN = {
     drawingTime: "Drawing time",
     full: "Full",
     inProgress: "In progress",
-    looking: "Looking…",
+    loading: "Loading…",
     nobodySeatedYet: "Nobody is seated yet.",
     host: "Host",
     couldNotReadWhoIs: "Could not read who is in this room.",
@@ -1681,38 +1651,29 @@ export const EN = {
     nothingHappensYet: (p: { name: string }) =>
       `A moderator will see this. Nothing happens to ${p.name} right now, and they are not told who reported them.`,
     theirPicture: (p: { name: string }) => `${p.name}'s picture`,
-    thatReportCouldNotBeSent: "That report could not be sent. Please try again.",
     whatWrongWith: "What is wrong with it",
     reportedTheirNameTheyHaveNo: "Reported for their name. They have no picture to report.",
-    anythingElseOptional: "Anything else (optional)",
-    anythingModeratorShouldKnow: "Anything a moderator should know",
     sentWithWhatAboutAttached: "Sent, with what it is about attached.",
-    done: "Done",
     inappropriateName: "Inappropriate name",
     inappropriatePicture: "Inappropriate picture",
-    reportSent: "Report sent",
     reportDisplayName: (p: { displayName: string }) => `Report ${p.displayName}`,
     thePictureOnTheAccount: "The picture on the account is attached as it stands now.",
     theNameOnTheAccount: "The name on the account is attached as it stands now.",
-    sending: "Sending…",
-    sendReport: "Send report",
-    close: "Close",
-    cancel: "Cancel",
   },
-  reportDrawingDialog: {
-    report: "Report",
-    reportThisDrawing: "Report this drawing",
-    nothingHappensYet: "A moderator will look at the drawing. Nothing happens to the player until they do.",
-    anythingElseOptional: "Anything else? (optional)",
-    anythingModeratorShouldKnow: "Anything a moderator should know",
+  reportDialog: {
     sendReport: "Send report",
     sending: "Sending…",
     reportSent: "Report sent",
+    anythingElseOptional: "Anything else (optional)",
+    anythingModeratorShouldKnow: "Anything a moderator should know",
+    couldNotSend: "Could not send the report.",
+    charactersLeft: (p: { count: number }) =>
+      `${counted(p.count, { one: "character", other: "characters" })} left`,
+  },
+  reportDrawingDialog: {
+    reportThisDrawing: "Report this drawing",
+    nothingHappensYet: "A moderator will look at the drawing. Nothing happens to the player until they do.",
     sentWithTheDrawingAttached: "Sent, with the drawing attached.",
-    thatReportCouldNotBeSent: "That report could not be sent.",
-    done: "Done",
-    cancel: "Cancel",
-    close: "Close",
   },
 
   reportedDrawing: {
@@ -1724,37 +1685,25 @@ export const EN = {
   reportLobbyLineDialog: {
     nothingHappensYet: (p: { name: string }) =>
       `A moderator will see this line. Nothing happens to ${p.name} right now, and they are not told who reported them.`,
-    thatReportCouldNotBeSent: "That report could not be sent. Please try again.",
     whatWrongWith: "What is wrong with it",
-    anythingElseOptional: "Anything else (optional)",
-    anythingModeratorShouldKnow: "Anything a moderator should know",
     thisLineAttachedWithWhatLobby: "This line is attached, with what the lobby said around it.",
     sentWithLineWhatWasSaid: "Sent, with the line and what was said around it attached.",
-    done: "Done",
     harassmentOrAbuse: "Harassment or abuse",
     spam: "Spam",
     inappropriateName: "Inappropriate name",
-    reportSent: "Report sent",
     reportDisplayName: (p: { displayName: string }) => `Report ${p.displayName}`,
-    sending: "Sending…",
-    sendReport: "Send report",
-    close: "Close",
-    cancel: "Cancel",
   },
 
   reportPlayerDialog: {
-    reportCouldNotBeSent: "That report could not be sent.",
     recentMessages: (p: { count: number }) =>
       `${p.count} of their ${plural(p.count, { one: "recent message", other: "recent messages" })}`,
     nothingHappensYet: (p: { name: string }) =>
       `A moderator will see this. Nothing happens to ${p.name} right now, and they are not told who reported them.`,
     whatHappened: "What happened",
-    anythingElseOptional: "Anything else (optional)",
     whatTheySaidDrewWhen: "What they said or drew, and when",
     theirRecentMessagesThisRoomAre: "Their recent messages in this room are attached automatically,\n                with what was said around them, so this can be left empty.",
     includeTheirDrawing: "Include their drawing",
     canvasAsRightNowSoModerator: "The canvas as it is right now, so a moderator sees what\n                      you saw.",
-    done: "Done",
     sentWithTheirDrawingAnd:
       (p: { messages: string }) => `Sent, with their drawing and ${p.messages} attached.`,
     sentWithTheirDrawingAttached: "Sent, with their drawing attached.",
@@ -1771,11 +1720,6 @@ export const EN = {
     inappropriatePicture: "Inappropriate picture",
     sendThatReport: "send that report",
     reportNickname: (p: { nickname: string }) => `Report ${p.nickname}`,
-    reportSent: "Report sent",
-    sending: "Sending…",
-    sendReport: "Send report",
-    cancel: "Cancel",
-    close: "Close",
   },
 
   reportsReviewedNotice: {
@@ -1804,10 +1748,10 @@ export const EN = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "You have been signed out on every device so the change can take\n            effect. Sign in again to carry on.",
     setUpNow: "Set it up now",
-    later: "Later",
-    oneMoment: "One moment…",
+    notNow: "Not now",
+    oneMoment: "Please wait…",
     signInAgain: "Sign in again",
-    understood: "Understood",
+    understood: "OK",
   },
 
   roomChatPanel: {
@@ -1815,10 +1759,10 @@ export const EN = {
       `${counted(p.count, { one: "new message", other: "new messages" })}`,
     correctWithPlace: (p: { place: string | null }) =>
       p.place ? `Correct · ${p.place}` : "Correct",
-    couldNotSendMessage: "Could not send message",
+    couldNotSendMessage: "Could not send the message.",
     sent: "Sent:",
     send: "Send",
-    youReDrawingWatchGuessesCome: "You’re drawing—watch the guesses come in.",
+    youReDrawingWatchGuessesCome: "You're drawing — watch the guesses come in.",
     yourGuessTrimmedDidNot:
       (p: { trimmed: string }) => `Your guess "${p.trimmed}" did not reach the server. Send it again.`,
     sendTheMessage: "send the message",
@@ -1829,21 +1773,21 @@ export const EN = {
     roomChat: "Room chat",
     sayHelloBeforeTheGame: "Say hello before the game starts.",
     noMessagesYet: "No messages yet.",
-    typeYourGuess: "Type your guess...",
-    typeAMessage: "Type a message...",
+    typeYourGuess: "Type your guess…",
+    typeAMessage: "Type a message…",
   },
 
   roomEntryState: {
-    thisRoomNoLongerAvailable: "This room is no longer available",
-    couldNotJoinThisRoom: "Could not join this room",
+    thisRoomNoLongerAvailable: "This room is no longer available.",
+    couldNotJoinThisRoom: "Could not join this room.",
     thatNameIsReservedPlease: "That name is reserved. Please choose another.",
     thisRoomHasEndedAsk: "This room has ended. Ask the host for a new invite.",
     loadThisRoom: "load this room",
     enterANicknameToContinue: "Enter a nickname to continue.",
-    thePlayerSlotsJustFilled: "The player slots just filled up, but you can still spectate.",
+    theLastPlayerSeatWasTaken: "The last player seat was just taken, but you can still spectate.",
     joinAsASpectator: "join as a spectator",
     joinThisRoom: "join this room",
-    nicknameRule: "Use 3-16 characters: letters, numbers, hyphens or underscores. No spaces.",
+    nicknameRule: "Use 3–16 characters: letters, numbers, hyphens or underscores. No spaces.",
   },
 
   roomFacts: {
@@ -1858,17 +1802,17 @@ export const EN = {
   },
 
   roomMenuSheet: {
-    away: "Away",
+    afk: "AFK",
     startTheGameOver: "Start the game over",
     startOverCooldown: (p: { seconds: number }) => ` · in ${p.seconds}s`,
     room: "Room",
+    close: "Close",
     playersScores: "Players and scores",
     copyInviteLink: "Copy the invite link",
-    saveThisDrawing: "Save this drawing",
-    settings: "Settings",
-    leaveRoom: "Leave the room",
-    iMBack: "I’m back",
-    goAwayForABit: "Go away for a bit",
+    saveImage: "Save image",
+    leaveRoom: "Leave room",
+    backFromAfk: "Back from AFK",
+    goAfk: "Go AFK",
   },
 
   roomNoticeChips: {
@@ -1881,38 +1825,38 @@ export const EN = {
   },
 
   roomPlayersPanel: {
+    you: "(you)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "spectator", other: "spectators" }),
     spectatorsHeading: (p: { count: number }) => `Spectators (${p.count})`,
     playersOfCapacity: (p: { here: number; capacity: number }) =>
       `${p.here} of ${p.capacity} players`,
     readyCount: (p: { count: number }) => `${p.count} ready`,
-    couldNotJoinAsPlayer: "Could not join as a player",
+    couldNotJoinAsPlayer: "Could not join as a player.",
     finalStandings: "Final standings",
     players: "Players",
     joinAsAPlayer: "join as a player",
-    aPlayerSlotIsAvailable: "A player slot is available.",
-    playerSlotsAreCurrentlyFull: "Player slots are currently full.",
+    aPlayerSeatIsOpen: "A player seat is open.",
+    noPlayerSeatsOpen: "No player seats open.",
     joining: "Joining…",
     joinAsPlayer: "Join as player",
   },
 
   roomSettingsEditor: {
-    couldNotLoadRoomRules: "Could not load room rules",
-    roomRefusedThoseSettings: "The room refused those settings.",
-    hostSettings: "Host settings",
+    couldNotLoadRoomRules: "Could not load the room rules.",
+    roomRefusedThoseRules: "The room did not accept those rules.",
     editRoomRules: "Edit room rules",
-    loadingSettings: "Loading settings…",
+    loadingRoomRules: "Loading room rules…",
     cancel: "Cancel",
     loadRoomRules: "load room rules",
     saveRoomRules: "save room rules",
     saving: "Saving…",
-    saveSettings: "Save settings",
+    saveRules: "Save room rules",
     saved: "Saved",
   },
 
   roomSetupForm: {
-    language: "Language",
+    promptLanguage: "Prompt language",
     visibility: "Visibility",
     maxPlayers: "Max players",
     rounds: "Rounds",
@@ -1924,8 +1868,8 @@ export const EN = {
     scoring: "Scoring",
     hints: "Hints",
     spectatorsCanSeePrompt: "Spectators can see the prompt",
-    hideBlanks: "Hide blanks",
-    alsoTurnsHintsOffWithNo: "Also turns hints off: with no blanks there is nothing to reveal.",
+    hideLetterTiles: "Hide letter tiles",
+    alsoTurnsHintsOffWithNo: "Also turns hints off: with no tiles there is nothing to reveal.",
     promptTotal: (p: { count: number }) =>
       counted(p.count, { one: "prompt", other: "prompts" }),
     basics: "Basics",
@@ -1935,8 +1879,8 @@ export const EN = {
     prompts: "Prompts",
     drawing: "Drawing",
     scoringHints: "Scoring and hints",
-    hintsAreOffBecauseBlanksAre: "Hints are off because blanks are hidden.",
-    pointPurchaseHintModesRequireScoring: "Point-purchase hint modes require scoring.",
+    hintsAreOffBecauseTilesAreHidden: "Hints are off because letter tiles are hidden.",
+    buyLettersAndWheelNeedScoring: "Buy letters and Wheel of Fortune need scoring.",
     allColors: "All colors",
     noScoring: "No scoring",
     listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in.",
@@ -1950,7 +1894,6 @@ export const EN = {
     drawWhileYouWait: "Draw while you wait",
     canvasLabel: "Scratch pad. Only you can see what you draw here.",
     save: "Save",
-    close: "Close",
     backToTheRoom: "Back to the room",
   },
 
@@ -1958,19 +1901,18 @@ export const EN = {
     connectionLost: "Connection lost",
     serverUpdating: "Server updating",
     reconnectingSeatKept: "Reconnecting… Your seat is kept for a short while.",
-    youReDisconnected: "You’re disconnected. Sketchy will reconnect as soon as your connection is back.",
+    youReDisconnected: "You're disconnected. Sketchy will reconnect as soon as your connection is back.",
     serverIsUpdating: "The server is updating, so this game is ending.",
-    couldNotRejoin: "Couldn’t get back into this room",
-    couldNotRejoinDetail: "The connection is back, but the room didn’t take you back. Reload to try again, or head to the lobby.",
+    couldNotRejoin: "Could not get back into this room",
+    couldNotRejoinDetail: "The connection is back, but the room didn't take you back. Reload to try again, or head to the lobby.",
     gameEnded: "This game ended",
-    endedServerUpdate: "The server was updated, and the game in progress couldn’t carry on.",
+    endedServerUpdate: "The server was updated, and the game in progress could not carry on.",
     endedRoomClosed: "The room closed while you were disconnected.",
-    removedByVote: "Removed from the room",
+    kickedFromRoom: "Kicked from the room",
     backToLobby: "Back to lobby",
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "The rules",
     thisPage: "On this page",
     forExample: "For example",
@@ -1984,16 +1926,17 @@ export const EN = {
       `Used from a different browser on ${p.when}. Revoke this device if that was not you.`,
     couldNotLoadSignedDevices: "Could not load signed-in devices.",
     couldNotRevokeDevice: "Could not revoke device.",
-    couldNotLogOutEverywhere: "Could not log out everywhere.",
+    couldNotSignOutEverywhere: "Could not sign out everywhere.",
     signedDevices: "Signed-in devices",
     revokeAnyDeviceYouNoLonger: "Revoke any device you no longer recognize. Device names are coarse and do not store browser versions.\n          A device you stop using signs itself out after ninety days.",
     loadingDevices: "Loading devices…",
     currentDevice: "Current device",
-    close: "Close",
     revoking: "Revoking…",
     revoke: "Revoke",
-    loggingOut: "Logging out…",
-    logOutEverywhere: "Log out everywhere",
+    signingOut: "Signing out…",
+    signOutEverywhere: "Sign out everywhere",
+    logOutEverywhereTitle: "Sign out everywhere?",
+    logOutEverywhereBody: "Every device signed in to this account is signed out, this one included. You will need to sign in again here.",
   },
 
   avatarDoodles: {
@@ -2029,7 +1972,6 @@ export const EN = {
     intro: "Drawn in your name color, wherever your name appears.",
     wearing: "Wearing now",
     couldNotChoose: "Could not change the doodle.",
-    close: "Close",
   },
   settingsOverlay: {
     email: "Email",
@@ -2055,16 +1997,14 @@ export const EN = {
     theSizeTheBrushStartsEveryTurnAt: "The size the brush starts every turn at. Marked on the size slider.",
     brushCursorStyle: "Brush cursor style",
     soundEffects: "Sound effects",
-    chimesCorrectGuessStartRoundLast: "Chimes for a correct guess, the start of a round, the last ten seconds, and players coming and going.",
-    volume2: "Volume",
+    chimesCorrectGuessStartTurnLast: "Chimes for a correct guess, the start of a turn, the last ten seconds, and players coming and going.",
     confetti: "Confetti",
     burstWhenYouGuessRightAgain: "A burst when you guess right, and again for the winner at the end of a game.",
     clickKeyRebindEachActionCan: "Click a key to rebind it. Each action can hold two. Press Esc to cancel.",
-    theseAreTheirSettings: (p: { name: string }) => `These are ${p.name}’s settings now.`,
+    theseAreTheirSettings: (p: { name: string }) => `These are ${p.name}'s settings now.`,
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} lives in this browser only. An account keeps the name, your points and your history on every device, and lets you pick a color.`,
     systemThemeNow: (p: { theme: "dark" | "light" }) => `Now: ${p.theme}`,
-    needsAccount: "Needs an account",
     choosePicture: "Choose a picture",
     editPicture: "Edit picture",
     picture: "Picture",
@@ -2075,11 +2015,11 @@ export const EN = {
     couldNotRemovePicture: "Could not remove the picture.",
     couldNotChangeYourDisplayName: "Could not change your display name.",
     couldNotChangeYourDisplayName2: "Could not change your display name. Please try again.",
-    themeSoundShortcutsCameFromAccount: "The theme, sound and\n            shortcuts came from the account. What this browser had is untouched, and\n            comes back if you log out.",
+    themeSoundShortcutsCameFromAccount: "The theme, sound and\n            shortcuts came from the account. What this browser had is untouched, and\n            comes back if you sign out.",
     dismiss: "Dismiss",
     playingAsGuest: "Playing as a guest",
-    createAccount: "Create an account",
-    logIn: "Log in",
+    createAccount: "Create account",
+    logIn: "Sign in",
     you: "You",
     displayName: "Display name",
     cancel: "Cancel",
@@ -2103,7 +2043,6 @@ export const EN = {
     drawingTools: "Drawing tools",
     resetDefaults: "Reset to defaults",
     settings: "Settings",
-    close: "Close",
     closeSettings: "Close settings",
     settingsSections: "Settings sections",
     account: "Account",
@@ -2133,22 +2072,20 @@ export const EN = {
     showTheFullAddress: "Show the full address",
     hide: "Hide",
     showInFull: "Show in full",
-    verified: "Verified",
-    notVerified: "Not verified",
+    confirmed: "Confirmed",
+    notConfirmed: "Not confirmed",
     saving: "Saving…",
     save: "Save",
-    aGuestHasNothingTo: "A guest has nothing to recover: there is no password to forget.",
     withoutOneThereIsNo:
       "Without one there is no way back into this account if the password is forgotten.",
     addAnEmail: "Add an email",
-    guestsHaveNoPassword: "Guests have no password.",
     changingItSignsEveryOther: "Changing it signs every other device out.",
     setThisUpAndThe:
       (p: { pendingRole: string }) => `Set this up and the ${p.pendingRole} role you have been offered takes effect.`,
     anAuthenticatorAppSCode:
       "An authenticator app's code, on top of your password. Moderators and administrators must have one.",
     setUp: "Set up",
-    thisBrowserIsTheOnly: "This browser is the only place you exist.",
+    guestKeptInThisBrowser: "Your guest name, points and history are kept in this browser only.",
     everyBrowserStillHoldingA:
       "Every browser still holding a session, and a way to end any of them.",
     worksForAGuestToo: "Works for a guest too: the games you have played are yours.",
@@ -2159,7 +2096,7 @@ export const EN = {
     removesTheNameThePoints:
       "Removes the name, the points and the history kept against this browser.",
     gamesYouPlayedStayIn:
-      "Games you played stay in other players’ histories, without your name on them.",
+      "Games you played stay in other players' histories, without your name on them.",
     clickToRebindTheSecond: "Click to rebind the second key",
     clickToRebind: "Click to rebind",
     pressKey: "Press key…",
@@ -2168,7 +2105,6 @@ export const EN = {
   },
 
   stepUpDialog: {
-    codeFromYourAuthenticatorApp2: "Code from your authenticator app",
     passkeyNotUsed: "That passkey was not used. You can try again.",
     thatCodeWasNotAccepted: "That code was not accepted.",
     thatPasskeyWasNotAccepted: "That passkey was not accepted.",
@@ -2185,15 +2121,7 @@ export const EN = {
   },
 
   suspensionNotice: {
-    yourReportedDrawing: (p: { prompt: string }) =>
-      `Your drawing of ${p.prompt}, as it was reported`,
-    recordedAs: "Recorded as {category}",
     yourAccountSuspended: "Your account is suspended",
-    youWereAskedDraw: "You were asked to draw",
-    theMessageThisWasAbout: "The message this was about:",
-    theMessagesThisWasAbout: "The messages this was about:",
-    theDrawingThisWasAbout: "The drawing this was about:",
-    theDrawingsThisWasAbout: "The drawings this was about:",
     signingOut: "Signing out…",
     signOut: "Sign out",
   },
@@ -2206,12 +2134,12 @@ export const EN = {
   toolbar: {
     colorOption: (p: { color: string }) => `color ${p.color}`,
     adjustSize: (p: { tool: string }) => `Adjust ${p.tool} size`,
-    sizeSnappingSlider: (p: { tool: string }) => `${p.tool} size snapping slider`,
+    sizeSlider: (p: { tool: string }) => `${p.tool} size`,
     chooseToolCurrent: (p: { tool: string }) => `Choose tool, current: ${p.tool}`,
     chooseColorCurrent: (p: { color: string }) => `Choose color, current ${p.color}`,
     sizeWithWidth: (p: { tool: string; width: number }) => `${p.tool} size ${p.width}px`,
-    sizeShortcutHint: (p: { tool: string; width: number }) =>
-      `${p.tool} size: ${p.width}px ([ / ])`,
+    sizeShortcutHint: (p: { tool: string; width: number; keys: string }) =>
+      `${p.tool} size: ${p.width}px (${p.keys})`,
     widthReadout: (p: { width: number }) => `${p.width}px`,
     defaultSize: "Default",
     backToDefaultSize: (p: { width: number }) => `Default size, ${p.width}px`,
@@ -2219,13 +2147,13 @@ export const EN = {
     drawingTools: "Drawing tools",
     chooseTool: "Choose tool",
     chooseColor: "Choose color",
-    undoLastStroke: "Undo last stroke",
+    ctrlKey: "Ctrl",
     undo: "Undo",
     clearCanvas: "Clear canvas",
     chooseCustomColor: "Choose custom color",
     colorPalette: "Color palette",
     canvasActions: "Canvas actions",
-    undoLastStrokeCtrlZ: "Undo last stroke (Ctrl+Z)",
+    undoWithShortcut: (p: { keys: string }) => `Undo last stroke (${p.keys})`,
     clear: "Clear",
     brush: "Brush",
     fill: "Fill",
@@ -2271,19 +2199,15 @@ export const EN = {
         p.confirmAuthenticator
           ? "Before this account can be given a moderator or administrator role, confirm that the authenticator is yours with your password and a code from it."
           : null,
-        "Each of the changes below swaps a credential, so each asks for your password.",
+        "Each change below asks for your password.",
       ]
         .filter(Boolean)
         .join(" "),
-    confirmAuthenticatorFirst:
-      "Before this account can be given a moderator or administrator role, confirm that the authenticator is yours with your password and a code from it.",
     copied: (p: { what: string }) => `${p.what} copied.`,
     couldNotCopy: (p: { what: string }) =>
-      `Couldn't copy the ${p.what}. Select it and copy by hand.`,
+      `Could not copy the ${p.what}. Select it and copy by hand.`,
     roleTaken: (p: { role: "admin" | "moderator" }) =>
       `You are now ${p.role === "admin" ? "an administrator" : "a moderator"}. Two-factor authentication is on, and the role that was waiting for it has taken effect. Your other devices have been signed out; this one carries on, and each sign-in from here asks for a code.`,
-    recoveryCodesLeft: (p: { count: number }) =>
-      `You have ${counted(p.count, { one: "recovery code", other: "recovery codes" })} left.`,
     couldNotReadYourSecuritySettings: "Could not read your security settings.",
     yourPasswordConfirmsAuthenticatorYours: "Your password confirms the authenticator is yours.",
     yourPasswordConfirmsThisPasskeyYours: "Your password confirms this passkey is yours.",
@@ -2293,12 +2217,12 @@ export const EN = {
     confirmedThisAccountCanNowBe: "Confirmed. This account can now be given a staff role.",
     twoFactorAuthentication: "Two-factor authentication",
     saveTheseRecoveryCodesNow: "Save these recovery codes now.",
-    eachOneSignsYouOnceIf: "Each one signs you\n              in once if you lose your authenticator app. They are not shown\n              again — only their hashes are kept.",
+    eachOneSignsYouOnceIf: "Each one signs you in once if you lose your authenticator app. They are not shown again.",
     recoveryCodes: "Recovery codes",
     downloadAsFile: "Download as a file",
     copyAll: "Copy all",
     iHaveSavedTheseSomewhereSafe: "I have saved these somewhere safe",
-    done: "Done",
+    done: "OK",
     moderatorsAdministratorsSignWithPasskeyYour: "Moderators and administrators sign in with a passkey: your\n              device confirms it is you — a fingerprint, your face, or its\n              PIN — and nothing is typed that could be given away.",
     yourPassword: "Your password",
     confirmsPasskeyBeingAddedByYou: "Confirms the passkey is being added by you.",
@@ -2308,19 +2232,18 @@ export const EN = {
     pointYourAppAtThis: "Point your app at this.",
     setupKey: "Setup key",
     copySetupKey: "Copy the setup key",
-    useThisIfYouCanT: "Use this if you can’t scan.",
+    useThisIfYouCanT: "Use this if you can't scan.",
     confirmsAuthenticatorYours: "Confirms the authenticator is yours.",
     codeFromYourApp: "Code from your app",
     cancel: "Cancel",
     passkeys: "Passkeys",
     thisDeviceOnly: "· on this device only",
     remove: "Remove",
-    confirmSYours: "Confirm it’s yours",
+    confirmSYours: "Confirm it's yours",
     addPasskey: "Add a passkey",
     newRecoveryCodes: "New recovery codes",
     turnOff: "Turn off",
     addAuthenticatorApp: "Add an authenticator app",
-    close: "Close",
     couldNotStartSettingThis: "Could not start setting this up.",
     thatCodeWasNotAccepted: "That code was not accepted.",
     couldNotAddThatPasskey: "Could not add that passkey.",
@@ -2347,26 +2270,28 @@ export const EN = {
       `${p.name} and ${counted(p.others, { one: "other", other: "others" })} want to be friends.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
+  roomVisibilityIcon: {
+    publicRoom: "Public room",
+    privateRoom: "Private room",
   },
 
   waitingRoomPanel: {
     editRoomRules: "Edit room rules",
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "round", other: "rounds" }),
+    editRules: "Edit rules",
+    doodle: "Doodle",
     needMorePlayers: (p: { count: number }) =>
       `Need ${counted(p.count, { one: "more player", other: "more players" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} will start the rematch" : "{host} will start the game",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Waiting for {host} to start the rematch" : "Waiting for {host} to start",
     copied: (p: { what: string }) => `${p.what} copied.`,
     couldNotCopy: (p: { what: string }) =>
-      `Couldn’t copy the ${p.what}. Copy it from the address bar.`,
+      `Could not copy the ${p.what}. Copy it from the address bar.`,
     roomCodeLabel: (p: { code: string }) => `Room code ${p.code}`,
     rosterCount: (p: { here: number; capacity: number }) => `${p.here} of ${p.capacity}`,
     inviteYourFriends: "Invite your friends",
     shareLink: "Share the link",
     copyCode: "Copy code",
+    copyLink: "Copy link",
     inTheRoom: "In the room",
     you: "(you)",
     host: "Host",
@@ -2375,13 +2300,9 @@ export const EN = {
     viewHighlights: "View highlights",
     viewDrawings: "View drawings",
     spectatorsAfkAndDisconnectedPlayers:
-      "Spectators, AFK, and disconnected players do not count towards the two active players a game needs.",
+      "Spectators, AFK, and disconnected players do not count toward the two active players a game needs.",
     joinMySketchyRoomCode: (p: { code: string }) => `Join my Sketchy room: ${p.code}`,
     inviteLink: "Invite link",
-    publicRoom: "Public room",
-    privateRoom: "Private room",
-    betweenGames: "between games",
-    waitingForPlayers: "waiting for players",
     roomCode: "Room code",
     starting: "Starting…",
     rematch: "Rematch",
@@ -2389,28 +2310,31 @@ export const EN = {
     waitingForAHost: "Waiting for a host",
   },
 
-  warningNotice: {
+  /** What a warning and a suspension both show about the report behind them. */
+  moderationNotice: {
     yourReportedDrawing: (p: { prompt: string }) =>
       `Your drawing of ${p.prompt}, as it was reported`,
     recordedAs: "Recorded as {category}",
-    whatAWarningMeans:
-      "A report about your behaviour was reviewed, and this is the outcome. Nothing is restricted, but a further report may lead to your account being suspended.",
     youWereAskedDraw: "You were asked to draw",
-    yourPictureWasRemoved: "Your picture was removed",
-    aModeratorWarning: "A moderator warning",
-    aReportAboutYourPicture:
-      "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected.",
     theMessageThisWasAbout: "The message this was about:",
     theMessagesThisWasAbout: "The messages this was about:",
     theDrawingThisWasAbout: "The drawing this was about:",
     theDrawingsThisWasAbout: "The drawings this was about:",
-    oneMoment: "One moment…",
-    understood: "Understood",
+  },
+  warningNotice: {
+    whatAWarningMeans:
+      "A report about your behavior was reviewed, and this is the outcome. Nothing is restricted, but a further report may lead to your account being suspended.",
+    yourPictureWasRemoved: "Your picture was removed",
+    aModeratorWarning: "A moderator warning",
+    aReportAboutYourPicture:
+      "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected.",
+    oneMoment: "Please wait…",
+    understood: "OK",
   },
   connectionStatusBanner: {
     youReDisconnectedCheckYour:
-      "You’re disconnected. Check your connection; Sketchy will reconnect automatically.",
-    couldnTReconnectToYour: "Couldn’t reconnect to your room. Reload the page to try again.",
+      "You're disconnected. Check your connection; Sketchy will reconnect automatically.",
+    couldNotReconnect: "Could not reconnect to your room. Reload the page to try again.",
     connectionLostReconnecting: "Connection lost — reconnecting…",
   },
   accountData: {
@@ -2420,7 +2344,7 @@ export const EN = {
     tooLargeToPrepareHere: "Too large to prepare here",
     couldNotPrepare: "Could not prepare",
     yourDataIsLargerThan:
-      "Your data is larger than this server prepares in one document. Ask the operator to raise the limit.",
+      "Your data is too large for this server to prepare in one file. Ask an administrator for help.",
     somethingWentWrongWhilePreparing:
       "Something went wrong while preparing it. You can request another export.",
   },
@@ -2460,13 +2384,17 @@ export const EN = {
       `None of these ${p.unrated} prompts has faced ${p.guessers} guessers yet, so none of them is ranked. Play some games and their difficulty will show up here.`,
     someRanked: (p: { rated: number; unrated: number; guessers: number }) =>
       `${p.rated} ranked. ${p.unrated} more ${plural(p.unrated, { one: "prompt is", other: "prompts are" })} unranked: fewer than ${p.guessers} guessers have seen them.`,
-    noMatch: (p: { query: string }) => `No prompt matches “${p.query}”.`,
+    noMatch: (p: { query: string }) => `No prompt matches "${p.query}".`,
     matching: (p: { count: number; query: string }) =>
-      `${counted(p.count, { one: "prompt", other: "prompts" })} matching “${p.query}”.`,
+      `${counted(p.count, { one: "prompt", other: "prompts" })} matching "${p.query}".`,
   },
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds:
       (p: { roundNumber: number; totalRounds: number }) => `Round ${p.roundNumber} of ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Round ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "The next player",
@@ -2504,12 +2432,12 @@ export const EN = {
     timedHints: "Timed hints",
     lettersRevealToEveryoneAt: "Letters reveal to everyone at fixed times.",
     noHints: "No hints",
-    blanksOnlyAllTurnLong: "Blanks only, all turn long.",
+    emptyTilesAllTurnLong: "Empty letter tiles, all turn long.",
     buyLetters: "Buy letters",
     revealALetterSlotJust: "Reveal a letter slot just for you — paid from that turn's points.",
     wheelOfFortune: "Wheel of Fortune",
     pickALetterPayIts: "Pick a letter, pay its price — vowels cost extra.",
-    hiddenPrompt: "Hidden prompt",
+    letterTilesHidden: "Letter tiles hidden",
     defaultScoring: "Default scoring",
     pressureScoring: "Pressure scoring",
   },
@@ -2534,8 +2462,6 @@ export const EN = {
   lobbyPresence: {
     showingShownOfOnlineCount:
       (p: { shown: number; onlineCount: number }) => `Showing ${p.shown} of ${p.onlineCount}`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Choose a name to play under.",
@@ -2548,10 +2474,10 @@ export const EN = {
     nicknameJoinedTheRoom: (p: { nickname: string }) => `${p.nickname} joined the room`,
     gameStarted: "Game started!",
     drawerNicknameIsChoosingAPrompt:
-      (p: { drawerNickname: string }) => `${p.drawerNickname} is choosing a prompt...`,
+      (p: { drawerNickname: string }) => `${p.drawerNickname} is choosing a prompt…`,
     thePromptWasPrompt: (p: { prompt: string }) => `The prompt was "${p.prompt}"`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} got it${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} got it · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} reconnected`,
     playerDisconnected: (p: { nickname: string }) =>
@@ -2589,7 +2515,7 @@ export const EN = {
     colorblindSafe: "Colorblind-safe",
     colorsThatStayApartFor: "Colors that stay apart for colorblind players.",
     blackAndWhite: "Black and white",
-    blackAndWhiteOnly: "Black and white only.",
+    twoSwatchesNoCustomColors: "Just two swatches; no custom colors.",
     allTools: "All tools",
     onlyTool: (p: { tool: string }) =>
       `${p.tool} only`,
@@ -2619,7 +2545,7 @@ export const EN = {
     majorHardToPlayAround: "Major — hard to play around",
     minorWorthFixingOneDay: "Minor — worth fixing one day",
     notInARoom: "Not in a room",
-    codeNotInARound: (p: { code: string }) => `${p.code} · not in a round`,
+    codeNotInAGame: (p: { code: string }) => `${p.code} · not in a game`,
     codeRoundRoundOfTotal:
       (p: { code: string; round: number; total: number }) => `${p.code} · round ${p.round} of ${p.total}`,
   },
@@ -2636,6 +2562,7 @@ export const EN = {
   },
   passwordPolicy: {
     tooShort: (p: { count: number }) => `A password needs at least ${p.count} characters.`,
+    rule: (p: { count: number }) => `At least ${p.count} characters.`,
   },
   operatorAccess: {
     administrator: "administrator",
@@ -2661,7 +2588,7 @@ export const EN = {
   roomNotices: {
     kickedByVote: "You were kicked from the room by vote.",
     roomClosed: "An administrator closed this room.",
-    removedByAdmin: "An administrator removed you.",
+    kickedByAdmin: "An administrator kicked you from the room.",
     accountDeleted: "Your account was deleted.",
     accountSuspended: "Your account was suspended.",
     signedOut: "You were signed out on this device.",

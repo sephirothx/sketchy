@@ -1,6 +1,7 @@
 import { useRef, useState } from "react";
 import type { ReactNode, RefObject, TouchEvent } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useBackCloses } from "../../hooks/useRoomHistory";
 import { XIcon } from "../icons";
 
 interface BottomSheetProps {
@@ -18,8 +19,9 @@ interface BottomSheetProps {
   /** Sheet actions, pinned below the scrolling body. */
   footer?: ReactNode;
   testId?: string;
-  /** Accessible name for the close control; defaults to "Close". */
-  closeLabel?: string;
+  /** Accessible name for the close control, from the caller's catalogue
+      group - required, so no sheet falls back to an English "Close". */
+  closeLabel: string;
   /** Replaces the ✕ in the header — the grab handle still dismisses. */
   headerAction?: ReactNode;
   children: ReactNode;
@@ -47,7 +49,7 @@ export function BottomSheet({
   initialFocusRef,
   footer,
   testId,
-  closeLabel = "Close",
+  closeLabel,
   headerAction,
   children,
 }: BottomSheetProps) {
@@ -70,6 +72,9 @@ export function BottomSheet({
     onEscape: onDismiss,
     initialFocusRef: initialFocusRef ?? (headerAction ? grabRef : closeRef),
   });
+  // In a room, Back closes the sheet as Escape does - on a phone it is the
+  // gesture people reach for first (R-UX-15).
+  useBackCloses(true, onDismiss);
 
   // The handle is the thing a thumb reaches for, so it both takes a tap and
   // follows a downward drag. Anything that reads as a vertical scroll rather

@@ -1,6 +1,6 @@
 import { useEffect, useId, useRef, useState } from "react";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import { STEP_UP_ABANDONED, useStepUp } from "../hooks/useStepUp";
 import {
   MAX_EMAIL_LENGTH,
@@ -25,9 +25,10 @@ export function AddEmailDialog({
   onClose: () => void;
   onSaved: (address: string) => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const inputRef = useRef<HTMLInputElement | null>(null);
-  const titleId = useId();
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const state = useEmailStateStore((store) => store.state);
   const refresh = useEmailStateStore((store) => store.refresh);
   const [email, setEmail] = useState("");
@@ -38,14 +39,18 @@ export function AddEmailDialog({
   const [sentTo, setSentTo] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: inputRef });
-
   // Read afresh on opening, so what is already on the account is current.
   // A failed read is not worth an error of its own: the form below still
   // works, it just cannot say what is already there.
   useEffect(() => {
     void refresh();
   }, [refresh]);
+
+  // The form goes once it has worked, and focus with it; Done is where it
+  // lands rather than on the page behind.
+  useEffect(() => {
+    if (sentTo) doneRef.current?.focus();
+  }, [sentTo]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -78,53 +83,56 @@ export function AddEmailDialog({
   const replacing = Boolean(state?.verified);
 
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">
-          {sentTo
+    <>
+      <ModalShell
+        title={
+          sentTo
             ? ui.addEmailDialog.checkYourInbox
             : replacing
               ? ui.addEmailDialog.changeYourEmailAddress
-              : ui.addEmailDialog.addAnEmailAddress}
-        </h3>
-
-        {sentTo ? (
-          <>
-            <p className="modal-body">
-              {ui.addEmailDialog.followTheLink({ address: sentTo, replacing })}
-            </p>
+              : ui.addEmailDialog.addAnEmailAddress
+        }
+        onDismiss={onClose}
+        initialFocusRef={inputRef}
+        footer={
+          sentTo ? (
             <button
+              ref={doneRef}
               type="button"
-              className="modal-button"
+              className="btn btn-primary"
               onClick={() => onSaved(sentTo)}
             >
               {ui.addEmailDialog.done}
             </button>
-          </>
+          ) : (
+            <>
+              {/* A deferral: the reminder that opens this comes back. */}
+              <button type="button" className="btn btn-secondary" onClick={onClose}>
+                {ui.addEmailDialog.notNow}
+              </button>
+              <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>
+                {busy ? ui.addEmailDialog.pleaseWait : ui.addEmailDialog.sendConfirmation}
+              </button>
+            </>
+          )
+        }
+      >
+        {sentTo ? (
+          <p className="modal-body">
+            {ui.addEmailDialog.followTheLink({ address: sentTo, replacing })}
+          </p>
         ) : (
           <>
             {state && <p className="modal-body">{recoveryStatusMessage(state)}</p>}
             <p className="modal-body">
               {ui.addEmailDialog.usedOnlyResetYourPasswordTell}
             </p>
-            <form onSubmit={submit} className="auth-form">
-              <label htmlFor={`${titleId}-email`}>
+            <form id={formId} onSubmit={submit} className="auth-form">
+              <label htmlFor={`${fieldId}-email`}>
                 {replacing ? ui.addEmailDialog.newEmail : ui.addEmailDialog.email}
               </label>
               <input
-                id={`${titleId}-email`}
+                id={`${fieldId}-email`}
                 ref={inputRef}
                 type="email"
                 value={email}
@@ -139,9 +147,9 @@ export function AddEmailDialog({
                 spellCheck={false}
                 required
               />
-              <label htmlFor={`${titleId}-password`}>{ui.addEmailDialog.yourPassword}</label>
+              <label htmlFor={`${fieldId}-password`}>{ui.addEmailDialog.yourPassword}</label>
               <input
-                id={`${titleId}-password`}
+                id={`${fieldId}-password`}
                 type="password"
                 value={password}
                 onChange={(event) => {
@@ -157,18 +165,11 @@ export function AddEmailDialog({
                   {error}
                 </p>
               )}
-              <button type="submit" className="modal-button" disabled={busy}>
-                {busy ? ui.addEmailDialog.pleaseWait : ui.addEmailDialog.sendConfirmation}
-              </button>
             </form>
           </>
         )}
-
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sentTo ? ui.addEmailDialog.close : ui.addEmailDialog.notNow}
-        </button>
-      </div>
+      </ModalShell>
       {stepUpDialog}
-    </div>
+    </>
   );
 }

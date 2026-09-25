@@ -37,7 +37,7 @@ test("one payload is all the server sends: the words are entirely the client's",
   assert.equal(payload.text, undefined);
   assert.equal(
     announcementText(payload),
-    "The restart was cancelled because a server update is in progress.",
+    "The restart was canceled because a server update is in progress.",
   );
   // Rendering the same payload again yields the same sentence - it holds no
   // per-reader state of its own.
@@ -47,7 +47,7 @@ test("one payload is all the server sends: the words are entirely the client's",
 test("a cancel reason the client has not heard of still reads as a sentence", () => {
   assert.equal(
     announcementText(line("restart_cancelled", { reason: "invented_later" })),
-    "The restart was cancelled because it could no longer go ahead.",
+    "The restart was canceled because it could no longer go ahead.",
   );
 });
 

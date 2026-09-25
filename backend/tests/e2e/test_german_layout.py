@@ -17,7 +17,7 @@ breakpoint where the room layout changes, and a laptop.
 from __future__ import annotations
 
 import pytest
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import use_guest_name
 
@@ -82,6 +82,62 @@ async def test_german_does_not_push_any_screen_sideways(viewport):
             await page.goto(f"{BASE_URL}/create")
             await page.wait_for_selector(".create-room-page")
             assert await _overflow(page) == 0, "room setup scrolls sideways in German"
+        finally:
+            await context.close()
+            await browser.close()
+
+
+# Every word of the room's fact values, and how many lines each is laid over:
+# a word on two lines is a word broken inside itself ("Zeitgesteu|erte").
+# Values only: they are the text allowed to wrap (overflow-wrap), and the
+# labels under them never break inside a word.
+_BROKEN_FACT_WORDS = """() => {
+  const broken = [];
+  for (const el of document.querySelectorAll('.room-fact-text')) {
+    const node = el.firstChild;
+    if (!node) continue;
+    let at = 0;
+    for (const part of node.textContent.split(/(\\s+)/)) {
+      if (part.trim()) {
+        const range = document.createRange();
+        range.setStart(node, at);
+        range.setEnd(node, at + part.length);
+        if (range.getClientRects().length > 1) broken.push(part);
+      }
+      at += part.length;
+    }
+  }
+  return broken;
+}"""
+
+
+async def test_german_room_facts_keep_their_words_whole_on_a_phone():
+    """The waiting room's six facts on a 390px phone, in German (R-UX-11).
+
+    Three to a row broke "Zeitgesteuerte" (the default hints, "Timed") inside
+    itself; RoomFacts measures the widest word and takes two to a row instead.
+    English keeps three at this width, so the answer is the language's - which
+    is why it is asked here.
+    """
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 390, "height": 844})
+        await context.add_init_script("localStorage.setItem('sketchy_locale', 'de')")
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "LangeFakten390")
+            await page.goto(f"{BASE_URL}/create")
+            await page.wait_for_selector(".create-room-page")
+            await page.click(".create-room-submit")
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            facts = page.get_by_test_id("waiting-facts")
+            await expect(facts).to_have_attribute("data-columns", "2")
+            # After the fonts: the count is measured again once they load.
+            await page.evaluate("document.fonts.ready")
+            await expect(facts).to_have_attribute("data-columns", "2")
+            assert await page.evaluate(_BROKEN_FACT_WORDS) == [], "a room fact's value breaks inside a word"
         finally:
             await context.close()
             await browser.close()

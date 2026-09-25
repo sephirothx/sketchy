@@ -145,7 +145,7 @@ function FullPromptTooltip({ activePrompt }: { activePrompt: ActivePrompt }) {
   return createPortal(
     <div
       id={FULL_PROMPT_TOOLTIP_ID}
-      className="custom-prompt-full-text-tooltip"
+      className="tooltip custom-prompt-full-text-tooltip"
       role="tooltip"
       style={{
         left: position.left,
