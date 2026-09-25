@@ -1241,9 +1241,6 @@ export const NL: Catalogue = {
     couldNotChangeTheStar: "De ster kon niet gewijzigd worden.",
     copiedToYourLists: "Gekopieerd naar de eigen woordenlijsten.",
     couldNotCopyThatList: "Deze lijst kon niet gekopieerd worden.",
-    reportSent: "Melding verzonden.",
-    // The count is part of the name: a screen reader hears one control, so it
-    // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
       p.starred ? `Je ster weghalen (${counted(p.count, { one: "ster", other: "sterren" })})` : `Een ster geven (${counted(p.count, { one: "ster", other: "sterren" })})`,
     chooseAList: "Kies een lijst om te zien wat erin staat",
@@ -1540,21 +1537,17 @@ export const NL: Catalogue = {
 
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `${p.name} melden`,
-    couldNotSendReport: "De melding kon niet verstuurd worden.",
     reportsAreReviewedAfterSubmissionList: "Meldingen worden na het versturen bekeken. De lijst blijft beschikbaar tenzij een moderator hem verbergt.",
+    sentWithWhatItSaysAttached: "Verstuurd, met de inhoud zoals die nu is erbij.",
     content: "Inhoud",
     entireList: "Hele lijst",
     reason: "Reden",
-    whatShouldModeratorKnow: "Wat moet de moderator weten?",
-    cancel: "Annuleren",
     inappropriateContent: "Ongepaste inhoud",
     hatefulOrAbusiveContent: "Haatdragende of kwetsende inhoud",
     sexualContent: "Seksuele inhoud",
     violence: "Geweld",
     spam: "Spam",
     other: "Anders",
-    sending: "Versturen…",
-    sendReport: "Melding versturen",
   },
 
   promptDisplay: {
@@ -1672,37 +1665,30 @@ export const NL: Catalogue = {
     nothingHappensYet: (p: { name: string }) =>
       `Een moderator ziet dit. Er gebeurt nu niets met ${p.name}, en er wordt niet verteld wie het meldde.`,
     theirPicture: (p: { name: string }) => `afbeelding van ${p.name}`,
-    thatReportCouldNotBeSent: "Deze melding kon niet verstuurd worden. Probeer het nog eens.",
     whatWrongWith: "Wat er mis mee is",
     reportedTheirNameTheyHaveNo: "Gemeld om de naam. Er is geen afbeelding om te melden.",
-    anythingElseOptional: "Nog iets (optioneel)",
-    anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
     sentWithWhatAboutAttached: "Verstuurd, met het onderwerp erbij.",
-    done: "Klaar",
     inappropriateName: "Ongepaste naam",
     inappropriatePicture: "Ongepaste afbeelding",
-    reportSent: "Melding verstuurd",
     reportDisplayName: (p: { displayName: string }) =>
       `${p.displayName} melden`,
     thePictureOnTheAccount: "De afbeelding van het account wordt bijgevoegd zoals die nu is.",
     theNameOnTheAccount: "De naam van het account wordt bijgevoegd zoals die nu is.",
-    sending: "Versturen…",
-    sendReport: "Melding versturen",
-    cancel: "Annuleren",
   },
-  reportDrawingDialog: {
-    report: "Melden",
-    reportThisDrawing: "Deze tekening melden",
-    nothingHappensYet: "Een moderator bekijkt de tekening. Tot die tijd gebeurt er niets met de speler.",
-    anythingElseOptional: "Nog iets? (optioneel)",
-    anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
+  reportDialog: {
     sendReport: "Melding versturen",
     sending: "Versturen…",
     reportSent: "Melding verstuurd",
+    anythingElseOptional: "Nog iets (optioneel)",
+    anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
+    couldNotSend: "De melding kon niet verstuurd worden.",
+    charactersLeft: (p: { count: number }) =>
+      `Nog ${counted(p.count, { one: "teken", other: "tekens" })}`,
+  },
+  reportDrawingDialog: {
+    reportThisDrawing: "Deze tekening melden",
+    nothingHappensYet: "Een moderator bekijkt de tekening. Tot die tijd gebeurt er niets met de speler.",
     sentWithTheDrawingAttached: "Verstuurd, met de tekening erbij.",
-    thatReportCouldNotBeSent: "Deze melding kon niet verstuurd worden.",
-    done: "Klaar",
-    cancel: "Annuleren",
   },
 
   reportedDrawing: {
@@ -1714,37 +1700,26 @@ export const NL: Catalogue = {
   reportLobbyLineDialog: {
     nothingHappensYet: (p: { name: string }) =>
       `Een moderator ziet deze regel. Er gebeurt nu niets met ${p.name}, en er wordt niet verteld wie het meldde.`,
-    thatReportCouldNotBeSent: "Deze melding kon niet verstuurd worden. Probeer het nog eens.",
     whatWrongWith: "Wat er mis mee is",
-    anythingElseOptional: "Nog iets (optioneel)",
-    anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
     thisLineAttachedWithWhatLobby: "Deze regel zit erbij, met wat de lobby eromheen zei.",
     sentWithLineWhatWasSaid: "Verstuurd, met de regel en wat eromheen gezegd is.",
-    done: "Klaar",
     harassmentOrAbuse: "Intimidatie of misbruik",
     spam: "Spam",
     inappropriateName: "Ongepaste naam",
-    reportSent: "Melding verstuurd",
     reportDisplayName: (p: { displayName: string }) =>
       `${p.displayName} melden`,
-    sending: "Versturen…",
-    sendReport: "Melding versturen",
-    cancel: "Annuleren",
   },
 
   reportPlayerDialog: {
-    reportCouldNotBeSent: "Deze melding kon niet verstuurd worden.",
     recentMessages: (p: { count: number }) =>
       `${p.count} van hun ${plural(p.count, { one: "recente bericht", other: "recente berichten" })}`,
     nothingHappensYet: (p: { name: string }) =>
       `Een moderator ziet dit. Er gebeurt nu niets met ${p.name}, en er wordt niet verteld wie het meldde.`,
     whatHappened: "Wat er gebeurde",
-    anythingElseOptional: "Nog iets (optioneel)",
     whatTheySaidDrewWhen: "Wat ze zeiden of tekenden, en wanneer",
     theirRecentMessagesThisRoomAre: "Hun recente berichten in deze kamer gaan er automatisch bij,\n                met wat eromheen gezegd is, dus dit mag leeg blijven.",
     includeTheirDrawing: "Hun tekening meesturen",
     canvasAsRightNowSoModerator: "Het canvas zoals het nu is, zodat een moderator ziet wat\n                      jij zag.",
-    done: "Klaar",
     sentWithTheirDrawingAnd: (p: { messages: string }) =>
       `Verstuurd, met hun tekening en ${p.messages} bijgevoegd.`,
     sentWithTheirDrawingAttached: "Verstuurd, met hun tekening bijgevoegd.",
@@ -1762,10 +1737,6 @@ export const NL: Catalogue = {
     sendThatReport: "die melding versturen",
     reportNickname: (p: { nickname: string }) =>
       `${p.nickname} melden`,
-    reportSent: "Melding verstuurd",
-    sending: "Versturen…",
-    sendReport: "Melding versturen",
-    cancel: "Annuleren",
   },
 
   reportsReviewedNotice: {

@@ -1254,9 +1254,6 @@ export const EN = {
     couldNotChangeTheStar: "Could not change your star.",
     copiedToYourLists: "Copied to your prompt lists.",
     couldNotCopyThatList: "Could not copy that list.",
-    reportSent: "Report sent.",
-    // The count is part of the name: a screen reader hears one control, so it
-    // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
       p.starred ? `Remove your star (${counted(p.count, { one: "star", other: "stars" })})` : `Star this list (${counted(p.count, { one: "star", other: "stars" })})`,
     chooseAList: "Choose a list to see what is in it",
@@ -1551,21 +1548,17 @@ export const EN = {
 
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Report ${p.name}`,
-    couldNotSendReport: "Could not send the report.",
     reportsAreReviewedAfterSubmissionList: "Reports are reviewed after submission. The list stays available unless a moderator hides it.",
+    sentWithWhatItSaysAttached: "Sent, with what it says right now attached.",
     content: "Content",
     entireList: "Entire list",
     reason: "Reason",
-    whatShouldModeratorKnow: "What should the moderator know?",
-    cancel: "Cancel",
     inappropriateContent: "Inappropriate content",
     hatefulOrAbusiveContent: "Hateful or abusive content",
     sexualContent: "Sexual content",
     violence: "Violence",
     spam: "Spam",
     other: "Other",
-    sending: "Sending…",
-    sendReport: "Send report",
   },
 
   promptDisplay: {
@@ -1681,36 +1674,29 @@ export const EN = {
     nothingHappensYet: (p: { name: string }) =>
       `A moderator will see this. Nothing happens to ${p.name} right now, and they are not told who reported them.`,
     theirPicture: (p: { name: string }) => `${p.name}'s picture`,
-    thatReportCouldNotBeSent: "That report could not be sent. Please try again.",
     whatWrongWith: "What is wrong with it",
     reportedTheirNameTheyHaveNo: "Reported for their name. They have no picture to report.",
-    anythingElseOptional: "Anything else (optional)",
-    anythingModeratorShouldKnow: "Anything a moderator should know",
     sentWithWhatAboutAttached: "Sent, with what it is about attached.",
-    done: "Done",
     inappropriateName: "Inappropriate name",
     inappropriatePicture: "Inappropriate picture",
-    reportSent: "Report sent",
     reportDisplayName: (p: { displayName: string }) => `Report ${p.displayName}`,
     thePictureOnTheAccount: "The picture on the account is attached as it stands now.",
     theNameOnTheAccount: "The name on the account is attached as it stands now.",
-    sending: "Sending…",
-    sendReport: "Send report",
-    cancel: "Cancel",
   },
-  reportDrawingDialog: {
-    report: "Report",
-    reportThisDrawing: "Report this drawing",
-    nothingHappensYet: "A moderator will look at the drawing. Nothing happens to the player until they do.",
-    anythingElseOptional: "Anything else? (optional)",
-    anythingModeratorShouldKnow: "Anything a moderator should know",
+  reportDialog: {
     sendReport: "Send report",
     sending: "Sending…",
     reportSent: "Report sent",
+    anythingElseOptional: "Anything else (optional)",
+    anythingModeratorShouldKnow: "Anything a moderator should know",
+    couldNotSend: "Could not send the report.",
+    charactersLeft: (p: { count: number }) =>
+      `${counted(p.count, { one: "character", other: "characters" })} left`,
+  },
+  reportDrawingDialog: {
+    reportThisDrawing: "Report this drawing",
+    nothingHappensYet: "A moderator will look at the drawing. Nothing happens to the player until they do.",
     sentWithTheDrawingAttached: "Sent, with the drawing attached.",
-    thatReportCouldNotBeSent: "That report could not be sent.",
-    done: "Done",
-    cancel: "Cancel",
   },
 
   reportedDrawing: {
@@ -1722,36 +1708,25 @@ export const EN = {
   reportLobbyLineDialog: {
     nothingHappensYet: (p: { name: string }) =>
       `A moderator will see this line. Nothing happens to ${p.name} right now, and they are not told who reported them.`,
-    thatReportCouldNotBeSent: "That report could not be sent. Please try again.",
     whatWrongWith: "What is wrong with it",
-    anythingElseOptional: "Anything else (optional)",
-    anythingModeratorShouldKnow: "Anything a moderator should know",
     thisLineAttachedWithWhatLobby: "This line is attached, with what the lobby said around it.",
     sentWithLineWhatWasSaid: "Sent, with the line and what was said around it attached.",
-    done: "Done",
     harassmentOrAbuse: "Harassment or abuse",
     spam: "Spam",
     inappropriateName: "Inappropriate name",
-    reportSent: "Report sent",
     reportDisplayName: (p: { displayName: string }) => `Report ${p.displayName}`,
-    sending: "Sending…",
-    sendReport: "Send report",
-    cancel: "Cancel",
   },
 
   reportPlayerDialog: {
-    reportCouldNotBeSent: "That report could not be sent.",
     recentMessages: (p: { count: number }) =>
       `${p.count} of their ${plural(p.count, { one: "recent message", other: "recent messages" })}`,
     nothingHappensYet: (p: { name: string }) =>
       `A moderator will see this. Nothing happens to ${p.name} right now, and they are not told who reported them.`,
     whatHappened: "What happened",
-    anythingElseOptional: "Anything else (optional)",
     whatTheySaidDrewWhen: "What they said or drew, and when",
     theirRecentMessagesThisRoomAre: "Their recent messages in this room are attached automatically,\n                with what was said around them, so this can be left empty.",
     includeTheirDrawing: "Include their drawing",
     canvasAsRightNowSoModerator: "The canvas as it is right now, so a moderator sees what\n                      you saw.",
-    done: "Done",
     sentWithTheirDrawingAnd:
       (p: { messages: string }) => `Sent, with their drawing and ${p.messages} attached.`,
     sentWithTheirDrawingAttached: "Sent, with their drawing attached.",
@@ -1768,10 +1743,6 @@ export const EN = {
     inappropriatePicture: "Inappropriate picture",
     sendThatReport: "send that report",
     reportNickname: (p: { nickname: string }) => `Report ${p.nickname}`,
-    reportSent: "Report sent",
-    sending: "Sending…",
-    sendReport: "Send report",
-    cancel: "Cancel",
   },
 
   reportsReviewedNotice: {

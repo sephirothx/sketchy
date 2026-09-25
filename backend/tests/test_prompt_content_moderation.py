@@ -378,6 +378,34 @@ async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):
     assert after_review.status_code == 201
 
 
+async def test_a_content_report_may_be_sent_without_words(env):
+    """Details are optional on every report route (R-MOD-01): the list or
+    prompt is the complaint, and its snapshot travels with the report. An
+    empty detail is stored empty, never padded with words nobody wrote."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    reporter_http = new_client()
+    owner = await register(owner_http, "QuietOwner")
+    await register(reporter_http, "QuietReporter")
+    prompt_list = await prompts.create_owned(
+        owner["id"],
+        name="Said nothing",
+        description="",
+        language="en",
+        prompts=(PromptListEntryInput(answer="a prompt"),),
+    )
+    await published(factory, prompt_list.id)
+
+    sent = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": prompt_list.id, "reason": "inappropriate"},
+    )
+    assert sent.status_code == 201
+    async with factory() as session:
+        stored = await session.get(PromptContentReport, UUID(sent.json()["id"]))
+    assert stored is not None and stored.details == ""
+
+
 async def test_content_reports_about_one_target_are_one_incident(env):
     """Prompt content groups on the target, which already names the incident:
     a list or an exact prompt version is a durable thing rather than a moment

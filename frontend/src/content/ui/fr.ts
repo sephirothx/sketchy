@@ -1241,9 +1241,6 @@ export const FR: Catalogue = {
     couldNotChangeTheStar: "L’étoile n’a pas pu être modifiée.",
     copiedToYourLists: "Copiée dans vos listes de mots.",
     couldNotCopyThatList: "Cette liste n’a pas pu être copiée.",
-    reportSent: "Signalement envoyé.",
-    // The count is part of the name: a screen reader hears one control, so it
-    // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
       p.starred ? `Retirer votre étoile (${counted(p.count, { one: "étoile", other: "étoiles" })})` : `Ajouter une étoile (${counted(p.count, { one: "étoile", other: "étoiles" })})`,
     chooseAList: "Choisissez une liste pour voir ce qu’elle contient",
@@ -1540,21 +1537,17 @@ export const FR: Catalogue = {
 
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Signaler ${p.name}`,
-    couldNotSendReport: "Le rapport n’a pas pu être envoyé.",
     reportsAreReviewedAfterSubmissionList: "Les signalements sont examinés après envoi. La liste reste disponible sauf si un modérateur la masque.",
+    sentWithWhatItSaysAttached: "Envoyé, avec le contenu tel qu'il est maintenant joint.",
     content: "Contenu",
     entireList: "Liste entière",
     reason: "Motif",
-    whatShouldModeratorKnow: "Que doit savoir le modérateur ?",
-    cancel: "Annuler",
     inappropriateContent: "Contenu inapproprié",
     hatefulOrAbusiveContent: "Contenu haineux ou injurieux",
     sexualContent: "Contenu sexuel",
     violence: "Violence",
     spam: "Spam",
     other: "Autre",
-    sending: "Envoi…",
-    sendReport: "Envoyer le signalement",
   },
 
   promptDisplay: {
@@ -1674,37 +1667,30 @@ export const FR: Catalogue = {
     nothingHappensYet: (p: { name: string }) =>
       `Un modérateur le verra. Rien n’arrive à ${p.name} pour l’instant, et on ne lui dit pas qui l’a signalé.`,
     theirPicture: (p: { name: string }) => `image de ${p.name}`,
-    thatReportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé. Réessaie.",
     whatWrongWith: "Ce qui ne va pas",
     reportedTheirNameTheyHaveNo: "Signalé pour son nom. Il n’a pas d’image à signaler.",
-    anythingElseOptional: "Autre chose (facultatif)",
-    anythingModeratorShouldKnow: "Tout ce qu’un modérateur devrait savoir",
     sentWithWhatAboutAttached: "Envoyé, avec l’objet du signalement joint.",
-    done: "Terminé",
     inappropriateName: "Nom inapproprié",
     inappropriatePicture: "Photo inappropriée",
-    reportSent: "Signalement envoyé",
     reportDisplayName: (p: { displayName: string }) =>
       `Signaler ${p.displayName}`,
     thePictureOnTheAccount: "La photo du compte est jointe telle qu’elle est maintenant.",
     theNameOnTheAccount: "Le nom du compte est joint tel qu’il est maintenant.",
-    sending: "Envoi…",
-    sendReport: "Envoyer le signalement",
-    cancel: "Annuler",
   },
-  reportDrawingDialog: {
-    report: "Signaler",
-    reportThisDrawing: "Signaler ce dessin",
-    nothingHappensYet: "Un modérateur regardera le dessin. Rien n’arrive au joueur avant cela.",
-    anythingElseOptional: "Autre chose ? (facultatif)",
-    anythingModeratorShouldKnow: "Tout ce qu’un modérateur devrait savoir",
+  reportDialog: {
     sendReport: "Envoyer le signalement",
     sending: "Envoi…",
     reportSent: "Signalement envoyé",
+    anythingElseOptional: "Autre chose (facultatif)",
+    anythingModeratorShouldKnow: "Tout ce qu'un modérateur devrait savoir",
+    couldNotSend: "Le signalement n'a pas pu être envoyé.",
+    charactersLeft: (p: { count: number }) =>
+      `${counted(p.count, { one: "caractère restant", other: "caractères restants" })}`,
+  },
+  reportDrawingDialog: {
+    reportThisDrawing: "Signaler ce dessin",
+    nothingHappensYet: "Un modérateur regardera le dessin. Rien n’arrive au joueur avant cela.",
     sentWithTheDrawingAttached: "Envoyé, avec le dessin joint.",
-    thatReportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé.",
-    done: "Terminé",
-    cancel: "Annuler",
   },
 
   reportedDrawing: {
@@ -1716,37 +1702,26 @@ export const FR: Catalogue = {
   reportLobbyLineDialog: {
     nothingHappensYet: (p: { name: string }) =>
       `Un modérateur verra cette ligne. Rien n’arrive à ${p.name} pour l’instant, et on ne lui dit pas qui l’a signalé.`,
-    thatReportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé. Réessaie.",
     whatWrongWith: "Ce qui ne va pas",
-    anythingElseOptional: "Autre chose (facultatif)",
-    anythingModeratorShouldKnow: "Tout ce qu’un modérateur devrait savoir",
     thisLineAttachedWithWhatLobby: "Cette ligne est jointe, avec ce que le hall disait autour.",
     sentWithLineWhatWasSaid: "Envoyé, avec la ligne et ce qui se disait autour.",
-    done: "Terminé",
     harassmentOrAbuse: "Harcèlement ou insultes",
     spam: "Spam",
     inappropriateName: "Nom inapproprié",
-    reportSent: "Signalement envoyé",
     reportDisplayName: (p: { displayName: string }) =>
       `Signaler ${p.displayName}`,
-    sending: "Envoi…",
-    sendReport: "Envoyer le signalement",
-    cancel: "Annuler",
   },
 
   reportPlayerDialog: {
-    reportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé.",
     recentMessages: (p: { count: number }) =>
       `${p.count} de ses ${plural(p.count, { one: "message récent", other: "messages récents" })}`,
     nothingHappensYet: (p: { name: string }) =>
       `Un modérateur le verra. Rien n’arrive à ${p.name} pour l’instant, et on ne lui dit pas qui l’a signalé.`,
     whatHappened: "Ce qui s’est passé",
-    anythingElseOptional: "Autre chose (facultatif)",
     whatTheySaidDrewWhen: "Ce qu’il a dit ou dessiné, et quand",
     theirRecentMessagesThisRoomAre: "Ses messages récents dans ce salon sont joints automatiquement,\n                avec ce qui se disait autour ; tu peux donc laisser ceci vide.",
     includeTheirDrawing: "Inclure son dessin",
     canvasAsRightNowSoModerator: "Le tableau tel qu’il est maintenant, pour qu’un modérateur voie\n                      ce que tu as vu.",
-    done: "Terminé",
     sentWithTheirDrawingAnd: (p: { messages: string }) =>
       `Envoyé, avec son dessin et ${p.messages} en pièce jointe.`,
     sentWithTheirDrawingAttached: "Envoyé, avec son dessin en pièce jointe.",
@@ -1764,10 +1739,6 @@ export const FR: Catalogue = {
     sendThatReport: "envoyer ce signalement",
     reportNickname: (p: { nickname: string }) =>
       `Signaler ${p.nickname}`,
-    reportSent: "Signalement envoyé",
-    sending: "Envoi…",
-    sendReport: "Envoyer le signalement",
-    cancel: "Annuler",
   },
 
   reportsReviewedNotice: {

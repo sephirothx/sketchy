@@ -94,11 +94,17 @@ async def test_a_registered_player_reports_a_lobby_line_by_its_author():
             # not on offer.
             reasons = await dialog.locator("select option").all_inner_texts()
             assert reasons == ["Harassment or abuse", "Spam", "Inappropriate name"]
+            # Every report dialog opens on its choice when it has one.
+            await expect(dialog.locator("select")).to_be_focused()
 
             # The line is the complaint; nothing more has to be typed.
             await dialog.get_by_role("button", name="Send report").click()
             await expect(reporter.locator('.modal-card:has-text("Report sent")')).to_be_visible()
-            await reporter.get_by_role("button", name="Done").click()
+            # One way out once it has gone: the footer's Close, and no ✕ beside it.
+            close = dialog.get_by_role("button", name="Close")
+            await expect(close).to_have_count(1)
+            await expect(close).to_be_focused()
+            await close.click()
             await expect(dialog).to_be_hidden()
 
             # One open report per target (R-MOD-05): saying it again is

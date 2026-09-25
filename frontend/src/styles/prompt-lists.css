@@ -1,25 +1,3 @@
-.prompt-content-report-dialog form,
-.prompt-content-report-dialog label {
-  display: grid;
-  gap: 6px;
-}
-
-.prompt-content-report-dialog form { gap: 12px; }
-.prompt-content-report-dialog label { color: var(--ink); font-size: 14px; font-weight: 700; }
-.prompt-content-report-dialog select,
-.prompt-content-report-dialog textarea {
-  background: var(--field);
-  border: 1.5px solid var(--line-strong);
-  border-radius: var(--radius-sm);
-  box-sizing: border-box;
-  color: var(--ink);
-  font: inherit;
-  font-weight: 400;
-  padding: 9px 10px;
-  width: 100%;
-}
-.prompt-content-report-dialog textarea { min-height: 100px; resize: vertical; }
-
 /* The page fills what the viewport has left, and the two panes inside it
    scroll on their own: the lists on the left, the list being edited on the
    right. A pinned sidebar was not enough - while the page itself scrolled, the

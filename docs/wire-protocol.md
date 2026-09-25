@@ -712,6 +712,7 @@ Shared bounds:
 | Constant | Value | Source |
 | --- | --- | --- |
 | `MAX_CHAT_MESSAGE_LENGTH` | 500 | [`message_limits.py`](../backend/app/message_limits.py) |
+| `MAX_REPORT_DETAILS` (every report route, socket and REST) | 2 000 | [`message_limits.py`](../backend/app/message_limits.py) |
 | `MAX_PROMPT_LENGTH` | 32 | [`prompts.py`](../backend/app/prompts.py) |
 | `MAX_MATCH_KEY_LENGTH` (an answer or alias once normalized; case-folding can lengthen it, #1017) | 64 | [`prompt_content.py`](../backend/app/prompt_content.py) |
 | `MAX_RAW_INPUT_LENGTH` (custom prompts blob) | 80 000 | [`prompts.py`](../backend/app/prompts.py) |
@@ -921,8 +922,8 @@ The database work runs under the entry deadline, inside the client's wait, and a
 `database_busy` when it fails or expires (#1012), as `rename_player` and `update_player_settings` do: a handler
 that raised sent no acknowledgement at all, and the dialog waited out its timeout.
 `reason` ∈ `harassment | offensive_drawing | inappropriate_name | cheating | spam |
-inappropriate_avatar`; `details` is optional and at most 1000 characters (stripped, so
-blank is empty) — the server attaches the evidence itself, and from a room that is
+inappropriate_avatar`; `details` is optional and at most `MAX_REPORT_DETAILS` = 2000
+characters (stripped, so blank is empty) — the server attaches the evidence itself, and from a room that is
 usually the whole complaint; `includeDrawing` (optional, default `false`) asks for the
 canvas to go with the report.
 
@@ -941,12 +942,16 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 > an incident may carry several, one per reporter who attached the canvas as it stood
 > when they sent.
 
-> Note the deliberate asymmetry: the **socket** report bounds `details` at 1000, while
-> the **REST** `POST /api/reports` bounds it at `MAX_REPORT_DETAILS` = 2000 and also
-> accepts `contextSnapshot` (≤ 32 768 bytes) and `messageIds` (≤ 20, which must be
-> unique). On both, `details` is optional and stripped: the evidence is the
-> complaint, and the queue reads an empty one as *no details given* rather than as
-> words the reporter never wrote. The socket path exists so a player can report from
+> **One limit on every report route.** `details` is bounded at `MAX_REPORT_DETAILS` =
+> 2000 ([`message_limits.py`](../backend/app/message_limits.py)) here, on
+> `POST /api/reports`, on the Gallery's report and on `POST /api/prompt-content-reports`,
+> and is optional and stripped on all four: the evidence is the complaint, and the queue
+> reads an empty one as *no details given* rather than as words the reporter never
+> wrote. The socket used to stop at 1000 while REST took 2000; since every report is
+> typed into the one dialog
+> ([`ReportDialog.tsx`](../frontend/src/components/ReportDialog.tsx)), that made the same complaint fit or not
+> depending on where it was opened. Only `POST /api/reports` also accepts `contextSnapshot`
+> (≤ 32 768 bytes) and `messageIds` (≤ 20, which must be unique). The socket path exists so a player can report from
 > the room without leaving it, and the server selects the evidence itself. On both paths the server then copies
 > the conversation around the cited lines as `context` (R-MOD-13); the acknowledgement's
 > `evidenceCount` counts the cited lines only.
@@ -2247,7 +2252,7 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | Method | Path | Role | Notes |
 | --- | --- | --- | --- |
 | `POST` | `/api/reports` | any signed-in | ≤ 2000 chars of optional detail, ≤ 32 768 bytes context, ≤ 20 **unique** `messageIds`. One open report per reporter/target |
-| `POST` | `/api/prompt-content-reports` | any signed-in | Targets a **published** list or an exact `promptVersionId` in one; anything else is **404** `no_reportable_prompt_list`, since nobody but its owner can see a private list. Official content and self-reports rejected |
+| `POST` | `/api/prompt-content-reports` | any signed-in | ≤ 2000 chars of optional detail, as on every report route (the list's or prompt's snapshot is the evidence). Targets a **published** list or an exact `promptVersionId` in one; anything else is **404** `no_reportable_prompt_list`, since nobody but its owner can see a private list. Official content and self-reports rejected |
 | `GET` | `/api/moderation/reports` | moderator+ | The queue as **incidents**, oldest first, leaving out the **pending** incidents about the caller unless they are an administrator (R-MOD-07, #1003, #1063; decided ones are shown as closed cases are): `{ incidents, total, hasMore }`, where `limit` and `offset` page incidents rather than reports (R-MOD-16). Each incident carries `id` (its oldest report's, which every decision route accepts), `reportedPlayer` standing (name, registered, age, prior reports/warnings, active suspension), `scope` (`room`, `lobby`, `profile`, `unscoped`), `reporterCount`, the distinct `reasons` in the order first given, `openedAt`/`latestReportedAt`, `reports` — each complaint's own `reason`, `details`, reporter and `drawing`, and no evidence of its own — `evidence`, every report's lines merged into one thread in the order they were said, each line once, with a `role` of `cited` or `context` (R-MOD-13) and `citedBy`, the reports that complained about it, `drawings`, every attached canvas by its metadata (`reportId`, `turnId`, `roundNumber`, `prompt`, `actionCount`, `byteSize`, `capturedAt`), and how it was closed: `outcome` (`pending`, `dismissed`, `resolved`, `warned`, `suspended`; a content report closes as `dismissed`, `hidden`, `left_up` or `resolved`) read from the warning or suspension that names the report rather than from its status, `reviewedBy`, the reviewer's name resolved when read (R-MOD-15), and `decisionGroupId`, the moderator action that decided it. Two more facts a moderator needs before deciding: `picture` says what became of the picture the incident is about (null when it is about none): `status` of `same`, `replaced` or `removed`, and for a removal `removedByModerator`, `removedAt` and `removedFromThisIncident` — because a picture a moderator has already taken down must not read as merely a different one, and the reviewer seeing it is often the one who removed it from that case; each report carries its own `pictureStatus` beside this (R-AVA-07); and `priorDecision`, null on a first complaint, carries `outcome`, `decidedAt`, `decidedBy`, `note` and `priorDecisions` for the last decision taken about this same incident key, so a repeat of something already dealt with does not arrive looking untouched (R-MOD-18) |
 | `GET` | `/api/moderation/reports/{report_id}/drawing` | moderator+ | The attached drawing's bytes in the **current wire format** (`application/octet-stream`, `Cache-Control: private, no-store`), checksum verified on every read; `404` when the report has none |
 | `GET` | `/api/moderation/closed-cases` | moderator+ | Decided **incidents**, player and content as one stream, **newest decision first**, under `limit` (≤ 100) and `offset` (≤ 1000): `{ players, content, hasMore }`, each list already in that order and carrying what its open queue does. The page counts **decisions**, so an incident five people reported takes one slot rather than five; grouping keys on `decisionGroupId`, never on the open incident key, since two incidents in one room instance decided a week apart are two entries. `hasMore` is `false` at the offset cap even when older rows exist, so the client is never pointed at a page it would be refused (R-MOD-15) |
@@ -2437,7 +2442,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (41) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (42) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

@@ -23,12 +23,15 @@ from app.api.moderation import (
     MAX_REPORT_CONTEXT_BYTES,
     BanBody,
     BanRevokeBody,
+    GalleryReportBody,
     PromptContentReportBody,
     PromptContentReviewBody,
     ReportBody,
     ReportReviewBody,
     WarningBody,
 )
+from app.handlers.payloads import ReportPlayerPayload
+from app.message_limits import MAX_REPORT_DETAILS
 
 
 # Whitespace only. The empty string is refused a step earlier, by
@@ -70,11 +73,41 @@ def test_a_review_note_that_is_only_whitespace_is_refused(blank):
 
 
 @pytest.mark.parametrize("blank", BLANK)
-def test_a_prompt_report_with_blank_details_is_refused(blank):
-    with pytest.raises(ValidationError, match="details cannot be blank"):
-        PromptContentReportBody(
-            promptListId=str(uuid4()), reason="offensive", details=blank
-        )
+def test_a_prompt_report_with_blank_details_is_stored_empty(blank):
+    """Optional here as on every other report: the list or prompt is the
+    complaint, and its snapshot travels with the report."""
+    body = PromptContentReportBody(
+        promptListId=str(uuid4()), reason="inappropriate", details=blank
+    )
+    assert body.details == ""
+
+
+def test_a_prompt_report_may_leave_details_out_altogether():
+    body = PromptContentReportBody(promptListId=str(uuid4()), reason="spam")
+    assert body.details == ""
+
+
+# One dialog files all five kinds of report, so one limit bounds them all. The
+# room's socket report used to stop at 1000 while REST took 2000.
+REPORT_BUILDERS = {
+    "room seat (socket)": lambda details: ReportPlayerPayload.model_validate(
+        {"targetPlayerId": "seat", "reason": "harassment", "details": details}
+    ),
+    "account or lobby line (REST)": lambda details: ReportBody(**_report(details=details)),
+    "prompt content (REST)": lambda details: PromptContentReportBody(
+        promptListId=str(uuid4()), reason="other", details=details
+    ),
+    "gallery drawing (REST)": lambda details: GalleryReportBody(details=details),
+}
+
+
+@pytest.mark.parametrize("route", sorted(REPORT_BUILDERS))
+def test_every_report_route_takes_the_same_details_limit(route):
+    build = REPORT_BUILDERS[route]
+    assert MAX_REPORT_DETAILS == 2000
+    assert build("x" * MAX_REPORT_DETAILS).details == "x" * MAX_REPORT_DETAILS
+    with pytest.raises(ValidationError):
+        build("x" * (MAX_REPORT_DETAILS + 1))
 
 
 @pytest.mark.parametrize("blank", BLANK)
