@@ -2350,6 +2350,11 @@ export const EN = {
     joinRoomFailed: "join_room failed",
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Public room",
+    privateRoom: "Private room",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Edit room rules",
     roundCount: (p: { count: number }) =>

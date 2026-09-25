@@ -47,12 +47,37 @@
 }
 
 .game-header-room-name {
+  align-items: center;
+  display: inline-flex;
   font-weight: 800;
   font-size: 16px;
   color: var(--ink);
+  min-width: 0;
+}
+
+/* The name gives way to an ellipsis; the public/private icon after it does
+   not, so a long name still says which kind of room this is. */
+.game-header-room-name-text {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* Public or private, beside the room's name (RoomVisibilityIcon). Sized in
+   ems to whichever text it follows - the bar's name, the waiting room's
+   heading - and muted, since it is a fact about the name, not a control. The
+   box is no taller than the text's own line, so the bar keeps its height. */
+.room-visibility-icon {
+  color: var(--muted);
+  display: inline-flex;
+  flex: none;
+  margin-left: 0.35em;
+  vertical-align: -0.08em;
+}
+
+.room-visibility-icon svg {
+  height: 0.8em;
+  width: 0.8em;
 }
 
 .game-header-center {

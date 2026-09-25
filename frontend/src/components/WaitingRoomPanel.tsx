@@ -6,6 +6,7 @@ import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon } from "./icons";
 import { RoomFacts } from "./RoomFacts";
+import { RoomVisibilityIcon } from "./RoomVisibilityIcon";
 import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
@@ -235,7 +236,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           the room can start is Start's own label ("Need 1 more player") -
           and during a drain, the drain's notice. */}
       <header className="waiting-room-head">
-        <h1>{props.name}</h1>
+        <h1>{props.name}<RoomVisibilityIcon isPublic={props.isPublic} /></h1>
       </header>
 
       {/* The code, read at a glance or tapped to copy, and one way to send it.

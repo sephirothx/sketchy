@@ -2339,6 +2339,11 @@ export const PT: Catalogue = {
     joinRoomFailed: "join_room failed",
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Sala pública",
+    privateRoom: "Sala privada",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Editar regras da sala",
     roundCount: (p: { count: number }) =>

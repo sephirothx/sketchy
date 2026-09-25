@@ -2731,7 +2731,8 @@ A seated client checks with the server every five seconds that it still holds th
   screen, so a banner there sat on top of its header; the banners that remain (an out-of-date
   tab, a full server) stack in one box that the screens sized to the viewport make room for.
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
-  home, and in a room the room's name), what is going on (the round and the clock, a
+  home, and in a room the room's name, with a globe after it for a public room and a lock
+  for a private one), what is going on (the round and the clock, a
   server notice, and an *Away* chip while you are away), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
   go away, save the drawing, start over, and Leave last in red - a dropdown on a

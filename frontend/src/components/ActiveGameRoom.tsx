@@ -15,6 +15,7 @@ import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { ConnectedPinControl } from "../components/ConnectedPinControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
+import { RoomVisibilityIcon } from "../components/RoomVisibilityIcon";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
 import { RoomMenuDropdown, RoomMenuSheet, type RoomMenuActions } from "../components/RoomMenu";
@@ -62,6 +63,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const roomState = useGameStore((s) => s.roomState);
   const roomName = useGameStore((s) => s.name);
+  const roomIsPublic = useGameStore((s) => s.isPublic);
   const phase = useGameStore((s) => s.phase);
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
@@ -374,7 +376,14 @@ export function ActiveGameRoom({ code }: { code: string }) {
           >
             <Wordmark size={isMobile ? 22 : 24} decorative />
           </button>
-          {!isMobile && roomName && <span className="game-header-room-name">{roomName}</span>}
+          {/* Public or private beside the name, and gone with it when the bar
+              gives the name up: the waiting room's heading says it there. */}
+          {!isMobile && roomName && (
+            <span className="game-header-room-name">
+              <span className="game-header-room-name-text">{roomName}</span>
+              <RoomVisibilityIcon isPublic={roomIsPublic} />
+            </span>
+          )}
         </div>
         <div className="game-header-center">
           <GameHeaderStatus />

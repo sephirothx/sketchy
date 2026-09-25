@@ -2342,6 +2342,11 @@ export const FR: Catalogue = {
     joinRoomFailed: "join_room failed",
   },
 
+  roomVisibilityIcon: {
+    publicRoom: "Salon public",
+    privateRoom: "Salon privé",
+  },
+
   waitingRoomPanel: {
     editRoomRules: "Modifier les règles du salon",
     roundCount: (p: { count: number }) =>
