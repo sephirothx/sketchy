@@ -9,6 +9,7 @@ import {
 } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useOpenSettings } from "../hooks/useSettingsRoute";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { waitingRequestCount } from "../lib/friends";
 import { useFriendsStore } from "../store/friendsStore";
 import { useOpenOverlay } from "../hooks/useOverlayRoute";
@@ -118,6 +119,8 @@ export function AccountMenu({ compact = false, inRoom = false }: {
   // keeps Tab inside, moves focus to the first item on open, and returns it to
   // the chip on close; the arrow keys are handled below.
   useFocusTrap(menuRef, { active: menuOpen });
+  // In a room, Back closes the menu as Escape does (R-UX-15); elsewhere a no-op.
+  useBackCloses(menuOpen, () => setMenuOpen(false));
 
   function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     const items = menuRef.current ? getFocusableElements(menuRef.current) : [];
@@ -473,6 +476,7 @@ export function AuthDialog({
   const canUsePasskeys = passkeysAvailable();
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: usernameRef });
+  useBackCloses(true, onClose);
   const isClaim = mode === "claim";
 
   async function submit(event: React.FormEvent) {

@@ -48,7 +48,9 @@ export function useOpenSettings(): (section?: SettingsSection) => void {
       // Already open: switching section replaces, so Back leaves Settings
       // rather than walking through the sections visited. `useOpenOverlay`
       // replaces for any overlay-to-overlay move, which is the same thing.
-      openOverlay(settingsPath(section), { replace: onSettings });
+      // Otherwise left to `useOpenOverlay`, which replaces a room sheet's
+      // entry when Settings is opened from one (R-UX-15).
+      openOverlay(settingsPath(section), onSettings ? { replace: true } : undefined);
     },
     [openOverlay, onSettings],
   );

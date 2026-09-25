@@ -7,6 +7,7 @@ import {
 } from "react";
 import { BottomSheet } from "./ui/BottomSheet";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import {
   DotsIcon,
   DownloadIcon,
@@ -175,6 +176,8 @@ export function RoomMenuDropdown({ actions }: { actions: RoomMenuActions }) {
 
   useEscapeLayer(open, () => setOpen(false));
   useFocusTrap(menuRef, { active: open });
+  // Back closes it as Escape does, like everything else open in a room (R-UX-15).
+  useBackCloses(open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;

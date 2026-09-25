@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import type { ReactNode, RefObject } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useBackCloses } from "../../hooks/useRoomHistory";
 
 interface ModalShellProps {
   role?: "dialog" | "alertdialog";
@@ -19,9 +20,9 @@ interface ModalShellProps {
 }
 
 /**
- * The one modal frame: scrim + card + focus trap + Escape. Keeps the
- * `.modal-overlay` / `.modal-card` classes the stylesheets and e2e suite
- * already know. Focus restore on close is handled by useFocusTrap.
+ * The one modal frame: scrim + card + focus trap + Escape (and, in a room,
+ * Back). Keeps the `.modal-overlay` / `.modal-card` classes the stylesheets
+ * and e2e suite already know. Focus restore on close is handled by useFocusTrap.
  */
 export function ModalShell({
   role = "dialog",
@@ -40,6 +41,8 @@ export function ModalShell({
     onEscape: onDismiss,
     initialFocusRef,
   });
+  // In a room, Back does what Escape does (R-UX-15).
+  useBackCloses(true, onDismiss);
 
   const cardClasses = ["modal-card", cardClassName ?? ""].filter(Boolean).join(" ");
   return (

@@ -2,6 +2,7 @@ import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
 import { socketRequestErrorMessage } from "../lib/socket";
 import { ui } from "../content/ui/index.ts";
@@ -89,6 +90,7 @@ export function ReportPlayerDialog({
   } | null>(null);
 
   useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: detailsRef });
+  useBackCloses(true, onClose);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
