@@ -141,7 +141,6 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
                   <small>
                     {ui.accountDataDialog.requestedOn({
                       when: dateLabel(job.createdAt, dateTime),
-                      schemaVersion: job.schemaVersion,
                     })}
                   </small>
                   {exportFailureNote(job) && (

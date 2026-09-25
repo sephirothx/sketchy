@@ -124,9 +124,11 @@ test("a malformed message leaves the store alone", () => {
   assert.deepEqual(applySnapshot(state, null), EMPTY_PRESENCE);
 });
 
-test("the summary says how many were left out", () => {
-  assert.equal(presenceSummary(snapshot(1, [], 0)), "0 online");
-  assert.equal(presenceSummary(snapshot(1, [player("u1", "Ada")], 1)), "1 online");
+test("the summary says how many were left out, and nothing when none were", () => {
+  // Nobody, or everybody on the list: the list already says it.
+  assert.equal(presenceSummary(snapshot(1, [], 0)), null);
+  assert.equal(presenceSummary(snapshot(1, [player("u1", "Ada")], 1)), null);
+  // A cap is never a quiet server (R-PRESENCE-04).
   assert.equal(
     presenceSummary(snapshot(1, [player("u1", "Ada")], 412)),
     "Showing 1 of 412",

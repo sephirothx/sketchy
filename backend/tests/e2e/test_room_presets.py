@@ -24,7 +24,7 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             await page.get_by_role("button", name="Save as preset").click()
             await page.get_by_placeholder("Name this preset").fill("Tournament night")
             await page.get_by_role("button", name="Save", exact=True).click()
-            await page.get_by_text("Saved “Tournament night”.").wait_for()
+            await page.get_by_text('Saved "Tournament night".').wait_for()
 
             await page.get_by_label("Room name").fill("Changed")
             await page.get_by_role("spinbutton", name="Max players").fill("3")
@@ -35,7 +35,7 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             await page.get_by_label("Start from a saved preset").select_option(
                 label="Tournament night"
             )
-            await page.get_by_text("Applied “Tournament night”.").wait_for()
+            await page.get_by_text('Applied "Tournament night".').wait_for()
 
             await expect(page.get_by_label("Room name")).to_have_value("Friday finals")
             assert await page.get_by_role("spinbutton", name="Max players").input_value() == "12"
@@ -50,12 +50,12 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             await page.get_by_label("Start from a saved preset").select_option(
                 label="Tournament night"
             )
-            await page.get_by_text("Applied “Tournament night”.").wait_for()
+            await page.get_by_text('Applied "Tournament night".').wait_for()
 
             await page.locator(".create-room-submit").click()
             await page.wait_for_selector('[data-testid="waiting-room"]')
             await open_room_settings(page)
-            await page.get_by_text("Host settings").wait_for()
+            await page.get_by_role("heading", name="Edit room rules").wait_for()
             assert await page.get_by_role("spinbutton", name="Max players").input_value() == "12"
             assert await page.get_by_role("spinbutton", name="Rounds").input_value() == "5"
         finally:

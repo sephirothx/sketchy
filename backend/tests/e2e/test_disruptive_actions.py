@@ -39,7 +39,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             )
             await room_menu_action(host_page, "Copy the invite link")
             await host_page.wait_for_selector(
-                '.app-toast.error:has-text("Couldn’t copy the link")'
+                '.app-toast.error:has-text("Could not copy the link")'
             )
 
             code = await get_room_code(host_page)
@@ -88,7 +88,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             await leave_room(guesser_page)
             generic_dialog = guesser_page.locator('[role="alertdialog"]')
             assert "Leave active game?" in await generic_dialog.inner_text()
-            assert "give up your place" in await generic_dialog.inner_text()
+            assert "give up your seat" in await generic_dialog.inner_text()
             await generic_dialog.locator('button:has-text("Leave game")').click()
             await guesser_page.wait_for_url(f"{BASE_URL}/")
         finally:

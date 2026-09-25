@@ -1,6 +1,7 @@
 import { useId, useRef } from "react";
 import type { ReactNode, Ref, RefObject } from "react";
 import { useFocusTrap } from "../../hooks/useFocusTrap";
+import { useBackCloses } from "../../hooks/useRoomHistory";
 import { XIcon } from "../icons";
 import { ui } from "../../content/ui/index.ts";
 
@@ -101,8 +102,8 @@ interface ModalShellProps {
 }
 
 /**
- * The one dialog: scrim, card, focus trap and Escape, with a header, a body
- * that scrolls on its own, and a footer for the actions.
+ * The one dialog: scrim, card, focus trap and Escape (in a room, Back too),
+ * with a header, a body that scrolls on its own, and a footer for the actions.
  *
  * The anatomy is the point. Dialogs used to be hand-rolled one at a time, and
  * it showed - titles centred in some and left in others, a ✕ in five sizes,
@@ -145,6 +146,10 @@ export function ModalShell({
     onEscape: escape,
     initialFocusRef,
   });
+  // In a room, Back does what Escape does (R-UX-15).
+  // In a room, Back does what dismissing does (R-UX-15); a blocking notice,
+  // which cannot be dismissed, leaves Back to the room.
+  useBackCloses(onDismiss !== undefined, onDismiss ?? swallow);
 
   const hasHeader = title !== undefined;
   const cardClasses = ["modal-card", cardClassName ?? ""].filter(Boolean).join(" ");

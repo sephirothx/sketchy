@@ -43,7 +43,10 @@ from app.domain_values import AccountState, AuditTargetType, EmailTemplate
 
 # Long enough that it reads as a standing note rather than nagging, short
 # enough that somebody who joins, plays for a month and forgets their password
-# has been told more than once.
+# has been told more than once. It is also the grace after signing up:
+# registration stamps the clock (`seed_user_settings`), because the form that
+# just called the address optional should not be followed by a banner asking
+# for it on the very next page.
 REMINDER_INTERVAL = timedelta(days=7)
 
 
@@ -127,7 +130,8 @@ async def email_state(
             settings.email_reminder_last_shown_at if settings else None
         )
         # A guest has nothing to recover yet - claiming the account is the
-        # step being asked for there, not an address.
+        # step being asked for there, not an address. An account with no stamp
+        # at all (registration writes one) has never been told, so it is due.
         registered = user.state == AccountState.REGISTERED.value
         needs_address = user.email is None or user.email_verified_at is None
         due = (

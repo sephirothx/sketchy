@@ -7,10 +7,10 @@ import {
 } from "react";
 import { BottomSheet } from "./ui/BottomSheet";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import {
   DotsIcon,
   DownloadIcon,
-  GearIcon,
   LeaveIcon,
   LinkIcon,
   MoonIcon,
@@ -33,7 +33,6 @@ export interface RoomMenuActions {
   onOpenPlayers?: () => void;
   onToggleAfk: () => void;
   onSaveImage: () => void;
-  onOpenSettings: () => void;
   onProposeRestart: () => void;
   onLeave: () => void;
 }
@@ -48,6 +47,11 @@ export interface RoomMenuActions {
  * who wants it is a player who wants to invite somebody. The one row that
  * differs by device is Players and scores, which a phone needs because its
  * players column is folded away and a desktop does not, because it is not.
+ *
+ * Player settings is not a row: they are about you, not the room, and the
+ * identity chip beside this menu opens them at every width (R-UX-11). While
+ * a phone's bar left the chip out this list carried a Settings row; once the
+ * chip came back, two menus side by side offered the same screen.
  */
 function RoomMenuRows({ actions, run, asMenu }: {
   actions: RoomMenuActions;
@@ -95,14 +99,14 @@ function RoomMenuRows({ actions, run, asMenu }: {
           onClick={run(actions.onToggleAfk)}
         >
           <MoonIcon size={19} />
-          <span>{isAfk ? ui.roomMenuSheet.iMBack : ui.roomMenuSheet.goAwayForABit}</span>
+          <span>{isAfk ? ui.roomMenuSheet.backFromAfk : ui.roomMenuSheet.goAfk}</span>
         </button>
       </li>
       {isPlaying && (
         <li role={asMenu ? "none" : undefined}>
           <button type="button" role={role} className="sheet-menu-item" onClick={run(actions.onSaveImage)}>
             <DownloadIcon size={19} />
-            <span>{ui.roomMenuSheet.saveThisDrawing}</span>
+            <span>{ui.roomMenuSheet.saveImage}</span>
           </button>
         </li>
       )}
@@ -125,12 +129,6 @@ function RoomMenuRows({ actions, run, asMenu }: {
           </button>
         </li>
       )}
-      <li role={asMenu ? "none" : undefined}>
-        <button type="button" role={role} className="sheet-menu-item" onClick={run(actions.onOpenSettings)}>
-          <GearIcon size={19} />
-          <span>{ui.roomMenuSheet.settings}</span>
-        </button>
-      </li>
       <li className="sheet-menu-sep" role={asMenu ? "none" : undefined}>
         <button
           type="button"
@@ -156,7 +154,12 @@ export function RoomMenuSheet({ actions, onDismiss }: {
     action();
   };
   return (
-    <BottomSheet title={ui.roomMenuSheet.room} onDismiss={onDismiss} testId="room-menu-sheet">
+    <BottomSheet
+      title={ui.roomMenuSheet.room}
+      closeLabel={ui.roomMenuSheet.close}
+      onDismiss={onDismiss}
+      testId="room-menu-sheet"
+    >
       <RoomMenuRows actions={actions} run={run} asMenu={false} />
     </BottomSheet>
   );
@@ -178,6 +181,8 @@ export function RoomMenuDropdown({ actions }: { actions: RoomMenuActions }) {
 
   useEscapeLayer(open, () => setOpen(false));
   useFocusTrap(menuRef, { active: open });
+  // Back closes it as Escape does, like everything else open in a room (R-UX-15).
+  useBackCloses(open, () => setOpen(false));
 
   useEffect(() => {
     if (!open) return;

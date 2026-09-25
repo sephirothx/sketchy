@@ -3,6 +3,7 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { GalleryPost, GalleryThumbnail } from "../components/GalleryDrawings";
 import { ReportDrawingDialog } from "../components/ReportDrawingDialog";
+import { SegmentedControl } from "../components/RoomSetupControls";
 import { ChevronUpIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import {
@@ -18,13 +19,15 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { EmptyState } from "../components/ui/EmptyState";
 import "../styles/lazy/gallery.css";
 
 const SORTS: readonly GallerySort[] = ["hot", "new", "top"];
 const WINDOWS: readonly GalleryWindow[] = ["all", "month", "week"];
 /** Below this the rail folds away and the sort sits under the title. */
 // Not copy: a media query.
-const NARROW = "(max-width: 899px)";
+const NARROW = "(max-width: 900px)";
 /** How far down the reader has to be before Back to top is offered. */
 const BACK_TO_TOP_AFTER_PX = 600;
 
@@ -38,6 +41,7 @@ const BACK_TO_TOP_AFTER_PX = 600;
  * door (R-GAL-06).
  */
 export function GalleryPage() {
+  useDocumentTitle(ui.galleryPage.gallery);
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
@@ -214,21 +218,14 @@ export function GalleryPage() {
     <div className="gallery-filters">
       {/* Three orders, all on screen: a menu that has to be opened to find
           out it holds three things is a menu for nothing. */}
-      <span
+      <SegmentedControl
         className="gallery-sort"
-        role="group"
-        aria-label={ui.galleryPage.sortBy}
-        data-testid="gallery-sort"
-      >
-        {SORTS.map((sort) => (
-          <button
-            key={sort}
-            type="button"
-            aria-pressed={filters.sort === sort}
-            onClick={() => applyFilters({ ...filters, sort })}
-          >{sortLabel[sort]}</button>
-        ))}
-      </span>
+        testId="gallery-sort"
+        label={ui.galleryPage.sortBy}
+        value={filters.sort}
+        options={SORTS.map((sort) => ({ value: sort, label: sortLabel[sort] }))}
+        onChange={(sort) => applyFilters({ ...filters, sort })}
+      />
       {/* The window only means something under Top (R-GAL-04); Hot has
           its own horizon and New is New. */}
       {filters.sort === "top" && (
@@ -242,7 +239,7 @@ export function GalleryPage() {
             <button
               key={window}
               type="button"
-              className="gallery-pill"
+              className="toggle-chip"
               aria-pressed={filters.window === window}
               onClick={() => applyFilters({ ...filters, window })}
             >{windowLabel[window]}</button>
@@ -284,13 +281,16 @@ export function GalleryPage() {
             <li className="gallery-post-skeleton" />
           </ul>
         : entries.length === 0
-          ? <div className="gallery-empty-state" data-testid="gallery-empty">
-              <p className="gallery-end-title">{ui.galleryPage.nothingHereYet}</p>
-              <p className="gallery-end-body">{ui.galleryPage.nothingHereYetBody}</p>
-              <button type="button" className="btn btn-primary" onClick={() => navigate("/")}>
-                {ui.galleryPage.findARoom}
-              </button>
-            </div>
+          ? <EmptyState
+              testId="gallery-empty"
+              title={ui.galleryPage.nothingHereYet}
+              body={ui.galleryPage.nothingHereYetBody}
+              action={
+                <button type="button" className="btn btn-primary" onClick={() => navigate("/")}>
+                  {ui.galleryPage.findARoom}
+                </button>
+              }
+            />
           : <ul className="gallery-feed" data-testid="gallery-feed">
               {entries.map((entry) => (
                 <GalleryPost
@@ -324,16 +324,18 @@ export function GalleryPage() {
       {signedOut ? (
         <>
           <div className="gallery-head">
-            <p className="section-label">{ui.galleryPage.eyebrow}</p>
             <h1>{ui.galleryPage.gallery}</h1>
           </div>
-          <div className="gallery-empty-state" data-testid="gallery-signed-out">
-            <p className="gallery-end-title">{ui.galleryPage.signInToSeeTheGallery}</p>
-            <p className="gallery-end-body">{ui.galleryPage.signInBody}</p>
-            <button type="button" className="btn btn-secondary" onClick={() => navigate("/")}>
-              {ui.galleryPage.backToLobby}
-            </button>
-          </div>
+          <EmptyState
+            testId="gallery-signed-out"
+            title={ui.galleryPage.signInToSeeTheGallery}
+            body={ui.galleryPage.signInBody}
+            action={
+              <button type="button" className="btn btn-secondary" onClick={() => navigate("/")}>
+                {ui.galleryPage.backToLobby}
+              </button>
+            }
+          />
         </>
       ) : (
         <div className={narrow ? "gallery-layout is-narrow" : "gallery-layout"}>
@@ -341,7 +343,6 @@ export function GalleryPage() {
             {/* A heading block rather than a card, as the community catalogue
                 introduces its lists. */}
             <div className="gallery-head">
-              <p className="section-label">{ui.galleryPage.eyebrow}</p>
               <h1>{ui.galleryPage.gallery}</h1>
               {!narrow && <p>{ui.galleryPage.drawingsFromPublicGames}</p>}
             </div>
@@ -359,14 +360,16 @@ export function GalleryPage() {
                 <section className="surface-card gallery-rail-card" data-testid="gallery-rail-week">
                   <div className="gallery-rail-head">
                     <h2>{ui.galleryPage.thisWeek}</h2>
-                    <button
+                    {/* Only with something to lead to: an empty week's "Top of
+                        the week" opened a second list with nothing in it. */}
+                    {weekEntries.length > 0 && <button
                       type="button"
                       className="gallery-link"
                       onClick={() => applyFilters({ sort: "top", window: "week" })}
-                    >{ui.galleryPage.topOfTheWeek}</button>
+                    >{ui.galleryPage.topOfTheWeek}</button>}
                   </div>
                   {weekEntries.length === 0
-                    ? <p className="gallery-empty" data-testid="gallery-rail-week-empty">{ui.galleryPage.nothingThisWeek}</p>
+                    ? <EmptyState compact testId="gallery-rail-week-empty" title={ui.galleryPage.nothingThisWeek} />
                     : <ul className="gallery-rail-list">
                     {weekEntries.map((entry) => (
                       <li key={entry.turnId}>

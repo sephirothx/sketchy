@@ -24,7 +24,7 @@
    scroll on their own: the lists on the left, the list being edited on the
    right. A pinned sidebar was not enough - while the page itself scrolled, the
    header and the top of the lists went with it, so scrolling the form still
-   moved the lists. Below 700px it is one column and the page scrolls as usual.
+   moved the lists. Up to 720px it is one column and the page scrolls as usual.
 
    "What the viewport has left" rather than the viewport: the connection,
    maintenance and email-recovery banners sit above every page in normal flow,
@@ -33,7 +33,7 @@
    mounted the app's root becomes a column exactly the viewport's height, the
    banners keep their own height, and the page takes the rest. Scoped with
    :has() so no other page's layout changes. */
-@media (min-width: 701px) {
+@media (min-width: 721px) {
   #root:has(> .prompt-list-manager-page) {
     display: flex;
     flex-direction: column;
@@ -50,7 +50,8 @@
   flex: 1;
   flex-direction: column;
   margin: 0 auto;
-  max-width: 1000px;
+  --page-width: 968px;
+  max-width: calc(var(--page-width) + 32px);
   min-height: 0;
   padding: 24px 16px;
   width: 100%;
@@ -58,8 +59,8 @@
 
 .prompt-list-manager-card {
   background: var(--card);
-  border: 1px solid var(--line);
-  border-radius: 10px;
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -68,22 +69,20 @@
 }
 
 .prompt-list-manager-heading {
-  align-items: center;
+  align-items: flex-end;
   display: flex;
+  flex: none;
   justify-content: space-between;
   gap: 16px;
+  margin-bottom: 18px;
 }
 
-.prompt-list-manager-heading p {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .07em;
-  margin: 0 0 4px;
-  text-transform: uppercase;
+.prompt-list-manager-heading h1 {
+  font-family: var(--font-display);
+  font-size: 27px;
+  font-weight: 600;
+  margin: 0;
 }
-
-.prompt-list-manager-heading h1 { margin: 0; }
 
 .prompt-list-manager-layout {
   display: grid;
@@ -91,7 +90,6 @@
   gap: 24px;
   grid-template-columns: minmax(180px, 240px) minmax(0, 1fr);
   grid-template-rows: minmax(0, 1fr);
-  margin-top: 24px;
   min-height: 0;
 }
 
@@ -126,7 +124,7 @@
 .prompt-list-manager-card .prompt-list-manager-layout aside button {
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   display: flex;
   flex-direction: column;
@@ -201,7 +199,7 @@
   justify-content: space-between;
   padding-block: 10px;
   position: sticky;
-  z-index: 2;
+  z-index: var(--z-dock);
 }
 
 .prompt-list-manager-buttons {
@@ -216,7 +214,7 @@
    soft wash, so it reads as a state rather than as another line of the form. */
 .prompt-list-alert {
   align-items: flex-start;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   display: flex;
   font-size: 13px;
   font-weight: 700;
@@ -246,15 +244,13 @@
   text-underline-offset: 2px;
 }
 
-.prompt-list-alert-action:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
-
 /* Publication reads as a state with one action, not a value in a select: it is
    an act with a gate behind it, and the only way a list stops being private. */
 .prompt-list-publication {
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;
@@ -302,10 +298,9 @@
 
 /* The tag picker wraps rather than scrolls: the vocabulary is fixed and small
    enough to show whole, and a set that scrolled would hide the ones already
-   chosen. Its chips are the `toggle-chip` from the room-creation form, so
-   picking tags here and picking prompt lists there are visibly one kind of
-   choice; only the size differs, because fifteen of them share a column with
-   the rest of the editor. */
+   chosen. Its chips are the `toggle-chip` recipe the room form's prompt lists
+   use, so picking tags here and picking prompt lists there are visibly one
+   kind of choice; only the size differs (`is-small`). */
 /* Name and language on one line when both fit: the name takes what is left,
    and the language wraps under it on a narrow editor rather than squeezing it. */
 .prompt-list-name-row {
@@ -345,7 +340,7 @@
   align-items: center;
   background: var(--primary-soft);
   border: 1.5px solid var(--primary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--primary-ink);
   display: inline-flex;
   font-size: 13px;
@@ -359,7 +354,7 @@
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: inherit;
   cursor: pointer;
   display: inline-flex;
@@ -377,7 +372,7 @@
   align-items: center;
   background: none;
   border: 1.5px dashed var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--primary-ink);
   cursor: pointer;
   display: inline-flex;
@@ -391,8 +386,6 @@
 
 .tag-picker-trigger:hover,
 .tag-picker-trigger[aria-expanded="true"] { border-color: var(--primary); }
-.tag-picker-remove:focus-visible,
-.tag-picker-trigger:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* The count changes as you pick, so it is tabular: 1 and 3 are different
    widths in this face, and the number would otherwise shift under the eye. */
@@ -412,7 +405,7 @@
 .tag-picker-panel {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   display: grid;
   gap: 10px;
@@ -421,20 +414,12 @@
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 30;
+  z-index: var(--z-popover);
 }
 
 .tag-picker-options { display: flex; flex-wrap: wrap; gap: 6px; }
 
-/* A size down from the room form's chips: these are a list's metadata. */
-.tag-picker-options .toggle-chip {
-  font-size: 13px;
-  gap: 5px;
-  min-height: 32px;
-  padding: 4px 12px;
-}
-
-.tag-picker-options .toggle-chip:disabled { cursor: not-allowed; opacity: 0.45; }
+.tag-picker-options .toggle-chip:disabled { cursor: not-allowed; opacity: var(--opacity-disabled); }
 
 .tag-picker-panel-foot { display: flex; justify-content: flex-end; }
 
@@ -540,7 +525,7 @@
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: flex;
   font-size: 14px;
   gap: 2px;
@@ -558,7 +543,7 @@
 .prompt-list-manager-card .prompt-list-entry-editor > li button {
   background: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   font-size: 16px;
   line-height: 1;
@@ -579,14 +564,14 @@
 .prompt-list-moderation-warning {
   background: var(--warning-soft);
   border: 1px solid var(--warning-edge);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   color: var(--warm-ink);
   margin: 0;
   padding: 10px 12px;
 }
-.prompt-list-manager-empty { color: var(--muted); margin-top: 24px; }
+.prompt-list-manager-empty { margin-top: 16px; }
 
-@media (max-width: 700px) {
+@media (max-width: 720px) {
   .prompt-list-manager-page { display: block; height: auto; padding-bottom: 64px; }
   .prompt-list-manager-card { display: block; padding: 18px; }
   .prompt-list-manager-layout { grid-template-columns: 1fr; grid-template-rows: none; }
@@ -657,6 +642,6 @@
    what grows is the room the editor's fields and the list rail get. */
 @media (min-width: 1200px) {
   .prompt-list-manager-page {
-    max-width: 1272px;
+    --page-width: 1240px;
   }
 }

@@ -98,7 +98,7 @@ export function SuspensionNotice() {
           {/* The rule itself, not just its name: a decision you can read
               the rule behind is one you can check rather than only be
               told (R-RULES-02). */}
-          {fill(ui.suspensionNotice.recordedAs, {
+          {fill(ui.moderationNotice.recordedAs, {
             category: (
               <a href={ruleAnchorFor(suspension.category)}>
                 {humanizeCategory(suspension.category)}
@@ -115,8 +115,8 @@ export function SuspensionNotice() {
         <>
           <p className="modal-body suspension-evidence-label">
             {suspension.messages.length === 1
-              ? ui.suspensionNotice.theMessageThisWasAbout
-              : ui.suspensionNotice.theMessagesThisWasAbout}
+              ? ui.moderationNotice.theMessageThisWasAbout
+              : ui.moderationNotice.theMessagesThisWasAbout}
           </p>
           {/* Their own words, as they were when the report was made. Scrolls
               inside the card rather than growing it off the screen. */}
@@ -138,8 +138,8 @@ export function SuspensionNotice() {
         <>
           <p className="modal-body suspension-evidence-label">
             {suspension.drawings.length === 1
-              ? ui.suspensionNotice.theDrawingThisWasAbout
-              : ui.suspensionNotice.theDrawingsThisWasAbout}
+              ? ui.moderationNotice.theDrawingThisWasAbout
+              : ui.moderationNotice.theDrawingsThisWasAbout}
           </p>
           {/* Their own work, as it was when each report was made - several
               when several reporters each caught the canvas at their own
@@ -150,8 +150,8 @@ export function SuspensionNotice() {
               key={drawing.reportId}
               className="suspension-drawing"
               load={() => fetchSuspensionDrawing(drawing.reportId)}
-              label={ui.suspensionNotice.yourReportedDrawing({ prompt: drawing.prompt })}
-              caption={<>{ui.suspensionNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
+              label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
+              caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
             />
           ))}
         </>

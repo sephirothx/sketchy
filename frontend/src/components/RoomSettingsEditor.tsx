@@ -165,7 +165,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         // The server settles dependent settings itself — a hint mode the
         // scoring rules out, say — so a refusal is not simply "put the old
         // value back"; the form reloads from what the room actually holds.
-        const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseSettings);
+        const message = refusalText(response, ui.roomSettingsEditor.roomRefusedThoseRules);
         setError(message);
         notify(message, "error");
         return;
@@ -195,7 +195,6 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
   // ones cost 90px of a phone's width in padding and borders alone.
   return <ModalShell
     title={ui.roomSettingsEditor.editRoomRules}
-    eyebrow={ui.roomSettingsEditor.hostSettings}
     cardClassName="room-settings-modal-card"
     onDismiss={onCancel}
     footer={<>
@@ -208,12 +207,12 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         disabled={!dirty || saving || promptsError || loading}
         onClick={() => void save()}
       >
-        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveSettings : ui.roomSettingsEditor.saved}
+        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveRules : ui.roomSettingsEditor.saved}
       </button>
     </>}
   >
     <section ref={sectionRef} className="room-settings-editor">
-      {loading ? <p>{ui.roomSettingsEditor.loadingSettings}</p> : (
+      {loading ? <p className="loading-note" role="status">{ui.roomSettingsEditor.loadingRoomRules}</p> : (
         <RoomSetupForm
           values={values}
           onChange={handleChange}

@@ -25,7 +25,6 @@ interface GameEndOverlayProps {
 
 const DISPLAY_SECONDS = 10;
 
-const PODIUM_COLORS = ["var(--gold)", "var(--silver)", "var(--bronze)"];
 const PODIUM_HEIGHTS = [104, 74, 56];
 
 function ConfettiDots() {
@@ -109,7 +108,7 @@ export function GameEndOverlay({
               : <>
                   {winners.map((winner, index) => (
                     <span key={winner.playerId}>
-                      {index > 0 ? (index === winners.length - 1 ? " and " : ", ") : ""}
+                      {index > 0 ? (index === winners.length - 1 ? ui.gameEndOverlay.nameListAnd : ", ") : ""}
                       <span
                         className={playerNameClass(winner.isAnonymous)}
                         style={playerNameStyle(winner.nameColor, winner.isAnonymous)}
@@ -138,7 +137,6 @@ export function GameEndOverlay({
             {podiumOrder.map((scoreIndex) => {
               const entry = podium[scoreIndex];
               const place = ranks[scoreIndex];
-              const color = PODIUM_COLORS[Math.min(place, 3) - 1] ?? "var(--faint)";
               const height = PODIUM_HEIGHTS[Math.min(place, 3) - 1] ?? 48;
               return (
                 <div key={entry.playerId} className="game-end-podium-col">
@@ -162,7 +160,7 @@ export function GameEndOverlay({
                       <span className="visually-hidden">{ui.gameEndOverlay.friend}</span>
                     )}
                   </span>
-                  <div className="game-end-podium-block" style={{ height, background: color }}>
+                  <div className={`game-end-podium-block is-place-${Math.min(place, 3)}`} style={{ height }}>
                     <span className="game-end-podium-place">{place}</span>
                     <span className="game-end-podium-score">{entry.score}</span>
                   </div>
@@ -208,7 +206,7 @@ export function GameEndOverlay({
           </p>
           <button
             type="button"
-            className="game-end-claim-action"
+            className="btn btn-primary btn-compact game-end-claim-action"
             onClick={() => setAuthMode("claim")}
           >
             {ui.gameEndOverlay.createAccount}
@@ -231,7 +229,7 @@ export function GameEndOverlay({
         )}
         <button
           type="button"
-          className="game-end-continue"
+          className="btn btn-primary btn-big game-end-continue"
           aria-label={countdownVisible
             ? ui.gameEndOverlay.continueWithCountdown({ seconds: remaining })
             : ui.gameEndOverlay.continueToWaitingRoom}
@@ -251,7 +249,7 @@ export function GameEndOverlay({
       </div>
       {!hold && (
         <p className="game-end-stay">
-          <button type="button" className="game-end-stay-link" onClick={() => setHold(true)}>
+          <button type="button" className="btn btn-ghost btn-compact" onClick={() => setHold(true)}>
             {ui.gameEndOverlay.stayHere}
           </button>
         </p>

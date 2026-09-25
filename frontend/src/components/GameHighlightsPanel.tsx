@@ -64,7 +64,7 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
                 <span className="game-highlights-icon" aria-hidden="true">
                   {KIND_ICONS[highlight.kind]}
                 </span>
-                <p className="game-highlights-label">{highlight.label}</p>
+                <p className="section-label">{highlight.label}</p>
                 <p className="game-highlights-subject">
                   {highlight.name ? (
                     <span

@@ -18,7 +18,6 @@
 @import "./styles/game-room.css" layer(components);
 @import "./styles/chat.css" layer(components);
 @import "./styles/overlays.css" layer(components);
-@import "./styles/game-results-shared.css" layer(components);
 @import "./styles/player-list-shared.css" layer(components);
 @import "./styles/dialogs.css" layer(components);
 @import "./styles/canvas.css" layer(components);
@@ -27,3 +26,4 @@
 @import "./styles/operator-shared.css" layer(components);
 @import "./styles/profile-shared.css" layer(components);
 @import "./styles/a11y.css" layer(utilities);
+@import "./styles/utilities.css" layer(utilities);

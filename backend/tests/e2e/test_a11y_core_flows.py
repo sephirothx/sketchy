@@ -198,9 +198,11 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         )
         await assert_no_axe_violations(host_page, "players drawer")
 
-        menu_button = drawer.get_by_role("button", name="Moderation for A11yGuest")
+        # Named for what it offers - a kick vote, an AFK vote, a report -
+        # and whom, rather than with the staff word "moderation".
+        menu_button = drawer.locator(".player-moderation-trigger[aria-label$='A11yGuest']")
         if await menu_button.count() == 0:
-            menu_button = drawer.get_by_role("button", name="Moderation for A11yHost")
+            menu_button = drawer.locator(".player-moderation-trigger[aria-label$='A11yHost']")
         await menu_button.focus()
         await host_page.keyboard.press("Enter")
         menu = drawer.get_by_role("menu")
@@ -211,7 +213,7 @@ async def test_settings_confirmation_drawer_and_moderation_keyboard():
         await host_page.keyboard.press("Escape")
         await menu.wait_for(state="hidden")
         assert await host_page.evaluate(
-            "() => document.activeElement?.getAttribute('aria-label')?.startsWith('Moderation for')"
+            "() => document.activeElement?.classList.contains('player-moderation-trigger')"
         )
         await host_page.keyboard.press("Escape")
         await drawer.wait_for(state="hidden")

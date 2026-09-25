@@ -6,6 +6,7 @@ import { Card, SectionLabel } from "../components/ui/Card";
 import { rulesFor } from "../content/rules";
 import { ui } from "../content/ui/index.ts";
 import { useSettingsStore } from "../store/settingsStore.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/operator.css";
 
 /** The rules, on one page.
@@ -33,6 +34,7 @@ export function RulesPage() {
   // they are held to.
   const locale = useSettingsStore((state) => state.locale);
   const rules = rulesFor(locale);
+  useDocumentTitle(rules.title);
 
   useEffect(() => {
     if (!hash) return;
@@ -75,7 +77,6 @@ export function RulesPage() {
       <AppHeader backLabel={ui.rulesPage.backToLobby} />
 
       <header className="rules-masthead">
-        <SectionLabel>{ui.rulesPage.sketchy}</SectionLabel>
         <h1>{rules.title}</h1>
       </header>
 
@@ -139,7 +140,7 @@ export function RulesPage() {
                   ))}
                   {rule.examples.length > 0 && (
                     <div className="rules-examples">
-                      <p className="rules-examples-label">{ui.rulesPage.forExample}</p>
+                      <p className="section-label rules-examples-label">{ui.rulesPage.forExample}</p>
                       <ul>
                         {rule.examples.map((example) => (
                           <li key={example}>{example}</li>

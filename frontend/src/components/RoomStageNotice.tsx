@@ -73,11 +73,13 @@ export function RoomEndedCard({ reason, onLeave }: { reason: RoomEndReason; onLe
     <div className="room-ended" data-testid="room-ended" data-reason={reason}>
       <div className="surface-card room-stage-card" role="alert">
         <h2 className="room-stage-title">
-          {reason === "kicked" ? ui.roomStageNotice.removedByVote : ui.roomStageNotice.gameEnded}
+          {reason === "kicked" ? ui.roomStageNotice.kickedFromRoom : ui.roomStageNotice.gameEnded}
         </h2>
         <p className="room-stage-body">
+          {/* A rejoin refused as kicked does not say who did it - a vote or
+              an administrator - so this says only what is known. */}
           {reason === "kicked"
-            ? kickedText("kicked_by_vote")
+            ? kickedText(undefined)
             : reason === "server-update"
               ? ui.roomStageNotice.endedServerUpdate
               : ui.roomStageNotice.endedRoomClosed}
@@ -133,7 +135,7 @@ export function RoomDrainCue({ playing }: { playing: boolean }) {
           </p>
           <div className="room-stage-actions">
             <Button variant="primary" onClick={dismiss}>
-              {ui.drainCue.gotIt}
+              {ui.drainCue.ok}
             </Button>
           </div>
         </div>

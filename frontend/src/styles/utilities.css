@@ -1,0 +1,15 @@
+/* Rules that have to win over every surface, in the utilities layer rather
+   than behind `!important`: a layer later in the order beats any specificity
+   in an earlier one, so a surface's field rule never has to be outranked one
+   at a time, and a later rule of the same kind still can be. */
+
+/* A disabled field reads as one wherever it is. Every surface styles its own
+   fields, most of them with a selector more specific than this one, and a
+   disabled field that kept its surface's white ground looked editable. */
+select:disabled,
+input:disabled,
+textarea:disabled {
+  background-color: var(--track);
+  border-color: var(--line);
+  color: var(--muted);
+}

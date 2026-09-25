@@ -205,7 +205,7 @@ test("a room-full player response returns to preview while keeping spectator joi
   assert.equal(machine.getSnapshot().state.room.isFull, true);
   assert.equal(
     machine.getSnapshot().state.error,
-    "The player slots just filled up, but you can still spectate.",
+    "The last player seat was just taken, but you can still spectate.",
   );
 });
 

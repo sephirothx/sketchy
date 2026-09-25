@@ -70,7 +70,7 @@ export const RULES_EN: RulesDocument = {
               "fast is the whole point.",
           ],
           examples: [
-            "Repeating a message until nobody can follow the round",
+            "Repeating a message until nobody can follow the game",
             "Posting links or invites to somewhere else",
             "Pasting the same wall of text into room after room",
           ],
@@ -144,12 +144,12 @@ export const RULES_EN: RulesDocument = {
             "Don't hand the prompt to anyone who's meant to be guessing it — " +
               "not in chat, not in the drawing, not somewhere outside the " +
               "game. And don't get a program to play for you.",
-            "Writing the word on the canvas counts as saying it.",
+            "Writing the prompt on the canvas counts as saying it.",
           ],
           examples: [
             "Writing or spelling out the prompt while you draw it",
             "Telling a friend the prompt over a call or another app",
-            "Using a second account to feed yourself answers",
+            "Using a second account to feed yourself the prompt",
           ],
         },
       ],

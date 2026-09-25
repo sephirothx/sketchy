@@ -39,8 +39,16 @@ export function gameLength(
 /** The rules this room plays by that differ from a new room's defaults, as
     short labels, in a fixed order: scoring, hints, drawing, prompts, then
     spectators. Empty for a room on standard settings, which the row says once
-    rather than as six grey chips that would hide the room that is unusual. */
-export function changedRoomRules(room: RoomSummary): string[] {
+    rather than as six grey chips that would hide the room that is unusual.
+    The Create page's "Your room" card lists the same ones, so a room is
+    described the same way before it exists as in the lobby afterwards. */
+export type ChangedRulesInput = Pick<
+  RoomSummary,
+  | "scoringMode" | "hintMode" | "hideMaskedPrompt" | "allowedTools" | "colorMode"
+  | "customPromptCount" | "customPromptsOnly" | "spectatorsSeePrompt"
+>;
+
+export function changedRoomRules(room: ChangedRulesInput): string[] {
   const rules: string[] = [];
   if (room.scoringMode === "pressure") rules.push(ui.roomSetup.pressureScoring);
   if (room.scoringMode === "none") rules.push(ui.roomSetup.noScoring);
@@ -138,4 +146,28 @@ export function otherRoomRules(room: RoomFactsInput): string[] {
     describeDrawingRules(room.allowedTools, room.colorMode),
     room.spectatorsSeePrompt ? ui.roomFacts.spectatorsSeeThePrompt : null,
   ].filter((rule): rule is string => Boolean(rule));
+}
+
+/** Six to a row, then three, then two: the room facts' column counts, most
+    first. Two is the floor - one to a row would be a list, not a strip. */
+export const ROOM_FACT_COLUMNS = [6, 3, 2] as const;
+
+/**
+ * How many room facts to a row (RoomFacts), so that no word breaks inside
+ * itself (R-UX-11): the most columns whose cells still hold the widest word -
+ * the cell's padding, its 1px rule and a pixel for canvas-versus-layout
+ * rounding included. Measured rather than set by a breakpoint, because the
+ * widest word is the language's: "Default" fits three to a phone's row where
+ * "Zeitgesteuerte" (Timed) and "Niederländisch" (Dutch) need two.
+ *
+ * `current` is the count showing now. Adding columns asks for one pixel more
+ * than keeping them, so a width sitting exactly on a threshold - a scrollbar
+ * coming and going, a fractional width rounding either way - does not flip
+ * the strip back and forth.
+ */
+export function columnsFor(width: number, widestWord: number, cellPadding: number, current?: number): number {
+  const needed = widestWord + cellPadding + 2;
+  const fits = (columns: number) =>
+    width / columns >= needed + (current !== undefined && columns > current ? 1 : 0);
+  return ROOM_FACT_COLUMNS.find(fits) ?? ROOM_FACT_COLUMNS[ROOM_FACT_COLUMNS.length - 1];
 }

@@ -14,6 +14,7 @@ import { ReportLobbyLineDialog } from "./ReportLobbyLineDialog";
 import { refusalText } from "../lib/refusals.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
+import { EmptyState } from "./ui/EmptyState";
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"
 without a new line arriving, which is the point of the label. */
@@ -99,9 +100,9 @@ export const LobbyChatPanel = memo(function LobbyChatPanel() {
   }
 
   return (
-    <section className="panel lobby-chat-panel" aria-labelledby="lobby-chat-heading">
+    <section className="surface-card panel lobby-chat-panel" aria-labelledby="lobby-chat-heading">
       <div className="lobby-rooms-heading">
-        <h2 id="lobby-chat-heading">{ui.lobbyChatPanel.chat}</h2>
+        <h2 id="lobby-chat-heading" className="panel-title">{ui.lobbyChatPanel.chat}</h2>
       </div>
       <div className="chat-messages-container">
         {/* Focusable because it scrolls: a keyboard user has to be able to
@@ -116,7 +117,7 @@ export const LobbyChatPanel = memo(function LobbyChatPanel() {
           data-testid="lobby-chat-list"
         >
           {lines.length === 0 ? (
-            <p className="lobby-chat-empty">{ui.lobbyChatPanel.nobodyHasSaidAnythingYet}</p>
+            <EmptyState compact title={ui.lobbyChatPanel.nobodyHasSaidAnythingYet} />
           ) : (
             lines.map((line) => (
               <LobbyChatLineRow
@@ -168,7 +169,7 @@ export const LobbyChatPanel = memo(function LobbyChatPanel() {
                 enterKeyHint="send"
               />
             </div>
-            <button type="submit" className="chat-send-button" disabled={sending} aria-label={ui.lobbyChatPanel.send}>
+            <button type="submit" className="btn btn-primary chat-send-button" disabled={sending} aria-label={ui.lobbyChatPanel.send}>
               <ChevronRightIcon size={17} />
             </button>
           </div>

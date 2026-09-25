@@ -9,8 +9,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  z-index: 1000;
-  animation: fadeInModal 0.15s ease-out;
+  z-index: var(--z-modal);
+  animation: fadeInModal var(--dur-fast) ease-out;
 }
 
 @keyframes fadeInModal {
@@ -26,9 +26,6 @@
   background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
-  box-sizing: border-box;
-  display: flex;
-  flex-direction: column;
   padding: 20px 24px;
   max-width: 420px;
   max-height: 90dvh;
@@ -36,7 +33,7 @@
   text-align: left;
   color: var(--ink);
   box-shadow: var(--shadow-raised);
-  animation: popUpModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: popUpModal var(--dur) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes popUpModal {
@@ -106,7 +103,7 @@
   padding-top: 16px;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 480px) {
   .modal-card {
     padding: 18px 16px;
   }
@@ -159,29 +156,6 @@
   margin: 0;
 }
 
-.modal-button {
-  background: var(--primary);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 0 var(--primary-edge);
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: filter 0.15s ease;
-}
-
-.modal-button:hover {
-  filter: brightness(1.05);
-}
-
-/* This one dialog is opened from inside the mobile players drawer, which is
-   itself at 1200 - the highest layer the game has. Matching it would leave the
-   two ordered by which happens to come later in the DOM, so it clears it. */
-.modal-overlay.report-player-overlay {
-  z-index: 1250;
-}
 
 /* A select inside a dialog form, drawn like the textarea beside it. The
    report dialogs referred to a class nothing defined, so the control came
@@ -207,16 +181,16 @@
   padding: 8px 10px;
   border-left: 3px solid var(--line-strong);
   background: var(--field);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   font-size: 13.5px;
   overflow-wrap: anywhere;
   text-align: left;
 }
 
-/* Above everything, including the drawer at 1200 and the report dialog at
-   1250: there is nothing behind this worth reaching. */
+/* Above every other dialog and drawer: there is nothing behind this worth
+   reaching. Only a toast goes over it (the layers, layout-primitives.css). */
 .modal-overlay.suspension-overlay {
-  z-index: 1300;
+  z-index: var(--z-blocking);
 }
 
 .suspension-reason {
@@ -292,7 +266,7 @@
 .bug-report-mark {
   align-items: center;
   background: var(--warm-soft);
-  border-radius: 9px;
+  border-radius: var(--radius-sm);
   color: var(--warm-ink);
   display: inline-flex;
   flex: none;
@@ -307,7 +281,7 @@
   grid-template-columns: 1fr 1fr;
 }
 
-@media (max-width: 520px) {
+@media (max-width: 640px) {
   .bug-report-row { grid-template-columns: 1fr; }
 }
 
@@ -337,15 +311,13 @@
 
 .bug-report-shot-head strong { color: var(--ink); font-size: 13px; }
 
+/* "(optional)" reads the same beside every label it qualifies: quiet text,
+   not a badge. */
 .bug-report-optional {
-  background: var(--well);
-  border: 1px solid var(--line);
-  border-radius: 999px;
   color: var(--muted);
   font-size: 12px;
-  font-weight: 800;
-  margin-left: auto;
-  padding: 4px 11px;
+  font-weight: 600;
+  margin-left: 4px;
 }
 
 .bug-report-shot-body {
@@ -356,14 +328,14 @@
 
 .bug-report-shot-body img {
   border: 1.5px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   flex: none;
   height: auto;
   width: 148px;
 }
 
 .bug-report-shot-meta {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 12.5px;
   font-weight: 800;
   margin: 0 0 4px;
@@ -430,12 +402,12 @@
   margin-top: 2px;
 }
 
-/* The AFK check (#677). Above the room's own overlays: it is the room asking
-   a question, and an answer is what keeps the seat. Nothing else on screen
-   can be reached while it is open, which is honest — the room really is about
-   to carry on without them. */
+/* The AFK check (#677). A blocking notice, over the room's own drawers and
+   dialogs: it is the room asking a question, and an answer is what keeps the
+   seat. Nothing else on screen can be reached while it is open, which is
+   honest — the room really is about to carry on without them. */
 .modal-overlay.afk-check-overlay {
-  z-index: 1300;
+  z-index: var(--z-blocking);
 }
 
 .afk-check-countdown {

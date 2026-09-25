@@ -136,7 +136,7 @@ export function StepUpDialog({
               value={code}
               onChange={setCode}
               onComplete={(complete) => void submitWith(complete)}
-              label={ui.stepUpDialog.codeFromYourAuthenticatorApp2}
+              label={ui.stepUpDialog.codeFromYourAuthenticatorApp}
               autoFocus
               disabled={busy}
             />

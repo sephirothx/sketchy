@@ -70,7 +70,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
       onClose();
       await logout();
     } catch (failure) {
-      setError(refusalText(failure, ui.sessionManagerDialog.couldNotLogOutEverywhere));
+      setError(refusalText(failure, ui.sessionManagerDialog.couldNotSignOutEverywhere));
       setBusyId(null);
     }
   }
@@ -92,7 +92,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
             onClick={() => setConfirmingAll(true)}
             disabled={busyId !== null || sessions.length === 0}
           >
-            {busyId === "all" ? ui.sessionManagerDialog.loggingOut : ui.sessionManagerDialog.logOutEverywhere}
+            {busyId === "all" ? ui.sessionManagerDialog.signingOut : ui.sessionManagerDialog.signOutEverywhere}
           </button>
         }
       >
@@ -150,7 +150,7 @@ export function SessionManagerDialog({ onClose }: { onClose: () => void }) {
         <ConfirmationDialog
           title={ui.sessionManagerDialog.logOutEverywhereTitle}
           description={ui.sessionManagerDialog.logOutEverywhereBody}
-          confirmLabel={ui.sessionManagerDialog.logOutEverywhere}
+          confirmLabel={ui.sessionManagerDialog.signOutEverywhere}
           onCancel={() => setConfirmingAll(false)}
           onConfirm={() => {
             setConfirmingAll(false);

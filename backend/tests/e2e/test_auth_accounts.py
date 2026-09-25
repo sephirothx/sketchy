@@ -84,15 +84,44 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             assert await page.locator(".modal-overlay").count() == 0
             assert await page.is_visible('button:has-text("Create room")')
 
-            # A returning registered player can reach Log in without ever being
+            # A returning registered player can reach Sign in without ever being
             # asked to invent a guest name.
             assert await page.is_visible(".first-run-login")
             assert await page.is_visible(".first-run-signup")
 
-            # Guest play is one field and one click.
+            # The field only takes the name rule's characters: a space and a
+            # "!" typed key by key are simply not entered.
+            field = page.locator(".first-run-guest-row input")
+            await field.press_sequentially("a b!c")
+            assert await field.input_value() == "abc"
+
+            # A refused key is never entered, so the browser's own undo still
+            # has its history: "X" typed after a refused "!" is undone alone.
+            # (Rewriting the value after the fact left undo doing nothing.)
+            await field.fill("")
+            await field.press_sequentially("ab")
+            await field.press("ArrowLeft")
+            await field.press("!")
+            await field.press("X")
+            assert await field.input_value() == "aXb"
+            await field.press("ControlOrMeta+z")
+            assert await field.input_value() == "ab"
+
+            # A paste - here Playwright's insertText, which goes through the
+            # same beforeinput - keeps the allowed characters only.
+            await field.fill("")
+            await field.focus()
+            await page.keyboard.insert_text("Jo Jo")
+            assert await field.input_value() == "JoJo"
+
+            # Guest play is one field and one click. Too short is refused in
+            # a toast, and the field is marked invalid until the next edit.
             await page.fill(".first-run-guest-row input", "ab")
             await page.click(".first-run-guest-submit")
-            await page.wait_for_selector(".auth-error")
+            await page.locator(".app-toast.error").get_by_text(
+                "A name needs at least 3 characters."
+            ).wait_for()
+            assert await field.get_attribute("aria-invalid") == "true"
 
             await page.fill(".first-run-guest-row input", "Marta")
             await page.click(".first-run-guest-submit")
@@ -133,9 +162,17 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             await open_player_settings(guest)
             await guest.wait_for_selector(".settings-you")
             # Guests are pinned to grey, so there is no palette and no chip on
-            # the disc; the account-only rows below are locked with a reason.
+            # the disc; and the rows only an account has are not shown at all -
+            # the guest card is the one invitation (R-SET-06).
             assert await guest.locator(".settings-swatch").count() == 0
-            assert await guest.is_visible(".settings-locked")
+            # Asserted by the controls, not a heading's wording: no password or
+            # email control and no device manager, while the data export -
+            # which works for a guest - is still there.
+            assert await guest.is_visible(".settings-guest-card")
+            assert await guest.locator('.settings-row button:has-text("Change password")').count() == 0
+            assert await guest.locator('.settings-row button:has-text("Add an email")').count() == 0
+            assert await guest.locator('.settings-row button:has-text("Manage")').count() == 0
+            assert await guest.locator('.settings-row button:has-text("Request export")').is_visible()
 
             # Only a guest can change the name (a registered player always
             # plays as their username), and it is the one thing on the card
