@@ -102,7 +102,7 @@ export function PlayerList({
         status?: string;
       }>("add_friend", { playerId });
       if (!answer?.ok) {
-        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent));
+        notify(refusalText(answer, ui.playerList.requestCouldNotBeSent), "error");
         return;
       }
       // One outcome worth telling apart - they had already asked, so you
@@ -116,7 +116,7 @@ export function PlayerList({
         notify(ui.playerList.friendRequestSent({ name: nickname }));
       }
     } catch {
-      notify(ui.playerList.thatRequestCouldNotBeSent);
+      notify(ui.playerList.thatRequestCouldNotBeSent, "error");
     }
   }
   const listRef = useRef<HTMLUListElement>(null);
