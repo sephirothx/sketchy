@@ -146,7 +146,6 @@ export function ModalShell({
     onEscape: escape,
     initialFocusRef,
   });
-  // In a room, Back does what Escape does (R-UX-15).
   // In a room, Back does what dismissing does (R-UX-15); a blocking notice,
   // which cannot be dismissed, leaves Back to the room.
   useBackCloses(onDismiss !== undefined, onDismiss ?? swallow);

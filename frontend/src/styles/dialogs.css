@@ -159,7 +159,6 @@
   margin: 0;
 }
 
-
 /* A select inside a dialog form, drawn like the textarea beside it. The
    report dialogs referred to a class nothing defined, so the control came
    out native beside a styled textarea. Scoped to the form rather than to a
