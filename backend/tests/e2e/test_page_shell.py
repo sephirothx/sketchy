@@ -74,11 +74,34 @@ async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
             await expect(nav.get_by_role("link", name="Rules", exact=True)).to_be_visible()
             await expect(page.locator(".lobby-links")).to_be_hidden()
 
+            # Labelled at 1280: `to_be_visible` on a link passes in icon mode
+            # too, so the label itself is what is checked, and the row has not
+            # fallen back to icons.
+            await expect(lobby.locator(".site-nav-label")).to_be_visible()
+            await expect(lobby.locator(".site-nav-label")).to_have_text("Lobby")
+            await expect(page.locator(".site-nav.is-crowded")).to_have_count(0)
+
+            # Icons below 1200: the label is clipped to nothing (still the
+            # link's name) and the tooltip says it instead.
+            await page.set_viewport_size({"width": 1000, "height": 800})
+            await expect(lobby).to_have_attribute("title", "Lobby")
+            label_box = await lobby.locator(".site-nav-label").bounding_box()
+            assert label_box is not None and label_box["width"] <= 1, label_box
+            await page.set_viewport_size({"width": 1280, "height": 800})
+            await expect(lobby).not_to_have_attribute("title", "Lobby")
+
             # A click is a way there, and the mark follows.
             await gallery.click()
             await page.wait_for_url(f"{BASE_URL}/gallery")
             await expect(gallery).to_have_attribute("aria-current", "page")
             await expect(lobby).not_to_have_attribute("aria-current", "page")
+
+            # A page nested under the Gallery marks the section, not the page.
+            # The drawing need not exist: its page still draws the bar, with
+            # the crumb back to the Gallery.
+            await page.goto(f"{BASE_URL}/gallery/00000000-0000-0000-0000-000000000000")
+            await page.locator(".lobby-header .header-crumb").wait_for()
+            await expect(gallery).to_have_attribute("aria-current", "true")
 
             visitor = await nameless.new_page()
             await visitor.goto(BASE_URL)
