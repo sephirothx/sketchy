@@ -66,6 +66,32 @@ async def test_back_in_the_waiting_room_leaves_at_once_and_gives_up_the_seat():
             await join_by_code(guest, code)
             await guest.wait_for_selector('[data-testid="waiting-room"]')
             await expect(seat(guest, host_name)).to_be_visible()
+            await expect(seat(host, guest_name)).to_be_visible()
+
+            # The guest leaves by Back, then goes Forward onto the room's old
+            # entry and joins again from the invite screen there. That seat is
+            # a new one on an entry the old seat marked, and the entry below it
+            # is the lobby now: Back has to be Leave for it too, not a walk out
+            # to the lobby with the seat still held.
+            await guest.go_back()
+            await guest.wait_for_url(f"{BASE_URL}/")
+            await expect(seat(host, guest_name)).to_have_count(0)
+            await guest.go_forward()
+            await guest.wait_for_url(f"{BASE_URL}/room/{code}")
+            await guest.click('button:has-text("Join game")')
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            await expect(seat(host, guest_name)).to_be_visible()
+            await room_history_at(guest, 0)
+            await guest.go_back()
+            await guest.wait_for_url(f"{BASE_URL}/")
+            await expect(guest.locator('[data-testid="room-header"]')).to_have_count(0)
+            await expect(seat(host, guest_name)).to_have_count(0)
+
+            # The host, the same way: Back leaves the waiting room at once.
+            await guest.goto(f"{BASE_URL}/room/{code}")
+            await guest.click('button:has-text("Join game")')
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            await expect(seat(guest, host_name)).to_be_visible()
 
             await host.go_back()
             await host.wait_for_url(f"{BASE_URL}/")

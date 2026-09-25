@@ -1,10 +1,11 @@
-import { createContext, useContext, useEffect, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useMemo, useRef } from "react";
 
 import {
   createRoomHistory,
   historyPortFor,
   leaveRoomHistory,
   type RoomHistory,
+  type RoomSeat,
 } from "../lib/roomHistory";
 
 /** Back in a room (R-UX-15): the React half of `lib/roomHistory.ts`, which
@@ -22,9 +23,18 @@ function browserPort() {
 }
 
 /** The room's entries on the history stack, for as long as the room is mounted.
-`onBackOnRoom` is what Back from the room itself does: the room's own Leave. */
-export function useRoomHistory(code: string, onBackOnRoom: () => void): RoomHistory {
-  const [history] = useState(() => createRoomHistory(browserPort(), code));
+`onBackOnRoom` is what Back from the room itself does: the room's own Leave.
+Keyed on the seat as well as the room, so entries pushed for a seat since
+given up are never taken for this one's (see `RoomSeat`). */
+export function useRoomHistory(
+  code: string,
+  seat: string,
+  onBackOnRoom: () => void,
+): RoomHistory {
+  const history = useMemo(
+    () => createRoomHistory(browserPort(), { code, seat }),
+    [code, seat],
+  );
   useEffect(() => {
     history.onBackOnRoom(onBackOnRoom);
   });
@@ -55,6 +65,6 @@ export function useBackCloses(active: boolean, onClose: () => void): void {
 /** Leave the room's history the way the room is left: its entries rewound off
 the stack, then `finish` navigates - replacing the entry the room was entered
 on when `replace` is true, so Back from the lobby does not come back here. */
-export function exitRoomHistory(code: string, finish: (replace: boolean) => void): void {
-  leaveRoomHistory(browserPort(), code, finish);
+export function exitRoomHistory(who: RoomSeat, finish: (replace: boolean) => void): void {
+  leaveRoomHistory(browserPort(), who, finish);
 }

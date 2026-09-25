@@ -2746,7 +2746,7 @@ A seated client checks with the server every five seconds that it still holds th
   the column for a scratch pad at a turn's size - only yours, like the one an outage shows,
   and the same drawing on both - with the room code (a chip that copies the invite link) and Start kept in a strip above it.
 - The browser's Back (or a phone's back gesture) in a room closes whatever is open over it
-  first - a sheet, a dialog, the drawings or the highlights - and otherwise is the room's
+  first - a sheet, a dialog, a menu, the drawings or the highlights - and otherwise is the room's
   Leave: during a game it asks first, and Back again stays; in the waiting room it leaves at
   once. It no longer walks out of a room with the seat still held, and after leaving, Back
   from the lobby goes to wherever you came from rather than into the room you left.

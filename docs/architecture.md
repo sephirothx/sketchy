@@ -279,7 +279,10 @@ A live room also keeps **history entries of its own**, because Back is the route
 otherwise and the router's Back unmounts the room without `leave_room` (R-UX-15). There
 is still no router migration and no blocker: the room pushes entries on its own URL
 with `history.pushState`, told apart by a mark in `history.state` beside the router's
-keys, so the router sees the same location throughout and the room never remounts.
+keys, so the router sees the same location throughout and the room never remounts. The
+mark names the seat as well as the room: entries a leave leaves in the forward history
+can be reached again with Forward, and a player who rejoins there holds a new seat on an
+old mark, which has to count as the base so a fresh guard goes over it.
 Over the entry the room was entered on (the *base*) sits a **guard**, and over that one
 entry per open sheet. Back from a sheet's entry closes the topmost sheet; Back from the
 guard lands on the base, where the room pushes the guard again and runs its own Leave
@@ -294,9 +297,13 @@ that port are [`lib/roomHistory.ts`](../frontend/src/lib/roomHistory.ts), tested
 a simulated history; the React half is
 [`hooks/useRoomHistory.ts`](../frontend/src/hooks/useRoomHistory.ts), whose context only
 the live room provides — so `BottomSheet` and `ModalShell` register every in-room sheet
-and dialog, and do nothing anywhere else. The overlays are unaffected: Settings and
+and dialog, the room's dropdown menus register themselves, and all of them do nothing
+anywhere else. The overlays are unaffected: Settings and
 Friends are entries of the router's own, pushed on top, and closing one lands back on a
-room entry that asks for nothing. A browser may skip an entry pushed without a user
+room entry that asks for nothing. An overlay opened *from* a sheet leaves that sheet's
+entry beneath it; Back from the overlay steps over it to the guard, and a Forward after
+that bounces off it the same way. Harmless, and cheaper than overlays that know about
+rooms. A browser may skip an entry pushed without a user
 gesture when Back is pressed (Chrome's history-manipulation intervention); the guard is
 pushed as the room mounts, just after the press that entered it, and if it were ever
 skipped Back would behave as it did before this rather than worse.

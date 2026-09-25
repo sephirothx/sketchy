@@ -14,6 +14,7 @@ import {
   eligibleModerationVotes,
 } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
+import { useBackCloses } from "../hooks/useRoomHistory";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
@@ -436,6 +437,7 @@ function PlayerModerationMenu({
 
   useEscapeLayer(isOpen, () => onOpenChange(false));
   useFocusTrap(menuRef, { active: isOpen });
+  useBackCloses(isOpen, () => onOpenChange(false));
 
   useEffect(() => {
     if (!isOpen) return;

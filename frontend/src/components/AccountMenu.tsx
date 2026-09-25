@@ -119,6 +119,8 @@ export function AccountMenu({ compact = false, inRoom = false }: {
   // keeps Tab inside, moves focus to the first item on open, and returns it to
   // the chip on close; the arrow keys are handled below.
   useFocusTrap(menuRef, { active: menuOpen });
+  // In a room, Back closes the menu as Escape does (R-UX-15); elsewhere a no-op.
+  useBackCloses(menuOpen, () => setMenuOpen(false));
 
   function handleMenuKeyDown(event: ReactKeyboardEvent<HTMLDivElement>): void {
     const items = menuRef.current ? getFocusableElements(menuRef.current) : [];

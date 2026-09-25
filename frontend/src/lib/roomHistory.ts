@@ -8,7 +8,8 @@ phone, where Back is a gesture people make without thinking, that was the
 easiest way out of a game by accident.
 
 So a room keeps entries of its own on the history stack, all on the room's URL
-and told apart by a mark in `history.state`:
+and told apart by a mark in `history.state` naming the room and the seat held
+in it (`RoomSeat`):
 
 * the **guard**, depth 0, pushed over the entry the room was opened on (the
   **base**). Back from the guard lands on the base, which is how Back on the
@@ -38,8 +39,21 @@ the router's own keys, never inside `usr`, so the router's `location.state`
 does not change when a sheet opens. */
 export const ROOM_ENTRY_KEY = "sketchyRoomEntry";
 
-interface RoomEntryMark {
+/** Whose entries these are: a room, and the seat held in it.
+
+The seat, not only the room, because entries outlive the seat that pushed
+them. Leaving leaves them in the forward history, and Forward onto one opens
+the invite screen; a player who rejoins from there holds a new seat on an
+entry that still says *guard*. Trusted, that mark would put no guard over the
+entry below - which is by then the lobby - and Back would walk out of the room
+with the seat held. A seat id survives a reload, which re-seats the same seat,
+and nothing else. */
+export interface RoomSeat {
   code: string;
+  seat: string;
+}
+
+interface RoomEntryMark extends RoomSeat {
   depth: number;
 }
 
@@ -61,16 +75,24 @@ function markOf(state: unknown): RoomEntryMark | null {
   if (!state || typeof state !== "object") return null;
   const mark = (state as Record<string, unknown>)[ROOM_ENTRY_KEY];
   if (!mark || typeof mark !== "object") return null;
-  const { code, depth } = mark as Partial<RoomEntryMark>;
-  if (typeof code !== "string" || typeof depth !== "number") return null;
+  const { code, seat, depth } = mark as Partial<RoomEntryMark>;
+  if (typeof code !== "string" || typeof seat !== "string" || typeof depth !== "number") {
+    return null;
+  }
   if (!Number.isInteger(depth) || depth < 0) return null;
-  return { code, depth };
+  return { code, seat, depth };
 }
 
-export function locate(state: unknown, pathname: string, code: string): Landing {
-  if (!isRoomPath(pathname, code)) return { kind: "elsewhere" };
+/** Where the current entry is for this seat. Another seat's mark - one left
+behind by a seat given up earlier - is the base, like no mark at all. */
+export function locate(state: unknown, pathname: string, who: RoomSeat): Landing {
+  if (!isRoomPath(pathname, who.code)) return { kind: "elsewhere" };
   const mark = markOf(state);
-  if (mark && mark.code.toUpperCase() === code.toUpperCase()) {
+  if (
+    mark
+    && mark.code.toUpperCase() === who.code.toUpperCase()
+    && mark.seat === who.seat
+  ) {
     return { kind: "entry", depth: mark.depth };
   }
   return { kind: "base" };
@@ -79,9 +101,10 @@ export function locate(state: unknown, pathname: string, code: string): Landing 
 /** The state for an entry pushed on top of `state`: the router's keys kept, so
 it still reads the same location, its index moved on by one as a push of its
 own would, and the mark added. */
-export function pushedState(state: unknown, code: string, depth: number): Record<string, unknown> {
+export function pushedState(state: unknown, who: RoomSeat, depth: number): Record<string, unknown> {
   const base = state && typeof state === "object" ? (state as Record<string, unknown>) : {};
-  const next: Record<string, unknown> = { ...base, [ROOM_ENTRY_KEY]: { code, depth } };
+  const mark: RoomEntryMark = { code: who.code, seat: who.seat, depth };
+  const next: Record<string, unknown> = { ...base, [ROOM_ENTRY_KEY]: mark };
   if (typeof base.idx === "number") next.idx = base.idx + 1;
   return next;
 }
@@ -254,14 +277,14 @@ export interface RoomHistory {
   onBackOnRoom(handler: () => void): void;
 }
 
-export function createRoomHistory(port: HistoryPort, code: string): RoomHistory {
+export function createRoomHistory(port: HistoryPort, who: RoomSeat): RoomHistory {
   const sheets: { dismiss: () => void }[] = [];
   let backOnRoom: () => void = () => {};
   let unlisten: (() => void) | null = null;
   let scheduled = false;
 
   const active = () => unlisten !== null && !leaving.has(port);
-  const landing = () => locate(port.state(), port.pathname(), code);
+  const landing = () => locate(port.state(), port.pathname(), who);
 
   function apply(step: HistoryStep) {
     if (!step) return;
@@ -271,7 +294,7 @@ export function createRoomHistory(port: HistoryPort, code: string): RoomHistory 
     }
     let state = port.state();
     for (const depth of step.push) {
-      state = pushedState(state, code, depth);
+      state = pushedState(state, who, depth);
       port.pushState(state);
     }
   }
@@ -361,7 +384,7 @@ already had in flight is let land first, since the rewind is counted from
 wherever it lands. */
 export function leaveRoomHistory(
   port: HistoryPort,
-  code: string,
+  who: RoomSeat,
   finish: (replace: boolean) => void,
 ): void {
   // A second way out while the first is rewinding (a kick arriving under a
@@ -383,7 +406,7 @@ export function leaveRoomHistory(
     // Landed on the base - or, if the browser dropped the traversal, still on
     // one of the room's entries. Replacing is right for both.
     if (rewinding) return done(true);
-    const exit = exitStep(locate(port.state(), port.pathname(), code));
+    const exit = exitStep(locate(port.state(), port.pathname(), who));
     if (exit.kind !== "rewind") return done(exit.kind === "replace");
     rewinding = true;
     port.go(exit.delta);

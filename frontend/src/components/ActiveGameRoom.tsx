@@ -130,12 +130,19 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }
 
   useEffect(() => {
+    // Whose history entries to take off: read before the session is cleared,
+    // which is what forgets the seat.
+    const heldSeat = () => ({
+      code: normalizedCode,
+      seat: useGameStore.getState().playerId ?? "",
+    });
     function onKicked(data: { code?: string }) {
+      const who = heldSeat();
       exitingRoomRef.current = true;
       setExitingRoom(true);
       clearSession();
       reset();
-      exitRoomHistory(normalizedCode, (replace) => {
+      exitRoomHistory(who, (replace) => {
         navigate("/", { replace, state: { criticalError: kickedText(data?.code) } });
       });
     }
@@ -151,11 +158,12 @@ export function ActiveGameRoom({ code }: { code: string }) {
       // `logout` leaves the room itself, and a red "signed out" over a
       // chosen action is wrong.
       if (data?.code === "signed_out" && isSigningOut()) return;
+      const who = heldSeat();
       exitingRoomRef.current = true;
       setExitingRoom(true);
       clearSession();
       reset();
-      exitRoomHistory(normalizedCode, (replace) => {
+      exitRoomHistory(who, (replace) => {
         navigate("/", {
           replace,
           state: {
@@ -175,6 +183,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }, [clearSession, navigate, normalizedCode, notify, reset, setExitingRoom]);
 
   function performLeave() {
+    const who = { code: normalizedCode, seat: playerId ?? "" };
     exitingRoomRef.current = true;
     setExitingRoom(true);
     clearSession();
@@ -183,7 +192,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     // The room's history entries go with it, and the lobby takes the place of
     // the entry the room was entered on: Back from the lobby then goes to
     // wherever that was, not to a room this player has left.
-    exitRoomHistory(normalizedCode, (replace) => navigate("/", { replace }));
+    exitRoomHistory(who, (replace) => navigate("/", { replace }));
   }
 
   function handleLeave() {
@@ -203,7 +212,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   // Back is the room's own: a sheet on top closes, and Back on the room
   // itself is Leave, which gives up the seat rather than walking away from it
   // (R-UX-15).
-  const roomHistory = useRoomHistory(normalizedCode, handleBackOnRoom);
+  const roomHistory = useRoomHistory(normalizedCode, playerId ?? "", handleBackOnRoom);
 
   function handleToggleAfk() {
     emitTransient("toggle_afk");

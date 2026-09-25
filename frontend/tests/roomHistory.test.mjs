@@ -16,6 +16,8 @@ import {
 
 const CODE = "AB12CD";
 const ROOM = `/room/${CODE}`;
+/** The seat held in it; a rejoin holds another. */
+const WHO = { code: CODE, seat: "seat-1" };
 
 /** A browser's session history, as far as a room can see it.
 
@@ -125,7 +127,7 @@ async function enterRoom() {
   const win = new FakeWindow();
   win.navigate(ROOM);
   const port = historyPortFor(win);
-  const room = createRoomHistory(port, CODE);
+  const room = createRoomHistory(port, WHO);
   const backs = [];
   room.onBackOnRoom(() => backs.push(win.describe()));
   room.start();
@@ -158,26 +160,32 @@ test("a room's path is recognised however the router spelled it", () => {
   assert.equal(isRoomPath("/settings/account", CODE), false);
 });
 
-test("an entry is the room's own only when it carries this room's mark", () => {
-  const mark = (code, depth) => ({ [ROOM_ENTRY_KEY]: { code, depth } });
-  assert.deepEqual(locate(mark(CODE, 2), ROOM, CODE), { kind: "entry", depth: 2 });
-  assert.deepEqual(locate({ usr: null, key: "a", idx: 3 }, ROOM, CODE), { kind: "base" });
-  assert.deepEqual(locate(null, ROOM, CODE), { kind: "base" });
+test("an entry is the room's own only when it carries this seat's mark", () => {
+  const mark = (code, depth, seat = WHO.seat) => ({ [ROOM_ENTRY_KEY]: { code, seat, depth } });
+  assert.deepEqual(locate(mark(CODE, 2), ROOM, WHO), { kind: "entry", depth: 2 });
+  assert.deepEqual(locate(mark("ab12cd", 0), ROOM, WHO), { kind: "entry", depth: 0 });
+  assert.deepEqual(locate({ usr: null, key: "a", idx: 3 }, ROOM, WHO), { kind: "base" });
+  assert.deepEqual(locate(null, ROOM, WHO), { kind: "base" });
+  // Left behind by a seat given up earlier: the base, so a fresh guard goes on.
+  assert.deepEqual(locate(mark(CODE, 0, "seat-0"), ROOM, WHO), { kind: "base" });
+  assert.deepEqual(locate({ [ROOM_ENTRY_KEY]: { code: CODE, depth: 0 } }, ROOM, WHO), { kind: "base" });
   // Another room's mark on this URL cannot happen, but is not ours if it does.
-  assert.deepEqual(locate(mark("ZZ99ZZ", 0), ROOM, CODE), { kind: "base" });
-  assert.deepEqual(locate(mark(CODE, -1), ROOM, CODE), { kind: "base" });
-  assert.deepEqual(locate(mark(CODE, 0), "/settings/account", CODE), { kind: "elsewhere" });
+  assert.deepEqual(locate(mark("ZZ99ZZ", 0), ROOM, WHO), { kind: "base" });
+  assert.deepEqual(locate(mark(CODE, -1), ROOM, WHO), { kind: "base" });
+  assert.deepEqual(locate(mark(CODE, 0), "/settings/account", WHO), { kind: "elsewhere" });
 });
 
 test("a pushed entry keeps the router's location and moves its index on", () => {
-  const state = pushedState({ usr: { overlayBackground: "/x" }, key: "k7", idx: 4 }, CODE, 1);
+  const state = pushedState({ usr: { overlayBackground: "/x" }, key: "k7", idx: 4 }, WHO, 1);
   assert.deepEqual(state, {
     usr: { overlayBackground: "/x" },
     key: "k7",
     idx: 5,
-    [ROOM_ENTRY_KEY]: { code: CODE, depth: 1 },
+    [ROOM_ENTRY_KEY]: { code: CODE, seat: WHO.seat, depth: 1 },
   });
-  assert.deepEqual(pushedState(null, CODE, 0), { [ROOM_ENTRY_KEY]: { code: CODE, depth: 0 } });
+  assert.deepEqual(pushedState(null, WHO, 0), {
+    [ROOM_ENTRY_KEY]: { code: CODE, seat: WHO.seat, depth: 0 },
+  });
 });
 
 test("reconciling holds exactly one entry per open sheet above the guard", () => {
@@ -215,6 +223,33 @@ test("entering a room puts the guard over the entry it was entered on", async ()
   assert.equal(win.describe(), `/ ${ROOM} [${ROOM}#0]`);
 });
 
+test("a rejoin on a stale guard gets a guard of its own, so Back still leaves", async () => {
+  // Leave, then Forward onto the entry the old seat's guard is still on, and
+  // join again from the invite screen there: a new seat on an old mark, with
+  // the lobby now the entry below it.
+  const { win, room, port } = await enterRoom();
+  leaveRoomHistory(port, WHO, (replace) => win.navigate("/", null, { replace }));
+  await win.settle();
+  room.stop();
+  win.press(1);
+  await win.settle();
+  assert.equal(win.describe(), `/ / [${ROOM}#0]`);
+
+  const rejoined = createRoomHistory(port, { code: CODE, seat: "seat-2" });
+  const backs = [];
+  rejoined.onBackOnRoom(() => backs.push(win.describe()));
+  rejoined.start();
+  await win.settle();
+  assert.equal(win.describe(), `/ / ${ROOM}#0 [${ROOM}#0]`);
+
+  // Back lands on the old seat's entry - the room's URL, this seat's base -
+  // and is heard as Back on the room, not a walk out to the lobby.
+  win.press(-1);
+  await win.settle();
+  assert.equal(backs.length, 1);
+  assert.match(win.location.pathname, /^\/room\//);
+});
+
 test("StrictMode's stop and start again leaves one guard", async () => {
   const { win, room } = await enterRoom();
   room.stop();
@@ -226,10 +261,10 @@ test("StrictMode's stop and start again leaves one guard", async () => {
 test("a reload on the guard keeps it; one on a sheet's entry steps back to it", async () => {
   const win = new FakeWindow();
   win.navigate(ROOM);
-  win.history.pushState(pushedState(win.history.state, CODE, 0));
-  win.history.pushState(pushedState(win.history.state, CODE, 1));
+  win.history.pushState(pushedState(win.history.state, WHO, 0));
+  win.history.pushState(pushedState(win.history.state, WHO, 1));
   // The reload: a fresh room over the same stack, no sheet open.
-  const room = createRoomHistory(historyPortFor(win), CODE);
+  const room = createRoomHistory(historyPortFor(win), WHO);
   room.start();
   await win.settle();
   assert.equal(win.describe(), `/ ${ROOM} [${ROOM}#0] ${ROOM}#1`);
@@ -335,7 +370,7 @@ test("confirming a Leave asked for by Back rewinds to the base and replaces it",
   const finished = [];
   // performLeave: the dialog closes as the room goes, and the lobby replaces.
   confirmation.close();
-  leaveRoomHistory(port, CODE, (replace) => {
+  leaveRoomHistory(port, WHO, (replace) => {
     finished.push(replace);
     win.navigate("/", null, { replace });
   });
@@ -348,7 +383,7 @@ test("confirming a Leave asked for by Back rewinds to the base and replaces it",
 test("Back in the waiting room leaves at once, from the guard", async () => {
   const { win, room, port } = await enterRoom();
   room.onBackOnRoom(() => {
-    leaveRoomHistory(port, CODE, (replace) => win.navigate("/", null, { replace }));
+    leaveRoomHistory(port, WHO, (replace) => win.navigate("/", null, { replace }));
   });
   win.press(-1);
   await win.settle();
@@ -364,7 +399,7 @@ test("leaving with sheets open takes every room entry off, not only the top", as
   await win.settle();
 
   // A kick, say: the room unmounts under its sheets as the rewind starts.
-  leaveRoomHistory(port, CODE, (replace) => win.navigate("/", { criticalError: "x" }, { replace }));
+  leaveRoomHistory(port, WHO, (replace) => win.navigate("/", { criticalError: "x" }, { replace }));
   players.close();
   await win.settle();
   room.stop();
@@ -381,7 +416,7 @@ test("a leave waits for a traversal already in flight before counting its rewind
   await new Promise((resolve) => setImmediate(resolve));
   assert.equal(port.inFlight(), 1);
 
-  leaveRoomHistory(port, CODE, (replace) => win.navigate("/", null, { replace }));
+  leaveRoomHistory(port, WHO, (replace) => win.navigate("/", null, { replace }));
   await win.settle();
   room.stop();
   // Counted from the guard it landed on (-1), not the sheet it left (-2),
@@ -392,11 +427,11 @@ test("a leave waits for a traversal already in flight before counting its rewind
 test("a second way out during a leave is left to the first", async () => {
   const { win, room, port } = await enterRoom();
   const calls = [];
-  leaveRoomHistory(port, CODE, (replace) => {
+  leaveRoomHistory(port, WHO, (replace) => {
     calls.push("leave");
     win.navigate("/", null, { replace });
   });
-  leaveRoomHistory(port, CODE, () => calls.push("kicked"));
+  leaveRoomHistory(port, WHO, () => calls.push("kicked"));
   await win.settle();
   room.stop();
   assert.deepEqual(calls, ["leave"]);
@@ -468,10 +503,10 @@ test("a traversal the browser drops is given up rather than waited on for good",
   const win = new FakeWindow();
   win.navigate(ROOM);
   // A mark that lies about how deep it is: the rewind goes past the start.
-  win.history.pushState(pushedState(win.history.state, CODE, 5));
+  win.history.pushState(pushedState(win.history.state, WHO, 5));
   const port = historyPortFor(win);
   const finished = [];
-  leaveRoomHistory(port, CODE, (replace) => finished.push(replace));
+  leaveRoomHistory(port, WHO, (replace) => finished.push(replace));
   await win.settle();
   assert.deepEqual(finished, []);
   await win.fireTimers();
@@ -481,12 +516,12 @@ test("a traversal the browser drops is given up rather than waited on for good",
 
 test("once a leave lands, the next room's history works on the same window", async () => {
   const { win, room, port } = await enterRoom();
-  leaveRoomHistory(port, CODE, (replace) => win.navigate("/", null, { replace }));
+  leaveRoomHistory(port, WHO, (replace) => win.navigate("/", null, { replace }));
   await win.settle();
   room.stop();
 
   win.navigate("/room/ZZ99ZZ");
-  const next = createRoomHistory(port, "ZZ99ZZ");
+  const next = createRoomHistory(port, { code: "ZZ99ZZ", seat: "seat-9" });
   next.start();
   await win.settle();
   assert.match(win.describe(), /\[\/room\/ZZ99ZZ#0\]$/);
@@ -496,6 +531,6 @@ test("outside the room's entries a leave is an ordinary push", async () => {
   const { win, port } = await enterRoom();
   win.navigate("/settings/account", { overlayBackground: ROOM });
   const finished = [];
-  leaveRoomHistory(port, CODE, (replace) => finished.push(replace));
+  leaveRoomHistory(port, WHO, (replace) => finished.push(replace));
   assert.deepEqual(finished, [false]);
 });
