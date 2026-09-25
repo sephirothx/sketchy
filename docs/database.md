@@ -585,7 +585,7 @@ Bounded at both the API and database layers: key bindings must describe the comp
 supported action set.
 
 `email_reminder_last_shown_at` is the no-email reminder's clock (R-AUTH-15): the
-reminder is due once it is a week old, and showing the reminder resets it. It is
+reminder is due once it is a week old, and closing the reminder resets it. It is
 also stamped when the row is seeded at registration — a claimed guest included — so
 the first reminder comes a week after signing up rather than on the next page;
 `NULL` means an account that has never been told, and is due at once.

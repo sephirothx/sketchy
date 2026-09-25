@@ -59,6 +59,11 @@
   margin: 0;
 }
 
+/* Turn counts under the "no finished game yet" line, clear of it. */
+.profile-statistics .profile-note + .profile-stats-small {
+  padding-top: 12px;
+}
+
 .profile-claim p {
   margin: 0 0 12px;
   font-size: 14px;

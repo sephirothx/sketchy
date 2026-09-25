@@ -8,7 +8,9 @@ from uuid import UUID
 from fastapi import APIRouter, Request
 from pydantic import ConfigDict, Field, field_validator, model_validator
 from app.request_text import ControlFreeModel
-from sqlalchemy import select
+from sqlalchemy import select, update
+from sqlalchemy.dialects.postgresql import insert as postgresql_insert
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
@@ -214,6 +216,16 @@ async def settings_of_registered_account(
         return user_settings_payload(settings)
 
 
+def _settings_insert(session: AsyncSession):
+    """The dialect's INSERT, for the ON CONFLICT clause both databases share."""
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
+        return postgresql_insert(UserSettings)
+    if dialect == "sqlite":
+        return sqlite_insert(UserSettings)
+    raise RuntimeError(f"Unsupported user-settings dialect: {dialect}")
+
+
 async def seed_user_settings(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -224,28 +236,41 @@ async def seed_user_settings(
 
     Registration also starts the no-email reminder's clock (R-AUTH-15): the
     form has just called the address optional, so the first reminder is due a
-    week after signing up rather than on the very next page. Stamped whether or
-    not this call made the row - a tab still holding the guest cookie can
-    reach `settings_of_registered_account` between the claim and this seed and
-    make it first - but only when unset, so it never pushes a reminder back.
+    week after signing up rather than on the very next page.
+
+    The account is already claimed when this runs, so a tab still holding its
+    cookie can reach `settings_of_registered_account` and make the row first.
+    Read-then-insert lost that race with an IntegrityError - a 500 after the
+    account had been created - so the row is inserted with ON CONFLICT DO
+    NOTHING, and the clock is then stamped only where it is unset: a row made
+    by the other tab still gets its week, and nothing ever pushes a reminder
+    back.
     """
     db_user_id = UUID(user_id)
+    now = datetime.now(timezone.utc)
     async with session_factory() as session:
         async with session.begin():
             await _registered_user(session, db_user_id)
-            settings = await session.get(UserSettings, db_user_id)
-            if settings is None:
-                settings = UserSettings(
+            await session.execute(
+                _settings_insert(session)
+                .values(
                     user_id=db_user_id,
+                    email_reminder_last_shown_at=now,
                     **_settings_values(values),
                 )
-                session.add(settings)
-            if settings.email_reminder_last_shown_at is None:
-                settings.email_reminder_last_shown_at = datetime.now(timezone.utc)
-            await session.flush()
-            # Stamping a row that already existed is an UPDATE, whose
-            # database-generated ``updated_at`` stays expired until reloaded.
-            await session.refresh(settings)
+                .on_conflict_do_nothing(index_elements=["user_id"])
+            )
+            await session.execute(
+                update(UserSettings)
+                .where(
+                    UserSettings.user_id == db_user_id,
+                    UserSettings.email_reminder_last_shown_at.is_(None),
+                )
+                .values(email_reminder_last_shown_at=now)
+            )
+            settings = await session.get(
+                UserSettings, db_user_id, populate_existing=True
+            )
         return user_settings_payload(settings)
 
 

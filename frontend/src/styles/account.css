@@ -8,8 +8,12 @@
  *
  * #6b7280 is 4.83:1 on white; the dark-theme override is 5.7:1 or better. No
  * opacity - it would scale the contrast straight back down.
+ *
+ * The header chip's own name wears it too (GLOSSARY: Guest), so a guest reads
+ * the same in the chip as in every list.
  */
-.colored-player-name.is-guest {
+.colored-player-name.is-guest,
+.identity-name.is-guest {
   font-style: italic;
   font-weight: 600;
   color: #6b7280;
@@ -27,7 +31,8 @@
   padding-right: 0.22em;
 }
 
-[data-theme="dark"] .colored-player-name.is-guest {
+[data-theme="dark"] .colored-player-name.is-guest,
+[data-theme="dark"] .identity-name.is-guest {
   color: #94a3b8;
 }
 
@@ -221,14 +226,6 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-/* A guest's name in italics, as every list draws it (GLOSSARY: Guest). The
-   slant is synthesised and this box clips, so it gets the room the lobby's
-   rows give it - see `.colored-player-name.is-guest` above. */
-.identity-name.is-guest {
-  font-style: italic;
-  padding-right: 0.22em;
 }
 
 .identity-chevron {

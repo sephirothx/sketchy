@@ -145,7 +145,7 @@ export function FriendsOverlay() {
               card - rather than an explanation with nothing to press. */}
           {isGuest ? (
             <div className="friends-guest">
-              <p className="friends-empty">{ui.friendsOverlay.createAnAccountOrSignIn}</p>
+              <p className="friends-empty">{ui.friendsOverlay.friendsNeedAnAccount}</p>
               <div className="settings-guest-actions">
                 <button type="button" className="btn btn-primary" onClick={() => setAuthMode("claim")}>
                   <PlusIcon size={15} />

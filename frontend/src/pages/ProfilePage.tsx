@@ -8,6 +8,7 @@ import { ChevronDownIcon, ChevronRightIcon, FlagIcon } from "../components/icons
 import { ReportAccountDialog } from "../components/ReportAccountDialog";
 import { avatarInitial, identityColor } from "../lib/avatar";
 import { formatDate } from "../lib/clock";
+import { statisticsLayout, type TurnStat } from "../lib/profileStats";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { ApiError } from "../lib/api";
 import { DrawingRecapGallery } from "../components/DrawingRecapGallery";
@@ -32,7 +33,6 @@ import {
   formatTimestamp,
   HISTORY_PAGE_SIZE,
   setHistoryReaction,
-  statisticsAreEmpty,
   type GameDetail,
   type GameTurn,
   type GameSummary,
@@ -54,6 +54,53 @@ import "../styles/lazy/profile.css";
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
 function asReactions(reactions: HistoryReaction[]): DrawingReaction[] {
   return reactions.map((reaction) => ({ playerId: reaction.seatId, emoji: reaction.emoji }));
+}
+
+/** The label of a per-turn count, read at render so a locale switch reaches it. */
+function turnStatLabel(key: TurnStat): string {
+  switch (key) {
+    case "turnsPlayed":
+      return ui.profilePage.turnsPlayed;
+    case "promptsGuessed":
+      return ui.profilePage.promptsGuessed;
+    case "drawingsMade":
+      return ui.profilePage.drawingsMade;
+    case "reactionsReceived":
+      return ui.profilePage.reactionsReceived;
+  }
+}
+
+/** The numbers, drawn only where they say something (`lib/profileStats.ts`). */
+function StatisticsPanel({ stats }: { stats: ProfileStats }) {
+  const statsLayout = statisticsLayout(stats);
+  return (
+    <section className="panel profile-statistics">
+      <h2>{ui.profilePage.statistics}</h2>
+      {statsLayout.gameStats ? (
+        <div className="profile-stats">
+          <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
+          <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
+          <StatTile
+            label={ui.profilePage.winRate}
+            value={`${Math.round(stats.winRate * 100)}%`}
+          />
+          <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
+        </div>
+      ) : (
+        <p className="profile-note">{ui.profilePage.winsAndScoresAppearAfterFirstGame}</p>
+      )}
+      {(statsLayout.gameStats || statsLayout.turnStats.length > 0) && (
+        <div className="profile-stats profile-stats-small">
+          {statsLayout.turnStats.map((key) => (
+            <StatTile key={key} label={turnStatLabel(key)} value={String(stats[key])} />
+          ))}
+          {statsLayout.gameStats && (
+            <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
+          )}
+        </div>
+      )}
+    </section>
+  );
 }
 
 function StatTile({ label, value }: { label: string; value: string }) {
@@ -753,31 +800,7 @@ function ProfileView({ userId }: { userId: string }) {
               long read, and the numbers stay in view while it scrolls. The
               statistics come first here, so they are still read first. */}
           <div className="profile-columns">
-          <section className="panel profile-statistics">
-            <h2>{ui.profilePage.statistics}</h2>
-            {statisticsAreEmpty(stats) ? (
-              <p className="profile-note">{ui.profilePage.statisticsAppearAfterFirstGame}</p>
-            ) : (
-            <>
-            <div className="profile-stats">
-              <StatTile label={ui.profilePage.gamesPlayed} value={String(stats.gamesPlayed)} />
-              <StatTile label={ui.profilePage.gamesWon} value={String(stats.gamesWon)} />
-              <StatTile
-                label={ui.profilePage.winRate}
-                value={`${Math.round(stats.winRate * 100)}%`}
-              />
-              <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
-            </div>
-            <div className="profile-stats profile-stats-small">
-              <StatTile label={ui.profilePage.turnsPlayed} value={String(stats.turnsPlayed)} />
-              <StatTile label={ui.profilePage.promptsGuessed} value={String(stats.promptsGuessed)} />
-              <StatTile label={ui.profilePage.drawingsMade} value={String(stats.drawingsMade)} />
-              <StatTile label={ui.profilePage.reactionsReceived} value={String(stats.reactionsReceived)} />
-              <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
-            </div>
-            </>
-            )}
-          </section>
+          <StatisticsPanel stats={stats} />
 
           <section className="panel profile-history">
             <div className="profile-history-head">

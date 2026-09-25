@@ -35,25 +35,6 @@ export interface ProfileStats {
   reactionsReceived: number;
 }
 
-/**
- * Whether a profile has counted anything yet.
- *
- * A brand-new player was shown nine zeros and a "0% win rate": tiles that
- * describe nothing, laid out as though they did. Every counter is checked
- * rather than games played alone, so a tile that is not zero is never hidden.
- */
-export function statisticsAreEmpty(stats: ProfileStats): boolean {
-  return [
-    stats.gamesPlayed,
-    stats.gamesWon,
-    stats.totalScore,
-    stats.turnsPlayed,
-    stats.promptsGuessed,
-    stats.drawingsMade,
-    stats.reactionsReceived,
-  ].every((count) => count === 0);
-}
-
 /** One reaction as history keeps it: the reactor's seat in that game and the code. */
 export interface HistoryReaction {
   seatId: string;

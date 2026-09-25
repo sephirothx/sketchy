@@ -1758,6 +1758,7 @@ frontend/
     lib/penStroke.ts Where a stroke's keyframes go in its frames, and what the drawer's canvas may already paint
     lib/reactions.ts The reaction set's codes and glyphs, tallies, and who may react
     lib/pinnedDrawings.ts Pinned drawings: the shelf's presence rule, where Pin is offered, and its list arithmetic
+    lib/profileStats.ts Which profile statistics are drawn before a first finished game, and which wait for one
     lib/clientErrorLog.ts Bounded tail of this tab's errors, for a bug report to carry
     lib/screenCapture.ts  One frame via getDisplayMedia, for an optional screenshot
     types.ts      Shared TypeScript types for all socket payloads
