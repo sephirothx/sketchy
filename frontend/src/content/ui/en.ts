@@ -1697,7 +1697,6 @@ export const EN = {
     theNameOnTheAccount: "The name on the account is attached as it stands now.",
     sending: "Sending…",
     sendReport: "Send report",
-    close: "Close",
     cancel: "Cancel",
   },
   reportDrawingDialog: {
@@ -1713,7 +1712,6 @@ export const EN = {
     thatReportCouldNotBeSent: "That report could not be sent.",
     done: "Done",
     cancel: "Cancel",
-    close: "Close",
   },
 
   reportedDrawing: {
@@ -1739,7 +1737,6 @@ export const EN = {
     reportDisplayName: (p: { displayName: string }) => `Report ${p.displayName}`,
     sending: "Sending…",
     sendReport: "Send report",
-    close: "Close",
     cancel: "Cancel",
   },
 
@@ -1776,7 +1773,6 @@ export const EN = {
     sending: "Sending…",
     sendReport: "Send report",
     cancel: "Cancel",
-    close: "Close",
   },
 
   reportsReviewedNotice: {

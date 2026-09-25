@@ -1690,7 +1690,6 @@ export const IT: Catalogue = {
     theNameOnTheAccount: "Il nome dell’account viene allegato così com’è ora.",
     sending: "Invio…",
     sendReport: "Invia segnalazione",
-    close: "Chiudi",
     cancel: "Annulla",
   },
   reportDrawingDialog: {
@@ -1706,7 +1705,6 @@ export const IT: Catalogue = {
     thatReportCouldNotBeSent: "Non è stato possibile inviare questa segnalazione.",
     done: "Fatto",
     cancel: "Annulla",
-    close: "Chiudi",
   },
 
   reportedDrawing: {
@@ -1733,7 +1731,6 @@ export const IT: Catalogue = {
       `Segnala ${p.displayName}`,
     sending: "Invio…",
     sendReport: "Invia segnalazione",
-    close: "Chiudi",
     cancel: "Annulla",
   },
 
@@ -1771,7 +1768,6 @@ export const IT: Catalogue = {
     sending: "Invio…",
     sendReport: "Invia segnalazione",
     cancel: "Annulla",
-    close: "Chiudi",
   },
 
   reportsReviewedNotice: {

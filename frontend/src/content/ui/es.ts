@@ -1688,7 +1688,6 @@ export const ES: Catalogue = {
     theNameOnTheAccount: "Se adjunta el nombre de la cuenta tal como está ahora.",
     sending: "Enviando…",
     sendReport: "Enviar denuncia",
-    close: "Cerrar",
     cancel: "Cancelar",
   },
   reportDrawingDialog: {
@@ -1704,7 +1703,6 @@ export const ES: Catalogue = {
     thatReportCouldNotBeSent: "No se pudo enviar esa denuncia.",
     done: "Hecho",
     cancel: "Cancelar",
-    close: "Cerrar",
   },
 
   reportedDrawing: {
@@ -1731,7 +1729,6 @@ export const ES: Catalogue = {
       `Denunciar a ${p.displayName}`,
     sending: "Enviando…",
     sendReport: "Enviar denuncia",
-    close: "Cerrar",
     cancel: "Cancelar",
   },
 
@@ -1769,7 +1766,6 @@ export const ES: Catalogue = {
     sending: "Enviando…",
     sendReport: "Enviar denuncia",
     cancel: "Cancelar",
-    close: "Cerrar",
   },
 
   reportsReviewedNotice: {

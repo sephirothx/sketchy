@@ -1689,7 +1689,6 @@ export const NL: Catalogue = {
     theNameOnTheAccount: "De naam van het account wordt bijgevoegd zoals die nu is.",
     sending: "Versturen…",
     sendReport: "Melding versturen",
-    close: "Sluiten",
     cancel: "Annuleren",
   },
   reportDrawingDialog: {
@@ -1705,7 +1704,6 @@ export const NL: Catalogue = {
     thatReportCouldNotBeSent: "Deze melding kon niet verstuurd worden.",
     done: "Klaar",
     cancel: "Annuleren",
-    close: "Sluiten",
   },
 
   reportedDrawing: {
@@ -1732,7 +1730,6 @@ export const NL: Catalogue = {
       `${p.displayName} melden`,
     sending: "Versturen…",
     sendReport: "Melding versturen",
-    close: "Sluiten",
     cancel: "Annuleren",
   },
 
@@ -1770,7 +1767,6 @@ export const NL: Catalogue = {
     sending: "Versturen…",
     sendReport: "Melding versturen",
     cancel: "Annuleren",
-    close: "Sluiten",
   },
 
   reportsReviewedNotice: {

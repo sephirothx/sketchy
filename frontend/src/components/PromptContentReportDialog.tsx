@@ -1,5 +1,5 @@
 import { useId, useRef, useState, type FormEvent } from "react";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import {
   submitPromptContentReport,
   type PromptContentReportReason,
@@ -31,9 +31,8 @@ export function PromptContentReportDialog({
   onClose,
   onSubmitted,
 }: PromptContentReportDialogProps) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const cancelRef = useRef<HTMLButtonElement | null>(null);
-  const titleId = useId();
+  const formId = useId();
   const targetId = useId();
   const reasonId = useId();
   const detailsId = useId();
@@ -42,8 +41,6 @@ export function PromptContentReportDialog({
   const [details, setDetails] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: cancelRef });
 
   async function submit(event: FormEvent) {
     event.preventDefault();
@@ -65,30 +62,30 @@ export function PromptContentReportDialog({
     }
   }
 
-  return <div className="modal-overlay" onMouseDown={(event) => {
-    if (event.target === event.currentTarget) onClose();
-  }}>
-    <div ref={dialogRef} className="modal-card prompt-content-report-dialog" role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1}>
-      <h2 id={titleId} className="modal-title">{ui.promptContentReportDialog.reportList({ name: promptList.name })}</h2>
-      <p className="modal-body">{ui.promptContentReportDialog.reportsAreReviewedAfterSubmissionList}</p>
-      <form onSubmit={(event) => void submit(event)}>
-        <label htmlFor={targetId}>{ui.promptContentReportDialog.content}</label>
-          <select id={targetId} value={target} onChange={(event) => setTarget(event.target.value)}>
-            <option value="list">{ui.promptContentReportDialog.entireList}</option>
-            {promptList.prompts.map((prompt) => <option key={prompt.promptVersionId} value={prompt.promptVersionId}>{prompt.prompt}</option>)}
-          </select>
-        <label htmlFor={reasonId}>{ui.promptContentReportDialog.reason}</label>
-          <select id={reasonId} value={reason} onChange={(event) => setReason(event.target.value as PromptContentReportReason)}>
-            {REASONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
-          </select>
-        <label htmlFor={detailsId}>{ui.promptContentReportDialog.whatShouldModeratorKnow}</label>
-          <textarea id={detailsId} value={details} required minLength={1} maxLength={2000} onChange={(event) => setDetails(event.target.value)} />
-        {error && <p className="auth-error" role="alert">{error}</p>}
-        <div className="confirmation-dialog-actions">
-          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.promptContentReportDialog.cancel}</button>
-          <button type="submit" className="confirmation-danger-button" disabled={busy || !details.trim()}>{busy ? ui.promptContentReportDialog.sending : ui.promptContentReportDialog.sendReport}</button>
-        </div>
-      </form>
-    </div>
-  </div>;
+  return <ModalShell
+    title={ui.promptContentReportDialog.reportList({ name: promptList.name })}
+    cardClassName="prompt-content-report-dialog"
+    onDismiss={onClose}
+    initialFocusRef={cancelRef}
+    footer={<>
+      <button ref={cancelRef} type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>{ui.promptContentReportDialog.cancel}</button>
+      <button type="submit" form={formId} className="btn btn-primary" disabled={busy || !details.trim()}>{busy ? ui.promptContentReportDialog.sending : ui.promptContentReportDialog.sendReport}</button>
+    </>}
+  >
+    <p className="modal-body">{ui.promptContentReportDialog.reportsAreReviewedAfterSubmissionList}</p>
+    <form id={formId} onSubmit={(event) => void submit(event)}>
+      <label htmlFor={targetId}>{ui.promptContentReportDialog.content}</label>
+        <select id={targetId} value={target} onChange={(event) => setTarget(event.target.value)}>
+          <option value="list">{ui.promptContentReportDialog.entireList}</option>
+          {promptList.prompts.map((prompt) => <option key={prompt.promptVersionId} value={prompt.promptVersionId}>{prompt.prompt}</option>)}
+        </select>
+      <label htmlFor={reasonId}>{ui.promptContentReportDialog.reason}</label>
+        <select id={reasonId} value={reason} onChange={(event) => setReason(event.target.value as PromptContentReportReason)}>
+          {REASONS.map((item) => <option key={item.value} value={item.value}>{item.label}</option>)}
+        </select>
+      <label htmlFor={detailsId}>{ui.promptContentReportDialog.whatShouldModeratorKnow}</label>
+        <textarea id={detailsId} value={details} required minLength={1} maxLength={2000} onChange={(event) => setDetails(event.target.value)} />
+      {error && <p className="auth-error" role="alert">{error}</p>}
+    </form>
+  </ModalShell>;
 }

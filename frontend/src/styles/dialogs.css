@@ -176,48 +176,6 @@
   filter: brightness(1.05);
 }
 
-.confirmation-dialog-icon {
-  align-items: center;
-  background: var(--danger-soft);
-  border-radius: 999px;
-  color: var(--danger);
-  display: inline-flex;
-  font-size: 1.25rem;
-  font-weight: 900;
-  height: 42px;
-  justify-content: center;
-  margin-bottom: 12px;
-  width: 42px;
-}
-
-.confirmation-dialog-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-}
-
-.confirmation-dialog-actions button {
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  padding: 10px 16px;
-}
-
-.confirmation-cancel-button {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  color: var(--ink);
-}
-
-.confirmation-danger-button {
-  background: var(--danger);
-  border: 1px solid var(--danger);
-  color: #fff;
-}
-
-.confirmation-danger-button:hover { filter: brightness(1.08); }
-.confirmation-dialog-actions button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
-
 /* This one dialog is opened from inside the mobile players drawer, which is
    itself at 1200 - the highest layer the game has. Matching it would leave the
    two ordered by which happens to come later in the DOM, so it clears it. */
@@ -326,32 +284,21 @@
  * the diagnostics disclosure - all of which the player is meant to read before
  * sending, not squint at.
  */
-.bug-report-dialog {
+.modal-card.bug-report-dialog {
   max-width: 620px;
-  max-height: min(90vh, 900px);
-  overflow-y: auto;
-  text-align: left;
 }
 
-.bug-report-head {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-}
-
-.bug-report-head .modal-title { margin: 0; }
-.bug-report-head .modal-body { margin-top: 3px; }
-
+/* The title's own mark, in the warm tint: a bug report is about the game. */
 .bug-report-mark {
   align-items: center;
   background: var(--warm-soft);
-  border-radius: 11px;
+  border-radius: 9px;
   color: var(--warm-ink);
   display: inline-flex;
   flex: none;
-  height: 38px;
+  height: 30px;
   justify-content: center;
-  width: 38px;
+  width: 30px;
 }
 
 .bug-report-row {

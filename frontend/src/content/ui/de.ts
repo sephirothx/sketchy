@@ -1689,7 +1689,6 @@ export const DE: Catalogue = {
     theNameOnTheAccount: "Der Name des Kontos wird so angehängt, wie er jetzt ist.",
     sending: "Wird gesendet …",
     sendReport: "Meldung senden",
-    close: "Schließen",
     cancel: "Abbrechen",
   },
   reportDrawingDialog: {
@@ -1705,7 +1704,6 @@ export const DE: Catalogue = {
     thatReportCouldNotBeSent: "Diese Meldung konnte nicht gesendet werden.",
     done: "Fertig",
     cancel: "Abbrechen",
-    close: "Schließen",
   },
 
   reportedDrawing: {
@@ -1732,7 +1730,6 @@ export const DE: Catalogue = {
       `${p.displayName} melden`,
     sending: "Wird gesendet …",
     sendReport: "Meldung senden",
-    close: "Schließen",
     cancel: "Abbrechen",
   },
 
@@ -1770,7 +1767,6 @@ export const DE: Catalogue = {
     sending: "Wird gesendet …",
     sendReport: "Meldung senden",
     cancel: "Abbrechen",
-    close: "Schließen",
   },
 
   reportsReviewedNotice: {

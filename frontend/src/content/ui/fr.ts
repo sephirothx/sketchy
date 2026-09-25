@@ -1691,7 +1691,6 @@ export const FR: Catalogue = {
     theNameOnTheAccount: "Le nom du compte est joint tel qu’il est maintenant.",
     sending: "Envoi…",
     sendReport: "Envoyer le signalement",
-    close: "Fermer",
     cancel: "Annuler",
   },
   reportDrawingDialog: {
@@ -1707,7 +1706,6 @@ export const FR: Catalogue = {
     thatReportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé.",
     done: "Terminé",
     cancel: "Annuler",
-    close: "Fermer",
   },
 
   reportedDrawing: {
@@ -1734,7 +1732,6 @@ export const FR: Catalogue = {
       `Signaler ${p.displayName}`,
     sending: "Envoi…",
     sendReport: "Envoyer le signalement",
-    close: "Fermer",
     cancel: "Annuler",
   },
 
@@ -1772,7 +1769,6 @@ export const FR: Catalogue = {
     sending: "Envoi…",
     sendReport: "Envoyer le signalement",
     cancel: "Annuler",
-    close: "Fermer",
   },
 
   reportsReviewedNotice: {

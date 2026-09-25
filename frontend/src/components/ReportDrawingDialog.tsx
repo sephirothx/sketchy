@@ -1,7 +1,7 @@
 import { useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import { reportGalleryDrawing } from "../lib/moderation";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -23,15 +23,13 @@ export function ReportDrawingDialog({
   turnId: string;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
   const titleId = useId();
+  const formId = `${titleId}-form`;
   const [details, setDetails] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
-
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: detailsRef });
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -52,75 +50,67 @@ export function ReportDrawingDialog({
   }
 
   return createPortal(
-    <div
-      className="modal-overlay report-player-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        data-testid="report-drawing-dialog"
-      >
-        <h3 id={titleId} className="modal-title">
-          {sent ? ui.reportDrawingDialog.reportSent : ui.reportDrawingDialog.reportThisDrawing}
-        </h3>
-
-        {!sent ? (
+    <ModalShell
+      title={sent ? ui.reportDrawingDialog.reportSent : ui.reportDrawingDialog.reportThisDrawing}
+      overlayClassName="report-player-overlay"
+      testId="report-drawing-dialog"
+      onDismiss={onClose}
+      initialFocusRef={detailsRef}
+      footer={
+        !sent ? (
           <>
-            <p className="modal-body">{ui.reportDrawingDialog.nothingHappensYet}</p>
-            <form onSubmit={submit} className="auth-form">
-              <label htmlFor={`${titleId}-details`}>
-                {ui.reportDrawingDialog.anythingElseOptional}
-              </label>
-              <textarea
-                id={`${titleId}-details`}
-                ref={detailsRef}
-                className="report-details"
-                rows={3}
-                maxLength={2000}
-                value={details}
-                onChange={(change) => {
-                  setDetails(change.target.value);
-                  setError(null);
-                }}
-                placeholder={ui.reportDrawingDialog.anythingModeratorShouldKnow}
-              />
-
-              {error && (
-                <p className="auth-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button
-                type="submit"
-                className="modal-button"
-                disabled={busy}
-                data-testid="report-drawing-send"
-              >
-                {busy ? ui.reportDrawingDialog.sending : ui.reportDrawingDialog.sendReport}
-              </button>
-            </form>
-          </>
-        ) : (
-          <>
-            <p className="modal-body">{ui.reportDrawingDialog.sentWithTheDrawingAttached}</p>
-            <button type="button" className="modal-button" onClick={onClose}>
-              {ui.reportDrawingDialog.done}
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              {ui.reportDrawingDialog.cancel}
+            </button>
+            <button
+              type="submit"
+              form={formId}
+              className="btn btn-primary"
+              disabled={busy}
+              data-testid="report-drawing-send"
+            >
+              {busy ? ui.reportDrawingDialog.sending : ui.reportDrawingDialog.sendReport}
             </button>
           </>
-        )}
+        ) : (
+          <button type="button" className="btn btn-primary" onClick={onClose}>
+            {ui.reportDrawingDialog.done}
+          </button>
+        )
+      }
+    >
+      {!sent ? (
+        <>
+          <p className="modal-body">{ui.reportDrawingDialog.nothingHappensYet}</p>
+          <form id={formId} onSubmit={submit} className="auth-form">
+            <label htmlFor={`${titleId}-details`}>
+              {ui.reportDrawingDialog.anythingElseOptional}
+            </label>
+            <textarea
+              id={`${titleId}-details`}
+              ref={detailsRef}
+              className="report-details"
+              rows={3}
+              maxLength={2000}
+              value={details}
+              onChange={(change) => {
+                setDetails(change.target.value);
+                setError(null);
+              }}
+              placeholder={ui.reportDrawingDialog.anythingModeratorShouldKnow}
+            />
 
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sent ? ui.reportDrawingDialog.close : ui.reportDrawingDialog.cancel}
-        </button>
-      </div>
-    </div>,
+            {error && (
+              <p className="auth-error" role="alert">
+                {error}
+              </p>
+            )}
+          </form>
+        </>
+      ) : (
+        <p className="modal-body">{ui.reportDrawingDialog.sentWithTheDrawingAttached}</p>
+      )}
+    </ModalShell>,
     document.body,
   );
 }

@@ -294,8 +294,8 @@ async def test_two_players_reporting_one_thing_are_one_case_decided_once():
             repeat_reporter = reporters[0]
             # Their first report's acknowledgement is still up, and it sits
             # over the player list the next one is opened from.
-            await repeat_reporter.locator(
-                ".modal-card .modal-dismiss"
+            await repeat_reporter.locator(".modal-card").get_by_role(
+                "button", name="Done"
             ).click()
             await repeat_reporter.locator(".modal-card").wait_for(state="detached")
             row = repeat_reporter.locator(".player-list li", has_text=names[drawer])
