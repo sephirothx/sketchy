@@ -63,10 +63,6 @@
 }
 
 .form-section {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   padding: 20px 22px;
 }
 
@@ -168,32 +164,21 @@ details.form-section > .form-section-body {
   gap: 8px;
 }
 
-.visibility-field-label {
-  font-size: 14.5px;
-  font-weight: 800;
-  color: var(--ink);
-}
-
 /* The language sits with the name and the visibility, not with the lists:
    it is what the room is, and the lists answer to it. */
 .create-room-language-field {
+  align-items: flex-start;
   display: flex;
   flex: 0 0 auto;
+  flex-direction: column;
+  gap: 6px;
 }
 
-
-.create-room-language-caption {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 700;
-  max-width: 320px;
-}
-
-.visibility-caption {
-  font-size: 11.5px;
-  font-weight: 700;
-  color: var(--faint);
-  max-width: 240px;
+/* Worded like the room name's label beside it, which it sits level with. */
+.create-room-language-label {
+  color: var(--ink);
+  font-size: 14.5px;
+  font-weight: 800;
 }
 
 .form-section input[type="text"],
@@ -341,6 +326,8 @@ details.form-section > .form-section-body {
 .custom-prompts-editor > label { display: flex; flex-direction: column; font-size: 14.5px; font-weight: 800; color: var(--ink); gap: 5px; }
 .custom-prompts-summary { color: var(--muted); display: flex; flex-wrap: wrap; font-size: 13px; font-weight: 700; gap: 4px 12px; margin-top: 7px; }
 .custom-prompts-summary strong { color: var(--success-ink); }
+/* Nothing typed is nothing to celebrate: green is for a count that is there. */
+.custom-prompts-summary.is-empty strong { color: var(--muted); }
 .custom-prompts-summary.has-errors strong,
 .custom-prompts-summary.has-errors span { color: var(--danger); }
 .custom-prompts-error,
@@ -376,6 +363,23 @@ details.form-section > .form-section-body {
 
 .create-room-footer .create-room-submit {
   flex: none;
+}
+
+/* Nothing but the button to show (every rule is a new room's): the button
+   keeps its place on the right, and above the phone breakpoint loses the card
+   around it. A phone keeps it - there the footer is the fixed dock, whose
+   surface is what keeps the form from showing through. */
+.create-room-footer.is-bare {
+  justify-content: flex-end;
+}
+
+@media (min-width: 641px) {
+  .create-room-footer.is-bare {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
 }
 
 /* -------------------------------------------------- wide: form and preview */
@@ -439,116 +443,19 @@ details.form-section > .form-section-body {
 }
 
 /* -------------------------------------------------- shared control recipes */
-.segmented-control-field,
-.room-choice-group { border: 0; margin: 0; min-width: 0; padding: 0; }
-.segmented-control-field.is-labeled {
-  align-items: center;
-  display: flex;
-  flex-direction: row;
-  font-size: 15px;
-  font-weight: 700;
-  gap: 12px;
-  justify-content: flex-start;
-  width: fit-content;
-}
-.segmented-control-label {
-  align-items: center;
-  box-sizing: border-box;
-  color: var(--ink);
-  display: inline-flex;
-  flex: 0 0 16.5rem;
-  gap: 6px;
-  line-height: 1.3;
-  width: 16.5rem;
-}
 .room-choice-group {
+  border: 0;
+  margin: 0;
   max-width: 100%;
+  min-width: 0;
+  padding: 0;
   width: auto;
 }
 .room-choice-group legend { color: var(--ink); font-size: 14.5px; font-weight: 800; margin-bottom: 8px; padding: 0; }
-.segmented-control {
-  background: var(--track);
-  border-radius: 999px;
-  display: inline-grid;
-  gap: 3px;
-  grid-auto-flow: column;
-  grid-auto-columns: minmax(88px, 1fr);
-  padding: 4px;
-  position: relative;
-  width: fit-content;
-}
-.segmented-control-thumb {
-  background: var(--card);
-  border-radius: 999px;
-  box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14);
-  height: calc(100% - 8px);
-  left: 4px;
-  pointer-events: none;
-  position: absolute;
-  top: 4px;
-  transform: translateX(calc(var(--segment-index, 0) * (100% + 3px)));
-  transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
-  width: calc((100% - 8px - (var(--segment-count, 2) - 1) * 3px) / var(--segment-count, 2));
-  z-index: 0;
-}
-.segmented-control button {
-  align-items: center;
-  background: transparent;
-  border: 0;
-  border-radius: 999px;
-  color: var(--muted);
-  cursor: pointer;
-  display: grid;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 700;
-  justify-content: center;
-  padding: 8px 16px;
-  position: relative;
-  text-align: center;
-  transition: color 180ms ease;
-  white-space: nowrap;
-  z-index: 1;
-}
-.segmented-control button[aria-pressed="true"] {
-  color: var(--ink);
-  font-weight: 800;
-}
-
-/* The two copies stack in one cell: the hidden one is always bold, so the
-   segment is as wide when it is off as when it is on and the row does not
-   move under the pointer that just pressed it. */
-.segmented-control button > .segment-sizer,
-.segmented-control button > .segment-label {
-  align-items: center;
-  display: inline-flex;
-  gap: 6px;
-  grid-area: 1 / 1;
-  justify-content: center;
-}
-
-.segmented-control button > .segment-sizer {
-  font-weight: 800;
-  visibility: hidden;
-}
-@media (prefers-reduced-motion: reduce) {
-  .segmented-control-thumb { transition: none; }
-  .segmented-control button { transition: none; }
-}
-.segmented-control button:focus-visible,
-.input-number button:focus-visible,
-.m3-switch-label input:focus-visible ~ .m3-switch-track {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 .room-choice-segmented {
   display: inline-grid;
   grid-auto-columns: 1fr;
   max-width: 100%;
-  width: max-content;
-}
-.room-settings-advanced .segmented-control.room-choice-segmented {
   width: max-content;
 }
 .room-choice-segmented button {
@@ -620,11 +527,6 @@ details.form-section > .form-section-body {
   font-weight: 600;
 }
 
-.choice-card:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 /* ---------------------------------------------------------------- switches */
 .m3-switch-label {
   align-items: center;
@@ -670,45 +572,59 @@ details.form-section > .form-section-body {
   padding: 0;
   width: 16px;
 }
-.m3-switch-hint:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
+/* Out of the layout until it is shown: an invisible tooltip still widens the
+   page, and one centred over a "?" near a phone's right edge made the whole
+   form scroll sideways. `--tip-shift` is set by `FieldHint` to keep a shown
+   one inside the viewport, or inside the nearest scrolling container when that
+   is narrower; the arrow moves back by as much, so it still points at its "?". */
 .m3-switch-hint-tooltip {
-  background: var(--ink);
-  border-radius: 8px;
-  box-sizing: border-box;
-  color: var(--paper);
-  font-size: 12px;
-  font-weight: 600;
+  --tip-shift: 0px;
+  bottom: calc(100% + 8px);
   left: 50%;
-  line-height: 1.35;
   max-width: 220px;
   opacity: 0;
-  overflow-wrap: break-word;
-  padding: 8px 10px;
-  pointer-events: none;
   position: absolute;
-  bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(4px);
-  transition: opacity 120ms ease, transform 120ms ease;
-  white-space: normal;
-  width: max-content;
-  z-index: 20;
+  display: none;
+  transform: translateX(calc(-50% + var(--tip-shift)));
+  /* Opacity only: a transition on the transform would slide a re-placed
+     tooltip across the edge it is being kept inside. */
+  transition: opacity 120ms ease;
+  z-index: var(--z-popover);
 }
 .m3-switch-hint-tooltip::after {
   border: 5px solid transparent;
-  border-top-color: var(--ink);
+  border-top-color: var(--menu);
   content: "";
-  left: 50%;
+  left: calc(50% - var(--tip-shift));
   position: absolute;
   top: 100%;
   transform: translateX(-50%);
 }
 .m3-switch-hint-wrap:hover .m3-switch-hint-tooltip,
 .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
+  display: block;
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+}
+@starting-style {
+  .m3-switch-hint-wrap:hover .m3-switch-hint-tooltip,
+  .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
+    opacity: 0;
+  }
+}
+/* The link form (`FieldHint` with `href`): the same mark in a 24px target. */
+.m3-switch-hint-link {
+  align-items: center;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  text-decoration: none;
+  width: 24px;
+}
+.m3-switch-hint-link > .m3-switch-hint {
+  cursor: pointer;
+}
+.m3-switch-hint-link:hover > .m3-switch-hint {
+  color: var(--primary);
 }
 .m3-switch-label.is-disabled .m3-switch-hint-wrap {
   opacity: 1;
@@ -725,48 +641,12 @@ details.form-section > .form-section-body {
   position: absolute;
   width: 1px;
 }
-.m3-switch-track {
-  background: var(--line-strong);
-  border-radius: 999px;
-  box-sizing: border-box;
-  display: inline-flex;
-  align-items: center;
-  flex: 0 0 auto;
-  height: 24px;
-  padding: 3px;
-  transition: background-color .2s ease;
-  width: 42px;
-}
-.m3-switch-thumb {
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25);
-  display: block;
-  height: 18px;
-  transition: transform .2s ease;
-  width: 18px;
-}
-.m3-switch-label input:checked ~ .m3-switch-track {
-  background: var(--primary);
-}
-.m3-switch-label input:checked ~ .m3-switch-track .m3-switch-thumb {
-  transform: translateX(18px);
-}
-/* Only apply hover polish on real hover devices — touch leaves :hover stuck after tap */
-@media (hover: hover) and (pointer: fine) {
-  .m3-switch-label:hover:not(.is-disabled) input:not(:checked) ~ .m3-switch-track {
-    background: var(--faint);
-  }
-  .m3-switch-label:hover:not(.is-disabled) input:checked ~ .m3-switch-track {
-    background: var(--primary-ink);
-  }
-}
 
 @media (max-width: 640px) {
   .create-room-heading-row { align-items: stretch; flex-direction: column; }
   .room-preset-bar { justify-content: flex-start; }
-  /* The name takes the width; the language and the visibility share the line
-     under it, which is what the two of them are - one short answer each. */
+  /* The name takes the width; the language and the visibility wrap under it,
+     each on its own line on a phone once the language carries its label. */
   .create-room-name-row {
     align-items: flex-end;
     flex-wrap: wrap;
@@ -775,6 +655,14 @@ details.form-section > .form-section-body {
 
   .create-room-name-field {
     flex: 1 1 100%;
+  }
+
+  /* Its label goes beside the flag here rather than above it: the pair has a
+     line to itself, so a label above would only add a line. */
+  .create-room-language-field {
+    align-items: center;
+    flex-direction: row;
+    gap: 12px;
   }
 
   /* ── The three numbers ────────────────────────────────────────────────
@@ -830,7 +718,7 @@ details.form-section > .form-section-body {
     font-size: 24px;
   }
 
-  .choice-cards { grid-template-columns: 1fr !important; }
+  .choice-cards { grid-template-columns: 1fr; }
 
   /* ── The dock ────────────────────────────────────────────────────────
      Create is the point of the page and it sat under a long form, reachable
@@ -844,7 +732,7 @@ details.form-section > .form-section-body {
     border-top: 1.5px solid var(--line);
     border-radius: 0;
     bottom: 0;
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
     flex-direction: row;
     gap: 12px;
     left: 0;
@@ -852,7 +740,7 @@ details.form-section > .form-section-body {
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   .create-room-footer .create-room-submit {
@@ -867,8 +755,7 @@ details.form-section > .form-section-body {
 
   /* ChoiceChips (waiting-room editor): 2x2 on narrow screens, where the
      sliding thumb assumes a single row. */
-  .room-choice-segmented,
-  .room-settings-advanced .segmented-control.room-choice-segmented {
+  .room-choice-segmented {
     border-radius: 18.5px;
     box-sizing: border-box;
     grid-auto-columns: unset;
@@ -890,82 +777,12 @@ details.form-section > .form-section-body {
     box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14);
     color: var(--ink);
   }
-
-  /* Stack labeled segmented rows (waiting-room editor); keep switches inline. */
-  .room-settings-fields .input-number-field,
-  .room-settings-fields .segmented-control-field.is-labeled,
-  .room-settings-advanced .segmented-control-field.is-labeled {
-    align-items: flex-start;
-    flex-direction: column;
-    width: 100%;
-  }
-
-  .room-settings-fields .segmented-control-label,
-  .room-settings-advanced .segmented-control-label {
-    flex: none;
-    white-space: normal;
-    width: auto;
-  }
-
-  .room-settings-fields .m3-switch-label {
-    max-width: 100%;
-    width: 100%;
-  }
-
-  .room-settings-fields .m3-switch-text {
-    flex: 1 1 auto;
-    min-width: 0;
-    white-space: normal;
-    width: auto;
-  }
 }
 
-/* Toggle chips: a set of independent on/off choices. Shared by the
-   prompt list picker and the room's allowed tools. */
+/* The prompt list picker. Its chips are the `toggle-chip` recipe in
+   primitives.css, shared with the room's allowed tools and every filter. */
 .prompt-list-picker-group {
   grid-column: 1 / -1;
-}
-.toggle-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 4px;
-}
-.toggle-chip {
-  align-items: center;
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
-  color: var(--muted);
-  cursor: pointer;
-  display: inline-flex;
-  font: inherit;
-  font-size: 13.5px;
-  font-weight: 800;
-  gap: 7px;
-  min-height: 42px;
-  padding: 9px 15px;
-  transition: all 150ms ease;
-  user-select: none;
-}
-.toggle-chip:hover:not(:disabled) {
-  border-color: var(--faint);
-  color: var(--ink);
-}
-.toggle-chip.is-selected {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-.toggle-chip-status {
-  color: var(--faint);
-  display: inline-flex;
-}
-.toggle-chip.is-selected .toggle-chip-status {
-  color: var(--primary);
-}
-.toggle-chip-name {
-  white-space: nowrap;
 }
 .prompt-list-chip-count {
   background: var(--well);
@@ -975,17 +792,9 @@ details.form-section > .form-section-body {
   font-weight: 700;
   padding: 1px 8px;
 }
-.toggle-chip.is-selected .prompt-list-chip-count {
+.toggle-chip[aria-pressed="true"] .prompt-list-chip-count {
   background: var(--card);
   color: var(--primary);
-}
-.toggle-chip:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-.toggle-chip:disabled {
-  cursor: default;
-  opacity: 0.85;
 }
 .prompt-list-picker-loading,
 .prompt-list-picker-fallback {

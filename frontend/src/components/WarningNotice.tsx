@@ -197,7 +197,7 @@ export function WarningNotice() {
         )}
         <button
           type="button"
-          className="modal-button"
+          className="btn btn-primary"
           disabled={busy}
           onClick={() => void dismiss()}
         >

@@ -189,12 +189,14 @@ export function ConfettiCanvas() {
         width: "100vw",
         height: "100dvh",
         pointerEvents: "none",
-        // Above the page (which tops out around 120) and below every dialog,
-        // drawer, sheet and toast (all >= 1000). At 9999 it painted over the
-        // turn-results panel, the players drawer and the settings dialog -
-        // worst on a phone, where the same particle count lands on a third of
-        // the area and the text underneath is unreadable.
-        zIndex: 999,
+        // Over the page and its popovers, under the banners and every
+        // overlay, drawer, dialog and toast (the layers, in
+        // layout-primitives.css). At 9999 it painted over the settings
+        // dialog and the drawers - worst on a phone, where the same particle
+        // count lands on a third of the area and the text underneath is
+        // unreadable. The phone's playing shell is the exception: it is a
+        // stacking context of its own, so the confetti is over all of it.
+        zIndex: "var(--z-confetti)",
       }}
     />
   );

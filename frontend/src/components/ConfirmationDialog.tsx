@@ -34,10 +34,10 @@ export function ConfirmationDialog({
       <h2 id={titleId} className="modal-title">{title}</h2>
       <p id={descriptionId} className="modal-body">{description}</p>
       <div className="confirmation-dialog-actions">
-        <button ref={cancelButtonRef} type="button" className="confirmation-cancel-button" onClick={onCancel}>
+        <button ref={cancelButtonRef} type="button" className="btn btn-secondary" onClick={onCancel}>
           {ui.confirmationDialog.cancel}
         </button>
-        <button type="button" className="confirmation-danger-button" onClick={onConfirm}>
+        <button type="button" className="btn btn-danger" onClick={onConfirm}>
           {confirmLabel}
         </button>
       </div>

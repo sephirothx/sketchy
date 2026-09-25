@@ -602,9 +602,11 @@ class UserSettings(Base):
         server_default=InterfaceLocale.ENGLISH.value,
         nullable=False,
     )
-    # When the account was last told it has no way back in. Stored per account
-    # rather than in the browser so the reminder does not restart on every new
-    # device, and does not vanish because one was cleared.
+    # When the account was last told it has no way back in - or, until the
+    # first reminder, when it registered: signing up stamps it so the first
+    # one comes a week later (R-AUTH-15). Stored per account rather than in the
+    # browser so the reminder does not restart on every new device, and does
+    # not vanish because one was cleared.
     email_reminder_last_shown_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
     )

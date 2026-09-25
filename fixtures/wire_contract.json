@@ -2333,9 +2333,6 @@
    "sourceRevisionIds",
    "vowelBaseCost"
   ],
-  "handlers.chat:_accepted_guess": [
-   "playerId"
-  ],
   "handlers.chat:_chat_line": [
    "playerId"
   ],
@@ -2472,6 +2469,9 @@
   ],
   "handlers.rooms:update_room_settings": [
    "errorCode"
+  ],
+  "presenters:correct_guess_payload": [
+   "playerId"
   ],
   "presenters:editable_room_settings_payload": [
    "allowedTools",
@@ -2776,7 +2776,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 41,
+ "protocolVersion": 42,
  "refusal": {
   "codes": [
    "invalid_payload",

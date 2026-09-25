@@ -131,7 +131,7 @@ export function TuningPanel() {
       )}
 
       {groups.map(([group, items]) => (
-        <section className="ops-card" key={group} aria-label={groupLabel(group)}>
+        <section className="surface-card ops-card" key={group} aria-label={groupLabel(group)}>
           <div className="ops-card-head">
             <h2>{groupLabel(group)}</h2>
             {group === "client" && (

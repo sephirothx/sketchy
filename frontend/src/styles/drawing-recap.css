@@ -1,12 +1,12 @@
 .drawing-recap { display: flex; justify-content: center; padding: 8px 0 32px; width: 100%; }
-.drawing-recap-card { background: var(--card); border: 1px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-raised); box-sizing: border-box; max-width: 880px; padding: 22px; width: 100%; }
+.drawing-recap-card { background: var(--card); border: 1.5px solid var(--line); border-radius: 16px; box-shadow: var(--shadow-raised); box-sizing: border-box; max-width: 880px; padding: 22px; width: 100%; }
 .drawing-recap-header { align-items: flex-start; display: flex; gap: 16px; justify-content: space-between; margin-bottom: 16px; }
 .drawing-recap-kicker { color: var(--muted); font-size: 12px; font-weight: 800; letter-spacing: .08em; margin: 0; text-transform: uppercase; }
 .drawing-recap-header h1 { color: var(--ink); font-size: 26px; margin: 4px 0; }
 .drawing-recap-meta { color: var(--muted); margin: 0; }
 .drawing-recap-header-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 .drawing-recap-close, .drawing-recap-download, .drawing-recap-navigation button, .drawing-recap-status button { background: var(--well); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-weight: 800; padding: 9px 13px; }
-.drawing-recap-download { background: var(--primary); border-color: var(--primary); color: var(--card); }
+.drawing-recap-download { background: var(--primary); border-color: var(--primary); color: var(--on-primary); }
 .drawing-recap-download:disabled { cursor: not-allowed; opacity: .5; }
 .drawing-recap-canvas { align-items: center; aspect-ratio: 4 / 3; background: var(--well); border-radius: 10px; display: flex; justify-content: center; overflow: hidden; width: 100%; }
 .drawing-recap-canvas .canvas-wrapper, .drawing-recap-canvas .canvas-stack { max-width: none; width: 100%; }
@@ -21,7 +21,7 @@
 .drawing-recap-navigation button:disabled { cursor: not-allowed; opacity: .45; }
 .drawing-recap-navigation strong { color: var(--ink); font-size: 14px; }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .drawing-recap-card { border-radius: 12px; padding: 14px; }
   .drawing-recap-header { align-items: stretch; flex-direction: column; }
   .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }

@@ -282,7 +282,7 @@ export function CrashPage({ scope, error, componentStack, onReload, onBackToLobb
           {sent ? (
             <p className="crash-sent" role="status">{ui.crashPage.thanksYourReportWithPeopleWho}</p>
           ) : (
-            <button type="submit" className="modal-button" disabled={busy || nothingToSend}>
+            <button type="submit" className="btn btn-primary" disabled={busy || nothingToSend}>
               {busy ? (failure ? ui.crashPage.sendingAgain : ui.crashPage.sending) : (failure ? ui.crashPage.trySendingAgain : ui.crashPage.sendReport)}
             </button>
           )}

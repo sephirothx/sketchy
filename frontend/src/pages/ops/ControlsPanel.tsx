@@ -194,7 +194,7 @@ export function ControlsPanel() {
         </p>
       )}
 
-      <section className="ops-card" aria-label="Maintenance">
+      <section className="surface-card ops-card" aria-label="Maintenance">
         <div className="ops-card-head">
           <div>
             <h2>Maintenance</h2>
@@ -238,7 +238,7 @@ export function ControlsPanel() {
         </div>
       </section>
 
-      <section className="ops-card" aria-label="Community publications">
+      <section className="surface-card ops-card" aria-label="Community publications">
         <div className="ops-card-head">
           <div>
             <h2>Community publications</h2>
@@ -280,7 +280,7 @@ export function ControlsPanel() {
         </div>
       </section>
 
-      <section className="ops-card" aria-label="Gallery · This week">
+      <section className="surface-card ops-card" aria-label="Gallery · This week">
         <div className="ops-card-head">
           <div>
             <h2>Gallery · This week</h2>
@@ -320,7 +320,7 @@ export function ControlsPanel() {
         </div>
       </section>
 
-      <section className="ops-card" aria-label="Live rooms">
+      <section className="surface-card ops-card" aria-label="Live rooms">
         <div className="ops-card-head">
           <div>
             <h2>Live rooms</h2>
@@ -478,7 +478,7 @@ export function ControlsPanel() {
         )}
       </section>
 
-      <section className="ops-card ops-danger" aria-label="Shutdown">
+      <section className="surface-card ops-card ops-danger" aria-label="Shutdown">
         <div className="ops-card-head">
           <div>
             <h2>Shut down this server</h2>
@@ -558,7 +558,7 @@ export function ControlsPanel() {
         </div>
       </section>
 
-      <section className="ops-card" aria-label="Roles">
+      <section className="surface-card ops-card" aria-label="Roles">
         <div className="ops-card-head">
           <div>
             <h2>Moderator role</h2>

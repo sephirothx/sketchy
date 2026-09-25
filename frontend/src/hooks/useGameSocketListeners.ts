@@ -14,6 +14,7 @@ import type {
   ChatMessage,
   PresenceCause,
   ColorblindSafeSuggestion,
+  CorrectGuessPayload,
   DrawingReaction,
   DrawingReactionEvent,
   GameEndedPayload,
@@ -22,6 +23,7 @@ import type {
   RoomStatePayload,
   TurnEndedPayload,
 } from "../types";
+import { formatGuessTime } from "../lib/guessTime";
 import { ui } from "../content/ui/index.ts";
 import { providePrivateResultHandler } from "../lib/privateResults.ts";
 
@@ -141,16 +143,13 @@ export function useGameSocketListeners() {
       });
     };
 
-    const onCorrectGuess = (payload: { playerId: string; nickname: string; points: number }) => {
+    const onCorrectGuess = (payload: CorrectGuessPayload) => {
       if (payload.playerId !== store.getState().playerId) {
         playCorrectGuessSound();
       }
       store.getState().applyGuessPoints(payload.playerId, payload.points);
-      store.getState().recordCorrectGuess(payload.playerId);
-      const elapsed = store.getState().turnCorrectGuesses[payload.playerId];
-      const time = elapsed != null
-        ? `${Math.floor(elapsed / 60)}:${String(elapsed % 60).padStart(2, "0")}`
-        : null;
+      store.getState().recordCorrectGuess(payload.playerId, payload.seconds);
+      const time = formatGuessTime(payload.seconds);
       const points = store.getState().scoringMode !== "none" ? payload.points : null;
       // `correct` styles the line as the green got-it event card.
       store.getState().addMessage({

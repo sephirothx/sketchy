@@ -27,3 +27,4 @@
 @import "./styles/operator-shared.css" layer(components);
 @import "./styles/profile-shared.css" layer(components);
 @import "./styles/a11y.css" layer(utilities);
+@import "./styles/utilities.css" layer(utilities);

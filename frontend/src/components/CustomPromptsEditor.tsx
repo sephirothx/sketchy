@@ -20,7 +20,11 @@ export function CustomPromptsEditor({ value, analysis, onChange, onCommit, foote
       onBlur={onCommit}
       placeholder={ui.customPromptsEditor.onePromptPerLineSeparateEntries}
       maxLength={MAX_RAW_INPUT_LENGTH} rows={7} aria-describedby="custom-prompts-summary" />
-    <div id="custom-prompts-summary" className={analysis.hasErrors ? "custom-prompts-summary has-errors" : "custom-prompts-summary"} aria-live="polite">
+    <div
+      id="custom-prompts-summary"
+      className={`custom-prompts-summary${analysis.hasErrors ? " has-errors" : analysis.usableCount === 0 ? " is-empty" : ""}`}
+      aria-live="polite"
+    >
       <strong>{ui.customPromptsEditor.usableCount({ count: analysis.usableCount })}</strong>
       {analysis.duplicateCount > 0 && <span>{ui.customPromptsEditor.duplicatesIgnored({ count: analysis.duplicateCount })}</span>}
       {analysis.invalidEntries.length > 0 && <span>{ui.customPromptsEditor.entriesTooLong({ count: analysis.invalidEntries.length, limit: MAX_PROMPT_LENGTH })}</span>}
