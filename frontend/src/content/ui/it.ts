@@ -688,7 +688,7 @@ export const IT: Catalogue = {
     sketchyHome: "Vai alla lobby",
     siteNav: "Pagine",
     communityLink: "Catalogo",
-    promptStatsLink: "Statistiche",
+    promptStatsLink: "Stats parole",
   },
 
   bugReportDialog: {

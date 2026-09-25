@@ -688,7 +688,7 @@ export const PT: Catalogue = {
     sketchyHome: "Ir para o átrio",
     siteNav: "Páginas",
     communityLink: "Catálogo",
-    promptStatsLink: "Estatísticas",
+    promptStatsLink: "Stats de palavras",
   },
 
   bugReportDialog: {

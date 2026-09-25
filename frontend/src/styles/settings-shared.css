@@ -8,9 +8,10 @@
   gap: 16px;
   /* The space between the bar and the page under it, the same on every page
      and at every width - but the invite page on a phone, which keeps 18px so
-     its Join button clears the fold (lobby-page.css). A layout that puts a gap of its own under the bar
-     (the pinned lobby's flex gap) takes that gap off this, rather than
-     adding to it: it used to, and the lobby's rooms dropped 16px at 901px. */
+     its Join button clears the fold (lobby-page.css). A layout that puts a
+     gap of its own under the bar (the pinned lobby's flex gap) takes that gap
+     off this, rather than adding to it: it used to, and the lobby's rooms
+     dropped 16px at 901px. */
   --header-space: 26px;
   margin-bottom: var(--header-space);
   /* One bar on every page. Each page keeps its own content width (#581), and

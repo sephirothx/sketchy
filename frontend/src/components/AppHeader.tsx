@@ -204,7 +204,10 @@ function SiteNav() {
     // loaded: measure again, and if the row was already icons, show the
     // labels for one pass so that pass measures them in the real font. Only
     // while fonts are still loading - `ready` also resolves at once when they
-    // are not, and un-crowding on that would loop.
+    // are not, and un-crowding on that would loop. A face that only starts
+    // loading after this pass (a glyph first needed later) is not measured
+    // again; `overflow: clip` on the nav (lobby-page.css) caps what that can
+    // cost at labels cut short, never a bar pushed onto two rows.
     let live = true;
     const fonts = typeof document !== "undefined" ? document.fonts : undefined;
     if (fonts && fonts.status === "loading") {

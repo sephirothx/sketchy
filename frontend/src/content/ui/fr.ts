@@ -688,7 +688,7 @@ export const FR: Catalogue = {
     sketchyHome: "Aller au hall",
     siteNav: "Pages",
     communityLink: "Catalogue",
-    promptStatsLink: "Statistiques",
+    promptStatsLink: "Stats des mots",
   },
 
   bugReportDialog: {
