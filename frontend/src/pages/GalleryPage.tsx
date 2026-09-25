@@ -330,7 +330,6 @@ export function GalleryPage() {
       {signedOut ? (
         <>
           <div className="gallery-head">
-            <p className="section-label">{ui.galleryPage.eyebrow}</p>
             <h1>{ui.galleryPage.gallery}</h1>
           </div>
           <EmptyState
@@ -350,7 +349,6 @@ export function GalleryPage() {
             {/* A heading block rather than a card, as the community catalogue
                 introduces its lists. */}
             <div className="gallery-head">
-              <p className="section-label">{ui.galleryPage.eyebrow}</p>
               <h1>{ui.galleryPage.gallery}</h1>
               {!narrow && <p>{ui.galleryPage.drawingsFromPublicGames}</p>}
             </div>

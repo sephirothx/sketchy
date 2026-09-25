@@ -574,7 +574,6 @@ export const PT: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Algo correu mal. Tenta de novo.",
     evenBestGuessersForgetSometimes: "Até os melhores a adivinhar se esquecem às vezes.",
     weRsquoLlSendSecureTime: "Vamos enviar uma ligação segura e com prazo para o e-mail confirmado\n            da tua conta.",
-    accountHelp: "Ajuda com a conta",
     backLobby: "Voltar ao átrio",
     enterYourUsernameYourConfirmedEmail: "Introduz o teu nome de utilizador ou o teu e-mail confirmado. Se a\n              conta puder ser recuperada, já vai uma ligação a caminho.",
     usernameEmail: "Nome de utilizador ou e-mail",
@@ -826,7 +825,6 @@ export const PT: Catalogue = {
     couldNotDeleteThatPreset: "Não foi possível eliminar essa predefinição.",
     fixCustomPromptEntriesMarkedAbove: "Corrige as palavras próprias assinaladas acima antes de criares a sala.",
     failedCreateRoom: "Não foi possível criar a sala",
-    roomSetup: "Configuração da sala",
     createRoom: "Criar uma sala",
     startFromSavedPreset: "Começar a partir de uma predefinição guardada",
     startFromPreset: "Começar a partir de uma predefinição…",
@@ -1222,7 +1220,6 @@ export const PT: Catalogue = {
     nothingMatchesThoseFilters: "Nenhuma lista corresponde a esses filtros.",
     nothingPublishedYet: "Ainda não foi publicada nenhuma lista.",
     byOwner: (p: { owner: string }) => `de ${p.owner}`,
-    community: "Comunidade",
     starred: "Com estrela",
     tags: "Etiquetas",
     promptCount: (p: { count: number }) =>
@@ -1267,7 +1264,6 @@ export const PT: Catalogue = {
   galleryPage: {
     gallery: "Galeria",
     backToLobby: "Voltar ao átrio",
-    eyebrow: "Desenhos",
     drawingsFromPublicGames: "Todos os desenhos de jogos públicos, para quem tiver sessão iniciada.",
     loading: "A carregar…",
     sortBy: "Ordenar por",
@@ -1968,7 +1964,6 @@ export const PT: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "As regras",
     thisPage: "Nesta página",
     forExample: "Por exemplo",

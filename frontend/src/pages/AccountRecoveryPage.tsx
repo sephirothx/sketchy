@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Squiggle, Wordmark } from "../components/icons";
-import { SectionLabel } from "../components/ui/Card";
 import {
   completePasswordReset,
   confirmEmailToken,
@@ -168,7 +167,6 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
         <section className="recovery-form">
         <Wordmark size={22} />
         <div className="recovery-heading">
-          <SectionLabel>{ui.accountRecoveryPage.accountHelp}</SectionLabel>
           <h1>{heading}</h1>
         </div>
 

@@ -1739,7 +1739,7 @@ a.online-player-name:focus-visible {
 
 .rules-masthead h1 {
   font-size: 30px;
-  margin: 4px 0 0;
+  margin: 0;
 }
 
 /* Sits at the top of the document column rather than across the page: the

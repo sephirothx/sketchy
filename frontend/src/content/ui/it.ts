@@ -574,7 +574,6 @@ export const IT: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Qualcosa è andato storto. Riprova.",
     evenBestGuessersForgetSometimes: "Anche i migliori indovini a volte dimenticano.",
     weRsquoLlSendSecureTime: "Invieremo un link sicuro e a tempo all’indirizzo email confermato\n            del tuo account.",
-    accountHelp: "Aiuto sull’account",
     backLobby: "Torna alla lobby",
     enterYourUsernameYourConfirmedEmail: "Inserisci il tuo nome utente o il tuo indirizzo confermato. Se\n              l’account è recuperabile, un link è già in viaggio.",
     usernameEmail: "Nome utente o email",
@@ -826,7 +825,6 @@ export const IT: Catalogue = {
     couldNotDeleteThatPreset: "Non è stato possibile eliminare questa preimpostazione.",
     fixCustomPromptEntriesMarkedAbove: "Correggi le parole personalizzate segnate qui sopra prima di creare la stanza.",
     failedCreateRoom: "Creazione della stanza non riuscita",
-    roomSetup: "Configurazione della stanza",
     createRoom: "Crea una stanza",
     startFromSavedPreset: "Parti da una preimpostazione salvata",
     startFromPreset: "Parti da una preimpostazione…",
@@ -1222,7 +1220,6 @@ export const IT: Catalogue = {
     nothingMatchesThoseFilters: "Nessuna lista corrisponde a questi filtri.",
     nothingPublishedYet: "Non è ancora stata pubblicata nessuna lista.",
     byOwner: (p: { owner: string }) => `di ${p.owner}`,
-    community: "Community",
     starred: "Con stella",
     tags: "Etichette",
     promptCount: (p: { count: number }) =>
@@ -1267,7 +1264,6 @@ export const IT: Catalogue = {
   galleryPage: {
     gallery: "Galleria",
     backToLobby: "Torna alla lobby",
-    eyebrow: "Disegni",
     drawingsFromPublicGames: "Tutti i disegni delle partite pubbliche, per chiunque abbia effettuato l’accesso.",
     loading: "Caricamento…",
     sortBy: "Ordina per",
@@ -1970,7 +1966,6 @@ export const IT: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "Le regole",
     thisPage: "In questa pagina",
     forExample: "Per esempio",

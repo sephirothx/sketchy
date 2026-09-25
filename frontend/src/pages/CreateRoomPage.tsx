@@ -3,7 +3,6 @@ import { useNavigate, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { RoomSetupForm } from "../components/RoomSetupForm";
-import { SectionLabel } from "../components/ui/Card";
 import { ClockIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import type { PromptListSummary } from "../types";
@@ -426,7 +425,6 @@ export function CreateRoomPage() {
     <AppHeader backLabel={ui.createRoomPage.backToLobby} />
     <div className="create-room-heading-row">
       <div className="create-room-heading">
-        <SectionLabel>{ui.createRoomPage.roomSetup}</SectionLabel>
         <h1>{ui.createRoomPage.createRoom}</h1>
       </div>
       {authUser && !authUser.isAnonymous && (
@@ -526,9 +524,10 @@ export function CreateRoomPage() {
       durationNote={isWide ? undefined : durationNote}
     />
 
+    {/* Named rather than headed: an eyebrow reading "Your room" over the
+        room's name said the same thing twice to everyone who can see it. */}
     {isWide && (
-      <aside className="create-room-preview" aria-labelledby="create-room-preview-title">
-        <SectionLabel id="create-room-preview-title">{ui.createRoomPage.yourRoom}</SectionLabel>
+      <aside className="create-room-preview" aria-label={ui.createRoomPage.yourRoom}>
         <p className={`create-room-preview-name${roomName.trim() ? "" : " is-random"}`}>
           {roomName.trim() || ui.createRoomPage.aRandomName}
         </p>

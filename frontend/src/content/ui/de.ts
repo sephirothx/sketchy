@@ -574,7 +574,6 @@ export const DE: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Etwas ist schiefgelaufen. Bitte versuch es noch einmal.",
     evenBestGuessersForgetSometimes: "Auch die besten Ratenden vergessen mal etwas.",
     weRsquoLlSendSecureTime: "Wir senden einen sicheren, zeitlich begrenzten Link an die bestätigte\n            E-Mail-Adresse deines Kontos.",
-    accountHelp: "Kontohilfe",
     backLobby: "Zurück zur Lobby",
     enterYourUsernameYourConfirmedEmail: "Gib deinen Benutzernamen oder deine bestätigte E-Mail-Adresse ein. Wenn\n              das Konto wiederhergestellt werden kann, ist ein Link unterwegs.",
     usernameEmail: "Benutzername oder E-Mail",
@@ -826,7 +825,6 @@ export const DE: Catalogue = {
     couldNotDeleteThatPreset: "Diese Vorlage konnte nicht gelöscht werden.",
     fixCustomPromptEntriesMarkedAbove: "Behebe die oben markierten eigenen Begriffe, bevor du den Raum erstellst.",
     failedCreateRoom: "Raum konnte nicht erstellt werden",
-    roomSetup: "Raum einrichten",
     createRoom: "Raum erstellen",
     startFromSavedPreset: "Mit einer gespeicherten Vorlage beginnen",
     startFromPreset: "Mit einer Vorlage beginnen …",
@@ -1222,7 +1220,6 @@ export const DE: Catalogue = {
     nothingMatchesThoseFilters: "Keine Liste passt zu diesen Filtern.",
     nothingPublishedYet: "Es wurde noch keine Liste veröffentlicht.",
     byOwner: (p: { owner: string }) => `von ${p.owner}`,
-    community: "Community",
     starred: "Mit Stern",
     tags: "Schlagwörter",
     promptCount: (p: { count: number }) =>
@@ -1267,7 +1264,6 @@ export const DE: Catalogue = {
   galleryPage: {
     gallery: "Galerie",
     backToLobby: "Zurück zur Lobby",
-    eyebrow: "Zeichnungen",
     drawingsFromPublicGames: "Jede Zeichnung aus einem öffentlichen Spiel, für alle, die angemeldet sind.",
     loading: "Wird geladen …",
     sortBy: "Sortieren nach",
@@ -1969,7 +1965,6 @@ export const DE: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "Die Regeln",
     thisPage: "Auf dieser Seite",
     forExample: "Zum Beispiel",

@@ -574,7 +574,6 @@ export const ES: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Algo ha salido mal. Inténtalo de nuevo.",
     evenBestGuessersForgetSometimes: "Hasta los que mejor adivinan se olvidan a veces.",
     weRsquoLlSendSecureTime: "Enviaremos un enlace seguro y con caducidad al correo confirmado\n            de tu cuenta.",
-    accountHelp: "Ayuda con la cuenta",
     backLobby: "Volver al vestíbulo",
     enterYourUsernameYourConfirmedEmail: "Introduce tu nombre de usuario o tu correo confirmado. Si la\n              cuenta se puede recuperar, el enlace ya va de camino.",
     usernameEmail: "Nombre de usuario o correo",
@@ -826,7 +825,6 @@ export const ES: Catalogue = {
     couldNotDeleteThatPreset: "No se pudo borrar esa plantilla.",
     fixCustomPromptEntriesMarkedAbove: "Corrige las palabras propias marcadas arriba antes de crear la sala.",
     failedCreateRoom: "No se pudo crear la sala",
-    roomSetup: "Configuración de la sala",
     createRoom: "Crear una sala",
     startFromSavedPreset: "Empezar desde una plantilla guardada",
     startFromPreset: "Empezar desde una plantilla…",
@@ -1222,7 +1220,6 @@ export const ES: Catalogue = {
     nothingMatchesThoseFilters: "Ninguna lista coincide con esos filtros.",
     nothingPublishedYet: "Todavía no hay listas publicadas.",
     byOwner: (p: { owner: string }) => `de ${p.owner}`,
-    community: "Comunidad",
     starred: "Con estrella",
     tags: "Etiquetas",
     promptCount: (p: { count: number }) =>
@@ -1267,7 +1264,6 @@ export const ES: Catalogue = {
   galleryPage: {
     gallery: "Galería",
     backToLobby: "Volver al vestíbulo",
-    eyebrow: "Dibujos",
     drawingsFromPublicGames: "Todos los dibujos de partidas públicas, para cualquiera que haya iniciado sesión.",
     loading: "Cargando…",
     sortBy: "Ordenar por",
@@ -1968,7 +1964,6 @@ export const ES: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "Las reglas",
     thisPage: "En esta página",
     forExample: "Por ejemplo",

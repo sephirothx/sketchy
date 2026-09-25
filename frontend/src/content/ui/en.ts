@@ -582,7 +582,6 @@ export const EN = {
     somethingWentWrongPleaseTryAgain: "Something went wrong. Please try again.",
     evenBestGuessersForgetSometimes: "Even the best guessers forget sometimes.",
     weRsquoLlSendSecureTime: "We&rsquo;ll send a secure, time-limited link to the confirmed email\n            on your account.",
-    accountHelp: "Account help",
     backLobby: "Back to the lobby",
     enterYourUsernameYourConfirmedEmail: "Enter your username or your confirmed email address. If the\n              account can be recovered, a link is on its way.",
     usernameEmail: "Username or email",
@@ -840,7 +839,6 @@ export const EN = {
     couldNotDeleteThatPreset: "Could not delete that preset.",
     fixCustomPromptEntriesMarkedAbove: "Fix the custom-prompt entries marked above before creating the room.",
     failedCreateRoom: "Failed to create room",
-    roomSetup: "Room setup",
     createRoom: "Create a room",
     startFromSavedPreset: "Start from a saved preset",
     startFromPreset: "Start from a preset…",
@@ -1233,7 +1231,6 @@ export const EN = {
     nothingMatchesThoseFilters: "No lists match those filters.",
     nothingPublishedYet: "Nobody has published a list yet.",
     byOwner: (p: { owner: string }) => `by ${p.owner}`,
-    community: "Community",
     starred: "Starred",
     tags: "Tags",
     promptCount: (p: { count: number }) =>
@@ -1278,7 +1275,6 @@ export const EN = {
   galleryPage: {
     gallery: "Gallery",
     backToLobby: "Back to lobby",
-    eyebrow: "Drawings",
     drawingsFromPublicGames: "Every drawing from a public game, for anyone signed in.",
     loading: "Loading…",
     sortBy: "Sort by",
@@ -1973,7 +1969,6 @@ export const EN = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "The rules",
     thisPage: "On this page",
     forExample: "For example",

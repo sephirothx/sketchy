@@ -574,7 +574,6 @@ export const NL: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Er ging iets mis. Probeer het nog eens.",
     evenBestGuessersForgetSometimes: "Zelfs de beste raders vergeten weleens iets.",
     weRsquoLlSendSecureTime: "We sturen een veilige link met een korte houdbaarheid naar het\n            bevestigde e-mailadres van je account.",
-    accountHelp: "Accounthulp",
     backLobby: "Terug naar de lobby",
     enterYourUsernameYourConfirmedEmail: "Vul je gebruikersnaam of je bevestigde e-mailadres in. Als het\n              account hersteld kan worden, is er een link onderweg.",
     usernameEmail: "Gebruikersnaam of e-mail",
@@ -826,7 +825,6 @@ export const NL: Catalogue = {
     couldNotDeleteThatPreset: "Deze voorinstelling kon niet verwijderd worden.",
     fixCustomPromptEntriesMarkedAbove: "Verbeter de hierboven gemarkeerde eigen woorden voordat je de kamer maakt.",
     failedCreateRoom: "Kamer aanmaken mislukt",
-    roomSetup: "Kameropzet",
     createRoom: "Een kamer maken",
     startFromSavedPreset: "Beginnen met een opgeslagen voorinstelling",
     startFromPreset: "Beginnen met een voorinstelling…",
@@ -1222,7 +1220,6 @@ export const NL: Catalogue = {
     nothingMatchesThoseFilters: "Geen lijst voldoet aan deze filters.",
     nothingPublishedYet: "Er is nog geen lijst gepubliceerd.",
     byOwner: (p: { owner: string }) => `van ${p.owner}`,
-    community: "Community",
     starred: "Met ster",
     tags: "Labels",
     promptCount: (p: { count: number }) =>
@@ -1267,7 +1264,6 @@ export const NL: Catalogue = {
   galleryPage: {
     gallery: "Galerij",
     backToLobby: "Terug naar de lobby",
-    eyebrow: "Tekeningen",
     drawingsFromPublicGames: "Elke tekening uit een openbaar spel, voor iedereen die is ingelogd.",
     loading: "Laden…",
     sortBy: "Sorteren op",
@@ -1969,7 +1965,6 @@ export const NL: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "De regels",
     thisPage: "Op deze pagina",
     forExample: "Bijvoorbeeld",

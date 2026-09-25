@@ -329,7 +329,6 @@ export function CommunityCataloguePage() {
           set, then the results - read as three empty boxes before they read
           as a page. */}
       <div className="community-catalogue-head">
-        <p className="section-label">{ui.communityCataloguePage.community}</p>
         <h1>{ui.communityCataloguePage.communityCatalogue}</h1>
         <p>{ui.communityCataloguePage.listsPlayersPublished}</p>
       </div>

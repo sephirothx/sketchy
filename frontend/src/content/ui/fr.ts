@@ -574,7 +574,6 @@ export const FR: Catalogue = {
     somethingWentWrongPleaseTryAgain: "Quelque chose s’est mal passé. Réessaie.",
     evenBestGuessersForgetSometimes: "Même les meilleurs devineurs oublient parfois.",
     weRsquoLlSendSecureTime: "Nous enverrons un lien sécurisé et limité dans le temps à l’adresse\n            confirmée de ton compte.",
-    accountHelp: "Aide sur le compte",
     backLobby: "Retour au hall",
     enterYourUsernameYourConfirmedEmail: "Saisis ton nom d’utilisateur ou ton adresse confirmée. Si le compte\n              peut être récupéré, un lien est en route.",
     usernameEmail: "Nom d’utilisateur ou e-mail",
@@ -826,7 +825,6 @@ export const FR: Catalogue = {
     couldNotDeleteThatPreset: "Ce préréglage n’a pas pu être supprimé.",
     fixCustomPromptEntriesMarkedAbove: "Corrige les mots personnalisés signalés ci-dessus avant de créer le salon.",
     failedCreateRoom: "Échec de la création du salon",
-    roomSetup: "Configuration du salon",
     createRoom: "Créer un salon",
     startFromSavedPreset: "Partir d’un préréglage enregistré",
     startFromPreset: "Partir d’un préréglage…",
@@ -1222,7 +1220,6 @@ export const FR: Catalogue = {
     nothingMatchesThoseFilters: "Aucune liste ne correspond à ces filtres.",
     nothingPublishedYet: "Aucune liste n’a encore été publiée.",
     byOwner: (p: { owner: string }) => `de ${p.owner}`,
-    community: "Communauté",
     starred: "Avec étoile",
     tags: "Étiquettes",
     promptCount: (p: { count: number }) =>
@@ -1267,7 +1264,6 @@ export const FR: Catalogue = {
   galleryPage: {
     gallery: "Galerie",
     backToLobby: "Retour au hall",
-    eyebrow: "Dessins",
     drawingsFromPublicGames: "Tous les dessins des parties publiques, pour quiconque est connecté.",
     loading: "Chargement…",
     sortBy: "Trier par",
@@ -1971,7 +1967,6 @@ export const FR: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "Les règles",
     thisPage: "Sur cette page",
     forExample: "Par exemple",
