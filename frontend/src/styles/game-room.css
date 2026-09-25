@@ -1117,20 +1117,7 @@
 .modal-card.room-settings-modal-card {
   width: min(720px, calc(100vw - 32px));
   max-width: 720px;
-  text-align: left;
   max-height: min(86vh, 900px);
-  overflow-y: auto;
-}
-.room-settings-editor-heading { margin-bottom: 14px; }
-/* The editor is no longer a `.waiting-card`, which is where this heading used
-   to get its face from. Scoped to the heading block so the form's own section
-   headings keep theirs. */
-.room-settings-editor-heading h2 {
-  color: var(--ink);
-  font-family: var(--font-display);
-  font-size: 18px;
-  font-weight: 600;
-  margin: 0;
 }
 
 @media (max-width: 640px) {
@@ -1144,16 +1131,10 @@
 /* The editor renders the same `RoomSetupForm` as /create, so its fields are
    styled by create-room-page.css. What used to be here was a second, flatter
    arrangement of the same controls. */
-/* The draft is submitted, not dripped out, so this is a button rather than a
-   status line reporting saves the host never asked for. */
-.room-settings-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
-  margin-top: 20px;
-}
-
-.room-settings-actions .room-settings-save { min-width: 148px; }
+/* The draft is submitted, not dripped out, so Save is a button rather than a
+   status line reporting saves the host never asked for; sized so its label
+   changing between "Save settings" and "Saved" does not move Cancel. */
+.room-settings-save { min-width: 148px; }
 
 .room-shell {
   display: grid;
@@ -1535,11 +1516,6 @@
      that is fixed now. Everything is spaced the same. */
   .waiting-room { padding-bottom: 0; }
 
-  .room-settings-actions {
-    flex-direction: column-reverse;
-  }
-
-  .room-settings-actions .btn { width: 100%; }
 
   /*
    * ── The playing shell on a phone ───────────────────────────────────────

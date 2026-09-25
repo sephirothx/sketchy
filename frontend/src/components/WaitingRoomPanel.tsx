@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
-import { ModalShell } from "./ui/ModalShell";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon } from "./icons";
@@ -442,16 +441,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       </section>
 
       {settingsOpen && (
-        <ModalShell
-          labelledBy="room-settings-title"
-          cardClassName="room-settings-modal-card"
-          onDismiss={() => setSettingsOpen(false)}
-        >
-          <RoomSettingsEditor
-            onSaved={() => setSettingsOpen(false)}
-            onCancel={() => setSettingsOpen(false)}
-          />
-        </ModalShell>
+        <RoomSettingsEditor
+          onSaved={() => setSettingsOpen(false)}
+          onCancel={() => setSettingsOpen(false)}
+        />
       )}
     </main>
   );

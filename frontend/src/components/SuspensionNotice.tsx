@@ -1,11 +1,12 @@
 import { useClock } from "../hooks/useClock";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { apiRequest } from "../lib/api";
 import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { socket } from "../lib/socket";
 import { ReportedDrawing } from "./ReportedDrawing";
+import { ModalShell } from "./ui/ModalShell";
 import {
   onSuspended,
   reportedDrawings,
@@ -28,6 +29,7 @@ export function SuspensionNotice() {
   const { timeFormat, dateTime } = useClock();
   const [suspension, setSuspension] = useState<Suspension | null>(null);
   const [busy, setBusy] = useState(false);
+  const signOutRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => onSuspended(setSuspension), []);
 
@@ -70,81 +72,18 @@ export function SuspensionNotice() {
     window.location.href = "/";
   }
 
+  // No way to set it aside - there is nothing behind it to go back to - so no
+  // ✕, no Escape and no scrim; focus starts on the one way on.
   return (
-    <div className="modal-overlay suspension-overlay">
-      <div
-        className="modal-card suspension-card"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="suspension-title"
-      >
-        <h3 className="modal-title" id="suspension-title">
-          {ui.suspensionNotice.yourAccountSuspended}
-        </h3>
-        {suspension.category && (
-          <p className="modal-body notice-category" data-testid="suspension-category">
-            {/* The rule itself, not just its name: a decision you can read
-                the rule behind is one you can check rather than only be
-                told (R-RULES-02). */}
-            {fill(ui.moderationNotice.recordedAs, {
-              category: (
-                <a href={ruleAnchorFor(suspension.category)}>
-                  {humanizeCategory(suspension.category)}
-                </a>
-              ),
-            })}
-          </p>
-        )}
-        {suspension.reason && (
-          <p className="modal-body suspension-reason">{suspension.reason}</p>
-        )}
-        <p className="modal-body">{suspensionDuration(suspension, new Date(), timeFormat)}</p>
-        {suspension.messages.length > 0 && (
-          <>
-            <p className="modal-body suspension-evidence-label">
-              {suspension.messages.length === 1
-                ? ui.moderationNotice.theMessageThisWasAbout
-                : ui.moderationNotice.theMessagesThisWasAbout}
-            </p>
-            {/* Their own words, as they were when the report was made. Scrolls
-                inside the card rather than growing it off the screen. */}
-            <ul className="suspension-evidence">
-              {suspension.messages.map((message, index) => (
-                <li key={`${message.at ?? index}-${index}`}>
-                  {message.at && (
-                    <span className="suspension-evidence-time">
-                      {dateTime(new Date(message.at))}
-                    </span>
-                  )}
-                  <span className="suspension-evidence-text">{message.text}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {suspension.drawings.length > 0 && (
-          <>
-            <p className="modal-body suspension-evidence-label">
-              {suspension.drawings.length === 1
-                ? ui.moderationNotice.theDrawingThisWasAbout
-                : ui.moderationNotice.theDrawingsThisWasAbout}
-            </p>
-            {/* Their own work, as it was when each report was made - several
-                when several reporters each caught the canvas at their own
-                moment. The bytes come through the one path a suspended
-                account may still reach for them. */}
-            {suspension.drawings.map((drawing) => (
-              <ReportedDrawing
-                key={drawing.reportId}
-                className="suspension-drawing"
-                load={() => fetchSuspensionDrawing(drawing.reportId)}
-                label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
-                caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
-              />
-            ))}
-          </>
-        )}
+    <ModalShell
+      role="alertdialog"
+      title={ui.suspensionNotice.yourAccountSuspended}
+      overlayClassName="suspension-overlay"
+      cardClassName="suspension-card"
+      initialFocusRef={signOutRef}
+      footer={
         <button
+          ref={signOutRef}
           type="button"
           className="btn btn-primary"
           disabled={busy}
@@ -152,7 +91,71 @@ export function SuspensionNotice() {
         >
           {busy ? ui.suspensionNotice.signingOut : ui.suspensionNotice.signOut}
         </button>
-      </div>
-    </div>
+      }
+    >
+      {suspension.category && (
+        <p className="modal-body notice-category" data-testid="suspension-category">
+          {/* The rule itself, not just its name: a decision you can read
+              the rule behind is one you can check rather than only be
+              told (R-RULES-02). */}
+          {fill(ui.moderationNotice.recordedAs, {
+            category: (
+              <a href={ruleAnchorFor(suspension.category)}>
+                {humanizeCategory(suspension.category)}
+              </a>
+            ),
+          })}
+        </p>
+      )}
+      {suspension.reason && (
+        <p className="modal-body suspension-reason">{suspension.reason}</p>
+      )}
+      <p className="modal-body">{suspensionDuration(suspension, new Date(), timeFormat)}</p>
+      {suspension.messages.length > 0 && (
+        <>
+          <p className="modal-body suspension-evidence-label">
+            {suspension.messages.length === 1
+              ? ui.moderationNotice.theMessageThisWasAbout
+              : ui.moderationNotice.theMessagesThisWasAbout}
+          </p>
+          {/* Their own words, as they were when the report was made. Scrolls
+              inside the card rather than growing it off the screen. */}
+          <ul className="suspension-evidence">
+            {suspension.messages.map((message, index) => (
+              <li key={`${message.at ?? index}-${index}`}>
+                {message.at && (
+                  <span className="suspension-evidence-time">
+                    {dateTime(new Date(message.at))}
+                  </span>
+                )}
+                <span className="suspension-evidence-text">{message.text}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {suspension.drawings.length > 0 && (
+        <>
+          <p className="modal-body suspension-evidence-label">
+            {suspension.drawings.length === 1
+              ? ui.moderationNotice.theDrawingThisWasAbout
+              : ui.moderationNotice.theDrawingsThisWasAbout}
+          </p>
+          {/* Their own work, as it was when each report was made - several
+              when several reporters each caught the canvas at their own
+              moment. The bytes come through the one path a suspended
+              account may still reach for them. */}
+          {suspension.drawings.map((drawing) => (
+            <ReportedDrawing
+              key={drawing.reportId}
+              className="suspension-drawing"
+              load={() => fetchSuspensionDrawing(drawing.reportId)}
+              label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
+              caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
+            />
+          ))}
+        </>
+      )}
+    </ModalShell>
   );
 }

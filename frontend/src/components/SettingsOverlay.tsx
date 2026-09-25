@@ -89,6 +89,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { LOCALES, type Locale } from "../lib/interfaceLocale.ts";
 import { useInterfaceLocale } from "../hooks/useInterfaceLocale";
+import { ModalHeader } from "./ui/ModalShell";
 import "../styles/lazy/settings.css";
 import "../styles/lazy/toolbar.css";
 
@@ -1319,22 +1320,21 @@ export function SettingsOverlay() {
         tabIndex={-1}
         data-testid="settings"
       >
-        <div className="settings-modal-header">
-          <h3 id={titleId}>
-            <GearIcon size={20} />
-            <span>{ui.settingsOverlay.settings}</span>
-          </h3>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            className="close-icon-button"
-            onClick={close}
-            title={ui.settingsOverlay.close}
-            aria-label={ui.settingsOverlay.closeSettings}
-          >
-            <XIcon size={16} />
-          </button>
-        </div>
+        {/* The same header every dialog wears (ModalShell's), over a sheet
+            that keeps its own layout, layer and route. */}
+        <ModalHeader
+          className="settings-modal-header"
+          titleId={titleId}
+          title={
+            <>
+              <span className="modal-title-icon" aria-hidden="true"><GearIcon size={20} /></span>
+              {ui.settingsOverlay.settings}
+            </>
+          }
+          onClose={close}
+          closeLabel={ui.settingsOverlay.closeSettings}
+          closeRef={closeButtonRef}
+        />
 
         <div className="settings-modal-body">
           <div className="settings-tabs" role="tablist" aria-label={ui.settingsOverlay.settingsSections}>

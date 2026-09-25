@@ -89,6 +89,10 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             codes = dialog.get_by_role("list", name="Recovery codes")
             await expect(codes).to_be_visible()
             assert await codes.locator("li").count() == 10
+            # One kept back for signing in with later: the other thing the
+            # sign-in's code field has to take.
+            recovery = (await codes.locator("li").first.inner_text()).strip()
+            assert recovery
 
             # Shown once, so the way past is a tick that says they were kept:
             # until it is given, "OK" is disabled and Escape does nothing.
@@ -125,6 +129,32 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             await expect(code_field).to_be_visible()
             # One step on from the enrolment's, which is spent.
             await code_field.fill(code_at(secret, current_step(time.time()) + 1))
+            await form.locator('button[type="submit"]').click()
+            await expect(form).to_have_count(0)
+            await expect(page.locator(".identity-chip")).to_contain_text(
+                "TwoFactorPlayer"
+            )
+
+            # And again with a recovery code, the way back in when the phone
+            # is gone. It has letters in it, so the number pad a phone offers
+            # for the app's code cannot type it: the field swaps for one that
+            # takes text, in capitals (A7).
+            await page.evaluate(
+                "async () => { await fetch('/api/auth/logout', {method: 'POST'}); }"
+            )
+            await page.goto(BASE_URL)
+            await page.click(".first-run-login")
+            form = page.locator(".modal-card").filter(has_text="Password")
+            await form.get_by_label("Username").fill("TwoFactorPlayer")
+            await form.get_by_label("Password", exact=True).fill(PASSWORD)
+            await form.locator('button[type="submit"]').click()
+            code_field = form.get_by_label("Code from your authenticator app")
+            await expect(code_field).to_have_attribute("inputmode", "numeric")
+            await form.get_by_role("button", name="Use a recovery code").click()
+            recovery_field = form.get_by_label("Recovery code", exact=True)
+            await expect(recovery_field).to_have_attribute("inputmode", "text")
+            await expect(recovery_field).to_have_attribute("autocapitalize", "characters")
+            await recovery_field.fill(recovery)
             await form.locator('button[type="submit"]').click()
             await expect(form).to_have_count(0)
             await expect(page.locator(".identity-chip")).to_contain_text(

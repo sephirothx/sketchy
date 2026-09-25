@@ -1,9 +1,9 @@
-import { Suspense, lazy, useEffect, useId, useRef, useState } from "react";
+import { Suspense, lazy, useEffect, useId, useState } from "react";
 
 // Split out so the QR encoder is fetched when somebody actually enrols.
 const AuthenticatorQrCode = lazy(() => import("./AuthenticatorQrCode"));
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import { downloadRecoveryCodes } from "../lib/recoveryCodeFile";
 import { SegmentedCodeInput } from "./SegmentedCodeInput";
 import { CopyIcon, DownloadIcon } from "./icons";
@@ -37,8 +37,7 @@ import { ui } from "../content/ui/index.ts";
  * close the dialog and discover it afterwards.
  */
 export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const titleId = useId();
+  const formId = useId();
   const keyId = useId();
   const passwordId = useId();
 
@@ -69,7 +68,6 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
   // and they are shown exactly once.
   const held = Boolean(codes) && !savedCodes;
   const dismiss = () => { if (!held) onClose(); };
-  useFocusTrap(dialogRef, { active: true, onEscape: dismiss });
 
   async function copy(value: string, what: string) {
     try {
@@ -254,92 +252,280 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
     }
   }
 
-  return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) dismiss();
-      }}
-    >
-      {/* Only the two-column setup and the block of codes need the extra
-          room; the manage view is one password field, and is the width every
-          other dialog with one is. */}
-      <div
-        ref={dialogRef}
-        className={`modal-card two-factor${offer || codes ? " two-factor-wide" : ""}`}
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">{ui.twoFactorDialog.twoFactorAuthentication}</h3>
-        {error && <p className="auth-error" role="alert">{error}</p>}
+  const view: "codes" | "choose" | "offer" | "granted" | "manage" | "loading" = codes
+    ? "codes"
+    : granted
+      ? "granted"
+      : offer
+        ? "offer"
+        : hasFactor
+          ? "manage"
+          : passkeys !== null
+            ? "choose"
+            : "loading";
 
-        {codes && (
-          <div className="two-factor-codes">
-            <p className="modal-body">
-              <strong>{ui.twoFactorDialog.saveTheseRecoveryCodesNow}</strong> {ui.twoFactorDialog.eachOneSignsYouOnceIf}
-            </p>
-            <ul aria-label={ui.twoFactorDialog.recoveryCodes}>
-              {codes.map((value) => <li key={value}><code>{value}</code></li>)}
-            </ul>
-            <div className="two-factor-actions">
-              <button
-                type="button"
-                className="btn btn-primary btn-compact"
-                onClick={() => downloadRecoveryCodes(username, codes)}
-              >
-                <DownloadIcon size={15} />
-                {ui.twoFactorDialog.downloadAsFile}
-              </button>
-              <button
-                type="button"
-                className="btn btn-secondary btn-compact"
-                onClick={() => void copy(codes.join("\n"), ui.twoFactorDialog.recoveryCodes)}
-              >
-                <CopyIcon size={15} />
-                {ui.twoFactorDialog.copyAll}
-              </button>
-            </div>
-            {/* A tick rather than a button, and the only way past: these exist
-                for the moment the authenticator is gone, and that is a bad
-                moment to discover they were skipped past. */}
-            <label className="two-factor-ack">
-              <input
-                type="checkbox"
-                checked={savedCodes}
-                onChange={(event) => setSavedCodes(event.target.checked)}
-              />
-              {ui.twoFactorDialog.iHaveSavedTheseSomewhereSafe}
-            </label>
-            {/* Done means done. Behind these codes is the manage view, which
-                is a different errand - somebody who came here to set a factor
-                up has finished, and would be handed a password field and a
-                "Turn off" button for their trouble. It is one click away from
-                the row they started at, marked "Manage", when they want it.
-                A role that has just taken effect is the exception: that panel
-                is the outcome of this ceremony, not a way of managing it. */}
+  const cancel = (
+    <button type="button" className="btn btn-secondary" onClick={onClose}>
+      {ui.twoFactorDialog.cancel}
+    </button>
+  );
+  // Each view that asks for something carries its own action here; the
+  // manage view's actions each belong to a row of their own, and the ✕ is its
+  // way out.
+  const footer = {
+    // Done means done. Behind these codes is the manage view, which is a
+    // different errand - somebody who came here to set a factor up has
+    // finished, and would be handed a password field and a "Turn off" button
+    // for their trouble. It is one click away from the row they started at,
+    // marked "Manage", when they want it. A role that has just taken effect
+    // is the exception: that panel is the outcome of this ceremony, not a way
+    // of managing it.
+    codes: (
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={() => (granted ? setCodes(null) : onClose())}
+        disabled={!savedCodes}
+      >
+        {ui.twoFactorDialog.done}
+      </button>
+    ),
+    choose: (
+      <>
+        {cancel}
+        <button
+          type="button"
+          className="btn btn-primary"
+          onClick={() => void addPasskey()}
+          disabled={busy || !password || !canUsePasskeys}
+        >
+          {busy ? ui.twoFactorDialog.waitingForYourDevice : ui.twoFactorDialog.setUpAPasskey}
+        </button>
+      </>
+    ),
+    offer: (
+      <>
+        {cancel}
+        <button
+          type="submit"
+          form={formId}
+          className="btn btn-primary"
+          disabled={busy || !password || code.length < 6}
+        >
+          {busy ? ui.twoFactorDialog.checking : ui.twoFactorDialog.confirm}
+        </button>
+      </>
+    ),
+    granted: (
+      <button
+        type="button"
+        className="btn btn-primary"
+        onClick={() => {
+          // The role only reaches the menu when the account is read
+          // again: this browser's session was replaced by the one the
+          // server minted for the role it now holds.
+          void useAuthStore.getState().fetchMe();
+          onClose();
+        }}
+      >
+        {ui.twoFactorDialog.done}
+      </button>
+    ),
+    manage: null,
+    loading: null,
+  }[view];
+
+  // While the codes are held there is no ✕ either: the tick is the way on.
+  // Only the two-column setup and the block of codes need the extra room; the
+  // manage view is one password field, and is the width every other dialog
+  // with one is.
+  return (
+    <ModalShell
+      title={ui.twoFactorDialog.twoFactorAuthentication}
+      cardClassName={`two-factor${offer || codes ? " two-factor-wide" : ""}`}
+      onDismiss={dismiss}
+      closeButton={!held}
+      dismissOnBackdrop={!held}
+      footer={footer}
+    >
+      {error && <p className="auth-error" role="alert">{error}</p>}
+
+      {codes && (
+        <div className="two-factor-codes">
+          <p className="modal-body">
+            <strong>{ui.twoFactorDialog.saveTheseRecoveryCodesNow}</strong> {ui.twoFactorDialog.eachOneSignsYouOnceIf}
+          </p>
+          <ul aria-label={ui.twoFactorDialog.recoveryCodes}>
+            {codes.map((value) => <li key={value}><code>{value}</code></li>)}
+          </ul>
+          <div className="two-factor-actions">
             <button
               type="button"
-              className="btn btn-primary"
-              onClick={() => (granted ? setCodes(null) : onClose())}
-              disabled={!savedCodes}
+              className="btn btn-primary btn-compact"
+              onClick={() => downloadRecoveryCodes(username, codes)}
             >
-              {ui.twoFactorDialog.done}
+              <DownloadIcon size={15} />
+              {ui.twoFactorDialog.downloadAsFile}
+            </button>
+            <button
+              type="button"
+              className="btn btn-secondary btn-compact"
+              onClick={() => void copy(codes.join("\n"), ui.twoFactorDialog.recoveryCodes)}
+            >
+              <CopyIcon size={15} />
+              {ui.twoFactorDialog.copyAll}
             </button>
           </div>
-        )}
+          {/* A tick rather than a button, and the only way past: these exist
+              for the moment the authenticator is gone, and that is a bad
+              moment to discover they were skipped past. */}
+          <label className="two-factor-ack">
+            <input
+              type="checkbox"
+              checked={savedCodes}
+              onChange={(event) => setSavedCodes(event.target.checked)}
+            />
+            {ui.twoFactorDialog.iHaveSavedTheseSomewhereSafe}
+          </label>
+        </div>
+      )}
 
-        {/* The first thing offered, and the reason the app route is now the
-            fallback rather than the only way: a passkey cannot be read out
-            over the phone, which is the one attack a code has no answer for
-            (R-AUTH-23). Somebody on a device that cannot make one is not
-            stuck - the app is still there, one line below. */}
-        {!codes && !granted && !offer && passkeys !== null && !hasFactor && (
-          <div className="auth-form two-factor-choose">
-            <p className="modal-body">
-              {ui.twoFactorDialog.moderatorsAdministratorsSignWithPasskeyYour}
-            </p>
+      {/* The first thing offered, and the reason the app route is now the
+          fallback rather than the only way: a passkey cannot be read out
+          over the phone, which is the one attack a code has no answer for
+          (R-AUTH-23). Somebody on a device that cannot make one is not
+          stuck - the app is still there, one line below. */}
+      {!codes && !granted && !offer && passkeys !== null && !hasFactor && (
+        <div className="auth-form two-factor-choose">
+          <p className="modal-body">
+            {ui.twoFactorDialog.moderatorsAdministratorsSignWithPasskeyYour}
+          </p>
+          <label htmlFor={passwordId}>{ui.twoFactorDialog.yourPassword}</label>
+          <input
+            id={passwordId}
+            type="password"
+            value={password}
+            onChange={(event) => setPassword(event.target.value)}
+            autoComplete="current-password"
+          />
+          <p className="modal-hint">{ui.twoFactorDialog.confirmsPasskeyBeingAddedByYou}</p>
+          <p className="modal-hint two-factor-fallback">
+            {canUsePasskeys
+              ? ui.twoFactorDialog.noPasskeyOnThisDevice
+              : ui.twoFactorDialog.thisBrowserCannotMakeA}
+            <button type="button" className="auth-link" onClick={() => void start()}>
+              {ui.twoFactorDialog.useAuthenticatorAppInstead}
+            </button>
+          </p>
+        </div>
+      )}
+
+      {!codes && !granted && offer && (
+        <form id={formId} className="two-factor-setup" onSubmit={(event) => void confirm(event)}>
+          <p className="modal-body two-factor-lead">
+            {ui.twoFactorDialog.scanCodeWithAuthenticatorAppThen}
+          </p>
+          <div className="two-factor-scan">
+            <div className="two-factor-frame">
+              <Suspense fallback={<p className="modal-hint">{ui.twoFactorDialog.drawingCode}</p>}>
+                <AuthenticatorQrCode
+                  uri={offer.uri}
+                  label={ui.twoFactorDialog.scanThisWithYourAuthenticatorApp}
+                />
+              </Suspense>
+            </div>
+            <p className="modal-hint">{ui.twoFactorDialog.pointYourAppAtThis}</p>
+          </div>
+
+          <div className="auth-form two-factor-entry">
+            <label htmlFor={keyId}>{ui.twoFactorDialog.setupKey}</label>
+            <div className="two-factor-secret">
+              <code id={keyId}>{offer.secret}</code>
+              <button
+                type="button"
+                className="btn btn-ghost btn-compact"
+                onClick={() => void copy(offer.secret, ui.twoFactorDialog.setupKey)}
+                aria-label={ui.twoFactorDialog.copySetupKey}
+              >
+                <CopyIcon size={15} />
+              </button>
+            </div>
+            <p className="modal-hint">{ui.twoFactorDialog.useThisIfYouCanT}</p>
+
+            <label className="two-factor-code-label" htmlFor={passwordId}>
+              {ui.twoFactorDialog.yourPassword}
+            </label>
+            <input
+              id={passwordId}
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoComplete="current-password"
+            />
+            {/* Asked for here rather than later because of what it proves.
+                The code says an authenticator produced it; the password
+                says whose account it is being bound to, and a role is
+                granted on the pair (R-AUTH-20). */}
+            <p className="modal-hint">{ui.twoFactorDialog.confirmsAuthenticatorYours}</p>
+
+            <span className="two-factor-code-label">{ui.twoFactorDialog.codeFromYourApp}</span>
+            <SegmentedCodeInput
+              value={code}
+              onChange={setCode}
+              onComplete={(complete) => void submitWith(complete)}
+              label={ui.twoFactorDialog.codeFromYourAuthenticatorApp}
+              autoFocus
+              disabled={busy}
+            />
+
+          </div>
+        </form>
+      )}
+
+      {!codes && granted && (
+        <p className="modal-body">
+          {ui.twoFactorDialog.roleTaken({
+            role: granted === "admin" ? "admin" : "moderator",
+          })}
+        </p>
+      )}
+
+      {!codes && !granted && !offer && hasFactor && (
+        <>
+          <p className="modal-body">
+            {ui.twoFactorDialog.secondFactorState({
+              recoveryCodesRemaining: state?.enrolled
+                ? state.recoveryCodesRemaining
+                : null,
+              confirmAuthenticator: Boolean(state?.enrolled && !state.passwordProved),
+            })}
+          </p>
+          {/* What this account can actually sign in with, listed like the
+              signed-in devices are: several is the point, because losing
+              one device should not be losing the role. */}
+          {(passkeys?.length ?? 0) > 0 && (
+            <ul className="two-factor-passkeys" aria-label={ui.twoFactorDialog.passkeys}>
+              {(passkeys ?? []).map((passkey) => (
+                <li key={passkey.id}>
+                  <span className="two-factor-passkey-name">
+                    {passkey.label}
+                    {!passkey.backedUp && (
+                      <span className="modal-hint"> {ui.twoFactorDialog.thisDeviceOnly}</span>
+                    )}
+                  </span>
+                  <button
+                    type="button"
+                    className="btn btn-danger-ghost btn-compact"
+                    onClick={() => void removePasskey(passkey.id)}
+                    disabled={busy || !password}
+                  >
+                    {ui.twoFactorDialog.remove}
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+          <div className="auth-form two-factor-manage">
             <label htmlFor={passwordId}>{ui.twoFactorDialog.yourPassword}</label>
             <input
               id={passwordId}
@@ -348,255 +534,86 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
               onChange={(event) => setPassword(event.target.value)}
               autoComplete="current-password"
             />
-            <p className="modal-hint">{ui.twoFactorDialog.confirmsPasskeyBeingAddedByYou}</p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => void addPasskey()}
-              disabled={busy || !password || !canUsePasskeys}
-            >
-              {busy ? ui.twoFactorDialog.waitingForYourDevice : ui.twoFactorDialog.setUpAPasskey}
-            </button>
-            <p className="modal-hint two-factor-fallback">
-              {canUsePasskeys
-                ? ui.twoFactorDialog.noPasskeyOnThisDevice
-                : ui.twoFactorDialog.thisBrowserCannotMakeA}
-              <button type="button" className="auth-link" onClick={() => void start()}>
-                {ui.twoFactorDialog.useAuthenticatorAppInstead}
-              </button>
-            </p>
-          </div>
-        )}
-
-        {!codes && !granted && offer && (
-          <form className="two-factor-setup" onSubmit={(event) => void confirm(event)}>
-            <p className="modal-body two-factor-lead">
-              {ui.twoFactorDialog.scanCodeWithAuthenticatorAppThen}
-            </p>
-            <div className="two-factor-scan">
-              <div className="two-factor-frame">
-                <Suspense fallback={<p className="modal-hint">{ui.twoFactorDialog.drawingCode}</p>}>
-                  <AuthenticatorQrCode
-                    uri={offer.uri}
-                    label={ui.twoFactorDialog.scanThisWithYourAuthenticatorApp}
-                  />
-                </Suspense>
-              </div>
-              <p className="modal-hint">{ui.twoFactorDialog.pointYourAppAtThis}</p>
-            </div>
-
-            <div className="auth-form two-factor-entry">
-              <label htmlFor={keyId}>{ui.twoFactorDialog.setupKey}</label>
-              <div className="two-factor-secret">
-                <code id={keyId}>{offer.secret}</code>
+            {/* Only while it matters: setting a factor up asks for no
+                password, so one may be in place that nobody has proved
+                belongs to this account — which is the one thing a staff
+                role needs of it (R-AUTH-20). Both halves are asked for
+                here: the password says the owner is present, the code says
+                the authenticator in place is theirs. */}
+            {state?.enrolled && !state.passwordProved && (
+              <>
+                <span className="two-factor-code-label">{ui.twoFactorDialog.codeFromYourApp}</span>
+                <SegmentedCodeInput
+                  value={code}
+                  onChange={setCode}
+                  label={ui.twoFactorDialog.codeFromYourAuthenticatorApp}
+                  disabled={busy}
+                />
                 <button
                   type="button"
-                  className="btn btn-ghost btn-compact"
-                  onClick={() => void copy(offer.secret, ui.twoFactorDialog.setupKey)}
-                  aria-label={ui.twoFactorDialog.copySetupKey}
+                  className="btn btn-primary two-factor-prove"
+                  onClick={() => void proveOwner()}
+                  disabled={busy || !password || code.length < 6}
                 >
-                  <CopyIcon size={15} />
+                  {ui.twoFactorDialog.confirmSYours}
                 </button>
-              </div>
-              <p className="modal-hint">{ui.twoFactorDialog.useThisIfYouCanT}</p>
-
-              <label className="two-factor-code-label" htmlFor={passwordId}>
-                {ui.twoFactorDialog.yourPassword}
-              </label>
-              <input
-                id={passwordId}
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-              />
-              {/* Asked for here rather than later because of what it proves.
-                  The code says an authenticator produced it; the password
-                  says whose account it is being bound to, and a role is
-                  granted on the pair (R-AUTH-20). */}
-              <p className="modal-hint">{ui.twoFactorDialog.confirmsAuthenticatorYours}</p>
-
-              <span className="two-factor-code-label">{ui.twoFactorDialog.codeFromYourApp}</span>
-              <SegmentedCodeInput
-                value={code}
-                onChange={setCode}
-                onComplete={(complete) => void submitWith(complete)}
-                label={ui.twoFactorDialog.codeFromYourAuthenticatorApp}
-                autoFocus
-                disabled={busy}
-              />
-
-            </div>
-            <div className="two-factor-decide">
-              <button
-                type="submit"
-                className="btn btn-primary"
-                disabled={busy || !password || code.length < 6}
-              >
-                {busy ? ui.twoFactorDialog.checking : ui.twoFactorDialog.confirm}
-              </button>
-              <button type="button" className="btn btn-ghost" onClick={onClose}>
-                {ui.twoFactorDialog.cancel}
-              </button>
-            </div>
-          </form>
-        )}
-
-        {!codes && granted && (
-          <>
-            <p className="modal-body">
-              {ui.twoFactorDialog.roleTaken({
-                role: granted === "admin" ? "admin" : "moderator",
-              })}
-            </p>
-            <button
-              type="button"
-              className="btn btn-primary"
-              onClick={() => {
-                // The role only reaches the menu when the account is read
-                // again: this browser's session was replaced by the one the
-                // server minted for the role it now holds.
-                void useAuthStore.getState().fetchMe();
-                onClose();
-              }}
-            >
-              {ui.twoFactorDialog.done}
-            </button>
-          </>
-        )}
-
-        {!codes && !granted && !offer && hasFactor && (
-          <>
-            <p className="modal-body">
-              {ui.twoFactorDialog.secondFactorState({
-                recoveryCodesRemaining: state?.enrolled
-                  ? state.recoveryCodesRemaining
-                  : null,
-                confirmAuthenticator: Boolean(state?.enrolled && !state.passwordProved),
-              })}
-            </p>
-            {/* What this account can actually sign in with, listed like the
-                signed-in devices are: several is the point, because losing
-                one device should not be losing the role. */}
-            {(passkeys?.length ?? 0) > 0 && (
-              <ul className="two-factor-passkeys" aria-label={ui.twoFactorDialog.passkeys}>
-                {(passkeys ?? []).map((passkey) => (
-                  <li key={passkey.id}>
-                    <span className="two-factor-passkey-name">
-                      {passkey.label}
-                      {!passkey.backedUp && (
-                        <span className="modal-hint"> {ui.twoFactorDialog.thisDeviceOnly}</span>
-                      )}
-                    </span>
-                    <button
-                      type="button"
-                      className="btn btn-danger-ghost btn-compact"
-                      onClick={() => void removePasskey(passkey.id)}
-                      disabled={busy || !password}
-                    >
-                      {ui.twoFactorDialog.remove}
-                    </button>
-                  </li>
-                ))}
-              </ul>
+              </>
             )}
-            <div className="auth-form two-factor-manage">
-              <label htmlFor={passwordId}>{ui.twoFactorDialog.yourPassword}</label>
-              <input
-                id={passwordId}
-                type="password"
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-                autoComplete="current-password"
-              />
-              {/* Only while it matters: setting a factor up asks for no
-                  password, so one may be in place that nobody has proved
-                  belongs to this account — which is the one thing a staff
-                  role needs of it (R-AUTH-20). Both halves are asked for
-                  here: the password says the owner is present, the code says
-                  the authenticator in place is theirs. */}
-              {state?.enrolled && !state.passwordProved && (
-                <>
-                  <span className="two-factor-code-label">{ui.twoFactorDialog.codeFromYourApp}</span>
-                  <SegmentedCodeInput
-                    value={code}
-                    onChange={setCode}
-                    label={ui.twoFactorDialog.codeFromYourAuthenticatorApp}
-                    disabled={busy}
-                  />
-                  <button
-                    type="button"
-                    className="btn btn-primary"
-                    onClick={() => void proveOwner()}
-                    disabled={busy || !password || code.length < 6}
-                  >
-                    {ui.twoFactorDialog.confirmSYours}
-                  </button>
-                </>
+            <div className="two-factor-actions">
+              {canUsePasskeys && (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-compact"
+                  onClick={() => void addPasskey()}
+                  disabled={busy || !password}
+                >
+                  {ui.twoFactorDialog.addPasskey}
+                </button>
               )}
-              <div className="two-factor-actions">
-                {canUsePasskeys && (
+              {/* Both of these are about the authenticator app, and an
+                  account whose only credential is a passkey has none: the
+                  endpoints answer 409, so offering them is offering a
+                  refusal. What that account wants instead is the app it
+                  does not have yet. */}
+              {state?.enrolled ? (
+                <>
                   <button
                     type="button"
                     className="btn btn-secondary btn-compact"
-                    onClick={() => void addPasskey()}
+                    onClick={() => void newCodes()}
                     disabled={busy || !password}
                   >
-                    {ui.twoFactorDialog.addPasskey}
+                    {ui.twoFactorDialog.newRecoveryCodes}
                   </button>
-                )}
-                {/* Both of these are about the authenticator app, and an
-                    account whose only credential is a passkey has none: the
-                    endpoints answer 409, so offering them is offering a
-                    refusal. What that account wants instead is the app it
-                    does not have yet. */}
-                {state?.enrolled ? (
-                  <>
-                    <button
-                      type="button"
-                      className="btn btn-secondary btn-compact"
-                      onClick={() => void newCodes()}
-                      disabled={busy || !password}
-                    >
-                      {ui.twoFactorDialog.newRecoveryCodes}
-                    </button>
-                    {/*
-                      Offered even when the role requires it: the server
-                      refuses, and being told why by the thing you asked is
-                      clearer than an option that silently is not there.
-                    */}
-                    <button
-                      type="button"
-                      className="btn btn-danger-ghost btn-compact"
-                      onClick={() => void turnOff()}
-                      disabled={busy || !password}
-                    >
-                      {ui.twoFactorDialog.turnOff}
-                    </button>
-                  </>
-                ) : (
+                  {/*
+                    Offered even when the role requires it: the server
+                    refuses, and being told why by the thing you asked is
+                    clearer than an option that silently is not there.
+                  */}
                   <button
                     type="button"
-                    className="btn btn-secondary btn-compact"
-                    onClick={() => void start()}
-                    disabled={busy}
+                    className="btn btn-danger-ghost btn-compact"
+                    onClick={() => void turnOff()}
+                    disabled={busy || !password}
                   >
-                    {ui.twoFactorDialog.addAuthenticatorApp}
+                    {ui.twoFactorDialog.turnOff}
                   </button>
-                )}
-              </div>
+                </>
+              ) : (
+                <button
+                  type="button"
+                  className="btn btn-secondary btn-compact"
+                  onClick={() => void start()}
+                  disabled={busy}
+                >
+                  {ui.twoFactorDialog.addAuthenticatorApp}
+                </button>
+              )}
             </div>
-          </>
-        )}
+          </div>
+        </>
+      )}
 
-        {/* The setup form, the codes and the role that just started each carry
-            their own way out. */}
-        {!offer && !codes && !granted && (
-          <button type="button" className="modal-dismiss" onClick={onClose}>
-            {ui.twoFactorDialog.close}
-          </button>
-        )}
-      </div>
-    </div>
+    </ModalShell>
   );
 }

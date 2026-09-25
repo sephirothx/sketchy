@@ -1,8 +1,7 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
-import { useBackCloses } from "../hooks/useRoomHistory";
+import { ModalShell } from "./ui/ModalShell";
 import { reportPlayerInRoom, type ReportReason } from "../lib/moderation";
 import { socketRequestErrorMessage } from "../lib/socket";
 import { ui } from "../content/ui/index.ts";
@@ -65,9 +64,10 @@ export function ReportPlayerDialog({
   drawingOffered?: boolean;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
-  const titleId = useId();
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const [reason, setReason] = useState<ReportReason>(
     drawingOffered ? "offensive_drawing" : "harassment",
   );
@@ -89,8 +89,11 @@ export function ReportPlayerDialog({
     drawingRequested: boolean;
   } | null>(null);
 
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: detailsRef });
-  useBackCloses(true, onClose);
+  // Sending swaps the form for the answer, and the submit button that held
+  // focus goes with it; focus follows to Done rather than dropping to the page.
+  useEffect(() => {
+    if (sent !== null) doneRef.current?.focus();
+  }, [sent]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -129,101 +132,97 @@ export function ReportPlayerDialog({
   // trapped in that stacking context - it drew beneath the game. It was also a
   // div directly inside a <ul>, which is not somewhere a div may go.
   return createPortal(
-    <div
-      className="modal-overlay report-player-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">
-          {sent === null ? ui.reportPlayerDialog.reportNickname({ nickname }) : ui.reportPlayerDialog.reportSent}
-        </h3>
-
-        {sent === null ? (
+    <ModalShell
+      title={sent === null ? ui.reportPlayerDialog.reportNickname({ nickname }) : ui.reportPlayerDialog.reportSent}
+      overlayClassName="report-player-overlay"
+      onDismiss={onClose}
+      initialFocusRef={detailsRef}
+      footer={
+        sent === null ? (
           <>
-            <p className="modal-body">
-              {ui.reportPlayerDialog.nothingHappensYet({ name: nickname })}
-            </p>
-            <form onSubmit={submit} className="auth-form">
-              <label htmlFor={`${titleId}-reason`}>{ui.reportPlayerDialog.whatHappened}</label>
-              <select
-                id={`${titleId}-reason`}
-                className="report-reason"
-                value={reason}
-                onChange={(change) => setReason(change.target.value as ReportReason)}
-              >
-                {REASONS.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-
-              <label htmlFor={`${titleId}-details`}>{ui.reportPlayerDialog.anythingElseOptional}</label>
-              <textarea
-                id={`${titleId}-details`}
-                ref={detailsRef}
-                className="report-details"
-                rows={3}
-                maxLength={1000}
-                value={details}
-                onChange={(change) => {
-                  setDetails(change.target.value);
-                  setError(null);
-                }}
-                placeholder={ui.reportPlayerDialog.whatTheySaidDrewWhen}
-              />
-              <p className="auth-hint">
-                {ui.reportPlayerDialog.theirRecentMessagesThisRoomAre}
-              </p>
-              {drawingOffered && (
-                <label className="report-include-drawing">
-                  <input
-                    type="checkbox"
-                    checked={includeDrawing}
-                    onChange={(change) => setIncludeDrawing(change.target.checked)}
-                  />
-                  <span>
-                    {ui.reportPlayerDialog.includeTheirDrawing}
-                    <span>
-                      {ui.reportPlayerDialog.canvasAsRightNowSoModerator}
-                    </span>
-                  </span>
-                </label>
-              )}
-
-              {error && (
-                <p className="auth-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? ui.reportPlayerDialog.sending : ui.reportPlayerDialog.sendReport}
-              </button>
-            </form>
-          </>
-        ) : (
-          <>
-            <p className="modal-body">{sentSummary(sent)}</p>
-            <button type="button" className="btn btn-primary" onClick={onClose}>
-              {ui.reportPlayerDialog.done}
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              {ui.reportPlayerDialog.cancel}
+            </button>
+            <button
+              type="submit"
+              form={formId}
+              className="btn btn-primary"
+              disabled={busy}
+            >
+              {busy ? ui.reportPlayerDialog.sending : ui.reportPlayerDialog.sendReport}
             </button>
           </>
-        )}
+        ) : (
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
+            {ui.reportPlayerDialog.done}
+          </button>
+        )
+      }
+    >
+      {sent === null ? (
+        <>
+          <p className="modal-body">
+            {ui.reportPlayerDialog.nothingHappensYet({ name: nickname })}
+          </p>
+          <form id={formId} onSubmit={submit} className="auth-form">
+            <label htmlFor={`${fieldId}-reason`}>{ui.reportPlayerDialog.whatHappened}</label>
+            <select
+              id={`${fieldId}-reason`}
+              className="report-reason"
+              value={reason}
+              onChange={(change) => setReason(change.target.value as ReportReason)}
+            >
+              {REASONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
 
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sent === null ? ui.reportPlayerDialog.cancel : ui.reportPlayerDialog.close}
-        </button>
-      </div>
-    </div>,
+            <label htmlFor={`${fieldId}-details`}>{ui.reportPlayerDialog.anythingElseOptional}</label>
+            <textarea
+              id={`${fieldId}-details`}
+              ref={detailsRef}
+              className="report-details"
+              rows={3}
+              maxLength={1000}
+              value={details}
+              onChange={(change) => {
+                setDetails(change.target.value);
+                setError(null);
+              }}
+              placeholder={ui.reportPlayerDialog.whatTheySaidDrewWhen}
+            />
+            <p className="auth-hint">
+              {ui.reportPlayerDialog.theirRecentMessagesThisRoomAre}
+            </p>
+            {drawingOffered && (
+              <label className="report-include-drawing">
+                <input
+                  type="checkbox"
+                  checked={includeDrawing}
+                  onChange={(change) => setIncludeDrawing(change.target.checked)}
+                />
+                <span>
+                  {ui.reportPlayerDialog.includeTheirDrawing}
+                  <span>
+                    {ui.reportPlayerDialog.canvasAsRightNowSoModerator}
+                  </span>
+                </span>
+              </label>
+            )}
+
+            {error && (
+              <p className="auth-error" role="alert">
+                {error}
+              </p>
+            )}
+          </form>
+        </>
+      ) : (
+        <p className="modal-body">{sentSummary(sent)}</p>
+      )}
+    </ModalShell>,
     document.body,
   );
 }

@@ -16,3 +16,9 @@ so it is read in the language in force when it is shown rather than at import. *
 export function passwordTooShort(): string {
   return ui.passwordPolicy.tooShort({ count: MIN_PASSWORD_LENGTH });
 }
+
+/** The same floor, said before anybody has broken it: the hint under a field
+where a new password is chosen, so the rule is read before the refusal. */
+export function passwordRule(): string {
+  return ui.passwordPolicy.rule({ count: MIN_PASSWORD_LENGTH });
+}

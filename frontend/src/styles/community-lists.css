@@ -407,41 +407,27 @@
 /* ------------------------------------------------- all prompts, as a dialog */
 
 /* The modal card is sized for a confirmation; this one holds up to 500
-   prompts, so it is wide, left-aligned, and scrolls inside itself. */
+   prompts, so it is wide. The search and the order stay put under the
+   header and only the prompts scroll. */
 .modal-card.community-prompts-dialog {
-  display: grid;
-  grid-template-rows: auto auto minmax(0, 1fr);
   max-height: min(680px, calc(var(--app-height) - 48px));
   max-width: 760px;
-  overflow: hidden;
-  padding: 0;
-  text-align: left;
-  width: calc(100% - 32px);
 }
 
-.community-prompts-dialog-head {
-  align-items: start;
-  border-bottom: 1px solid var(--line);
+.community-prompts-dialog .modal-content {
   display: flex;
-  gap: 12px;
-  justify-content: space-between;
-  padding: 18px 20px 14px;
-}
-
-.community-prompts-dialog-head h2 {
-  font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 600;
-  margin: 2px 0 0;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .community-prompts-dialog-tools {
   align-items: center;
   border-bottom: 1px solid var(--line);
   display: flex;
+  flex: 0 0 auto;
   flex-wrap: wrap;
   gap: 10px;
-  padding: 12px 20px;
+  padding: 2px 0 12px;
 }
 
 .community-prompts-search {
@@ -479,7 +465,7 @@
   white-space: nowrap;
 }
 
-.community-prompts-dialog-body { overflow-y: auto; padding: 14px 20px 20px; }
+.community-prompts-dialog-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding: 14px 0 2px; }
 
 /* A-Z earns an index: at 500 prompts a letter is how a reader jumps to the
    part they want. */

@@ -137,8 +137,11 @@
   color: var(--ink);
 }
 
-.auth-form .btn-primary {
-  margin-top: 10px;
+/* The swap between the authenticator's code and a recovery code: a link's
+   weight, under the field it changes. */
+.auth-form .auth-code-swap {
+  align-self: flex-start;
+  font-size: 13px;
 }
 
 /* A footer row lines its buttons up by itself; the primary's gap above is for
@@ -166,16 +169,6 @@
   font: inherit;
   font-weight: 700;
   text-decoration: underline;
-  cursor: pointer;
-}
-
-.modal-dismiss {
-  margin-top: 8px;
-  border: none;
-  background: none;
-  color: inherit;
-  opacity: 0.7;
-  font-size: 13px;
   cursor: pointer;
 }
 
@@ -336,29 +329,19 @@
 .session-list li > span { display: grid; gap: 3px; }
 .session-list small { color: var(--muted); }
 .session-current { color: var(--success-ink); font-size: 12px; font-weight: 700; }
-.session-list button, .session-actions button {
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xs);
-  cursor: pointer;
-  padding: 8px 12px;
-}
-.session-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.session-actions .session-revoke-all { background: var(--danger-button); border-color: var(--danger-button); color: var(--on-danger); }
-.session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: var(--opacity-disabled); }
+.session-list .btn { flex: none; }
 
 /* A session used from a browser it was not issued to. Given the warning
    colour rather than the muted one every other line in the list has: it is the
    one row somebody is meant to stop and look at (R-AUTH-22). */
 .session-anomaly { color: var(--warning); font-weight: 700; }
 
-/* The card stays centred like every other dialog - title, lead and dismiss
-   all sit as they do elsewhere. Only the entry column reads left. */
 .two-factor-wide { max-width: 640px; }
 /* The entry column is an `.auth-form` like every other dialog's, so labels,
    fields and spacing come from there rather than being restated. */
 
-/* The two columns are the work; the lead above and the button below span
-   them, so the dialog still reads top-to-bottom like every other one. */
+/* The two columns are the work; the lead above spans them, so the dialog
+   still reads top-to-bottom like every other one. */
 .two-factor-setup {
   align-items: start;
   display: grid;
@@ -367,16 +350,6 @@
   margin-top: 4px;
 }
 .two-factor-lead { grid-column: 1 / -1; margin: 0 0 6px; }
-/* Side by side under both columns, the primary first. */
-.two-factor-decide {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  grid-column: 1 / -1;
-  justify-content: center;
-  margin-top: 16px;
-}
-.two-factor-decide .btn-primary { margin: 0; }
 .two-factor-scan { min-width: 0; text-align: center; }
 .two-factor-scan .modal-hint { margin: 8px 0 0; }
 .two-factor-entry { margin-top: 0; min-width: 0; text-align: left; }
@@ -461,20 +434,9 @@
    come from there; only the row of destructive-ish actions is described. */
 .two-factor-manage { text-align: left; }
 
-/* An offer asks something, so it has two ways on rather than one
-   acknowledgement. Laid out like the setup dialog's pair, for the same
-   reason: the thing to do first reads first. */
-.role-notice-decide {
-  align-items: center;
-  display: flex;
-  gap: 10px;
-  justify-content: center;
-  margin-top: 16px;
-}
-.role-notice-decide .btn-primary { margin: 0; }
 
 /* The passkey route, above the fields it replaces. */
-.auth-passkey { margin-top: 14px; width: 100%; }
+.auth-passkey { width: 100%; }
 .auth-divider {
   align-items: center;
   color: var(--muted);
@@ -529,8 +491,7 @@
   margin: 4px 0 12px;
 }
 .two-factor-ack input { accent-color: var(--primary); height: 16px; width: 16px; }
-/* Done, under the codes; the direct child, not the download beside Copy all. */
-.two-factor-codes > .btn-primary { width: 100%; }
+.two-factor-prove { align-self: flex-start; margin-top: 6px; }
 .two-factor-codes ul {
   display: grid;
   gap: 6px;
@@ -551,54 +512,34 @@
   .two-factor-scan { margin: 0 auto; max-width: 190px; }
 }
 
-.step-up { max-width: 380px; text-align: left; }
+/* The recovery code's field, drawn like every other dialog field. */
 .step-up input {
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xs);
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  box-sizing: border-box;
+  color: var(--ink);
   font: inherit;
+  font-size: 16px;
   margin-top: 6px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   width: 100%;
 }
-.step-up input {
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xs);
-  font: inherit;
-  padding: 9px 11px;
-  width: 100%;
-}
-.step-up-passkey { margin: 4px 0 14px; width: 100%; }
+.step-up-passkey { margin: 0 0 14px; width: 100%; }
 .step-up-swap { display: block; margin-top: 12px; padding-left: 0; }
-.step-up-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 16px; }
 
-.account-data-dialog { max-width: 620px; text-align: left; }
+.account-data-dialog { max-width: 620px; }
 .account-data-section { border-top: 1px solid var(--line-strong); margin-top: 18px; padding-top: 16px; }
-.account-data-section h4 { margin: 0; }
+.account-data-section h3 { font-size: 15px; margin: 0; }
 .account-data-heading-row { align-items: center; display: flex; gap: 12px; justify-content: space-between; }
-.account-data-heading-row button,
-.account-export-list a,
-.account-data-actions button {
-  border: 1px solid var(--line-strong);
-  border-radius: var(--radius-xs);
-  color: inherit;
-  cursor: pointer;
-  font: inherit;
-  font-weight: 700;
-  padding: 8px 12px;
-}
-.account-data-heading-row button, .account-data-actions button { background: transparent; }
+.account-export-list a { flex: none; text-decoration: none; }
 .account-export-list { display: grid; gap: 8px; list-style: none; margin: 12px 0; padding: 0; }
 .account-export-list li { align-items: center; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); display: flex; gap: 12px; justify-content: space-between; padding: 12px; }
 .account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
 .account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
 .account-export-note { color: var(--ink); line-height: 1.4; }
-.account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--on-primary); text-decoration: none; }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
-.account-delete-form input { background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--radius-xs); color: var(--ink); font-size: 16px; padding: 9px 11px; }
-.account-data-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.account-data-actions { margin-top: 18px; }
-.account-data-heading-row button:disabled { cursor: wait; opacity: var(--opacity-disabled); }
 
 /* First-run block (#588, #590): a name tag, the line of the visit beside it,
    and the account as one quiet line. One layout at every width - the tag, then

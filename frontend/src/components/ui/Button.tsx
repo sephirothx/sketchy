@@ -5,6 +5,7 @@ export type ButtonVariant =
   | "warm"
   | "secondary"
   | "ghost"
+  | "danger"
   | "dangerGhost"
   | "icon";
 
@@ -13,6 +14,7 @@ const VARIANT_CLASS: Record<ButtonVariant, string> = {
   warm: "btn-warm",
   secondary: "btn-secondary",
   ghost: "btn-ghost",
+  danger: "btn-danger",
   dangerGhost: "btn-danger-ghost",
   icon: "btn-icon",
 };

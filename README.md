@@ -872,7 +872,8 @@ it swaps its own cookie and every other device stays signed in. If a replaced
 token is ever used afterwards, that means a second copy of it exists - so that
 device is signed out entirely and has to sign in again, which is how you find out.
 A session used from a browser it was not issued to is flagged in the list, with
-the date, so you can revoke it.
+the date, so you can revoke it. **Log out everywhere** asks before it acts,
+because everywhere includes the device you are holding.
 
 #### Two-factor authentication
 
@@ -925,6 +926,10 @@ player, changes a role, or reconfigures the running server - a passkey answers
 both, and answers the second in one tap. Reading
 the moderation queue is deliberately not gated: a check made on the way in would
 simply be done as a matter of routine.
+
+At sign-in the code field takes the authenticator's six digits, and a phone
+offers its number pad for them; **Use a recovery code** swaps it for a field
+that takes letters, because recovery codes have them.
 
 #### Recovery
 

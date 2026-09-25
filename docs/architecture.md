@@ -323,7 +323,7 @@ refuses any difference, because the drift is invisible in a browser. The three s
 routes render the same page for the wrong role rather than naming the surface and
 refusing it (§7, *Authorization*), and keep their 200: the URL exists, the account is what does not.
 
-Three frontend conventions worth knowing:
+Four frontend conventions worth knowing:
 
 1. **`autoConnect` is off** ([`frontend/src/lib/socket.ts:13`](../frontend/src/lib/socket.ts)).
    The handshake reads the session cookie exactly once, and `GET /api/auth/me` may
@@ -350,6 +350,21 @@ Three frontend conventions worth knowing:
    [`pages/CrashPage.tsx`](../frontend/src/pages/CrashPage.tsx), which pre-fills a bug
    report from the caught error, offers the ways out only once it has been sent (or has
    failed to send), and leaves browser storage exactly as it was.
+4. **One dialog anatomy** ([`components/ui/ModalShell.tsx`](../frontend/src/components/ui/ModalShell.tsx), R-A11Y-04).
+   A modal dialog is a `ModalShell`: an `h2` title and a close button in the header, a
+   body that scrolls inside a card capped at 90% of the dynamic viewport, and the
+   actions in a footer — right-aligned with the primary last, stacked full width on a
+   phone. Left without `onDismiss` it is a **blocking notice** (the AFK check, a
+   suspension, a warning, a role change): no close button and no scrim, focus still
+   trapped, and Escape claimed so it never reaches what is open underneath — swallowed,
+   or for the AFK check (`onEscape`) taken as the answer. A form whose submit button sits in the footer reaches it through the
+   `form` attribute, so the button stays `type="submit"`. The two route overlays keep
+   their own sheet and layer but draw the same `ModalHeader`; the room's sheets are
+   [`BottomSheet`](../frontend/src/components/ui/BottomSheet.tsx). The dialogs used to
+   be hand-rolled one by one, and it showed — a close button in five sizes, four footer
+   layouts, three notices that declared `aria-modal` without trapping focus, and cards
+   with no height limit that ran off a landscape phone with their submit button — so a
+   new dialog starts from `ModalShell`, not from a fresh `.modal-overlay`.
 
 ---
 

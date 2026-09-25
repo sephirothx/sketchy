@@ -7,7 +7,7 @@ planted for the page.
 """
 import asyncio
 
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
@@ -294,8 +294,8 @@ async def test_two_players_reporting_one_thing_are_one_case_decided_once():
             repeat_reporter = reporters[0]
             # Their first report's acknowledgement is still up, and it sits
             # over the player list the next one is opened from.
-            await repeat_reporter.locator(
-                ".modal-card .modal-dismiss"
+            await repeat_reporter.locator(".modal-card").get_by_role(
+                "button", name="OK", exact=True
             ).click()
             await repeat_reporter.locator(".modal-card").wait_for(state="detached")
             row = repeat_reporter.locator(".player-list li", has_text=names[drawer])
@@ -350,4 +350,70 @@ async def test_two_players_reporting_one_thing_are_one_case_decided_once():
         finally:
             for context in contexts:
                 await context.close()
+            await browser.close()
+
+
+async def test_escape_does_not_reach_past_a_warning():
+    """A warning is answered, not dismissed - and Escape does not slip past it.
+
+    The notice registered no Escape handler of its own, so the key went on to
+    whatever was open beneath it: Settings closed behind a notice the player
+    had not answered (R-A11Y-04). The warning is issued the way a moderator
+    issues one, and lands over Settings the way it would for a player who
+    happened to have it open.
+    """
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        admin_context = await browser.new_context()
+        target_context = await browser.new_context()
+        try:
+            admin = await admin_context.new_page()
+            target = await target_context.new_page()
+            admin.set_default_timeout(15000)
+            target.set_default_timeout(15000)
+
+            await admin.goto(BASE_URL)
+            await use_guest_name(admin, "EscapeWarnAdmin")
+            await register_account(admin, "EscapeWarnAdmin")
+            await set_role("EscapeWarnAdmin", UserRole.ADMIN.value)
+
+            await target.goto(BASE_URL)
+            await use_guest_name(target, "EscapeWarnTarget")
+            await register_account(target, "EscapeWarnTarget")
+            user_id = await target.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json()).id"
+            )
+            await target.goto(f"{BASE_URL}/settings/account")
+            settings = target.locator('[data-testid="settings"]')
+            await settings.wait_for()
+
+            status = await admin.evaluate(
+                """async (userId) => (await fetch('/api/moderation/warnings', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({
+                        userId, reason: 'Escape regression check', category: 'spam',
+                    }),
+                })).status""",
+                user_id,
+            )
+            assert status == 201, status
+
+            notice = target.get_by_role("alertdialog", name="A moderator warning")
+            await expect(notice).to_be_visible()
+            # Focus is inside the notice, on its one answer.
+            await expect(notice.get_by_role("button", name="OK", exact=True)).to_be_focused()
+
+            await target.keyboard.press("Escape")
+            await target.wait_for_timeout(300)
+            await expect(notice).to_be_visible()
+            await expect(settings).to_be_visible()
+
+            # Answering it is the way on, and Settings is still there after.
+            await notice.get_by_role("button", name="OK", exact=True).click()
+            await expect(notice).to_have_count(0)
+            await expect(settings).to_be_visible()
+        finally:
+            await admin_context.close()
+            await target_context.close()
             await browser.close()

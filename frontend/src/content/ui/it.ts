@@ -507,7 +507,6 @@ export const IT: Catalogue = {
     loadingExports: "Caricamento esportazioni…",
     youHaveNotRequestedExportYet: "Non hai ancora chiesto nessuna esportazione.",
     download: "Scarica",
-    close: "Chiudi",
     requesting: "Richiesta in corso…",
     requestExport: "Richiedi l’esportazione",
   },
@@ -541,7 +540,6 @@ export const IT: Catalogue = {
     username: "Nome utente",
     password: "Password",
     codeFromYourAuthenticatorApp: "Codice dalla tua app di autenticazione",
-    recoveryCodeWorksHereTooCan: "Anche un codice di recupero funziona qui, e si può usare una volta.",
     email: "Email",
     optional: "(facoltativo)",
     letsYouResetYourPasswordLater: "Ti permette di reimpostare la password più avanti. Non serve ad altro.",
@@ -643,7 +641,6 @@ export const IT: Catalogue = {
     yourPassword: "La tua password",
     passwordConfirmsItIsYou: "La tua password conferma che sei tu: questo indirizzo serve a recuperare l’account.",
     enterYourPasswordToConfirm: "Inserisci la tua password per confermare la modifica.",
-    close: "Chiudi",
     notNow: "Non ora",
   },
 
@@ -742,7 +739,6 @@ export const IT: Catalogue = {
     changeYourPassword: "Cambia la tua password",
     pleaseWait: "Attendi…",
     changePassword: "Cambia password",
-    close: "Chiudi",
     cancel: "Annulla",
   },
 
@@ -758,6 +754,12 @@ export const IT: Catalogue = {
     switchRoomPaletteFutureDrawings: "Cambiare la tavolozza della stanza per i prossimi disegni?",
     switchColors: "Cambia colori",
     notNow: "Non ora",
+  },
+
+  dialog: {
+    close: "Chiudi",
+    cancel: "Annulla",
+    couldNotSave: "Impossibile salvare. Riprova.",
   },
 
   confirmationDialog: {
@@ -895,8 +897,6 @@ export const IT: Catalogue = {
     deleteYourAccount: "Elimina il tuo account",
     deleting: "Eliminazione…",
     deleteForGood: "Elimina per sempre",
-    keepPlaying: "Continua a giocare",
-    keepMyAccount: "Tieni il mio account",
   },
 
   drainCue: {
@@ -1005,7 +1005,6 @@ export const IT: Catalogue = {
     youWillBothStopBeingAble: "Non potrete più entrare nelle partite l’uno dell’altro senza invito. Potete richiederlo quando volete.",
     removeConfirm: (p: { name: string }) => `Rimuovere ${p.name}?`,
     friends: "Amici",
-    close: "Chiudi",
     closeFriends: "Chiudi gli amici",
     friendsNeedAnAccount: "Per gli amici serve un account, così possono ritrovarti. Crea un account o accedi per aggiungere amici.",
     loading: "Caricamento…",
@@ -1236,7 +1235,6 @@ export const IT: Catalogue = {
     alphabetical: "A–Z",
     noPromptMatches: (p: { query: string }) => `Nessuna parola contiene «${p.query}».`,
     allLists: "Tutte le liste",
-    close: "Chiudi",
   },
   galleryPage: {
     gallery: "Galleria",
@@ -1661,7 +1659,6 @@ export const IT: Catalogue = {
     theNameOnTheAccount: "Il nome dell’account viene allegato così com’è ora.",
     sending: "Invio…",
     sendReport: "Invia segnalazione",
-    close: "Chiudi",
     cancel: "Annulla",
   },
   reportDrawingDialog: {
@@ -1676,7 +1673,6 @@ export const IT: Catalogue = {
     thatReportCouldNotBeSent: "Non è stato possibile inviare questa segnalazione.",
     done: "OK",
     cancel: "Annulla",
-    close: "Chiudi",
   },
 
   reportedDrawing: {
@@ -1703,7 +1699,6 @@ export const IT: Catalogue = {
       `Segnala ${p.displayName}`,
     sending: "Invio…",
     sendReport: "Invia segnalazione",
-    close: "Chiudi",
     cancel: "Annulla",
   },
 
@@ -1741,7 +1736,6 @@ export const IT: Catalogue = {
     sending: "Invio…",
     sendReport: "Invia segnalazione",
     cancel: "Annulla",
-    close: "Chiudi",
   },
 
   reportsReviewedNotice: {
@@ -1770,7 +1764,7 @@ export const IT: Catalogue = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Sei stato disconnesso da ogni dispositivo perché la modifica abbia\n            effetto. Accedi di nuovo per continuare.",
     setUpNow: "Attivalo adesso",
-    later: "Non ora",
+    notNow: "Non ora",
     oneMoment: "Attendi…",
     signInAgain: "Accedi di nuovo",
     understood: "OK",
@@ -1916,7 +1910,6 @@ export const IT: Catalogue = {
     drawWhileYouWait: "Disegna mentre aspetti",
     canvasLabel: "Blocco appunti. Solo tu vedi quello che disegni qui.",
     save: "Salva",
-    close: "Chiudi",
     backToTheRoom: "Torna alla stanza",
   },
 
@@ -1954,11 +1947,12 @@ export const IT: Catalogue = {
     revokeAnyDeviceYouNoLonger: "Revoca ogni dispositivo che non riconosci più. I nomi dei dispositivi sono approssimativi e non conservano le versioni del browser.\n          Un dispositivo che smetti di usare si disconnette da solo dopo novanta giorni.",
     loadingDevices: "Caricamento dei dispositivi…",
     currentDevice: "Dispositivo attuale",
-    close: "Chiudi",
     revoking: "Revoca…",
     revoke: "Revoca",
     signingOut: "Uscita…",
     signOutEverywhere: "Esci ovunque",
+    logOutEverywhereTitle: "Uscire ovunque?",
+    logOutEverywhereBody: "Ogni dispositivo collegato a questo account viene disconnesso, compreso questo. Qui dovrai accedere di nuovo.",
   },
 
   avatarDoodles: {
@@ -1994,7 +1988,6 @@ export const IT: Catalogue = {
     intro: "Nel colore del tuo nome, ovunque compaia il tuo nome.",
     wearing: "Lo indossi ora",
     couldNotChoose: "Non è stato possibile cambiare il disegno.",
-    close: "Chiudi",
   },
   settingsOverlay: {
     email: "Email",
@@ -2066,7 +2059,6 @@ export const IT: Catalogue = {
     drawingTools: "Strumenti di disegno",
     resetDefaults: "Ripristina i valori predefiniti",
     settings: "Impostazioni",
-    close: "Chiudi",
     closeSettings: "Chiudi le impostazioni",
     settingsSections: "Sezioni delle impostazioni",
     account: "Account",
@@ -2262,7 +2254,6 @@ export const IT: Catalogue = {
     newRecoveryCodes: "Nuovi codici di recupero",
     turnOff: "Disattiva",
     addAuthenticatorApp: "Aggiungi un’app di autenticazione",
-    close: "Chiudi",
     couldNotStartSettingThis: "Impossibile avviare la configurazione.",
     thatCodeWasNotAccepted: "Quel codice non è stato accettato.",
     couldNotAddThatPasskey: "Impossibile aggiungere quella passkey.",
@@ -2586,6 +2577,7 @@ export const IT: Catalogue = {
   passwordPolicy: {
     tooShort: (p: { count: number }) =>
       `Una password deve avere almeno ${p.count} caratteri.`,
+    rule: (p: { count: number }) => `Almeno ${p.count} caratteri.`,
   },
   operatorAccess: {
     administrator: "amministratore",

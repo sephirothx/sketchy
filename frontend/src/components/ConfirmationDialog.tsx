@@ -1,5 +1,6 @@
 import { useId, useRef } from "react";
 import { ModalShell } from "./ui/ModalShell";
+import { AlertCircleIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 
 interface ConfirmationDialogProps {
@@ -10,6 +11,11 @@ interface ConfirmationDialogProps {
   onConfirm: () => void;
 }
 
+/** A yes-or-no before something that cannot be taken back.
+
+No ✕: a confirmation has exactly two answers, both in the footer, and a third
+control that means the same as Cancel would only sit between them in the tab
+order. Escape and the scrim still cancel. */
 export function ConfirmationDialog({
   title,
   description,
@@ -18,29 +24,36 @@ export function ConfirmationDialog({
   onConfirm,
 }: ConfirmationDialogProps) {
   const cancelButtonRef = useRef<HTMLButtonElement | null>(null);
-  const titleId = useId();
   const descriptionId = useId();
 
   return (
     <ModalShell
       role="alertdialog"
-      labelledBy={titleId}
+      title={
+        <>
+          <span className="modal-title-icon is-danger" aria-hidden="true">
+            <AlertCircleIcon size={20} />
+          </span>
+          {title}
+        </>
+      }
       describedBy={descriptionId}
       cardClassName="confirmation-dialog"
       onDismiss={onCancel}
+      closeButton={false}
       initialFocusRef={cancelButtonRef}
+      footer={
+        <>
+          <button ref={cancelButtonRef} type="button" className="btn btn-secondary" onClick={onCancel}>
+            {ui.confirmationDialog.cancel}
+          </button>
+          <button type="button" className="btn btn-danger" onClick={onConfirm}>
+            {confirmLabel}
+          </button>
+        </>
+      }
     >
-      <div className="confirmation-dialog-icon" aria-hidden="true">!</div>
-      <h2 id={titleId} className="modal-title">{title}</h2>
       <p id={descriptionId} className="modal-body">{description}</p>
-      <div className="confirmation-dialog-actions">
-        <button ref={cancelButtonRef} type="button" className="btn btn-secondary" onClick={onCancel}>
-          {ui.confirmationDialog.cancel}
-        </button>
-        <button type="button" className="btn btn-danger" onClick={onConfirm}>
-          {confirmLabel}
-        </button>
-      </div>
     </ModalShell>
   );
 }

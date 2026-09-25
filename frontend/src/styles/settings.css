@@ -39,43 +39,16 @@
   overflow: hidden;
 }
 
+/* ModalShell's header, with a rule under it: the sheet's rail and pane
+   scroll beneath, and the rule is where they stop. */
 .settings-modal-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
   border-bottom: 1.5px solid var(--line);
   padding-bottom: 8px;
-  margin-bottom: 10px;
-  flex: 0 0 auto;
 }
 
-.settings-modal-header h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 19px;
-  color: var(--ink);
-}
-
-.close-icon-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  background: none;
-  border: none;
-  color: var(--muted);
-  cursor: pointer;
-  width: 36px;
-  height: 36px;
-  border-radius: var(--radius-sm);
-}
-
-.close-icon-button:hover {
-  background: var(--well);
-  color: var(--ink);
+.settings-modal-header .modal-title {
+  padding-top: 0;
 }
 
 /* Rail beside pane. The pane scrolls; the rail does not. */
@@ -1024,7 +997,7 @@
 
 /* ------------------------------------------------------------ crop dialog */
 
-.picture-crop-card {
+.picture-crop-card .modal-content {
   display: grid;
   justify-items: center;
 }
@@ -1121,11 +1094,6 @@
   border-radius: 50%;
   height: 20px;
   width: 20px;
-}
-
-.picture-crop-card .btn-primary {
-  margin-top: 8px;
-  width: 100%;
 }
 
 /* The default brush size: eight segments in a recipe sized for two to four.

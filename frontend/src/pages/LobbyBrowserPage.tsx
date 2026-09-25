@@ -55,24 +55,31 @@ function RemovedFromRoomDialog({
   onDismiss: () => void;
 }) {
   const okButtonRef = useRef<HTMLButtonElement | null>(null);
-  const titleId = useId();
   const descriptionId = useId();
 
+  // No ✕: OK is the one answer, and a second control saying the same would
+  // only stand in front of it.
   return (
     <ModalShell
-      labelledBy={titleId}
+      title={
+        <>
+          <span className="modal-title-icon is-danger" aria-hidden="true">
+            <AlertCircleIcon size={20} />
+          </span>
+          {kicked ? ui.lobbyBrowserPage.kickedFromRoom : ui.lobbyBrowserPage.noLongerInRoom}
+        </>
+      }
       describedBy={descriptionId}
       onDismiss={onDismiss}
+      closeButton={false}
       initialFocusRef={okButtonRef}
+      footer={
+        <button ref={okButtonRef} type="button" className="btn btn-primary" onClick={onDismiss}>
+          {ui.lobbyBrowserPage.ok}
+        </button>
+      }
     >
-      <div className="modal-icon is-danger" aria-hidden="true">
-        <AlertCircleIcon size={22} />
-      </div>
-      <h3 id={titleId} className="modal-title">{kicked ? ui.lobbyBrowserPage.kickedFromRoom : ui.lobbyBrowserPage.noLongerInRoom}</h3>
       <p id={descriptionId} className="modal-body">{message}</p>
-      <button ref={okButtonRef} type="button" className="btn btn-primary" onClick={onDismiss}>
-        {ui.lobbyBrowserPage.ok}
-      </button>
     </ModalShell>
   );
 }

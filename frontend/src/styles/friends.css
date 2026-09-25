@@ -26,25 +26,15 @@
   text-align: left;
 }
 
+/* ModalShell's header, ruled off like Settings' (settings.css). */
 .friends-modal-header {
-  display: flex;
-  justify-content: space-between;
   align-items: center;
   border-bottom: 1.5px solid var(--line);
   padding-bottom: 8px;
-  margin-bottom: 10px;
-  flex: 0 0 auto;
 }
 
-.friends-modal-header h3 {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 0;
-  font-family: var(--font-display);
-  font-weight: 600;
-  font-size: 19px;
-  color: var(--ink);
+.friends-modal-header .modal-title {
+  padding-top: 0;
 }
 
 .friends-modal-body {

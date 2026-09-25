@@ -117,6 +117,11 @@
   --warning-edge: #ebc98a;
   --danger: #c92a2a;
   --danger-soft: #fbecec;
+  /* The destructive button's fill: the light red in both themes, since the
+     dark theme's status --danger is too light to carry white lettering. */
+  --danger-button: #c92a2a;
+  --danger-button-edge: #a51d1d;
+  --on-danger: #ffffff;
   /* Destructive-button fill (.btn-danger); the status --danger is too light
      for white text in dark mode, so buttons get their own pair, as Start's
      --success-button does. */

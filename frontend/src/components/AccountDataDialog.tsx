@@ -1,6 +1,6 @@
 import { useClock } from "../hooks/useClock";
-import { useEffect, useId, useRef, useState } from "react";
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { useEffect, useId, useState } from "react";
+import { ModalShell } from "./ui/ModalShell";
 import {
   exportFailureNote,
   exportLabel,
@@ -25,16 +25,13 @@ function dateLabel(value: string, dateTime: (date: Date) => string): string {
  * least expected; it has a row and a dialog of its own in Settings now.
  */
 export function AccountDataDialog({ onClose }: { onClose: () => void }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
-  const titleId = useId();
+  const sectionId = useId();
   const { dateTime, date } = useClock();
   const [exports, setExports] = useState<DataExportJob[]>([]);
   const [nextRequestAt, setNextRequestAt] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [requesting, setRequesting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  useFocusTrap(dialogRef, { active: true, onEscape: onClose });
 
   useEffect(() => {
     let active = true;
@@ -106,71 +103,65 @@ export function AccountDataDialog({ onClose }: { onClose: () => void }) {
   const waitUntil = nextRequestAt ? new Date(nextRequestAt) : null;
   const canRequest = !loading && !requesting && !hasWork && !waitUntil;
 
+  // Only information and one action of its own, which sits beside the list
+  // it adds to: the ✕ is the way out, so the footer has nothing to hold.
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
+    <ModalShell
+      title={ui.accountDataDialog.yourData}
+      cardClassName="account-data-dialog"
+      onDismiss={onClose}
     >
-      <div
-        ref={dialogRef}
-        className="modal-card account-data-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">{ui.accountDataDialog.yourData}</h3>
-        <p className="modal-body">
-          {ui.accountDataDialog.downloadPrivateJsonCopyYourAccount}
-        </p>
-        {error && <p className="auth-error" role="alert">{error}</p>}
+      <p className="modal-body">
+        {ui.accountDataDialog.downloadPrivateJsonCopyYourAccount}
+      </p>
+      {error && <p className="auth-error" role="alert">{error}</p>}
 
-        <section className="account-data-section" aria-labelledby={`${titleId}-exports`}>
-          <div className="account-data-heading-row">
-            <h4 id={`${titleId}-exports`}>{ui.accountDataDialog.dataExports}</h4>
-            <button type="button" onClick={() => void startExport()} disabled={!canRequest}>
-              {requesting ? ui.accountDataDialog.requesting : ui.accountDataDialog.requestExport}
-            </button>
-          </div>
-          {loading && <p role="status">{ui.accountDataDialog.loadingExports}</p>}
-          {!loading && exports.length === 0 && (
-            <p className="account-data-empty">{ui.accountDataDialog.youHaveNotRequestedExportYet}</p>
-          )}
-          {exports.length > 0 && (
-            <ul className="account-export-list">
-              {exports.map((job) => (
-                <li key={job.id}>
-                  <span>
-                    <strong>{exportLabel(job)}</strong>
-                    <small>
-                      {ui.accountDataDialog.requestedOn({
-                        when: dateLabel(job.createdAt, dateTime),
-                      })}
-                    </small>
-                    {exportFailureNote(job) && (
-                      <small className="account-export-note">{exportFailureNote(job)}</small>
-                    )}
-                  </span>
-                  {job.downloadUrl && (
-                    <a href={job.downloadUrl} download>{ui.accountDataDialog.download}</a>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          <p className="account-data-note">
-            {ui.accountDataDialog.exportAllowance({
-              nextAllowed: waitUntil ? date(waitUntil) : null,
-            })}
-          </p>
-        </section>
-
-        <div className="account-data-actions">
-          <button type="button" onClick={onClose}>{ui.accountDataDialog.close}</button>
+      <section className="account-data-section" aria-labelledby={`${sectionId}-exports`}>
+        <div className="account-data-heading-row">
+          <h3 id={`${sectionId}-exports`}>{ui.accountDataDialog.dataExports}</h3>
+          <button
+            type="button"
+            className="btn btn-secondary btn-compact"
+            onClick={() => void startExport()}
+            disabled={!canRequest}
+          >
+            {requesting ? ui.accountDataDialog.requesting : ui.accountDataDialog.requestExport}
+          </button>
         </div>
-      </div>
-    </div>
+        {loading && <p role="status">{ui.accountDataDialog.loadingExports}</p>}
+        {!loading && exports.length === 0 && (
+          <p className="account-data-empty">{ui.accountDataDialog.youHaveNotRequestedExportYet}</p>
+        )}
+        {exports.length > 0 && (
+          <ul className="account-export-list">
+            {exports.map((job) => (
+              <li key={job.id}>
+                <span>
+                  <strong>{exportLabel(job)}</strong>
+                  <small>
+                    {ui.accountDataDialog.requestedOn({
+                      when: dateLabel(job.createdAt, dateTime),
+                    })}
+                  </small>
+                  {exportFailureNote(job) && (
+                    <small className="account-export-note">{exportFailureNote(job)}</small>
+                  )}
+                </span>
+                {job.downloadUrl && (
+                  <a className="btn btn-primary btn-compact" href={job.downloadUrl} download>
+                    {ui.accountDataDialog.download}
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+        <p className="account-data-note">
+          {ui.accountDataDialog.exportAllowance({
+            nextAllowed: waitUntil ? date(waitUntil) : null,
+          })}
+        </p>
+      </section>
+    </ModalShell>
   );
 }

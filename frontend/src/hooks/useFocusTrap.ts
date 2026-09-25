@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 const FOCUSABLE_SELECTOR = [
@@ -14,6 +14,20 @@ export function getFocusableElements(container: HTMLElement): HTMLElement[] {
   return Array.from(container.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)).filter(
     (element) => element.offsetParent !== null || element.getClientRects().length > 0,
   );
+}
+
+/** Where focus starts: the element asked for, else the first control in the
+ * body. A dialog's ✕ comes first in the markup but is marked to be passed
+ * over, because starting there puts Enter one press from abandoning whatever
+ * the dialog was opened to do. The element asked for can also refuse focus -
+ * a button still disabled while the dialog loads - and the same fallback
+ * keeps focus from staying on the page behind. */
+function initialFocus(container: HTMLElement, requested: HTMLElement | null) {
+  requested?.focus();
+  if (container.contains(document.activeElement)) return;
+  const focusable = getFocusableElements(container);
+  const first = focusable.find((element) => !element.hasAttribute("data-skip-initial-focus"));
+  (first ?? focusable[0] ?? container).focus();
 }
 
 type DismissLayer = {
@@ -107,6 +121,10 @@ export function useFocusTrap(
 ) {
   const { active = true, onEscape, initialFocusRef } = options;
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  // What had focus before this component rendered at all, read once.
+  const [focusAtMount] = useState<Element | null>(() =>
+    typeof document === "undefined" ? null : document.activeElement,
+  );
   const onEscapeRef = useRef(onEscape);
   useEffect(() => {
     onEscapeRef.current = onEscape;
@@ -121,12 +139,17 @@ export function useFocusTrap(
     const container = containerRef.current;
     if (!container) return;
 
-    previousFocusRef.current = document.activeElement as HTMLElement | null;
-    const initial =
-      initialFocusRef?.current
-      ?? getFocusableElements(container)[0]
-      ?? container;
-    initial.focus();
+    // Focus may already be inside: a field with `autoFocus` takes it during
+    // the commit, before this effect runs. Unless a start was named
+    // explicitly, that is the dialog's own choice and it stands - and the
+    // element that had focus before is then the one seen at first render,
+    // not the field that has just taken it.
+    const alreadyInside = container.contains(document.activeElement);
+    previousFocusRef.current = (alreadyInside ? focusAtMount : document.activeElement) as HTMLElement | null;
+    const requested = initialFocusRef?.current ?? null;
+    if (requested || !alreadyInside) {
+      initialFocus(container, requested);
+    }
 
     const layer: TabLayer = { container };
     tabStack.push(layer);
@@ -137,5 +160,5 @@ export function useFocusTrap(
       unbindDocumentListenerIfIdle();
       previousFocusRef.current?.focus();
     };
-  }, [active, containerRef, initialFocusRef]);
+  }, [active, containerRef, initialFocusRef, focusAtMount]);
 }

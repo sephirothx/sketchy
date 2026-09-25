@@ -1,10 +1,10 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import { changePassword, requestPasswordReset } from "../lib/accountRecovery";
 import { reconnectWithCurrentIdentity } from "../lib/socket";
 import { useToast } from "../lib/toast";
-import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
+import { MIN_PASSWORD_LENGTH, passwordRule, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/settings.css";
@@ -34,9 +34,10 @@ export function ChangePasswordDialog({
   canEmailLink: boolean;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const currentRef = useRef<HTMLInputElement | null>(null);
-  const titleId = useId();
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const { notify } = useToast();
 
   const [current, setCurrent] = useState("");
@@ -46,7 +47,11 @@ export function ChangePasswordDialog({
   const [busy, setBusy] = useState(false);
   const [mailed, setMailed] = useState(false);
 
-  useFocusTrap(dialogRef, { onEscape: onClose, initialFocusRef: currentRef });
+  // The form goes once it has worked, and focus with it; Done is where it
+  // lands rather than on the page behind.
+  useEffect(() => {
+    if (mailed) doneRef.current?.focus();
+  }, [mailed]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -88,109 +93,101 @@ export function ChangePasswordDialog({
   }
 
   return (
-    <div
-      className="modal-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-      >
-        <h3 id={titleId} className="modal-title">
-          {mailed ? ui.changePasswordDialog.checkYourInbox : ui.changePasswordDialog.changeYourPassword}
-        </h3>
-
-        {mailed ? (
-          <>
-            <p className="modal-body">
-              {ui.changePasswordDialog.ifThatAccountHasConfirmedEmail}
-            </p>
-            <button type="button" className="btn btn-primary" onClick={onClose}>
-              {ui.changePasswordDialog.done}
-            </button>
-          </>
+    <ModalShell
+      title={mailed ? ui.changePasswordDialog.checkYourInbox : ui.changePasswordDialog.changeYourPassword}
+      onDismiss={onClose}
+      initialFocusRef={currentRef}
+      footer={
+        mailed ? (
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
+            {ui.changePasswordDialog.done}
+          </button>
         ) : (
           <>
-            <p className="modal-body">
-              {ui.changePasswordDialog.everyDeviceSignsOutWhenPassword}
-            </p>
-            <form onSubmit={(event) => void submit(event)} className="auth-form">
-              <label htmlFor={`${titleId}-current`}>{ui.changePasswordDialog.currentPassword}</label>
-              <input
-                id={`${titleId}-current`}
-                ref={currentRef}
-                type="password"
-                value={current}
-                onChange={(event) => {
-                  setCurrent(event.target.value);
-                  setError(null);
-                }}
-                autoComplete="current-password"
-                required
-              />
-              <label htmlFor={`${titleId}-next`}>{ui.changePasswordDialog.newPassword}</label>
-              <input
-                id={`${titleId}-next`}
-                type="password"
-                value={next}
-                onChange={(event) => {
-                  setNext(event.target.value);
-                  setError(null);
-                }}
-                autoComplete="new-password"
-                minLength={MIN_PASSWORD_LENGTH}
-                required
-              />
-              <label htmlFor={`${titleId}-confirm`}>{ui.changePasswordDialog.newPasswordAgain}</label>
-              <input
-                id={`${titleId}-confirm`}
-                type="password"
-                value={confirm}
-                onChange={(event) => {
-                  setConfirm(event.target.value);
-                  setError(null);
-                }}
-                autoComplete="new-password"
-                required
-              />
-              {error && (
-                <p className="auth-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? ui.changePasswordDialog.pleaseWait : ui.changePasswordDialog.changePassword}
-              </button>
-            </form>
-            {/* The other way to do the same job, for somebody who does not
-                know the current password. Hidden rather than dead when there
-                is no verified address, because the link could not arrive. */}
-            {canEmailLink && (
-              <p className="modal-body settings-alt-route">
-                {ui.changePasswordDialog.forgottenTheCurrentOne}{" "}
-                <button
-                  type="button"
-                  className="auth-link"
-                  disabled={busy}
-                  onClick={() => void mailLink()}
-                >
-                  {ui.changePasswordDialog.emailMeLinkInstead}
-                </button>
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              {ui.changePasswordDialog.cancel}
+            </button>
+            <button type="submit" form={formId} className="btn btn-primary" disabled={busy}>
+              {busy ? ui.changePasswordDialog.pleaseWait : ui.changePasswordDialog.changePassword}
+            </button>
+          </>
+        )
+      }
+    >
+      {mailed ? (
+        <p className="modal-body">
+          {ui.changePasswordDialog.ifThatAccountHasConfirmedEmail}
+        </p>
+      ) : (
+        <>
+          <p className="modal-body">
+            {ui.changePasswordDialog.everyDeviceSignsOutWhenPassword}
+          </p>
+          <form id={formId} onSubmit={(event) => void submit(event)} className="auth-form">
+            <label htmlFor={`${fieldId}-current`}>{ui.changePasswordDialog.currentPassword}</label>
+            <input
+              id={`${fieldId}-current`}
+              ref={currentRef}
+              type="password"
+              value={current}
+              onChange={(event) => {
+                setCurrent(event.target.value);
+                setError(null);
+              }}
+              autoComplete="current-password"
+              required
+            />
+            <label htmlFor={`${fieldId}-next`}>{ui.changePasswordDialog.newPassword}</label>
+            <input
+              id={`${fieldId}-next`}
+              type="password"
+              value={next}
+              onChange={(event) => {
+                setNext(event.target.value);
+                setError(null);
+              }}
+              autoComplete="new-password"
+              minLength={MIN_PASSWORD_LENGTH}
+              aria-describedby={`${fieldId}-rule`}
+              required
+            />
+            <p id={`${fieldId}-rule`} className="auth-hint">{passwordRule()}</p>
+            <label htmlFor={`${fieldId}-confirm`}>{ui.changePasswordDialog.newPasswordAgain}</label>
+            <input
+              id={`${fieldId}-confirm`}
+              type="password"
+              value={confirm}
+              onChange={(event) => {
+                setConfirm(event.target.value);
+                setError(null);
+              }}
+              autoComplete="new-password"
+              required
+            />
+            {error && (
+              <p className="auth-error" role="alert">
+                {error}
               </p>
             )}
-          </>
-        )}
-
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {mailed ? ui.changePasswordDialog.close : ui.changePasswordDialog.cancel}
-        </button>
-      </div>
-    </div>
+          </form>
+          {/* The other way to do the same job, for somebody who does not
+              know the current password. Hidden rather than dead when there
+              is no verified address, because the link could not arrive. */}
+          {canEmailLink && (
+            <p className="modal-body settings-alt-route">
+              {ui.changePasswordDialog.forgottenTheCurrentOne}{" "}
+              <button
+                type="button"
+                className="auth-link"
+                disabled={busy}
+                onClick={() => void mailLink()}
+              >
+                {ui.changePasswordDialog.emailMeLinkInstead}
+              </button>
+            </p>
+          )}
+        </>
+      )}
+    </ModalShell>
   );
 }

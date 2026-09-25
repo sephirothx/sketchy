@@ -64,7 +64,7 @@ async def test_the_lobby_offers_the_pad_while_offline_and_keeps_it_when_the_conn
             assert await inked(page, pad) == 0
             await page.locator(pad).locator(UNDO).click()
             assert await inked(page, pad) == drawn
-            await page.click('.scratch-pad-dialog button:has-text("Close")')
+            await page.click('.scratch-pad-dialog .modal-close')
             await page.wait_for_selector(".scratch-pad-dialog", state="detached")
         finally:
             await context.close()
@@ -205,7 +205,7 @@ async def test_the_pad_fits_the_narrowest_phone():
             assert overflow["page"] <= 320, overflow
             assert overflow["right"] <= 320, overflow
             assert overflow["narrowest"] >= 44, overflow
-            await page.click('.scratch-pad-dialog button:has-text("Close")')
+            await page.click('.scratch-pad-dialog .modal-close')
             await context.set_offline(False)
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
 

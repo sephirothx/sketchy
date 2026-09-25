@@ -1,9 +1,11 @@
-/* Pop-up Modal Component */
+/* The dialog (ModalShell): one flat scrim, and a card whose header and footer
+   stay put while the body between them scrolls. The card is capped at 90% of
+   the dynamic viewport, so a tall form on a landscape phone scrolls inside
+   rather than running off the screen with its submit button. */
 .modal-overlay {
   position: fixed;
   inset: 0;
   background: var(--scrim);
-  backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -24,10 +26,11 @@
   background: var(--card);
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
-  padding: 24px 28px;
-  max-width: 380px;
-  width: 90%;
-  text-align: center;
+  padding: 20px 24px;
+  max-width: 420px;
+  max-height: 90dvh;
+  width: calc(100% - 32px);
+  text-align: left;
   color: var(--ink);
   box-shadow: var(--shadow-raised);
   animation: popUpModal var(--dur) cubic-bezier(0.16, 1, 0.3, 1);
@@ -44,24 +47,81 @@
   }
 }
 
-.modal-icon {
-  font-size: 2.5rem;
-  margin-bottom: 8px;
+/* Title left, ✕ right. The ✕ is the icon button at the 36px the header
+   has room for. */
+.modal-head {
+  align-items: flex-start;
+  display: flex;
+  flex: 0 0 auto;
+  gap: 12px;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
 
-/* An SVG badge in place of the old emoji glyphs. */
-.modal-icon.is-danger {
+.modal-head-text {
   display: grid;
-  place-items: center;
-  width: 44px;
-  height: 44px;
-  margin: 0 auto 10px;
-  border-radius: 50%;
-  background: var(--danger-soft);
-  color: var(--danger);
+  gap: 4px;
+  min-width: 0;
 }
 
+.modal-head .modal-title {
+  margin: 0;
+  padding-top: 5px;
+}
+
+.btn.modal-close {
+  flex: none;
+  height: 36px;
+  margin: 0 -6px 0 0;
+  min-height: 36px;
+  width: 36px;
+}
+
+.btn.modal-close:hover {
+  background: var(--well);
+  color: var(--ink);
+}
+
+/* The scroller. The inline padding, taken back by the margin, is room for a
+   field's focus ring, which `overflow` would otherwise cut off at the edge. */
+.modal-content {
+  flex: 1 1 auto;
+  margin: 0 -6px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 6px;
+}
+
+/* The actions: right-aligned, the primary last and so nearest the thumb's
+   side of a desktop pointer; stacked full width on a phone, primary on top. */
+.modal-foot {
+  display: flex;
+  flex: 0 0 auto;
+  flex-wrap: wrap;
+  gap: 10px;
+  justify-content: flex-end;
+  padding-top: 16px;
+}
+
+@media (max-width: 480px) {
+  .modal-card {
+    padding: 18px 16px;
+  }
+
+  .modal-foot {
+    flex-direction: column-reverse;
+  }
+
+  .modal-foot > .btn {
+    width: 100%;
+  }
+}
+
+/* An icon may lead the title, the way Settings' gear does. */
 .modal-title {
+  align-items: center;
+  display: flex;
+  gap: 8px;
   margin: 0 0 8px;
   font-family: var(--font-display);
   font-size: 1.2rem;
@@ -69,31 +129,31 @@
   color: var(--ink);
 }
 
+.modal-title-icon {
+  color: var(--faint);
+  display: inline-flex;
+  flex: none;
+}
+
+.modal-title-icon.is-danger {
+  color: var(--danger);
+}
+
 .modal-body {
-  margin: 0 0 20px;
+  margin: 0 0 16px;
   font-size: 0.95rem;
   color: var(--muted);
   line-height: 1.4;
 }
 
-.confirmation-dialog-icon {
-  align-items: center;
-  background: var(--danger-soft);
-  border-radius: var(--radius-pill);
-  color: var(--danger);
-  display: inline-flex;
-  font-size: 1.25rem;
-  font-weight: 800;
-  height: 42px;
-  justify-content: center;
-  margin-bottom: 12px;
-  width: 42px;
+.modal-content > .modal-body:last-child {
+  margin-bottom: 0;
 }
 
-.confirmation-dialog-actions {
-  display: flex;
-  gap: 10px;
-  justify-content: flex-end;
+.modal-hint {
+  color: var(--muted);
+  font-size: 12px;
+  margin: 0;
 }
 
 
@@ -133,18 +193,8 @@
   z-index: var(--z-blocking);
 }
 
-.suspension-card {
-  text-align: left;
-}
-
 .suspension-reason {
   font-weight: 600;
-}
-
-.suspension-card {
-  display: flex;
-  flex-direction: column;
-  max-height: min(80vh, 640px);
 }
 
 .suspension-evidence-label {
@@ -153,14 +203,12 @@
   opacity: 0.8;
 }
 
-/* However many were attached, the card stays on screen and the list moves. */
+/* However many were attached, the card stays on screen: the dialog's body
+   scrolls, and the footer's button stays in reach. */
 .suspension-evidence {
   border-left: 2px solid currentColor;
-  flex: 1 1 auto;
   list-style: none;
   margin: 0 0 16px;
-  min-height: 0;
-  overflow-y: auto;
   padding: 0 0 0 12px;
 }
 
@@ -210,22 +258,11 @@
  * the diagnostics disclosure - all of which the player is meant to read before
  * sending, not squint at.
  */
-.bug-report-dialog {
+.modal-card.bug-report-dialog {
   max-width: 620px;
-  max-height: min(90vh, 900px);
-  overflow-y: auto;
-  text-align: left;
 }
 
-.bug-report-head {
-  align-items: flex-start;
-  display: flex;
-  gap: 12px;
-}
-
-.bug-report-head .modal-title { margin: 0; }
-.bug-report-head .modal-body { margin-top: 3px; }
-
+/* The title's own mark, in the warm tint: a bug report is about the game. */
 .bug-report-mark {
   align-items: center;
   background: var(--warm-soft);
@@ -233,9 +270,9 @@
   color: var(--warm-ink);
   display: inline-flex;
   flex: none;
-  height: 38px;
+  height: 30px;
   justify-content: center;
-  width: 38px;
+  width: 30px;
 }
 
 .bug-report-row {
@@ -395,9 +432,6 @@
   font-weight: 700;
 }
 
-.afk-check-answer {
-  font-size: 15px;
-  font-weight: 800;
-  padding: 12px 28px;
+.btn.afk-check-answer {
   width: 100%;
 }

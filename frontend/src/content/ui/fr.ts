@@ -507,7 +507,6 @@ export const FR: Catalogue = {
     loadingExports: "Chargement des exports…",
     youHaveNotRequestedExportYet: "Tu n’as pas encore demandé d’export.",
     download: "Télécharger",
-    close: "Fermer",
     requesting: "Demande en cours…",
     requestExport: "Demander un export",
   },
@@ -541,7 +540,6 @@ export const FR: Catalogue = {
     username: "Nom d’utilisateur",
     password: "Mot de passe",
     codeFromYourAuthenticatorApp: "Code de ton application d’authentification",
-    recoveryCodeWorksHereTooCan: "Un code de récupération marche ici aussi, et sert une fois.",
     email: "E-mail",
     optional: "(facultatif)",
     letsYouResetYourPasswordLater: "Te permet de réinitialiser ton mot de passe plus tard. Sert uniquement à cela.",
@@ -643,7 +641,6 @@ export const FR: Catalogue = {
     yourPassword: "Ton mot de passe",
     passwordConfirmsItIsYou: "Ton mot de passe confirme que c’est bien toi : cette adresse sert à récupérer le compte.",
     enterYourPasswordToConfirm: "Saisis ton mot de passe pour confirmer la modification.",
-    close: "Fermer",
     notNow: "Pas maintenant",
   },
 
@@ -742,7 +739,6 @@ export const FR: Catalogue = {
     changeYourPassword: "Change ton mot de passe",
     pleaseWait: "Patiente…",
     changePassword: "Changer le mot de passe",
-    close: "Fermer",
     cancel: "Annuler",
   },
 
@@ -758,6 +754,12 @@ export const FR: Catalogue = {
     switchRoomPaletteFutureDrawings: "Changer la palette du salon pour les prochains dessins ?",
     switchColors: "Changer les couleurs",
     notNow: "Pas maintenant",
+  },
+
+  dialog: {
+    close: "Fermer",
+    cancel: "Annuler",
+    couldNotSave: "Impossible d'enregistrer. Réessaie.",
   },
 
   confirmationDialog: {
@@ -895,8 +897,6 @@ export const FR: Catalogue = {
     deleteYourAccount: "Supprimer ton compte",
     deleting: "Suppression…",
     deleteForGood: "Supprimer définitivement",
-    keepPlaying: "Continuer à jouer",
-    keepMyAccount: "Garder mon compte",
   },
 
   drainCue: {
@@ -1005,7 +1005,6 @@ export const FR: Catalogue = {
     youWillBothStopBeingAble: "Vous ne pourrez plus rejoindre les parties l’un de l’autre sans invitation. Chacun peut redemander.",
     removeConfirm: (p: { name: string }) => `Retirer ${p.name} ?`,
     friends: "Amis",
-    close: "Fermer",
     closeFriends: "Fermer les amis",
     friendsNeedAnAccount: "Les amis demandent un compte, pour pouvoir te retrouver. Crée un compte ou connecte-toi pour ajouter des amis.",
     loading: "Chargement…",
@@ -1236,7 +1235,6 @@ export const FR: Catalogue = {
     alphabetical: "A–Z",
     noPromptMatches: (p: { query: string }) => `Aucun mot ne contient « ${p.query} ».`,
     allLists: "Toutes les listes",
-    close: "Fermer",
   },
   galleryPage: {
     gallery: "Galerie",
@@ -1662,7 +1660,6 @@ export const FR: Catalogue = {
     theNameOnTheAccount: "Le nom du compte est joint tel qu’il est maintenant.",
     sending: "Envoi…",
     sendReport: "Envoyer le signalement",
-    close: "Fermer",
     cancel: "Annuler",
   },
   reportDrawingDialog: {
@@ -1677,7 +1674,6 @@ export const FR: Catalogue = {
     thatReportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé.",
     done: "OK",
     cancel: "Annuler",
-    close: "Fermer",
   },
 
   reportedDrawing: {
@@ -1704,7 +1700,6 @@ export const FR: Catalogue = {
       `Signaler ${p.displayName}`,
     sending: "Envoi…",
     sendReport: "Envoyer le signalement",
-    close: "Fermer",
     cancel: "Annuler",
   },
 
@@ -1742,7 +1737,6 @@ export const FR: Catalogue = {
     sending: "Envoi…",
     sendReport: "Envoyer le signalement",
     cancel: "Annuler",
-    close: "Fermer",
   },
 
   reportsReviewedNotice: {
@@ -1771,7 +1765,7 @@ export const FR: Catalogue = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Tu as été déconnecté de tous tes appareils pour que le changement\n            prenne effet. Reconnecte-toi pour continuer.",
     setUpNow: "Le configurer maintenant",
-    later: "Pas maintenant",
+    notNow: "Pas maintenant",
     oneMoment: "Patiente…",
     signInAgain: "Se reconnecter",
     understood: "OK",
@@ -1917,7 +1911,6 @@ export const FR: Catalogue = {
     drawWhileYouWait: "Dessine en attendant",
     canvasLabel: "Bloc-notes. Toi seul vois ce que tu dessines ici.",
     save: "Enregistrer",
-    close: "Fermer",
     backToTheRoom: "Retour au salon",
   },
 
@@ -1955,11 +1948,12 @@ export const FR: Catalogue = {
     revokeAnyDeviceYouNoLonger: "Révoque tout appareil que tu ne reconnais plus. Les noms d’appareils sont approximatifs et ne stockent pas les versions de navigateur.\n          Un appareil que tu cesses d’utiliser se déconnecte seul au bout de quatre-vingt-dix jours.",
     loadingDevices: "Chargement des appareils…",
     currentDevice: "Appareil actuel",
-    close: "Fermer",
     revoking: "Révocation…",
     revoke: "Révoquer",
     signingOut: "Déconnexion…",
     signOutEverywhere: "Se déconnecter partout",
+    logOutEverywhereTitle: "Se déconnecter partout ?",
+    logOutEverywhereBody: "Tous les appareils connectés à ce compte sont déconnectés, y compris celui-ci. Tu devras te reconnecter ici.",
   },
 
   avatarDoodles: {
@@ -1995,7 +1989,6 @@ export const FR: Catalogue = {
     intro: "Dans la couleur de ton nom, partout où ton nom apparaît.",
     wearing: "Porté en ce moment",
     couldNotChoose: "Le dessin n’a pas pu être changé.",
-    close: "Fermer",
   },
   settingsOverlay: {
     email: "E-mail",
@@ -2067,7 +2060,6 @@ export const FR: Catalogue = {
     drawingTools: "Outils de dessin",
     resetDefaults: "Rétablir les valeurs par défaut",
     settings: "Paramètres",
-    close: "Fermer",
     closeSettings: "Fermer les paramètres",
     settingsSections: "Sections des paramètres",
     account: "Compte",
@@ -2263,7 +2255,6 @@ export const FR: Catalogue = {
     newRecoveryCodes: "Nouveaux codes de récupération",
     turnOff: "Désactiver",
     addAuthenticatorApp: "Ajouter une application d’authentification",
-    close: "Fermer",
     couldNotStartSettingThis: "Impossible de lancer la configuration.",
     thatCodeWasNotAccepted: "Ce code n’a pas été accepté.",
     couldNotAddThatPasskey: "Impossible d’ajouter cette clé d’accès.",
@@ -2587,6 +2578,7 @@ export const FR: Catalogue = {
   passwordPolicy: {
     tooShort: (p: { count: number }) =>
       `Un mot de passe doit contenir au moins ${p.count} caractères.`,
+    rule: (p: { count: number }) => `Au moins ${p.count} caractères.`,
   },
   operatorAccess: {
     administrator: "administrateur",

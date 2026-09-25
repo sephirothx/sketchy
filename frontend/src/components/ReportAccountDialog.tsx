@@ -1,7 +1,7 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
-import { useFocusTrap } from "../hooks/useFocusTrap";
+import { ModalShell } from "./ui/ModalShell";
 import { submitPlayerReport, type ReportReason } from "../lib/moderation";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -40,10 +40,11 @@ export function ReportAccountDialog({
   avatarUrl: string | null;
   onClose: () => void;
 }) {
-  const dialogRef = useRef<HTMLDivElement | null>(null);
   const detailsRef = useRef<HTMLTextAreaElement | null>(null);
   const reasonRef = useRef<HTMLSelectElement | null>(null);
-  const titleId = useId();
+  const fieldId = useId();
+  const formId = `${fieldId}-form`;
+  const doneRef = useRef<HTMLButtonElement | null>(null);
   const reasons: { value: ReportReason; label: string }[] = [
     { value: "inappropriate_name", label: ui.reportAccountDialog.inappropriateName },
     // A doodle is our drawing rather than something the player put up, so
@@ -58,10 +59,11 @@ export function ReportAccountDialog({
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState(false);
 
-  useFocusTrap(dialogRef, {
-    onEscape: onClose,
-    initialFocusRef: reasons.length > 1 ? reasonRef : detailsRef,
-  });
+  // Sending swaps the form for the answer, and the submit button that held
+  // focus goes with it; focus follows to Done rather than dropping to the page.
+  useEffect(() => {
+    if (sent) doneRef.current?.focus();
+  }, [sent]);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -88,113 +90,109 @@ export function ReportAccountDialog({
   }
 
   return createPortal(
-    <div
-      className="modal-overlay report-player-overlay"
-      onMouseDown={(event) => {
-        if (event.target === event.currentTarget) onClose();
-      }}
-    >
-      <div
-        ref={dialogRef}
-        className="modal-card"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby={titleId}
-        tabIndex={-1}
-        data-testid="report-account-dialog"
-      >
-        <h3 id={titleId} className="modal-title">
-          {sent ? ui.reportAccountDialog.reportSent : ui.reportAccountDialog.reportDisplayName({ displayName })}
-        </h3>
-
-        {!sent ? (
+    <ModalShell
+      title={sent ? ui.reportAccountDialog.reportSent : ui.reportAccountDialog.reportDisplayName({ displayName })}
+      overlayClassName="report-player-overlay"
+      testId="report-account-dialog"
+      onDismiss={onClose}
+      initialFocusRef={reasons.length > 1 ? reasonRef : detailsRef}
+      footer={
+        !sent ? (
           <>
-            <p className="modal-body">
-              {ui.reportAccountDialog.nothingHappensYet({ name: displayName })}
-            </p>
-            {/* Shown only while it is what the complaint is about: a picture
-                beside a complaint about a name is the wrong evidence in front
-                of the person choosing. */}
-            {avatarUrl && reason === "inappropriate_avatar" && (
-              <figure className="report-quoted-picture" data-testid="report-quoted-picture">
-                <img src={avatarUrl} alt={ui.reportAccountDialog.theirPicture({ name: displayName })} />
-              </figure>
-            )}
-            <form onSubmit={submit} className="auth-form">
-              {/* One reason is not a choice. An account with no picture can
-                  only be reported for its name, and a select of one asks a
-                  question with a single answer. */}
-              {reasons.length > 1 ? (
-                <>
-                  <label htmlFor={`${titleId}-reason`}>{ui.reportAccountDialog.whatWrongWith}</label>
-                  <select
-                    id={`${titleId}-reason`}
-                    ref={reasonRef}
-                    className="report-reason"
-                    value={reason}
-                    onChange={(change) =>
-                      setReason(change.target.value as ReportReason)
-                    }
-                  >
-                    {reasons.map((option) => (
-                      <option key={option.value} value={option.value}>
-                        {option.label}
-                      </option>
-                    ))}
-                  </select>
-                </>
-              ) : (
-                <p className="auth-hint">
-                  {ui.reportAccountDialog.reportedTheirNameTheyHaveNo}
-                </p>
-              )}
-
-              <label htmlFor={`${titleId}-details`}>{ui.reportAccountDialog.anythingElseOptional}</label>
-              <textarea
-                id={`${titleId}-details`}
-                ref={detailsRef}
-                className="report-details"
-                rows={3}
-                maxLength={1000}
-                value={details}
-                onChange={(change) => {
-                  setDetails(change.target.value);
-                  setError(null);
-                }}
-                placeholder={ui.reportAccountDialog.anythingModeratorShouldKnow}
-              />
-              <p className="auth-hint">
-                {reason === "inappropriate_avatar"
-                  ? ui.reportAccountDialog.thePictureOnTheAccount
-                  : ui.reportAccountDialog.theNameOnTheAccount}
-              </p>
-
-              {error && (
-                <p className="auth-error" role="alert">
-                  {error}
-                </p>
-              )}
-              <button type="submit" className="btn btn-primary" disabled={busy}>
-                {busy ? ui.reportAccountDialog.sending : ui.reportAccountDialog.sendReport}
-              </button>
-            </form>
-          </>
-        ) : (
-          <>
-            <p className="modal-body">
-              {ui.reportAccountDialog.sentWithWhatAboutAttached}
-            </p>
-            <button type="button" className="btn btn-primary" onClick={onClose}>
-              {ui.reportAccountDialog.done}
+            <button type="button" className="btn btn-secondary" onClick={onClose}>
+              {ui.reportAccountDialog.cancel}
+            </button>
+            <button
+              type="submit"
+              form={formId}
+              className="btn btn-primary"
+              disabled={busy}
+            >
+              {busy ? ui.reportAccountDialog.sending : ui.reportAccountDialog.sendReport}
             </button>
           </>
-        )}
+        ) : (
+          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
+            {ui.reportAccountDialog.done}
+          </button>
+        )
+      }
+    >
+      {!sent ? (
+        <>
+          <p className="modal-body">
+            {ui.reportAccountDialog.nothingHappensYet({ name: displayName })}
+          </p>
+          {/* Shown only while it is what the complaint is about: a picture
+              beside a complaint about a name is the wrong evidence in front
+              of the person choosing. */}
+          {avatarUrl && reason === "inappropriate_avatar" && (
+            <figure className="report-quoted-picture" data-testid="report-quoted-picture">
+              <img src={avatarUrl} alt={ui.reportAccountDialog.theirPicture({ name: displayName })} />
+            </figure>
+          )}
+          <form id={formId} onSubmit={submit} className="auth-form">
+            {/* One reason is not a choice. An account with no picture can
+                only be reported for its name, and a select of one asks a
+                question with a single answer. */}
+            {reasons.length > 1 ? (
+              <>
+                <label htmlFor={`${fieldId}-reason`}>{ui.reportAccountDialog.whatWrongWith}</label>
+                <select
+                  id={`${fieldId}-reason`}
+                  ref={reasonRef}
+                  className="report-reason"
+                  value={reason}
+                  onChange={(change) =>
+                    setReason(change.target.value as ReportReason)
+                  }
+                >
+                  {reasons.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </select>
+              </>
+            ) : (
+              <p className="auth-hint">
+                {ui.reportAccountDialog.reportedTheirNameTheyHaveNo}
+              </p>
+            )}
 
-        <button type="button" className="modal-dismiss" onClick={onClose}>
-          {sent ? ui.reportAccountDialog.close : ui.reportAccountDialog.cancel}
-        </button>
-      </div>
-    </div>,
+            <label htmlFor={`${fieldId}-details`}>{ui.reportAccountDialog.anythingElseOptional}</label>
+            <textarea
+              id={`${fieldId}-details`}
+              ref={detailsRef}
+              className="report-details"
+              rows={3}
+              maxLength={1000}
+              value={details}
+              onChange={(change) => {
+                setDetails(change.target.value);
+                setError(null);
+              }}
+              placeholder={ui.reportAccountDialog.anythingModeratorShouldKnow}
+            />
+            <p className="auth-hint">
+              {reason === "inappropriate_avatar"
+                ? ui.reportAccountDialog.thePictureOnTheAccount
+                : ui.reportAccountDialog.theNameOnTheAccount}
+            </p>
+
+            {error && (
+              <p className="auth-error" role="alert">
+                {error}
+              </p>
+            )}
+          </form>
+        </>
+      ) : (
+        <p className="modal-body">
+          {ui.reportAccountDialog.sentWithWhatAboutAttached}
+        </p>
+      )}
+    </ModalShell>,
     document.body,
   );
 }

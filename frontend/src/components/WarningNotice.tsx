@@ -1,5 +1,5 @@
 import { useClock } from "../hooks/useClock";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import {
   acknowledgeWarning,
@@ -13,6 +13,7 @@ import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { ReportedDrawing } from "./ReportedDrawing";
+import { ModalShell } from "./ui/ModalShell";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 
@@ -62,6 +63,8 @@ export function WarningNotice() {
   const hasResolved = useAuthStore((state) => state.hasResolved);
   const [warning, setWarning] = useState<PendingWarning | null>(null);
   const [busy, setBusy] = useState(false);
+  const [failed, setFailed] = useState(false);
+  const acknowledgeRef = useRef<HTMLButtonElement | null>(null);
 
   useEffect(() => {
     if (!hasResolved || !userId) return;
@@ -84,7 +87,10 @@ export function WarningNotice() {
     // fetch above is the catch-up route for everybody else.
     function onModeratorWarning(payload: unknown) {
       const pushed = warningFromPayload(payload);
-      if (pushed) setWarning(pushed);
+      if (pushed) {
+        setWarning(pushed);
+        setFailed(false);
+      }
     }
     socket.on("moderator_warning", onModeratorWarning);
     return () => {
@@ -101,101 +107,32 @@ export function WarningNotice() {
   async function dismiss() {
     if (busy || !warning) return;
     setBusy(true);
+    setFailed(false);
     try {
       await acknowledgeWarning(warning.id);
       setWarning(null);
     } catch {
       // Leave the notice up: closing it without the receipt landing would
-      // mark nothing, and the player can simply press the button again.
+      // mark nothing. Said, so the button that did nothing is not a mystery,
+      // and pressing it again is the way on.
+      setFailed(true);
     } finally {
       setBusy(false);
     }
   }
 
+  // Answered, never dismissed: acknowledging is what records that it landed,
+  // so there is no ✕, no Escape and no scrim to close it without that.
   return (
-    <div className="modal-overlay suspension-overlay">
-      <div
-        className="modal-card suspension-card"
-        role="alertdialog"
-        aria-modal="true"
-        aria-labelledby="warning-title"
-      >
-        <h3 className="modal-title" id="warning-title">
-          {isRemoval ? ui.warningNotice.yourPictureWasRemoved : ui.warningNotice.aModeratorWarning}
-        </h3>
-        {warning.category && (
-          <p className="modal-body notice-category" data-testid="warning-category">
-            {/* The rule itself, not just its name: a decision you can read
-                the rule behind is one you can check rather than only be
-                told (R-RULES-02). */}
-            {fill(ui.moderationNotice.recordedAs, {
-              category: (
-                <a href={ruleAnchorFor(warning.category)}>
-                  {humanizeCategory(warning.category)}
-                </a>
-              ),
-            })}
-          </p>
-        )}
-        <p className="modal-body suspension-reason">{warning.reason}</p>
-        {/* A removal shares this surface and nothing else. Saying "nothing is
-            restricted" of one would be false - it restricts uploading, and by
-            more each time (R-AVA-08) - so a removal says what it restricts,
-            which its own words above already carry, and stops there. */}
-        <p className="modal-body">
-          {isRemoval ? (
-            ui.warningNotice.aReportAboutYourPicture
-          ) : (
-            <>
-              {/* What a warning is *for* - the step between nothing and a
-                  suspension - said in general terms. Naming a ladder would
-                  promise one nobody is bound to and nothing enforces. */}
-              {ui.warningNotice.whatAWarningMeans}
-            </>
-          )}
-        </p>
-        {warning.messages.length > 0 && (
-          <>
-            <p className="modal-body suspension-evidence-label">
-              {warning.messages.length === 1
-                ? ui.moderationNotice.theMessageThisWasAbout
-                : ui.moderationNotice.theMessagesThisWasAbout}
-            </p>
-            {/* Reuses the suspension notice's evidence styling: both lists
-                are "your own words, as reported". */}
-            <ul className="suspension-evidence">
-              {warning.messages.map((message, index) => (
-                <li key={`${message.at ?? index}-${index}`}>
-                  {message.at && (
-                    <span className="suspension-evidence-time">
-                      {dateTime(new Date(message.at))}
-                    </span>
-                  )}
-                  <span className="suspension-evidence-text">{message.text}</span>
-                </li>
-              ))}
-            </ul>
-          </>
-        )}
-        {warning.drawings.length > 0 && (
-          <>
-            <p className="modal-body suspension-evidence-label">
-              {warning.drawings.length === 1
-                ? ui.moderationNotice.theDrawingThisWasAbout
-                : ui.moderationNotice.theDrawingsThisWasAbout}
-            </p>
-            {warning.drawings.map((drawing) => (
-              <ReportedDrawing
-                key={drawing.reportId}
-                className="suspension-drawing"
-                load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
-                label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
-                caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
-              />
-            ))}
-          </>
-        )}
+    <ModalShell
+      role="alertdialog"
+      title={isRemoval ? ui.warningNotice.yourPictureWasRemoved : ui.warningNotice.aModeratorWarning}
+      overlayClassName="suspension-overlay"
+      cardClassName="suspension-card"
+      initialFocusRef={acknowledgeRef}
+      footer={
         <button
+          ref={acknowledgeRef}
           type="button"
           className="btn btn-primary"
           disabled={busy}
@@ -203,7 +140,85 @@ export function WarningNotice() {
         >
           {busy ? ui.warningNotice.oneMoment : ui.warningNotice.understood}
         </button>
-      </div>
-    </div>
+      }
+    >
+      {warning.category && (
+        <p className="modal-body notice-category" data-testid="warning-category">
+          {/* The rule itself, not just its name: a decision you can read
+              the rule behind is one you can check rather than only be
+              told (R-RULES-02). */}
+          {fill(ui.moderationNotice.recordedAs, {
+            category: (
+              <a href={ruleAnchorFor(warning.category)}>
+                {humanizeCategory(warning.category)}
+              </a>
+            ),
+          })}
+        </p>
+      )}
+      <p className="modal-body suspension-reason">{warning.reason}</p>
+      {/* A removal shares this surface and nothing else. Saying "nothing is
+          restricted" of one would be false - it restricts uploading, and by
+          more each time (R-AVA-08) - so a removal says what it restricts,
+          which its own words above already carry, and stops there. */}
+      <p className="modal-body">
+        {isRemoval ? (
+          ui.warningNotice.aReportAboutYourPicture
+        ) : (
+          <>
+            {/* What a warning is *for* - the step between nothing and a
+                suspension - said in general terms. Naming a ladder would
+                promise one nobody is bound to and nothing enforces. */}
+            {ui.warningNotice.whatAWarningMeans}
+          </>
+        )}
+      </p>
+      {warning.messages.length > 0 && (
+        <>
+          <p className="modal-body suspension-evidence-label">
+            {warning.messages.length === 1
+              ? ui.moderationNotice.theMessageThisWasAbout
+              : ui.moderationNotice.theMessagesThisWasAbout}
+          </p>
+          {/* Reuses the suspension notice's evidence styling: both lists
+              are "your own words, as reported". */}
+          <ul className="suspension-evidence">
+            {warning.messages.map((message, index) => (
+              <li key={`${message.at ?? index}-${index}`}>
+                {message.at && (
+                  <span className="suspension-evidence-time">
+                    {dateTime(new Date(message.at))}
+                  </span>
+                )}
+                <span className="suspension-evidence-text">{message.text}</span>
+              </li>
+            ))}
+          </ul>
+        </>
+      )}
+      {warning.drawings.length > 0 && (
+        <>
+          <p className="modal-body suspension-evidence-label">
+            {warning.drawings.length === 1
+              ? ui.moderationNotice.theDrawingThisWasAbout
+              : ui.moderationNotice.theDrawingsThisWasAbout}
+          </p>
+          {warning.drawings.map((drawing) => (
+            <ReportedDrawing
+              key={drawing.reportId}
+              className="suspension-drawing"
+              load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
+              label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
+              caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
+            />
+          ))}
+        </>
+      )}
+      {failed && (
+        <p className="auth-error" role="alert">
+          {ui.dialog.couldNotSave}
+        </p>
+      )}
+    </ModalShell>
   );
 }
