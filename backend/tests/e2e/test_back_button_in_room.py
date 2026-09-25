@@ -15,7 +15,12 @@ from an entry the page is about to leave.
 import random
 
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import join_by_code, room_code, room_menu_action, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    open_player_settings,
+    room_code,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -112,7 +117,8 @@ async def test_back_in_the_waiting_room_leaves_at_once_and_gives_up_the_seat():
 
 async def test_back_during_a_game_closes_sheets_then_asks_before_leaving():
     """On a phone, where Back is a gesture: the Room menu's sheet closes, the
-    Settings overlay opened from it closes, and only then is Back the Leave -
+    Settings overlay (opened from the identity chip) closes, and only then is
+    Back the Leave -
     which asks during a game, and is answered "stay" by Back again."""
     tag = random.randint(1000, 9999)
     host_name, phone_name = f"GameHost{tag}", f"PhoneBack{tag}"
@@ -160,22 +166,16 @@ async def test_back_during_a_game_closes_sheets_then_asks_before_leaving():
             await expect(phone.locator(ALERT)).to_have_count(0)
             assert phone.url == room_url
 
-            # Settings, opened from that sheet: an overlay route of its own,
-            # which Back closes without asking anything. It takes the sheet's
-            # entry, so Forward reopens it rather than bouncing off the sheet's.
-            await room_menu_action(phone, "Settings")
+            # Settings, opened from the identity chip's menu (the Room menu has
+            # no Settings row): an overlay route of its own, which Back closes
+            # without asking anything.
+            await open_player_settings(phone)
             overlay = phone.locator(".settings-overlay")
             await overlay.wait_for()
             await phone.go_back()
             await expect(overlay).to_have_count(0)
             await room_history_at(phone, 0)
             await expect(phone.locator(ALERT)).to_have_count(0)
-            assert phone.url == room_url
-            await phone.go_forward()
-            await overlay.wait_for()
-            await phone.go_back()
-            await expect(overlay).to_have_count(0)
-            await room_history_at(phone, 0)
             assert phone.url == room_url
 
             # Nothing open: Back is Leave, and during a game Leave asks.
