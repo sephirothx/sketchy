@@ -7,7 +7,7 @@ import { refusalCode, refusalText } from "../src/lib/refusals.ts";
 test("a refusal is read from its code, not from the server's sentence", () => {
   const problem = new ApiError(404, "No such player.", { errorCode: "no_such_player" });
   assert.equal(refusalCode(problem), "no_such_player");
-  assert.equal(refusalText(problem, "fallback"), "No such player.");
+  assert.equal(refusalText(problem, "fallback"), "Player not found.");
 });
 
 test("the sentence comes from the table even when the server's prose differs", () => {

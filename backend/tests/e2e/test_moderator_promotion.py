@@ -93,7 +93,7 @@ async def test_an_administrator_promotes_by_name_and_the_player_is_told():
             # is still signed in, which is what makes enrolling from it
             # possible at all.
             await expect(notice).not_to_contain_text("signed out on every device")
-            await notice.locator('button:has-text("Later")').click()
+            await notice.locator('button:has-text("Not now")').click()
             await expect(notice).to_have_count(0)
 
             # Still an ordinary player until they enrol.

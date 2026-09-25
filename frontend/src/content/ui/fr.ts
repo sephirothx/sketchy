@@ -127,7 +127,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   empty_message: "Écris quelque chose d’abord.",
 
   // Rate and capacity
-  too_fast: "Tu vas trop vite. Ralentis un instant.",
+  too_fast: "Tu vas trop vite. Réessaie dans un instant.",
   seat_changing_too_fast: "Cette place change de mains trop vite. Réessaie dans une minute.",
   joining_too_fast: "Tu rejoins des salons trop vite. Réessaie dans une minute.",
   room_quota: "Tu as déjà autant de salons ouverts que possible.",
@@ -213,7 +213,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Moderation, from the reporter's side
   reporting_unavailable: "Les signalements ne sont pas disponibles sur ce serveur.",
-  no_such_player: "Ce joueur n’existe pas.",
+  no_such_player: "Joueur introuvable.",
   cannot_report: "Ce joueur ne peut pas être signalé.",
   already_reported: "Tu as déjà signalé cela, et un modérateur ne l’a pas encore examiné.",
 
@@ -248,11 +248,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   "Ce compte a besoin de la double authentification avant de pouvoir se connecter. Demande de l’aide à un administrateur pour la configurer.",
   second_factor_not_set_up: "La double authentification n’est pas configurée.",
   second_factor_code_wrong: "Ce code n’est pas le bon.",
-  second_factor_throttled: "Trop de codes erronés. Patiente un peu et réessaie.",
+  second_factor_throttled: "Trop de codes erronés. Réessaie plus tard.",
   step_up_required: "Confirme que c’est bien toi avant de faire cela.",
   passkey_sign_in_required: "Connecte-toi avec ta clé d’accès.",
   passkey_not_registered: "Cette clé d’accès n’est pas enregistrée ici.",
-  passkey_not_found: "Cette clé d’accès n’existe pas.",
+  passkey_not_found: "Clé d’accès introuvable.",
   passkey_refused:
   "Les clés d’accès sont réservées aux comptes de modérateur et d’administrateur. On te demandera d’en créer une si un rôle t’est un jour proposé.",
   last_factor: "C’est le seul moyen dont tu disposes pour prouver que c’est toi. Ajoutes-en un autre avant de retirer celui-ci.",
@@ -276,15 +276,15 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   export_refused: "Cet export n’a pas pu être lancé. Réessaie.",
 
   // Rate limits reached over HTTP
-  too_many_attempts: "Trop de tentatives. Patiente un peu et réessaie.",
-  too_many_requests: "Trop de requêtes. Patiente un peu et réessaie.",
-  too_many_reports: "Trop de signalements. Attends avant d’en envoyer un autre.",
-  too_many_bug_reports: "Trop de rapports de bug. Attends avant d’en envoyer un autre.",
-  too_many_pictures: "Trop d’images. Patiente un peu et réessaie.",
+  too_many_attempts: "Trop de tentatives. Réessaie plus tard.",
+  too_many_requests: "Trop de requêtes. Réessaie plus tard.",
+  too_many_reports: "Trop de signalements. Réessaie plus tard.",
+  too_many_bug_reports: "Trop de rapports de bug. Réessaie plus tard.",
+  too_many_pictures: "Trop d’images. Réessaie plus tard.",
 
   // Pictures
   unsupported_picture_type: "Ce n’est pas une image WebP ou PNG.",
-  picture_not_found: "Cette image n’existe pas.",
+  picture_not_found: "Image introuvable.",
   picture_refused: "Cette image ne peut pas être utilisée ici.",
 
   // Bug reports
@@ -299,8 +299,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   that_is_you: "C’est toi.",
 
   // Profiles and history
-  no_such_game: "Cette partie n’existe pas.",
-  no_such_drawing: "Ce dessin n’existe pas.",
+  no_such_game: "Partie introuvable.",
+  no_such_drawing: "Dessin introuvable.",
   drawing_unreadable: "Ce dessin n’a pas pu être lu.",
   pinned_drawings_full: "Tes dessins épinglés sont au complet. Retire-en un de ton profil d’abord.",
 
@@ -359,7 +359,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   setting_refused: "Ce réglage n’a pas pu être enregistré.",
 
   // Role notices
-  no_such_notice: "Cet avis n’existe pas.",
+  no_such_notice: "Avis introuvable.",
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "Tu ne peux pas te signaler toi-même.",
@@ -369,7 +369,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       ? "Une liste copiée depuis quelqu’un d’autre ne peut pas être dupliquée : elle garde ainsi sa mention d’origine."
       : "Une liste en cours d’examen ou masquée par la modération ne peut pas être dupliquée.",
   cannot_report_own_prompt_list: "Tu ne peux pas signaler ta propre liste de mots.",
-  no_reportable_prompt_list: "Aucune liste de mots signalable trouvée.",
+  no_reportable_prompt_list: "Liste de mots introuvable.",
   prompt_not_in_list: "Ce mot n’appartient pas à cette liste.",
   no_picture_to_report: "Ce joueur n’a pas d’image à signaler.",
   no_such_game_context: "Ce contexte de partie n’existe pas.",
@@ -382,8 +382,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   evidence_not_received: "Tu ne peux pas sélectionner un message que tu n’as pas reçu.",
   evidence_not_in_game: "Le message sélectionné n’appartient pas à cette partie.",
   evidence_not_in_turn: "Le message sélectionné n’appartient pas à ce tour.",
-  no_such_warning: "Cet avertissement n’existe pas.",
-  no_drawing: "Aucun dessin.",};
+  no_such_warning: "Avertissement introuvable.",
+  no_drawing: "Dessin introuvable.",};
 
 /** What the room says about itself. One entry per `AnnouncementCode`. */
 const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string> = {
@@ -548,7 +548,7 @@ export const FR: Catalogue = {
     codeFromYourAuthenticatorApp: "Code de ton application d’authentification",
     recoveryCodeWorksHereTooCan: "Un code de récupération marche ici aussi, et sert une fois.",
     email: "E-mail",
-    optional: "facultatif",
+    optional: "(facultatif)",
     letsYouResetYourPasswordLater: "Te permet de réinitialiser ton mot de passe plus tard. Sert uniquement à cela.",
     rules2: "règles",
     forgotYourPassword: "Mot de passe oublié ?",
@@ -594,7 +594,7 @@ export const FR: Catalogue = {
     pleaseWait: "Patiente…",
     sendAResetLink: "Envoyer un lien de réinitialisation",
     setPassword: "Définir le mot de passe",
-    oneMoment: "Un instant…",
+    oneMoment: "Patiente…",
     nothingToConfirm: "Rien à confirmer.",
     resetLinkOnItsWay:
       "Si ce compte existe et a une adresse e-mail confirmée, un lien de réinitialisation est en route.",
@@ -604,7 +604,7 @@ export const FR: Catalogue = {
     leaveGame: "Quitter la partie",
     markedAfkByRoomVote: "Le salon t’a marqué AFK par vote.",
     inviteLinkCopied: "Lien d’invitation copié.",
-    couldnTCopyLinkCopyFrom: "Le lien n’a pas pu être copié. Copie-le depuis la barre d’adresse.",
+    couldNotCopyLink: "Le lien n’a pas pu être copié. Copie-le depuis la barre d’adresse.",
     couldNotStartGamePleaseTry: "La partie n’a pas pu démarrer. Réessaie.",
     couldNotStartRestartVote: "Le vote de redémarrage n’a pas pu être lancé.",
     couldNotRecordYourRestartVote: "Ton vote de redémarrage n’a pas pu être enregistré.",
@@ -649,7 +649,7 @@ export const FR: Catalogue = {
       }`,
     thatDoesNotLookLikeEmail: "Cela ne ressemble pas à une adresse e-mail.",
     somethingWentWrongPleaseTryAgain: "Quelque chose s’est mal passé. Réessaie.",
-    done: "Terminé",
+    done: "OK",
     usedOnlyResetYourPasswordTell: "Sert uniquement à réinitialiser ton mot de passe et à te prévenir si\n              ton compte ou quelque chose que tu as partagé fait l’objet d’une\n              décision. Rien d’autre n’est jamais envoyé ici.",
     checkYourInbox: "Vérifie ta boîte de réception",
     changeYourEmailAddress: "Change ton adresse e-mail",
@@ -711,7 +711,7 @@ export const FR: Catalogue = {
     whatHappened: "Ce qui s’est passé",
     whatYouDidWhatYouExpected: "Ce que tu as fait, ce que tu attendais, ce qui s’est passé à la place.",
     screenshot: "Capture",
-    optional: "Facultatif",
+    optional: "(facultatif)",
     screenshotThatWillBeSentWith: "La capture qui sera envoyée avec ce rapport",
     thisDialogHidesItselfWhileShot: "Cette fenêtre se cache pendant la capture, tu obtiens donc la page derrière. Regarde-la avant d’envoyer — c’est toi qui choisis ce que tu partages.",
     replace: "Remplacer",
@@ -747,7 +747,7 @@ export const FR: Catalogue = {
     passwordChangedEveryOtherDeviceHas: "Mot de passe changé. Tous les autres appareils ont été déconnectés.",
     couldNotChangePasswordPleaseTry: "Le mot de passe n’a pas pu être changé. Réessaie.",
     ifThatAccountHasConfirmedEmail: "Si ce compte a une adresse confirmée, un lien pour définir un nouveau\n              mot de passe est en route. Il sert une fois, et il expire.",
-    done: "Terminé",
+    done: "OK",
     everyDeviceSignsOutWhenPassword: "Chaque appareil est déconnecté lors d’un changement de mot de passe, y\n              compris ceux que tu n’avais pas voulu laisser connectés. Celui-ci reste.",
     currentPassword: "Mot de passe actuel",
     newPassword: "Nouveau mot de passe",
@@ -785,7 +785,7 @@ export const FR: Catalogue = {
     helpUsSquash: "Aide-nous à l’écraser",
     reportReadySendErrorWhatThis: "Un rapport est prêt : l’erreur, et ce que cet onglet sait de lui-même.\n            Il va aux personnes qui font tourner Sketchy — jamais aux autres joueurs.",
     whatWereYouDoing: "Que faisais-tu ?",
-    optional: "Facultatif",
+    optional: "(facultatif)",
     lastThingYouClickedTypedIf: "La dernière chose que tu as cliquée ou tapée, si tu t’en souviens.",
     recentClientErrorsNewestFirst: "Erreurs client récentes, les plus récentes en premier",
     sendMyDescriptionOnly: "Envoyer seulement ma description",
@@ -824,7 +824,7 @@ export const FR: Catalogue = {
     couldNotUpdateThatPreset: "Ce préréglage n’a pas pu être mis à jour.",
     couldNotDeleteThatPreset: "Ce préréglage n’a pas pu être supprimé.",
     fixCustomPromptEntriesMarkedAbove: "Corrige les mots personnalisés signalés ci-dessus avant de créer le salon.",
-    failedCreateRoom: "Échec de la création du salon",
+    couldNotCreateRoom: "Impossible de créer le salon.",
     roomSetup: "Configuration du salon",
     createRoom: "Créer un salon",
     startFromSavedPreset: "Partir d’un préréglage enregistré",
@@ -884,7 +884,7 @@ export const FR: Catalogue = {
       counted(p.count, { one: "mot personnalisé", other: "mots personnalisés" }),
     inspectPrompts: (p: { count: number }) =>
       `Examiner ${counted(p.count, { one: "mot personnalisé", other: "mots personnalisés" })}`,
-    couldNotLoadCustomPrompts: "Les mots personnalisés n’ont pas pu être chargés",
+    couldNotLoadCustomPrompts: "Les mots personnalisés n’ont pas pu être chargés.",
     loadingCustomPrompts: "Chargement des mots personnalisés…",
     roomPromptCollection: "Collection de mots du salon",
     readOnlyListSuppliedByRoom: "Liste en lecture seule fournie par l’hôte du salon.",
@@ -992,6 +992,7 @@ export const FR: Catalogue = {
     beenHereBefore: "Déjà venu ?",
     helloMyNameIs: "Bonjour, je m’appelle",
     stickItOn: "Coller",
+    saving: "Enregistrement…",
     oneLineExplainer: "Un joueur dessine, tous les autres devinent. Sans compte, sans installation, sans talent.",
     /* One is picked per visit (lib/firstRunLines.ts). Not a translation of
        the English pool: the misread-drawing joke needs a pair of words that
@@ -1133,8 +1134,8 @@ export const FR: Catalogue = {
     abc123: "ABC123",
     thereNoRoomCodeClipboard: "Il n’y a aucun code de salon dans le presse-papiers.",
     sketchyCouldNotReadClipboardPaste: "Sketchy n’a pas pu lire le presse-papiers. Colle plutôt dans les cases.",
-    pleaseEnterRoomCode: "Saisis un code de salon",
-    failedJoinRoom: "Impossible de rejoindre le salon",
+    enterRoomCode: "Saisis un code de salon.",
+    couldNotJoinRoom: "Impossible de rejoindre le salon.",
     joinByCode: "Rejoindre avec un code",
     createRoom: "Créer un salon",
     publicRooms: "Salons publics",
@@ -1587,7 +1588,7 @@ export const FR: Catalogue = {
     noListsInLanguage: (p: { language: string }) =>
       `Pas encore de listes en ${p.language} — ce salon puise dans ses propres mots.`,
     howListPlays: (p: { name: string }) => `Comment se jouent les mots de ${p.name}`,
-    failedLoadPromptLists: "Impossible de charger les listes de mots",
+    couldNotLoadPromptLists: "Impossible de charger les listes de mots.",
     loadingCuratedPromptLists: "Chargement des listes de mots…",
     promptLists: "Listes de mots",
     namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
@@ -1640,7 +1641,7 @@ export const FR: Catalogue = {
     drawingTime: "Temps de dessin",
     full: "Complet",
     inProgress: "En cours",
-    looking: "Recherche…",
+    loading: "Chargement…",
     nobodySeatedYet: "Personne n’est encore assis.",
     host: "Hôte",
     couldNotReadWhoIs: "Impossible de savoir qui est dans ce salon.",
@@ -1678,7 +1679,7 @@ export const FR: Catalogue = {
     anythingElseOptional: "Autre chose (facultatif)",
     anythingModeratorShouldKnow: "Tout ce qu’un modérateur devrait savoir",
     sentWithWhatAboutAttached: "Envoyé, avec l’objet du signalement joint.",
-    done: "Terminé",
+    done: "OK",
     inappropriateName: "Nom inapproprié",
     inappropriatePicture: "Photo inappropriée",
     reportSent: "Signalement envoyé",
@@ -1695,14 +1696,14 @@ export const FR: Catalogue = {
     report: "Signaler",
     reportThisDrawing: "Signaler ce dessin",
     nothingHappensYet: "Un modérateur regardera le dessin. Rien n’arrive au joueur avant cela.",
-    anythingElseOptional: "Autre chose ? (facultatif)",
+    anythingElseOptional: "Autre chose (facultatif)",
     anythingModeratorShouldKnow: "Tout ce qu’un modérateur devrait savoir",
     sendReport: "Envoyer le signalement",
     sending: "Envoi…",
     reportSent: "Signalement envoyé",
     sentWithTheDrawingAttached: "Envoyé, avec le dessin joint.",
     thatReportCouldNotBeSent: "Ce signalement n’a pas pu être envoyé.",
-    done: "Terminé",
+    done: "OK",
     cancel: "Annuler",
     close: "Fermer",
   },
@@ -1722,7 +1723,7 @@ export const FR: Catalogue = {
     anythingModeratorShouldKnow: "Tout ce qu’un modérateur devrait savoir",
     thisLineAttachedWithWhatLobby: "Cette ligne est jointe, avec ce que le hall disait autour.",
     sentWithLineWhatWasSaid: "Envoyé, avec la ligne et ce qui se disait autour.",
-    done: "Terminé",
+    done: "OK",
     harassmentOrAbuse: "Harcèlement ou insultes",
     spam: "Spam",
     inappropriateName: "Nom inapproprié",
@@ -1747,7 +1748,7 @@ export const FR: Catalogue = {
     theirRecentMessagesThisRoomAre: "Ses messages récents dans ce salon sont joints automatiquement,\n                avec ce qui se disait autour ; tu peux donc laisser ceci vide.",
     includeTheirDrawing: "Inclure son dessin",
     canvasAsRightNowSoModerator: "Le tableau tel qu’il est maintenant, pour qu’un modérateur voie\n                      ce que tu as vu.",
-    done: "Terminé",
+    done: "OK",
     sentWithTheirDrawingAnd: (p: { messages: string }) =>
       `Envoyé, avec son dessin et ${p.messages} en pièce jointe.`,
     sentWithTheirDrawingAttached: "Envoyé, avec son dessin en pièce jointe.",
@@ -1798,10 +1799,10 @@ export const FR: Catalogue = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Tu as été déconnecté de tous tes appareils pour que le changement\n            prenne effet. Reconnecte-toi pour continuer.",
     setUpNow: "Le configurer maintenant",
-    later: "Plus tard",
-    oneMoment: "Un instant…",
+    later: "Pas maintenant",
+    oneMoment: "Patiente…",
     signInAgain: "Se reconnecter",
-    understood: "Compris",
+    understood: "OK",
   },
 
   roomChatPanel: {
@@ -1809,7 +1810,7 @@ export const FR: Catalogue = {
       `${counted(p.count, { one: "nouveau message", other: "nouveaux messages" })}`,
     correctWithPlace: (p: { place: string | null }) =>
       p.place ? `Correct · ${p.place}` : "Correct",
-    couldNotSendMessage: "Le message n’a pas pu être envoyé",
+    couldNotSendMessage: "Le message n’a pas pu être envoyé.",
     sent: "Envoyé :",
     send: "Envoyer",
     youReDrawingWatchGuessesCome: "Tu dessines — regarde les propositions arriver.",
@@ -1823,13 +1824,13 @@ export const FR: Catalogue = {
     roomChat: "Chat du salon",
     sayHelloBeforeTheGame: "Dis bonjour avant le début de la partie.",
     noMessagesYet: "Pas encore de messages.",
-    typeYourGuess: "Tape ta réponse...",
-    typeAMessage: "Tape un message...",
+    typeYourGuess: "Tape ta réponse…",
+    typeAMessage: "Tape un message…",
   },
 
   roomEntryState: {
-    thisRoomNoLongerAvailable: "Ce salon n’est plus disponible",
-    couldNotJoinThisRoom: "Impossible de rejoindre ce salon",
+    thisRoomNoLongerAvailable: "Ce salon n’est plus disponible.",
+    couldNotJoinThisRoom: "Impossible de rejoindre ce salon.",
     thatNameIsReservedPlease: "Ce nom est réservé. Choisis-en un autre.",
     thisRoomHasEndedAsk: "Ce salon est terminé. Demande une nouvelle invitation à l’hôte.",
     loadThisRoom: "charger ce salon",
@@ -1881,7 +1882,7 @@ export const FR: Catalogue = {
     playersOfCapacity: (p: { here: number; capacity: number }) =>
       `${p.here} joueurs sur ${p.capacity}`,
     readyCount: (p: { count: number }) => `${p.count} prêts`,
-    couldNotJoinAsPlayer: "Impossible de rejoindre comme joueur",
+    couldNotJoinAsPlayer: "Impossible de rejoindre comme joueur.",
     finalStandings: "Classement final",
     players: "Joueurs",
     joinAsAPlayer: "rejoindre en joueur",
@@ -1892,7 +1893,7 @@ export const FR: Catalogue = {
   },
 
   roomSettingsEditor: {
-    couldNotLoadRoomRules: "Impossible de charger les règles du salon",
+    couldNotLoadRoomRules: "Impossible de charger les règles du salon.",
     roomRefusedThoseRules: "Le salon n’a pas accepté ces règles.",
     editRoomRules: "Modifier les règles du salon",
     loadingRoomRules: "Chargement des règles du salon…",
@@ -2285,7 +2286,7 @@ export const FR: Catalogue = {
     downloadAsFile: "Télécharger en fichier",
     copyAll: "Tout copier",
     iHaveSavedTheseSomewhereSafe: "Je les ai enregistrés en lieu sûr",
-    done: "Terminé",
+    done: "OK",
     moderatorsAdministratorsSignWithPasskeyYour: "Les modérateurs et administrateurs se connectent avec une clé d’accès :\n              ton appareil confirme que c’est toi — empreinte, visage ou code\n              PIN — et rien de divulgable n’est tapé.",
     yourPassword: "Ton mot de passe",
     confirmsPasskeyBeingAddedByYou: "Confirme que c’est bien toi qui ajoutes la clé d’accès.",
@@ -2390,12 +2391,12 @@ export const FR: Catalogue = {
     theMessagesThisWasAbout: "Les messages concernés :",
     theDrawingThisWasAbout: "Le dessin concerné :",
     theDrawingsThisWasAbout: "Les dessins concernés :",
-    oneMoment: "Un instant…",
-    understood: "Compris",
+    oneMoment: "Patiente…",
+    understood: "OK",
   },
   connectionStatusBanner: {
     youReDisconnectedCheckYour: "Tu es déconnecté. Vérifie ta connexion ; Sketchy se reconnectera tout seul.",
-    couldnTReconnectToYour: "Impossible de se reconnecter à ton salon. Recharge la page pour réessayer.",
+    couldNotReconnect: "Impossible de se reconnecter à ton salon. Recharge la page pour réessayer.",
     connectionLostReconnecting: "Connexion perdue — reconnexion…",
   },
   accountData: {
@@ -2536,7 +2537,7 @@ export const FR: Catalogue = {
       `${p.nickname} a rejoint le salon`,
     gameStarted: "La partie commence !",
     drawerNicknameIsChoosingAPrompt: (p: { drawerNickname: string }) =>
-      `${p.drawerNickname} choisit un mot...`,
+      `${p.drawerNickname} choisit un mot…`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Le mot était « ${p.prompt} »`,
     gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>

@@ -127,7 +127,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   empty_message: "Typ eerst iets.",
 
   // Rate and capacity
-  too_fast: "Je gaat te snel. Doe even rustig aan.",
+  too_fast: "Je gaat te snel. Probeer het zo nog eens.",
   seat_changing_too_fast: "Deze plek wisselt te snel van eigenaar. Probeer het over een minuut nog eens.",
   joining_too_fast: "Je stapt te snel kamers binnen. Probeer het over een minuut nog eens.",
   room_quota: "Je hebt al net zoveel kamers open als tegelijk kan.",
@@ -213,7 +213,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Moderation, from the reporter's side
   reporting_unavailable: "Melden is niet beschikbaar op deze server.",
-  no_such_player: "Deze speler bestaat niet.",
+  no_such_player: "Speler niet gevonden.",
   cannot_report: "Deze speler kan niet gemeld worden.",
   already_reported: "Je hebt dit al gemeld, en een moderator heeft het nog niet bekeken.",
 
@@ -248,11 +248,11 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   "Dit account heeft tweestapsverificatie nodig voordat het kan inloggen. Vraag een beheerder om hulp bij het instellen.",
   second_factor_not_set_up: "Tweestapsverificatie is niet ingesteld.",
   second_factor_code_wrong: "Deze code klopt niet.",
-  second_factor_throttled: "Te veel codes waren fout. Wacht even en probeer het nog eens.",
+  second_factor_throttled: "Te veel codes waren fout. Probeer het later nog eens.",
   step_up_required: "Bevestig dat jij het bent voordat je dat doet.",
   passkey_sign_in_required: "Log in met je passkey.",
   passkey_not_registered: "Deze passkey is hier niet geregistreerd.",
-  passkey_not_found: "Deze passkey bestaat niet.",
+  passkey_not_found: "Passkey niet gevonden.",
   passkey_refused:
   "Passkeys zijn voor moderator- en beheerdersaccounts. Je wordt gevraagd er een in te stellen als je ooit een rol krijgt aangeboden.",
   last_factor: "Dit is de enige manier waarop je kunt bewijzen dat jij het bent. Voeg er een toe voordat je deze weghaalt.",
@@ -276,15 +276,15 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   export_refused: "Deze export kon niet gestart worden. Probeer het nog eens.",
 
   // Rate limits reached over HTTP
-  too_many_attempts: "Te veel pogingen. Wacht even en probeer het nog eens.",
-  too_many_requests: "Te veel verzoeken. Wacht even en probeer het nog eens.",
-  too_many_reports: "Te veel meldingen. Wacht even voordat je er nog een stuurt.",
-  too_many_bug_reports: "Te veel bugmeldingen. Wacht even voordat je er nog een stuurt.",
-  too_many_pictures: "Te veel afbeeldingen. Wacht even en probeer het nog eens.",
+  too_many_attempts: "Te veel pogingen. Probeer het later nog eens.",
+  too_many_requests: "Te veel verzoeken. Probeer het later nog eens.",
+  too_many_reports: "Te veel meldingen. Probeer het later nog eens.",
+  too_many_bug_reports: "Te veel bugmeldingen. Probeer het later nog eens.",
+  too_many_pictures: "Te veel afbeeldingen. Probeer het later nog eens.",
 
   // Pictures
   unsupported_picture_type: "Dat is geen WebP- of PNG-afbeelding.",
-  picture_not_found: "Deze afbeelding bestaat niet.",
+  picture_not_found: "Afbeelding niet gevonden.",
   picture_refused: "Deze afbeelding kan hier niet gebruikt worden.",
 
   // Bug reports
@@ -299,8 +299,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   that_is_you: "Dat ben jij.",
 
   // Profiles and history
-  no_such_game: "Dit spel bestaat niet.",
-  no_such_drawing: "Deze tekening bestaat niet.",
+  no_such_game: "Spel niet gevonden.",
+  no_such_drawing: "Tekening niet gevonden.",
   drawing_unreadable: "Deze tekening kon niet gelezen worden.",
   pinned_drawings_full: "Je vastgezette tekeningen zijn vol. Maak er eerst een los in je profiel.",
 
@@ -359,7 +359,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   setting_refused: "Deze instelling kon niet opgeslagen worden.",
 
   // Role notices
-  no_such_notice: "Deze melding bestaat niet.",
+  no_such_notice: "Melding niet gevonden.",
 
   // Reporting, from the reporter's side
   cannot_report_yourself: "Je kunt jezelf niet melden.",
@@ -369,7 +369,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
       ? "Een lijst die je van iemand anders hebt gekopieerd, kan niet gedupliceerd worden, zodat de bronvermelding blijft."
       : "Een lijst die de moderatie beoordeelt of heeft verborgen, kan niet gedupliceerd worden.",
   cannot_report_own_prompt_list: "Je kunt je eigen woordenlijst niet melden.",
-  no_reportable_prompt_list: "Geen meldbare woordenlijst gevonden.",
+  no_reportable_prompt_list: "Woordenlijst niet gevonden.",
   prompt_not_in_list: "Dit woord hoort niet bij deze lijst.",
   no_picture_to_report: "Deze speler heeft geen afbeelding om te melden.",
   no_such_game_context: "Deze spelcontext bestaat niet.",
@@ -382,8 +382,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   evidence_not_received: "Je kunt geen bericht kiezen dat je niet ontvangen hebt.",
   evidence_not_in_game: "Het gekozen bericht hoort niet bij dat spel.",
   evidence_not_in_turn: "Het gekozen bericht hoort niet bij die beurt.",
-  no_such_warning: "Deze waarschuwing bestaat niet.",
-  no_drawing: "Geen tekening.",};
+  no_such_warning: "Waarschuwing niet gevonden.",
+  no_drawing: "Tekening niet gevonden.",};
 
 /** What the room says about itself. One entry per `AnnouncementCode`. */
 const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string> = {
@@ -548,7 +548,7 @@ export const NL: Catalogue = {
     codeFromYourAuthenticatorApp: "Code uit je authenticatie-app",
     recoveryCodeWorksHereTooCan: "Een herstelcode werkt hier ook, en is één keer te gebruiken.",
     email: "E-mail",
-    optional: "optioneel",
+    optional: "(optioneel)",
     letsYouResetYourPasswordLater: "Hiermee kun je later je wachtwoord herstellen. Verder wordt het nergens voor gebruikt.",
     rules2: "regels",
     forgotYourPassword: "Wachtwoord vergeten?",
@@ -594,7 +594,7 @@ export const NL: Catalogue = {
     pleaseWait: "Even geduld…",
     sendAResetLink: "Herstellink sturen",
     setPassword: "Wachtwoord instellen",
-    oneMoment: "Een moment…",
+    oneMoment: "Even geduld…",
     nothingToConfirm: "Niets te bevestigen.",
     resetLinkOnItsWay:
       "Als dat account bestaat en een bevestigd e-mailadres heeft, is er een herstellink onderweg.",
@@ -604,7 +604,7 @@ export const NL: Catalogue = {
     leaveGame: "Spel verlaten",
     markedAfkByRoomVote: "De kamer heeft je door een stemming als AFK gemarkeerd.",
     inviteLinkCopied: "Uitnodigingslink gekopieerd.",
-    couldnTCopyLinkCopyFrom: "De link kon niet gekopieerd worden. Kopieer hem uit de adresbalk.",
+    couldNotCopyLink: "De link kon niet gekopieerd worden. Kopieer hem uit de adresbalk.",
     couldNotStartGamePleaseTry: "Het spel kon niet gestart worden. Probeer het nog eens.",
     couldNotStartRestartVote: "Er kon geen herstartstemming gestart worden.",
     couldNotRecordYourRestartVote: "Je herstartstem kon niet vastgelegd worden.",
@@ -649,7 +649,7 @@ export const NL: Catalogue = {
       }`,
     thatDoesNotLookLikeEmail: "Dat lijkt geen e-mailadres.",
     somethingWentWrongPleaseTryAgain: "Er ging iets mis. Probeer het nog eens.",
-    done: "Klaar",
+    done: "Oké",
     usedOnlyResetYourPasswordTell: "Wordt alleen gebruikt om je wachtwoord te herstellen en om je te laten\n              weten of er iets met je account of met iets dat je deelde gebeurt.\n              Verder gaat hier nooit iets heen.",
     checkYourInbox: "Kijk in je inbox",
     changeYourEmailAddress: "Wijzig je e-mailadres",
@@ -711,7 +711,7 @@ export const NL: Catalogue = {
     whatHappened: "Wat er gebeurde",
     whatYouDidWhatYouExpected: "Wat je deed, wat je verwachtte, wat er in plaats daarvan gebeurde.",
     screenshot: "Schermafbeelding",
-    optional: "Optioneel",
+    optional: "(optioneel)",
     screenshotThatWillBeSentWith: "De schermafbeelding die met deze melding meegaat",
     thisDialogHidesItselfWhileShot: "Dit venster verbergt zichzelf terwijl de opname wordt gemaakt, zodat je de pagina erachter krijgt. Bekijk hem voor je verstuurt — jij kiest wat je deelt.",
     replace: "Vervangen",
@@ -747,7 +747,7 @@ export const NL: Catalogue = {
     passwordChangedEveryOtherDeviceHas: "Wachtwoord gewijzigd. Elk ander apparaat is uitgelogd.",
     couldNotChangePasswordPleaseTry: "Het wachtwoord kon niet gewijzigd worden. Probeer het nog eens.",
     ifThatAccountHasConfirmedEmail: "Als dat account een bevestigd e-mailadres heeft, is er een link\n              onderweg om een nieuw wachtwoord in te stellen. Hij werkt één keer\n              en verloopt.",
-    done: "Klaar",
+    done: "Oké",
     everyDeviceSignsOutWhenPassword: "Bij een wachtwoordwijziging logt elk apparaat uit, ook de apparaten die\n              je niet ingelogd wilde laten. Dit apparaat blijft.",
     currentPassword: "Huidig wachtwoord",
     newPassword: "Nieuw wachtwoord",
@@ -785,7 +785,7 @@ export const NL: Catalogue = {
     helpUsSquash: "Help ons hem te verpletteren",
     reportReadySendErrorWhatThis: "Er staat een melding klaar: de fout, en wat dit tabblad over zichzelf weet.\n            Hij komt bij de mensen die Sketchy draaien — nooit bij andere spelers.",
     whatWereYouDoing: "Wat was je aan het doen?",
-    optional: "Optioneel",
+    optional: "(optioneel)",
     lastThingYouClickedTypedIf: "Het laatste dat je klikte of typte, als je het nog weet.",
     recentClientErrorsNewestFirst: "Recente clientfouten, nieuwste eerst",
     sendMyDescriptionOnly: "Alleen mijn beschrijving sturen",
@@ -824,7 +824,7 @@ export const NL: Catalogue = {
     couldNotUpdateThatPreset: "Deze voorinstelling kon niet bijgewerkt worden.",
     couldNotDeleteThatPreset: "Deze voorinstelling kon niet verwijderd worden.",
     fixCustomPromptEntriesMarkedAbove: "Verbeter de hierboven gemarkeerde eigen woorden voordat je de kamer maakt.",
-    failedCreateRoom: "Kamer aanmaken mislukt",
+    couldNotCreateRoom: "Kamer aanmaken lukte niet.",
     roomSetup: "Kameropzet",
     createRoom: "Een kamer maken",
     startFromSavedPreset: "Beginnen met een opgeslagen voorinstelling",
@@ -884,7 +884,7 @@ export const NL: Catalogue = {
       counted(p.count, { one: "eigen woord", other: "eigen woorden" }),
     inspectPrompts: (p: { count: number }) =>
       `${counted(p.count, { one: "eigen woord", other: "eigen woorden" })} bekijken`,
-    couldNotLoadCustomPrompts: "De eigen woorden konden niet geladen worden",
+    couldNotLoadCustomPrompts: "De eigen woorden konden niet geladen worden.",
     loadingCustomPrompts: "Eigen woorden laden…",
     roomPromptCollection: "Woordenverzameling van de kamer",
     readOnlyListSuppliedByRoom: "Alleen-lezen lijst van de gastheer.",
@@ -992,6 +992,7 @@ export const NL: Catalogue = {
     beenHereBefore: "Al eerder hier geweest?",
     helloMyNameIs: "Hallo, ik heet",
     stickItOn: "Plakken",
+    saving: "Opslaan…",
     oneLineExplainer: "Eén speler tekent, alle anderen raden. Geen account, geen installatie, geen talent nodig.",
     /* One is picked per visit (lib/firstRunLines.ts). Not a translation of
        the English pool: the misread-drawing joke needs a pair of words that
@@ -1133,8 +1134,8 @@ export const NL: Catalogue = {
     abc123: "ABC123",
     thereNoRoomCodeClipboard: "Er staat geen kamercode op het klembord.",
     sketchyCouldNotReadClipboardPaste: "Sketchy kon het klembord niet lezen. Plak in plaats daarvan in de vakjes.",
-    pleaseEnterRoomCode: "Voer een kamercode in",
-    failedJoinRoom: "Deelnemen aan de kamer mislukt",
+    enterRoomCode: "Voer een kamercode in.",
+    couldNotJoinRoom: "Deelnemen aan de kamer lukte niet.",
     joinByCode: "Meedoen met een code",
     createRoom: "Kamer maken",
     publicRooms: "Openbare kamers",
@@ -1587,7 +1588,7 @@ export const NL: Catalogue = {
     noListsInLanguage: (p: { language: string }) =>
       `Nog geen woordenlijsten in het ${p.language} — deze kamer gebruikt eigen woorden.`,
     howListPlays: (p: { name: string }) => `Hoe woorden uit ${p.name} spelen`,
-    failedLoadPromptLists: "Woordenlijsten laden mislukt",
+    couldNotLoadPromptLists: "Woordenlijsten laden lukte niet.",
     loadingCuratedPromptLists: "Woordenlijsten laden…",
     promptLists: "Woordenlijsten",
     namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
@@ -1640,7 +1641,7 @@ export const NL: Catalogue = {
     drawingTime: "Tekentijd",
     full: "Vol",
     inProgress: "Bezig",
-    looking: "Zoeken…",
+    loading: "Laden…",
     nobodySeatedYet: "Er zit nog niemand.",
     host: "Gastheer",
     couldNotReadWhoIs: "Kon niet lezen wie er in deze kamer zit.",
@@ -1676,7 +1677,7 @@ export const NL: Catalogue = {
     anythingElseOptional: "Nog iets (optioneel)",
     anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
     sentWithWhatAboutAttached: "Verstuurd, met het onderwerp erbij.",
-    done: "Klaar",
+    done: "Oké",
     inappropriateName: "Ongepaste naam",
     inappropriatePicture: "Ongepaste afbeelding",
     reportSent: "Melding verstuurd",
@@ -1693,14 +1694,14 @@ export const NL: Catalogue = {
     report: "Melden",
     reportThisDrawing: "Deze tekening melden",
     nothingHappensYet: "Een moderator bekijkt de tekening. Tot die tijd gebeurt er niets met de speler.",
-    anythingElseOptional: "Nog iets? (optioneel)",
+    anythingElseOptional: "Nog iets (optioneel)",
     anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
     sendReport: "Melding versturen",
     sending: "Versturen…",
     reportSent: "Melding verstuurd",
     sentWithTheDrawingAttached: "Verstuurd, met de tekening erbij.",
     thatReportCouldNotBeSent: "Deze melding kon niet verstuurd worden.",
-    done: "Klaar",
+    done: "Oké",
     cancel: "Annuleren",
     close: "Sluiten",
   },
@@ -1720,7 +1721,7 @@ export const NL: Catalogue = {
     anythingModeratorShouldKnow: "Alles wat een moderator zou moeten weten",
     thisLineAttachedWithWhatLobby: "Deze regel zit erbij, met wat de lobby eromheen zei.",
     sentWithLineWhatWasSaid: "Verstuurd, met de regel en wat eromheen gezegd is.",
-    done: "Klaar",
+    done: "Oké",
     harassmentOrAbuse: "Intimidatie of misbruik",
     spam: "Spam",
     inappropriateName: "Ongepaste naam",
@@ -1745,7 +1746,7 @@ export const NL: Catalogue = {
     theirRecentMessagesThisRoomAre: "Hun recente berichten in deze kamer gaan er automatisch bij,\n                met wat eromheen gezegd is, dus dit mag leeg blijven.",
     includeTheirDrawing: "Hun tekening meesturen",
     canvasAsRightNowSoModerator: "Het canvas zoals het nu is, zodat een moderator ziet wat\n                      jij zag.",
-    done: "Klaar",
+    done: "Oké",
     sentWithTheirDrawingAnd: (p: { messages: string }) =>
       `Verstuurd, met hun tekening en ${p.messages} bijgevoegd.`,
     sentWithTheirDrawingAttached: "Verstuurd, met hun tekening bijgevoegd.",
@@ -1796,10 +1797,10 @@ export const NL: Catalogue = {
   roleChangeNotice: {
     youHaveBeenSignedOutEvery: "Je bent op elk apparaat uitgelogd zodat de wijziging effect heeft.\n            Log opnieuw in om verder te gaan.",
     setUpNow: "Nu instellen",
-    later: "Later",
-    oneMoment: "Een moment…",
+    later: "Nu niet",
+    oneMoment: "Even geduld…",
     signInAgain: "Opnieuw inloggen",
-    understood: "Begrepen",
+    understood: "Oké",
   },
 
   roomChatPanel: {
@@ -1807,7 +1808,7 @@ export const NL: Catalogue = {
       `${counted(p.count, { one: "nieuw bericht", other: "nieuwe berichten" })}`,
     correctWithPlace: (p: { place: string | null }) =>
       p.place ? `Goed · ${p.place}` : "Goed",
-    couldNotSendMessage: "Bericht kon niet verstuurd worden",
+    couldNotSendMessage: "Bericht kon niet verstuurd worden.",
     sent: "Verstuurd:",
     send: "Versturen",
     youReDrawingWatchGuessesCome: "Jij tekent — kijk hoe de gokken binnenkomen.",
@@ -1821,13 +1822,13 @@ export const NL: Catalogue = {
     roomChat: "Kamerchat",
     sayHelloBeforeTheGame: "Zeg hallo voordat het spel begint.",
     noMessagesYet: "Nog geen berichten.",
-    typeYourGuess: "Typ je gok...",
-    typeAMessage: "Typ een bericht...",
+    typeYourGuess: "Typ je gok…",
+    typeAMessage: "Typ een bericht…",
   },
 
   roomEntryState: {
-    thisRoomNoLongerAvailable: "Deze kamer is niet meer beschikbaar",
-    couldNotJoinThisRoom: "Deelnemen aan deze kamer lukte niet",
+    thisRoomNoLongerAvailable: "Deze kamer is niet meer beschikbaar.",
+    couldNotJoinThisRoom: "Deelnemen aan deze kamer lukte niet.",
     thatNameIsReservedPlease: "Die naam is gereserveerd. Kies een andere.",
     thisRoomHasEndedAsk: "Deze kamer is afgelopen. Vraag de gastheer om een nieuwe uitnodiging.",
     loadThisRoom: "deze kamer laden",
@@ -1879,7 +1880,7 @@ export const NL: Catalogue = {
     playersOfCapacity: (p: { here: number; capacity: number }) =>
       `${p.here} van de ${p.capacity} spelers`,
     readyCount: (p: { count: number }) => `${p.count} klaar`,
-    couldNotJoinAsPlayer: "Meedoen als speler lukte niet",
+    couldNotJoinAsPlayer: "Meedoen als speler lukte niet.",
     finalStandings: "Eindstand",
     players: "Spelers",
     joinAsAPlayer: "als speler meedoen",
@@ -1890,7 +1891,7 @@ export const NL: Catalogue = {
   },
 
   roomSettingsEditor: {
-    couldNotLoadRoomRules: "De kamerregels konden niet geladen worden",
+    couldNotLoadRoomRules: "De kamerregels konden niet geladen worden.",
     roomRefusedThoseRules: "De kamer accepteerde die regels niet.",
     editRoomRules: "Kamerregels bewerken",
     loadingRoomRules: "Kamerregels laden…",
@@ -2283,7 +2284,7 @@ export const NL: Catalogue = {
     downloadAsFile: "Als bestand downloaden",
     copyAll: "Alles kopiëren",
     iHaveSavedTheseSomewhereSafe: "Ik heb ze veilig opgeborgen",
-    done: "Klaar",
+    done: "Oké",
     moderatorsAdministratorsSignWithPasskeyYour: "Moderatoren en beheerders loggen in met een passkey: je apparaat\n              bevestigt dat jij het bent — een vingerafdruk, je gezicht of de\n              pincode — en er wordt niets getypt dat weggegeven kan worden.",
     yourPassword: "Je wachtwoord",
     confirmsPasskeyBeingAddedByYou: "Bevestigt dat jij de passkey toevoegt.",
@@ -2388,12 +2389,12 @@ export const NL: Catalogue = {
     theMessagesThisWasAbout: "De berichten waar het om ging:",
     theDrawingThisWasAbout: "De tekening waar het om ging:",
     theDrawingsThisWasAbout: "De tekeningen waar het om ging:",
-    oneMoment: "Een moment…",
-    understood: "Begrepen",
+    oneMoment: "Even geduld…",
+    understood: "Oké",
   },
   connectionStatusBanner: {
     youReDisconnectedCheckYour: "Je verbinding is verbroken. Controleer je verbinding; Sketchy maakt vanzelf opnieuw verbinding.",
-    couldnTReconnectToYour: "Kon niet opnieuw verbinden met je kamer. Herlaad de pagina om het nog eens te proberen.",
+    couldNotReconnect: "Kon niet opnieuw verbinden met je kamer. Herlaad de pagina om het nog eens te proberen.",
     connectionLostReconnecting: "Verbinding verbroken — opnieuw verbinden…",
   },
   accountData: {
@@ -2534,7 +2535,7 @@ export const NL: Catalogue = {
       `${p.nickname} is de kamer binnengekomen`,
     gameStarted: "Het spel is begonnen!",
     drawerNicknameIsChoosingAPrompt: (p: { drawerNickname: string }) =>
-      `${p.drawerNickname} kiest een woord...`,
+      `${p.drawerNickname} kiest een woord…`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Het woord was ‘${p.prompt}’`,
     gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>

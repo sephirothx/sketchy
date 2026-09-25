@@ -104,7 +104,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
     <div className="public-room-roster">
       {rosterError && <p className="public-room-roster-note" role="alert">{rosterError}</p>}
       {!rosterError && roster === null && (
-        <p className="public-room-roster-note">{ui.publicRoomCard.looking}</p>
+        <p className="public-room-roster-note">{ui.publicRoomCard.loading}</p>
       )}
       {!rosterError && roster !== null && roster.length === 0 && (
         <p className="public-room-roster-note">{ui.publicRoomCard.nobodySeatedYet}</p>

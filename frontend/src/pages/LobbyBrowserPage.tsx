@@ -327,7 +327,7 @@ export function LobbyBrowserPage() {
 
   async function handleJoinByCode(asSpectator = false) {
     if (!joinCode.trim()) {
-      setError(ui.lobbyBrowserPage.pleaseEnterRoomCode);
+      setError(ui.lobbyBrowserPage.enterRoomCode);
       return;
     }
     await joinRoom({ code: joinCode.trim().toUpperCase() }, asSpectator, "private-code");
@@ -370,7 +370,7 @@ export function LobbyBrowserPage() {
         setSession(session);
         navigate(`/room/${session.code}`);
       } else {
-        setError(refusalText(res, ui.lobbyBrowserPage.failedJoinRoom));
+        setError(refusalText(res, ui.lobbyBrowserPage.couldNotJoinRoom));
       }
     } catch (joinError) {
       if (!mountedRef.current) return;

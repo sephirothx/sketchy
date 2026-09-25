@@ -98,7 +98,7 @@ async def test_a_registered_player_reports_a_lobby_line_by_its_author():
             # The line is the complaint; nothing more has to be typed.
             await dialog.get_by_role("button", name="Send report").click()
             await expect(reporter.locator('.modal-card:has-text("Report sent")')).to_be_visible()
-            await reporter.get_by_role("button", name="Done").click()
+            await reporter.get_by_role("button", name="OK", exact=True).click()
             await expect(dialog).to_be_hidden()
 
             # One open report per target (R-MOD-05): saying it again is

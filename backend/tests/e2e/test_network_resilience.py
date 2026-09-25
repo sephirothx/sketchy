@@ -29,7 +29,7 @@ async def test_going_offline_banners_and_refuses_a_join():
 
             await context.set_offline(True)
             await page.wait_for_selector(
-                '.connection-status-banner.offline:has-text("You\u2019re disconnected")'
+                ".connection-status-banner.offline:has-text(\"You're disconnected\")"
             )
             await join_by_code(page, "ABC123")
             await page.wait_for_selector('.lobby-action-error:has-text("Connection lost")')
@@ -292,7 +292,7 @@ async def test_a_notice_never_covers_a_phone_room_header():
             assert hit, "something covers the room menu"
             await chip.click()
             await page.wait_for_selector(
-                '.room-notice-popover:has-text("You\u2019re disconnected")'
+                ".room-notice-popover:has-text(\"You're disconnected\")"
             )
             await context.set_offline(False)
             await chip.wait_for(state="detached", timeout=10000)

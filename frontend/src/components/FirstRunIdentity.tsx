@@ -145,7 +145,7 @@ export function FirstRunIdentity() {
           />
         </div>
         <button type="submit" className="first-run-guest-submit" disabled={busy}>
-          {busy ? "\u2026" : ui.firstRunIdentity.stickItOn}
+          {busy ? ui.firstRunIdentity.saving : ui.firstRunIdentity.stickItOn}
         </button>
         {error && (
           <p id={`${fieldId}-error`} className="auth-error" role="alert">{error}</p>

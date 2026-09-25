@@ -119,7 +119,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       await navigator.clipboard.writeText(window.location.href);
       notify(ui.activeGameRoom.inviteLinkCopied, "success", 2500);
     } catch {
-      notify(ui.activeGameRoom.couldnTCopyLinkCopyFrom, "error");
+      notify(ui.activeGameRoom.couldNotCopyLink, "error");
     }
   }
 

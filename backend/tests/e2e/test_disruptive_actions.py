@@ -39,7 +39,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
             )
             await room_menu_action(host_page, "Copy the invite link")
             await host_page.wait_for_selector(
-                '.app-toast.error:has-text("Couldn’t copy the link")'
+                '.app-toast.error:has-text("Could not copy the link")'
             )
 
             code = await get_room_code(host_page)

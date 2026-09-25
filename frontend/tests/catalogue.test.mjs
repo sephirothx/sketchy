@@ -395,6 +395,104 @@ test("no catalogue entry is blank", () => {
   assert.deepEqual(blank, [], `blank entries render as nothing at all: ${blank}`);
 });
 
+/* The house style of the English copy, checked rather than remembered.
+
+Each rule was broken in a dozen places before it was a test (the beta polish
+list's C7): curly and straight quotes side by side, "..." beside "…", "Failed
+to" and "Couldn't" beside the house "Could not …", errors with no full stop,
+and British spellings in an American catalogue. English only, on purpose: the
+other six write their own typography (French spaces its colons, German and
+Dutch phrase "Could not" differently), and a rule that fits English would be
+wrong in each of them. */
+const ENGLISH = ["content/ui/en.ts", "content/rules/en.ts"];
+
+/** Every piece of text in a source file's string and template literals, with
+    its line - the words, not the keys or the code around them. */
+function copyIn(rel) {
+  const path = join(ROOT, rel);
+  const source = ts.createSourceFile(path, readFileSync(path, "utf8"), ts.ScriptTarget.Latest, true);
+  const found = [];
+  const visit = (node) => {
+    let text = null;
+    if (ts.isStringLiteral(node) || ts.isNoSubstitutionTemplateLiteral(node)) text = node.text;
+    else if (ts.isTemplateHead(node) || ts.isTemplateMiddle(node) || ts.isTemplateTail(node)) text = node.text;
+    // A string in a type, an import, a `case` or a comparison is code.
+    const code = text !== null && (ts.isLiteralTypeNode(node.parent) || ts.isImportDeclaration(node.parent)
+      || ts.isCaseClause(node.parent)
+      || (ts.isBinaryExpression(node.parent) && node.parent.operatorToken.kind === ts.SyntaxKind.EqualsEqualsEqualsToken));
+    if (text !== null && !code) {
+      const line = source.getLineAndCharacterOfPosition(node.getStart(source)).line + 1;
+      found.push({ at: `${rel}:${line}`, text, node });
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return found;
+}
+
+// Spelled the American way in UI copy. *Catalogue* is not here: it is the
+// name of the Community catalogue, recorded in GLOSSARY's Known drift.
+const BRITISH = /\b(colour\w*|behaviour\w*|favour\w*|honour\w*|(recogn|organ|real|apolog|custom)is(e|ed|es|ing)|centre\w*|licence|cancell(ed|ing)|travell(ed|ing)|labell(ed|ing)|towards|enrol|enrolment|whilst|amongst|grey|judgement)\b/i;
+
+const STYLE = [
+  ["a curly quote or apostrophe (the copy uses ' and \")", (text) => /[‘’“”]/.test(text)],
+  ["three dots for an ellipsis (use …)", (text) => text.includes("...")],
+  ["\"Failed to\" (errors say \"Could not …\")", (text) => /\bFailed to\b/.test(text)],
+  ["\"Couldn't\" (errors say \"Could not …\")", (text) => /\bCouldn't\b/i.test(text)],
+  ["a double space", (text) => /\S {2,}\S/.test(text.replace(/\n\s*/g, " "))],
+  ["a British spelling", (text) => BRITISH.test(text)],
+];
+
+test("the English copy keeps one house style", () => {
+  const offenders = ENGLISH.flatMap((rel) => copyIn(rel)).flatMap(({ at, text }) =>
+    STYLE.filter(([, breaks]) => breaks(text)).map(([rule]) => `${at} ${rule}: ${JSON.stringify(text.slice(0, 60))}`));
+  assert.deepEqual(offenders, [], `the English catalogue has drifted from its style:\n${offenders.join("\n")}`);
+});
+
+// A "Could not …" that is a heading or a status label rather than a sentence.
+const NOT_A_SENTENCE = new Set([
+  "roomStageNotice.couldNotRejoin", // the title of the card over a room it could not rejoin
+  "accountData.couldNotPrepare", // an export's status, beside Queued and Ready
+]);
+
+test("an error is a sentence, and ends like one", () => {
+  // Every refusal, however the server phrased it, reads as a whole sentence.
+  const unfinished = Object.entries(EN.refusals)
+    .map(([code, sentence]) => [code, typeof sentence === "function" ? sentence({}) : sentence])
+    .filter(([, sentence]) => !/[.!?]$/.test(sentence))
+    .map(([code, sentence]) => `refusals.${code}: ${JSON.stringify(sentence)}`);
+  // And so does every "Could not …" in the catalogue, wherever it is filed.
+  for (const { at, text, node } of copyIn("content/ui/en.ts")) {
+    if (!/^Could not\b/.test(text)) continue;
+    let key = node.parent;
+    while (key && !ts.isPropertyAssignment(key)) key = key.parent;
+    const group = key?.parent?.parent;
+    const path = `${group && ts.isPropertyAssignment(group) ? `${group.name.getText()}.` : ""}${key?.name.getText()}`;
+    if (NOT_A_SENTENCE.has(path)) continue;
+    // A template's sentence ends in its last literal part.
+    const template = ts.isTemplateHead(node) ? node.parent : null;
+    const ending = template ? template.templateSpans.at(-1).literal.text : text;
+    if (!/[.!?]$/.test(ending)) unfinished.push(`${at} ${path}: ${JSON.stringify(text)}`);
+  }
+  assert.deepEqual(unfinished, [], `these errors stop short of a full stop:\n${unfinished.join("\n")}`);
+});
+
+test("the style check would notice a slip", () => {
+  const breaks = (text) => STYLE.filter(([, rule]) => rule(text)).map(([name]) => name);
+  for (const slip of [
+    "Couldn’t copy the link.", "Type a message...", "Failed to load", "Couldn't copy.",
+    "Two  spaces.", "Your behaviour was reviewed.", "The vote was cancelled.", "Ask them to help you enrol.",
+  ]) {
+    assert.ok(breaks(slip).length > 0, `the style check cannot see: ${slip}`);
+  }
+  for (const fine of [
+    "Could not copy the link.", "Type a message…", "Community catalogue", "Every signed-in device, including any you did\n              not recognize.",
+    "Kick vote, AFK vote or report Ana", "Otherwise the room carries on.",
+  ]) {
+    assert.deepEqual(breaks(fine), [], `the style check takes good copy for a slip: ${fine}`);
+  }
+});
+
 // Groups nobody names directly, each for a stated reason.
 const READ_BY_CODE = {
   refusals: "ui.refusals[errorCode]",
