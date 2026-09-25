@@ -1,8 +1,11 @@
 import { useCallback, useLayoutEffect, useRef, type ChangeEvent } from "react";
 import { MAX_NICKNAME_LENGTH, keepNameCharacters, nameCharactersToInsert } from "../lib/roomEntryState";
 
-/** The insertions the browser describes before making them. */
-const INSERTIONS = new Set(["insertText", "insertFromPaste", "insertFromDrop", "insertReplacementText"]);
+/** The insertions the browser describes before making them, at the selection.
+    Not `insertReplacementText` (a spelling or autocorrect replacement): its
+    target range is not the selection, so inserting there would put the text
+    in the wrong place; the `onChange` clean-up handles it instead. */
+const INSERTIONS = new Set(["insertText", "insertFromPaste", "insertFromDrop"]);
 
 /**
  * A name field that only ever holds the name rule's characters: letters,
@@ -48,9 +51,15 @@ export function useNameField(onValue: (value: string) => void) {
       const allowed = nameCharactersToInsert(data, room);
       if (allowed === data) return;
       event.preventDefault();
+      if (!allowed) return;
       // Deprecated, and still the one way to insert text that the browser's
-      // undo history records, in every engine.
-      if (allowed) document.execCommand("insertText", false, allowed);
+      // undo history records, in every engine - but it acts on whatever has
+      // the focus, so only while this field does.
+      if (document.activeElement === field && document.execCommand("insertText", false, allowed)) return;
+      // Where it cannot, the text still goes in, at the selection, and the
+      // value is reported by hand; that one edit is lost to undo.
+      field.setRangeText(allowed, field.selectionStart ?? field.value.length, field.selectionEnd ?? field.value.length, "end");
+      latest.current(field.value);
     };
     const compositionStart = () => {
       composing.current = true;
