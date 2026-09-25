@@ -76,23 +76,6 @@
   line-height: 1.4;
 }
 
-.modal-button {
-  background: var(--primary);
-  color: #ffffff;
-  border: none;
-  border-radius: var(--radius-sm);
-  box-shadow: 0 2px 0 var(--primary-edge);
-  padding: 10px 24px;
-  font-size: 0.95rem;
-  font-weight: 800;
-  cursor: pointer;
-  transition: filter 0.15s ease;
-}
-
-.modal-button:hover {
-  filter: brightness(1.05);
-}
-
 .confirmation-dialog-icon {
   align-items: center;
   background: var(--danger-soft);
@@ -113,26 +96,6 @@
   justify-content: flex-end;
 }
 
-.confirmation-dialog-actions button {
-  border-radius: 8px;
-  font-size: 0.95rem;
-  font-weight: 700;
-  padding: 10px 16px;
-}
-
-.confirmation-cancel-button {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  color: var(--ink);
-}
-
-.confirmation-danger-button {
-  background: var(--danger);
-  border: 1px solid var(--danger);
-  color: #fff;
-}
-
-.confirmation-danger-button:hover { filter: brightness(1.08); }
 .confirmation-dialog-actions button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* A select inside a dialog form, drawn like the textarea beside it. The

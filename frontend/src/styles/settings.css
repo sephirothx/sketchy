@@ -265,21 +265,6 @@
   color: var(--ink);
 }
 
-/* An account-only row for a guest: the reason on the row, a lock in place of
-   the control (R-ACCT-05 is why the colour is one of them). */
-.settings-locked .settings-row-label b {
-  color: var(--muted);
-}
-
-.settings-locked-reason {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--faint);
-  font-size: 13px;
-  font-weight: 700;
-}
-
 /* ------------------------------------------------------------- name color */
 
 .settings-swatches {
@@ -1162,7 +1147,7 @@
   width: 20px;
 }
 
-.picture-crop-card .modal-button {
+.picture-crop-card .btn-primary {
   margin-top: 8px;
   width: 100%;
 }

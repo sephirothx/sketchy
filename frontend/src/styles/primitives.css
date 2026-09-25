@@ -15,6 +15,15 @@
   font-weight: 800;
   min-height: 44px;
   color: var(--ink);
+  /* A <Link> wears the recipe too, and must not keep a link's underline. */
+  text-decoration: none;
+  transition:
+    filter var(--dur-fast) ease-out,
+    translate var(--dur-fast) ease-out,
+    box-shadow var(--dur-fast) ease-out,
+    background-color var(--dur-fast) ease-out,
+    border-color var(--dur-fast) ease-out,
+    color var(--dur-fast) ease-out;
 }
 
 .btn-primary {
@@ -50,6 +59,12 @@
   font-size: 14px;
 }
 
+.btn-danger {
+  background: var(--danger-button);
+  color: #fff;
+  box-shadow: 0 2px 0 var(--danger-button-edge);
+}
+
 .btn-danger-ghost {
   background: transparent;
   color: var(--danger);
@@ -83,6 +98,73 @@
   width: 38px;
   height: 38px;
   padding: 0;
+}
+
+/* States, once, for every variant. They were missing, so only the buttons
+   that reimplemented .btn reacted to the pointer - each with its own filter.
+
+   Wrapped in :where() so a state weighs no more than the variant it modifies:
+   it beats `.btn-primary` by coming after it, and loses to any component rule
+   that deliberately restyles a button, rather than repainting it on hover.
+
+   Hover only where a pointer can hover: a tap leaves :hover stuck on touch
+   screens until the next tap somewhere else. */
+@media (hover: hover) {
+  .btn-primary:where(:hover:not(:disabled)),
+  .btn-warm:where(:hover:not(:disabled)),
+  .btn-success:where(:hover:not(:disabled)),
+  .btn-danger:where(:hover:not(:disabled)) {
+    filter: brightness(1.07);
+  }
+
+  .btn-secondary:where(:hover:not(:disabled)),
+  .btn-icon:where(:hover:not(:disabled)) {
+    border-color: var(--faint);
+    color: var(--ink);
+  }
+
+  .btn-ghost:where(:hover:not(:disabled)),
+  .btn-danger-ghost:where(:hover:not(:disabled)) {
+    background: color-mix(in srgb, currentColor 9%, transparent);
+  }
+
+  .btn-ghost:where(:hover:not(:disabled)) {
+    color: var(--ink);
+  }
+}
+
+/* The press: the button sinks onto its edge. `translate` rather than
+   `transform`, so a button a component positions with a transform (the chat's
+   centred "new messages" pill) keeps its place while it is pressed. */
+.btn:where(:active:not(:disabled)) {
+  translate: 0 1px;
+}
+
+.btn-primary:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--primary-edge);
+}
+
+.btn-warm:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--warm-edge);
+}
+
+.btn-success:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--success-button-edge);
+}
+
+.btn-danger:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--danger-button-edge);
+}
+
+.btn-secondary:where(:active:not(:disabled)),
+.btn-icon:where(:active:not(:disabled)) {
+  box-shadow: none;
+}
+
+/* Disabled is dimmed globally (reset.css); a disabled button also loses its
+   edge, so it no longer looks like something that can be pressed. */
+.btn:where(:disabled) {
+  box-shadow: none;
 }
 
 /* ------------------------------------------------------------------ chips */
@@ -491,7 +573,9 @@
   justify-items: center;
   line-height: 1.25;
   margin: 0;
-  overflow-wrap: anywhere;
+  /* Words wrap whole: RoomFacts picks a column count that gives the widest
+     one room. Broken only as a last resort, in a strip too narrow for two. */
+  overflow-wrap: break-word;
 }
 
 .room-fact-icon {
@@ -520,16 +604,42 @@
   margin: 10px 0 0;
 }
 
+/* How many to a row is RoomFacts' measure (`data-columns`), so that no word
+   breaks inside itself. Until it has measured, a phone's three. */
 @media (max-width: 720px) {
-  .room-facts {
+  .room-facts:not([data-columns]) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .room-fact:nth-child(4) {
+  .room-facts:not([data-columns]) .room-fact:nth-child(4) {
     border-left: 0;
   }
 
-  .room-fact:nth-child(n + 4) {
+  .room-facts:not([data-columns]) .room-fact:nth-child(n + 4) {
     border-top: 1px solid var(--line);
   }
+}
+
+.room-facts[data-columns="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.room-facts[data-columns="3"] .room-fact:nth-child(3n + 1) {
+  border-left: 0;
+}
+
+.room-facts[data-columns="3"] .room-fact:nth-child(n + 4) {
+  border-top: 1px solid var(--line);
+}
+
+.room-facts[data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.room-facts[data-columns="2"] .room-fact:nth-child(2n + 1) {
+  border-left: 0;
+}
+
+.room-facts[data-columns="2"] .room-fact:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
 }

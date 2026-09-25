@@ -78,9 +78,9 @@ interface GameStore {
   /** The phase's full length. phaseSeconds is rebased to the remaining time
       by sync_game, so ring/bar fractions divide by this instead. */
   phaseDurationSeconds: number;
-  /** Per-player elapsed seconds for correct guesses this turn: estimated
-      client-side from correct_guess events, replaced by the server's figures
-      on every sync_game. */
+  /** Per-player seconds into the drawing of each correct guess this turn, as
+      the server timed them: from correct_guess, and restored whole by every
+      sync_game. */
   turnCorrectGuesses: Record<string, number>;
   nextHintCost: number | null;
   letterPrices: Record<string, number> | null;
@@ -119,7 +119,7 @@ interface GameStore {
   setColorblindSafeSuggestion: (suggestion: ColorblindSafeSuggestion) => void;
   addMessage: (message: ChatMessage) => void;
   applyGuessPoints: (playerId: string, points: number) => void;
-  recordCorrectGuess: (playerId: string) => void;
+  recordCorrectGuess: (playerId: string, seconds: number) => void;
   startChoosing: (payload: {
     isSync?: boolean;
     drawerId: string;
@@ -308,23 +308,8 @@ export const useGameStore = create<GameStore>((set, get) => ({
     set((s) => ({
       players: s.players.map((p) => (p.playerId === playerId ? { ...p, score: p.score + points } : p)),
     })),
-  recordCorrectGuess: (playerId) =>
-    set((s) => ({
-      turnCorrectGuesses: {
-        ...s.turnCorrectGuesses,
-        // phaseStartedAt is rebased by sync_game, so seconds since it only
-        // cover the time since the last sync; the difference between the
-        // phase's full length and what remained at that sync is the part
-        // that had already elapsed.
-        [playerId]: Math.max(
-          0,
-          Math.round(
-            (Date.now() - s.phaseStartedAt) / 1000 +
-              Math.max(0, s.phaseDurationSeconds - s.phaseSeconds),
-          ),
-        ),
-      },
-    })),
+  recordCorrectGuess: (playerId, seconds) =>
+    set((s) => ({ turnCorrectGuesses: { ...s.turnCorrectGuesses, [playerId]: seconds } })),
   startChoosing: ({ drawerId, roundNumber, totalRounds, seconds, isSync }) =>
     set((s) => ({
       phase: "choosing_prompt",

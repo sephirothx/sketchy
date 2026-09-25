@@ -174,6 +174,11 @@ const HEIGHTS = [521, 640, 781];
 const EXCEPTIONS = [
   // The room's name leaves the desktop header where the header stops fitting it.
   { file: "game-room.css", query: "max-width", value: 1100 },
+  // ...and the waiting room's heading takes over below it, so the name is on
+  // screen once at every width (#1107).
+  { file: "game-room.css", query: "min-width", value: 1101 },
+  // The footer's short labels follow the same line (#1107).
+  { file: "WaitingRoomPanel.tsx", query: "max-width", value: 1100 },
   // The waiting room's two share buttons lose padding, then stack, on the
   // narrowest phones.
   { file: "game-room.css", query: "max-width", value: 400 },

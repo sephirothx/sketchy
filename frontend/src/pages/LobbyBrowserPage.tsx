@@ -64,7 +64,7 @@ function RemovedFromRoomDialog({
       </div>
       <h3 id={titleId} className="modal-title">{ui.lobbyBrowserPage.removedFromRoom}</h3>
       <p id={descriptionId} className="modal-body">{message}</p>
-      <button ref={okButtonRef} type="button" className="modal-button" onClick={onDismiss}>
+      <button ref={okButtonRef} type="button" className="btn btn-primary" onClick={onDismiss}>
         {ui.lobbyBrowserPage.ok}
       </button>
     </ModalShell>

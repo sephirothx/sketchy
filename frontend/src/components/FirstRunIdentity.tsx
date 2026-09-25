@@ -144,7 +144,7 @@ export function FirstRunIdentity() {
             aria-describedby={error ? `${fieldId}-error` : undefined}
           />
         </div>
-        <button type="submit" className="first-run-guest-submit" disabled={busy}>
+        <button type="submit" className="btn btn-secondary first-run-guest-submit" disabled={busy}>
           {busy ? "\u2026" : ui.firstRunIdentity.stickItOn}
         </button>
         {error && (

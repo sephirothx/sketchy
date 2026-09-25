@@ -321,7 +321,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                 is the outcome of this ceremony, not a way of managing it. */}
             <button
               type="button"
-              className="modal-button"
+              className="btn btn-primary"
               onClick={() => (granted ? setCodes(null) : onClose())}
               disabled={!savedCodes}
             >
@@ -351,7 +351,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
             <p className="modal-hint">{ui.twoFactorDialog.confirmsPasskeyBeingAddedByYou}</p>
             <button
               type="button"
-              className="modal-button"
+              className="btn btn-primary"
               onClick={() => void addPasskey()}
               disabled={busy || !password || !canUsePasskeys}
             >
@@ -430,7 +430,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
             <div className="two-factor-decide">
               <button
                 type="submit"
-                className="modal-button"
+                className="btn btn-primary"
                 disabled={busy || !password || code.length < 6}
               >
                 {busy ? ui.twoFactorDialog.checking : ui.twoFactorDialog.confirm}
@@ -451,7 +451,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
             </p>
             <button
               type="button"
-              className="modal-button"
+              className="btn btn-primary"
               onClick={() => {
                 // The role only reaches the menu when the account is read
                 // again: this browser's session was replaced by the one the
@@ -526,7 +526,7 @@ export function TwoFactorDialog({ onClose }: { onClose: () => void }) {
                   />
                   <button
                     type="button"
-                    className="modal-button"
+                    className="btn btn-primary"
                     onClick={() => void proveOwner()}
                     disabled={busy || !password || code.length < 6}
                   >

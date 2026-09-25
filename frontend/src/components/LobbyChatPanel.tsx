@@ -168,7 +168,7 @@ export const LobbyChatPanel = memo(function LobbyChatPanel() {
                 enterKeyHint="send"
               />
             </div>
-            <button type="submit" className="chat-send-button" disabled={sending} aria-label={ui.lobbyChatPanel.send}>
+            <button type="submit" className="btn btn-primary chat-send-button" disabled={sending} aria-label={ui.lobbyChatPanel.send}>
               <ChevronRightIcon size={17} />
             </button>
           </div>

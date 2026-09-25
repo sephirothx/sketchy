@@ -67,7 +67,7 @@ export function InviteEntryPage({ code }: { code: string }) {
           <p className="invite-eyebrow">{ui.inviteEntryPage.roomCode({ code })}</p>
           <h1>{ui.inviteEntryPage.roomUnavailable}</h1>
           <p>{state.message}</p>
-          <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>{ui.inviteEntryPage.backLobby}</button>
+          <button type="button" className="btn btn-primary invite-primary-button" onClick={() => navigate("/")}>{ui.inviteEntryPage.backLobby}</button>
         </main>
       ) : !room ? (
         <DelayedInviteLoader />
@@ -152,7 +152,7 @@ export function InviteEntryPage({ code }: { code: string }) {
             <div className="invite-actions">
               <button
                 type="button"
-                className="invite-primary-button"
+                className="btn btn-primary invite-primary-button"
                 disabled={busy || entryPending || room.isFull || !hasResolved}
                 onClick={() => void join("player")}
               >
@@ -160,7 +160,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               </button>
               <button
                 type="button"
-                className={room.isFull ? "invite-primary-button" : "invite-secondary-button"}
+                className={room.isFull ? "btn btn-primary invite-primary-button" : "btn btn-secondary invite-secondary-button"}
                 disabled={busy || entryPending || !hasResolved}
                 onClick={() => void join("spectator")}
               >

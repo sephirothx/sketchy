@@ -133,9 +133,17 @@ async def test_guest_renames_from_settings_and_cannot_take_a_username():
             await open_player_settings(guest)
             await guest.wait_for_selector(".settings-you")
             # Guests are pinned to grey, so there is no palette and no chip on
-            # the disc; the account-only rows below are locked with a reason.
+            # the disc; and the rows only an account has are not shown at all -
+            # the guest card is the one invitation (R-SET-06).
             assert await guest.locator(".settings-swatch").count() == 0
-            assert await guest.is_visible(".settings-locked")
+            # Asserted by the controls, not a heading's wording: no password or
+            # email control and no device manager, while the data export -
+            # which works for a guest - is still there.
+            assert await guest.is_visible(".settings-guest-card")
+            assert await guest.locator('.settings-row button:has-text("Change password")').count() == 0
+            assert await guest.locator('.settings-row button:has-text("Add an email")').count() == 0
+            assert await guest.locator('.settings-row button:has-text("Manage")').count() == 0
+            assert await guest.locator('.settings-row button:has-text("Request export")').is_visible()
 
             # Only a guest can change the name (a registered player always
             # plays as their username), and it is the one thing on the card
