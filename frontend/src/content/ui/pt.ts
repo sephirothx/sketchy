@@ -573,7 +573,9 @@ export const PT: Catalogue = {
     thatConfirmationLinkCouldNotBe: "Não foi possível usar essa ligação de confirmação.",
     somethingWentWrongPleaseTryAgain: "Algo correu mal. Tenta de novo.",
     evenBestGuessersForgetSometimes: "Até os melhores a adivinhar se esquecem às vezes.",
-    weRsquoLlSendSecureTime: "Vamos enviar uma ligação segura e com prazo para o e-mail confirmado\n            da tua conta.",
+    asideForgot: "Vamos enviar uma ligação segura e com prazo para o e-mail confirmado da tua conta.",
+    asideReset: "Escolhe uma palavra-passe que não uses em mais lado nenhum.",
+    asideVerify: "Com um e-mail confirmado consegues voltar a entrar se algum dia te esqueceres da palavra-passe.",
     accountHelp: "Ajuda com a conta",
     backLobby: "Voltar ao átrio",
     enterYourUsernameYourConfirmedEmail: "Introduz o teu nome de utilizador ou o teu e-mail confirmado. Se a\n              conta puder ser recuperada, já vai uma ligação a caminho.",
@@ -1039,6 +1041,8 @@ export const PT: Catalogue = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " e ",
     continueLabel: "Continuar",
     youFinished: (p: { points: number }) =>
       `Ficaste em {place} com ${counted(p.points, { one: "ponto", other: "pontos" })}.`,
@@ -1343,8 +1347,10 @@ export const PT: Catalogue = {
       `${counted(p.prompts, { one: "palavra", other: "palavras" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `Esta lista está ${p.state} e não pode ser usada em partidas novas. Editá-la não a repõe automaticamente; um moderador tem de a analisar.`,
+    underReview: "Em análise",
+    hidden: "Oculta",
+    listUnderReviewWarning: "Esta lista está em análise e não pode ser usada em partidas novas. Editá-la não a repõe automaticamente; um moderador tem de a analisar.",
+    listHiddenWarning: "Esta lista está oculta e não pode ser usada em partidas novas. Editá-la não a repõe automaticamente; um moderador tem de a analisar.",
     needsReview: (p: { count: number }) => `A analisar (${p.count})`,
     removePrompt: (p: { prompt: string }) => `Remover ${p.prompt}`,
     couldNotLoadYourPromptLists: "Não foi possível carregar as tuas listas de palavras.",
@@ -1469,16 +1475,8 @@ export const PT: Catalogue = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronda", other: "rondas" })} · ${counted(p.players, { one: "jogador", other: "jogadores" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} pts`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Regras: pontuação ${p.scoringMode}${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (versão antiga desconhecida)"
-      } · pistas ${p.hintMode} · ${p.seconds} segundos · palavras ${p.promptSource}`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Regras: ${p.scoring} · ${p.hints} · ${p.seconds} segundos · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Denunciar ${p.name}`,
     privateRoom: "sala privada",
     thisGameDidNotFinishSo: "Esta partida não chegou ao fim, por isso estes são os pontos tal como\n              estavam quando parou e não uma classificação final.",
@@ -1514,10 +1512,17 @@ export const PT: Catalogue = {
     onlyThePlayersInThis: "Só os jogadores deste jogo podem ver as suas vezes.",
     couldNotLoadTheTurns: "Não foi possível carregar as vezes deste jogo.",
     cutShort: "interrompido",
+    abandoned: "abandonado",
     noAttempt: "sem tentativa",
     joinedLate: "entrou tarde",
-    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
-      `não conta (${p.eligibilityReason})`,
+    notEligibleAfk: "não conta (AFK)",
+    notEligibleDisconnected: "não conta (desligado)",
+    notEligible: "não conta",
+    noGuessers: "ninguém a adivinhar",
+    promptSourceCurated: "Palavras selecionadas",
+    promptSourceCustom: "Palavras próprias",
+    promptSourceMixed: "Palavras mistas",
+    promptSourceBuiltinFallback: "Palavras integradas de reserva",
     unknownPlayer: "Jogador desconhecido",
     backToLobby: "Voltar ao átrio",
     guestDisplayNameNotSaved: "Convidado — nome a mostrar não guardado",
@@ -1568,7 +1573,7 @@ export const PT: Catalogue = {
     pickSomethingDraw: "Escolhe algo para desenhar",
     autoPicksWhenTimeRunsOut: "Escolhe sozinho quando o tempo acabar.",
     hintSpendLimitReached: "Limite de gasto em pistas atingido",
-    deductedFromYourScoreIfYou: "É descontado da tua pontuação se adivinhares a palavra",
+    hintSpendComesOutOfTurnPoints: "É descontado dos pontos desta vez se adivinhares a palavra.",
     buyLetterRevealsEveryMatch: "Compra uma letra — revela todas as ocorrências",
     selectThePrompt: "escolher a palavra",
     choosing: "A escolher…",
@@ -1865,6 +1870,7 @@ export const PT: Catalogue = {
   },
 
   roomPlayersPanel: {
+    you: "(tu)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "espectador", other: "espectadores" }),
     spectatorsHeading: (p: { count: number }) => `Espectadores (${p.count})`,
@@ -2325,10 +2331,6 @@ export const PT: Catalogue = {
       `${p.name} e ${counted(p.others, { one: "outra pessoa", other: "outras pessoas" })} querem ser teus amigos.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
-  },
-
   waitingRoomPanel: {
     editRoomRules: "Editar regras da sala",
     roundCount: (p: { count: number }) =>
@@ -2530,8 +2532,8 @@ export const PT: Catalogue = {
       `${p.drawerNickname} está a escolher uma palavra...`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `A palavra era «${p.prompt}»`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} acertou${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} acertou · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} voltou a ligar-se`,
     playerDisconnected: (p: { nickname: string }) =>

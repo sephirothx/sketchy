@@ -581,7 +581,9 @@ export const EN = {
     thatConfirmationLinkCouldNotBe: "That confirmation link could not be used.",
     somethingWentWrongPleaseTryAgain: "Something went wrong. Please try again.",
     evenBestGuessersForgetSometimes: "Even the best guessers forget sometimes.",
-    weRsquoLlSendSecureTime: "We&rsquo;ll send a secure, time-limited link to the confirmed email\n            on your account.",
+    asideForgot: "We'll send a secure, time-limited link to the confirmed email on your account.",
+    asideReset: "Choose a password you don't use anywhere else.",
+    asideVerify: "A confirmed email is your way back in if you ever forget your password.",
     accountHelp: "Account help",
     backLobby: "Back to the lobby",
     enterYourUsernameYourConfirmedEmail: "Enter your username or your confirmed email address. If the\n              account can be recovered, a link is on its way.",
@@ -1050,6 +1052,8 @@ export const EN = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " and ",
     continueLabel: "Continue",
     youFinished: (p: { points: number }) =>
       `You finished {place} with ${counted(p.points, { one: "point", other: "points" })}.`,
@@ -1352,8 +1356,10 @@ export const EN = {
       `${counted(p.prompts, { one: "prompt", other: "prompts" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `This list is ${p.state} and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.`,
+    underReview: "Under review",
+    hidden: "Hidden",
+    listUnderReviewWarning: "This list is under review and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.",
+    listHiddenWarning: "This list is hidden and cannot be used in new games. Editing does not automatically restore it; a moderator must review the list.",
     needsReview: (p: { count: number }) => `Needs review (${p.count})`,
     removePrompt: (p: { prompt: string }) => `Remove ${p.prompt}`,
     couldNotLoadYourPromptLists: "Could not load your prompt lists.",
@@ -1477,16 +1483,8 @@ export const EN = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "round", other: "rounds" })} · ${counted(p.players, { one: "player", other: "players" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} pts`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Rules: ${p.scoringMode} scoring${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (legacy version unknown)"
-      } · ${p.hintMode} hints · ${p.seconds} seconds · ${p.promptSource} prompts`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Rules: ${p.scoring} · ${p.hints} · ${p.seconds} seconds · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Report ${p.name}`,
     privateRoom: "private room",
     thisGameDidNotFinishSo: "This game did not finish, so these are the scores as they stood\n              when it stopped rather than a final placing.",
@@ -1522,10 +1520,17 @@ export const EN = {
     onlyThePlayersInThis: "Only the players in this game can see its turns.",
     couldNotLoadTheTurns: "Could not load the turns for this game.",
     cutShort: "cut short",
+    abandoned: "abandoned",
     noAttempt: "no attempt",
     joinedLate: "joined late",
-    notEligibleEligibilityReason:
-      (p: { eligibilityReason: string }) => `not eligible (${p.eligibilityReason})`,
+    notEligibleAfk: "not eligible (AFK)",
+    notEligibleDisconnected: "not eligible (disconnected)",
+    notEligible: "not eligible",
+    noGuessers: "no guessers",
+    promptSourceCurated: "Curated prompts",
+    promptSourceCustom: "Custom prompts",
+    promptSourceMixed: "Mixed prompts",
+    promptSourceBuiltinFallback: "Built-in fallback prompts",
     unknownPlayer: "Unknown player",
     backToLobby: "Back to lobby",
     guestDisplayNameNotSaved: "Guest — display name not saved",
@@ -1577,7 +1582,7 @@ export const EN = {
     pickSomethingDraw: "Pick something to draw",
     autoPicksWhenTimeRunsOut: "Auto-picks when time runs out.",
     hintSpendLimitReached: "Hint spend limit reached",
-    deductedFromYourScoreIfYou: "Deducted from your score if you guess the prompt",
+    hintSpendComesOutOfTurnPoints: "Taken out of this turn's points if you guess the prompt.",
     buyLetterRevealsEveryMatch: "Buy a letter - reveals every match",
     selectThePrompt: "select the prompt",
     choosing: "Choosing…",
@@ -1870,6 +1875,7 @@ export const EN = {
   },
 
   roomPlayersPanel: {
+    you: "(you)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "spectator", other: "spectators" }),
     spectatorsHeading: (p: { count: number }) => `Spectators (${p.count})`,
@@ -2336,10 +2342,6 @@ export const EN = {
       `${p.name} and ${counted(p.others, { one: "other", other: "others" })} want to be friends.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
-  },
-
   waitingRoomPanel: {
     editRoomRules: "Edit room rules",
     roundCount: (p: { count: number }) =>
@@ -2539,8 +2541,8 @@ export const EN = {
     drawerNicknameIsChoosingAPrompt:
       (p: { drawerNickname: string }) => `${p.drawerNickname} is choosing a prompt...`,
     thePromptWasPrompt: (p: { prompt: string }) => `The prompt was "${p.prompt}"`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} got it${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} got it · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} reconnected`,
     playerDisconnected: (p: { nickname: string }) =>

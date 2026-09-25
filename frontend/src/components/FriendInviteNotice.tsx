@@ -99,13 +99,13 @@ export function FriendInviteNotice() {
       });
       const session = sessionFrom(answer);
       if (!session) {
-        notify(refusalText(answer, ui.friendInviteNotice.couldNotJoinThatGame));
+        notify(refusalText(answer, ui.friendInviteNotice.couldNotJoinThatGame), "error");
         return;
       }
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify(ui.friendInviteNotice.thatGameCouldNotBeJoined);
+      notify(ui.friendInviteNotice.thatGameCouldNotBeJoined, "error");
     } finally {
       useRoomEntryStore.getState().end(token);
     }

@@ -573,7 +573,9 @@ export const NL: Catalogue = {
     thatConfirmationLinkCouldNotBe: "Deze bevestigingslink kon niet gebruikt worden.",
     somethingWentWrongPleaseTryAgain: "Er ging iets mis. Probeer het nog eens.",
     evenBestGuessersForgetSometimes: "Zelfs de beste raders vergeten weleens iets.",
-    weRsquoLlSendSecureTime: "We sturen een veilige link met een korte houdbaarheid naar het\n            bevestigde e-mailadres van je account.",
+    asideForgot: "We sturen een veilige link met een korte houdbaarheid naar het bevestigde e-mailadres van je account.",
+    asideReset: "Kies een wachtwoord dat je nergens anders gebruikt.",
+    asideVerify: "Met een bevestigd e-mailadres kom je weer binnen als je ooit je wachtwoord vergeet.",
     accountHelp: "Accounthulp",
     backLobby: "Terug naar de lobby",
     enterYourUsernameYourConfirmedEmail: "Vul je gebruikersnaam of je bevestigde e-mailadres in. Als het\n              account hersteld kan worden, is er een link onderweg.",
@@ -1039,6 +1041,8 @@ export const NL: Catalogue = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " en ",
     continueLabel: "Verder",
     youFinished: (p: { points: number }) =>
       `Je bent {place} geworden met ${counted(p.points, { one: "punt", other: "punten" })}.`,
@@ -1343,8 +1347,10 @@ export const NL: Catalogue = {
       `${counted(p.prompts, { one: "woord", other: "woorden" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `Deze lijst is ${p.state} en kan niet in nieuwe spellen gebruikt worden. Bewerken zet hem niet automatisch terug; een moderator moet de lijst bekijken.`,
+    underReview: "In beoordeling",
+    hidden: "Verborgen",
+    listUnderReviewWarning: "Deze lijst wordt beoordeeld en kan niet in nieuwe spellen gebruikt worden. Bewerken zet hem niet automatisch terug; een moderator moet de lijst bekijken.",
+    listHiddenWarning: "Deze lijst is verborgen en kan niet in nieuwe spellen gebruikt worden. Bewerken zet hem niet automatisch terug; een moderator moet de lijst bekijken.",
     needsReview: (p: { count: number }) => `Te beoordelen (${p.count})`,
     removePrompt: (p: { prompt: string }) => `${p.prompt} verwijderen`,
     couldNotLoadYourPromptLists: "Je woordenlijsten konden niet geladen worden.",
@@ -1469,16 +1475,8 @@ export const NL: Catalogue = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronde", other: "rondes" })} · ${counted(p.players, { one: "speler", other: "spelers" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} ptn`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Regels: ${p.scoringMode} puntentelling${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (oude versie onbekend)"
-      } · ${p.hintMode} hints · ${p.seconds} seconden · ${p.promptSource} woorden`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Regels: ${p.scoring} · ${p.hints} · ${p.seconds} seconden · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
     privateRoom: "privékamer",
     thisGameDidNotFinishSo: "Dit spel is niet uitgespeeld, dus dit zijn de punten zoals ze stonden\n              toen het stopte en geen eindstand.",
@@ -1514,10 +1512,17 @@ export const NL: Catalogue = {
     onlyThePlayersInThis: "Alleen de spelers van dit spel kunnen de beurten zien.",
     couldNotLoadTheTurns: "De beurten van dit spel konden niet worden geladen.",
     cutShort: "afgebroken",
+    abandoned: "verlaten",
     noAttempt: "geen poging",
     joinedLate: "later ingestapt",
-    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
-      `telt niet mee (${p.eligibilityReason})`,
+    notEligibleAfk: "telt niet mee (AFK)",
+    notEligibleDisconnected: "telt niet mee (verbinding verbroken)",
+    notEligible: "telt niet mee",
+    noGuessers: "geen raders",
+    promptSourceCurated: "Geselecteerde woorden",
+    promptSourceCustom: "Eigen woorden",
+    promptSourceMixed: "Gemengde woorden",
+    promptSourceBuiltinFallback: "Ingebouwde reservewoorden",
     unknownPlayer: "Onbekende speler",
     backToLobby: "Terug naar de lobby",
     guestDisplayNameNotSaved: "Gast — weergavenaam niet opgeslagen",
@@ -1569,7 +1574,7 @@ export const NL: Catalogue = {
     pickSomethingDraw: "Kies iets om te tekenen",
     autoPicksWhenTimeRunsOut: "Kiest vanzelf als de tijd om is.",
     hintSpendLimitReached: "Hintlimiet bereikt",
-    deductedFromYourScoreIfYou: "Wordt van je punten afgetrokken als je het woord raadt",
+    hintSpendComesOutOfTurnPoints: "Gaat af van de punten van deze beurt als je het woord raadt.",
     buyLetterRevealsEveryMatch: "Koop een letter — laat elke plek zien",
     selectThePrompt: "het woord kiezen",
     choosing: "Kiezen…",
@@ -1866,6 +1871,7 @@ export const NL: Catalogue = {
   },
 
   roomPlayersPanel: {
+    you: "(jij)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "toeschouwer", other: "toeschouwers" }),
     spectatorsHeading: (p: { count: number }) => `Toeschouwers (${p.count})`,
@@ -2326,10 +2332,6 @@ export const NL: Catalogue = {
       `${p.name} en ${counted(p.others, { one: "iemand anders", other: "anderen" })} willen vrienden worden.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
-  },
-
   waitingRoomPanel: {
     editRoomRules: "Kamerregels bewerken",
     roundCount: (p: { count: number }) =>
@@ -2531,8 +2533,8 @@ export const NL: Catalogue = {
       `${p.drawerNickname} kiest een woord...`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Het woord was ‘${p.prompt}’`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} heeft het geraden${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} heeft het geraden · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} is weer verbonden`,
     playerDisconnected: (p: { nickname: string }) =>

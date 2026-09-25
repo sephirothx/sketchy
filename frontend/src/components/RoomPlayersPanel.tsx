@@ -115,7 +115,7 @@ export function RoomPlayersPanel({
                       >
                         {spectator.nickname}
                       </span>
-                      {spectator.playerId === myPlayerId ? " (you)" : ""}
+                      {spectator.playerId === myPlayerId ? ` ${ui.roomPlayersPanel.you}` : ""}
                     </li>
                   ))}
                 </ul>
