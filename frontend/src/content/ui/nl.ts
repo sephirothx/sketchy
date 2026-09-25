@@ -1525,7 +1525,7 @@ export const NL: Catalogue = {
     notEligibleDisconnected: "telt niet mee (verbinding verbroken)",
     notEligible: "telt niet mee",
     noGuessers: "geen raders",
-    promptSourceCurated: "Samengestelde woorden",
+    promptSourceCurated: "Geselecteerde woorden",
     promptSourceCustom: "Eigen woorden",
     promptSourceMixed: "Gemengde woorden",
     promptSourceBuiltinFallback: "Ingebouwde reservewoorden",

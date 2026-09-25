@@ -333,7 +333,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
         return "L’avertissement de la modération doit d’abord être lu.";
     }
   },
-  prompt_list_hidden: "Cette liste est masquée et ne peut pas être publiée. La modération doit d’abord l’examiner.",
+  prompt_list_hidden: "Cette liste est invisible et ne peut pas être publiée. La modération doit d’abord l’examiner.",
   unknown_prompt_tag: (params: Record<string, unknown>) => {
     const tag = String(params.tag ?? "");
     return `« ${tag} » n’est pas une étiquette qu’une liste peut porter.`;
@@ -367,7 +367,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   cannot_duplicate_prompt_list: (params: Record<string, unknown>) =>
     params.reason === "copy"
       ? "Une liste copiée depuis quelqu’un d’autre ne peut pas être dupliquée : elle garde ainsi sa mention d’origine."
-      : "Une liste en cours d’examen ou masquée par la modération ne peut pas être dupliquée.",
+      : "Une liste en cours d’examen ou rendue invisible par la modération ne peut pas être dupliquée.",
   cannot_report_own_prompt_list: "Tu ne peux pas signaler ta propre liste de mots.",
   no_reportable_prompt_list: "Aucune liste de mots signalable trouvée.",
   prompt_not_in_list: "Ce mot n’appartient pas à cette liste.",
@@ -1356,7 +1356,7 @@ export const FR: Catalogue = {
     underReview: "En examen",
     hidden: "Invisible",
     listUnderReviewWarning: "Cette liste est en cours d'examen et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l'examiner.",
-    listHiddenWarning: "Cette liste est masquée et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l'examiner.",
+    listHiddenWarning: "Cette liste est invisible et ne peut pas servir dans de nouvelles parties. La modifier ne la rétablit pas automatiquement ; un modérateur doit l'examiner.",
     needsReview: (p: { count: number }) => `À examiner (${p.count})`,
     removePrompt: (p: { prompt: string }) => `Retirer ${p.prompt}`,
     couldNotLoadYourPromptLists: "Tes listes de mots n’ont pas pu être chargées.",
