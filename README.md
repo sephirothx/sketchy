@@ -825,9 +825,9 @@ production database.
 
 The lobby's first landing asks for one thing: a name, on a name tag — *Hello, my
 name is …*, and a button that sticks it on. The field takes only what a name can
-hold - letters, digits, `_` and `-` - so a space or a "!" is simply not entered, and
-a name the form refuses is said just under the tag, in a line kept free for it so
-nothing moves. It saves the name and nothing else;
+hold — letters, digits, `_` and `-` — so a space or a "!" is simply not entered (the
+invite page's name field works the same way), and a name the form refuses is said in
+a toast, with the field's line turned red and the cursor back in it. It saves the name and nothing else;
 what puts you in a game is Quick play, beside the room list. Next to the tag, one
 line drawn from a pool on each visit ("Cubism, but by accident.") over the sentence
 that never changes: one player draws, everybody else tries to guess, and no account,

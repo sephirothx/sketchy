@@ -34,7 +34,7 @@ async def test_a_guest_who_comes_back_to_a_taken_name_chooses_another():
             await stranger.wait_for_selector(".first-run")
             await stranger.fill(".first-run-guest-row input", "dupeguest")
             await stranger.click(".first-run-guest-submit")
-            await stranger.locator(".first-run .auth-error").get_by_text(
+            await stranger.locator(".app-toast.error").get_by_text(
                 "already playing under that name"
             ).wait_for()
 

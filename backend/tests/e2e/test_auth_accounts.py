@@ -95,11 +95,13 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await field.press_sequentially("a b!c")
             assert await field.input_value() == "abc"
 
-            # Guest play is one field and one click. Too short is refused
-            # under the tag, not inside it, and the field says it is invalid.
+            # Guest play is one field and one click. Too short is refused in
+            # a toast, and the field is marked invalid until the next edit.
             await page.fill(".first-run-guest-row input", "ab")
             await page.click(".first-run-guest-submit")
-            await page.wait_for_selector(".first-run-error-line .auth-error")
+            await page.locator(".app-toast.error").get_by_text(
+                "A name needs at least 3 characters."
+            ).wait_for()
             assert await field.get_attribute("aria-invalid") == "true"
 
             await page.fill(".first-run-guest-row input", "Marta")

@@ -28,7 +28,7 @@ const NICKNAME_CHARACTER = /^[a-zA-Z0-9_-]$/;
  * inserted - those before the caret - that give way, as with `maxLength`,
  * rather than the end of a name that was already there.
  */
-export function nicknameInput(raw: string, caret: number = raw.length): { value: string; caret: number } {
+export function keepNameCharacters(raw: string, caret: number = raw.length): { value: string; caret: number } {
   let kept = "";
   let keptBeforeCaret = 0;
   for (let index = 0; index < raw.length; index += 1) {
@@ -47,6 +47,22 @@ export function nicknameInput(raw: string, caret: number = raw.length): { value:
     value: kept.slice(0, keptBeforeCaret - excess) + kept.slice(keptBeforeCaret),
     caret: keptBeforeCaret - excess,
   };
+}
+
+/**
+ * What of an insertion - a key, a paste, a drop - may go into a name field:
+ * its allowed characters, no more than the `room` the field has left.
+ * `keepNameCharacters`' rule for one piece of text, used before the browser
+ * inserts it, so a refused character is never entered at all and the field's
+ * own undo history stays whole.
+ */
+export function nameCharactersToInsert(data: string, room: number): string {
+  let kept = "";
+  for (const character of data) {
+    if (kept.length >= room) break;
+    if (NICKNAME_CHARACTER.test(character)) kept += character;
+  }
+  return kept;
 }
 
 /** Mirrors the server rule so the form can object before a round trip. */
