@@ -83,7 +83,7 @@ function turnStatLabel(key: TurnStat): string {
 function StatisticsPanel({ stats }: { stats: ProfileStats }) {
   const statsLayout = statisticsLayout(stats);
   return (
-    <section className="panel profile-statistics">
+    <section className="surface-card panel profile-statistics">
       <h2>{ui.profilePage.statistics}</h2>
       {statsLayout.gameStats ? (
         <div className="profile-stats">
@@ -775,7 +775,7 @@ function ProfileView({ userId }: { userId: string }) {
           )}
 
           {isOwnProfile && subject.isAnonymous && (
-            <section className="panel profile-claim">
+            <section className="surface-card panel profile-claim">
               <h2>{ui.profilePage.claimYourAccount}</h2>
               <p>
                 {ui.profilePage.yourGamesAreAlreadyBeingRecorded}
@@ -796,7 +796,7 @@ function ProfileView({ userId }: { userId: string }) {
               isOwner: isOwnProfile,
               count: pins.length,
             }) !== "absent" && (
-            <section className="panel" data-testid="pinned-drawings-panel">
+            <section className="surface-card panel" data-testid="pinned-drawings-panel">
               <h2>{ui.profilePage.pinnedDrawings}</h2>
               <PinnedDrawingsShelf
                 userId={userId}
@@ -824,7 +824,7 @@ function ProfileView({ userId }: { userId: string }) {
           <div className="profile-columns">
           <StatisticsPanel stats={stats} />
 
-          <section className="panel profile-history">
+          <section className="surface-card panel profile-history">
             <div className="profile-history-head">
               <h2>{ui.profilePage.gameHistory}</h2>
               <label className="profile-history-filter">

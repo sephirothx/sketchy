@@ -257,14 +257,6 @@
   max-width: 100%;
 }
 
-/* A value the player cannot change, shown as the value rather than as a
-   disabled field pretending to be editable. */
-.settings-readonly {
-  font-size: 15px;
-  font-weight: 800;
-  color: var(--ink);
-}
-
 /* ------------------------------------------------------------- name color */
 
 .settings-swatches {
@@ -457,8 +449,9 @@
 
 /* --------------------------------------------------------------- toggles */
 
-/* The pane's own on/off control: the room form's track and thumb, driven by
-   a hidden input of ours, so the row keeps label-left and its reason visible. */
+/* The pane's own on/off control: the switch recipe's track and thumb, driven
+   by a hidden input of ours, so the row keeps label-left and its reason visible.
+   The checked, focus and hover looks come with the recipe (primitives.css). */
 .settings-toggle-row {
   cursor: pointer;
 }
@@ -479,19 +472,6 @@
   opacity: 0;
   cursor: pointer;
   z-index: 1;
-}
-
-.settings-toggle-input:checked ~ .m3-switch-track {
-  background: var(--primary);
-}
-
-.settings-toggle-input:checked ~ .m3-switch-track .m3-switch-thumb {
-  transform: translateX(18px);
-}
-
-.settings-toggle-input:focus-visible ~ .m3-switch-track {
-  outline: 3px solid var(--focus-ring);
-  outline-offset: 2px;
 }
 
 /* ------------------------------------------------------------ theme cards */

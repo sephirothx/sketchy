@@ -416,7 +416,7 @@ export function LobbyBrowserPage() {
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 
-      <section className="panel lobby-rooms-panel">
+      <section className="surface-card panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
           <h2>{ui.lobbyBrowserPage.publicRooms}</h2>
           <span className="lobby-rooms-count">
@@ -483,7 +483,7 @@ export function LobbyBrowserPage() {
             {isNarrow ? (
               <button
                 type="button"
-                className={`lobby-filter-toggle lobby-filter-sheet-button${activeFilterCount > 0 ? " has-filters" : ""}`}
+                className="toggle-chip lobby-filter-sheet-button"
                 aria-pressed={activeFilterCount > 0}
                 onClick={() => setFilterSheetOpen(true)}
               >
@@ -501,7 +501,7 @@ export function LobbyBrowserPage() {
                 />
                 <button
                   type="button"
-                  className="lobby-filter-toggle"
+                  className="toggle-chip"
                   aria-pressed={hideFullRooms}
                   onClick={() => setHideFullRooms((v) => !v)}
                 >
@@ -509,7 +509,7 @@ export function LobbyBrowserPage() {
                 </button>
                 <button
                   type="button"
-                  className="lobby-filter-toggle"
+                  className="toggle-chip"
                   aria-pressed={hideInProgressRooms}
                   onClick={() => setHideInProgressRooms((v) => !v)}
                 >
@@ -565,7 +565,9 @@ export function LobbyBrowserPage() {
                 onClick={() => setHideFullRooms((v) => !v)}
               >
                 <span>{ui.lobbyBrowserPage.hideFullRooms}</span>
-                <span className={`lobby-filter-switch${hideFullRooms ? " is-on" : ""}`} aria-hidden="true" />
+                <span className={`switch-track${hideFullRooms ? " is-on" : ""}`} aria-hidden="true">
+                  <span className="switch-thumb" />
+                </span>
               </button>
               <button
                 type="button"
@@ -574,7 +576,9 @@ export function LobbyBrowserPage() {
                 onClick={() => setHideInProgressRooms((v) => !v)}
               >
                 <span>{ui.lobbyBrowserPage.hideGamesProgress}</span>
-                <span className={`lobby-filter-switch${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true" />
+                <span className={`switch-track${hideInProgressRooms ? " is-on" : ""}`} aria-hidden="true">
+                  <span className="switch-thumb" />
+                </span>
               </button>
             </div>
           </BottomSheet>

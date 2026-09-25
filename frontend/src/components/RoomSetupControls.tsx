@@ -142,7 +142,7 @@ export function FieldHint({ hint, href }: { hint: string; href?: string }) {
           ?
         </button>
       )}
-      <span ref={tipRef} className="m3-switch-hint-tooltip" role="tooltip">
+      <span ref={tipRef} className="tooltip m3-switch-hint-tooltip" role="tooltip">
         {hint}
       </span>
     </span>
@@ -244,6 +244,9 @@ interface SegmentedControlProps<T extends string> {
   onChange: (value: T) => void;
   hint?: string;
   showLabel?: boolean;
+  /** Extra classes for the field, for a page placing the control in its own layout. */
+  className?: string;
+  testId?: string;
 }
 
 export function SegmentedControl<T extends string>({
@@ -253,6 +256,8 @@ export function SegmentedControl<T extends string>({
   onChange,
   hint,
   showLabel = false,
+  className,
+  testId,
 }: SegmentedControlProps<T>) {
   const selectedIndex = Math.max(0, options.findIndex((option) => option.value === value));
 
@@ -261,6 +266,7 @@ export function SegmentedControl<T extends string>({
       className="segmented-control"
       role="group"
       aria-label={label}
+      data-testid={testId}
       style={{
         ["--segment-index" as string]: selectedIndex,
         ["--segment-count" as string]: options.length,
@@ -281,12 +287,14 @@ export function SegmentedControl<T extends string>({
     </div>
   );
 
+  const fieldClass = className ? `segmented-control-field ${className}` : "segmented-control-field";
+
   if (!showLabel) {
-    return <div className="segmented-control-field">{control}</div>;
+    return <div className={fieldClass}>{control}</div>;
   }
 
   return (
-    <div className="segmented-control-field is-labeled">
+    <div className={`${fieldClass} is-labeled`}>
       <span className="segmented-control-label">
         {label}
         {hint ? <FieldHint hint={hint} /> : null}
@@ -386,7 +394,7 @@ export function ToggleChips<T extends string>({
             <button
               key={option.value}
               type="button"
-              className={`toggle-chip ${selected ? "is-selected" : ""}`}
+              className="toggle-chip"
               aria-pressed={selected}
               disabled={disabled || option.disabled}
               title={option.description}
@@ -485,8 +493,8 @@ export function Switch({ label, hint, checked, disabled = false, onChange }: Swi
         {label}
         {hint ? <FieldHint hint={hint} /> : null}
       </span>
-      <span className="m3-switch-track" aria-hidden="true">
-        <span className="m3-switch-thumb" />
+      <span className="switch-track" aria-hidden="true">
+        <span className="switch-thumb" />
       </span>
     </label>
   );

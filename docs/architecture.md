@@ -1900,14 +1900,25 @@ Files are named for their single concern; the directory says the role.
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
-`frontend/src/styles/` is one CSS file per surface. A media query cannot read a custom
-property, so the breakpoints are a fixed set of widths rather than tokens, each named as
+`frontend/src/styles/` is one CSS file per surface. The controls more than one surface
+draws — buttons, chips, toggle chips, the segmented control, the switch, the tooltip and
+the card — are recipes in
+[`styles/primitives.css`](../frontend/src/styles/primitives.css), the first sheet of the
+`components` layer, so a surface specialises a recipe rather than restating it; a card
+composes `surface-card` in its markup. Every other sheet, entry or lazy, comes after it,
+so a specialisation of the same specificity wins by order; a tie between two surface
+sheets is another matter, since the lazy ones load after the whole entry sheet whatever
+their import order says. A rule that must beat every surface goes in the `utilities`
+layer ([`styles/utilities.css`](../frontend/src/styles/utilities.css)) rather than
+behind `!important`: a later layer beats any specificity in an earlier one.
+
+A media query cannot read a custom property, so the breakpoints are a fixed set of widths rather than tokens, each named as
 the first width of the wider side — 481, 641, 721, 901, 1001, 1200, 1500 and 2100 as a
 `min-width`, one less as a `max-width`, so no width is on both sides. Components asking
 through `useMediaQuery` use the same numbers. They are listed in
 [`styles/layout-primitives.css`](../frontend/src/styles/layout-primitives.css), and
 [`stylesheetScales.test.mjs`](../frontend/tests/stylesheetScales.test.mjs) fails on any
-other width except the three it names as measured against content.
+other width except the few it names, each with its reason.
 
 ### The phone layout
 

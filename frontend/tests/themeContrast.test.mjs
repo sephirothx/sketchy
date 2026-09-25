@@ -205,7 +205,7 @@ const KNOWN_SHORT = {
   "create-room-page.css .prompt-list-chip-count dark": FAINT_TEXT,
   "game-room.css .room-spectator-indicator light": FAINT_TEXT,
   "game-room.css .room-spectator-indicator dark": FAINT_TEXT,
-  "create-room-page.css .toggle-chip.is-selected .prompt-list-chip-count dark": PRIMARY_TEXT,
+  "create-room-page.css .toggle-chip[aria-pressed=\"true\"] .prompt-list-chip-count dark": PRIMARY_TEXT,
   "game-room.css .wheel-letter-btn dark": PRIMARY_TEXT,
 };
 

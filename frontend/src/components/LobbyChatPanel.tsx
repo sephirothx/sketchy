@@ -99,7 +99,7 @@ export const LobbyChatPanel = memo(function LobbyChatPanel() {
   }
 
   return (
-    <section className="panel lobby-chat-panel" aria-labelledby="lobby-chat-heading">
+    <section className="surface-card panel lobby-chat-panel" aria-labelledby="lobby-chat-heading">
       <div className="lobby-rooms-heading">
         <h2 id="lobby-chat-heading">{ui.lobbyChatPanel.chat}</h2>
       </div>

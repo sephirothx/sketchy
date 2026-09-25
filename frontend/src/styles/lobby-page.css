@@ -15,12 +15,6 @@
 }
 
 @media (max-width: 720px) {
-  /* The arrow alone. "Back to lobby" beside a wordmark and an identity chip is
-     what would not fit; the label stays as the accessible name. */
-  .header-back-label {
-    display: none;
-  }
-
   .lobby-header.has-back .header-back-button {
     flex: none;
     padding-inline: 10px;
@@ -71,42 +65,11 @@
   text-decoration: underline;
 }
 
-.lobby-columns {
-  display: grid;
-  grid-template-columns: 1.15fr 1fr;
-  gap: 16px;
-}
-
-@media (max-width: 720px) {
-  .lobby-columns {
-    grid-template-columns: 1fr;
-  }
-}
-
-.lobby-entry-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.lobby-entry-panel h2,
 .panel > h2 {
   /* 22px per the Main artboard; the browser default 1.5em read a size too
      large next to the body copy. Family and weight come from the base rule. */
   font-size: 22px;
   margin: 0;
-}
-
-.lobby-entry-panel .create-room-lobby-copy {
-  margin: 0;
-}
-
-.lobby-entry-actions {
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 10px;
-  margin-top: auto;
 }
 
 /* --------------------------------------------------- segmented code input */
@@ -280,24 +243,6 @@
   flex: 0 0 auto;
 }
 
-.lobby-filter-toggle {
-  background: var(--card);
-  border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
-  padding: 9px 15px;
-  font-family: var(--font-body);
-  font-size: 13px;
-  font-weight: 800;
-  color: var(--muted);
-  min-height: 42px;
-}
-
-.lobby-filter-toggle[aria-pressed="true"] {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-
 .lobby-no-matches {
   color: var(--muted);
   font-style: italic;
@@ -306,10 +251,6 @@
 /* --------------------------------------------------------------- room card */
 .public-room-card {
   align-items: center;
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
   display: flex;
   gap: 18px;
   justify-content: space-between;
@@ -782,32 +723,6 @@
   .lobby-rooms-panel {
     order: -1;
   }
-
-  /* Copy that reassures on a wide screen is just scroll on a narrow one. */
-  .lobby-entry-panel .create-room-lobby-copy {
-    display: none;
-  }
-
-  .lobby-entry-panel .btn-big,
-  .lobby-entry-actions > .btn-primary {
-    width: 100%;
-  }
-
-  /* Spectating is a real choice, just not the common one, and it should not
-     read as the twin of the button next to it. */
-  .lobby-entry-actions {
-    align-items: stretch;
-    flex-direction: column;
-  }
-
-  .lobby-entry-actions > .btn-secondary {
-    background: none;
-    border: 0;
-    box-shadow: none;
-    min-height: 44px;
-    text-decoration: underline;
-    text-underline-offset: 3px;
-  }
 }
 
 
@@ -844,13 +759,7 @@
 
 /* ── Filters behind one chip ────────────────────────────────────────────
    The bar's three controls wrapped to three rows on a phone — about 110px of
-   filtering above the first room. */
-.lobby-filter-sheet-button.has-filters {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary-ink);
-}
-
+   filtering above the first room. The chip is pressed while any filter is on. */
 .lobby-filter-sheet {
   display: flex;
   flex-direction: column;
@@ -880,40 +789,6 @@
 
 .lobby-filter-row.is-toggle {
   cursor: pointer;
-}
-
-.lobby-filter-switch {
-  background: var(--line-strong);
-  border-radius: 999px;
-  flex: 0 0 auto;
-  height: 29px;
-  position: relative;
-  width: 48px;
-}
-
-.lobby-filter-switch::after {
-  background: #fff;
-  border-radius: 50%;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
-  content: "";
-  height: 23px;
-  left: 3px;
-  position: absolute;
-  top: 3px;
-  transition: left 140ms ease;
-  width: 23px;
-}
-
-.lobby-filter-switch.is-on {
-  background: var(--primary);
-}
-
-.lobby-filter-switch.is-on::after {
-  left: 22px;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .lobby-filter-switch::after { transition: none; }
 }
 
 @media (max-width: 720px) {
