@@ -166,7 +166,9 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             anonymous_context = await browser.new_context()
             anonymous = await anonymous_context.new_page()
             await anonymous.goto(f"{BASE_URL}/gallery")
-            await anonymous.get_by_text("signed-in players", exact=False).wait_for()
+            await anonymous.get_by_test_id("gallery-signed-out").get_by_text(
+                "Sign in to see the gallery", exact=True
+            ).wait_for()
             await expect(anonymous.locator('[data-testid="gallery-feed"]')).to_have_count(0)
             await anonymous_context.close()
         finally:

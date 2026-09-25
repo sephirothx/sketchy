@@ -366,11 +366,13 @@ export function GalleryPage() {
                 <section className="surface-card gallery-rail-card" data-testid="gallery-rail-week">
                   <div className="gallery-rail-head">
                     <h2>{ui.galleryPage.thisWeek}</h2>
-                    <button
+                    {/* Only with something to lead to: an empty week's "Top of
+                        the week" opened a second list with nothing in it. */}
+                    {weekEntries.length > 0 && <button
                       type="button"
                       className="gallery-link"
                       onClick={() => applyFilters({ sort: "top", window: "week" })}
-                    >{ui.galleryPage.topOfTheWeek}</button>
+                    >{ui.galleryPage.topOfTheWeek}</button>}
                   </div>
                   {weekEntries.length === 0
                     ? <EmptyState compact testId="gallery-rail-week-empty" title={ui.galleryPage.nothingThisWeek} />
