@@ -415,7 +415,7 @@ async def test_player_can_download_then_delete_account_from_settings():
 
 
 async def test_log_out_everywhere_asks_before_signing_this_device_out():
-    """"Log out everywhere" reaches the device it is pressed on, so it asks.
+    """"Sign out everywhere" reaches the device it is pressed on, so it asks.
 
     A single revoke names the device it means; this one does not, and the
     device holding the button is part of "everywhere". Cancelling leaves the
@@ -437,7 +437,7 @@ async def test_log_out_everywhere_asks_before_signing_this_device_out():
             devices = page.get_by_role("dialog", name="Signed-in devices")
             await devices.locator(".session-list li").first.wait_for()
 
-            await devices.get_by_role("button", name="Log out everywhere").click()
+            await devices.get_by_role("button", name="Sign out everywhere").click()
             confirm = page.get_by_role("alertdialog", name="Sign out everywhere?")
             await expect(confirm).to_be_visible()
             # Asking is the whole change: nothing has happened yet.
@@ -449,8 +449,8 @@ async def test_log_out_everywhere_asks_before_signing_this_device_out():
             )
             assert me == "EverywhereE2E"
 
-            await devices.get_by_role("button", name="Log out everywhere").click()
-            await confirm.get_by_role("button", name="Log out everywhere").click()
+            await devices.get_by_role("button", name="Sign out everywhere").click()
+            await confirm.get_by_role("button", name="Sign out everywhere").click()
             await expect(devices).to_have_count(0)
             # Signed out here too: whatever this browser holds now, it is not
             # the account it just ended every session of.

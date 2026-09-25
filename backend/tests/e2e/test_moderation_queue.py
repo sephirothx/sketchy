@@ -295,7 +295,7 @@ async def test_two_players_reporting_one_thing_are_one_case_decided_once():
             # Their first report's acknowledgement is still up, and it sits
             # over the player list the next one is opened from.
             await repeat_reporter.locator(".modal-card").get_by_role(
-                "button", name="Done"
+                "button", name="OK", exact=True
             ).click()
             await repeat_reporter.locator(".modal-card").wait_for(state="detached")
             row = repeat_reporter.locator(".player-list li", has_text=names[drawer])
@@ -402,7 +402,7 @@ async def test_escape_does_not_reach_past_a_warning():
             notice = target.get_by_role("alertdialog", name="A moderator warning")
             await expect(notice).to_be_visible()
             # Focus is inside the notice, on its one answer.
-            await expect(notice.get_by_role("button", name="Understood")).to_be_focused()
+            await expect(notice.get_by_role("button", name="OK", exact=True)).to_be_focused()
 
             await target.keyboard.press("Escape")
             await target.wait_for_timeout(300)
@@ -410,7 +410,7 @@ async def test_escape_does_not_reach_past_a_warning():
             await expect(settings).to_be_visible()
 
             # Answering it is the way on, and Settings is still there after.
-            await notice.get_by_role("button", name="Understood").click()
+            await notice.get_by_role("button", name="OK", exact=True).click()
             await expect(notice).to_have_count(0)
             await expect(settings).to_be_visible()
         finally:
