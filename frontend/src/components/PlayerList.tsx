@@ -14,7 +14,7 @@ import {
   eligibleModerationVotes,
 } from "../lib/moderation";
 import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/useFocusTrap";
-import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { fittedNameFontSize, playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
 import { CheckIcon, MedalIcon, MoonIcon, PencilIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
@@ -48,27 +48,23 @@ function fitPlayerNames(list: HTMLElement) {
     if (!name) continue;
     name.style.fontSize = "";
     // Nothing visible shares the line since #574 moved "you" and the crown
-    // onto the avatar, so the name may have the whole cell - its content
-    // box, that is. The padding is the room for ink past the letters
-    // (--ink-overhang, #1170); a name fitted into it would be cut by the
-    // ellipsis instead.
-    // Measured unrounded: `clientWidth` rounds, and a name fitted to a width
-    // a fraction wider than the box ends in an ellipsis.
+    // onto the avatar, so the name may have the whole cell - its content box,
+    // as `fittedNameFontSize` says.
     const cellStyle = getComputedStyle(cell);
-    const available =
-      cell.getBoundingClientRect().width -
-      (parseFloat(cellStyle.borderLeftWidth) || 0) -
-      (parseFloat(cellStyle.borderRightWidth) || 0) -
-      (parseFloat(cellStyle.paddingLeft) || 0) -
-      (parseFloat(cellStyle.paddingRight) || 0);
     const range = document.createRange();
     range.selectNodeContents(name);
-    const natural = range.getBoundingClientRect().width;
-    if (natural > available && available > 0) {
-      const current = parseFloat(getComputedStyle(name).fontSize);
-      // Rounded down to a tenth of a pixel, so the fitted text lands inside.
-      name.style.fontSize = `${Math.floor((available / natural) * current * 10) / 10}px`;
-    }
+    const fitted = fittedNameFontSize(
+      {
+        width: cell.getBoundingClientRect().width,
+        borderLeft: parseFloat(cellStyle.borderLeftWidth) || 0,
+        borderRight: parseFloat(cellStyle.borderRightWidth) || 0,
+        paddingLeft: parseFloat(cellStyle.paddingLeft) || 0,
+        paddingRight: parseFloat(cellStyle.paddingRight) || 0,
+      },
+      range.getBoundingClientRect().width,
+      parseFloat(getComputedStyle(name).fontSize),
+    );
+    if (fitted !== null) name.style.fontSize = `${fitted}px`;
   }
 }
 
