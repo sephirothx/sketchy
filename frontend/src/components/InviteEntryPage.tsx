@@ -10,6 +10,7 @@ import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { MAX_NICKNAME_LENGTH } from "../lib/roomEntryState";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
+import { useBottomDock } from "../hooks/useBottomDock";
 import "../styles/lazy/toolbar.css";
 
 const INVITE_LOADING_DELAY_MS = 250;
@@ -33,6 +34,7 @@ function DelayedInviteLoader() {
 }
 
 export function InviteEntryPage({ code }: { code: string }) {
+  const dockRef = useBottomDock();
   const navigate = useNavigate();
   const { state, join, setNicknameInput } = useRoomEntry(code);
   // Another way into a room already in flight - a friend's invitation, say -
@@ -102,7 +104,7 @@ export function InviteEntryPage({ code }: { code: string }) {
               says; at the end of the card on a wider screen. A plain
               container, not a <form>: Enter in the field joins, and the
               account dialog brings its own form. */}
-          <div className="invite-join-form">
+          <div className="invite-join-form" ref={dockRef}>
             {asksForName && (
               <>
                 {user?.nameInUse && (

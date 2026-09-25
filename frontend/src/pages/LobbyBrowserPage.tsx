@@ -32,6 +32,7 @@ import {
 import type { AckResponse, RoomSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useBottomDock } from "../hooks/useBottomDock";
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -148,6 +149,7 @@ function identityMessage(error: unknown): string {
 }
 
 export function LobbyBrowserPage() {
+  const dockRef = useBottomDock();
   const navigate = useNavigate();
   const location = useLocation();
   const nameColor = useSettingsStore((s) => s.nameColor);
@@ -621,7 +623,7 @@ export function LobbyBrowserPage() {
           header controls a desktop gets: three actions beside the wordmark is
           what used to push this header onto two rows. */}
       {isNarrow && (
-        <div className="lobby-dock">
+        <div className="lobby-dock" ref={dockRef}>
           {/* The page-top alert is out of sight from down here, and behind the
               code sheet entirely, so on a phone the message follows the
               control. Only one of the three renders at a time. */}

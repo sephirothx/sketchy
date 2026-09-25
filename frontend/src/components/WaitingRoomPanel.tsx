@@ -10,6 +10,7 @@ import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useBottomDock } from "../hooks/useBottomDock";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import type {
@@ -66,6 +67,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // says more than a grid of faces can, so rendering both would put every
   // nickname on the page twice.
   const isNarrow = useMediaQuery("(max-width: 900px)");
+  const dockRef = useBottomDock();
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The scratch pad in place of the column (#591). Focus follows the swap:
   // the control that made it lands on the one that undoes it, and back.
@@ -216,7 +218,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         {/* A phone docks Start at the bottom of the screen, as the room view
             does, rather than wrapping it onto a line of its own in the strip. */}
         {isNarrow && (
-          <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+          <div className="waiting-rules-footer waiting-start-card" aria-live="polite" ref={dockRef}>
             {isHost ? startButton(true) : waitingForHost}
           </div>
         )}
@@ -366,7 +368,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             playerCount: activePlayers.length,
           }}
         />
-        <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+        <div className="waiting-rules-footer waiting-start-card" aria-live="polite" ref={dockRef}>
           {isHost ? (
             <>
               <button

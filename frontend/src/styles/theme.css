@@ -104,8 +104,11 @@
   --app-height: 100dvh;
   /* height of the top banner stack, written by AppBanners */
   --banner-height: 0px;
-  /* how far up from the bottom edge a friend invite reaches, written by
-     FriendInviteNotice while one is shown; the toasts stand on it */
+  /* how far up from the bottom edge a page's docked controls reach, written
+     by useBottomDock; the friend invite and the toasts stand on them */
+  --dock-clearance: 0px;
+  /* how far a friend invite reaches above that, written by
+     FriendInviteNotice while one is shown; the toasts stand on both */
   --friend-invite-clearance: 0px;
 }
 

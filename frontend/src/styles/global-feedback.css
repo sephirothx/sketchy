@@ -97,12 +97,13 @@
   background: var(--primary-edge-soft);
 }
 
-/* Above a friend invite rather than on it (--friend-invite-clearance): the
-   invite is the same bottom-centre spot, and the component that shows it is
-   also what announces friend requests - onto its own Join button. The invite
-   stays out of this stack on purpose; see FriendInviteNotice. */
+/* Above whatever is docked at the bottom rather than on it: a phone page's
+   dock (--dock-clearance, useBottomDock), and a friend invite standing on
+   that (--friend-invite-clearance). The invite is the same bottom-centre spot, and the component that shows it is
+   also what announces friend requests - onto its own Join button. It stays
+   out of this stack on purpose; see FriendInviteNotice. */
 .toast-viewport {
-  bottom: calc(20px + var(--friend-invite-clearance));
+  bottom: calc(20px + var(--dock-clearance) + var(--friend-invite-clearance));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -161,7 +162,7 @@
 /* A lazy overlay whose chunk could not be fetched (LazyOverlay): the toast's
    look, pinned where a toast would sit, over whatever page is open. */
 .lazy-overlay-notice {
-  bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--friend-invite-clearance));
+  bottom: calc(max(16px, env(safe-area-inset-bottom)) + var(--dock-clearance) + var(--friend-invite-clearance));
   left: 50%;
   position: fixed;
   transform: translateX(-50%);

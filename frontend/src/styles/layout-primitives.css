@@ -19,8 +19,11 @@
              waiting room's Start, sticky sort and save bars. They are the
              page's standing controls, so what floats goes under them.
    notice    A notice laid over the page: the friend invite, and the paused
-             or offline stage's card over a room. Above the docks, because it
-             is news the player has not seen yet.
+             or offline stage's card over a room. Above the docks in case they
+             meet, but they should not: the invite and the toasts stand on
+             whatever is docked at the bottom (--dock-clearance, written by
+             useBottomDock), because a notice must not cover a control
+             (R-UX-07).
    popover   Menus, pickers and tooltips a control opened. Above notices and
              docks, because it is the thing the player just asked for - the
              offline chip's explanation used to open under the offline card.

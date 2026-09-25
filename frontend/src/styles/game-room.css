@@ -2440,9 +2440,11 @@ button.guess-pips {
    `orientation` is a property of the viewport, not of the phone: a portrait
    handset whose soft keyboard eats half the screen reports landscape too, and
    without the width floor a 360x340 Android with the keyboard up got the
-   two-column rail layout and a 76px-wide guess field. No phone is over 480px
-   across in portrait, and none is under it turned sideways - the 568px of the
-   smallest iPhones included, which the old floor of 600 left in portrait. */
+   two-column rail layout and a 76px-wide guess field. Phones in portrait are
+   almost all 430px or less across - a few folding ones reach about 540, and
+   with the keyboard up those would take this layout - and none is under 481
+   turned sideways: the 568px of the smallest iPhones, which the old floor of
+   600 left in portrait, included. */
 @media (orientation: landscape) and (max-height: 520px) and (min-width: 481px) {
   .game-room.game-room-playing {
     padding: 0;

@@ -1622,11 +1622,12 @@ a.online-player-name:focus-visible {
 }
 
 /* An invitation asks a question, so it sits where a banner does rather than
-   passing by like a toast. */
+   passing by like a toast - above a phone page's dock rather than on it
+   (--dock-clearance, useBottomDock): it sat on Quick play and Create a room. */
 .friend-invite-notice {
   position: fixed;
   left: 50%;
-  bottom: 18px;
+  bottom: calc(18px + var(--dock-clearance));
   transform: translateX(-50%);
   z-index: var(--z-notice);
   display: flex;

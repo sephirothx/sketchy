@@ -282,7 +282,7 @@
   grid-template-columns: 1fr 1fr;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .bug-report-row { grid-template-columns: 1fr; }
 }
 

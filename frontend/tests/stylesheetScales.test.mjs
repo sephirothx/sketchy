@@ -127,12 +127,36 @@ test("every z-index is a layer or a component's own 0-4", () => {
   assert.deepEqual(wrong, []);
 });
 
-test("the toasts stand on a friend invite rather than landing on it", () => {
-  const feedback = cssFiles.find(({ path }) => path.endsWith("styles/global-feedback.css")).text;
-  const viewport = feedback.slice(feedback.indexOf(".toast-viewport {"));
-  assert.match(viewport.slice(0, viewport.indexOf("}")), /bottom: calc\(20px \+ var\(--friend-invite-clearance\)\);/);
-  const invite = scriptFiles.find(({ path }) => path.endsWith("components/FriendInviteNotice.tsx")).text;
-  assert.match(invite, /setProperty\("--friend-invite-clearance"/);
+test("the invite stands on the bottom dock, and the toasts on both (R-UX-07)", () => {
+  const block = (file, selector) => {
+    const text = cssFiles.find(({ path }) => path.endsWith(`styles/${file}`)).text;
+    const start = text.indexOf(`${selector} {`);
+    return text.slice(start, text.indexOf("}", start));
+  };
+  assert.match(block("lobby-page.css", ".friend-invite-notice"), /bottom: calc\(18px \+ var\(--dock-clearance\)\);/);
+  assert.match(
+    block("global-feedback.css", ".toast-viewport"),
+    /bottom: calc\(20px \+ var\(--dock-clearance\) \+ var\(--friend-invite-clearance\)\);/,
+  );
+  const source = (file) => scriptFiles.find(({ path }) => path.endsWith(file)).text;
+  assert.match(source("components/FriendInviteNotice.tsx"), /setProperty\("--friend-invite-clearance"/);
+  assert.match(source("hooks/useBottomDock.ts"), /setProperty\("--dock-clearance"/);
+  // Every bar a phone page docks at the bottom says how tall it is.
+  const docks = [
+    ["pages/LobbyBrowserPage.tsx", "lobby-dock"],
+    ["components/InviteEntryPage.tsx", "invite-join-form"],
+    ["pages/CreateRoomPage.tsx", "create-room-footer"],
+    ["components/WaitingRoomPanel.tsx", "waiting-start-card"],
+    ["components/RoomShell.tsx", "room-shell-dock"],
+  ];
+  for (const [file, className] of docks) {
+    const text = source(file);
+    for (const tag of text.matchAll(new RegExp(`<div className="(?:[^"]* )?${className}(?: [^"]*)?"[^>]*>`, "g"))) {
+      assert.match(tag[0], /ref=\{dockRef\}/, `${file}: .${className} does not publish its height`);
+    }
+    assert.match(text, /useBottomDock\(\)/, file);
+  }
+  assert.match(source("components/RoomChatPanel.tsx"), /ref=\{composerRef\}/);
 });
 
 // ------------------------------------------------------------- breakpoints

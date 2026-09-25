@@ -533,7 +533,7 @@
   text-align: center;
 }
 
-@media (max-width: 480px) {
+@media (max-width: 640px) {
   .two-factor-setup { grid-template-columns: minmax(0, 1fr); gap: 12px; }
   .two-factor-scan { margin: 0 auto; max-width: 190px; }
 }

@@ -83,9 +83,10 @@ export function FriendInviteNotice() {
 
   // The toasts sit in the same bottom-centre spot, and this component is also
   // what announces friend requests - which landed on the card's own Join.
-  // So while the card is up it publishes how far it reaches from the bottom
-  // edge, and the toast stack stands on it (R-UX-07). The card stays out of
-  // the stack: it is a question, not something that happened.
+  // So while the card is up it publishes how far it reaches above the page's
+  // dock (which it stands on itself), and the toast stack stands on both
+  // (R-UX-07). The card stays out of the stack: it is a question, not
+  // something that happened.
   const cardRef = useRef<HTMLDivElement | null>(null);
   const shown = invite !== null && myUserId !== null;
   useLayoutEffect(() => {
@@ -93,8 +94,11 @@ export function FriendInviteNotice() {
     if (!shown || !card) return;
     const root = document.documentElement;
     const publish = () => {
+      // Its offset less the dock's, read together: the part that is the
+      // card's own, which does not change when the dock does.
       const bottom = Number.parseFloat(getComputedStyle(card).bottom) || 0;
-      root.style.setProperty("--friend-invite-clearance", `${bottom + card.offsetHeight}px`);
+      const dock = Number.parseFloat(getComputedStyle(root).getPropertyValue("--dock-clearance")) || 0;
+      root.style.setProperty("--friend-invite-clearance", `${bottom - dock + card.offsetHeight}px`);
     };
     publish();
     // A long name wraps the card to a second line on a phone.
