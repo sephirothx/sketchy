@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: center;
   z-index: 1000;
-  animation: fadeInModal 0.15s ease-out;
+  animation: fadeInModal var(--dur-fast) ease-out;
 }
 
 @keyframes fadeInModal {
@@ -30,7 +30,7 @@
   text-align: center;
   color: var(--ink);
   box-shadow: var(--shadow-raised);
-  animation: popUpModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: popUpModal var(--dur) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes popUpModal {

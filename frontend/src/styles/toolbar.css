@@ -151,7 +151,7 @@
   align-items: center;
   gap: 10px;
   box-shadow: var(--shadow-raised);
-  animation: popUp 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: popUp var(--dur-fast) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes popUp {

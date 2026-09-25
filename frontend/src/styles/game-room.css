@@ -968,7 +968,7 @@
 }
 
 .room-shell-main-transition {
-  animation: room-main-enter 160ms ease-out;
+  animation: room-main-enter var(--dur) ease-out;
   min-width: 0;
 }
 
@@ -2189,7 +2189,6 @@
 
 .wheel-letter-btn:disabled {
   border-color: var(--line);
-  color: var(--faint);
   cursor: not-allowed;
   opacity: var(--opacity-disabled);
 }

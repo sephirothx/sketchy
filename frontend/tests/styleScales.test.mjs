@@ -78,13 +78,38 @@ test("every radius is a token, a circle, or a named exception", () => {
   assert.deepEqual(bad, [], "use --radius, --radius-sm, --radius-xs or --radius-pill");
 });
 
-test("transitions name their properties and use the motion tokens", () => {
+test("transitions and animations name their properties and use the motion tokens", () => {
   // A transition that joins the steps of a clock follows that clock's
   // cadence, not the motion scale.
   const clocked = new Set([
     ".timer-bar-fill", // Timer.tsx recomputes the width every 250ms
     ".turn-results-progress-track span", // the phase clock ticks every 100ms
   ]);
+  // Animations whose length is part of what they show rather than how fast
+  // something arrives, named by keyframes.
+  const timed = new Map([
+    ["gallery-spin", "a loading spinner's period, one turn"],
+    ["invite-spin", "a loading spinner's period, one turn"],
+    ["choosing-prompt-pulse", "a looping pulse's period"],
+    ["reaction-float", "how long a reaction drifts up the canvas before it fades"],
+    ["restart-approved-emphasis", "the approved banner's one beat of emphasis"],
+    ["rank-change-pop", "delayed 2550ms to land after the results rows settle"],
+  ]);
+  const literal = (value) =>
+    value.split(",").filter((part) => /(?<![\w-])\d*\.?\d+m?s\b/.test(part));
+  const badAnimations = offScale((rule) =>
+    ["animation", "animation-duration"].flatMap((property) => {
+      const value = rule.declarations.get(property);
+      if (!value || value.startsWith("none")) return [];
+      return literal(value)
+        .filter((part) => !timed.has(part.trim().split(/\s+/)[0]))
+        .map((part) => `${rule.where}: ${property}: ${part.trim()}`);
+    }),
+  );
+  const badDurations = offScale((rule) => {
+    const value = rule.declarations.get("transition-duration");
+    return value && literal(value).length ? [`${rule.where}: transition-duration: ${value}`] : [];
+  });
   const bad = offScale((rule) => {
     const value = rule.declarations.get("transition");
     if (!value || value === "none" || value.startsWith("none ")) return [];
@@ -92,13 +117,15 @@ test("transitions name their properties and use the motion tokens", () => {
     // The autofill wash: a delay long enough that the browser's yellow
     // never arrives, which is not a motion at all.
     if (rule.selector.startsWith("input:-webkit-autofill")) return [];
-    const literal = value
-      .split(",")
-      .filter((part) => /(?<![\w-])\d*\.?\d+m?s\b/.test(part))
-      .filter((part) => !(clocked.has(rule.selector) && /^\s*width /.test(part)));
-    return literal.map((part) => `${rule.where}: ${part.trim()}`);
+    return literal(value)
+      .filter((part) => !(clocked.has(rule.selector) && /^\s*width /.test(part)))
+      .map((part) => `${rule.where}: ${part.trim()}`);
   });
-  assert.deepEqual(bad, [], "use var(--dur-fast) or var(--dur), and list the properties that change");
+  assert.deepEqual(
+    [...bad, ...badDurations, ...badAnimations],
+    [],
+    "use var(--dur-fast) or var(--dur), and list the properties that change",
+  );
 });
 
 test("a disabled control dims by the one amount", () => {

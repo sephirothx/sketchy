@@ -50,7 +50,7 @@
   align-items: center;
   gap: 4px;
   transition: background-color var(--dur) ease, transform var(--dur) ease;
-  animation: popIn 0.2s ease;
+  animation: popIn var(--dur) ease;
 }
 
 .chat-scroll-bottom-button:hover {
@@ -177,7 +177,7 @@
   text-align: center;
   pointer-events: none;
   box-shadow: var(--shadow-raised);
-  animation: guessFlashIn 0.18s ease-out;
+  animation: guessFlashIn var(--dur) ease-out;
 }
 
 .chat-input-row {

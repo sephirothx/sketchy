@@ -124,7 +124,7 @@ export function WarningNotice() {
           {isRemoval ? ui.warningNotice.yourPictureWasRemoved : ui.warningNotice.aModeratorWarning}
         </h3>
         {warning.category && (
-          <p className="section-label notice-category" data-testid="warning-category">
+          <p className="modal-body notice-category" data-testid="warning-category">
             {/* The rule itself, not just its name: a decision you can read
                 the rule behind is one you can check rather than only be
                 told (R-RULES-02). */}

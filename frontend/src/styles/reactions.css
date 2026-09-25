@@ -131,7 +131,7 @@
   background: rgba(32, 32, 36, 0.94);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
   z-index: 4;
-  animation: reaction-picker-in 140ms ease-out;
+  animation: reaction-picker-in var(--dur-fast) ease-out;
 }
 
 .reaction-control-panel .reaction-picker {

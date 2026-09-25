@@ -82,7 +82,7 @@ export function SuspensionNotice() {
           {ui.suspensionNotice.yourAccountSuspended}
         </h3>
         {suspension.category && (
-          <p className="section-label notice-category" data-testid="suspension-category">
+          <p className="modal-body notice-category" data-testid="suspension-category">
             {/* The rule itself, not just its name: a decision you can read
                 the rule behind is one you can check rather than only be
                 told (R-RULES-02). */}
