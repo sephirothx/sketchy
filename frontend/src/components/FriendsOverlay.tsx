@@ -16,7 +16,8 @@ import { useFriendsStore } from "../store/friendsStore";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { ConfirmationDialog } from "./ConfirmationDialog";
-import { UsersIcon, XIcon } from "./icons";
+import { ModalHeader } from "./ui/ModalShell";
+import { UsersIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/friends.css";
 import "../styles/lazy/settings.css";
@@ -115,22 +116,21 @@ export function FriendsOverlay() {
         tabIndex={-1}
         data-testid="friends"
       >
-        <div className="friends-modal-header">
-          <h3 id={titleId}>
-            <UsersIcon size={20} />
-            <span>{ui.friendsOverlay.friends}</span>
-          </h3>
-          <button
-            ref={closeButtonRef}
-            type="button"
-            className="close-icon-button"
-            onClick={close}
-            title={ui.friendsOverlay.close}
-            aria-label={ui.friendsOverlay.closeFriends}
-          >
-            <XIcon size={16} />
-          </button>
-        </div>
+        {/* The same header every dialog wears (ModalShell's), over a sheet
+            that keeps its own layout, layer and route. */}
+        <ModalHeader
+          className="friends-modal-header"
+          titleId={titleId}
+          title={
+            <>
+              <span className="modal-title-icon" aria-hidden="true"><UsersIcon size={20} /></span>
+              {ui.friendsOverlay.friends}
+            </>
+          }
+          onClose={close}
+          closeLabel={ui.friendsOverlay.closeFriends}
+          closeRef={closeButtonRef}
+        />
 
         <div className="friends-modal-body">
           {/* A guest reaching this by URL. The menu does not offer it to them,

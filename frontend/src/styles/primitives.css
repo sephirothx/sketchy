@@ -59,10 +59,12 @@
 }
 
 /* The destructive act itself - "Delete for good", "Log out everywhere" -
-   filled, where the ghost above is for the quieter way to the same place. */
+   filled, where the ghost above is for the quieter way to the same place.
+   Lettered in the page's ground rather than white: the dark theme's red is
+   light enough that white on it falls under 3:1, and --paper reads on both. */
 .btn-danger {
   background: var(--danger);
-  color: #fff;
+  color: var(--paper);
   box-shadow: 0 2px 0 color-mix(in srgb, var(--danger) 70%, #000);
 }
 
