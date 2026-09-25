@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Squiggle, Wordmark } from "../components/icons";
-import { SectionLabel } from "../components/ui/Card";
 import {
   completePasswordReset,
   confirmEmailToken,
@@ -14,6 +13,7 @@ import { useEmailStateStore } from "../store/emailStateStore";
 import { MIN_PASSWORD_LENGTH, passwordTooShort } from "../lib/passwordPolicy";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
+import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 type Mode = "forgot" | "reset" | "verify";
 
@@ -152,6 +152,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           ? ui.accountRecoveryPage.thatLinkNoLongerWorks
           : ui.accountRecoveryPage.chooseANewPassword
         : ui.accountRecoveryPage.confirmingYourEmail;
+  useDocumentTitle(heading);
 
   return (
     <main className="recovery-page">
@@ -160,20 +161,23 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           <h2>{ui.accountRecoveryPage.evenBestGuessersForgetSometimes}</h2>
           <Squiggle width={110} color="var(--primary)" />
           <p>
-            {ui.accountRecoveryPage.weRsquoLlSendSecureTime}
+            {mode === "forgot"
+              ? ui.accountRecoveryPage.asideForgot
+              : mode === "reset"
+                ? ui.accountRecoveryPage.asideReset
+                : ui.accountRecoveryPage.asideVerify}
           </p>
         </section>
         <section className="recovery-form">
         <Wordmark size={22} />
         <div className="recovery-heading">
-          <SectionLabel>{ui.accountRecoveryPage.accountHelp}</SectionLabel>
           <h1>{heading}</h1>
         </div>
 
         {done ? (
           <>
             <p className="recovery-body">{done}</p>
-            <Link className="modal-button" to="/">
+            <Link className="btn btn-primary" to="/">
               {ui.accountRecoveryPage.backLobby}
             </Link>
           </>
@@ -201,7 +205,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
                 {error}
               </p>
             )}
-            <button type="submit" className="modal-button" disabled={busy}>
+            <button type="submit" className="btn btn-primary" disabled={busy}>
               {busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.sendAResetLink}
             </button>
           </form>
@@ -210,7 +214,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
             <p className="recovery-body">
               {ui.accountRecoveryPage.thatResetLinkHasExpiredHas}
             </p>
-            <Link className="modal-button" to="/forgot-password">
+            <Link className="btn btn-primary" to="/forgot-password">
               {ui.accountRecoveryPage.sendNewOne}
             </Link>
           </>
@@ -238,7 +242,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
                 {error}
               </p>
             )}
-            <button type="submit" className="modal-button" disabled={busy || !token}>
+            <button type="submit" className="btn btn-primary" disabled={busy || !token}>
               {busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.setPassword}
             </button>
           </form>
@@ -247,7 +251,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
             <p className="recovery-body">
               {error ?? (busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.nothingToConfirm)}
             </p>
-            <Link className="modal-button" to="/">
+            <Link className="btn btn-primary" to="/">
               {ui.accountRecoveryPage.backLobby}
             </Link>
           </>

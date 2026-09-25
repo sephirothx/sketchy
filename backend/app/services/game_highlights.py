@@ -25,6 +25,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from app.game import Game
+from app.presenters import guess_time_on_wire
 from app.rooms import Room
 
 # A drawer's turns are only comparable against another drawer's. With one
@@ -132,7 +133,7 @@ def _fastest_guess(game: Game, names: dict[str, _Name]) -> dict | None:
         {
             "kind": "fastest_guess",
             "prompt": turn.chosen_prompt,
-            "seconds": round(guess.guess_time_seconds, 2),
+            "seconds": guess_time_on_wire(guess.guess_time_seconds),
         },
         names[guess.token],
     )
@@ -183,7 +184,7 @@ def _quickest_on_average(game: Game, names: dict[str, _Name]) -> dict | None:
     return _named(
         {
             "kind": "quickest_average",
-            "seconds": round(sum(ranked[token]) / len(ranked[token]), 2),
+            "seconds": guess_time_on_wire(sum(ranked[token]) / len(ranked[token])),
         },
         names[token],
     )

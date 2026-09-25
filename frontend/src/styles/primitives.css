@@ -15,11 +15,20 @@
   font-weight: 800;
   min-height: 44px;
   color: var(--ink);
+  /* A <Link> wears the recipe too, and must not keep a link's underline. */
+  text-decoration: none;
+  transition:
+    filter var(--dur-fast) ease-out,
+    translate var(--dur-fast) ease-out,
+    box-shadow var(--dur-fast) ease-out,
+    background-color var(--dur-fast) ease-out,
+    border-color var(--dur-fast) ease-out,
+    color var(--dur-fast) ease-out;
 }
 
 .btn-primary {
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   box-shadow: 0 2px 0 var(--primary-edge);
 }
 
@@ -31,7 +40,7 @@
 
 .btn-success {
   background: var(--success-button);
-  color: #fff;
+  color: var(--on-success);
   box-shadow: 0 2px 0 var(--success-button-edge);
 }
 
@@ -48,6 +57,12 @@
   gap: 7px;
   padding: 10px 12px;
   font-size: 14px;
+}
+
+.btn-danger {
+  background: var(--danger-button);
+  color: #fff;
+  box-shadow: 0 2px 0 var(--danger-button-edge);
 }
 
 .btn-danger-ghost {
@@ -85,13 +100,80 @@
   padding: 0;
 }
 
+/* States, once, for every variant. They were missing, so only the buttons
+   that reimplemented .btn reacted to the pointer - each with its own filter.
+
+   Wrapped in :where() so a state weighs no more than the variant it modifies:
+   it beats `.btn-primary` by coming after it, and loses to any component rule
+   that deliberately restyles a button, rather than repainting it on hover.
+
+   Hover only where a pointer can hover: a tap leaves :hover stuck on touch
+   screens until the next tap somewhere else. */
+@media (hover: hover) {
+  .btn-primary:where(:hover:not(:disabled)),
+  .btn-warm:where(:hover:not(:disabled)),
+  .btn-success:where(:hover:not(:disabled)),
+  .btn-danger:where(:hover:not(:disabled)) {
+    filter: brightness(1.07);
+  }
+
+  .btn-secondary:where(:hover:not(:disabled)),
+  .btn-icon:where(:hover:not(:disabled)) {
+    border-color: var(--faint);
+    color: var(--ink);
+  }
+
+  .btn-ghost:where(:hover:not(:disabled)),
+  .btn-danger-ghost:where(:hover:not(:disabled)) {
+    background: color-mix(in srgb, currentColor 9%, transparent);
+  }
+
+  .btn-ghost:where(:hover:not(:disabled)) {
+    color: var(--ink);
+  }
+}
+
+/* The press: the button sinks onto its edge. `translate` rather than
+   `transform`, so a button a component positions with a transform (the chat's
+   centred "new messages" pill) keeps its place while it is pressed. */
+.btn:where(:active:not(:disabled)) {
+  translate: 0 1px;
+}
+
+.btn-primary:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--primary-edge);
+}
+
+.btn-warm:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--warm-edge);
+}
+
+.btn-success:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--success-button-edge);
+}
+
+.btn-danger:where(:active:not(:disabled)) {
+  box-shadow: 0 1px 0 var(--danger-button-edge);
+}
+
+.btn-secondary:where(:active:not(:disabled)),
+.btn-icon:where(:active:not(:disabled)) {
+  box-shadow: none;
+}
+
+/* Disabled is dimmed globally (reset.css); a disabled button also loses its
+   edge, so it no longer looks like something that can be pressed. */
+.btn:where(:disabled) {
+  box-shadow: none;
+}
+
 /* ------------------------------------------------------------------ chips */
 .chip {
   display: inline-flex;
   align-items: center;
   gap: 5px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 11px;
   font-size: 12px;
   font-weight: 800;
@@ -129,7 +211,87 @@
   color: var(--warm-ink);
 }
 
-/* ------------------------------------------------------------------ cards */
+/* ----------------------------------------------------------- toggle chips
+
+   One of a set of independent on/off choices, pressed or not: the create
+   form's prompt lists and tools, the lobby's filters, the gallery's window,
+   the catalogue's filters and its tags. They used to be four recipes with
+   four sizes; the state is `aria-pressed`, which every one of them already
+   set for a screen reader, so the look cannot disagree with what is read. */
+.toggle-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 4px;
+}
+
+.toggle-chip {
+  align-items: center;
+  background: var(--card);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 800;
+  gap: 7px;
+  min-height: 42px;
+  padding: 9px 15px;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
+  user-select: none;
+}
+
+.toggle-chip:hover:not(:disabled) {
+  border-color: var(--faint);
+  color: var(--ink);
+}
+
+.toggle-chip[aria-pressed="true"] {
+  background: var(--primary-soft);
+  border-color: var(--primary);
+  color: var(--primary-ink);
+}
+
+.toggle-chip:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+.toggle-chip:disabled {
+  cursor: default;
+  opacity: 0.85;
+}
+
+.toggle-chip-status {
+  color: var(--faint);
+  display: inline-flex;
+}
+
+.toggle-chip[aria-pressed="true"] .toggle-chip-status {
+  color: var(--primary);
+}
+
+.toggle-chip-name {
+  white-space: nowrap;
+}
+
+/* A size down, for a vocabulary of tags: fifteen of them share a column
+   with the rest of the list editor, or fold out under the catalogue's bar. */
+.toggle-chip.is-small {
+  font-size: 13px;
+  gap: 5px;
+  min-height: 32px;
+  padding: 4px 12px;
+}
+
+/* ------------------------------------------------------------------ cards
+
+   The one card surface. A card composes it in its markup (`surface-card
+   panel`, `surface-card ops-card`) and keeps only its own layout, rather than
+   restating the four declarations: nine rules did, and a change to the card
+   had to find all of them. A card is 1.5px; 1px is for wells and notices. */
 .surface-card {
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -137,13 +299,313 @@
   box-shadow: var(--shadow);
 }
 
+/* Two heading styles, and only two (C10).
+
+   A panel's title is the display face in sentence case, in the lobby, the
+   room's side columns, and the phone's waiting room alike: it names the
+   panel, so it reads as a title rather than as a label. Only its size moves,
+   a step down in the room's narrow columns (game-room.css).
+
+   The eyebrow - a small label over a title, a group of fields, a column or a
+   figure - is the one place text is set in capitals, and this is the one
+   recipe for it. A label keeps its own colour where it has one (a tint on an
+   invite card, --muted where it has to be read rather than glanced at) and
+   its own spacing; its type comes from here. The body face is stated because
+   an eyebrow is sometimes an <h3> or <h4>, which reset.css gives the display
+   face. */
+.panel-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+}
+
 .section-label {
   color: var(--faint);
+  font-family: var(--font-body);
   font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.09em;
   margin: 0;
   text-transform: uppercase;
+}
+
+/* ------------------------------------------------------------ empty state
+   What a list says when it is empty (`components/ui/EmptyState.tsx`): a dashed
+   outline where the list would be, a title, a line of what to do, and at most
+   one control. Content sits in the middle, because in a pinned panel the box
+   takes the list's whole height. */
+.empty-state {
+  align-items: center;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty-state-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.empty-state-body {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+  max-width: 44ch;
+}
+
+.empty-state-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.empty-state.is-compact {
+  border-radius: var(--radius-sm);
+  gap: 4px;
+  padding: 16px 12px;
+}
+
+.empty-state.is-compact .empty-state-title {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.empty-state.is-compact .empty-state-body {
+  font-size: 13px;
+}
+
+.empty-state.is-compact .empty-state-action {
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------- loading
+   "Loading…" where there is no skeleton to draw: one muted line, centred in
+   the space the content will take. The Gallery's feed keeps its skeleton. */
+.loading-note {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+  padding: 16px 0;
+  text-align: center;
+}
+
+/* ------------------------------------------------------ segmented control
+
+   One of two to four orders or modes, all on screen, with a thumb that slides
+   to the one that is on (SegmentedControl in RoomSetupControls.tsx, which sets
+   --segment-index and --segment-count). The room form, the settings pane, the
+   gallery's sort and the catalogue's orders all use this one; the last two
+   had a copy each without the thumb. */
+.segmented-control-field {
+  border: 0;
+  margin: 0;
+  min-width: 0;
+  padding: 0;
+}
+
+.segmented-control-field.is-labeled {
+  align-items: center;
+  display: flex;
+  flex-direction: row;
+  font-size: 15px;
+  font-weight: 700;
+  gap: 12px;
+  justify-content: flex-start;
+  width: fit-content;
+}
+
+.segmented-control-label {
+  align-items: center;
+  box-sizing: border-box;
+  color: var(--ink);
+  display: inline-flex;
+  flex: 0 0 16.5rem;
+  gap: 6px;
+  line-height: 1.3;
+  width: 16.5rem;
+}
+
+.segmented-control {
+  background: var(--track);
+  border-radius: var(--radius-pill);
+  display: inline-grid;
+  gap: 3px;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(88px, 1fr);
+  padding: 4px;
+  position: relative;
+  width: fit-content;
+}
+
+.segmented-control-thumb {
+  background: var(--card);
+  border-radius: var(--radius-pill);
+  box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14);
+  height: calc(100% - 8px);
+  left: 4px;
+  pointer-events: none;
+  position: absolute;
+  top: 4px;
+  transform: translateX(calc(var(--segment-index) * (100% + 3px)));
+  transition: transform var(--dur) cubic-bezier(0.2, 0, 0, 1);
+  width: calc((100% - 8px - (var(--segment-count) - 1) * 3px) / var(--segment-count));
+  z-index: 0;
+}
+
+.segmented-control button {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-pill);
+  color: var(--muted);
+  cursor: pointer;
+  display: grid;
+  font: inherit;
+  font-size: 13.5px;
+  font-weight: 700;
+  justify-content: center;
+  padding: 8px 16px;
+  position: relative;
+  text-align: center;
+  transition: color var(--dur) ease;
+  white-space: nowrap;
+  z-index: 1;
+}
+
+.segmented-control button[aria-pressed="true"] {
+  color: var(--ink);
+  font-weight: 800;
+}
+
+.segmented-control button:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+/* The two copies stack in one cell: the hidden one is always bold, so the
+   segment is as wide when it is off as when it is on and the row does not
+   move under the pointer that just pressed it. */
+.segmented-control button > .segment-sizer,
+.segmented-control button > .segment-label {
+  align-items: center;
+  display: inline-flex;
+  gap: 6px;
+  grid-area: 1 / 1;
+  justify-content: center;
+}
+
+.segmented-control button > .segment-sizer {
+  font-weight: 800;
+  visibility: hidden;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .segmented-control-thumb,
+  .segmented-control button {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------- switches
+
+   One switch, at one size, wherever a setting is on or off: the room form,
+   the settings pane and the lobby's filter sheet (which had a larger one of
+   its own). The track is decoration. What drives it is a checkbox before it
+   (`input:checked ~ .switch-track`), or `.is-on` where the whole row is a
+   button and there is no checkbox. */
+.switch-track {
+  align-items: center;
+  background: var(--line-strong);
+  border-radius: var(--radius-pill);
+  box-sizing: border-box;
+  display: inline-flex;
+  flex: 0 0 auto;
+  height: 24px;
+  padding: 3px;
+  transition: background-color var(--dur) ease;
+  width: 42px;
+}
+
+.switch-thumb {
+  background: #fff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25);
+  display: block;
+  height: 18px;
+  transition: transform var(--dur) ease;
+  width: 18px;
+}
+
+input:checked ~ .switch-track,
+.switch-track.is-on {
+  background: var(--primary);
+}
+
+input:checked ~ .switch-track .switch-thumb,
+.switch-track.is-on .switch-thumb {
+  transform: translateX(18px);
+}
+
+input:focus-visible ~ .switch-track {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+/* Only on a real pointer: a tap leaves :hover stuck on a touch screen. */
+@media (hover: hover) and (pointer: fine) {
+  :is(label, button):hover:not(.is-disabled, :disabled) .switch-track {
+    background: var(--faint);
+  }
+
+  :is(label, button):hover:not(.is-disabled, :disabled) input:checked ~ .switch-track,
+  :is(label, button):hover:not(.is-disabled, :disabled) .switch-track.is-on {
+    background: var(--primary-ink);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .switch-track,
+  .switch-thumb {
+    transition: none;
+  }
+}
+
+/* --------------------------------------------------------------- tooltips
+
+   A line or two about the thing under the pointer. On the popover surface,
+   which is dark in both themes: the tooltips used to be --ink on --paper,
+   which inverts, so in the dark theme they turned white. The edge is for the
+   dark theme, where --menu is the card's own slate. Placement and any arrow
+   belong to the adopter. */
+.tooltip {
+  background: var(--menu);
+  border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
+  border-radius: var(--radius-xs);
+  box-shadow: var(--shadow-raised);
+  box-sizing: border-box;
+  color: var(--menu-ink);
+  font-size: 12.5px;
+  font-weight: 600;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+  padding: 7px 10px;
+  pointer-events: none;
+  white-space: normal;
+  width: max-content;
 }
 
 /* ---------------------------------------------------------------- avatars */
@@ -391,7 +853,7 @@
 .language-picker-list {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   display: flex;
   flex-direction: column;
@@ -405,14 +867,14 @@
   padding: 6px;
   position: absolute;
   top: calc(100% + 6px);
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .language-picker-option {
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   cursor: pointer;
   display: flex;
@@ -491,7 +953,9 @@
   justify-items: center;
   line-height: 1.25;
   margin: 0;
-  overflow-wrap: anywhere;
+  /* Words wrap whole: RoomFacts picks a column count that gives the widest
+     one room. Broken only as a last resort, in a strip too narrow for two. */
+  overflow-wrap: break-word;
 }
 
 .room-fact-icon {
@@ -520,16 +984,42 @@
   margin: 10px 0 0;
 }
 
+/* How many to a row is RoomFacts' measure (`data-columns`), so that no word
+   breaks inside itself. Until it has measured, a phone's three. */
 @media (max-width: 720px) {
-  .room-facts {
+  .room-facts:not([data-columns]) {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .room-fact:nth-child(4) {
+  .room-facts:not([data-columns]) .room-fact:nth-child(4) {
     border-left: 0;
   }
 
-  .room-fact:nth-child(n + 4) {
+  .room-facts:not([data-columns]) .room-fact:nth-child(n + 4) {
     border-top: 1px solid var(--line);
   }
+}
+
+.room-facts[data-columns="3"] {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.room-facts[data-columns="3"] .room-fact:nth-child(3n + 1) {
+  border-left: 0;
+}
+
+.room-facts[data-columns="3"] .room-fact:nth-child(n + 4) {
+  border-top: 1px solid var(--line);
+}
+
+.room-facts[data-columns="2"] {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.room-facts[data-columns="2"] .room-fact:nth-child(2n + 1) {
+  border-left: 0;
+}
+
+.room-facts[data-columns="2"] .room-fact:nth-child(n + 3) {
+  border-top: 1px solid var(--line);
 }

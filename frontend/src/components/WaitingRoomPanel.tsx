@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { ModalShell } from "./ui/ModalShell";
@@ -6,10 +6,12 @@ import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
 import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon } from "./icons";
 import { RoomFacts } from "./RoomFacts";
+import { RoomVisibilityIcon } from "./RoomVisibilityIcon";
 import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useBottomDock } from "../hooks/useBottomDock";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
 import type {
@@ -56,6 +58,27 @@ interface WaitingRoomPanelProps {
 }
 
 
+/**
+ * A phone docks the rules card's footer over the bottom of the screen, so the
+ * room shell keeps that much room free under the chat card. Measured rather
+ * than fixed: the dock is one row or two (the host's Start under Edit and the
+ * pad, an error line, a wait that wraps), and the fixed 84px it replaced was
+ * shorter than the host's two rows, which left the chat's last lines under it.
+ * Above 900px the footer is in the card and the reserve is not applied.
+ */
+function reserveDock(dock: HTMLDivElement | null) {
+  const shell = dock?.closest<HTMLElement>(".room-shell");
+  if (!dock || !shell) return;
+  const measure = () => shell.style.setProperty("--waiting-dock-height", `${dock.offsetHeight}px`);
+  measure();
+  const observer = new ResizeObserver(measure);
+  observer.observe(dock, { box: "border-box" });
+  return () => {
+    observer.disconnect();
+    shell.style.removeProperty("--waiting-dock-height");
+  };
+}
+
 export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   const { players, myPlayerId, isHost, finalScores, code } = props;
   const { notify } = useToast();
@@ -66,6 +89,20 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // says more than a grid of faces can, so rendering both would put every
   // nickname on the page twice.
   const isNarrow = useMediaQuery("(max-width: 900px)");
+  const dockRef = useBottomDock();
+  // Up to where the bar gives the room's name back (1100px) the rules card's
+  // footer is a column about 340px wide on a desktop and a dock on a phone:
+  // Edit and the pad's button share a row there only with the short labels.
+  // Above it the long labels, and the footer's rows fill (game-room.css).
+  const shortFooterLabels = useMediaQuery("(max-width: 1100px)");
+  const footerRef = useRef<HTMLDivElement | null>(null);
+  // One element, two readers: the room shell's reserve under the chat card
+  // (reserveDock, above) and the page-wide clearance the toasts and the
+  // friend invite stand above (useBottomDock).
+  const footerDockRef = useCallback((element: HTMLDivElement | null) => {
+    footerRef.current = element;
+    dockRef(element);
+  }, [dockRef]);
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The scratch pad in place of the column (#591). Focus follows the swap:
   // the control that made it lands on the one that undoes it, and back.
@@ -81,6 +118,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     swapped.current = true;
     setDrawing(nextDrawing);
   }
+  // The phone's dock, fixed over the page: the room shell keeps its height
+  // free. Which footer is the dock changes with the pad (`drawing`) and, while
+  // it is open, with the width: its footer exists only on a phone.
+  useLayoutEffect(() => reserveDock(footerRef.current), [drawing, isNarrow]);
   const activePlayers = players.filter((player) => !player.isSpectator);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const host = players.find((player) => player.isHost);
@@ -127,6 +168,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
     await copyToClipboard(url, ui.waitingRoomPanel.inviteLink);
   }
 
+  const startLabel = props.startBusy
+    ? ui.waitingRoomPanel.starting
+    : canStart
+      ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
+      : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers });
+
   const startButton = (big: boolean) => (
     <button
       type="button"
@@ -136,17 +183,13 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       title={canStart ? undefined : startBlockedReason}
     >
       <PlayIcon size={big ? 17 : 15} />
-      {props.startBusy
-        ? ui.waitingRoomPanel.starting
-        : canStart
-          ? rematch ? ui.waitingRoomPanel.rematch : ui.waitingRoomPanel.startGame
-          : ui.waitingRoomPanel.needMorePlayers({ count: needsPlayers })}
+      {startLabel}
     </button>
   );
   const waitingForHost = (
     <p className="waiting-start-waiting">
       {host
-        ? <>{fill(ui.waitingRoomPanel.hostWillStart({ rematch }), {
+        ? <>{fill(ui.waitingRoomPanel.waitingForHostToStart({ rematch }), {
         host: (
           <span
             className={playerNameClass(host.isAnonymous)}
@@ -159,6 +202,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         : ui.waitingRoomPanel.waitingForAHost}
     </p>
   );
+  // Up to 1100px this button shares a narrow row with Edit (the host's) or
+  // with the wait for the host (everybody else's), so there it has the short
+  // label; the accessible name is the visible one either way (WCAG 2.5.3).
   const drawButton = (
     <button
       ref={drawButtonRef}
@@ -168,7 +214,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       onClick={() => swapTo(true)}
     >
       <BrushIcon size={15} />
-      {ui.scratchPad.drawWhileYouWait}
+      {shortFooterLabels ? ui.waitingRoomPanel.doodle : ui.scratchPad.drawWhileYouWait}
     </button>
   );
 
@@ -216,7 +262,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         {/* A phone docks Start at the bottom of the screen, as the room view
             does, rather than wrapping it onto a line of its own in the strip. */}
         {isNarrow && (
-          <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+          <div ref={footerDockRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
             {isHost ? startButton(true) : waitingForHost}
           </div>
         )}
@@ -227,18 +273,21 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   return (
     <main className="waiting-room" data-testid="waiting-room">
       {/* Which room this is, out of the invite card. It is the one thing on
-          the screen that is not about getting people into it. */}
+          the screen that is not about getting people into it. Where the bar
+          prints the room's name (above 1100px, game-room.css) the heading is
+          for a screen reader only; below that the bar has no room for the
+          name, so this is the one place it is said. No status line under it:
+          "waiting for players" said what the whole screen says, and whether
+          the room can start is Start's own label ("Need 1 more player") -
+          and during a drain, the drain's notice. */}
       <header className="waiting-room-head">
-        <h1>{props.name}</h1>
-        <p className="section-label">
-          {props.isPublic ? ui.waitingRoomPanel.publicRoom : ui.waitingRoomPanel.privateRoom} · {rematch ? ui.waitingRoomPanel.betweenGames : ui.waitingRoomPanel.waitingForPlayers}
-        </p>
+        <h1>{props.name}<RoomVisibilityIcon isPublic={props.isPublic} /></h1>
       </header>
 
       {/* The code, read at a glance or tapped to copy, and one way to send it.
           Six bordered cells and two buttons spent 237px on that. */}
-      <section className="waiting-card waiting-invite-card">
-        <p className="waiting-invite-kicker">{ui.waitingRoomPanel.inviteYourFriends}</p>
+      <section className="surface-card waiting-card waiting-invite-card">
+        <p className="section-label waiting-invite-kicker">{ui.waitingRoomPanel.inviteYourFriends}</p>
         {code && (
           <p className="waiting-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</p>
         )}
@@ -253,7 +302,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
               iconLeft={<LinkIcon size={15} />}
               onClick={() => void copyToClipboard(window.location.href, ui.waitingRoomPanel.inviteLink)}
             >
-              {ui.roomMenuSheet.copyInviteLink}
+              {/* Half a phone's card wide, beside Copy code: the menu row's
+                  longer label ran into both of the button's edges there. */}
+              {isNarrow ? ui.waitingRoomPanel.copyLink : ui.roomMenuSheet.copyInviteLink}
             </Button>
           )}
           {/* A button of its own, not a link pretending to be one: it is the
@@ -275,9 +326,9 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       {/* Who is here, as faces rather than a list in another column. The one
           thing you watch while waiting used to be the last thing on the page,
           below the chat card. */}
-      {isNarrow && <section className="waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
+      {isNarrow && <section className="surface-card waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
         <div className="waiting-roster-head">
-          <h2 id="waiting-roster-title">{ui.waitingRoomPanel.inTheRoom}</h2>
+          <h2 id="waiting-roster-title" className="panel-title">{ui.waitingRoomPanel.inTheRoom}</h2>
           <span className="waiting-roster-count">
             {ui.waitingRoomPanel.rosterCount({
               here: activePlayers.length,
@@ -356,7 +407,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           said them in a different order and wording from every other place
           a room is described. On a phone the footer docks to the bottom of
           the screen, as Start did - it sat below the fold otherwise. */}
-      <section className="waiting-card waiting-rules-card" aria-labelledby="waiting-rules-title">
+      <section className="surface-card waiting-card waiting-rules-card" aria-labelledby="waiting-rules-title">
         <h2 id="waiting-rules-title" className="visually-hidden">{ui.inviteEntryPage.roomRules}</h2>
         <RoomFacts
           testId="waiting-facts"
@@ -366,7 +417,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             playerCount: activePlayers.length,
           }}
         />
-        <div className="waiting-rules-footer waiting-start-card" aria-live="polite">
+        <div ref={footerDockRef} className="waiting-rules-footer waiting-start-card" aria-live="polite">
           {isHost ? (
             <>
               <button
@@ -375,7 +426,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
                 onClick={() => setSettingsOpen(true)}
               >
                 <PencilIcon size={15} />
-                {ui.waitingRoomPanel.editRoomRules}
+                {shortFooterLabels ? ui.waitingRoomPanel.editRules : ui.waitingRoomPanel.editRoomRules}
               </button>
               {props.startError && <p className="waiting-start-error">{props.startError}</p>}
               {drawButton}

@@ -96,7 +96,7 @@ export function StepUpDialog({
         {canUsePasskeys && (
           <button
             type="button"
-            className="modal-button step-up-passkey"
+            className="btn btn-primary step-up-passkey"
             onClick={() => void proveWithPasskey()}
             disabled={busy}
           >

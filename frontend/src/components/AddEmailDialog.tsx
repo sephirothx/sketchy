@@ -107,7 +107,7 @@ export function AddEmailDialog({
             </p>
             <button
               type="button"
-              className="modal-button"
+              className="btn btn-primary"
               onClick={() => onSaved(sentTo)}
             >
               {ui.addEmailDialog.done}
@@ -157,7 +157,7 @@ export function AddEmailDialog({
                   {error}
                 </p>
               )}
-              <button type="submit" className="modal-button" disabled={busy}>
+              <button type="submit" className="btn btn-primary" disabled={busy}>
                 {busy ? ui.addEmailDialog.pleaseWait : ui.addEmailDialog.sendConfirmation}
               </button>
             </form>

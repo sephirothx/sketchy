@@ -84,3 +84,44 @@ export function statsRows(prompts: PromptStats[]) {
     drawnLabel: String(prompt.pickCount),
   }));
 }
+
+/**
+ * Is there nothing in this slice to show but names?
+ *
+ * Then the table has nothing to say: every row would read "Not played
+ * enough", a dash, a dash and a zero, forty to a page. The page says why
+ * once (`coverageNote`) and lists the prompts as names instead (R-STAT-02).
+ * Only while nothing has been drawn either: a prompt drawn a few times has a
+ * count worth showing and an order ("Most picked") worth keeping, ranked or
+ * not, and the table keeps both.
+ */
+export function nothingRanked(stats: {
+  ratedCount: number;
+  unratedCount: number;
+  prompts: readonly Pick<PromptStats, "pickCount">[];
+}): boolean {
+  return stats.ratedCount === 0
+    && stats.unratedCount > 0
+    && stats.prompts.every((prompt) => prompt.pickCount === 0);
+}
+
+/** The names of an unranked list, alphabetically in the list's own language:
+    with no difficulty to order them by, the order a reader can scan is the
+    only useful one. */
+export function plainPromptNames(prompts: PromptStats[], language: string): string[] {
+  const collator = new Intl.Collator(language, { sensitivity: "base" });
+  return prompts.map((prompt) => prompt.text).sort(collator.compare);
+}
+
+/**
+ * A prompt from the list itself, as the search box's example.
+ *
+ * A fixed English example sat in the box above a German list. The middle name
+ * alphabetically is stable across sorts and filters, which all list the same
+ * prompts, so the example does not change under the reader's cursor.
+ */
+export function searchExample(prompts: PromptStats[], language: string): string | null {
+  if (prompts.length === 0) return null;
+  const names = plainPromptNames(prompts, language);
+  return names[Math.floor(names.length / 2)];
+}

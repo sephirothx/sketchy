@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { gameLength, gameMinutes, changedRoomRules } from "../src/lib/roomCardFacts.ts";
+import { columnsFor, gameLength, gameMinutes, changedRoomRules } from "../src/lib/roomCardFacts.ts";
 
 const standard = {
   id: "r1",
@@ -113,4 +113,35 @@ test("a room on a single list other than its language's Standard one is marked, 
   assert.deepEqual([community.value, community.changed], ["English · 1 list", true]);
   const extended = promptsOf(["english_extended"]);
   assert.deepEqual([extended.value, extended.changed], ["English · 1 list", true]);
+});
+
+// A cell holds its widest word plus 12px of padding, its 1px rule and a
+// rounding pixel: 117px for German's "Niederländisch" (103px).
+const GERMAN = 103;
+const PADDING = 12;
+
+test("room facts go six, three or two to a row, the most that hold the widest word", () => {
+  assert.equal(columnsFor(720, GERMAN, PADDING), 6, "a wide column: six of 120px");
+  assert.equal(columnsFor(700, GERMAN, PADDING), 3, "six of 116.7px would break the word");
+  assert.equal(columnsFor(351, GERMAN, PADDING), 3, "three of 117px, exactly enough");
+  // The waiting room on a 390px phone: three of 108.7px would break
+  // "Zeitgesteu|erte", so German takes two - where English's widest word
+  // (79px) keeps three.
+  assert.equal(columnsFor(326, GERMAN, PADDING), 2);
+  assert.equal(columnsFor(326, 79, PADDING), 3);
+});
+
+test("two is the floor, even where a word cannot fit", () => {
+  assert.equal(columnsFor(200, GERMAN, PADDING), 2);
+  assert.equal(columnsFor(0, GERMAN, PADDING), 2);
+});
+
+test("adding columns asks for a pixel more than keeping them", () => {
+  // 702 / 6 = 117: exactly enough. Kept when showing, not taken when not,
+  // so a width sitting on the threshold does not flip the strip.
+  assert.equal(columnsFor(702, GERMAN, PADDING, 6), 6);
+  assert.equal(columnsFor(702, GERMAN, PADDING, 3), 3);
+  assert.equal(columnsFor(708, GERMAN, PADDING, 3), 6, "a pixel over, it adds them");
+  // Dropping columns needs no margin: a word about to break does not wait.
+  assert.equal(columnsFor(701, GERMAN, PADDING, 6), 3);
 });

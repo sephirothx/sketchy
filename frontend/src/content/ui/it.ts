@@ -473,11 +473,6 @@ export const IT: Catalogue = {
       `${p.percent} indovinato`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Data del commit: ${p.commitDate} | Build: ${p.builtAt}`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, cifra ${p.index} di ${p.length}`,
@@ -564,6 +559,7 @@ export const IT: Catalogue = {
     newHere: "Nuovo qui? ",
     guestIdentity: (p: { name: string }) =>
       `${p.name}. Il tuo nome visualizzato non è salvato.`,
+    guestNameNotSaved: "Nome da ospite, non salvato in un account",
     signedInAs: (p: { name: string }) =>
       `Accesso come ${p.name}`,
   },
@@ -572,8 +568,9 @@ export const IT: Catalogue = {
     thatConfirmationLinkCouldNotBe: "Non è stato possibile usare questo link di conferma.",
     somethingWentWrongPleaseTryAgain: "Qualcosa è andato storto. Riprova.",
     evenBestGuessersForgetSometimes: "Anche i migliori indovini a volte dimenticano.",
-    weRsquoLlSendSecureTime: "Invieremo un link sicuro e a tempo all’indirizzo email confermato\n            del tuo account.",
-    accountHelp: "Aiuto sull’account",
+    asideForgot: "Invieremo un link sicuro e a tempo all'indirizzo email confermato del tuo account.",
+    asideReset: "Scegli una password che non usi da nessun'altra parte.",
+    asideVerify: "Un'email confermata ti permette di rientrare se un giorno dimentichi la password.",
     backLobby: "Torna alla lobby",
     enterYourUsernameYourConfirmedEmail: "Inserisci il tuo nome utente o il tuo indirizzo confermato. Se\n              l’account è recuperabile, un link è già in viaggio.",
     usernameEmail: "Nome utente o email",
@@ -676,6 +673,9 @@ export const IT: Catalogue = {
   appHeader: {
     playerSettings: "Impostazioni del giocatore",
     sketchyHome: "Vai alla lobby",
+    siteNav: "Pagine",
+    communityLink: "Catalogo",
+    promptStatsLink: "Stats parole",
   },
 
   bugReportDialog: {
@@ -810,7 +810,6 @@ export const IT: Catalogue = {
     couldNotDeleteThatPreset: "Non è stato possibile eliminare questa preimpostazione.",
     fixCustomPromptEntriesMarkedAbove: "Correggi le parole personalizzate segnate qui sopra prima di creare la stanza.",
     couldNotCreateRoom: "Impossibile creare la stanza.",
-    roomSetup: "Configurazione della stanza",
     createRoom: "Crea una stanza",
     startFromSavedPreset: "Parti da una preimpostazione salvata",
     startFromPreset: "Parti da una preimpostazione…",
@@ -832,8 +831,6 @@ export const IT: Catalogue = {
     deleteThisRoomSettingPreset: "Eliminare questa impostazione predefinita della stanza?",
     deletePresetDescription: "Le stanze che hai già creato con questa impostazione non cambiano.",
     createTheRoom: "creare la stanza",
-    noScoring: "Senza punteggio",
-    public: "Pubblica",
     private: "Privata",
     backToLobby: "Torna alla lobby",
     leaveBlankForARandom: "Lascia vuoto per un nome a caso!",
@@ -841,10 +838,6 @@ export const IT: Catalogue = {
     createRoom2: "Crea stanza",
     yourRoom: "La tua stanza",
     aRandomName: "Un nome casuale",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "giocatore", other: "giocatori" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "round", other: "round" }),
   },
 
   customPromptsEditor: {
@@ -967,6 +960,7 @@ export const IT: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameTooShort: (p: { min: number }) => `Un nome deve avere almeno ${p.min} caratteri.`,
     nameInUse: (p: { name: string }) =>
       `Qualcuno online sta già giocando come «${p.name}». Scegli un altro nome per continuare a giocare.`,
     couldNotSaveThatNamePlease: "Non è stato possibile salvare questo nome. Riprova.",
@@ -1027,6 +1021,8 @@ export const IT: Catalogue = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " e ",
     continueLabel: "Continua",
     youFinished: (p: { points: number }) =>
       `Sei arrivato {place} con ${counted(p.points, { one: "punto", other: "punti" })}.`,
@@ -1101,6 +1097,7 @@ export const IT: Catalogue = {
 
   lobbyBrowserPage: {
     quickPlay: "Gioca subito",
+    lobby: "Lobby",
     quickPlayBusy: "Sto cercando una stanza…",
     couldNotFindOrOpenARoom: "Non è stato possibile trovare o aprire una stanza.",
     filterByLanguage: "Filtra per lingua",
@@ -1129,16 +1126,15 @@ export const IT: Catalogue = {
     hideFullRooms: "Nascondi le stanze piene",
     hideGamesProgress: "Nascondi le partite in corso",
     loadingPublicRooms: "Caricamento delle stanze pubbliche…",
-    noPublicRoomsYetCreateOne: "Ancora nessuna stanza pubblica. Creane una!",
+    noPublicRoomsYet: "Ancora nessuna stanza pubblica",
+    noPublicRoomsYetBody: "Gioca subito ne apre una per te, oppure creane una tua.",
     noPublicRoomsMatchYourSearch: "Nessuna stanza pubblica corrisponde alla tua ricerca.",
     paste: "Incolla",
     couldNotSaveThatName: "Impossibile salvare quel nome. Riprova.",
     joinAsASpectator: "entrare come spettatore",
     joinTheRoom: "entrare nella stanza",
-    loading: "Caricamento…",
     showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
       `${p.filteredRoomsCount} su ${p.roomsCount} mostrate`,
-    n0Rooms: "0 stanze",
     close: "Chiudi",
     joining: "Ingresso…",
     join: "Entra",
@@ -1201,7 +1197,6 @@ export const IT: Catalogue = {
     nothingMatchesThoseFilters: "Nessuna lista corrisponde a questi filtri.",
     nothingPublishedYet: "Non è ancora stata pubblicata nessuna lista.",
     byOwner: (p: { owner: string }) => `di ${p.owner}`,
-    community: "Community",
     starred: "Con stella",
     tags: "Etichette",
     promptCount: (p: { count: number }) =>
@@ -1246,8 +1241,7 @@ export const IT: Catalogue = {
   galleryPage: {
     gallery: "Galleria",
     backToLobby: "Torna alla lobby",
-    eyebrow: "Disegni",
-    drawingsFromPublicGames: "Tutti i disegni delle partite pubbliche, per chiunque abbia effettuato l’accesso.",
+    drawingsFromPublicGames: "Tutti i disegni delle partite pubbliche.",
     loading: "Caricamento…",
     sortBy: "Ordina per",
     hot: "In evidenza",
@@ -1257,9 +1251,9 @@ export const IT: Catalogue = {
     allTime: "Da sempre",
     thisMonth: "Questo mese",
     thisWeek: "Questa settimana",
-    nothingThisWeek: "Ancora nessun disegno pubblico questa settimana. Gioca una partita pubblica e torna.",
-    nothingHereYet: "Qui non c’è ancora niente. Gioca una partita pubblica e torna.",
-    signInToSeeTheGallery: "La galleria è per i giocatori che hanno effettuato l’accesso. Accedi o continua come ospite dalla lobby.",
+    nothingThisWeek: "Ancora niente questa settimana.",
+    nothingHereYet: "Ancora nessun disegno",
+    signInToSeeTheGallery: "Accedi per vedere la galleria",
     couldNotLoadTheGallery: "Non è stato possibile caricare la galleria.",
     couldNotLoadThisDrawing: "Non è stato possibile caricare questo disegno.",
     showMore: "Mostra altro",
@@ -1275,8 +1269,8 @@ export const IT: Catalogue = {
     findARoom: "Trova una stanza",
     backToTop: "Torna su",
     topOfTheWeek: "Top della settimana",
-    nothingHereYetBody: "Ogni disegno conservato da una partita pubblica finisce qui.",
-    signInBody: "Accedi, o continua come ospite dalla lobby, per vedere tutti i disegni delle partite pubbliche.",
+    nothingHereYetBody: "Gioca una partita pubblica e i suoi disegni saranno i primi qui.",
+    signInBody: "Oppure scegli un nome nella lobby per guardare come ospite.",
     backToGallery: "Torna alla galleria",
     replay: "Riproduci",
     pause: "Pausa",
@@ -1327,8 +1321,10 @@ export const IT: Catalogue = {
       `${counted(p.prompts, { one: "parola", other: "parole" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `Questa lista è ${p.state} e non si può usare in nuove partite. Modificarla non la ripristina in automatico; deve esaminarla un moderatore.`,
+    underReview: "In revisione",
+    hidden: "Nascosta",
+    listUnderReviewWarning: "Questa lista è in revisione e non si può usare in nuove partite. Modificarla non la ripristina in automatico; deve esaminarla un moderatore.",
+    listHiddenWarning: "Questa lista è nascosta e non si può usare in nuove partite. Modificarla non la ripristina in automatico; deve esaminarla un moderatore.",
     needsReview: (p: { count: number }) => `Da esaminare (${p.count})`,
     removePrompt: (p: { prompt: string }) => `Rimuovi ${p.prompt}`,
     couldNotLoadYourPromptLists: "Non è stato possibile caricare le tue liste di parole.",
@@ -1338,7 +1334,8 @@ export const IT: Catalogue = {
     couldNotDeleteThisPromptList: "Non è stato possibile eliminare questa lista.",
     myPromptLists: "Le mie liste di parole",
     newList: "Nuova lista",
-    createAccountSaveReviseSharePrompt: "Crea un account per salvare, rivedere e condividere liste di parole. Le parole veloci di una stanza restano locali ed effimere.",
+    promptListsNeedAnAccount: "Le tue liste di parole hanno bisogno di un account",
+    promptListsNeedAnAccountBody: "Un account conserva le tue liste, da giocare in ogni stanza che ospiti e da pubblicare se vuoi. Le parole personalizzate scritte in una stanza non vengono salvate.",
     loading: "Caricamento…",
     noSavedListsYet: "Ancora nessuna lista salvata.",
     name: "Nome",
@@ -1372,6 +1369,7 @@ export const IT: Catalogue = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Questa pagina non l’ha disegnata nessuno",
+    pageNotFound: "Pagina non trovata",
     thatLinkDoesnTLeadAnywhere: "Questo link non porta da nessuna parte su Sketchy.",
     backLobby: "Torna alla lobby",
   },
@@ -1452,16 +1450,8 @@ export const IT: Catalogue = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "round", other: "round" })} · ${counted(p.players, { one: "giocatore", other: "giocatori" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} pt`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Regole: punteggio ${p.scoringMode}${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (versione vecchia ignota)"
-      } · indizi ${p.hintMode} · ${p.seconds} secondi · parole ${p.promptSource}`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Regole: ${p.scoring} · ${p.hints} · ${p.seconds} secondi · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Segnala ${p.name}`,
     privateRoom: "stanza privata",
     thisGameEndedEarly: "Questa partita è finita prima del tempo, quindi questi sono i punteggi com’erano quando si è fermata e non una classifica finale.",
@@ -1483,7 +1473,8 @@ export const IT: Catalogue = {
     createAccount: "Crea account",
     statistics: "Statistiche",
     gameHistory: "Cronologia delle partite",
-    includeGamesThatFellApart: "Includi le partite andate a monte",
+    includeAbandonedGames: "Includi le partite abbandonate",
+    winsAndScoresAppearAfterFirstGame: "Vittorie e punteggi compaiono dopo la prima partita conclusa.",
     notKept: "non conservato",
     pinnedDrawings: "Disegni fissati",
     nothingPinnedYet: "Ancora niente di fissato. Fissa un disegno dal riepilogo di una partita, o da una partita nella tua cronologia qui sotto.",
@@ -1497,13 +1488,20 @@ export const IT: Catalogue = {
     onlyThePlayersInThis: "Solo i giocatori di questa partita possono vederne i turni.",
     couldNotLoadTheTurns: "Impossibile caricare i turni di questa partita.",
     cutShort: "interrotta",
+    abandoned: "abbandonata",
     noAttempt: "nessun tentativo",
     joinedLate: "entrato tardi",
-    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
-      `non conteggiato (${p.eligibilityReason})`,
+    notEligibleAfk: "non conteggiato (AFK)",
+    notEligibleDisconnected: "non conteggiato (disconnesso)",
+    notEligible: "non conteggiato",
+    noGuessers: "nessuno a indovinare",
+    promptSourceCurated: "Parole selezionate",
+    promptSourceCustom: "Parole personalizzate",
+    promptSourceMixed: "Parole miste",
+    promptSourceBuiltinFallback: "Parole integrate di riserva",
     unknownPlayer: "Giocatore sconosciuto",
     backToLobby: "Torna alla lobby",
-    guestDisplayNameNotSaved: "Ospite — nome visualizzato non salvato",
+    guest: "Ospite",
     registeredPlayer: "Giocatore registrato",
     noFinishedGamesYetPlay: "Ancora nessuna partita conclusa. Giocane una e comparirà qui.",
     noGamesToShowGames: "Nessuna partita da mostrare. Le partite delle stanze private sono visibili solo a chi c’era.",
@@ -1551,7 +1549,7 @@ export const IT: Catalogue = {
     pickSomethingDraw: "Scegli qualcosa da disegnare",
     autoPicksWhenTimeRunsOut: "Sceglie da sola allo scadere del tempo.",
     hintSpendLimitReached: "Limite di spesa in indizi raggiunto",
-    deductedFromYourScoreIfYou: "Viene tolto dal tuo punteggio se indovini la parola",
+    hintSpendComesOutOfTurnPoints: "Viene tolto dai punti di questo turno se indovini la parola.",
     buyLetterRevealsEveryMatch: "Compra una lettera: rivela tutte le sue occorrenze",
     selectThePrompt: "scegliere la parola",
     choosing: "Scelta…",
@@ -1589,10 +1587,9 @@ export const IT: Catalogue = {
     scoring: "Punteggio",
     hints: "Indizi",
     findPrompt: "Trova una parola",
-    rollerCoaster: "montagne russe",
     loading: "Caricamento…",
     prompt: "Parola",
-    howGoes: "Come va",
+    howHard: "Quanto è difficile",
     guessed: "Indovinata",
     picked: "Scelta",
     drawn: "Disegnata",
@@ -1604,10 +1601,6 @@ export const IT: Catalogue = {
     defaultScoring: "Punteggio standard",
     pressureScoring: "Punteggio a pressione",
     allHintModes: "Tutte le modalità di indizi",
-    noHints: "Senza indizi",
-    checkpointHints: "Indizi a tempo",
-    purchasedHints: "Indizi acquistati",
-    letterWheel: "Ruota delle lettere",
     backToLobby: "Torna alla lobby",
   },
 
@@ -1839,7 +1832,6 @@ export const IT: Catalogue = {
     playersScores: "Giocatori e punteggi",
     copyInviteLink: "Copia il link d’invito",
     saveImage: "Salva immagine",
-    settings: "Impostazioni",
     leaveRoom: "Esci dalla stanza",
     backFromAfk: "Non sono più AFK",
     goAfk: "Mettiti AFK",
@@ -1855,6 +1847,7 @@ export const IT: Catalogue = {
   },
 
   roomPlayersPanel: {
+    you: "(tu)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "spettatore", other: "spettatori" }),
     spectatorsHeading: (p: { count: number }) => `Spettatori (${p.count})`,
@@ -1885,7 +1878,7 @@ export const IT: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Lingua",
+    promptLanguage: "Lingua delle parole",
     visibility: "Visibilità",
     maxPlayers: "Numero massimo di giocatori",
     rounds: "Round",
@@ -1943,7 +1936,6 @@ export const IT: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "Le regole",
     thisPage: "In questa pagina",
     forExample: "Per esempio",
@@ -2036,7 +2028,6 @@ export const IT: Catalogue = {
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} vive solo in questo browser. Un account conserva il nome, i tuoi punti e la tua cronologia su ogni dispositivo, e ti lascia scegliere un colore.`,
     systemThemeNow: (p: { theme: "dark" | "light" }) => `Adesso: ${p.theme}`,
-    needsAccount: "Serve un account",
     choosePicture: "Scegli un’immagine",
     editPicture: "Modifica l’immagine",
     picture: "Immagine",
@@ -2109,10 +2100,8 @@ export const IT: Catalogue = {
     notConfirmed: "Non confermato",
     saving: "Salvataggio…",
     save: "Salva",
-    aGuestHasNothingTo: "Un ospite non ha nulla da recuperare: non c’è una password da dimenticare.",
     withoutOneThereIsNo: "Senza, non c’è modo di rientrare in questo account se dimentichi la password.",
     addAnEmail: "Aggiungi un’email",
-    guestsHaveNoPassword: "Gli ospiti non hanno password.",
     changingItSignsEveryOther: "Cambiarla disconnette tutti gli altri dispositivi.",
     setThisUpAndThe: (p: { pendingRole: string }) =>
       `Configurala e il ruolo di ${p.pendingRole} che ti è stato offerto diventerà effettivo.`,
@@ -2300,16 +2289,19 @@ export const IT: Catalogue = {
       `${p.name} e ${counted(p.others, { one: "un’altra persona", other: "altre persone" })} vogliono diventare tuoi amici.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
+  roomVisibilityIcon: {
+    publicRoom: "Stanza pubblica",
+    privateRoom: "Stanza privata",
   },
 
   waitingRoomPanel: {
     editRoomRules: "Modifica le regole della stanza",
+    editRules: "Modifica regole",
+    doodle: "Scarabocchia",
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Manca 1 giocatore", other: "Mancano altri giocatori" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} inizierà la rivincita" : "{host} inizierà la partita",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "In attesa che {host} inizi la rivincita" : "In attesa che {host} inizi",
     copied: (p: { what: string }) => `${p.what} copiato.`,
     couldNotCopy: (p: { what: string }) =>
       `Non è stato possibile copiare ${p.what}. Copialo dalla barra degli indirizzi.`,
@@ -2318,6 +2310,7 @@ export const IT: Catalogue = {
     inviteYourFriends: "Invita i tuoi amici",
     shareLink: "Condividi il link",
     copyCode: "Copia il codice",
+    copyLink: "Copia il link",
     inTheRoom: "Nella stanza",
     you: "(tu)",
     host: "Host",
@@ -2329,10 +2322,6 @@ export const IT: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Entra nella mia stanza di Sketchy: ${p.code}`,
     inviteLink: "Link d’invito",
-    publicRoom: "Stanza pubblica",
-    privateRoom: "Stanza privata",
-    betweenGames: "tra una partita e l’altra",
-    waitingForPlayers: "in attesa di giocatori",
     roomCode: "Codice stanza",
     starting: "Avvio…",
     rematch: "Rivincita",
@@ -2417,6 +2406,10 @@ export const IT: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Round ${p.roundNumber} di ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Round ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "Il prossimo giocatore",
@@ -2487,8 +2480,6 @@ export const IT: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `${p.shown} su ${p.onlineCount} mostrati`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Scegli un nome con cui giocare.",
@@ -2505,8 +2496,8 @@ export const IT: Catalogue = {
       `${p.drawerNickname} sta scegliendo una parola…`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `La parola era «${p.prompt}»`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} ha indovinato${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} ha indovinato · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} si è riconnesso`,
     playerDisconnected: (p: { nickname: string }) =>
@@ -2544,7 +2535,7 @@ export const IT: Catalogue = {
     colorblindSafe: "Adatti al daltonismo",
     colorsThatStayApartFor: "Colori che restano distinguibili per chi è daltonico.",
     blackAndWhite: "Bianco e nero",
-    blackAndWhiteOnly: "Solo bianco e nero.",
+    twoSwatchesNoCustomColors: "Solo due campioni; niente colori liberi.",
     allTools: "Tutti gli strumenti",
     onlyTool: (p: { tool: string }) =>
       `solo ${p.tool}`,

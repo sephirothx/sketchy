@@ -23,6 +23,7 @@ import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { refusalText } from "../lib/refusals.ts";
+import { EmptyState } from "./ui/EmptyState";
 
 /** Who else is here, beside the room list.
 
@@ -68,6 +69,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
   // Friends first, then the order the server sent — see `withFriendsFirst`.
   // A friend the capped list left out is still here: they are told to this
   // account apart from it (#878).
+  const summary = presenceSummary(presence);
   const players = useMemo(
     () => withFriendsFirst(withOnlineFriends(presence.players, lists, onlineFriends), lists),
     [presence.players, lists, onlineFriends],
@@ -83,7 +85,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       });
       const session = sessionFrom(answer);
       if (!session) {
-        notify(refusalText(answer, ui.onlinePlayersPanel.couldNotJoinThatGame));
+        notify(refusalText(answer, ui.onlinePlayersPanel.couldNotJoinThatGame), "error");
         return;
       }
       // The seat is already taken by the time this answers, so the page has
@@ -91,23 +93,23 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify(ui.onlinePlayersPanel.couldNotJoinThatGame);
+      notify(ui.onlinePlayersPanel.couldNotJoinThatGame, "error");
     } finally {
       useRoomEntryStore.getState().end(token);
     }
   }
 
   return (
-    <section className="panel lobby-online-panel" aria-labelledby="online-heading">
+    <section className="surface-card panel lobby-online-panel" aria-labelledby="online-heading">
       <div className="lobby-rooms-heading">
-        <h2 id="online-heading">{ui.onlinePlayersPanel.whoOnline}</h2>
+        <h2 id="online-heading" className="panel-title">{ui.onlinePlayersPanel.whoOnline}</h2>
         {/* The true total, not the number of rows: a cap must never read as a
-            quiet server (R-PRESENCE-04). */}
-        <span className="lobby-rooms-count">{presenceSummary(presence)}</span>
+            quiet server (R-PRESENCE-04). Nothing when the rows are everybody. */}
+        {summary && <span className="lobby-rooms-count">{summary}</span>}
       </div>
 
       {players.length === 0 ? (
-        <p className="online-players-empty">{ui.onlinePlayersPanel.nobodyElseHereRightNow}</p>
+        <EmptyState compact title={ui.onlinePlayersPanel.nobodyElseHereRightNow} />
       ) : (
         <ul className="online-players-list" data-testid="online-players-list">
           {players.map((player) => {

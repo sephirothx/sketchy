@@ -5,6 +5,7 @@ import {
   presentHighlight,
   presentHighlights,
 } from "../src/lib/gameHighlights.ts";
+import { formatGuessTime } from "../src/lib/guessTime.ts";
 
 test("the hardest prompt reports the share that got it, not a ratio", () => {
   const presented = presentHighlight({
@@ -37,6 +38,24 @@ test("guess times render to one decimal", () => {
       nickname: "Bo",
     }).value,
     "8.0s",
+  );
+});
+
+test("the fastest guess reads as the chat and the results card read it", () => {
+  // The server sends tenths now; it used to send hundredths, and a second
+  // rounding here turned 3.249 (3.2s in chat) into 3.25 and "3.3s".
+  assert.equal(
+    presentHighlight({ kind: "fastest_guess", prompt: "cat", seconds: 3.2, nickname: "Ana" }).value,
+    formatGuessTime(3.2),
+  );
+  // Past a minute, minutes and tenths, like everywhere else - not "64.3s".
+  assert.equal(
+    presentHighlight({ kind: "fastest_guess", prompt: "cat", seconds: 64.3, nickname: "Ana" }).value,
+    "1:04.3",
+  );
+  assert.equal(
+    presentHighlight({ kind: "quickest_average", seconds: 64.3, nickname: "Bo" }).value,
+    "1:04.3",
   );
 });
 

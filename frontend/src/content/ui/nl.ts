@@ -473,11 +473,6 @@ export const NL: Catalogue = {
       `${p.percent} geraden`,
   },
 
-  versionBadge: {
-    buildDetails: (p: { commitDate: string; builtAt: string }) =>
-      `Commitdatum: ${p.commitDate} | Gebouwd: ${p.builtAt}`,
-  },
-
   segmentedCodeInput: {
     digitPosition: (p: { label: string; index: number; length: number }) =>
       `${p.label}, cijfer ${p.index} van ${p.length}`,
@@ -564,6 +559,7 @@ export const NL: Catalogue = {
     newHere: "Nieuw hier? ",
     guestIdentity: (p: { name: string }) =>
       `${p.name}. Je weergavenaam is niet opgeslagen.`,
+    guestNameNotSaved: "Gastnaam, niet opgeslagen in een account",
     signedInAs: (p: { name: string }) =>
       `Ingelogd als ${p.name}`,
   },
@@ -572,8 +568,9 @@ export const NL: Catalogue = {
     thatConfirmationLinkCouldNotBe: "Deze bevestigingslink kon niet gebruikt worden.",
     somethingWentWrongPleaseTryAgain: "Er ging iets mis. Probeer het nog eens.",
     evenBestGuessersForgetSometimes: "Zelfs de beste raders vergeten weleens iets.",
-    weRsquoLlSendSecureTime: "We sturen een veilige link met een korte houdbaarheid naar het\n            bevestigde e-mailadres van je account.",
-    accountHelp: "Accounthulp",
+    asideForgot: "We sturen een veilige link met een korte houdbaarheid naar het bevestigde e-mailadres van je account.",
+    asideReset: "Kies een wachtwoord dat je nergens anders gebruikt.",
+    asideVerify: "Met een bevestigd e-mailadres kom je weer binnen als je ooit je wachtwoord vergeet.",
     backLobby: "Terug naar de lobby",
     enterYourUsernameYourConfirmedEmail: "Vul je gebruikersnaam of je bevestigde e-mailadres in. Als het\n              account hersteld kan worden, is er een link onderweg.",
     usernameEmail: "Gebruikersnaam of e-mail",
@@ -676,6 +673,9 @@ export const NL: Catalogue = {
   appHeader: {
     playerSettings: "Spelerinstellingen",
     sketchyHome: "Naar de lobby",
+    siteNav: "Pagina's",
+    communityLink: "Catalogus",
+    promptStatsLink: "Woordstatistieken",
   },
 
   bugReportDialog: {
@@ -810,7 +810,6 @@ export const NL: Catalogue = {
     couldNotDeleteThatPreset: "Deze voorinstelling kon niet verwijderd worden.",
     fixCustomPromptEntriesMarkedAbove: "Verbeter de hierboven gemarkeerde eigen woorden voordat je de kamer maakt.",
     couldNotCreateRoom: "Kamer aanmaken lukte niet.",
-    roomSetup: "Kameropzet",
     createRoom: "Een kamer maken",
     startFromSavedPreset: "Beginnen met een opgeslagen voorinstelling",
     startFromPreset: "Beginnen met een voorinstelling…",
@@ -832,8 +831,6 @@ export const NL: Catalogue = {
     deleteThisRoomSettingPreset: "Deze kamervoorinstelling verwijderen?",
     deletePresetDescription: "Kamers die je er al mee hebt gemaakt, veranderen niet.",
     createTheRoom: "de kamer maken",
-    noScoring: "Zonder punten",
-    public: "Openbaar",
     private: "Privé",
     backToLobby: "Terug naar de lobby",
     leaveBlankForARandom: "Laat leeg voor een willekeurige naam!",
@@ -841,10 +838,6 @@ export const NL: Catalogue = {
     createRoom2: "Kamer maken",
     yourRoom: "Jouw kamer",
     aRandomName: "Een willekeurige naam",
-    playerCount: (p: { count: number }) =>
-      counted(p.count, { one: "speler", other: "spelers" }),
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "ronde", other: "rondes" }),
   },
 
   customPromptsEditor: {
@@ -967,6 +960,7 @@ export const NL: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameTooShort: (p: { min: number }) => `Een naam heeft minstens ${p.min} tekens nodig.`,
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
     couldNotSaveThatNamePlease: "Deze naam kon niet opgeslagen worden. Probeer het nog eens.",
@@ -1027,6 +1021,8 @@ export const NL: Catalogue = {
   },
 
   gameEndOverlay: {
+    // Between the last two named winners: "Ada and Grace".
+    nameListAnd: " en ",
     continueLabel: "Verder",
     youFinished: (p: { points: number }) =>
       `Je bent {place} geworden met ${counted(p.points, { one: "punt", other: "punten" })}.`,
@@ -1101,6 +1097,7 @@ export const NL: Catalogue = {
 
   lobbyBrowserPage: {
     quickPlay: "Snel spelen",
+    lobby: "Lobby",
     quickPlayBusy: "Kamer zoeken…",
     couldNotFindOrOpenARoom: "Er kon geen kamer worden gevonden of geopend.",
     filterByLanguage: "Filteren op taal",
@@ -1129,16 +1126,15 @@ export const NL: Catalogue = {
     hideFullRooms: "Volle kamers verbergen",
     hideGamesProgress: "Lopende spellen verbergen",
     loadingPublicRooms: "Openbare kamers laden…",
-    noPublicRoomsYetCreateOne: "Nog geen openbare kamers. Maak er een!",
+    noPublicRoomsYet: "Nog geen openbare kamers",
+    noPublicRoomsYetBody: "Snel spelen opent er een voor je, of maak je eigen kamer.",
     noPublicRoomsMatchYourSearch: "Geen openbare kamers passen bij je zoekopdracht.",
     paste: "Plakken",
     couldNotSaveThatName: "Die naam kon niet worden opgeslagen. Probeer het nog eens.",
     joinAsASpectator: "als toeschouwer meedoen",
     joinTheRoom: "de kamer in gaan",
-    loading: "Laden…",
     showingFilteredRoomsCountOfRoomsCount: (p: { filteredRoomsCount: number; roomsCount: number }) =>
       `${p.filteredRoomsCount} van ${p.roomsCount} getoond`,
-    n0Rooms: "0 kamers",
     close: "Sluiten",
     joining: "Deelnemen…",
     join: "Meedoen",
@@ -1201,7 +1197,6 @@ export const NL: Catalogue = {
     nothingMatchesThoseFilters: "Geen lijst voldoet aan deze filters.",
     nothingPublishedYet: "Er is nog geen lijst gepubliceerd.",
     byOwner: (p: { owner: string }) => `van ${p.owner}`,
-    community: "Community",
     starred: "Met ster",
     tags: "Labels",
     promptCount: (p: { count: number }) =>
@@ -1246,8 +1241,7 @@ export const NL: Catalogue = {
   galleryPage: {
     gallery: "Galerij",
     backToLobby: "Terug naar de lobby",
-    eyebrow: "Tekeningen",
-    drawingsFromPublicGames: "Elke tekening uit een openbaar spel, voor iedereen die is ingelogd.",
+    drawingsFromPublicGames: "Elke tekening uit een openbaar spel.",
     loading: "Laden…",
     sortBy: "Sorteren op",
     hot: "Populair",
@@ -1257,9 +1251,9 @@ export const NL: Catalogue = {
     allTime: "Altijd",
     thisMonth: "Deze maand",
     thisWeek: "Deze week",
-    nothingThisWeek: "Nog geen openbare tekeningen deze week. Speel een openbaar spel en kom terug.",
-    nothingHereYet: "Hier is nog niets. Speel een openbaar spel en kom terug.",
-    signInToSeeTheGallery: "De galerij is voor ingelogde spelers. Log in of ga verder als gast vanuit de lobby.",
+    nothingThisWeek: "Deze week nog niets.",
+    nothingHereYet: "Nog geen tekeningen",
+    signInToSeeTheGallery: "Log in om de galerij te zien",
     couldNotLoadTheGallery: "De galerij kon niet geladen worden.",
     couldNotLoadThisDrawing: "Deze tekening kon niet worden geladen.",
     showMore: "Meer tonen",
@@ -1275,8 +1269,8 @@ export const NL: Catalogue = {
     findARoom: "Zoek een kamer",
     backToTop: "Terug naar boven",
     topOfTheWeek: "Top van de week",
-    nothingHereYetBody: "Elke bewaarde tekening uit een openbaar spel komt hier terecht.",
-    signInBody: "Log in, of ga verder als gast vanuit de lobby, om elke tekening uit een openbaar spel te zien.",
+    nothingHereYetBody: "Speel een openbaar spel, en de tekeningen ervan zijn de eerste hier.",
+    signInBody: "Of kies een naam in de lobby om als gast rond te kijken.",
     backToGallery: "Terug naar de galerij",
     replay: "Afspelen",
     pause: "Pauze",
@@ -1327,8 +1321,10 @@ export const NL: Catalogue = {
       `${counted(p.prompts, { one: "woord", other: "woorden" })} · ${p.visibility}${
         p.moderationState ? ` · ${p.moderationState}` : ""
       }`,
-    listUnderReview: (p: { state: string }) =>
-      `Deze lijst is ${p.state} en kan niet in nieuwe spellen gebruikt worden. Bewerken zet hem niet automatisch terug; een moderator moet de lijst bekijken.`,
+    underReview: "In beoordeling",
+    hidden: "Verborgen",
+    listUnderReviewWarning: "Deze lijst wordt beoordeeld en kan niet in nieuwe spellen gebruikt worden. Bewerken zet hem niet automatisch terug; een moderator moet de lijst bekijken.",
+    listHiddenWarning: "Deze lijst is verborgen en kan niet in nieuwe spellen gebruikt worden. Bewerken zet hem niet automatisch terug; een moderator moet de lijst bekijken.",
     needsReview: (p: { count: number }) => `Te beoordelen (${p.count})`,
     removePrompt: (p: { prompt: string }) => `${p.prompt} verwijderen`,
     couldNotLoadYourPromptLists: "Je woordenlijsten konden niet geladen worden.",
@@ -1338,7 +1334,8 @@ export const NL: Catalogue = {
     couldNotDeleteThisPromptList: "Deze woordenlijst kon niet verwijderd worden.",
     myPromptLists: "Mijn woordenlijsten",
     newList: "Nieuwe lijst",
-    createAccountSaveReviseSharePrompt: "Maak een account om woordenlijsten te bewaren, te herzien en te delen. Snelle kamerwoorden blijven lokaal en vluchtig.",
+    promptListsNeedAnAccount: "Je woordenlijsten hebben een account nodig",
+    promptListsNeedAnAccountBody: "Een account bewaart je lijsten, om te spelen in elke kamer die je host en te publiceren als je wilt. Eigen woorden die je in een kamer typt, worden niet bewaard.",
     loading: "Laden…",
     noSavedListsYet: "Nog geen opgeslagen lijsten.",
     name: "Naam",
@@ -1372,6 +1369,7 @@ export const NL: Catalogue = {
 
   notFoundPage: {
     nobodyDrewThisPage: "Deze pagina heeft niemand getekend",
+    pageNotFound: "Pagina niet gevonden",
     thatLinkDoesnTLeadAnywhere: "Die link leidt nergens heen op Sketchy.",
     backLobby: "Terug naar de lobby",
   },
@@ -1452,16 +1450,8 @@ export const NL: Catalogue = {
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronde", other: "rondes" })} · ${counted(p.players, { one: "speler", other: "spelers" })}`,
     seatScore: (p: { points: number }) => `${number(p.points)} ptn`,
-    gameRules: (p: {
-      scoringMode: string;
-      scoringVersion: number;
-      hintMode: string;
-      seconds: number;
-      promptSource: string;
-    }) =>
-      `Regels: ${p.scoringMode} puntentelling${
-        p.scoringVersion > 0 ? ` v${p.scoringVersion}` : " (oude versie onbekend)"
-      } · ${p.hintMode} hints · ${p.seconds} seconden · ${p.promptSource} woorden`,
+    gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
+      `Regels: ${p.scoring} · ${p.hints} · ${p.seconds} seconden · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
     privateRoom: "privékamer",
     thisGameEndedEarly: "Dit spel is voortijdig gestopt, dus dit zijn de punten zoals ze stonden toen het stopte en geen eindstand.",
@@ -1483,7 +1473,8 @@ export const NL: Catalogue = {
     createAccount: "Account maken",
     statistics: "Statistieken",
     gameHistory: "Spelgeschiedenis",
-    includeGamesThatFellApart: "Ook spellen die uiteenvielen",
+    includeAbandonedGames: "Ook afgebroken spellen tonen",
+    winsAndScoresAppearAfterFirstGame: "Overwinningen en scores verschijnen na het eerste afgeronde spel.",
     notKept: "niet bewaard",
     pinnedDrawings: "Vastgezette tekeningen",
     nothingPinnedYet: "Nog niets vastgezet. Zet een tekening vast vanuit de samenvatting van een spel, of vanuit een spel in je geschiedenis hieronder.",
@@ -1497,13 +1488,20 @@ export const NL: Catalogue = {
     onlyThePlayersInThis: "Alleen de spelers van dit spel kunnen de beurten zien.",
     couldNotLoadTheTurns: "De beurten van dit spel konden niet worden geladen.",
     cutShort: "afgebroken",
+    abandoned: "verlaten",
     noAttempt: "geen poging",
     joinedLate: "later ingestapt",
-    notEligibleEligibilityReason: (p: { eligibilityReason: string }) =>
-      `telt niet mee (${p.eligibilityReason})`,
+    notEligibleAfk: "telt niet mee (AFK)",
+    notEligibleDisconnected: "telt niet mee (verbinding verbroken)",
+    notEligible: "telt niet mee",
+    noGuessers: "geen raders",
+    promptSourceCurated: "Geselecteerde woorden",
+    promptSourceCustom: "Eigen woorden",
+    promptSourceMixed: "Gemengde woorden",
+    promptSourceBuiltinFallback: "Ingebouwde reservewoorden",
     unknownPlayer: "Onbekende speler",
     backToLobby: "Terug naar de lobby",
-    guestDisplayNameNotSaved: "Gast — weergavenaam niet opgeslagen",
+    guest: "Gast",
     registeredPlayer: "Geregistreerde speler",
     noFinishedGamesYetPlay: "Nog geen afgeronde spellen. Speel er een en hij verschijnt hier.",
     noGamesToShowGames: "Geen spellen om te tonen. Spellen uit privékamers zijn alleen zichtbaar voor wie erbij was.",
@@ -1552,7 +1550,7 @@ export const NL: Catalogue = {
     pickSomethingDraw: "Kies iets om te tekenen",
     autoPicksWhenTimeRunsOut: "Kiest vanzelf als de tijd om is.",
     hintSpendLimitReached: "Hintlimiet bereikt",
-    deductedFromYourScoreIfYou: "Wordt van je punten afgetrokken als je het woord raadt",
+    hintSpendComesOutOfTurnPoints: "Gaat af van de punten van deze beurt als je het woord raadt.",
     buyLetterRevealsEveryMatch: "Koop een letter — laat elke plek zien",
     selectThePrompt: "het woord kiezen",
     choosing: "Kiezen…",
@@ -1590,10 +1588,9 @@ export const NL: Catalogue = {
     scoring: "Punten",
     hints: "Hints",
     findPrompt: "Een woord vinden",
-    rollerCoaster: "achtbaan",
     loading: "Laden…",
     prompt: "Woord",
-    howGoes: "Hoe het loopt",
+    howHard: "Hoe moeilijk",
     guessed: "Geraden",
     picked: "Gekozen",
     drawn: "Getekend",
@@ -1605,10 +1602,6 @@ export const NL: Catalogue = {
     defaultScoring: "Standaardpunten",
     pressureScoring: "Drukpunten",
     allHintModes: "Alle hintmodi",
-    noHints: "Geen hints",
-    checkpointHints: "Hints op tijd",
-    purchasedHints: "Gekochte hints",
-    letterWheel: "Letterrad",
     backToLobby: "Terug naar de lobby",
   },
 
@@ -1838,7 +1831,6 @@ export const NL: Catalogue = {
     playersScores: "Spelers en punten",
     copyInviteLink: "De uitnodigingslink kopiëren",
     saveImage: "Afbeelding opslaan",
-    settings: "Instellingen",
     leaveRoom: "Kamer verlaten",
     backFromAfk: "Terug van AFK",
     goAfk: "AFK gaan",
@@ -1854,6 +1846,7 @@ export const NL: Catalogue = {
   },
 
   roomPlayersPanel: {
+    you: "(jij)",
     spectatorCount: (p: { count: number }) =>
       counted(p.count, { one: "toeschouwer", other: "toeschouwers" }),
     spectatorsHeading: (p: { count: number }) => `Toeschouwers (${p.count})`,
@@ -1884,7 +1877,7 @@ export const NL: Catalogue = {
   },
 
   roomSetupForm: {
-    language: "Taal",
+    promptLanguage: "Woordtaal",
     visibility: "Zichtbaarheid",
     maxPlayers: "Maximum aantal spelers",
     rounds: "Rondes",
@@ -1942,7 +1935,6 @@ export const NL: Catalogue = {
   },
 
   rulesPage: {
-    sketchy: "Sketchy",
     theRules: "De regels",
     thisPage: "Op deze pagina",
     forExample: "Bijvoorbeeld",
@@ -2035,7 +2027,6 @@ export const NL: Catalogue = {
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} bestaat alleen in deze browser. Een account houdt de naam, je punten en je geschiedenis op elk apparaat, en laat je een kleur kiezen.`,
     systemThemeNow: (p: { theme: "dark" | "light" }) => `Nu: ${p.theme}`,
-    needsAccount: "Heeft een account nodig",
     choosePicture: "Een afbeelding kiezen",
     editPicture: "Afbeelding bewerken",
     picture: "Afbeelding",
@@ -2108,10 +2099,8 @@ export const NL: Catalogue = {
     notConfirmed: "Niet bevestigd",
     saving: "Opslaan…",
     save: "Opslaan",
-    aGuestHasNothingTo: "Een gast heeft niets te herstellen: er is geen wachtwoord om te vergeten.",
     withoutOneThereIsNo: "Zonder e-mailadres is er geen weg terug in dit account als het wachtwoord vergeten is.",
     addAnEmail: "E-mail toevoegen",
-    guestsHaveNoPassword: "Gasten hebben geen wachtwoord.",
     changingItSignsEveryOther: "Wijzigen logt alle andere apparaten uit.",
     setThisUpAndThe: (p: { pendingRole: string }) =>
       `Stel dit in en de rol van ${p.pendingRole} die je is aangeboden gaat in.`,
@@ -2299,16 +2288,19 @@ export const NL: Catalogue = {
       `${p.name} en ${counted(p.others, { one: "iemand anders", other: "anderen" })} willen vrienden worden.`,
   },
 
-  useRoomSessionReconnect: {
-    joinRoomFailed: "join_room failed",
+  roomVisibilityIcon: {
+    publicRoom: "Openbare kamer",
+    privateRoom: "Privékamer",
   },
 
   waitingRoomPanel: {
     editRoomRules: "Kamerregels bewerken",
+    editRules: "Regels bewerken",
+    doodle: "Krabbelen",
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Nog 1 speler nodig", other: "Nog meer spelers nodig" })}`,
-    hostWillStart: (p: { rematch: boolean }): string =>
-      p.rematch ? "{host} begint de revanche" : "{host} begint het spel",
+    waitingForHostToStart: (p: { rematch: boolean }): string =>
+      p.rematch ? "Wachten tot {host} de revanche begint" : "Wachten tot {host} begint",
     copied: (p: { what: string }) => `${p.what} gekopieerd.`,
     couldNotCopy: (p: { what: string }) =>
       `Kon ${p.what} niet kopiëren. Kopieer het uit de adresbalk.`,
@@ -2317,6 +2309,7 @@ export const NL: Catalogue = {
     inviteYourFriends: "Nodig je vrienden uit",
     shareLink: "Deel de link",
     copyCode: "Code kopiëren",
+    copyLink: "Link kopiëren",
     inTheRoom: "In de kamer",
     you: "(jij)",
     host: "Gastheer",
@@ -2328,10 +2321,6 @@ export const NL: Catalogue = {
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Kom in mijn Sketchy-kamer: ${p.code}`,
     inviteLink: "Uitnodigingslink",
-    publicRoom: "Openbare kamer",
-    privateRoom: "Privékamer",
-    betweenGames: "tussen spellen door",
-    waitingForPlayers: "wacht op spelers",
     roomCode: "Kamercode",
     starting: "Starten…",
     rematch: "Revanche",
@@ -2416,6 +2405,10 @@ export const NL: Catalogue = {
   gameHeaderStatus: {
     roundRoundNumberOfTotalRounds: (p: { roundNumber: number; totalRounds: number }) =>
       `Ronde ${p.roundNumber} van ${p.totalRounds}`,
+    roundCompact: (p: { roundNumber: number; totalRounds: number }) =>
+      `Ronde ${p.roundNumber}/${p.totalRounds}`,
+    roundFraction: (p: { roundNumber: number; totalRounds: number }) =>
+      `${p.roundNumber}/${p.totalRounds}`,
   },
   gameRoomRegions: {
     theNextPlayer: "De volgende speler",
@@ -2486,8 +2479,6 @@ export const NL: Catalogue = {
   lobbyPresence: {
     showingShownOfOnlineCount: (p: { shown: number; onlineCount: number }) =>
       `${p.shown} van ${p.onlineCount} getoond`,
-    onlineCount: (p: { count: number }) =>
-      `${number(p.count)} online`,
   },
   authStore: {
     chooseANameToPlay: "Kies een naam om onder te spelen.",
@@ -2504,8 +2495,8 @@ export const NL: Catalogue = {
       `${p.drawerNickname} kiest een woord…`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Het woord was ‘${p.prompt}’`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} heeft het geraden${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} heeft het geraden · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} is weer verbonden`,
     playerDisconnected: (p: { nickname: string }) =>
@@ -2543,7 +2534,7 @@ export const NL: Catalogue = {
     colorblindSafe: "Kleurenblindvriendelijk",
     colorsThatStayApartFor: "Kleuren die voor kleurenblinde spelers goed te onderscheiden blijven.",
     blackAndWhite: "Zwart-wit",
-    blackAndWhiteOnly: "Alleen zwart en wit.",
+    twoSwatchesNoCustomColors: "Maar twee kleurstalen; geen eigen kleuren.",
     allTools: "Alle gereedschappen",
     onlyTool: (p: { tool: string }) =>
       `alleen ${p.tool}`,

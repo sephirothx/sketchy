@@ -117,6 +117,18 @@ async def room_code(page) -> str:
     return (await header.get_attribute("data-room-code") or "").strip()
 
 
+async def room_name(page) -> str:
+    """The current room's name, from the room bar's `data-room-name`.
+
+    A desktop's bar prints the name only above 1100px, and the waiting room's
+    heading shows it only on a phone (the bar says it there otherwise), so
+    the attribute is the one place that holds it at every width.
+    """
+    header = page.locator(f"{ROOM_HEADER}[data-room-name]")
+    await header.wait_for()
+    return (await header.get_attribute("data-room-name") or "").strip()
+
+
 async def open_room_menu(page):
     """Open the Room menu - the desktop dropdown or the phone's sheet, which
     share a test id and hold the same rows - and return it."""
@@ -140,14 +152,10 @@ async def leave_room(page) -> None:
 
 async def open_player_settings(page) -> None:
     """Open Player settings from the identity chip's menu, where the gear
-    folded in (#580). In a room on a phone the chip is not in the bar, so the
-    Room menu's Settings row is the way in there."""
-    chip = page.locator(".identity-chip").first
-    if await chip.is_visible():
-        await chip.click()
-        await page.locator(".header-settings-button").first.click()
-        return
-    await room_menu_action(page, "Settings")
+    folded in (#580). The chip is in every bar, a room's on a phone included,
+    and it is the only way in: the Room menu has no Settings row."""
+    await page.locator(".identity-chip").first.click()
+    await page.locator(".header-settings-button").first.click()
 
 
 async def open_room_settings(page) -> None:
@@ -202,3 +210,39 @@ async def join_by_code(page, code: str, *, spectate: bool = False) -> None:
         if spectate
         else '[data-testid="lobby-code-sheet"] button:text-is("Join")'
     )
+
+
+async def open_public_rooms(browser, prefix: str, count: int) -> list:
+    """Open `count` public rooms, each with a host of its own; returns their
+    browser contexts, which the caller closes as soon as it is done with them.
+
+    The lobby offers search and filters only once six rooms are open
+    (`ROOM_FILTERS_FROM` in frontend/src/lib/lobbyControls.ts), and the shards
+    share one server, so how many other tests' rooms are open at any moment is
+    a coin flip. A test that needs the search box opens enough here to make it
+    certain. One after another rather than all at once: a shard is eight
+    workers on a two-core runner, and five pages loading together is the kind
+    of spike that starves the tests beside it.
+    """
+    contexts = []
+    try:
+        for index in range(count):
+            context = await browser.new_context()
+            contexts.append(context)
+            page = await context.new_page()
+            await use_guest_name(page, f"{prefix}Host{index}")
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".identity-chip")
+            await page.click(".lobby-rooms-actions .btn-primary")
+            await page.wait_for_selector(".create-room-page")
+            await page.fill(
+                'input[placeholder="Leave blank for a random name!"]', f"{prefix} room {index}"
+            )
+            await page.click(".create-room-submit")
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+    except BaseException:
+        # The caller never gets the list, so it cannot close what was opened.
+        for context in contexts:
+            await context.close()
+        raise
+    return contexts
