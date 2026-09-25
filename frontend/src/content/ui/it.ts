@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Stai andando troppo veloce. Riprova tra un attimo.",
-  seat_changing_too_fast: "Questo posto cambia mano troppo in fretta. Riprova tra un minuto.",
+  seat_changing_too_fast: "Questa stanza è stata riaperta troppe volte di fila. Riprova tra un minuto.",
   joining_too_fast: "Entri nelle stanze troppo in fretta. Riprova tra un minuto.",
   room_quota: "Hai già tutte le stanze aperte che puoi avere insieme.",
   room_full: "Questa stanza è piena.",
@@ -149,7 +149,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   room_not_found: "Stanza non trovata.",
   room_ended: "Questa stanza è finita.",
   could_not_create_room: "Non è stato possibile creare la stanza.",
-  no_session_to_resume: "Non c’è nessuna tua sessione da riprendere in questa stanza.",
+  no_session_to_resume: "Non sei più in questa stanza. Rientra.",
   host_only: "Può farlo solo l’host.",
   players_only: "Possono farlo solo i giocatori.",
   waiting_room_only: "È disponibile solo nella sala d’attesa.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Non è stato possibile cambiare la password.",
   session_not_found: "Questo dispositivo non è più connesso.",
-  session_replaced: "Questa sessione è stata sostituita. Ricarica e riprova.",
+  session_replaced: "Questo browser ha rifatto l’accesso dopo il caricamento della pagina. Ricarica e riprova.",
   guest_progress_unlinked: "Non è stato possibile collegare i progressi da ospite a questo account.",
   not_taking_visitors: "Sketchy non accetta nuovi visitatori in questo momento. Riprova più tardi.",
   account_delete_refused: "Non è stato possibile eliminare l’account adesso. Riprova.",
@@ -372,13 +372,13 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_reportable_prompt_list: "Lista di parole non trovata.",
   prompt_not_in_list: "Questa parola non appartiene a questa lista.",
   no_picture_to_report: "Questo giocatore non ha un’immagine da segnalare.",
-  no_such_game_context: "Questo contesto di partita non esiste.",
-  no_such_turn_context: "Questo contesto di turno non esiste.",
+  no_such_game_context: "Partita non trovata.",
+  no_such_turn_context: "Turno non trovato.",
   turn_not_in_game: "Il turno non appartiene a questa partita.",
   evidence_unavailable: "Uno o più messaggi selezionati non sono disponibili.",
   evidence_mixed_scopes: "I messaggi della lobby e quelli della stanza non si possono mischiare in una segnalazione.",
   evidence_several_rooms: "I messaggi selezionati devono venire dalla stessa stanza.",
-  evidence_not_theirs: "Le prove devono essere del giocatore segnalato.",
+  evidence_not_theirs: "Si possono allegare solo i messaggi inviati dal giocatore segnalato.",
   evidence_not_received: "Non puoi selezionare un messaggio che non hai ricevuto.",
   evidence_not_in_game: "Il messaggio selezionato non appartiene a questa partita.",
   evidence_not_in_turn: "Il messaggio selezionato non appartiene a questo turno.",
@@ -498,8 +498,8 @@ export const IT: Catalogue = {
   },
 
   accountDataDialog: {
-    requestedOn: (p: { when: string; schemaVersion: number }) =>
-      `Richiesta ${p.when} · formato v${p.schemaVersion}`,
+    requestedOn: (p: { when: string }) =>
+      `Richiesta ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
       p.nextAllowed
         ? `Un’esportazione a settimana; quelle pronte scadono dopo sette giorni. Puoi chiederne un’altra il ${p.nextAllowed}.`
@@ -963,7 +963,7 @@ export const IT: Catalogue = {
     saveImage: "Salva immagine",
     close: "Chiudi",
     thisDrawingWasNotKept: "Questo disegno non è stato conservato.",
-    roomRanOutRoomLaterTurns: "Nella stanza non c’era più spazio. Sono stati tenuti i turni successivi.",
+    earlierDrawingsFilledTheSpace: "I disegni precedenti di questa partita hanno riempito lo spazio che la stanza riserva loro.",
     tryAgain: "Riprova",
     loadingDrawing: "Caricamento del disegno…",
     noDrawingWasCapturedThisTurn: "Per questo turno non è stato salvato nessun disegno.",
@@ -1031,7 +1031,7 @@ export const IT: Catalogue = {
     friends: "Amici",
     close: "Chiudi",
     closeFriends: "Chiudi gli amici",
-    friendsNeedAccountGuestNameBelongs: "Per gli amici serve un account. Un nome da ospite appartiene a questo\n              browser e non a te, quindi fra un mese non resterebbe nessuno con\n              cui essere amici.",
+    friendsNeedAnAccount: "Per gli amici serve un account. Un nome da ospite appartiene a questo browser e viene rimosso dopo un mese senza giocare.",
     loading: "Caricamento…",
     noFriendsYetAddSomebodyFrom: "Ancora nessun amico. Aggiungi qualcuno dalla lobby, o da una partita\n              in cui siete entrambi.",
     requests: "Richieste",
@@ -1929,7 +1929,7 @@ export const IT: Catalogue = {
     drawing: "Disegna",
     scoringHints: "Punteggio e indizi",
     hintsAreOffBecauseTilesAreHidden: "Gli indizi sono spenti perché le caselle delle lettere sono nascoste.",
-    pointPurchaseHintModesRequireScoring: "Le modalità di indizio a pagamento richiedono il punteggio.",
+    buyLettersAndWheelNeedScoring: "Compra lettere e Ruota della fortuna richiedono il punteggio.",
     allColors: "Tutti i colori",
     noScoring: "Senza punteggio",
     listedInTheLobbyAnyone: "Elencata nella lobby: chiunque può entrare.",
@@ -2139,7 +2139,7 @@ export const IT: Catalogue = {
       `Configurala e il ruolo di ${p.pendingRole} che ti è stato offerto diventerà effettivo.`,
     anAuthenticatorAppSCode: "Il codice di un’app di autenticazione, oltre alla password. Moderatori e amministratori devono averla.",
     setUp: "Configura",
-    thisBrowserIsTheOnly: "Questo browser è l’unico posto in cui esisti.",
+    guestKeptInThisBrowser: "Il tuo nome da ospite, i punti e la cronologia sono salvati solo in questo browser.",
     everyBrowserStillHoldingA: "Ogni browser che ha ancora una sessione, e un modo per chiuderne una qualsiasi.",
     worksForAGuestToo: "Funziona anche per gli ospiti: le partite che hai giocato sono tue.",
     everyGameListAndSetting: "Ogni partita, lista e impostazione che Sketchy conserva su di te, in un unico file JSON.",
@@ -2193,7 +2193,7 @@ export const IT: Catalogue = {
   toolbar: {
     colorOption: (p: { color: string }) => `colore ${p.color}`,
     adjustSize: (p: { tool: string }) => `Regola la dimensione di ${p.tool}`,
-    sizeSnappingSlider: (p: { tool: string }) => `Cursore di dimensione a scatti per ${p.tool}`,
+    sizeSlider: (p: { tool: string }) => `${p.tool}, dimensione`,
     chooseToolCurrent: (p: { tool: string }) => `Scegli lo strumento, attuale: ${p.tool}`,
     chooseColorCurrent: (p: { color: string }) => `Scegli il colore, attuale ${p.color}`,
     sizeWithWidth: (p: { tool: string; width: number }) => `${p.tool}, dimensione ${p.width}px`,
@@ -2258,7 +2258,7 @@ export const IT: Catalogue = {
         p.confirmAuthenticator
           ? "Prima che questo account possa ricevere un ruolo di moderatore o amministratore, conferma con la tua password e un codice che l’autenticatore è tuo."
           : null,
-        "Ognuna delle modifiche qui sotto sostituisce una credenziale, quindi ognuna chiede la tua password.",
+        "Ogni modifica qui sotto chiede la tua password.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -2280,7 +2280,7 @@ export const IT: Catalogue = {
     confirmedThisAccountCanNowBe: "Confermato. Questo account ora può ricevere un ruolo dello staff.",
     twoFactorAuthentication: "Autenticazione a due fattori",
     saveTheseRecoveryCodesNow: "Salva subito questi codici di recupero.",
-    eachOneSignsYouOnceIf: "Ognuno ti fa accedere una\n              volta se perdi la tua app di autenticazione. Non vengono mostrati\n              di nuovo — se ne conservano solo gli hash.",
+    eachOneSignsYouOnceIf: "Ognuno ti fa accedere una volta se perdi la tua app di autenticazione. Non vengono mostrati di nuovo.",
     recoveryCodes: "Codici di recupero",
     downloadAsFile: "Scarica come file",
     copyAll: "Copia tutti",
@@ -2404,7 +2404,7 @@ export const IT: Catalogue = {
     ready: "Pronto",
     tooLargeToPrepareHere: "Troppo grande per prepararlo qui",
     couldNotPrepare: "Impossibile preparare",
-    yourDataIsLargerThan: "I tuoi dati superano ciò che questo server prepara in un unico documento. Chiedi al gestore di alzare il limite.",
+    yourDataIsLargerThan: "I tuoi dati sono troppo grandi perché questo server li prepari in un unico file. Chiedi aiuto a un amministratore.",
     somethingWentWrongWhilePreparing: "Qualcosa è andato storto durante la preparazione. Puoi richiedere un’altra esportazione.",
   },
   recoveryCodeFile: {

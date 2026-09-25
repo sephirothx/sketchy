@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Tu vas trop vite. Réessaie dans un instant.",
-  seat_changing_too_fast: "Cette place change de mains trop vite. Réessaie dans une minute.",
+  seat_changing_too_fast: "Ce salon a été rouvert trop de fois d’affilée. Réessaie dans une minute.",
   joining_too_fast: "Tu rejoins des salons trop vite. Réessaie dans une minute.",
   room_quota: "Tu as déjà autant de salons ouverts que possible.",
   room_full: "Ce salon est complet.",
@@ -149,7 +149,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   room_not_found: "Salon introuvable.",
   room_ended: "Ce salon est terminé.",
   could_not_create_room: "Le salon n’a pas pu être créé.",
-  no_session_to_resume: "Il n’y a aucune session à toi à reprendre dans ce salon.",
+  no_session_to_resume: "Tu n’es plus dans ce salon. Rejoins-le à nouveau.",
   host_only: "Seul l’hôte peut faire cela.",
   players_only: "Seuls les joueurs peuvent faire cela.",
   waiting_room_only: "Ce n’est disponible que dans la salle d’attente.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Le mot de passe n’a pas pu être changé.",
   session_not_found: "Cet appareil n’est plus connecté.",
-  session_replaced: "Cette session a été remplacée. Recharge et réessaie.",
+  session_replaced: "Ce navigateur s’est reconnecté depuis le chargement de cette page. Recharge et réessaie.",
   guest_progress_unlinked: "La progression d’invité n’a pas pu être liée à ce compte.",
   not_taking_visitors: "Sketchy n’accepte pas de nouveaux visiteurs pour le moment. Réessaie plus tard.",
   account_delete_refused: "Le compte n’a pas pu être supprimé maintenant. Réessaie.",
@@ -372,13 +372,13 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_reportable_prompt_list: "Liste de mots introuvable.",
   prompt_not_in_list: "Ce mot n’appartient pas à cette liste.",
   no_picture_to_report: "Ce joueur n’a pas d’image à signaler.",
-  no_such_game_context: "Ce contexte de partie n’existe pas.",
-  no_such_turn_context: "Ce contexte de tour n’existe pas.",
+  no_such_game_context: "Partie introuvable.",
+  no_such_turn_context: "Tour introuvable.",
   turn_not_in_game: "Le tour n’appartient pas à cette partie.",
   evidence_unavailable: "Un ou plusieurs messages sélectionnés ne sont pas disponibles.",
   evidence_mixed_scopes: "Les messages du hall et du salon ne peuvent pas être mélangés dans un signalement.",
   evidence_several_rooms: "Les messages sélectionnés doivent venir du même salon.",
-  evidence_not_theirs: "Les preuves doivent être du joueur signalé.",
+  evidence_not_theirs: "Seuls les messages envoyés par le joueur signalé peuvent être joints.",
   evidence_not_received: "Tu ne peux pas sélectionner un message que tu n’as pas reçu.",
   evidence_not_in_game: "Le message sélectionné n’appartient pas à cette partie.",
   evidence_not_in_turn: "Le message sélectionné n’appartient pas à ce tour.",
@@ -498,8 +498,8 @@ export const FR: Catalogue = {
   },
 
   accountDataDialog: {
-    requestedOn: (p: { when: string; schemaVersion: number }) =>
-      `Demandé ${p.when} · format v${p.schemaVersion}`,
+    requestedOn: (p: { when: string }) =>
+      `Demandé ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
       p.nextAllowed
         ? `Un export par semaine ; les exports prêts expirent au bout de sept jours. Tu pourras en redemander un le ${p.nextAllowed}.`
@@ -963,7 +963,7 @@ export const FR: Catalogue = {
     saveImage: "Enregistrer l’image",
     close: "Fermer",
     thisDrawingWasNotKept: "Ce dessin n’a pas été conservé.",
-    roomRanOutRoomLaterTurns: "Le salon n’avait plus de place. Des tours plus tardifs ont été conservés à la place.",
+    earlierDrawingsFilledTheSpace: "Les dessins précédents de cette partie ont rempli la place que le salon leur réserve.",
     tryAgain: "Réessayer",
     loadingDrawing: "Chargement du dessin…",
     noDrawingWasCapturedThisTurn: "Aucun dessin n’a été capturé pour ce tour.",
@@ -1031,7 +1031,7 @@ export const FR: Catalogue = {
     friends: "Amis",
     close: "Fermer",
     closeFriends: "Fermer les amis",
-    friendsNeedAccountGuestNameBelongs: "Les amis demandent un compte. Un nom d’invité appartient à ce navigateur\n              plutôt qu’à toi, donc dans un mois il ne resterait plus personne\n              avec qui être ami.",
+    friendsNeedAnAccount: "Les amis demandent un compte. Un nom d’invité appartient à ce navigateur et disparaît après un mois sans jouer.",
     loading: "Chargement…",
     noFriendsYetAddSomebodyFrom: "Pas encore d’amis. Ajoute quelqu’un depuis le hall, ou depuis une partie\n              où vous êtes tous les deux.",
     requests: "Demandes",
@@ -1930,7 +1930,7 @@ export const FR: Catalogue = {
     drawing: "Dessine",
     scoringHints: "Score et indices",
     hintsAreOffBecauseTilesAreHidden: "Les indices sont désactivés car les cases de lettres sont masquées.",
-    pointPurchaseHintModesRequireScoring: "Les modes d’indice payants nécessitent un score.",
+    buyLettersAndWheelNeedScoring: "Acheter des lettres et Roue de la fortune ont besoin du score.",
     allColors: "Toutes les couleurs",
     noScoring: "Sans score",
     listedInTheLobbyAnyone: "Affiché dans le hall : tout le monde peut entrer.",
@@ -2140,7 +2140,7 @@ export const FR: Catalogue = {
       `Configure-la et le rôle de ${p.pendingRole} qui t’a été proposé prendra effet.`,
     anAuthenticatorAppSCode: "Un code d’application d’authentification, en plus de ton mot de passe. Les modérateurs et les administrateurs doivent en avoir une.",
     setUp: "Configurer",
-    thisBrowserIsTheOnly: "Ce navigateur est le seul endroit où tu existes.",
+    guestKeptInThisBrowser: "Ton nom d’invité, tes points et ton historique ne sont gardés que dans ce navigateur.",
     everyBrowserStillHoldingA: "Chaque navigateur qui a encore une session, et un moyen de fermer n’importe laquelle.",
     worksForAGuestToo: "Marche aussi pour un invité : les parties que tu as jouées t’appartiennent.",
     everyGameListAndSetting: "Chaque partie, liste et réglage que Sketchy conserve sur toi, dans un seul fichier JSON.",
@@ -2194,7 +2194,7 @@ export const FR: Catalogue = {
   toolbar: {
     colorOption: (p: { color: string }) => `couleur ${p.color}`,
     adjustSize: (p: { tool: string }) => `Ajuster la taille de ${p.tool}`,
-    sizeSnappingSlider: (p: { tool: string }) => `Curseur de taille par crans pour ${p.tool}`,
+    sizeSlider: (p: { tool: string }) => `${p.tool}, taille`,
     chooseToolCurrent: (p: { tool: string }) => `Choisir un outil, actuel : ${p.tool}`,
     chooseColorCurrent: (p: { color: string }) => `Choisir une couleur, actuelle ${p.color}`,
     sizeWithWidth: (p: { tool: string; width: number }) => `${p.tool}, taille ${p.width}px`,
@@ -2259,7 +2259,7 @@ export const FR: Catalogue = {
         p.confirmAuthenticator
           ? "Avant que ce compte puisse recevoir un rôle de modérateur ou d’administrateur, confirme avec ton mot de passe et un code que l’authentificateur est le tien."
           : null,
-        "Chacun des changements ci-dessous remplace un identifiant, chacun demande donc ton mot de passe.",
+        "Chaque changement ci-dessous demande ton mot de passe.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -2281,7 +2281,7 @@ export const FR: Catalogue = {
     confirmedThisAccountCanNowBe: "Confirmé. Ce compte peut désormais recevoir un rôle d’équipe.",
     twoFactorAuthentication: "Double authentification",
     saveTheseRecoveryCodesNow: "Enregistre ces codes de récupération maintenant.",
-    eachOneSignsYouOnceIf: "Chacun te connecte une\n              fois si tu perds ton application d’authentification. Ils ne sont\n              plus affichés ensuite — seuls leurs empreintes sont conservées.",
+    eachOneSignsYouOnceIf: "Chacun te connecte une fois si tu perds ton application d’authentification. Ils ne sont plus affichés ensuite.",
     recoveryCodes: "Codes de récupération",
     downloadAsFile: "Télécharger en fichier",
     copyAll: "Tout copier",
@@ -2405,7 +2405,7 @@ export const FR: Catalogue = {
     ready: "Prêt",
     tooLargeToPrepareHere: "Trop volumineux pour être préparé ici",
     couldNotPrepare: "Préparation impossible",
-    yourDataIsLargerThan: "Tes données dépassent ce que ce serveur prépare en un seul document. Demande à l’opérateur de relever la limite.",
+    yourDataIsLargerThan: "Tes données sont trop volumineuses pour que ce serveur les prépare en un seul fichier. Demande de l’aide à un administrateur.",
     somethingWentWrongWhilePreparing: "Un problème est survenu pendant la préparation. Tu peux demander un autre export.",
   },
   recoveryCodeFile: {

@@ -331,7 +331,7 @@ export const Toolbar = memo(function Toolbar({
           // The desktop habit for "put it back": the same as the button below.
           onDoubleClick={() => handleWidthChange(defaultSize)}
           className="vertical-brush-slider"
-          aria-label={ui.toolbar.sizeSnappingSlider({ tool: labelPrefix })}
+          aria-label={ui.toolbar.sizeSlider({ tool: labelPrefix })}
         />
         {/* Where the slider stops, with the default marked: a stop is a
             place the thumb lands, and the default is the one to find again. */}

@@ -186,7 +186,7 @@ export function DrawingRecapGallery({
             <div className="drawing-recap-status">
               <p>{ui.drawingRecapGallery.thisDrawingWasNotKept}</p>
               <p className="drawing-recap-status-detail">
-                {ui.drawingRecapGallery.roomRanOutRoomLaterTurns}
+                {ui.drawingRecapGallery.earlierDrawingsFilledTheSpace}
               </p>
             </div>
           ) : error ? (

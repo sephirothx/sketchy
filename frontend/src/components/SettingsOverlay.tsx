@@ -845,7 +845,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           locked={isGuest}
           hint={
             isGuest
-              ? ui.settingsOverlay.thisBrowserIsTheOnly
+              ? ui.settingsOverlay.guestKeptInThisBrowser
               : ui.settingsOverlay.everyBrowserStillHoldingA
           }
         >

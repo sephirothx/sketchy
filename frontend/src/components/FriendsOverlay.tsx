@@ -138,7 +138,7 @@ export function FriendsOverlay() {
               rather than showing an empty list that looks like a fault. */}
           {isGuest ? (
             <p className="friends-empty">
-              {ui.friendsOverlay.friendsNeedAccountGuestNameBelongs}
+              {ui.friendsOverlay.friendsNeedAnAccount}
             </p>
           ) : !loaded ? (
             <p className="friends-empty">{ui.friendsOverlay.loading}</p>

@@ -128,7 +128,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "Je gaat te snel. Probeer het zo nog eens.",
-  seat_changing_too_fast: "Deze plek wisselt te snel van eigenaar. Probeer het over een minuut nog eens.",
+  seat_changing_too_fast: "Deze kamer is te vaak achter elkaar opnieuw geopend. Probeer het over een minuut nog eens.",
   joining_too_fast: "Je stapt te snel kamers binnen. Probeer het over een minuut nog eens.",
   room_quota: "Je hebt al net zoveel kamers open als tegelijk kan.",
   room_full: "Deze kamer is vol.",
@@ -149,7 +149,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   room_not_found: "Kamer niet gevonden.",
   room_ended: "Deze kamer is afgelopen.",
   could_not_create_room: "De kamer kon niet aangemaakt worden.",
-  no_session_to_resume: "Er is geen sessie van jou om in deze kamer te hervatten.",
+  no_session_to_resume: "Je bent niet meer in deze kamer. Doe opnieuw mee.",
   host_only: "Dat kan alleen de gastheer.",
   players_only: "Dat kunnen alleen spelers.",
   waiting_room_only: "Dat kan alleen in de wachtkamer.",
@@ -235,7 +235,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Het wachtwoord kon niet gewijzigd worden.",
   session_not_found: "Dit apparaat is niet meer ingelogd.",
-  session_replaced: "Deze sessie is vervangen. Herlaad en probeer het nog eens.",
+  session_replaced: "Deze browser is opnieuw ingelogd sinds deze pagina laadde. Herlaad en probeer het nog eens.",
   guest_progress_unlinked: "De gastvoortgang kon niet aan dit account gekoppeld worden.",
   not_taking_visitors: "Sketchy neemt op dit moment geen nieuwe bezoekers aan. Probeer het later nog eens.",
   account_delete_refused: "Het account kon nu niet verwijderd worden. Probeer het nog eens.",
@@ -372,13 +372,13 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_reportable_prompt_list: "Woordenlijst niet gevonden.",
   prompt_not_in_list: "Dit woord hoort niet bij deze lijst.",
   no_picture_to_report: "Deze speler heeft geen afbeelding om te melden.",
-  no_such_game_context: "Deze spelcontext bestaat niet.",
-  no_such_turn_context: "Deze beurtcontext bestaat niet.",
+  no_such_game_context: "Spel niet gevonden.",
+  no_such_turn_context: "Beurt niet gevonden.",
   turn_not_in_game: "De beurt hoort niet bij dat spel.",
   evidence_unavailable: "Een of meer geselecteerde berichten zijn niet beschikbaar.",
   evidence_mixed_scopes: "Lobby- en kamerberichten kunnen niet in één melding gemengd worden.",
   evidence_several_rooms: "Geselecteerde berichten moeten uit dezelfde kamer komen.",
-  evidence_not_theirs: "Bewijs moet van de gemelde speler zijn.",
+  evidence_not_theirs: "Alleen berichten van de gemelde speler kunnen worden bijgevoegd.",
   evidence_not_received: "Je kunt geen bericht kiezen dat je niet ontvangen hebt.",
   evidence_not_in_game: "Het gekozen bericht hoort niet bij dat spel.",
   evidence_not_in_turn: "Het gekozen bericht hoort niet bij die beurt.",
@@ -498,8 +498,8 @@ export const NL: Catalogue = {
   },
 
   accountDataDialog: {
-    requestedOn: (p: { when: string; schemaVersion: number }) =>
-      `Aangevraagd ${p.when} · formaat v${p.schemaVersion}`,
+    requestedOn: (p: { when: string }) =>
+      `Aangevraagd ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
       p.nextAllowed
         ? `Eén export per week; klaargezette exports verlopen na zeven dagen. Je kunt op ${p.nextAllowed} een nieuwe aanvragen.`
@@ -963,7 +963,7 @@ export const NL: Catalogue = {
     saveImage: "Afbeelding opslaan",
     close: "Sluiten",
     thisDrawingWasNotKept: "Deze tekening is niet bewaard.",
-    roomRanOutRoomLaterTurns: "De kamer had er geen ruimte meer voor. In plaats daarvan zijn latere beurten bewaard.",
+    earlierDrawingsFilledTheSpace: "De eerdere tekeningen van dit spel hebben de ruimte gevuld die de kamer ervoor heeft.",
     tryAgain: "Opnieuw proberen",
     loadingDrawing: "Tekening laden…",
     noDrawingWasCapturedThisTurn: "Voor deze beurt is geen tekening vastgelegd.",
@@ -1031,7 +1031,7 @@ export const NL: Catalogue = {
     friends: "Vrienden",
     close: "Sluiten",
     closeFriends: "Vrienden sluiten",
-    friendsNeedAccountGuestNameBelongs: "Voor vrienden heb je een account nodig. Een gastnaam hoort bij deze\n              browser en niet bij jou, dus over een maand zou er niemand meer\n              zijn om bevriend mee te zijn.",
+    friendsNeedAnAccount: "Voor vrienden heb je een account nodig. Een gastnaam hoort bij deze browser en verdwijnt na een maand zonder spelen.",
     loading: "Laden…",
     noFriendsYetAddSomebodyFrom: "Nog geen vrienden. Voeg iemand toe vanuit de lobby, of vanuit een spel\n              waar jullie allebei in zitten.",
     requests: "Verzoeken",
@@ -1928,7 +1928,7 @@ export const NL: Catalogue = {
     drawing: "Tekent",
     scoringHints: "Punten en hints",
     hintsAreOffBecauseTilesAreHidden: "Hints staan uit omdat de lettervakjes verborgen zijn.",
-    pointPurchaseHintModesRequireScoring: "Hintmodi met punten kosten vereisen puntentelling.",
+    buyLettersAndWheelNeedScoring: "Letters kopen en Rad van fortuin hebben puntentelling nodig.",
     allColors: "Alle kleuren",
     noScoring: "Zonder punten",
     listedInTheLobbyAnyone: "Zichtbaar in de lobby — iedereen kan binnenlopen.",
@@ -2138,7 +2138,7 @@ export const NL: Catalogue = {
       `Stel dit in en de rol van ${p.pendingRole} die je is aangeboden gaat in.`,
     anAuthenticatorAppSCode: "Een code uit een authenticatie-app, bovenop je wachtwoord. Moderators en beheerders moeten er een hebben.",
     setUp: "Instellen",
-    thisBrowserIsTheOnly: "Deze browser is de enige plek waar je bestaat.",
+    guestKeptInThisBrowser: "Je gastnaam, punten en geschiedenis staan alleen in deze browser.",
     everyBrowserStillHoldingA: "Elke browser die nog een sessie heeft, en een manier om er een te beëindigen.",
     worksForAGuestToo: "Werkt ook voor gasten: de spellen die je hebt gespeeld zijn van jou.",
     everyGameListAndSetting: "Elk spel, elke lijst en elke instelling die Sketchy over je bewaart, als één JSON-bestand.",
@@ -2192,7 +2192,7 @@ export const NL: Catalogue = {
   toolbar: {
     colorOption: (p: { color: string }) => `kleur ${p.color}`,
     adjustSize: (p: { tool: string }) => `Grootte van ${p.tool} aanpassen`,
-    sizeSnappingSlider: (p: { tool: string }) => `Schuifregelaar met stappen voor de grootte van ${p.tool}`,
+    sizeSlider: (p: { tool: string }) => `${p.tool}, grootte`,
     chooseToolCurrent: (p: { tool: string }) => `Gereedschap kiezen, nu: ${p.tool}`,
     chooseColorCurrent: (p: { color: string }) => `Kleur kiezen, nu ${p.color}`,
     sizeWithWidth: (p: { tool: string; width: number }) => `${p.tool}, grootte ${p.width}px`,
@@ -2257,7 +2257,7 @@ export const NL: Catalogue = {
         p.confirmAuthenticator
           ? "Voordat dit account een moderator- of beheerdersrol kan krijgen, bevestig met je wachtwoord en een code dat de authenticator van jou is."
           : null,
-        "Elk van de wijzigingen hieronder vervangt een inloggegeven, dus elke wijziging vraagt om je wachtwoord.",
+        "Elke wijziging hieronder vraagt om je wachtwoord.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -2279,7 +2279,7 @@ export const NL: Catalogue = {
     confirmedThisAccountCanNowBe: "Bevestigd. Dit account kan nu een teamrol krijgen.",
     twoFactorAuthentication: "Tweestapsverificatie",
     saveTheseRecoveryCodesNow: "Bewaar deze herstelcodes nu.",
-    eachOneSignsYouOnceIf: "Elke code logt je één keer\n              in als je je authenticatie-app kwijtraakt. Ze worden niet nog eens\n              getoond — alleen hun hashes worden bewaard.",
+    eachOneSignsYouOnceIf: "Elke code logt je één keer in als je je authenticatie-app kwijtraakt. Ze worden niet nog eens getoond.",
     recoveryCodes: "Herstelcodes",
     downloadAsFile: "Als bestand downloaden",
     copyAll: "Alles kopiëren",
@@ -2403,7 +2403,7 @@ export const NL: Catalogue = {
     ready: "Klaar",
     tooLargeToPrepareHere: "Te groot om hier voor te bereiden",
     couldNotPrepare: "Kon niet worden voorbereid",
-    yourDataIsLargerThan: "Je gegevens zijn groter dan deze server in één document voorbereidt. Vraag de beheerder de limiet te verhogen.",
+    yourDataIsLargerThan: "Je gegevens zijn te groot voor deze server om in één bestand voor te bereiden. Vraag een beheerder om hulp.",
     somethingWentWrongWhilePreparing: "Er ging iets mis bij het voorbereiden. Je kunt een nieuwe export aanvragen.",
   },
   recoveryCodeFile: {

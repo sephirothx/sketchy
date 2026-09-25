@@ -140,7 +140,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
 
   // Rate and capacity
   too_fast: "You are doing that too quickly. Try again in a moment.",
-  seat_changing_too_fast: "This seat is changing hands too quickly. Try again in a minute.",
+  seat_changing_too_fast: "This room has been reopened too many times in a row. Try again in a minute.",
   joining_too_fast: "You are joining rooms too quickly. Try again in a minute.",
   room_quota: "You have as many rooms open as you can have at once.",
   room_full: "This room is full.",
@@ -161,7 +161,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   room_not_found: "Room not found.",
   room_ended: "This room has ended.",
   could_not_create_room: "Could not create the room.",
-  no_session_to_resume: "There is no session of yours to resume in this room.",
+  no_session_to_resume: "You're no longer in this room. Join it again.",
   host_only: "Only the host can do that.",
   players_only: "Only players can do that.",
   waiting_room_only: "That is only available in the waiting room.",
@@ -247,7 +247,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   weak_password: weakPassword,
   password_change_failed: "Could not change the password.",
   session_not_found: "That device is no longer signed in.",
-  session_replaced: "This session has been replaced. Reload and try again.",
+  session_replaced: "This browser was signed in again since this page loaded. Reload and try again.",
   guest_progress_unlinked: "Guest progress could not be linked to this account.",
   not_taking_visitors: "Sketchy is not taking new visitors right now. Please try again later.",
   account_delete_refused: "The account could not be deleted right now. Please try again.",
@@ -384,13 +384,13 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   no_reportable_prompt_list: "Prompt list not found.",
   prompt_not_in_list: "That prompt does not belong to this list.",
   no_picture_to_report: "That player has no picture to report.",
-  no_such_game_context: "No such game context.",
-  no_such_turn_context: "No such turn context.",
+  no_such_game_context: "Game not found.",
+  no_such_turn_context: "Turn not found.",
   turn_not_in_game: "The turn does not belong to that game.",
   evidence_unavailable: "One or more selected messages are unavailable.",
   evidence_mixed_scopes: "Lobby and room messages cannot be mixed in one report.",
   evidence_several_rooms: "Selected messages must come from one room instance.",
-  evidence_not_theirs: "Evidence must be authored by the reported player.",
+  evidence_not_theirs: "Only messages the reported player sent can be attached.",
   evidence_not_received: "You cannot select a message you did not receive.",
   evidence_not_in_game: "Selected message does not belong to that game.",
   evidence_not_in_turn: "Selected message does not belong to that turn.",
@@ -508,8 +508,8 @@ export const EN = {
   },
 
   accountDataDialog: {
-    requestedOn: (p: { when: string; schemaVersion: number }) =>
-      `Requested ${p.when} · format v${p.schemaVersion}`,
+    requestedOn: (p: { when: string }) =>
+      `Requested ${p.when}`,
     exportAllowance: (p: { nextAllowed: string | null }) =>
       p.nextAllowed
         ? `One export a week; ready exports expire after seven days. You can request another on ${p.nextAllowed}.`
@@ -973,7 +973,7 @@ export const EN = {
     saveImage: "Save image",
     close: "Close",
     thisDrawingWasNotKept: "This drawing was not kept.",
-    roomRanOutRoomLaterTurns: "The room ran out of room for it. Later turns were kept instead.",
+    earlierDrawingsFilledTheSpace: "This game's earlier drawings used up the space the room keeps for them.",
     tryAgain: "Try again",
     loadingDrawing: "Loading drawing…",
     noDrawingWasCapturedThisTurn: "No drawing was captured for this turn.",
@@ -1042,7 +1042,7 @@ export const EN = {
     friends: "Friends",
     close: "Close",
     closeFriends: "Close friends",
-    friendsNeedAccountGuestNameBelongs: "Friends need an account. A guest name belongs to this browser\n              rather than to you, so there would be nobody left to be friends\n              with a month from now.",
+    friendsNeedAnAccount: "Friends need an account. A guest name belongs to this browser, and is removed after a month without playing.",
     loading: "Loading…",
     noFriendsYetAddSomebodyFrom: "No friends yet. Add somebody from the lobby, or from a game you\n              are both in.",
     requests: "Requests",
@@ -1932,7 +1932,7 @@ export const EN = {
     drawing: "Drawing",
     scoringHints: "Scoring and hints",
     hintsAreOffBecauseTilesAreHidden: "Hints are off because letter tiles are hidden.",
-    pointPurchaseHintModesRequireScoring: "Point-purchase hint modes require scoring.",
+    buyLettersAndWheelNeedScoring: "Buy letters and Wheel of Fortune need scoring.",
     allColors: "All colors",
     noScoring: "No scoring",
     listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in.",
@@ -2144,7 +2144,7 @@ export const EN = {
     anAuthenticatorAppSCode:
       "An authenticator app's code, on top of your password. Moderators and administrators must have one.",
     setUp: "Set up",
-    thisBrowserIsTheOnly: "This browser is the only place you exist.",
+    guestKeptInThisBrowser: "Your guest name, points and history are kept in this browser only.",
     everyBrowserStillHoldingA:
       "Every browser still holding a session, and a way to end any of them.",
     worksForAGuestToo: "Works for a guest too: the games you have played are yours.",
@@ -2202,7 +2202,7 @@ export const EN = {
   toolbar: {
     colorOption: (p: { color: string }) => `color ${p.color}`,
     adjustSize: (p: { tool: string }) => `Adjust ${p.tool} size`,
-    sizeSnappingSlider: (p: { tool: string }) => `${p.tool} size snapping slider`,
+    sizeSlider: (p: { tool: string }) => `${p.tool} size`,
     chooseToolCurrent: (p: { tool: string }) => `Choose tool, current: ${p.tool}`,
     chooseColorCurrent: (p: { color: string }) => `Choose color, current ${p.color}`,
     sizeWithWidth: (p: { tool: string; width: number }) => `${p.tool} size ${p.width}px`,
@@ -2267,7 +2267,7 @@ export const EN = {
         p.confirmAuthenticator
           ? "Before this account can be given a moderator or administrator role, confirm that the authenticator is yours with your password and a code from it."
           : null,
-        "Each of the changes below swaps a credential, so each asks for your password.",
+        "Each change below asks for your password.",
       ]
         .filter(Boolean)
         .join(" "),
@@ -2289,7 +2289,7 @@ export const EN = {
     confirmedThisAccountCanNowBe: "Confirmed. This account can now be given a staff role.",
     twoFactorAuthentication: "Two-factor authentication",
     saveTheseRecoveryCodesNow: "Save these recovery codes now.",
-    eachOneSignsYouOnceIf: "Each one signs you\n              in once if you lose your authenticator app. They are not shown\n              again — only their hashes are kept.",
+    eachOneSignsYouOnceIf: "Each one signs you in once if you lose your authenticator app. They are not shown again.",
     recoveryCodes: "Recovery codes",
     downloadAsFile: "Download as a file",
     copyAll: "Copy all",
@@ -2416,7 +2416,7 @@ export const EN = {
     tooLargeToPrepareHere: "Too large to prepare here",
     couldNotPrepare: "Could not prepare",
     yourDataIsLargerThan:
-      "Your data is larger than this server prepares in one document. Ask the operator to raise the limit.",
+      "Your data is too large for this server to prepare in one file. Ask an administrator for help.",
     somethingWentWrongWhilePreparing:
       "Something went wrong while preparing it. You can request another export.",
   },

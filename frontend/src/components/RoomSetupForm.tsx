@@ -346,7 +346,7 @@ export function RoomSetupForm({
             }))}
           />
           {hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.hintsAreOffBecauseTilesAreHidden}</p>}
-          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.pointPurchaseHintModesRequireScoring}</p>}
+          {hintsDisabled && !hideMaskedPrompt && <p className="setting-dependency">{ui.roomSetupForm.buyLettersAndWheelNeedScoring}</p>}
           <div className="form-section-switch-row">
             <Switch
               label={ui.roomSetupForm.spectatorsCanSeePrompt}
