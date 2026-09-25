@@ -41,6 +41,7 @@ import type {
 } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { EmptyState } from "../components/ui/EmptyState";
 import "../styles/lazy/community-lists.css";
 
 /** A tag's name in the reader's language, by the slug that never changes. */
@@ -419,11 +420,11 @@ export function CommunityCataloguePage() {
         !loading && lists.length === 0 && !selectedId ? "is-empty" : "",
       ].filter(Boolean).join(" ")}>
         <div className="community-catalogue-results">
-          {loading ? <p className="community-catalogue-empty">{ui.communityCataloguePage.loading}</p>
+          {loading ? <p className="loading-note" role="status">{ui.communityCataloguePage.loading}</p>
             : lists.length === 0
-              ? <p className="community-catalogue-empty">{isFiltered(filters)
+              ? <EmptyState title={isFiltered(filters)
                   ? ui.communityCataloguePage.nothingMatchesThoseFilters
-                  : ui.communityCataloguePage.nothingPublishedYet}</p>
+                  : ui.communityCataloguePage.nothingPublishedYet} />
               : <ul className="community-catalogue-list">
                   {lists.map((list) => {
                     const selected = list.id === selectedId;

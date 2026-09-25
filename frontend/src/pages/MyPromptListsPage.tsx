@@ -2,11 +2,13 @@ import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { AddEmailDialog } from "../components/AddEmailDialog";
 import { AppHeader } from "../components/AppHeader";
+import { AuthDialog } from "../components/AccountMenu";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { LanguageFace, LanguagePicker } from "../components/LanguagePicker";
 import { TagPicker } from "../components/TagPicker";
 import { AlertIcon, CopyIcon, PlusIcon, StarIcon, TrashIcon, XIcon } from "../components/icons";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
+import { EmptyState } from "../components/ui/EmptyState";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
@@ -27,6 +29,7 @@ import {
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
 import { maskEmail } from "../lib/accountRecovery";
+import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { useEmailStateStore } from "../store/emailStateStore";
@@ -81,6 +84,9 @@ export function MyPromptListsPage() {
   const user = useAuthStore((state) => state.user);
   const userId = user?.id;
   const isAnonymous = user?.isAnonymous;
+  const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
+  const [authMode, setAuthMode] = useState<AuthMode | null>(null);
   const arrival = location.state as { quickPrompts?: string; openListId?: string } | null;
   const initialQuickPrompts = arrival?.quickPrompts;
   const { notify } = useToast();
@@ -364,17 +370,25 @@ export function MyPromptListsPage() {
       {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
     </div>
     {!user || user.isAnonymous ? (
-      <div className="prompt-list-manager-empty">
-        <p>{ui.myPromptListsPage.createAccountSaveReviseSharePrompt}</p>
-      </div>
+      // Saved lists are a registered player's (R-LIST-01), so a guest has
+      // none - and the way to have some is one press away, not a sentence.
+      <EmptyState
+        title={ui.myPromptListsPage.promptListsNeedAnAccount}
+        body={ui.myPromptListsPage.promptListsNeedAnAccountBody}
+        action={
+          <button type="button" className="btn btn-primary" onClick={() => setAuthMode("claim")}>
+            {ui.accountMenu.createAccount}
+          </button>
+        }
+      />
     ) : (
       <section className="prompt-list-manager-card">
         <div className="prompt-list-manager-layout">
           <aside aria-label={ui.myPromptListsPage.yourPromptLists}>
-            {loading && lists.length === 0 && <p>{ui.myPromptListsPage.loading}</p>}
+            {loading && lists.length === 0 && <p className="loading-note" role="status">{ui.myPromptListsPage.loading}</p>}
             {listError
               ? <p className="prompt-list-alert is-error" role="alert"><AlertIcon size={14} /><span>{listError}</span></p>
-              : lists.length === 0 && !loading && <p>{ui.myPromptListsPage.noSavedListsYet}</p>}
+              : lists.length === 0 && !loading && <EmptyState compact title={ui.myPromptListsPage.noSavedListsYet} />}
             {lists.map((item) => <button
               type="button"
               key={item.id}
@@ -512,7 +526,7 @@ export function MyPromptListsPage() {
             </div>
             <div className="prompt-list-collection">
             {draft.prompts.length === 0 ? (
-              <p className="prompt-list-manager-empty">{ui.myPromptListsPage.noPromptsYetPasteSomeAbove}</p>
+              <EmptyState compact className="prompt-list-manager-empty" title={ui.myPromptListsPage.noPromptsYetPasteSomeAbove} />
             ) : (
               <>
                 <div className="prompt-list-entry-filters">
@@ -546,7 +560,7 @@ export function MyPromptListsPage() {
                   </span>
                 </div>
                 {visiblePrompts.length === 0 ? (
-                  <p className="prompt-list-manager-empty">{ui.myPromptListsPage.nothingMatchesThatSearch}</p>
+                  <EmptyState compact className="prompt-list-manager-empty" title={ui.myPromptListsPage.nothingMatchesThatSearch} />
                 ) : (
                   <ul className="prompt-list-entry-editor">
                     {visiblePrompts.map((prompt, index) => {
@@ -601,6 +615,13 @@ export function MyPromptListsPage() {
     {addingEmail && <AddEmailDialog
       onClose={() => setAddingEmail(false)}
       onSaved={() => setAddingEmail(false)}
+    />}
+    {authMode && <AuthDialog
+      mode={authMode}
+      suggestedUsername={authMode === "claim" && user?.isAnonymous ? user.displayName : ""}
+      onClose={() => setAuthMode(null)}
+      onSwitchMode={setAuthMode}
+      onSubmit={authSubmitter(authMode, login, register)}
     />}
   </main>;
 }

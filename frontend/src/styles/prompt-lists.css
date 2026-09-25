@@ -591,7 +591,7 @@
   margin: 0;
   padding: 10px 12px;
 }
-.prompt-list-manager-empty { color: var(--muted); margin-top: 24px; }
+.prompt-list-manager-empty { margin-top: 16px; }
 
 @media (max-width: 700px) {
   .prompt-list-manager-page { display: block; height: auto; padding-bottom: 64px; }

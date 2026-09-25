@@ -48,6 +48,7 @@ import { ui } from "../content/ui/index.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { EmptyState } from "../components/ui/EmptyState";
 import "../styles/lazy/profile.css";
 
 /** History reactions in the shape the shared control reads: seat id as the reactor id. */
@@ -284,7 +285,7 @@ function GameRow({
           </ol>
 
           {detailError && <p className="profile-note">{detailError}</p>}
-          {!detail && !detailError && <p className="profile-note">{ui.profilePage.loadingTurns}</p>}
+          {!detail && !detailError && <p className="loading-note" role="status">{ui.profilePage.loadingTurns}</p>}
 
           {detail && (() => {
             // The rounds carry ids, the standings carry the colors: joining
@@ -450,9 +451,9 @@ export function ProfilePage() {
     return (
       <div className="profile-page">
         <AppHeader backLabel={ui.profilePage.backToLobby} />
-        <p className="profile-note">
-          {hasResolved ? ui.profilePage.noSuchProfile : ui.profilePage.loading}
-        </p>
+        {hasResolved
+          ? <EmptyState title={ui.profilePage.noSuchProfile} />
+          : <p className="loading-note" role="status">{ui.profilePage.loading}</p>}
       </div>
     );
   }
@@ -599,7 +600,7 @@ function ProfileView({ userId }: { userId: string }) {
     <div className="profile-page">
       <AppHeader backLabel={ui.profilePage.backToLobby} />
 
-      {!subject && !error && <p className="profile-note">{ui.profilePage.loading}</p>}
+      {!subject && !error && <p className="loading-note" role="status">{ui.profilePage.loading}</p>}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 
       {subject && stats && (
@@ -785,11 +786,12 @@ function ProfileView({ userId }: { userId: string }) {
               </label>
             </div>
             {games.length === 0 ? (
-              <p className="profile-note">
-                {isOwnProfile
+              <EmptyState
+                compact
+                title={isOwnProfile
                   ? ui.profilePage.noFinishedGamesYetPlay
                   : ui.profilePage.noGamesToShowGames}
-              </p>
+              />
             ) : (
               <ul className="profile-games">
                 {games.map((game) => (

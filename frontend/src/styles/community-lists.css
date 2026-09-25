@@ -136,16 +136,6 @@
    beside an empty pane. */
 .community-catalogue-body.is-empty { grid-template-columns: minmax(0, 1fr); }
 
-.community-catalogue-body.is-empty .community-catalogue-empty {
-  background: var(--card);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
-  font-style: normal;
-  padding: 34px 24px;
-  text-align: center;
-}
-
 .community-catalogue-list {
   display: grid;
   gap: 10px;
@@ -300,13 +290,6 @@
   display: flex;
   justify-content: center;
   padding-top: 10px;
-}
-
-.community-catalogue-empty {
-  color: var(--muted);
-  font-style: italic;
-  margin: 0;
-  padding: 8px 0;
 }
 
 .community-catalogue-notice {

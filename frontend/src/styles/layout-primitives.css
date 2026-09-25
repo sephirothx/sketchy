@@ -98,4 +98,3 @@ textarea:disabled {
 
 .create-room-lobby-copy { color: var(--muted); line-height: 1.5; margin: 8px 0 16px; font-size: 14px; }
 .lobby-action-error { background: var(--danger-soft); border: 1px solid var(--danger); border-radius: var(--radius-sm); color: var(--danger); font-weight: 600; margin: 0 0 16px; padding: 10px 12px; }
-.room-list-loading { color: var(--muted); padding: 20px 0; text-align: center; }

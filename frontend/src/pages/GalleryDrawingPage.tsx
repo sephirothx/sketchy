@@ -17,6 +17,7 @@ import { refusalText } from "../lib/refusals.ts";
 import { useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+import { EmptyState } from "../components/ui/EmptyState";
 import "../styles/lazy/gallery.css";
 
 /**
@@ -93,21 +94,27 @@ export function GalleryDrawingPage() {
       <AppHeader parent={{ label: ui.galleryPage.gallery, to: "/gallery" }} backLabel={ui.galleryPage.backToGallery} backTo="/gallery" languageSwitch />
 
       {signedOut ? (
-        <div className="gallery-empty-state" data-testid="gallery-signed-out">
-          <p className="gallery-end-title">{ui.galleryPage.signInToSeeTheGallery}</p>
-          <p className="gallery-end-body">{ui.galleryPage.signInBody}</p>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate("/")}>
-            {ui.galleryPage.backToLobby}
-          </button>
-        </div>
+        <EmptyState
+          testId="gallery-signed-out"
+          title={ui.galleryPage.signInToSeeTheGallery}
+          body={ui.galleryPage.signInBody}
+          action={
+            <button type="button" className="btn btn-secondary" onClick={() => navigate("/")}>
+              {ui.galleryPage.backToLobby}
+            </button>
+          }
+        />
       ) : missing ? (
-        <div className="gallery-empty-state" data-testid="gallery-drawing-missing">
-          <p className="gallery-end-title">{ui.galleryPage.notInTheGallery}</p>
-          <p className="gallery-end-body">{ui.galleryPage.notInTheGalleryBody}</p>
-          <button type="button" className="btn btn-secondary" onClick={() => navigate("/gallery")}>
-            {ui.galleryPage.backToGallery}
-          </button>
-        </div>
+        <EmptyState
+          testId="gallery-drawing-missing"
+          title={ui.galleryPage.notInTheGallery}
+          body={ui.galleryPage.notInTheGalleryBody}
+          action={
+            <button type="button" className="btn btn-secondary" onClick={() => navigate("/gallery")}>
+              {ui.galleryPage.backToGallery}
+            </button>
+          }
+        />
       ) : (
         <article className="gallery-drawing" data-testid="gallery-drawing-page" aria-busy={shown === null && !error}>
           {error && <p className="lobby-action-error" role="alert">{error}</p>}

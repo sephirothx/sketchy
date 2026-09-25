@@ -211,7 +211,7 @@ async def test_a_dropped_socket_keeps_the_rooms_it_last_knew():
             await watcher_context.set_offline(True)
             await watcher.wait_for_selector(".connection-status-banner.offline")
             assert await watcher.is_visible(card)
-            assert not await watcher.is_visible(".room-list-loading")
+            assert not await watcher.is_visible(".lobby-rooms-panel .loading-note")
 
             await watcher_context.set_offline(False)
             await watcher.wait_for_selector(

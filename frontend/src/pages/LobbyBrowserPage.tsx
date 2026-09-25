@@ -17,6 +17,7 @@ import { useRoomsStore } from "../store/roomsStore";
 import { useRoomEntryStore } from "../store/roomEntryStore";
 import { ModalShell } from "../components/ui/ModalShell";
 import { BottomSheet } from "../components/ui/BottomSheet";
+import { EmptyState } from "../components/ui/EmptyState";
 import { Button } from "../components/ui/Button";
 import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -225,6 +226,14 @@ export function LobbyBrowserPage() {
   // sight in a sheet never looks like a list with nothing in it.
   const activeFilterCount =
     (languageFilter !== ANY_LANGUAGE ? 1 : 0) + (hideFullRooms ? 1 : 0) + (hideInProgressRooms ? 1 : 0);
+  // Everything that narrows the list, the search included: what a list with
+  // nothing left in it offers to undo.
+  function clearRoomFilters() {
+    setSearchQuery("");
+    setLanguageFilter(ANY_LANGUAGE);
+    setHideFullRooms(false);
+    setHideInProgressRooms(false);
+  }
   // Nothing here works without a name: the server provisions on naming,
   // needs an account to open a room, and needs a valid nickname to seat
   // anybody. The first-run block above asks for it.
@@ -538,7 +547,7 @@ export function LobbyBrowserPage() {
                     type="button"
                     className="btn btn-ghost"
                     onClick={() => {
-                      setLanguageFilter("all");
+                      setLanguageFilter(ANY_LANGUAGE);
                       setHideFullRooms(false);
                       setHideInProgressRooms(false);
                     }}
@@ -591,13 +600,23 @@ export function LobbyBrowserPage() {
             and a socket that is down is what `ConnectionStatusBanner` is for.
             The only states left are "not told yet" and "told". */}
         {!roomsState.loaded ? (
-          <div className="room-list-loading" role="status">{ui.lobbyBrowserPage.loadingPublicRooms}</div>
+          <p className="loading-note" role="status">{ui.lobbyBrowserPage.loadingPublicRooms}</p>
         ) : rooms.length === 0 ? (
-          <p>{ui.lobbyBrowserPage.noPublicRoomsYetCreateOne}</p>
+          <EmptyState
+            title={ui.lobbyBrowserPage.noPublicRoomsYet}
+            body={ui.lobbyBrowserPage.noPublicRoomsYetBody}
+          />
         ) : filteredRooms.length === 0 ? (
-          <p className="lobby-no-matches">
-            {ui.lobbyBrowserPage.noPublicRoomsMatchYourSearch}
-          </p>
+          <EmptyState
+            compact
+            className="lobby-no-matches"
+            title={ui.lobbyBrowserPage.noPublicRoomsMatchYourSearch}
+            action={
+              <button type="button" className="btn btn-ghost btn-compact" onClick={clearRoomFilters}>
+                {ui.lobbyBrowserPage.clearFilters}
+              </button>
+            }
+          />
         ) : (
           <div className={`room-list${isWide ? " is-rows" : ""}`}>
             {/* Headings for the row's columns. Hidden from assistive tech:

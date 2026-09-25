@@ -414,8 +414,7 @@
   .gallery-spinner { animation: none; }
 }
 
-.gallery-end,
-.gallery-empty-state {
+.gallery-end {
   align-items: center;
   display: flex;
   flex-direction: column;
@@ -423,14 +422,6 @@
   padding: 22px 0 8px;
   text-align: center;
 }
-
-.gallery-empty-state {
-  border: 1.5px dashed var(--line-strong);
-  border-radius: 14px;
-  padding: 36px 16px;
-}
-
-.gallery-empty-state .btn { margin-top: 6px; }
 
 .gallery-end-title {
   font-family: var(--font-display);
@@ -444,13 +435,6 @@
   font-size: 14px;
   margin: 0;
   max-width: 40ch;
-}
-
-.gallery-empty {
-  color: var(--muted);
-  font-style: italic;
-  margin: 0;
-  padding: 8px 0;
 }
 
 /* Offered once the reader is past the top, over everything, in the corner

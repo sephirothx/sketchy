@@ -23,6 +23,7 @@ import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { refusalText } from "../lib/refusals.ts";
+import { EmptyState } from "./ui/EmptyState";
 
 /** Who else is here, beside the room list.
 
@@ -107,7 +108,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       </div>
 
       {players.length === 0 ? (
-        <p className="online-players-empty">{ui.onlinePlayersPanel.nobodyElseHereRightNow}</p>
+        <EmptyState compact title={ui.onlinePlayersPanel.nobodyElseHereRightNow} />
       ) : (
         <ul className="online-players-list" data-testid="online-players-list">
           {players.map((player) => {

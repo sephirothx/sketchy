@@ -303,11 +303,6 @@
   color: var(--primary-ink);
 }
 
-.lobby-no-matches {
-  color: var(--muted);
-  font-style: italic;
-}
-
 /* --------------------------------------------------------------- room card */
 .public-room-card {
   align-items: center;
@@ -1072,13 +1067,6 @@
   align-items: start;
 }
 
-.lobby-chat-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
 /* On a phone the panel is as tall as its contents, so the list has to bound
    itself; the desktop's pinned viewport lifts this and lets the panel do it. */
 .lobby-chat-panel .chat-messages {
@@ -1161,12 +1149,6 @@
 .lobby-chat-name-prompt {
   align-self: flex-start;
   margin-top: 10px;
-}
-
-.online-players-empty {
-  margin: 0;
-  color: var(--muted);
-  font-size: 14px;
 }
 
 .online-players-list {
@@ -1355,9 +1337,8 @@ a.online-player-name:focus-visible {
 
   /* The states that stand in for the list sit where the list would, rather
      than collapsing the panel to its heading and leaving a gap under it. */
-  .lobby-rooms-panel .room-list-loading,
-  .lobby-rooms-panel .lobby-no-matches,
-  .lobby-rooms-panel > p {
+  .lobby-rooms-panel > .loading-note,
+  .lobby-rooms-panel > .empty-state {
     flex: 1 1 auto;
     min-height: 0;
   }

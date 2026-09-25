@@ -146,6 +146,77 @@
   text-transform: uppercase;
 }
 
+/* ------------------------------------------------------------ empty state
+   What a list says when it is empty (`components/ui/EmptyState.tsx`): a dashed
+   outline where the list would be, a title, a line of what to do, and at most
+   one control. Content sits in the middle, because in a pinned panel the box
+   takes the list's whole height. */
+.empty-state {
+  align-items: center;
+  border: 1.5px dashed var(--line-strong);
+  border-radius: var(--radius);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  justify-content: center;
+  padding: 32px 16px;
+  text-align: center;
+}
+
+.empty-state-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.empty-state-body {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+  max-width: 44ch;
+}
+
+.empty-state-action {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 6px;
+}
+
+.empty-state.is-compact {
+  border-radius: var(--radius-sm);
+  gap: 4px;
+  padding: 16px 12px;
+}
+
+.empty-state.is-compact .empty-state-title {
+  font-family: var(--font-body);
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.empty-state.is-compact .empty-state-body {
+  font-size: 13px;
+}
+
+.empty-state.is-compact .empty-state-action {
+  margin-top: 4px;
+}
+
+/* ---------------------------------------------------------------- loading
+   "Loading…" where there is no skeleton to draw: one muted line, centred in
+   the space the content will take. The Gallery's feed keeps its skeleton. */
+.loading-note {
+  color: var(--muted);
+  font-size: 14px;
+  margin: 0;
+  padding: 16px 0;
+  text-align: center;
+}
+
 /* ---------------------------------------------------------------- avatars */
 .avatar {
   display: inline-flex;
