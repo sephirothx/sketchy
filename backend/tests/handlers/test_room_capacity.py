@@ -5,10 +5,7 @@ spectators, and every one of them was another recipient of every broadcast.
 """
 from __future__ import annotations
 
-import asyncio
 from unittest.mock import AsyncMock
-
-from app.protocol import SERVER_FULL_CLOSE_SECONDS
 
 import pytest
 import socketio
@@ -17,7 +14,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.refusals import ErrorCode
 from app.rooms import RoomManager
 from app.services.room_quotas import RoomCapacityService
-from tests.handlers.helpers import SessionStore
+from tests.handlers.helpers import SessionStore, settle_capacity_closes
 
 
 def build_stack(room_manager: RoomManager, **kwargs):
@@ -127,7 +124,7 @@ async def test_the_server_stops_accepting_sockets_past_its_ceiling():
     assert ctx.room_capacity.open_sockets == 3
     told = await sio.handlers["/"]["create_room"]("third", {"nickname": "Sneak"})
     assert told == {"ok": False, "errorCode": "server_busy", "error": "Sketchy is full right now. Try again in a few minutes."}
-    await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
+    await settle_capacity_closes(ctx)
     assert sio.disconnect.await_args_list[-1].args[0] == "third"
     assert ctx.room_capacity.open_sockets == 2
     assert not ctx.is_turned_away("third")

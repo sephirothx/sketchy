@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from "react";
+import type { HTMLAttributes, Ref } from "react";
 
 export type ChipKind =
   | "neutral"
@@ -10,6 +10,7 @@ export type ChipKind =
 
 interface ChipProps extends HTMLAttributes<HTMLSpanElement> {
   kind?: ChipKind;
+  ref?: Ref<HTMLSpanElement>;
 }
 
 export function Chip({ kind = "neutral", className, children, ...rest }: ChipProps) {

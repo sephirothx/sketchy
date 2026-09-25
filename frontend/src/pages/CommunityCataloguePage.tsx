@@ -32,6 +32,7 @@ import {
   setPromptListStarred,
 } from "../lib/promptLists";
 import { refusalText } from "../lib/refusals.ts";
+import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import type {
   CommunityPromptList,
@@ -49,6 +50,7 @@ function tagName(slug: string): string {
 
 export function CommunityCataloguePage() {
   const navigate = useNavigate();
+  const { notify } = useToast();
   const params = useParams<{ listId?: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const user = useAuthStore((state) => state.user);
@@ -80,7 +82,6 @@ export function CommunityCataloguePage() {
   >(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [vocabulary, setVocabulary] = useState<PromptTag[]>([]);
   // Bumped to ask for the rows again when a star landed against a view that
   // is no longer the one on screen. Nothing else re-reads then: the filters
@@ -302,14 +303,15 @@ export function CommunityCataloguePage() {
     if (!registered || busy) return;
     setBusy(true);
     setError(null);
-    setNotice(null);
     try {
       await forkPromptList(list.id);
       const counted = <T extends CommunityPromptList>(row: T): T =>
         row.id === list.id ? { ...row, copyCount: row.copyCount + 1 } : row;
       setPage((held) => (held ? { ...held, lists: held.lists.map(counted) } : held));
       setLoaded((held) => (held && held.list.id === list.id ? { ...held, list: counted(held.list) } : held));
-      setNotice(ui.communityCataloguePage.copiedToYourLists);
+      // A toast, as Duplicate on the owner's own page says it (#817): a
+      // success is said where every other success is, and goes by itself.
+      notify(ui.communityCataloguePage.copiedToYourLists, "success");
     } catch (forkError) {
       setError(refusalText(forkError, ui.communityCataloguePage.couldNotCopyThatList));
     } finally {
@@ -332,7 +334,6 @@ export function CommunityCataloguePage() {
       </div>
 
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
-      {notice && <p className="community-catalogue-notice" role="status">{notice}</p>}
 
       <div className="community-catalogue-filters">
         {/* The app's one language control, as the lobby's room filter uses it.
@@ -590,7 +591,7 @@ export function CommunityCataloguePage() {
         onClose={() => setReporting(false)}
         onSubmitted={() => {
           setReporting(false);
-          setNotice(ui.communityCataloguePage.reportSent);
+          notify(ui.communityCataloguePage.reportSent, "success");
         }}
       />}
     </div>

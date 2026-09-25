@@ -160,7 +160,11 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           <h2>{ui.accountRecoveryPage.evenBestGuessersForgetSometimes}</h2>
           <Squiggle width={110} color="var(--primary)" />
           <p>
-            {ui.accountRecoveryPage.weRsquoLlSendSecureTime}
+            {mode === "forgot"
+              ? ui.accountRecoveryPage.asideForgot
+              : mode === "reset"
+                ? ui.accountRecoveryPage.asideReset
+                : ui.accountRecoveryPage.asideVerify}
           </p>
         </section>
         <section className="recovery-form">

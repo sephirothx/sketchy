@@ -10,7 +10,6 @@ import { getFocusableElements, useEscapeLayer, useFocusTrap } from "../hooks/use
 import {
   DotsIcon,
   DownloadIcon,
-  GearIcon,
   LeaveIcon,
   LinkIcon,
   MoonIcon,
@@ -33,7 +32,6 @@ export interface RoomMenuActions {
   onOpenPlayers?: () => void;
   onToggleAfk: () => void;
   onSaveImage: () => void;
-  onOpenSettings: () => void;
   onProposeRestart: () => void;
   onLeave: () => void;
 }
@@ -48,6 +46,11 @@ export interface RoomMenuActions {
  * who wants it is a player who wants to invite somebody. The one row that
  * differs by device is Players and scores, which a phone needs because its
  * players column is folded away and a desktop does not, because it is not.
+ *
+ * Player settings is not a row: they are about you, not the room, and the
+ * identity chip beside this menu opens them at every width (R-UX-11). While
+ * a phone's bar left the chip out this list carried a Settings row; once the
+ * chip came back, two menus side by side offered the same screen.
  */
 function RoomMenuRows({ actions, run, asMenu }: {
   actions: RoomMenuActions;
@@ -125,12 +128,6 @@ function RoomMenuRows({ actions, run, asMenu }: {
           </button>
         </li>
       )}
-      <li role={asMenu ? "none" : undefined}>
-        <button type="button" role={role} className="sheet-menu-item" onClick={run(actions.onOpenSettings)}>
-          <GearIcon size={19} />
-          <span>{ui.roomMenuSheet.settings}</span>
-        </button>
-      </li>
       <li className="sheet-menu-sep" role={asMenu ? "none" : undefined}>
         <button
           type="button"

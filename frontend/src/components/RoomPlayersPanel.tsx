@@ -84,7 +84,11 @@ export function RoomPlayersPanel({
           </div>
         </div>
         <div className="room-panel-actions">
-          {mode === "waiting" && (
+          {/* Only when it says something the count beside the heading does
+              not: somebody seated who is away or disconnected, and so does
+              not count towards a start. "2/8" and "2 ready" said one fact
+              twice the rest of the time. */}
+          {mode === "waiting" && eligiblePlayers.length !== activePlayers.length && (
             <span className={`waiting-ready-count ${eligiblePlayers.length >= 2 ? "is-ready" : ""}`}>
               {ui.roomPlayersPanel.readyCount({ count: eligiblePlayers.length })}
             </span>
@@ -115,7 +119,7 @@ export function RoomPlayersPanel({
                       >
                         {spectator.nickname}
                       </span>
-                      {spectator.playerId === myPlayerId ? " (you)" : ""}
+                      {spectator.playerId === myPlayerId ? ` ${ui.roomPlayersPanel.you}` : ""}
                     </li>
                   ))}
                 </ul>

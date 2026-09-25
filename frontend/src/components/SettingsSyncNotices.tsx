@@ -13,7 +13,7 @@ silence. Mounted once, under the toasts, for the whole app. */
 export function SettingsSyncNotices() {
   const { notify } = useToast();
   useEffect(() => {
-    onSettingsSyncError((message) => notify(message, "error"));
+    onSettingsSyncError((failure) => notify(failure, "error"));
     return () => onSettingsSyncError(null);
   }, [notify]);
   return null;
