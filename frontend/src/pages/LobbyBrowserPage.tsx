@@ -709,7 +709,7 @@ export function LobbyBrowserPage() {
               disabled={Boolean(pendingJoin)}
               onClick={() => void handleOpenCreateRoom()}
             >
-              {ui.lobbyBrowserPage.createRoom2}
+              {ui.lobbyBrowserPage.createRoom}
             </Button>
           </div>
         </div>
