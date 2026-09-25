@@ -104,7 +104,10 @@
      container, a field's inner editor. Measured over ASCII in every face and
      weight this app loads, the worst are 0.16em left (Fredoka 600 italic
      "j") and 0.208em right (Nunito Sans 800 italic "Y"), so one value
-     covers both sides. It is in em so it scales with the text it guards.
+     covers both sides. A name is ASCII (NAME_PATTERN in auth/names.py), so
+     for names that is a guarantee; chat and prompts may fall back to a face
+     nobody measured, and get the allowance without one. It is in em so it
+     scales with the text it guards.
      A clipping box takes it as padding and gives it back as negative margin,
      which moves the clip edge out without moving anything else:
        padding-inline: var(--ink-overhang);
