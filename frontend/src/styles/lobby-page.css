@@ -1330,6 +1330,35 @@ a.online-player-name:focus-visible {
   }
 }
 
+/* Side by side, one height. Chat and Who is online share a row from 721px
+   until the wide lobby stacks them (1500px), and each took its own
+   content's height: a 305px chat beside a 126px list of one person. The chat
+   sets the row - its list is bounded (`.chat-messages`) - and the list of
+   people fills the rest and scrolls inside it. `contain: size` is what keeps
+   a long list from growing the row instead: the panel is sized by the row,
+   never by what is in it. The pinned lobby already sizes both from the
+   window; this is the same answer for a window too short or too narrow to
+   pin. */
+@media (min-width: 721px) and (max-width: 1499px) {
+  .lobby-social {
+    align-items: stretch;
+  }
+
+  .lobby-social > .lobby-online-panel {
+    contain: size;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+
+  .lobby-online-panel .online-players-list {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+}
+
 /* The lobby as a screen rather than a document.
 
    Everything that matters is on it at once — the rooms, who is around, and
