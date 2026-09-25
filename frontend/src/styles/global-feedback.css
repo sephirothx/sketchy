@@ -32,7 +32,7 @@
 .connection-status-pad-button {
   background: transparent;
   border: 1.5px solid currentColor;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -78,7 +78,7 @@
 .server-shutdown-banner.is-update-required button {
   background: var(--warm-ink);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--card);
   cursor: pointer;
   font: inherit;
@@ -124,7 +124,7 @@
   align-items: center;
   background: var(--card);
   border: 1.5px solid var(--primary-edge-soft);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow-raised);
   color: var(--primary-ink);
   display: flex;
@@ -156,7 +156,7 @@
    `!important`. */
 .app-toast .app-toast-action {
   background: var(--primary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--on-primary);
   font-size: 13px;
   font-weight: 700;

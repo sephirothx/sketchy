@@ -47,7 +47,7 @@
 
 .room-preset-bar .auth-link { font-size: 13px; }
 .room-preset-bar .room-preset-delete { color: var(--danger); }
-.room-preset-bar button:disabled { cursor: not-allowed; opacity: .55; }
+.room-preset-bar button:disabled { cursor: not-allowed; opacity: var(--opacity-disabled); }
 
 .room-preset-status { color: var(--muted); display: inline-flex; gap: 8px; }
 
@@ -114,7 +114,7 @@ details.form-section summary::-webkit-details-marker {
   align-self: center;
   display: inline-flex;
   color: var(--faint);
-  transition: transform 160ms ease;
+  transition: transform var(--dur) ease;
 }
 
 details.form-section[open] .form-section-chevron {
@@ -223,10 +223,6 @@ details.form-section > .form-section-body {
   align-items: center;
   gap: 7px;
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
 }
 
 .input-number {
@@ -255,7 +251,7 @@ details.form-section > .form-section-body {
   width: 40px;
 }
 
-.input-number button:disabled { color: var(--faint); cursor: not-allowed; opacity: .5; }
+.input-number button:disabled { color: var(--faint); cursor: not-allowed; opacity: var(--opacity-disabled); }
 
 .input-number-value {
   display: inline-flex;
@@ -464,11 +460,11 @@ details.form-section > .form-section-body {
   white-space: nowrap;
 }
 .room-choice-group:disabled {
-  opacity: .55;
+  opacity: var(--opacity-disabled);
 }
 .room-choice-segmented button:disabled {
   cursor: not-allowed;
-  opacity: .45;
+  opacity: var(--opacity-disabled);
 }
 
 /* Option cards: one-of-several choices with a visible description. */
@@ -499,7 +495,7 @@ details.form-section > .form-section-body {
 
 .choice-card:disabled {
   cursor: not-allowed;
-  opacity: .5;
+  opacity: var(--opacity-disabled);
 }
 
 .choice-card-title {
@@ -559,7 +555,7 @@ details.form-section > .form-section-body {
   align-items: center;
   background: var(--track);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   cursor: help;
   display: inline-flex;
@@ -588,7 +584,7 @@ details.form-section > .form-section-body {
   transform: translateX(calc(-50% + var(--tip-shift)));
   /* Opacity only: a transition on the transform would slide a re-placed
      tooltip across the edge it is being kept inside. */
-  transition: opacity 120ms ease;
+  transition: opacity var(--dur-fast) ease;
   z-index: var(--z-popover);
 }
 .m3-switch-hint-tooltip::after {
@@ -633,7 +629,7 @@ details.form-section > .form-section-body {
   cursor: help;
   pointer-events: auto;
 }
-.m3-switch-label.is-disabled { cursor: not-allowed; opacity: .55; }
+.m3-switch-label.is-disabled { cursor: not-allowed; opacity: var(--opacity-disabled); }
 .m3-switch-label input {
   height: 1px;
   margin: 0;
@@ -756,6 +752,9 @@ details.form-section > .form-section-body {
   /* ChoiceChips (waiting-room editor): 2x2 on narrow screens, where the
      sliding thumb assumes a single row. */
   .room-choice-segmented {
+    /* Off the radius scale on purpose: half of one row's height, so each
+       row's ends still match a one-row control. --radius-pill on a block two
+       rows tall would round it into a stadium. */
     border-radius: 18.5px;
     box-sizing: border-box;
     grid-auto-columns: unset;
@@ -786,7 +785,7 @@ details.form-section > .form-section-body {
 }
 .prompt-list-chip-count {
   background: var(--well);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--faint);
   font-size: 11.5px;
   font-weight: 700;

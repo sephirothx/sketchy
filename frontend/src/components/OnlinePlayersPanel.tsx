@@ -100,7 +100,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
   return (
     <section className="surface-card panel lobby-online-panel" aria-labelledby="online-heading">
       <div className="lobby-rooms-heading">
-        <h2 id="online-heading">{ui.onlinePlayersPanel.whoOnline}</h2>
+        <h2 id="online-heading" className="panel-title">{ui.onlinePlayersPanel.whoOnline}</h2>
         {/* The true total, not the number of rows: a cap must never read as a
             quiet server (R-PRESENCE-04). */}
         <span className="lobby-rooms-count">{presenceSummary(presence)}</span>

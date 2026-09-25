@@ -5,7 +5,7 @@
   margin: 0 auto;
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 10px 14px;
   box-shadow: var(--shadow-raised);
 }
@@ -63,7 +63,8 @@
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: color var(--dur-fast) ease, background-color var(--dur-fast) ease, border-color var(--dur-fast) ease,
+    box-shadow var(--dur-fast) ease, transform var(--dur-fast) ease;
 }
 
 .tool-button:hover {
@@ -115,7 +116,7 @@
   align-items: center;
   gap: 8px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 
 .brush-size-trigger:hover {
@@ -143,14 +144,14 @@
   z-index: var(--z-popover);
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 10px;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
   box-shadow: var(--shadow-raised);
-  animation: popUp 0.15s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: popUp var(--dur-fast) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes popUp {
@@ -182,7 +183,7 @@
   /* Its size is its size: never the thing that gives when space is short. */
   flex: 0 0 auto;
   aspect-ratio: 1;
-  transition: width 0.1s ease, height 0.1s ease, background-color 0.15s ease;
+  transition: width var(--dur-fast) ease, height var(--dur-fast) ease, background-color var(--dur-fast) ease;
 }
 
 .preview-readout {
@@ -255,7 +256,7 @@
   min-height: 24px;
   padding: 2px 8px;
   border: 1.5px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--muted);
   font: inherit;
@@ -291,7 +292,7 @@
   border-radius: 50%;
   display: inline-block;
   flex: 0 0 auto;
-  transition: transform 0.15s ease, background-color 0.15s ease;
+  transition: transform var(--dur-fast) ease, background-color var(--dur-fast) ease;
 }
 
 .toolbar-colors {
@@ -310,11 +311,11 @@
 .color-swatch {
   width: 26px;
   height: 26px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   border: 1px solid rgba(0, 0, 0, 0.15);
   padding: 0;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 
 .color-swatch:hover {
@@ -333,13 +334,13 @@
   grid-row: span 2;
   width: 26px;
   height: 55px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   background: conic-gradient(red, yellow, lime, cyan, blue, magenta, red);
   position: relative;
   overflow: hidden;
   display: block;
   cursor: pointer;
-  transition: transform 0.12s ease, box-shadow 0.12s ease;
+  transition: transform var(--dur-fast) ease, box-shadow var(--dur-fast) ease;
 }
 
 .color-swatch-custom:hover {
@@ -384,7 +385,7 @@
   color: var(--ink);
   box-shadow: var(--shadow);
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: border-color var(--dur-fast) ease, opacity var(--dur-fast) ease;
   /* The layout is measured with each name on one line; "Ongedaan maken"
      broken over two would be a button taller than the rest of its row. */
   white-space: nowrap;
@@ -403,7 +404,7 @@
 }
 
 .toolbar-action-button:disabled {
-  opacity: 0.5;
+  opacity: var(--opacity-disabled);
   cursor: not-allowed;
 }
 
@@ -532,7 +533,7 @@
   display: block;
   width: 28px;
   height: 28px;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   border: 1px solid rgba(15, 23, 42, 0.2);
 }
 
@@ -563,7 +564,7 @@
   overflow: auto;
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 10px;
   box-shadow: var(--shadow-raised);
 }
@@ -600,7 +601,7 @@
   height: 36px;
   min-width: 44px;
   min-height: 44px;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
 }
 
 .toolbar-mobile-swatch-btn.color-swatch-custom {

@@ -365,7 +365,7 @@ export function MyPromptListsPage() {
     <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
     <section className="prompt-list-manager-card">
       <div className="prompt-list-manager-heading">
-        <div><p>{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
+        <div><p className="section-label">{ui.myPromptListsPage.yourLibrary}</p><h1>{ui.myPromptListsPage.reusablePromptLists}</h1></div>
         {user && !user.isAnonymous && <button type="button" className="btn btn-primary" onClick={beginNew}><PlusIcon size={15} />{ui.myPromptListsPage.newList}</button>}
       </div>
       {!user || user.isAnonymous ? (

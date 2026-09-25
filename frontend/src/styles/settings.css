@@ -34,7 +34,7 @@
   height: min(calc(100dvh - 32px), 760px);
   max-height: calc(100dvh - 32px);
   padding: 14px 22px 14px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   text-align: left;
   overflow: hidden;
 }
@@ -109,7 +109,7 @@
   font-size: 13.5px;
   font-weight: 800;
   color: var(--ink);
-  transition: background 0.15s ease, border-color 0.15s ease;
+  transition: background var(--dur-fast) ease, border-color var(--dur-fast) ease;
 }
 
 .settings-tab-icon {
@@ -276,7 +276,7 @@
   padding: 0;
   color: #fff;
   cursor: pointer;
-  transition: transform 0.12s ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 .settings-swatch:hover {
@@ -319,7 +319,7 @@
   width: 26px;
   height: 26px;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--card);
   color: var(--muted);
   cursor: pointer;
@@ -336,7 +336,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 1px 8px;
   font-size: 11.5px;
   font-weight: 800;
@@ -364,7 +364,7 @@
   gap: 11px;
   background: var(--success-soft);
   border: 1px solid var(--success);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   padding: 10px 14px;
   margin-bottom: 10px;
 }
@@ -395,7 +395,7 @@
 .settings-guest-card {
   background: var(--primary-soft);
   border: 1px solid var(--primary-edge-soft);
-  border-radius: 12px;
+  border-radius: var(--radius);
   padding: 12px 16px;
   margin-bottom: 10px;
   display: grid;
@@ -503,7 +503,7 @@
 .theme-card-preview {
   width: 62px;
   height: 38px;
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   overflow: hidden;
   display: grid;
   grid-template-rows: 1fr 1fr;
@@ -570,7 +570,7 @@
     var(--volume-track) var(--volume-progress),
     var(--volume-track) 100%
   );
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 12px;
 }
 
@@ -582,21 +582,21 @@
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.22);
   height: 20px;
   margin-top: -4px;
-  transition: transform 120ms ease;
+  transition: transform var(--dur-fast) ease;
   width: 20px;
 }
 
 .settings-volume-control input[type="range"]::-moz-range-track {
   background: var(--volume-track);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 12px;
 }
 
 .settings-volume-control input[type="range"]::-moz-range-progress {
   background: var(--volume-fill);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 12px;
 }
 
@@ -680,14 +680,14 @@
   background: var(--card);
   border: 1.5px solid var(--line-strong);
   border-bottom-width: 3px;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   font-family: var(--font-body);
   font-size: 12.5px;
   font-weight: 800;
   color: var(--ink);
   padding: 0 9px;
   cursor: pointer;
-  transition: all 0.15s ease;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 
 .kbd-badge:hover {
@@ -841,7 +841,7 @@
 }
 
 .settings-you-edit-chip:disabled {
-  opacity: 0.6;
+  opacity: var(--opacity-disabled);
   cursor: progress;
 }
 
@@ -855,7 +855,7 @@
   width: 180px;
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   padding: 6px;
   display: grid;
@@ -868,7 +868,7 @@
   gap: 9px;
   width: 100%;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   background: transparent;
   color: var(--ink);
   font: inherit;
@@ -989,7 +989,7 @@
 .settings-you-name {
   font-family: var(--font-display);
   font-size: 26px;
-  font-weight: 800;
+  font-weight: 600;
   line-height: 1.1;
   overflow-wrap: anywhere;
   min-width: 0;
@@ -1036,7 +1036,7 @@
 .picture-crop-viewport {
   position: relative;
   overflow: hidden;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--track);
   cursor: grab;
   touch-action: none;
@@ -1093,7 +1093,7 @@
 
 .picture-crop-zoom input[type="range"]::-webkit-slider-runnable-track {
   background: var(--volume-track);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 10px;
 }
 
@@ -1111,7 +1111,7 @@
 .picture-crop-zoom input[type="range"]::-moz-range-track {
   background: var(--volume-track);
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 10px;
 }
 

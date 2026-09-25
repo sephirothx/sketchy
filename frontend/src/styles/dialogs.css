@@ -8,7 +8,7 @@
   align-items: center;
   justify-content: center;
   z-index: var(--z-modal);
-  animation: fadeInModal 0.15s ease-out;
+  animation: fadeInModal var(--dur-fast) ease-out;
 }
 
 @keyframes fadeInModal {
@@ -23,14 +23,14 @@
 .modal-card {
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 24px 28px;
   max-width: 380px;
   width: 90%;
   text-align: center;
   color: var(--ink);
   box-shadow: var(--shadow-raised);
-  animation: popUpModal 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: popUpModal var(--dur) cubic-bezier(0.16, 1, 0.3, 1);
 }
 
 @keyframes popUpModal {
@@ -79,11 +79,11 @@
 .confirmation-dialog-icon {
   align-items: center;
   background: var(--danger-soft);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--danger);
   display: inline-flex;
   font-size: 1.25rem;
-  font-weight: 900;
+  font-weight: 800;
   height: 42px;
   justify-content: center;
   margin-bottom: 12px;
@@ -121,7 +121,7 @@
   padding: 8px 10px;
   border-left: 3px solid var(--line-strong);
   background: var(--field);
-  border-radius: 0 6px 6px 0;
+  border-radius: 0 var(--radius-xs) var(--radius-xs) 0;
   font-size: 13.5px;
   overflow-wrap: anywhere;
   text-align: left;
@@ -229,7 +229,7 @@
 .bug-report-mark {
   align-items: center;
   background: var(--warm-soft);
-  border-radius: 11px;
+  border-radius: var(--radius-sm);
   color: var(--warm-ink);
   display: inline-flex;
   flex: none;
@@ -277,7 +277,7 @@
 .bug-report-optional {
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   font-size: 12px;
   font-weight: 800;
@@ -293,7 +293,7 @@
 
 .bug-report-shot-body img {
   border: 1.5px solid var(--line-strong);
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   flex: none;
   height: auto;
   width: 148px;

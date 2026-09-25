@@ -286,11 +286,11 @@ export function PromptStatsPage() {
             </caption>
             <thead>
               <tr>
-                <th scope="col">{ui.promptStatsPage.prompt}</th>
-                <th scope="col">{ui.promptStatsPage.howHard}</th>
-                <th scope="col">{ui.promptStatsPage.guessed}</th>
-                <th scope="col">{ui.promptStatsPage.picked}</th>
-                <th scope="col">{ui.promptStatsPage.drawn}</th>
+                <th scope="col" className="section-label">{ui.promptStatsPage.prompt}</th>
+                <th scope="col" className="section-label">{ui.promptStatsPage.howHard}</th>
+                <th scope="col" className="section-label">{ui.promptStatsPage.guessed}</th>
+                <th scope="col" className="section-label">{ui.promptStatsPage.picked}</th>
+                <th scope="col" className="section-label">{ui.promptStatsPage.drawn}</th>
               </tr>
             </thead>
             <tbody>

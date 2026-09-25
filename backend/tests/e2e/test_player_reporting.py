@@ -55,11 +55,11 @@ async def test_a_player_reports_another_from_the_room_menu():
             await row.locator(".player-moderation-trigger").click()
             menu = host_page.locator(".player-vote-menu")
             await menu.wait_for(state="visible")
-            # Report sits with the votes rather than on a row of its own.
-            # Rendered uppercase by the stylesheet the votes already use.
+            # Report sits with the votes rather than on a row of its own, in
+            # the same sentence case as every other menu row.
             kinds = await menu.locator(".player-vote-action-kind").all_inner_texts()
-            assert kinds[-1] == "REPORT"
-            assert "KICK" in kinds
+            assert kinds[-1] == "Report"
+            assert "Kick" in kinds
 
             await menu.get_by_role("menuitem", name="Report").click()
             dialog = host_page.locator(".modal-card").filter(has_text="Report")
@@ -141,8 +141,8 @@ async def test_a_guest_votes_but_is_offered_no_way_to_report():
             await menu.wait_for(state="visible")
 
             kinds = await menu.locator(".player-vote-action-kind").all_inner_texts()
-            assert "KICK" in kinds
-            assert "REPORT" not in kinds
+            assert "Kick" in kinds
+            assert "Report" not in kinds
         finally:
             await host_context.close()
             await player_context.close()

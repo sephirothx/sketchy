@@ -295,7 +295,7 @@
 .ops-sizes h3 {
   color: var(--faint);
   font-size: 11px;
-  font-weight: 800;
+  font-weight: 600;
   letter-spacing: 0.06em;
   margin-bottom: 4px;
   text-transform: uppercase;
@@ -424,7 +424,7 @@
 .ops-attention h3 {
   color: var(--ink);
   font-size: 13px;
-  font-weight: 800;
+  font-weight: 600;
   margin-top: 14px;
 }
 
@@ -688,7 +688,7 @@
 .mod-filter-pill {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   cursor: pointer;
   font-family: var(--font-body);
@@ -979,7 +979,7 @@
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   display: inline-flex;
   font-size: 11.5px;
@@ -994,7 +994,7 @@
    thread still reads as a conversation. */
 .mod-evidence-cites {
   background: color-mix(in srgb, var(--danger) 18%, transparent);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--ink);
   font-size: 11px;
   font-weight: 800;
@@ -1262,7 +1262,7 @@
 
 .bug-shot {
   border: 1.5px solid var(--line-strong);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   display: block;
   height: auto;
   margin-top: 10px;
@@ -1533,7 +1533,7 @@
   gap: 8px;
   flex-wrap: wrap;
   padding: 4px 8px;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   font-size: 13px;
   font-weight: 700;
   color: var(--ink);
@@ -1564,7 +1564,7 @@
   height: 40px;
   border-radius: 50%;
   overflow: hidden;
-  transition: transform 0.15s ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 /* A doodle is ours, not the player's, so it is shown for context on a plain
@@ -1588,7 +1588,7 @@
 
 .mod-context-avatar:hover {
   transform: scale(3);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   position: relative;
   z-index: 2;
 }

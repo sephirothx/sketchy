@@ -173,7 +173,7 @@
   align-items: center;
   gap: 5px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 11px;
   font-size: 12px;
   font-weight: 800;
@@ -229,7 +229,7 @@
   align-items: center;
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   cursor: pointer;
   display: inline-flex;
@@ -239,7 +239,7 @@
   gap: 7px;
   min-height: 42px;
   padding: 9px 15px;
-  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+  transition: background-color var(--dur-fast) ease, border-color var(--dur-fast) ease, color var(--dur-fast) ease;
   user-select: none;
 }
 
@@ -299,8 +299,32 @@
   box-shadow: var(--shadow);
 }
 
+/* Two heading styles, and only two (C10).
+
+   A panel's title is the display face in sentence case, in the lobby, the
+   room's side columns, and the phone's waiting room alike: it names the
+   panel, so it reads as a title rather than as a label. Only its size moves,
+   a step down in the room's narrow columns (game-room.css).
+
+   The eyebrow - a small label over a title, a group of fields, a column or a
+   figure - is the one place text is set in capitals, and this is the one
+   recipe for it. A label keeps its own colour where it has one (a tint on an
+   invite card, --muted where it has to be read rather than glanced at) and
+   its own spacing; its type comes from here. The body face is stated because
+   an eyebrow is sometimes an <h3> or <h4>, which reset.css gives the display
+   face. */
+.panel-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+}
+
 .section-label {
   color: var(--faint);
+  font-family: var(--font-body);
   font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.09em;
@@ -346,7 +370,7 @@
 
 .segmented-control {
   background: var(--track);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: inline-grid;
   gap: 3px;
   grid-auto-flow: column;
@@ -358,7 +382,7 @@
 
 .segmented-control-thumb {
   background: var(--card);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: 0 1px 3px rgba(20, 16, 10, 0.14);
   height: calc(100% - 8px);
   left: 4px;
@@ -366,7 +390,7 @@
   position: absolute;
   top: 4px;
   transform: translateX(calc(var(--segment-index) * (100% + 3px)));
-  transition: transform 220ms cubic-bezier(0.2, 0, 0, 1);
+  transition: transform var(--dur) cubic-bezier(0.2, 0, 0, 1);
   width: calc((100% - 8px - (var(--segment-count) - 1) * 3px) / var(--segment-count));
   z-index: 0;
 }
@@ -375,7 +399,7 @@
   align-items: center;
   background: transparent;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   cursor: pointer;
   display: grid;
@@ -386,7 +410,7 @@
   padding: 8px 16px;
   position: relative;
   text-align: center;
-  transition: color 180ms ease;
+  transition: color var(--dur) ease;
   white-space: nowrap;
   z-index: 1;
 }
@@ -435,13 +459,13 @@
 .switch-track {
   align-items: center;
   background: var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-sizing: border-box;
   display: inline-flex;
   flex: 0 0 auto;
   height: 24px;
   padding: 3px;
-  transition: background-color 200ms ease;
+  transition: background-color var(--dur) ease;
   width: 42px;
 }
 
@@ -451,7 +475,7 @@
   box-shadow: 0 1px 2px rgba(20, 16, 10, 0.25);
   display: block;
   height: 18px;
-  transition: transform 200ms ease;
+  transition: transform var(--dur) ease;
   width: 18px;
 }
 
@@ -499,7 +523,7 @@ input:focus-visible ~ .switch-track {
 .tooltip {
   background: var(--menu);
   border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-raised);
   box-sizing: border-box;
   color: var(--menu-ink);
@@ -758,7 +782,7 @@ input:focus-visible ~ .switch-track {
 .language-picker-list {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   display: flex;
   flex-direction: column;
@@ -779,7 +803,7 @@ input:focus-visible ~ .switch-track {
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   cursor: pointer;
   display: flex;

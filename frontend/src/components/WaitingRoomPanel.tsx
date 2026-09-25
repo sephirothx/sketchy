@@ -287,7 +287,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       {/* The code, read at a glance or tapped to copy, and one way to send it.
           Six bordered cells and two buttons spent 237px on that. */}
       <section className="surface-card waiting-card waiting-invite-card">
-        <p className="waiting-invite-kicker">{ui.waitingRoomPanel.inviteYourFriends}</p>
+        <p className="section-label waiting-invite-kicker">{ui.waitingRoomPanel.inviteYourFriends}</p>
         {code && (
           <p className="waiting-code" aria-label={ui.waitingRoomPanel.roomCodeLabel({ code })}>{code}</p>
         )}
@@ -328,7 +328,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           below the chat card. */}
       {isNarrow && <section className="surface-card waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
         <div className="waiting-roster-head">
-          <h2 id="waiting-roster-title">{ui.waitingRoomPanel.inTheRoom}</h2>
+          <h2 id="waiting-roster-title" className="panel-title">{ui.waitingRoomPanel.inTheRoom}</h2>
           <span className="waiting-roster-count">
             {ui.waitingRoomPanel.rosterCount({
               here: activePlayers.length,

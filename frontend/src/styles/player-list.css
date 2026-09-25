@@ -13,7 +13,7 @@
 .player-row {
   align-items: center;
   border: 1.5px solid transparent;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   column-gap: 10px;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -166,7 +166,7 @@
   --focus-ring: var(--menu-ink);
   background: var(--menu);
   border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-raised);
   display: flex;
   flex-direction: column;
@@ -183,7 +183,7 @@
   align-items: baseline;
   background: color-mix(in srgb, var(--menu-ink) 6%, transparent);
   border: none;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--menu-ink);
   cursor: pointer;
   display: grid;
@@ -197,8 +197,6 @@
 
 .player-vote-action-kind {
   font-weight: 800;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
 }
 
 .player-vote-action-label {
@@ -261,7 +259,7 @@
 }
 
 .player-vote-chip {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 10px;
   font-weight: 800;
   letter-spacing: 0.02em;

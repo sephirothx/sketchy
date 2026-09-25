@@ -68,11 +68,9 @@
 
 .bug-more-context .bug-context { margin-top: 8px; }
 
+/* "Recorded as <rule>": a sentence the player reads, so it keeps the dialog
+   body's type and case - not an eyebrow. */
 .notice-category {
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
   margin-bottom: 2px;
-  text-transform: uppercase;
 }

@@ -124,7 +124,7 @@
 
 .gallery-rail-head h2 {
   font-size: 17px;
-  font-weight: 800;
+  font-weight: 600;
   margin: 0;
 }
 
@@ -141,7 +141,7 @@
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   cursor: pointer;
   display: flex;
@@ -159,7 +159,7 @@
   width: 64px;
 }
 
-.gallery-rail-thumb .gallery-card-canvas { border-radius: 8px; }
+.gallery-rail-thumb .gallery-card-canvas { border-radius: var(--radius-xs); }
 
 .gallery-rail-text {
   display: flex;
@@ -219,14 +219,14 @@
 .gallery-post-open {
   background: none;
   border: 0;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   display: block;
   padding: 0;
   width: 100%;
 }
 
-.gallery-post-open .gallery-card-canvas { border-radius: 10px; }
+.gallery-post-open .gallery-card-canvas { border-radius: var(--radius-sm); }
 
 .gallery-post-open:hover .gallery-card-canvas { border-color: var(--primary-ink); }
 
@@ -284,7 +284,7 @@
   aspect-ratio: 4 / 3;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   justify-content: center;
   overflow: hidden;
@@ -313,7 +313,7 @@
 .gallery-post-skeleton {
   aspect-ratio: 4 / 3;
   background: var(--track);
-  border-radius: 14px;
+  border-radius: var(--radius);
   width: 100%;
 }
 
@@ -369,7 +369,7 @@
 
 .gallery-empty-state {
   border: 1.5px dashed var(--line-strong);
-  border-radius: 14px;
+  border-radius: var(--radius);
   padding: 36px 16px;
 }
 
@@ -443,7 +443,7 @@
 .gallery-drawing-canvas .canvas-stack {
   aspect-ratio: 4 / 3;
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 
@@ -473,25 +473,25 @@
   min-width: 0;
 }
 
-.gallery-replay-track:disabled { cursor: default; opacity: 0.5; }
+.gallery-replay-track:disabled { cursor: default; opacity: var(--opacity-disabled); }
 
 /* The part behind the thumb is filled; WebKit has no progress pseudo, so
    the fill is painted from the input's own --replay-fill. */
 .gallery-replay-track::-webkit-slider-runnable-track {
   background: linear-gradient(90deg, var(--primary) var(--replay-fill), var(--track) var(--replay-fill));
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 6px;
 }
 
 .gallery-replay-track::-moz-range-track {
   background: var(--track);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 6px;
 }
 
 .gallery-replay-track::-moz-range-progress {
   background: var(--primary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   height: 6px;
 }
 

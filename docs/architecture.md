@@ -1951,6 +1951,15 @@ their import order says. A rule that must beat every surface goes in the `utilit
 layer ([`styles/utilities.css`](../frontend/src/styles/utilities.css)) rather than
 behind `!important`: a later layer beats any specificity in an earlier one.
 
+What the surfaces share is not restated in each either: the scales — four radii, two motion durations, one disabled opacity — are tokens in
+[`theme.css`](../frontend/src/styles/theme.css), and the two heading styles, the display
+panel title and the capitals eyebrow `.section-label`, are recipes in
+[`primitives.css`](../frontend/src/styles/primitives.css).
+[`styleScales.test.mjs`](../frontend/tests/styleScales.test.mjs) fails on a value off
+a scale, on a weight [`main.tsx`](../frontend/src/main.tsx) does not load (the browser
+would quietly draw the nearest one that is), and on capitals outside the recipe; its
+exceptions are listed there with the reason for each.
+
 A media query cannot read a custom property, so the breakpoints are a fixed set of widths rather than tokens, each named as
 the first width of the wider side — 481, 641, 721, 901, 1001, 1200, 1500 and 2100 as a
 `min-width`, one less as a `max-width`, so no width is on both sides. Components asking

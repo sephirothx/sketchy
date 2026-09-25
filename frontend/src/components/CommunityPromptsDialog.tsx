@@ -126,7 +126,7 @@ export function CommunityPromptsDialog({
           : groups
             ? groups.map((group) => (
                 <section key={group.initial} className="community-prompts-group">
-                  <h3 className="community-prompts-letter">{group.initial}</h3>
+                  <h3 className="section-label community-prompts-letter">{group.initial}</h3>
                   <ul className="community-catalogue-prompts">{group.entries.map(cell)}</ul>
                 </section>
               ))

@@ -298,7 +298,7 @@ function FriendsSection({
   if (entries.length === 0) return null;
   return (
     <section className="friends-section">
-      <h4 className="friends-section-heading">
+      <h4 className="section-label friends-section-heading">
         {title} <span className="friends-section-count">{count}</span>
       </h4>
       <ul className="friends-list" data-testid={testId}>
@@ -339,7 +339,7 @@ function RecentPlayersSection({ players }: { players: RecentPlayer[] }) {
   if (players.length === 0) return null;
   return (
     <section className="friends-section">
-      <h4 className="friends-section-heading">{ui.friendsOverlay.recentlyPlayedWith}</h4>
+      <h4 className="section-label friends-section-heading">{ui.friendsOverlay.recentlyPlayedWith}</h4>
       <ul className="friends-list" data-testid="friends-recent">
         {players.map((player) => (
           <li key={player.userId} className="friends-row">

@@ -186,7 +186,7 @@ export function InputNumber({
 
   return (
     <label className="input-number-field">
-      <span className="input-number-label">
+      <span className="section-label input-number-label">
         {icon}
         {label}
       </span>
