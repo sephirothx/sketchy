@@ -9,6 +9,46 @@ export const MIN_NICKNAME_LENGTH = 3;
 export const NICKNAME_PATTERN = /^[a-zA-Z0-9_-]{3,16}$/;
 const RESERVED_NICKNAMES = new Set(["guest", "system", "admin", "sketchy", "server", "you"]);
 
+/** One character a name may hold: the pattern above, a character at a time. */
+const NICKNAME_CHARACTER = /^[a-zA-Z0-9_-]$/;
+
+/**
+ * What a name field holds after an edit: the characters the name rule allows,
+ * in order, no more than `MAX_NICKNAME_LENGTH`, and where the caret belongs.
+ *
+ * Anything else is simply not entered, however it arrived - typed, pasted,
+ * dropped or composed. A space too: "Jo Jo" pasted becomes "JoJo", the same
+ * as typing it, where the space key does nothing. Turning it into "Jo_Jo"
+ * would put a character in the name that nobody typed, and an underscore for
+ * a space is a rule a player would have to know.
+ *
+ * `caret` is where the caret was in the raw value; it comes back counting only
+ * the characters kept before it, so it stays after what was just typed rather
+ * than jumping to the end. Past the length limit it is the characters just
+ * inserted - those before the caret - that give way, as with `maxLength`,
+ * rather than the end of a name that was already there.
+ */
+export function nicknameInput(raw: string, caret: number = raw.length): { value: string; caret: number } {
+  let kept = "";
+  let keptBeforeCaret = 0;
+  for (let index = 0; index < raw.length; index += 1) {
+    const character = raw[index];
+    if (!NICKNAME_CHARACTER.test(character)) continue;
+    kept += character;
+    if (index < caret) keptBeforeCaret = kept.length;
+  }
+  const excess = kept.length - MAX_NICKNAME_LENGTH;
+  if (excess <= 0) return { value: kept, caret: keptBeforeCaret };
+  if (keptBeforeCaret < excess) {
+    const value = kept.slice(0, MAX_NICKNAME_LENGTH);
+    return { value, caret: Math.min(keptBeforeCaret, value.length) };
+  }
+  return {
+    value: kept.slice(0, keptBeforeCaret - excess) + kept.slice(keptBeforeCaret),
+    caret: keptBeforeCaret - excess,
+  };
+}
+
 /** Mirrors the server rule so the form can object before a round trip. */
 export function nicknameError(value: string): string | null {
   const trimmed = value.trim();
