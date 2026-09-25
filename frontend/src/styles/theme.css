@@ -1,7 +1,12 @@
 /* Design tokens. The values are the redesign palette from
  * docs/ui-mockups/tools/ui.mjs (PALETTES): a warm paper light theme and a
  * slate dark theme whose tinted surfaces are alpha washes of their accent so
- * they blend with any ground. `data-theme` on <html> is always resolved to
+ * they blend with any ground. Two fills have since been darkened a step so
+ * the white label on them reaches WCAG AA (4.5:1) - the dark theme's
+ * --primary and --success-button - which the mockups have not followed.
+ * frontend/tests/themeContrast.test.mjs holds the text-on-ground pairs
+ * declared here to that bar, so a value moved below it fails there first.
+ * `data-theme` on <html> is always resolved to
  * "light" or "dark" before paint (index.html + settingsStore), so light
  * lives on :root and dark overrides below.
  *
@@ -13,6 +18,8 @@
 
   --font-display: "Fredoka", "Trebuchet MS", system-ui, sans-serif;
   --font-body: "Nunito Sans", "Segoe UI", system-ui, sans-serif;
+  /* Codes read off a screen and typed by hand, and operator figures. */
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, monospace;
   font-family: var(--font-body);
 
   /* surfaces */
@@ -30,6 +37,13 @@
      does. Derived colors use color-mix on --menu-ink. */
   --menu: #292520;
   --menu-ink: #faf6ef;
+  /* The vote menu's accents. --menu is dark in both themes, so these are the
+     pale tints that read on it - and are not redeclared for dark: the ground
+     they sit on does not change. A cast vote fills its row with the tint and
+     writes on it in --menu. */
+  --menu-warning: #fcd34d;
+  --menu-danger: #fca5a5;
+  --menu-warm: #fdba74;
   --muted: #6f6759;
   --faint: #a29883;
 
@@ -44,7 +58,6 @@
   /* avatars */
   --avatar-ink: #ffffff;
   --guest-avatar: #5b6472;
-  --guest-bg: #f0eadd;
 
   /* crayon indigo — routine actions */
   --primary: #5157d8;
@@ -52,11 +65,19 @@
   --primary-ink: #3b41b5;
   --primary-edge: #3b41b5;
   --primary-edge-soft: #c9ccf4;
+  /* The label on an indigo fill. White in both themes: the dark theme's
+     indigo is lighter, but not so light that the label should flip dark -
+     and var(--card), which some rules used to borrow, turns slate there. */
+  --on-primary: #ffffff;
+  /* One keyboard focus ring for the whole app: the indigo itself on paper,
+     lifted toward white in dark, where the indigo alone is only 3.2:1 on a
+     card. Checked at 3:1 against --paper and --card in both themes. */
+  --focus-ring: var(--primary);
 
   /* marker orange — game moments, timers, celebration */
   --warm: #e8703a;
   --warm-soft: #fbeadf;
-  --warm-ink: #b5541f;
+  --warm-ink: #ab501c;
   --warm-edge: #c1521f;
 
   /* brand mark — the drawn wordmark paints itself from these, so tinting the
@@ -74,14 +95,19 @@
   --success-ink: #1f7a33;
   /* Go-action button fill (Start game); the status --success is too light
      for white text in dark mode, so buttons get their own pair. */
-  --success-button: #2f9e44;
-  --success-button-edge: #247c34;
+  --success-button: #2b853d;
+  --success-button-edge: #1f6b2f;
+  /* The destructive button's fill, for the same reason: the status --danger
+     turns a light coral in dark mode (2.8:1 under white), so a button that
+     deletes or kicks gets its own pair, the same in both themes. */
+  --danger-button: #c92a2a;
+  --danger-button-edge: #a51d1d;
   /* A QR code is read by a camera, not by a person, so these do not follow
      the theme: a scanner needs dark modules on a light quiet zone in both
      light and dark mode. */
   --qr-dark: #101010;
   --qr-light: #ffffff;
-  --warning: #b45309;
+  --warning: #b35209;
   --warning-soft: #fdf1dc;
   --warning-edge: #ebc98a;
   --danger: #c92a2a;
@@ -89,12 +115,17 @@
   --gold: #8a6d0b;
   --silver: #5a6472;
   --bronze: #8a5a2e;
+  /* The first-run name tag is a sticker - white card, red banner - and stays
+     one in the dark theme, like the canvas sheet it is modelled on. */
+  --tag-edge: #c8102e;
 
   /* shape and depth */
   --radius: 14px;
   --radius-sm: 10px;
   --shadow: 0 1px 2px rgba(20, 16, 10, 0.06);
   --shadow-raised: 0 10px 30px rgba(20, 16, 10, 0.14);
+  /* A sheet or dock pinned to the bottom edge casts upward. */
+  --shadow-sheet: 0 -6px 18px rgba(20, 16, 10, 0.06);
 
   /* visual-viewport vars written by useVisualViewportCssVars */
   --vv-height: 100dvh;
@@ -131,13 +162,13 @@
 
   --avatar-ink: #132036;
   --guest-avatar: #c3cbd8;
-  --guest-bg: rgba(148, 163, 184, 0.18);
 
-  --primary: #666ce4;
+  --primary: #6369e2;
   --primary-soft: rgba(102, 108, 228, 0.17);
   --primary-ink: #c7cbfa;
   --primary-edge: #3b41b5;
   --primary-edge-soft: rgba(102, 108, 228, 0.5);
+  --focus-ring: color-mix(in srgb, var(--primary) 70%, #ffffff);
 
   --warm: #ee7e48;
   --warm-soft: rgba(238, 126, 72, 0.15);
@@ -152,12 +183,14 @@
   --success: #4ade80;
   --success-soft: rgba(74, 222, 128, 0.13);
   --success-ink: #86efac;
-  --success-button: #2f9e44;
-  --success-button-edge: #247c34;
+  --success-button: #2b853d;
+  --success-button-edge: #1f6b2f;
+  --danger-button: #c92a2a;
+  --danger-button-edge: #a51d1d;
   --warning: #fbbf24;
   --warning-soft: rgba(251, 191, 36, 0.13);
   --warning-edge: rgba(251, 191, 36, 0.4);
-  --danger: #f87171;
+  --danger: #f87c7c;
   --danger-soft: rgba(248, 113, 113, 0.14);
   --gold: #f5ce62;
   --silver: #b9c4d4;
@@ -165,4 +198,5 @@
 
   --shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
   --shadow-raised: 0 10px 30px rgba(0, 0, 0, 0.4);
+  --shadow-sheet: 0 -6px 18px rgba(0, 0, 0, 0.3);
 }

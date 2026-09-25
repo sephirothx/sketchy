@@ -277,7 +277,7 @@
   align-items: center;
   gap: 11px;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   border: 0;
   border-radius: 999px;
   padding: 11px 26px 11px 15px;

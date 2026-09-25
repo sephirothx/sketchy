@@ -283,12 +283,14 @@
   background: var(--warm);
 }
 
-
-
-
-
+/* The size preview sits on a disc of the canvas's white - the sheet is white
+   in both themes (.canvas-stack) - so a black dot still shows on the dark
+   toolbar. A ring of box-shadow rather than a wrapper: it takes no layout
+   space, so the trigger and the phone chip keep the widths the toolbar
+   arrangement is measured with (lib/toolbarLayout.ts). */
 .width-dot {
   border-radius: 50%;
+  box-shadow: 0 0 0 3px #fff, 0 0 0 4px var(--line-strong);
   display: inline-block;
   flex: 0 0 auto;
   transition: transform 0.15s ease, background-color 0.15s ease;

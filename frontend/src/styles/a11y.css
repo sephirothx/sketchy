@@ -1,13 +1,3 @@
-:root {
-  --focus-ring: #2563eb;
-  --focus-field-border: #2563eb;
-}
-
-[data-theme="dark"] {
-  --focus-ring: #93c5fd;
-  --focus-field-border: #60a5fa;
-}
-
 .visually-hidden {
   border: 0;
   clip: rect(0 0 0 0);
@@ -21,6 +11,10 @@
   width: 1px;
 }
 
+/* The one keyboard focus ring (--focus-ring, theme.css). A component does
+   not restate it in another colour or width; a rule of its own is only for an
+   element these selectors miss - a switch track standing in for its hidden
+   checkbox, a tabindex="-1" panel, a text field - and uses the same token. */
 button:focus-visible,
 a:focus-visible,
 summary:focus-visible,
@@ -29,7 +23,7 @@ summary:focus-visible,
   outline-offset: 2px;
 }
 
-/* Text fields: blue border only — no outer halo. */
+/* Text fields: the ring's colour on the border only — no outer halo. */
 input:not(
     [type="button"],
     [type="submit"],
@@ -44,16 +38,16 @@ input:not(
   ):focus-visible,
 textarea:focus-visible,
 select:focus-visible {
-  border-color: var(--focus-field-border);
+  border-color: var(--focus-ring);
   outline: none;
 }
 
 .chat-input-box:focus-within {
-  border-color: var(--focus-field-border);
+  border-color: var(--focus-ring);
 }
 
 .input-number:has(input:focus-visible) {
-  outline: 1px solid var(--focus-field-border);
+  outline: 1px solid var(--focus-ring);
   outline-offset: 0;
 }
 

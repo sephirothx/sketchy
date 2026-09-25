@@ -38,11 +38,6 @@
   display: inline-flex;
 }
 
-.header-home-link:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 3px;
-}
-
 /* The way up from a nested page, after the wordmark, on a wide screen. */
 .header-crumb {
   align-items: center;
@@ -278,7 +273,7 @@
 }
 
 .lobby-room-search:focus-within {
-  border-color: var(--focus-field-border, var(--primary));
+  border-color: var(--focus-ring);
 }
 
 .lobby-room-search > svg {
@@ -595,7 +590,7 @@
 .invite-primary-button {
   border: 0;
   background: var(--primary);
-  color: #fff;
+  color: var(--on-primary);
   box-shadow: 0 2px 0 var(--primary-edge);
 }
 
@@ -695,7 +690,7 @@
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     border-top: 1.5px solid var(--line);
     background: var(--card);
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
   }
 
   /* Beats the narrow rule below that stacks the two and turns Spectate into
@@ -764,7 +759,7 @@
     background: var(--card);
     border-top: 1.5px solid var(--line);
     bottom: 0;
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -1122,11 +1117,6 @@
   text-decoration-color: currentColor;
 }
 
-.lobby-chat-author:focus-visible {
-  outline: 2px solid var(--primary-edge-soft);
-  outline-offset: 1px;
-}
-
 /* A margin note, not part of the message: small, quiet, and out at the edge
    so a long line wraps under the name rather than under the time. */
 .lobby-chat-time {
@@ -1263,7 +1253,7 @@ a.online-player-name:focus-visible {
    a short desktop window: below it the panels would each be a few rows tall,
    which is less usable than the ordinary page, so the ordinary page is what
    it falls back to. */
-@media (min-width: 900px) and (min-height: 640px) {
+@media (min-width: 901px) and (min-height: 640px) {
   /* A visitor who has not chosen a name yet gets a page that can grow: the
      first-run block, the rooms and the social column together can outgrow a
      short window, and pinning the viewport around them left the rooms panel a
@@ -1680,14 +1670,10 @@ a.online-player-name:focus-visible {
   text-decoration: underline;
 }
 
-.online-player-trigger:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
-}
-
 /* The room's seat menu, restated for this list: two lists of people should
    not look like two different mechanisms. */
 .online-player-menu {
+  --focus-ring: var(--menu-ink);
   background: var(--menu);
   border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
   border-radius: 8px;

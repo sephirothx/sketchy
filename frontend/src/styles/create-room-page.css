@@ -535,10 +535,9 @@ details.form-section > .form-section-body {
   .segmented-control-thumb { transition: none; }
   .segmented-control button { transition: none; }
 }
-.segmented-control button:focus-visible,
-.input-number button:focus-visible,
+/* The checkbox is hidden under its track, so the ring goes on the track. */
 .m3-switch-label input:focus-visible ~ .m3-switch-track {
-  outline: 3px solid var(--primary-edge-soft);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -620,11 +619,6 @@ details.form-section > .form-section-body {
   font-weight: 600;
 }
 
-.choice-card:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 /* ---------------------------------------------------------------- switches */
 .m3-switch-label {
   align-items: center;
@@ -669,10 +663,6 @@ details.form-section > .form-section-body {
   line-height: 1;
   padding: 0;
   width: 16px;
-}
-.m3-switch-hint:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
 }
 .m3-switch-hint-tooltip {
   background: var(--ink);
@@ -844,7 +834,7 @@ details.form-section > .form-section-body {
     border-top: 1.5px solid var(--line);
     border-radius: 0;
     bottom: 0;
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
     flex-direction: row;
     gap: 12px;
     left: 0;
@@ -978,10 +968,6 @@ details.form-section > .form-section-body {
 .toggle-chip.is-selected .prompt-list-chip-count {
   background: var(--card);
   color: var(--primary);
-}
-.toggle-chip:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
 }
 .toggle-chip:disabled {
   cursor: default;

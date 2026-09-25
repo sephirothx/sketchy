@@ -155,11 +155,13 @@
   -webkit-appearance: none;
 }
 
-/* A cue, not a movement: the glyph stays put and its circle lights up. */
+/* A cue, not a movement: the glyph stays put and its circle lights up. The
+   keyboard also gets the app's focus ring (a11y.css) around the circle - an
+   `outline: none` here never won against it, and the wash alone is too faint
+   to be the only sign of focus. */
 .reaction-option:hover:not(:disabled),
 .reaction-option:focus-visible {
   background: rgba(255, 255, 255, 0.16);
-  outline: none;
 }
 
 .reaction-option.is-mine {
@@ -196,7 +198,7 @@
   border: 0;
   border-radius: 9px;
   background: var(--primary);
-  color: var(--card);
+  color: var(--on-primary);
   font: inherit;
   font-weight: 800;
   cursor: pointer;

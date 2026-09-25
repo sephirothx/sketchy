@@ -71,11 +71,14 @@
   color: var(--primary-ink);
 }
 
+/* The label is --card, not --warm-soft: the soft wash is translucent in the
+   dark theme and let the button's own orange through (1.1:1). --warm-ink
+   turns light in dark, and --card turns dark with it. */
 .server-shutdown-banner.is-update-required button {
   background: var(--warm-ink);
   border: 0;
   border-radius: 6px;
-  color: var(--warm-soft);
+  color: var(--card);
   cursor: pointer;
   font: inherit;
   padding: 4px 12px;
@@ -139,17 +142,18 @@
   line-height: 1;
   padding: 3px 4px;
 }
-.app-toast button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* The one thing a toast may offer to do. Reads as a control rather than as
-   the dismiss cross beside it, because it is the reason the toast lingers. */
-.app-toast-action {
-  font-weight: 700;
+   the dismiss cross beside it, because it is the reason the toast lingers.
+   Two classes, so it outranks the bare `.app-toast button` above without
+   `!important`. */
+.app-toast .app-toast-action {
+  background: var(--primary);
+  border-radius: 999px;
+  color: var(--on-primary);
   font-size: 13px;
-  padding: 3px 10px !important;
-  border-radius: 999px !important;
-  background: var(--primary) !important;
-  color: var(--primary-ink) !important;
+  font-weight: 700;
+  padding: 3px 10px;
   white-space: nowrap;
 }
 

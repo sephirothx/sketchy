@@ -236,7 +236,7 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #f59e0b;
+  background: var(--warning);
   flex: none;
 }
 
@@ -262,7 +262,7 @@
   padding: 0 4px;
   border-radius: 999px;
   background: var(--primary);
-  color: var(--primary-ink);
+  color: var(--on-primary);
   font-size: 10px;
   font-weight: 800;
   line-height: 16px;
@@ -288,7 +288,7 @@
   padding: 0 5px;
   border-radius: 999px;
   background: var(--primary);
-  color: var(--primary-ink);
+  color: var(--on-primary);
   font-size: 11px;
   font-weight: 800;
   line-height: 18px;
@@ -331,7 +331,7 @@
   padding: 8px 12px;
 }
 .session-actions { display: flex; gap: 10px; justify-content: flex-end; }
-.session-revoke-all { background: var(--danger); border-color: var(--danger) !important; color: var(--card); }
+.session-revoke-all { background: var(--danger-button); border-color: var(--danger-button) !important; color: #fff; }
 .session-list button:disabled, .session-actions button:disabled { cursor: wait; opacity: 0.6; }
 
 /* A session used from a browser it was not issued to. Given the warning
@@ -408,7 +408,7 @@
   padding: 6px 6px 6px 10px;
 }
 .two-factor-secret code, .two-factor-codes code {
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 13px;
   letter-spacing: 0.06em;
   overflow-wrap: anywhere;
@@ -429,7 +429,7 @@
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
   color: var(--ink);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-family: var(--font-mono);
   font-size: 18px;
   min-width: 0;
   padding: 0;
@@ -580,10 +580,10 @@
 .account-export-list li > span { display: grid; gap: 3px; min-width: 0; }
 .account-export-list small, .account-data-note, .account-data-empty { color: var(--muted); font-size: 13px; }
 .account-export-note { color: var(--ink); line-height: 1.4; }
-.account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--card); text-decoration: none; }
+.account-export-list a { background: var(--primary); border-color: var(--primary); color: var(--on-primary); text-decoration: none; }
 .account-danger-zone { border-color: var(--danger-soft); }
 .account-danger-zone > p { font-size: 14px; line-height: 1.5; }
-.account-delete-start, .account-delete-confirm { background: var(--danger); border-color: var(--danger) !important; color: var(--card) !important; }
+.account-delete-start, .account-delete-confirm { background: var(--danger-button); border-color: var(--danger-button) !important; color: #fff !important; }
 .account-delete-form { display: grid; gap: 12px; }
 .account-delete-form label { display: grid; font-size: 13px; font-weight: 700; gap: 5px; }
 .account-delete-form input { background: var(--card); border: 1px solid var(--line-strong); border-radius: 8px; color: var(--ink); font-size: 16px; padding: 9px 11px; }
@@ -662,7 +662,7 @@
   justify-self: center;
   max-width: 360px;
   width: 100%;
-  border: 2px solid var(--tag-edge, #c8102e);
+  border: 2px solid var(--tag-edge);
   border-radius: 12px;
   box-shadow: 0 3px 0 rgba(20, 16, 10, 0.14);
   display: grid;
@@ -672,7 +672,7 @@
 }
 
 .first-run-tag-top {
-  background: var(--tag-edge, #c8102e);
+  background: var(--tag-edge);
   /* The card's radius less its border, so the banner ends where the card
      curves instead of poking two square corners past it. */
   border-radius: 10px 10px 0 0;
@@ -706,12 +706,6 @@
 .first-run-guest-row input::placeholder {
   color: #a29883;
   font-weight: 500;
-}
-
-.first-run-guest-row input:focus-visible {
-  border-bottom-color: var(--tag-edge, #c8102e);
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 3px;
 }
 
 /* Plainly a name, not a game: what plays is Quick play, beside the room list. */
@@ -908,9 +902,9 @@
   flex-wrap: wrap;
   margin: 12px 0;
   padding: 12px 16px;
-  border: 1px solid rgba(245, 158, 11, 0.5);
+  border: 1px solid var(--warning-edge);
   border-radius: 12px;
-  background: rgba(245, 158, 11, 0.08);
+  background: var(--warning-soft);
 }
 
 .game-end-claim-copy {
@@ -921,7 +915,7 @@
 .game-end-claim-action {
   border: none;
   background: var(--primary);
-  color: var(--card);
+  color: var(--on-primary);
   border-radius: 8px;
   padding: 9px 16px;
   font-weight: 700;
@@ -1124,7 +1118,7 @@
 
 /* Deleting the account has a dialog of its own (Settings > Account). */
 .account-delete-dialog .account-delete-confirm {
-  background: var(--danger);
+  background: var(--danger-button);
   box-shadow: none;
 }
 
