@@ -2745,7 +2745,9 @@ A seated client checks with the server every five seconds that it still holds th
   what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
   On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
-  Edit and an orange Start in the same card. An invite link shows the room the same six
+  Edit and an orange Start in the same card - on one line where the words fit, otherwise Edit
+  and the pad's button over a full-width Start (with the short labels only where even those two
+  do not fit side by side, which above 1100px is the language's longer words). An invite link shows the room the same six
   cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait"
   ("Doodle" up to 1100px, where it shares a row with "Edit rules", or with "Waiting for Hosty to
   start" for everybody but the host) swaps
