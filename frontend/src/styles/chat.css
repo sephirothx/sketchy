@@ -156,11 +156,17 @@
   margin-top: 8px;
   border-top: 1.5px solid var(--line);
   padding-top: 10px;
+  /* The verdict below floats outside this box, in the slot above it; on a
+     phone's playing shell the field is a dock (useBottomDock), and this is
+     the room it reserves so a friend invite or a toast stands above the
+     verdict rather than on it. The chip plus its gap. */
+  --dock-reserve: 44px;
 }
 
 /* The verdict on your own guess. It floats above the field rather than sitting
    in the feed, because on a phone the feed is one line — and with the keyboard
    up it is the only report you get. It stays until you type again. */
+
 .guess-focus-flash {
   display: none;
   position: absolute;

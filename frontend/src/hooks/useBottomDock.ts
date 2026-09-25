@@ -11,10 +11,14 @@ drawing toolbar), so like the banner stack (`--banner-height`) the height is
 measured rather than restated in CSS.
 
 Returns a callback ref. An element counts while it is fixed to the viewport -
-itself, or inside a fixed shell such as the phone's playing room - and only as
-a band along the bottom: a fixed element that reaches more than half-way up is
-a rail down the side (the landscape room's toolbar), not something to stand
-on. Several can be mounted at once; the highest reach wins. */
+itself, or inside a fixed shell such as the phone's playing room - and only
+where it spans the bottom centre, which is where the invite and the toasts
+stand: the landscape room's toolbar rail and its guess field in the right-hand
+column are beside that spot, not under it, and counting them pushed the invite
+into the middle of the canvas. An element may also reserve room above itself
+with `--dock-reserve` (the guess field keeps a slot for the verdict on the last
+guess, which floats outside its box). Several can be mounted at once; the
+highest reach wins. */
 
 const reaches = new Map<HTMLElement, number>();
 
@@ -40,10 +44,12 @@ export function useBottomDock(): (element: HTMLElement | null) => void {
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(() => measure());
     const measure = () => {
       const container = fixedContainer(element);
-      const reach = container && element.offsetHeight > 0
-        ? Math.round(window.innerHeight - element.getBoundingClientRect().top)
-        : 0;
-      if (reach > 0 && reach <= window.innerHeight / 2) reaches.set(element, reach);
+      const box = element.getBoundingClientRect();
+      const centre = window.innerWidth / 2;
+      const spansCentre = box.height > 0 && box.left < centre && centre < box.right;
+      const reserve = Number.parseFloat(getComputedStyle(element).getPropertyValue("--dock-reserve")) || 0;
+      const reach = container && spansCentre ? Math.round(window.innerHeight - box.top + reserve) : 0;
+      if (reach > 0) reaches.set(element, reach);
       else reaches.delete(element);
       publish();
       // A band that grows under this one - the drawing toolbar arriving under

@@ -157,6 +157,10 @@ test("the invite stands on the bottom dock, and the toasts on both (R-UX-07)", (
     assert.match(text, /useBottomDock\(\)/, file);
   }
   assert.match(source("components/RoomChatPanel.tsx"), /ref=\{composerRef\}/);
+  // The verdict on a guess floats above the field, outside its box, and is
+  // the only feedback with the keyboard up: the field reserves its slot.
+  assert.match(block("chat.css", ".chat-input"), /--dock-reserve: \d+px;/);
+  assert.match(source("hooks/useBottomDock.ts"), /getPropertyValue\("--dock-reserve"\)/);
 });
 
 // ------------------------------------------------------------- breakpoints
