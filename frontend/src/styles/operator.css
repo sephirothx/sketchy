@@ -505,6 +505,8 @@
   font: inherit;
   font-size: 13.5px;
   padding: 7px 10px;
+  padding-inline-start: calc(10px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   width: 180px;
 }
 
@@ -778,6 +780,8 @@
   overflow: hidden;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .mod-queue-item time {

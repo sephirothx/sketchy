@@ -96,6 +96,27 @@
   --shadow: 0 1px 2px rgba(20, 16, 10, 0.06);
   --shadow-raised: 0 10px 30px rgba(20, 16, 10, 0.14);
 
+  /* Room for a glyph's ink past its own advance, which is all a text box
+     measures (#1170). A "j" hooks its tail back left of where it starts, and
+     the browser's synthesised italic - neither font ships a real one here -
+     leans every letter's top right of where it ends. Any box that clips its
+     text cuts that ink off: an ellipsis box, a clipped flex item, a scroll
+     container, a field's inner editor. Measured over ASCII in every face and
+     weight this app loads, the worst are 0.16em left (Fredoka 600 italic
+     "j") and 0.208em right (Nunito Sans 800 italic "Y"), so one value
+     covers both sides. It is in em so it scales with the text it guards.
+     A clipping box takes it as padding and gives it back as negative margin,
+     which moves the clip edge out without moving anything else:
+       padding-inline: var(--ink-overhang);
+       margin-inline: calc(-1 * var(--ink-overhang));
+     A text field clips at its content box whatever its padding, so it
+     indents its text by the allowance and takes it off its start padding
+     (or, with none, reaches back into its frame's by negative margin):
+       padding-inline-start: calc(<padding> - var(--ink-overhang));
+       text-indent: var(--ink-overhang);
+     tests/inkOverhang.test.mjs holds every stylesheet to this (R-UX-15). */
+  --ink-overhang: 0.22em;
+
   /* visual-viewport vars written by useVisualViewportCssVars */
   --vv-height: 100dvh;
   --vv-width: 100%;

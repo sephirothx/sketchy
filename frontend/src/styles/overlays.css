@@ -169,9 +169,22 @@
   gap: 5px;
   font-size: 14px;
   font-weight: 800;
-  max-width: 100%;
+  max-width: calc(100% + 2 * var(--ink-overhang));
   overflow: hidden;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
+}
+
+/* The name is a flex item beside "you", so it takes the ellipsis itself: the
+   row's own clip cut a long name off mid-letter. */
+.game-end-podium-name > .colored-player-name,
+.game-end-standing-name > .colored-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .game-end-you {
@@ -250,6 +263,8 @@
   min-width: 0;
   overflow: hidden;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .game-end-standings strong {

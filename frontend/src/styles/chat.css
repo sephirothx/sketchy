@@ -20,7 +20,11 @@
   flex-direction: column;
   gap: 6px;
   font-size: 14px;
-  padding-right: 4px;
+  /* A line starts at the list's edge, where the scroll container clips, so
+     the ink allowance goes there; the end keeps its lane for the
+     scrollbar, which a wrapped line never reaches past. */
+  padding-inline: var(--ink-overhang) 4px;
+  margin-inline-start: calc(-1 * var(--ink-overhang));
 }
 
 .chat-message {
@@ -207,6 +211,11 @@
   border: none;
   outline: none;
   padding: 0;
+  /* The box around it draws the border; the field reaches into its padding
+     so its own clip clears a first letter's ink, and indents the text back
+     to where it was (--ink-overhang in theme.css). */
+  margin-inline-start: calc(-1 * var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   font-family: var(--font-body);
   font-size: 14.5px;
   background: transparent;

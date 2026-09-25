@@ -331,6 +331,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .profile-shelf-byline {
@@ -346,6 +348,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .profile-shelf-controls {

@@ -177,6 +177,13 @@
   width: 100%;
 }
 
+/* A field's inner editor clips at its content box; a select and a textarea
+   do not, and a textarea would indent only its first line. */
+.prompt-list-manager-layout input {
+  padding-inline-start: calc(10px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
+}
+
 /* The shortlist is a second group under the catalogue's own, labelled so it
    is clear these came from somewhere else. */
 .prompt-list-starred-label {
@@ -499,6 +506,8 @@
 .prompt-list-manager-layout .prompt-list-entry-filters input[type="search"] {
   flex: 1 1 200px;
   padding: 6px 10px;
+  padding-inline-start: calc(10px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   width: auto;
 }
 

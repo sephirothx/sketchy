@@ -43,6 +43,8 @@
   max-width: 220px;
   min-height: 42px;
   padding: 6px 10px;
+  padding-inline-start: calc(10px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
 }
 
 .room-preset-bar .auth-link { font-size: 13px; }
@@ -111,6 +113,8 @@ details.form-section summary::-webkit-details-marker {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .form-section-chevron {
@@ -208,6 +212,14 @@ details.form-section > .form-section-body {
   font-weight: 400;
   min-height: 42px;
   padding: 9px 12px;
+}
+
+/* A field's inner editor clips at its content box; a select and a textarea
+   do not, and a textarea would indent only its first line. */
+.form-section input[type="text"],
+.form-section input[type="search"] {
+  padding-inline-start: calc(12px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
 }
 
 .setting-cards {

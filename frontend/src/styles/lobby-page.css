@@ -66,6 +66,8 @@
   color: var(--ink);
   overflow: hidden;
   text-overflow: ellipsis;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .header-crumb > a {
@@ -271,6 +273,8 @@
   min-width: 0;
   outline: none;
   padding: 0;
+  margin-inline-start: calc(-1 * var(--ink-overhang));
+  text-indent: var(--ink-overhang);
 }
 
 .lobby-room-search input[type="search"]::placeholder {
@@ -533,6 +537,8 @@
   width: 100%;
   min-height: 48px;
   padding: 10px 14px;
+  padding-inline-start: calc(14px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
   background: var(--field);
@@ -1146,6 +1152,8 @@
   border: none;
   border-radius: 0;
   padding: 0;
+  margin-inline-start: calc(-1 * var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   background: transparent;
   box-shadow: none;
   font-size: 14.5px;
@@ -1200,6 +1208,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 /* A registered name is a link to that profile. Undecorated until it is
@@ -1221,9 +1231,6 @@ a.online-player-name:focus-visible {
   color: var(--muted);
   font-style: italic;
   font-weight: 500;
-  /* Room for the synthesised slant, which this row clips - see
-     `.colored-player-name.is-guest` in account.css for the measurement. */
-  padding-right: 0.22em;
 }
 
 .online-player-status {
@@ -1335,8 +1342,10 @@ a.online-player-name:focus-visible {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    /* So a row's text does not run under the scrollbar's lane. */
-    padding-right: 4px;
+    /* So a row's text does not run under the scrollbar's lane - and, at the
+       start, so a row's first letter is not cut by the clip (#1170). */
+    padding-inline: var(--ink-overhang) 4px;
+    margin-inline-start: calc(-1 * var(--ink-overhang));
     /* Reaching the end of one list must not start scrolling anything else. */
     overscroll-behavior: contain;
   }

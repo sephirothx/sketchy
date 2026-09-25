@@ -78,6 +78,8 @@
   background: var(--field);
   color: var(--ink);
   padding: 8px 10px;
+  padding-inline-start: calc(10px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
   font-size: 15px;

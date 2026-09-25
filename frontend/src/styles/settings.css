@@ -249,6 +249,8 @@
   border-radius: var(--radius-sm);
   color: var(--ink);
   padding: 8px 11px;
+  padding-inline-start: calc(11px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   font: inherit;
   font-size: 14px;
   min-height: 38px;
@@ -1041,6 +1043,8 @@
   border-radius: var(--radius-sm);
   color: var(--ink);
   padding: 8px 11px;
+  padding-inline-start: calc(11px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
   font: inherit;
   font-size: 15px;
   font-weight: 700;

@@ -381,6 +381,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 /* A raised card rather than the inverted popover the seat menus use: this one

@@ -115,6 +115,8 @@
   white-space: nowrap;
   font-weight: 600;
   color: var(--ink);
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .friends-row-actions {
