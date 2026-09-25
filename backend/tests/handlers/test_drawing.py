@@ -1,3 +1,4 @@
+import pytest
 import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock
@@ -1255,6 +1256,94 @@ async def test_an_action_after_a_torn_path_closes_it_rather_than_asking_for_ever
     )
     assert canvas.sequence == 2 and len(canvas.history) == 2
     assert "request_canvas_actions" not in _emitted_events(sio)
+
+
+async def test_a_fresh_stroke_reusing_the_open_number_closes_the_torn_path():
+    """#1057: back from a rebind, a *new* `draw_start` carried the open
+    path's number. Taken for a retransmission, it popped the partial path on
+    the server alone - every viewer still held it and failed the commit, and
+    the partial stroke was gone from the record. A new action nonce is a
+    fresh stroke: the torn path is closed for the room, kept, and committed."""
+    room, sio = _drawing_room()
+    await _open_a_path(room, sio)
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+    sio.emit.reset_mock()
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.7, "y": 0.7, "color": "#ff0000", "width": 9}),
+        canvas_action(room.game, 1, nonce=2),
+    )
+
+    assert canvas.active_draw_sequence is None
+    assert canvas.sequence == 1, "the torn path is committed where the server's copy ends"
+    assert len(canvas.history) == 1 and canvas.history[0].points == [(0.1, 0.1), (0.2, 0.2)]
+    # The room gets the torn path's draw_end with its commit - the frame the
+    # viewers already expect for the path they hold, so none of them resyncs.
+    [(end_call,)] = [call.args[1:] for call in _emitted(sio, "draw")]
+    assert end_call[0] == encode_live_drawing("draw_end")
+    assert end_call[1] is not None and end_call[1][1] == 1, "committed under the open number"
+    [(notice,)] = [call.args[1:] for call in _emitted(sio, "canvas_stale")]
+    assert notice[2] == "dropped_frame", "the drawer is told to resync"
+    # The fresh stroke's trailing points are not glued onto anything.
+    await draw("drawer-sid", encode_live_drawing("draw_move", {"points": [{"x": 0.8, "y": 0.8}]}))
+    assert canvas.history[0].points == [(0.1, 0.1), (0.2, 0.2)]
+
+
+async def test_a_retransmitted_opener_still_restarts_the_open_path():
+    """The same action nonce is the drawer re-sending the stroke it was in
+    the middle of: that path starts over, as it always did."""
+    room, sio = _drawing_room()
+    await _open_a_path(room, sio)
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+
+    await draw(
+        "drawer-sid",
+        encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4}),
+        canvas_action(room.game, 1),
+    )
+
+    assert canvas.active_draw_sequence == 1
+    assert len(canvas.history) == 1 and canvas.history[0].points == [(0.1, 0.1)]
+
+
+async def test_the_action_nonce_decides_between_a_resend_and_a_fresh_stroke():
+    """#1057 review: a dot tapped again on the same spot with the same brush
+    has the open path's very opener, which the wire alone cannot tell from a
+    retransmission. The client's action nonce, kept across resends and new
+    for each action, can."""
+    room, sio = _drawing_room()
+    canvas = room.game.canvas
+    draw = sio.handlers["/"]["draw"]
+    dot = encode_live_drawing("draw_start", {"x": 0.3, "y": 0.3, "color": "#000000", "width": 4})
+
+    await draw("drawer-sid", dot, canvas_action(room.game, 1, nonce=111))
+    # The same action resent (its nonce kept): the path starts over.
+    await draw("drawer-sid", dot, canvas_action(room.game, 1, nonce=111))
+    assert canvas.active_draw_sequence == 1 and len(canvas.history) == 1
+
+    # A new dot on the same spot, reusing the number after a lost draw_end:
+    # a new nonce, so the open path is closed for the room, not restarted.
+    sio.emit.reset_mock()
+    await draw("drawer-sid", dot, canvas_action(room.game, 1, nonce=222))
+    assert canvas.active_draw_sequence is None
+    assert canvas.sequence == 1 and len(canvas.history) == 1
+    [(notice,)] = [call.args[1:] for call in _emitted(sio, "canvas_stale")]
+    assert notice[2] == "dropped_frame"
+
+
+@pytest.mark.parametrize("nonce", [0, -1, 2**31, True, "7", 1.5])
+async def test_an_action_nonce_out_of_range_is_refused(nonce):
+    from app.handlers.payloads import PayloadError, parse_draw_payload
+
+    opener = encode_live_drawing("draw_start", {"x": 0.3, "y": 0.3, "color": "#000000", "width": 4})
+    with pytest.raises(PayloadError):
+        parse_draw_payload(opener, [1, 1, nonce])
+    assert parse_draw_payload(opener, [1, 1, 2**31 - 1]).action_nonce == 2**31 - 1
+    with pytest.raises(PayloadError):
+        parse_draw_payload(opener, [1, 1])
 
 
 async def test_undo_of_the_open_path_forgets_that_it_was_open():

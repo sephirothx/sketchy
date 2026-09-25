@@ -111,15 +111,27 @@ export function pointCount(frames: DrawingFrame[]): number {
   return total;
 }
 
+/** `[generation, sequence, nonce]`: the nonce is drawn once per action and
+kept across resends, so the server can tell a retransmitted opener from a
+fresh stroke that reuses its sequence (#1057). */
+export type ActionIdentity = [number, number, number];
+
+/** A fresh action nonce, 1..2**31-1: random rather than counted, so two tabs
+or two page loads of the same drawer cannot mint the same one for the same
+sequence. */
+export function drawActionNonce(random: () => number = Math.random): number {
+  return 1 + Math.floor(random() * 0x7ffffffe);
+}
+
 export interface QueuedMutation {
   sequence: number;
   frames: DrawingFrame[];
-  identity: [number, number];
+  identity: ActionIdentity;
 }
 
 export interface SenderDependencies {
   /** Put one frame on the wire; `identity` only on the opener. */
-  emit(frame: DrawingFrame, identity?: [number, number]): void;
+  emit(frame: DrawingFrame, identity?: ActionIdentity): void;
   allowance(): DrawingAllowance;
   now(): number;
   schedule(callback: () => void, delayMs: number): unknown;

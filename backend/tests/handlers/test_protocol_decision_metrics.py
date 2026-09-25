@@ -115,7 +115,7 @@ async def test_the_frame_mix_counts_kind_shape_result_points_and_width_keyframes
     await draw("drawer-sid", mouse)
     await draw("drawer-sid", encode_live_drawing("draw_end"))
     # From a generation the canvas has left: refused, and resynced.
-    await draw("drawer-sid", start, [room.game.canvas.generation + 1, 2])
+    await draw("drawer-sid", start, [room.game.canvas.generation + 1, 2, 2])
     await draw("drawer-sid", "not base64!")
 
     frames = dict(store.draw_frames.items())

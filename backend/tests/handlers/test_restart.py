@@ -279,7 +279,7 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     await sio.handlers["/"]["draw"](
         proposer.sid,
         stale_frame,
-        [old_generation, 1],
+        [old_generation, 1, 1],
     )
     assert len(room.game.canvas.history) == 0
     # A frame from the replaced game's generation earns a recovery notice

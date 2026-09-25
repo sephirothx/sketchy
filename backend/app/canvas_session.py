@@ -66,6 +66,8 @@ class CanvasSession:
     commits: list[tuple[int, int, str]] = field(default_factory=list, repr=False, compare=False)
     commit_base_sequence: int = field(default=1, repr=False, compare=False)
     active_draw_sequence: int | None = field(default=None, repr=False, compare=False)
+    # The open path's action nonce (#1057).
+    active_draw_nonce: int | None = field(default=None, repr=False, compare=False)
     discarding_draw_sequence: bool = field(default=False, repr=False, compare=False)
     active_path_index: int | None = field(default=None, repr=False, compare=False)
     point_count: int = field(default=0, repr=False, compare=False)
@@ -252,6 +254,20 @@ class CanvasSession:
         if not 0 <= index < len(self.commits):
             return None
         return self.commits[index]
+
+    def is_active_path_resend(self, nonce: int | None) -> bool:
+        """Whether a `draw_start` numbered as the open path is that path's own
+        action re-sent - a retransmission - rather than a fresh stroke reusing
+        its number after the path's `draw_end` was lost (#1057).
+
+        Decided by the action nonce alone: a resend keeps its action's nonce
+        and a fresh stroke draws a new one. The opener is no evidence - a dot
+        tapped again on the same spot with the same brush repeats it byte for
+        byte.
+        """
+        if self.active_path_index is None or self.history.last_is_clear():
+            return False
+        return nonce is not None and nonce == self.active_draw_nonce
 
     def restart_active_path(self) -> bool:
         """Discard an uncommitted path so its semantic action can be replayed."""

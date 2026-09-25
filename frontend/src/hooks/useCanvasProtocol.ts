@@ -10,11 +10,13 @@ import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import {
   CompletionWatch,
   RecoverySender,
+  drawActionNonce,
   onServerCanvasSequence,
   repackDrawFrames,
   requestSessionRebind,
   staleNoticeAction,
 } from "../lib/canvasRecovery";
+import type { ActionIdentity } from "../lib/canvasRecovery";
 import {
   CANVAS_SYNC_TIMEOUT_MS,
   createCanvasSyncRequester,
@@ -61,6 +63,8 @@ type PendingCanvasMutation =
   | {
     kind: "draw";
     generation: number;
+    /** Kept across resends (#1057); see `ActionIdentity`. */
+    nonce: number;
     frames: DrawingFrame[];
     expectedRevision: number | null;
     expectedHash: number | null;
@@ -124,7 +128,7 @@ export function useCanvasProtocol(
   // connected: Socket.IO would buffer them and flush that buffer on reconnect,
   // before the seat is rebound, into whatever the canvas has become (#597).
   // A frame dropped here is recovered by the sync that follows the rebind.
-  const sendDraw = useCallback((frame: DrawingFrame, identity?: [number, number]): void => {
+  const sendDraw = useCallback((frame: DrawingFrame, identity?: ActionIdentity): void => {
     if (!socket.connected) return;
     if (identity) socket.emit("draw", toWireFrame(frame), identity);
     else socket.emit("draw", toWireFrame(frame));
@@ -229,15 +233,17 @@ export function useCanvasProtocol(
       requestAuthoritativeSync();
       return null;
     }
+    const nonce = drawActionNonce();
     pendingMutationsRef.current.set(sequence, {
       kind: "draw",
       generation,
+      nonce,
       frames: [frame],
       expectedRevision: isPath ? null : historyRef.current.revision,
       expectedHash: isPath ? null : historyRef.current.historyHash,
     });
     activeOutgoingSequenceRef.current = isPath ? sequence : null;
-    sendDraw(frame, [generation, sequence]);
+    sendDraw(frame, [generation, sequence, nonce]);
     // A shape, fill or clear commits on this one frame: its clock starts now.
     if (!isPath) watchRef.current?.arm(sequence);
     publishBudgets();
@@ -399,7 +405,7 @@ export function useCanvasProtocol(
       sender.enqueue({
         sequence,
         frames: repackDrawFrames(pending.frames),
-        identity: [pending.generation, sequence],
+        identity: [pending.generation, sequence, pending.nonce],
       });
     };
     const watch = new CompletionWatch({
@@ -516,7 +522,7 @@ export function useCanvasProtocol(
           sender.enqueue({
             sequence: pendingSequence,
             frames: repackDrawFrames(pending.frames),
-            identity: [pending.generation, pendingSequence],
+            identity: [pending.generation, pendingSequence, pending.nonce],
           });
           watch.arm(pendingSequence);
         } else {

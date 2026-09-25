@@ -33,9 +33,11 @@ _CREDENTIAL_KEYS = {
 }
 
 
-def canvas_action(game: Game, sequence: int) -> list[int]:
-    """The [generation, sequence] pair a draw payload is stamped with."""
-    return [game.canvas.generation, sequence]
+def canvas_action(game: Game, sequence: int, nonce: int | None = None) -> list[int]:
+    """The [generation, sequence, nonce] a draw payload is stamped with. The
+    nonce defaults to the sequence, so stamping the same number twice is a
+    resend of one action; pass a different nonce for a fresh action."""
+    return [game.canvas.generation, sequence, sequence if nonce is None else nonce]
 
 
 def contains_secret(value, secret: str) -> bool:

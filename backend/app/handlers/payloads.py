@@ -631,6 +631,11 @@ class DrawPayload:
     packet: LiveDrawingPacket
     wire_data: int | bytes
     action_identity: tuple[int, int] | None
+    # A number the client drew for this action and keeps across resends, so a
+    # retransmitted opener and a fresh stroke reusing its sequence can be told
+    # apart (#1057). Required with the identity: an identical opener - a dot
+    # tapped again on the same spot - is no evidence either way.
+    action_nonce: int | None = None
 
 
 @dataclass(frozen=True, slots=True)
@@ -658,6 +663,11 @@ def parse_empty_payload(data: Any) -> EmptyPayload:
     return parse_payload(EmptyPayload, data, allow_none=True)
 
 
+# The client draws the nonce from 1..2**31-1: a signed 32-bit range every JSON
+# number and both languages hold exactly.
+MAX_ACTION_NONCE = 2**31 - 1
+
+
 def _canvas_sequence(value: Any) -> int | None:
     if isinstance(value, bool) or not isinstance(value, int) or not 1 <= value <= MAX_CANVAS_SEQUENCE:
         return None
@@ -671,12 +681,16 @@ def parse_draw_payload(data: Any, action_identity: Any = None) -> DrawPayload:
         raise PayloadError("Invalid drawing payload") from exc
     starts_action = packet.event in {"draw_start", "draw_shape", "draw_fill", "clear_canvas"}
     identity: tuple[int, int] | None = None
+    nonce: int | None = None
     if action_identity is not None:
         if (
             not isinstance(action_identity, list)
-            or len(action_identity) != 2
+            or len(action_identity) != 3
             or (generation := _canvas_sequence(action_identity[0])) is None
             or (sequence := _canvas_sequence(action_identity[1])) is None
+            or isinstance(nonce := action_identity[2], bool)
+            or not isinstance(nonce, int)
+            or not 1 <= nonce <= MAX_ACTION_NONCE
         ):
             raise PayloadError("Invalid drawing action identity")
         identity = (generation, sequence)
@@ -690,7 +704,9 @@ def parse_draw_payload(data: Any, action_identity: Any = None) -> DrawPayload:
     # the rule that viewers see the drawer's own bytes rather than the
     # server's idea of them.
     wire_data = data if isinstance(data, (int, str)) else bytes(data)
-    return DrawPayload(packet=packet, wire_data=wire_data, action_identity=identity)
+    return DrawPayload(
+        packet=packet, wire_data=wire_data, action_identity=identity, action_nonce=nonce
+    )
 
 
 @dataclass(frozen=True, slots=True)
