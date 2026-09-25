@@ -89,13 +89,23 @@ export function FirstRunIdentity() {
   if (!needsIdentity(user)) return null;
   const takenName = user?.nameInUse ? user.displayName : null;
 
-  /** Say why, in a toast, and put the player back in the field that fixes
-      it. The message used to sit inside the tag, then under it, and either
-      way it moved the layout or held empty space for itself. */
+  /** Say why, in a toast, and mark the field that fixes it. On a desktop the
+      player is put back in it. With a touch screen they are not: the toast
+      is fixed to the bottom of the layout viewport, and iOS Safari lays the
+      keyboard over that rather than resizing it (it ignores
+      `interactive-widget=resizes-content`), so a refocused field kept the
+      keyboard up and the toast under it - the refusal went unread. There
+      the keyboard is let go, and the red line says which field to tap. */
   function refuse(message: string) {
     setRefused(true);
     notify(message, "error");
-    nameElement.current?.focus();
+    const field = nameElement.current;
+    if (!field) return;
+    if (window.matchMedia?.("(pointer: coarse)").matches) {
+      if (document.activeElement === field) field.blur();
+    } else {
+      field.focus();
+    }
   }
 
   async function nameMe(event: React.FormEvent) {
