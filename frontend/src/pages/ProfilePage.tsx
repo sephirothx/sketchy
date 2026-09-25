@@ -452,7 +452,7 @@ export function ProfilePage() {
       <div className="profile-page">
         <AppHeader backLabel={ui.profilePage.backToLobby} />
         {hasResolved
-          ? <EmptyState title={ui.profilePage.noSuchProfile} />
+          ? <EmptyState heading title={ui.profilePage.noSuchProfile} />
           : <p className="loading-note" role="status">{ui.profilePage.loading}</p>}
       </div>
     );

@@ -1193,11 +1193,11 @@
   }
 }
 
-/* Which build this is, at the foot of every section: small and faint, and
+/* Which build this is, at the foot of every section: small and quiet, and
    selectable, since the one person who reads it wants to paste it. */
 .version-badge {
   border-top: 1px solid var(--line);
-  color: var(--faint);
+  color: var(--muted);
   font-size: 12px;
   margin: 24px 0 0;
   padding-top: 12px;

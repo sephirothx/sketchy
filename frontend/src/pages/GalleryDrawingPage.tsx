@@ -95,6 +95,7 @@ export function GalleryDrawingPage() {
 
       {signedOut ? (
         <EmptyState
+          heading
           testId="gallery-signed-out"
           title={ui.galleryPage.signInToSeeTheGallery}
           body={ui.galleryPage.signInBody}
@@ -106,6 +107,7 @@ export function GalleryDrawingPage() {
         />
       ) : missing ? (
         <EmptyState
+          heading
           testId="gallery-drawing-missing"
           title={ui.galleryPage.notInTheGallery}
           body={ui.galleryPage.notInTheGalleryBody}

@@ -571,7 +571,7 @@ export function CommunityCataloguePage() {
                 </section>
             : selectedId
               ? <section className="panel community-catalogue-pane">
-                  <p className="community-catalogue-empty">{ui.communityCataloguePage.loading}</p>
+                  <p className="loading-note" role="status">{ui.communityCataloguePage.loading}</p>
                 </section>
               // Nothing chosen: ask, rather than open a list the reader did
               // not pick. Only where there is a choice to make.

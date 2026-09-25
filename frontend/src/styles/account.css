@@ -790,9 +790,10 @@
    Seated wholly inside the corner. It used to hang 14px below the card's
    edge, plus a random drop, in a card that clips - half a kite, which read as
    an overflow bug rather than a peek. The inset covers the largest tilt, size
-   and drop the deal gives (`MAX_DROP` in lib/firstRunArt.ts). */
+   and drop the deal gives (`cornerOverhang` in lib/firstRunArt.ts, checked
+   against these two numbers by tests/firstRunArt.test.mjs). */
 .first-run-art.is-left {
-  bottom: 18px;
+  bottom: 22px;
   pointer-events: none;
   position: absolute;
   right: 18px;
