@@ -77,108 +77,122 @@
 }
 
 /* ── The site's pages, in the bar ────────────────────────────────────────
-   A desktop's way around the site (AppHeader's `SiteNav`), after the wordmark
-   and before the flag and the chip. Quiet until it is where you are: muted
-   words, and the current page - or the section a nested page sits in - in ink
-   on the track, which is also what a hover shows. The track rather than the
-   well: the bar sits on the paper, and in the light theme `--well` is the
-   paper's own colour, so the mark was only a change of text colour - too
-   little to find with icons alone. None on a phone, whose bar has no room for
-   it; the chip's menu is the way there instead. */
+   The way around the site (AppHeader's `SiteNav`), after the wordmark and
+   before the flag and the chip, at any width it fits: named, as icons, or not
+   at all (`is-labels`, `is-icons`, `is-hidden`), which SiteNav decides from
+   the room the bar leaves. Quiet until it is where you are: muted words, and
+   the current page - or the section a nested page sits in - in ink on the
+   track, which is also what a hover shows. The track rather than the well:
+   the bar sits on the paper, and in the light theme `--well` is the paper's
+   own colour, so the mark was only a change of text colour - too little to
+   find with icons alone.
+
+   The box takes only free space (`flex: 1 1 0`), so it never pushes the
+   wordmark, a crumb, the flag or the chip, and its content box is the room
+   SiteNav measures. Its margins cancel two of the bar's gaps and its padding
+   gives one back inside, before the list: the bar keeps one gap between the
+   wordmark and the chip when there is no nav, and the list sits a gap from
+   the wordmark when there is one. The same padding is room for a focus ring
+   inside the clip, and the clip is what keeps the frame before a decision
+   from painting names over the flag. The box reaches back over the wordmark's
+   side by that much, so it lets clicks through and only the links take
+   them. */
+/* The flag and the chip stay whole, on one row, at every width; the nav is
+   what gives. */
+.lobby-header > .lobby-header-actions {
+  flex: none;
+  flex-wrap: nowrap;
+}
+
 .site-nav {
-  display: none;
+  align-self: center;
+  flex: 1 1 0;
+  margin: -6px;
+  margin-left: calc(-6px - 2 * var(--header-gap));
+  min-width: 0;
+  overflow: clip;
+  padding: 6px;
+  padding-left: calc(6px + var(--header-gap));
+  pointer-events: none;
+  position: relative;
 }
 
-@media (min-width: 901px) {
-  /* The width the bar has left, whatever the links inside need: SiteNav
-     compares the two to decide whether the labels fit. */
-  .site-nav {
-    align-self: center;
-    display: block;
-    flex: 1 1 0;
-    min-width: 0;
-    /* Clipped, so the one frame between crossing 1200px and SiteNav finding
-       the labels do not fit never paints them over the flag. The padding,
-       taken back by the margin, is room for a link's focus ring inside the
-       clip; `overflow-clip-margin` would say it more directly, but Safari
-       does not support it. */
-    margin: -6px;
-    overflow: clip;
-    padding: 6px;
-  }
-
-  /* The flag and the chip stay whole, on one row; the nav is what gives. */
-  .lobby-header-actions {
-    flex: none;
-    flex-wrap: nowrap;
-  }
-
-  /* Up against the wordmark, not centred between it and the chip: the links
-     belong to the site the wordmark names. */
-  .site-nav > ul {
-    display: flex;
-    gap: 4px;
-    list-style: none;
-    margin: 0;
-    padding: 0;
-  }
-
-  .site-nav-link {
-    align-items: center;
-    border-radius: var(--radius-sm);
-    color: var(--muted);
-    display: inline-flex;
-    font-size: 15px;
-    font-weight: 700;
-    gap: 7px;
-    justify-content: center;
-    min-height: 40px;
-    min-width: 40px;
-    padding: 8px 10px;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .site-nav-link:hover,
-  .site-nav-link[aria-current] {
-    background: var(--track);
-    color: var(--ink);
-  }
-
-  .site-nav-link:focus-visible {
-    outline: 3px solid var(--primary-edge-soft);
-    outline-offset: 2px;
-  }
-
-  .site-nav-link > svg {
-    flex: none;
-  }
-
-  /* Icons alone below 1200px: five labels beside a crumb, the flag and a
-     long name are what would push the chip off the row. The words stay in
-     the link for its accessible name, and the link's tooltip says them. */
-  .site-nav-label {
-    clip-path: inset(50%);
-    height: 1px;
-    overflow: hidden;
-    position: absolute;
-    white-space: nowrap;
-    width: 1px;
-  }
+.site-nav > nav > ul,
+.site-nav-ruler {
+  display: flex;
+  gap: 4px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  width: max-content;
 }
 
-@media (min-width: 1200px) {
-  .site-nav:not(.is-crowded) .site-nav-label {
-    clip-path: none;
-    height: auto;
-    overflow: visible;
-    position: static;
-    width: auto;
-  }
+.site-nav > nav > ul {
+  margin-left: var(--header-gap);
+}
 
-  .site-nav:not(.is-crowded) .site-nav-link {
-    padding-inline: 12px;
-  }
+.site-nav-link {
+  align-items: center;
+  border-radius: var(--radius-sm);
+  color: var(--muted);
+  display: inline-flex;
+  font-size: 15px;
+  font-weight: 700;
+  gap: 7px;
+  justify-content: center;
+  min-height: 40px;
+  min-width: 40px;
+  padding: 8px 12px;
+  pointer-events: auto;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.site-nav-link:hover,
+.site-nav-link[aria-current] {
+  background: var(--track);
+  color: var(--ink);
+}
+
+.site-nav-link:focus-visible {
+  outline: 3px solid var(--primary-edge-soft);
+  outline-offset: 2px;
+}
+
+.site-nav-link > svg {
+  flex: none;
+}
+
+/* Icons alone: the name stays in the link, as its accessible name, and the
+   link's tooltip says it. Only the real list's, through `> nav`: the rulers
+   sit in the same box and must keep measuring both modes whichever one is on
+   screen. */
+.site-nav.is-icons > nav .site-nav-link,
+.site-nav-ruler.is-icons .site-nav-link {
+  padding-inline: 10px;
+}
+
+.site-nav.is-icons > nav .site-nav-label {
+  clip-path: inset(50%);
+  height: 1px;
+  overflow: hidden;
+  position: absolute;
+  white-space: nowrap;
+  width: 1px;
+}
+
+/* The two measures SiteNav reads: the row with its names and without, laid
+   out like the real one but never seen, focused or read out. */
+.site-nav-rulers {
+  left: 0;
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  visibility: hidden;
+}
+
+.site-nav-ruler {
+  position: absolute;
 }
 
 .lobby-columns {

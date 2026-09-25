@@ -1895,7 +1895,7 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useRoomEntry.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
 | `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollbarWidth.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `LobbyLinks.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
 | `frontend/src/components/ui/` | The shared recipes as components: `Avatar.tsx`, `AvatarPicture.tsx`, `BottomSheet.tsx`, `Button.tsx`, `Card.tsx` (with `SectionLabel`), `Chip.tsx`, `EmptyState.tsx`, `ModalShell.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
@@ -2065,28 +2065,34 @@ case that is open. `useDocumentTitle` names the tab after the page rather than
 after its heading — "Gallery · Sketchy", "My prompt lists · Sketchy", a room's
 own name in a room, the brand alone on the lobby.
 
-From 901px the bar also carries the site's pages, between the wordmark (and
-its crumb) and the flag and chip: the lobby, the Gallery (only with a session),
-the Community catalogue, Prompt stats and Rules, as `SiteNav` in
+The bar also carries the site's pages, between the wordmark (and its crumb)
+and the flag and chip: the lobby, the Gallery (only with a session), the
+Community catalogue, Prompt stats and Rules, as `SiteNav` in
 [`components/AppHeader.tsx`](../frontend/src/components/AppHeader.tsx) — so
 every page that draws `AppHeader`, the staff pages and the invite page
 included. The link for the page you are on carries `aria-current="page"`, and
 the one for the section a nested page sits in (a Gallery drawing, a list's
 Prompt stats) `aria-current="true"`
-([`lib/siteNav.ts`](../frontend/src/lib/siteNav.ts)). Below 1200px the links
-are icons with a tooltip; from 1200px they are labelled. Two labels have
+([`lib/siteNav.ts`](../frontend/src/lib/siteNav.ts)). How much of it shows is
+decided by space, not by breakpoints: named where the names fit, icons with a
+tooltip where only the icons do, and nothing (`hidden`, so out of the tab order
+and the accessibility tree) where neither does, a phone included. The nav's box
+takes `flex: 1 1 0` — only the room the rest of the bar leaves, which its own
+content never changes, so the wordmark's crumb, the flag and the chip never
+give way to it and the measurement cannot feed back on itself. What each mode
+needs is read off two invisible rulers, the row with and without its names, so
+no mode has to be drawn to learn whether it fits; `siteNavMode` picks the
+fullest that fits, with 8px of slack before growing so a bar on the line does
+not flicker. A ResizeObserver on the box and both rulers re-decides on a
+resize, new words or a web font landing, and the box clips its overflow so the
+frame before a decision cannot paint names over the flag. Two labels have
 header-only keys (`appHeader.communityLink`, `appHeader.promptStatsLink`):
-English and German use the page titles, and the languages whose titles do not
-fit the bar beside a crumb at 1200px use shorter names for the same pages -
-Spanish *Stats de palabras* rather than *Estadísticas de palabras*, keeping the
-qualifier, since a bare *Estadísticas* is a profile's own heading. Whether they
-fit is still measured rather than assumed, as a safety net for a label a later
-translation makes longer: the nav takes `flex: 1 1 0` — the width the bar has
-left, which its own content never changes, so the measurement cannot
-oscillate — and falls back to icons (`is-crowded`) when the labelled row is
-wider than that. Below 901px the bar has no room for it; a phone keeps the
-account menu and the lobby's foot row (`LobbyLinks`), which CSS hides from
-901px.
+English and German use the page titles, and the languages whose titles would
+not fit beside a crumb at 1200px use shorter names for the same pages - Spanish
+*Stats de palabras* rather than *Estadísticas de palabras*, keeping the
+qualifier, since a bare *Estadísticas* is a profile's own heading. The lobby
+has no links of its own; the account menu keeps every entry, since on a narrow
+phone it is the way there.
 
 The wordmark is the authored logo rather than set type. `scripts/brand/sketchy-logo-source.svg` is the artwork of record; `node scripts/brand/derive-assets.mjs` reads it and regenerates both `frontend/src/components/brandArt.ts` and `docs/ui-mockups/tools/brandArt.mjs`, so the app and the mockup artboards can never drift. The generated paths carry no colour of their own — `Wordmark` in `frontend/src/components/icons.tsx` paints them with `--ink` and `--warm`, which is what makes one mark serve both themes.
 

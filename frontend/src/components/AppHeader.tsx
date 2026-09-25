@@ -19,7 +19,8 @@ import {
 import { ui } from "../content/ui/index.ts";
 import { InterfaceLanguageButton } from "./InterfaceLanguageButton";
 import { linksToGallery } from "../lib/lobbyControls.ts";
-import { siteLinkCurrent } from "../lib/siteNav.ts";
+import { siteLinkCurrent, siteNavMode } from "../lib/siteNav.ts";
+import type { SiteNavMode } from "../lib/siteNav.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 
 /**
@@ -49,13 +50,12 @@ import { useLocaleRerender } from "../hooks/useLocaleRerender";
  * visit, before a name - the gear takes the chip's place. Both carry
  * `.header-settings-button`.
  *
- * Between the two, on a desktop (901px and up), the site's pages: the lobby,
- * the Gallery (only with a session - R-GAL-02), the Community catalogue,
- * Prompt stats and Rules, the one you are on marked. They were reachable only
- * from the chip's menu, and the lobby's own row of links sat below the fold on
- * every other page. Icons with a tooltip up to 1199px, where the labels would
- * crowd the chip; labels from 1200px. A phone has no room in its bar, so it
- * keeps the menu and the lobby's row (`LobbyLinks`) instead.
+ * Between the two, the site's pages: the lobby, the Gallery (only with a
+ * session - R-GAL-02), the Community catalogue, Prompt stats and Rules, the
+ * one you are on marked. They were reachable only from the chip's menu. The
+ * nav takes only the room the rest of the bar leaves, and shows as much of
+ * itself as fits there (`SiteNav`); the chip's menu keeps every entry, since
+ * on a narrow phone it is the only way there.
  *
  * A page's own actions are not the chrome's and do not live here: the lobby's
  * *Create room* and *Join by code* sit beside its room list (#594), and a phone
@@ -158,72 +158,72 @@ export function AppHeader({
 }
 
 /**
- * The site's pages, in the bar. Hidden below 901px by CSS (lobby-page.css),
- * which keeps the first paint right without waiting for a media query here.
- * The labels are always in the markup; from 901 to 1199px they are hidden
- * visually and the link keeps its name, with the same words as a tooltip.
+ * The site's pages, in the bar (R-UX-11): named if the names fit, as icons
+ * with a tooltip if only the icons do, and not at all if neither does - at
+ * any width, a phone's included. The room is whatever the bar leaves once the
+ * wordmark, a crumb, the flag and the chip have theirs: the nav takes
+ * `flex: 1 1 0`, so it only ever gets free space and never takes any from
+ * them, and its own content never changes the room it is measured against.
  *
- * From 1200px the labels show if they fit. Two of them have header-only keys
- * (`communityLink`, `promptStatsLink`): at the page titles' length Spanish,
- * French, Italian, Portuguese and Dutch did not fit beside a crumb, the flag
- * and a long name at 1200px, so those languages name the pages more briefly
- * here. The check stays as a safety net for a later, longer translation: the
- * nav takes only the width the bar has left (`flex-basis: 0`, which also means
- * its own content never changes that width, so the check cannot flip back and
- * forth), and when the labelled row is wider than that it falls back to icons
- * (`is-crowded`). The labelled width is remembered from the last time the
- * labels were shown, and measured again whenever the words change or a web
- * font finishes loading.
+ * What each mode needs is read off two rulers - invisible, unfocusable copies
+ * of the row with and without its names - so the nav never has to be drawn in
+ * a mode to learn whether that mode fits, and the decision is one pure
+ * function (`siteNavMode`) with a little slack before growing, so a bar on
+ * the line does not flicker. A ResizeObserver watches the room and both
+ * rulers, which also catches new words (a language, or the Gallery link
+ * arriving with a session) and a web font that changes the names' width,
+ * whenever it loads; `document.fonts` is asked too, for a font that loads
+ * before the observer's first report. The nav clips its overflow, so the
+ * frame before a decision lands never paints names over the flag.
+ *
+ * Two names have header-only keys (`communityLink`, `promptStatsLink`): at the
+ * page titles' length Spanish, French, Italian, Portuguese and Dutch did not
+ * fit beside a crumb, the flag and a long name at 1200px, so those languages
+ * name the pages more briefly here.
  */
 function SiteNav() {
   const { pathname } = useLocation();
   const hasSession = useAuthStore((state) => linksToGallery(state.user));
-  const wide = useMediaQuery("(min-width: 1200px)");
-  const locale = useLocaleRerender();
-  const navRef = useRef<HTMLElement>(null);
-  const labelledWidth = useRef(0);
-  // Crowded for these words: new words, or a link more or fewer, show the
-  // labels once more, so the next pass measures them rather than a width
-  // remembered for others.
-  const words = `${locale}|${hasSession}`;
-  const [crowdedFor, setCrowdedFor] = useState<string | null>(null);
-  const crowded = crowdedFor === words;
-  const labelled = wide && !crowded;
+  useLocaleRerender();
+  const boxRef = useRef<HTMLDivElement>(null);
+  const labelsRef = useRef<HTMLSpanElement>(null);
+  const iconsRef = useRef<HTMLSpanElement>(null);
+  const [mode, setMode] = useState<SiteNavMode>("labels");
 
   useLayoutEffect(() => {
-    const nav = navRef.current;
-    const list = nav?.firstElementChild;
-    if (!wide || !nav || !(list instanceof HTMLElement)) return;
+    const box = boxRef.current;
+    const labels = labelsRef.current;
+    const icons = iconsRef.current;
+    if (!box || !labels || !icons) return;
     const check = () => {
-      if (!nav.classList.contains("is-crowded")) labelledWidth.current = list.scrollWidth;
-      setCrowdedFor(labelledWidth.current > list.clientWidth ? words : null);
+      const style = getComputedStyle(box);
+      const room = box.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight);
+      // The rulers carry the row's leading gap (the header's own), as the
+      // list does.
+      const lead = parseFloat(style.getPropertyValue("--header-gap")) || 0;
+      setMode((current) =>
+        siteNavMode({
+          room,
+          labels: labels.getBoundingClientRect().width + lead,
+          icons: icons.getBoundingClientRect().width + lead,
+          current,
+        }),
+      );
     };
     check();
-    // A web font that arrives after this pass changes the labels' width
-    // without resizing the nav, so nothing above would notice. Once it has
-    // loaded: measure again, and if the row was already icons, show the
-    // labels for one pass so that pass measures them in the real font. Only
-    // while fonts are still loading - `ready` also resolves at once when they
-    // are not, and un-crowding on that would loop. A face that only starts
-    // loading after this pass (a glyph first needed later) is not measured
-    // again; `overflow: clip` on the nav (lobby-page.css) caps what that can
-    // cost at labels cut short, never a bar pushed onto two rows.
     let live = true;
-    const fonts = typeof document !== "undefined" ? document.fonts : undefined;
-    if (fonts && fonts.status === "loading") {
-      void fonts.ready.then(() => {
-        if (!live) return;
-        if (nav.classList.contains("is-crowded")) setCrowdedFor(null);
-        else check();
-      });
-    }
+    void document.fonts?.ready.then(() => {
+      if (live) check();
+    });
     const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(check);
-    observer?.observe(nav);
+    observer?.observe(box);
+    observer?.observe(labels);
+    observer?.observe(icons);
     return () => {
       live = false;
       observer?.disconnect();
     };
-  }, [wide, words, crowded]);
+  }, []);
 
   const pages: { to: string; label: string; icon: ReactNode }[] = [
     { to: "/", label: ui.lobbyBrowserPage.lobby, icon: <HomeIcon size={16} /> },
@@ -233,22 +233,43 @@ function SiteNav() {
     { to: "/rules", label: ui.accountMenu.rules, icon: <InfoIcon size={16} /> },
   ];
   return (
-    <nav ref={navRef} className={`site-nav${crowded ? " is-crowded" : ""}`} aria-label={ui.appHeader.siteNav}>
-      <ul>
-        {pages.map((page) => (
-          <li key={page.to}>
-            <Link
-              to={page.to}
-              className="site-nav-link"
-              aria-current={siteLinkCurrent(page.to, pathname)}
-              title={labelled ? undefined : page.label}
-            >
+    <div ref={boxRef} className={`site-nav is-${mode}`}>
+      {/* `hidden` takes it out of the tab order and the accessibility tree,
+          not only out of sight. */}
+      <nav aria-label={ui.appHeader.siteNav} hidden={mode === "hidden"}>
+        <ul>
+          {pages.map((page) => (
+            <li key={page.to}>
+              <Link
+                to={page.to}
+                className="site-nav-link"
+                aria-current={siteLinkCurrent(page.to, pathname)}
+                title={mode === "icons" ? page.label : undefined}
+              >
+                {page.icon}
+                <span className="site-nav-label">{page.label}</span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <span className="site-nav-rulers" aria-hidden="true">
+        <span ref={labelsRef} className="site-nav-ruler">
+          {pages.map((page) => (
+            <span key={page.to} className="site-nav-link">
               {page.icon}
               <span className="site-nav-label">{page.label}</span>
-            </Link>
-          </li>
-        ))}
-      </ul>
-    </nav>
+            </span>
+          ))}
+        </span>
+        <span ref={iconsRef} className="site-nav-ruler is-icons">
+          {pages.map((page) => (
+            <span key={page.to} className="site-nav-link">
+              {page.icon}
+            </span>
+          ))}
+        </span>
+      </span>
+    </div>
   );
 }

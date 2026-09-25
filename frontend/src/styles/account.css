@@ -956,7 +956,7 @@
   .lobby-header {
     align-items: center;
     flex-wrap: nowrap;
-    gap: 10px;
+    --header-gap: 10px;
   }
 
   .lobby-header-actions {
@@ -975,7 +975,7 @@
      390px, and an SVG with a fixed width overlapped the flag instead of
      shrinking. It scales down with the room the lead has. */
   .lobby-header-lead {
-    flex: 1 1 auto;
+    flex: 0 1 auto;
     min-width: 0;
   }
 

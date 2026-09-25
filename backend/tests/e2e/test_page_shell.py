@@ -49,12 +49,12 @@ async def test_the_lobby_header_is_whole_and_where_every_page_has_it():
 
 
 async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
-    """From 901px the bar carries the site's pages (R-UX-11, R-UX-16): the
-    lobby, the Gallery with a session, the Community catalogue, Prompt stats
-    and Rules, with the current one marked. The lobby's foot row says the same
-    only on a phone, so on a desktop it is hidden. A visitor who has not chosen
-    a name has no session, and the Gallery would only refuse them (R-GAL-02),
-    so their bar does not offer it."""
+    """The bar carries the site's pages (R-UX-11, R-UX-16): the lobby, the
+    Gallery with a session, the Community catalogue, Prompt stats and Rules,
+    with the current one marked - named where the names fit, as icons where
+    only the icons do, and not at all where neither does. A visitor who has
+    not chosen a name has no session, and the Gallery would only refuse them
+    (R-GAL-02), so their bar does not offer it."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         named = await browser.new_context(viewport={"width": 1280, "height": 800})
@@ -72,22 +72,12 @@ async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
             await expect(nav.get_by_role("link", name="Community catalogue")).to_be_visible()
             await expect(nav.get_by_role("link", name="Prompt stats")).to_be_visible()
             await expect(nav.get_by_role("link", name="Rules", exact=True)).to_be_visible()
-            await expect(page.locator(".lobby-links")).to_be_hidden()
 
-            # Labelled at 1280: `to_be_visible` on a link passes in icon mode
-            # too, so the label itself is what is checked, and the row has not
-            # fallen back to icons.
+            # Named at 1280: `to_be_visible` on a link passes in icon mode
+            # too, so the label itself is what is checked.
+            await expect(page.locator(".site-nav.is-labels")).to_have_count(1)
             await expect(lobby.locator(".site-nav-label")).to_be_visible()
             await expect(lobby.locator(".site-nav-label")).to_have_text("Lobby")
-            await expect(page.locator(".site-nav.is-crowded")).to_have_count(0)
-
-            # Icons below 1200: the label is clipped to nothing (still the
-            # link's name) and the tooltip says it instead.
-            await page.set_viewport_size({"width": 1000, "height": 800})
-            await expect(lobby).to_have_attribute("title", "Lobby")
-            label_box = await lobby.locator(".site-nav-label").bounding_box()
-            assert label_box is not None and label_box["width"] <= 1, label_box
-            await page.set_viewport_size({"width": 1280, "height": 800})
             await expect(lobby).not_to_have_attribute("title", "Lobby")
 
             # A click is a way there, and the mark follows.
@@ -102,6 +92,25 @@ async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
             await page.goto(f"{BASE_URL}/gallery/00000000-0000-0000-0000-000000000000")
             await page.locator(".lobby-header .header-crumb").wait_for()
             await expect(gallery).to_have_attribute("aria-current", "true")
+
+            # At 960 beside the crumb the names no longer fit, but the icons
+            # do (measured with a name like this one: the names need a window
+            # of about 1160px here, the icons about 760px). The label is clipped to nothing - still the link's name -
+            # and the tooltip says it instead.
+            await page.set_viewport_size({"width": 960, "height": 800})
+            await expect(page.locator(".site-nav.is-icons")).to_have_count(1)
+            await expect(lobby).to_have_attribute("title", "Lobby")
+            label_box = await lobby.locator(".site-nav-label").bounding_box()
+            assert label_box is not None and label_box["width"] <= 1, label_box
+
+            # On a phone the wordmark, the flag and the chip leave no room for
+            # even the icons, so there is no nav: not clipped out of sight but
+            # out of the accessibility tree and the tab order.
+            await page.set_viewport_size({"width": 390, "height": 844})
+            await page.goto(BASE_URL)
+            await page.locator(".lobby-header .identity-chip").wait_for()
+            await expect(page.locator(".site-nav.is-hidden")).to_have_count(1)
+            await expect(nav).to_have_count(0)
 
             visitor = await nameless.new_page()
             await visitor.goto(BASE_URL)

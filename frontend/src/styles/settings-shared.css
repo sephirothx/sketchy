@@ -5,7 +5,9 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-end;
-  gap: 16px;
+  /* A property so the site nav can cancel and restore it (lobby-page.css). */
+  --header-gap: 16px;
+  gap: var(--header-gap);
   /* The space between the bar and the page under it, the same on every page
      and at every width - but the invite page on a phone, which keeps 18px so
      its Join button clears the fold (lobby-page.css). A layout that puts a
