@@ -2552,8 +2552,8 @@ export const EN = {
     drawerNicknameIsChoosingAPrompt:
       (p: { drawerNickname: string }) => `${p.drawerNickname} is choosing a prompt...`,
     thePromptWasPrompt: (p: { prompt: string }) => `The prompt was "${p.prompt}"`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} got it${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} got it · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} reconnected`,
     playerDisconnected: (p: { nickname: string }) =>

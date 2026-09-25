@@ -2546,8 +2546,8 @@ export const FR: Catalogue = {
       `${p.drawerNickname} choisit un mot...`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Le mot était « ${p.prompt} »`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} a trouvé${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} a trouvé · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} s’est reconnecté`,
     playerDisconnected: (p: { nickname: string }) =>

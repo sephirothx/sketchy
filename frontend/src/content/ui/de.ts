@@ -2544,8 +2544,8 @@ export const DE: Catalogue = {
       `${p.drawerNickname} wählt einen Begriff …`,
     thePromptWasPrompt: (p: { prompt: string }) =>
       `Der Begriff war „${p.prompt}“`,
-    gotIt: (p: { nickname: string; time: string | null; points: number | null }) =>
-      `${p.nickname} hat es erraten${p.time === null ? "" : ` · ${p.time}`}${p.points === null ? "" : ` (+${p.points})`}`,
+    gotIt: (p: { nickname: string; time: string; points: number | null }) =>
+      `${p.nickname} hat es erraten · ${p.time}${p.points === null ? "" : ` (+${p.points})`}`,
     playerReconnected: (p: { nickname: string }) =>
       `${p.nickname} ist wieder verbunden`,
     playerDisconnected: (p: { nickname: string }) =>
