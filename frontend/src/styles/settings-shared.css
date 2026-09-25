@@ -14,16 +14,14 @@
      window's 16px gutter when that is nearer - and sits in the same place on
      every page.
 
-     A page declares its column as `--page-width`, the content width its
-     max-width leaves inside the 16px padding. The reach is only taken while
-     the page is at that width: below it the column already fills the window,
-     and `100vw` counts a classic scrollbar the column does not have, so
-     reaching out there would put the bar a few pixels past the content. The
-     clamp's upper bound is that switch - huge while the column is at its full
-     width, negative (so no reach at all) once it is narrower. A page with no
-     `--page-width` gets no reach and keeps its own width. */
-  --header-reach: calc((min(var(--shell-width), 100vw - 32px) - 100%) / 2);
-  margin-inline: calc(-1 * clamp(0px, var(--header-reach), (100% - var(--page-width) + 1px) * 999));
+     The window is `100vw` less a classic scrollbar's lane
+     (`--scrollbar-width`, lib/scrollbarWidth.ts), which `100vw` counts: sized
+     from `100vw` alone the bar sat half a lane too close to the edge and moved
+     between pages that scroll and pages that do not. Where the page's column
+     already fills the window the reach is zero, and a page wider than the
+     shell - or one that runs the window's width - gets none either. */
+  --header-reach: calc((min(var(--shell-width), 100vw - var(--scrollbar-width) - 32px) - 100%) / 2);
+  margin-inline: calc(-1 * max(0px, var(--header-reach)));
 }
 
 .header-settings-button:hover {

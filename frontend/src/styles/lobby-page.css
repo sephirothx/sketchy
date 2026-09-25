@@ -1268,7 +1268,13 @@ a.online-player-name:focus-visible {
     display: flex;
     flex-direction: column;
     gap: 16px;
-    overflow: hidden;
+    /* Clipped top to bottom only. The header reaches sideways out of this
+       column to the shell (settings-shared.css), and `overflow: hidden` cut
+       the wordmark and the chip off at laptop widths. `clip` rather than
+       `hidden` on the one axis, because `hidden` would turn the other
+       axis's `visible` into `auto`; nothing in here is sticky. */
+    overflow-x: visible;
+    overflow-y: clip;
   }
 
   /* The gap owns the spacing now; the per-panel margin would double it. */
