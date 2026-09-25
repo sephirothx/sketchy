@@ -85,8 +85,8 @@ export function PromptContentReportDialog({
           <textarea id={detailsId} value={details} required minLength={1} maxLength={2000} onChange={(event) => setDetails(event.target.value)} />
         {error && <p className="auth-error" role="alert">{error}</p>}
         <div className="confirmation-dialog-actions">
-          <button ref={cancelRef} type="button" className="confirmation-cancel-button" disabled={busy} onClick={onClose}>{ui.promptContentReportDialog.cancel}</button>
-          <button type="submit" className="confirmation-danger-button" disabled={busy || !details.trim()}>{busy ? ui.promptContentReportDialog.sending : ui.promptContentReportDialog.sendReport}</button>
+          <button ref={cancelRef} type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>{ui.promptContentReportDialog.cancel}</button>
+          <button type="submit" className="btn btn-danger" disabled={busy || !details.trim()}>{busy ? ui.promptContentReportDialog.sending : ui.promptContentReportDialog.sendReport}</button>
         </div>
       </form>
     </div>

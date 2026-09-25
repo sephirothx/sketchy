@@ -25,7 +25,7 @@ const SORTS: readonly GallerySort[] = ["hot", "new", "top"];
 const WINDOWS: readonly GalleryWindow[] = ["all", "month", "week"];
 /** Below this the rail folds away and the sort sits under the title. */
 // Not copy: a media query.
-const NARROW = "(max-width: 899px)";
+const NARROW = "(max-width: 900px)";
 /** How far down the reader has to be before Back to top is offered. */
 const BACK_TO_TOP_AFTER_PX = 600;
 

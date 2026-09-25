@@ -72,7 +72,6 @@ import {
   KeyIcon,
   ShieldIcon,
   KeyboardIcon,
-  LockIcon,
   MailIcon,
   PencilIcon,
   PlusIcon,
@@ -178,19 +177,16 @@ function Row({
   children,
   stacked = false,
   tone,
-  locked = false,
 }: {
   label: string;
   hint?: ReactNode;
   children?: ReactNode;
   stacked?: boolean;
   tone?: "danger";
-  locked?: boolean;
 }) {
   const classes = ["settings-row"];
   if (stacked) classes.push("is-stacked");
   if (tone) classes.push(`is-${tone}`);
-  if (locked) classes.push("settings-locked");
   return (
     <div className={classes.join(" ")}>
       <span className="settings-row-label">
@@ -260,16 +256,6 @@ function Group({
       {hint && <p className="settings-group-hint">{hint}</p>}
       {children}
     </section>
-  );
-}
-
-/** What an account-only row says instead of offering a control that cannot work. */
-function NeedsAccount() {
-  return (
-    <span className="settings-locked-reason">
-      <LockIcon size={13} />
-      {ui.settingsOverlay.needsAccount}
-    </span>
   );
 }
 
@@ -378,6 +364,9 @@ function PictureEditChip({
         type="file"
         accept="image/png,image/jpeg,image/webp,image/gif"
         className="settings-picture-input"
+        // Out of the tab order: it is invisible, and the Edit picture menu
+        // below is the keyboard's way to it (it calls click() on this).
+        tabIndex={-1}
         aria-label={ui.settingsOverlay.choosePicture}
         onChange={(event) => {
           onChoose(event.target.files?.[0]);
@@ -766,23 +755,21 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         </div>
       </Group>
 
-      <Group title={ui.settingsOverlay.signingIn}>
-        <Row
-          label={ui.settingsOverlay.email}
-          locked={isGuest}
-          hint={
-            isGuest ? (
-              ui.settingsOverlay.aGuestHasNothingTo
-            ) : shownAddress ? (
-              <EmailAddressStatus address={shownAddress} verified={shownVerified} />
-            ) : (
-              ui.settingsOverlay.withoutOneThereIsNo
-            )
-          }
-        >
-          {isGuest ? (
-            <NeedsAccount />
-          ) : (
+      {/* Not shown to a guest at all (R-SET-06): every row here needs an
+          account, and the guest card above is the one invitation to make one.
+          Three locked rows under it only repeated that card three times. */}
+      {!isGuest && (
+        <Group title={ui.settingsOverlay.signingIn}>
+          <Row
+            label={ui.settingsOverlay.email}
+            hint={
+              shownAddress ? (
+                <EmailAddressStatus address={shownAddress} verified={shownVerified} />
+              ) : (
+                ui.settingsOverlay.withoutOneThereIsNo
+              )
+            }
+          >
             <button
               type="button"
               className="btn btn-secondary btn-compact"
@@ -791,18 +778,11 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               <MailIcon size={15} />
               {shownAddress ? ui.settingsOverlay.change : ui.settingsOverlay.addAnEmail}
             </button>
-          )}
-        </Row>
-        <Row
-          label={ui.settingsOverlay.password}
-          locked={isGuest}
-          hint={
-            isGuest ? ui.settingsOverlay.guestsHaveNoPassword : ui.settingsOverlay.changingItSignsEveryOther
-          }
-        >
-          {isGuest ? (
-            <NeedsAccount />
-          ) : (
+          </Row>
+          <Row
+            label={ui.settingsOverlay.password}
+            hint={ui.settingsOverlay.changingItSignsEveryOther}
+          >
             <button
               type="button"
               className="btn btn-secondary btn-compact"
@@ -811,47 +791,38 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               <KeyIcon size={15} />
               {ui.settingsOverlay.changePassword}
             </button>
-          )}
-        </Row>
-        {/* Only for the accounts it means anything to (R-AUTH-20). A second
-            factor is not something an ordinary player can use here - it does
-            not gate their sign-in, and there is no way back from a lost
-            authenticator the way there is from a lost password - so it is a
-            staff control, and it appears when somebody is staff or has just
-            been offered a role that waits on it. */}
-        {showsTwoFactor && (
-          <Row
-            label={ui.settingsOverlay.twoFactorAuthentication}
-            hint={
-              pendingRole
-                ? ui.settingsOverlay.setThisUpAndThe({ pendingRole: roleName(pendingRole) })
-                : ui.settingsOverlay.anAuthenticatorAppSCode
-            }
-          >
-            <button
-              type="button"
-              className="btn btn-secondary btn-compact"
-              onClick={() => setTwoFactorOpen(true)}
-            >
-              <ShieldIcon size={15} />
-              {twoFactorState && (twoFactorState.enrolled || twoFactorState.passkeys > 0)
-                ? ui.settingsOverlay.manage
-                : ui.settingsOverlay.setUp}
-            </button>
           </Row>
-        )}
-        <Row
-          label={ui.settingsOverlay.signedDevices}
-          locked={isGuest}
-          hint={
-            isGuest
-              ? ui.settingsOverlay.thisBrowserIsTheOnly
-              : ui.settingsOverlay.everyBrowserStillHoldingA
-          }
-        >
-          {isGuest ? (
-            <NeedsAccount />
-          ) : (
+          {/* Only for the accounts it means anything to (R-AUTH-20). A second
+              factor is not something an ordinary player can use here - it does
+              not gate their sign-in, and there is no way back from a lost
+              authenticator the way there is from a lost password - so it is a
+              staff control, and it appears when somebody is staff or has just
+              been offered a role that waits on it. */}
+          {showsTwoFactor && (
+            <Row
+              label={ui.settingsOverlay.twoFactorAuthentication}
+              hint={
+                pendingRole
+                  ? ui.settingsOverlay.setThisUpAndThe({ pendingRole: roleName(pendingRole) })
+                  : ui.settingsOverlay.anAuthenticatorAppSCode
+              }
+            >
+              <button
+                type="button"
+                className="btn btn-secondary btn-compact"
+                onClick={() => setTwoFactorOpen(true)}
+              >
+                <ShieldIcon size={15} />
+                {twoFactorState && (twoFactorState.enrolled || twoFactorState.passkeys > 0)
+                  ? ui.settingsOverlay.manage
+                  : ui.settingsOverlay.setUp}
+              </button>
+            </Row>
+          )}
+          <Row
+            label={ui.settingsOverlay.signedDevices}
+            hint={ui.settingsOverlay.everyBrowserStillHoldingA}
+          >
             <button
               type="button"
               className="btn btn-secondary btn-compact"
@@ -860,9 +831,9 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
               <DevicesIcon size={15} />
               {ui.settingsOverlay.manage}
             </button>
-          )}
-        </Row>
-      </Group>
+          </Row>
+        </Group>
+      )}
 
       <Group title={ui.settingsOverlay.yourData}>
         <Row

@@ -42,7 +42,7 @@
 .community-catalogue-pill-count {
   background: var(--primary);
   border-radius: 999px;
-  color: #fff;
+  color: var(--on-primary);
   font-size: 11px;
   font-variant-numeric: tabular-nums;
   padding: 1px 7px;
@@ -134,10 +134,8 @@
   position: absolute;
 }
 
-.community-catalogue-card-open:focus-visible { outline: none; }
-
 .community-catalogue-card:has(.community-catalogue-card-open:focus-visible) {
-  outline: 3px solid var(--primary-edge-soft);
+  outline: 3px solid var(--focus-ring);
   outline-offset: 2px;
 }
 
@@ -224,11 +222,6 @@
 
 .community-catalogue-star.is-on svg { fill: var(--warm); stroke: var(--warm); }
 
-.community-catalogue-star:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
-}
-
 .community-catalogue-star:disabled { cursor: default; opacity: 0.6; }
 
 /* A guest's count: the same pill, with nothing to press. */
@@ -245,16 +238,6 @@
   font-style: italic;
   margin: 0;
   padding: 8px 0;
-}
-
-.community-catalogue-notice {
-  background: var(--success-soft);
-  border: 1px solid var(--success);
-  border-radius: var(--radius-sm);
-  color: var(--success-ink);
-  font-weight: 700;
-  margin: 0 0 14px;
-  padding: 10px 12px;
 }
 
 /* ------------------------------------------------------------- the pane
@@ -423,7 +406,7 @@
 
    No second column to stand a list in. The cards are the page; an open list
    replaces them, with a way back, rather than landing somewhere below them. */
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .community-catalogue-body { grid-template-columns: minmax(0, 1fr); }
   .community-catalogue-pane-slot { position: static; }
   .community-catalogue-page:not(.has-selection) .community-catalogue-pane-slot { display: none; }
@@ -490,7 +473,7 @@
   padding: 0 12px;
 }
 
-.community-prompts-search:focus-within { border-color: var(--primary); }
+.community-prompts-search:focus-within { border-color: var(--focus-ring); }
 
 .community-prompts-search input {
   background: none;
@@ -575,8 +558,6 @@
 .community-catalogue-credit a:focus-visible,
 .prompt-list-credit a:focus-visible {
   border-radius: 3px;
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 2px;
 }
 
 /* In the editor it opens the form, so it gets the room a field would. */

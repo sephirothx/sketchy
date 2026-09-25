@@ -6,10 +6,9 @@
 .friends-overlay {
   align-items: center;
   padding: 16px;
-  /* The same layer Settings sits on, and for the same reasons: above the
-     email reminder (1090), below the connection (1100) and deploy (1150)
-     banners. The two are never open at once. */
-  z-index: 1095;
+  /* The same layer Settings sits on, and for the same reason: over the
+     banner stack rather than under it. The two are never open at once. */
+  z-index: var(--z-overlay);
 }
 
 .modal-card.friends-modal-card {
@@ -63,6 +62,12 @@
   padding: 8px 0 4px;
   color: var(--muted);
   line-height: 1.5;
+}
+
+/* A guest's one line and the two ways past it. */
+.friends-guest {
+  display: grid;
+  gap: 12px;
 }
 
 .friends-section-heading {

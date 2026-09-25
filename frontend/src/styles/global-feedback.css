@@ -4,11 +4,12 @@
    banner each, which all stuck to the same top: 0 and covered one another; and
    its height is published as --banner-height (AppBanners), so the screens that
    size themselves to the viewport make room instead of going underneath (#797).
-   Above ordinary dialogs, below the confirmation and toast layers. */
+   Above the page, below every overlay, sheet and dialog (the layers, in
+   layout-primitives.css). */
 .app-banners {
   position: sticky;
   top: 0;
-  z-index: 1150;
+  z-index: var(--z-banner);
 }
 
 .connection-status-banner {
@@ -71,11 +72,14 @@
   color: var(--primary-ink);
 }
 
+/* The label is --card, not --warm-soft: the soft wash is translucent in the
+   dark theme and let the button's own orange through (1.1:1). --warm-ink
+   turns light in dark, and --card turns dark with it. */
 .server-shutdown-banner.is-update-required button {
   background: var(--warm-ink);
   border: 0;
   border-radius: 6px;
-  color: var(--warm-soft);
+  color: var(--card);
   cursor: pointer;
   font: inherit;
   padding: 4px 12px;
@@ -96,8 +100,14 @@
   background: var(--primary-edge-soft);
 }
 
+/* Above whatever is docked at the bottom rather than on it: a phone page's
+   dock (--dock-clearance, useBottomDock), and a friend invite standing on
+   that (--friend-invite-clearance). The invite is the same bottom-centre
+   spot, and the component that shows it is also what announces friend
+   requests - onto its own Join button. It stays out of this stack on
+   purpose; see FriendInviteNotice. */
 .toast-viewport {
-  bottom: 20px;
+  bottom: calc(20px + var(--dock-clearance) + var(--friend-invite-clearance));
   display: flex;
   flex-direction: column;
   gap: 8px;
@@ -107,7 +117,7 @@
   position: fixed;
   transform: translateX(-50%);
   width: max-content;
-  z-index: 1200;
+  z-index: var(--z-toast);
 }
 
 .app-toast {
@@ -139,27 +149,30 @@
   line-height: 1;
   padding: 3px 4px;
 }
-.app-toast button:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* The one thing a toast may offer to do. Reads as a control rather than as
-   the dismiss cross beside it, because it is the reason the toast lingers. */
+   the dismiss cross beside it, because it is the reason the toast lingers.
+   Two classes, so it outranks the bare `.app-toast button` above without
+   `!important`. */
 .app-toast .app-toast-action {
-  font-weight: 700;
-  font-size: 13px;
-  padding: 3px 10px;
-  border-radius: 999px;
   background: var(--primary);
-  color: var(--primary-ink);
+  border-radius: 999px;
+  color: var(--on-primary);
+  font-size: 13px;
+  font-weight: 700;
+  padding: 3px 10px;
   white-space: nowrap;
 }
 
 /* A lazy overlay whose chunk could not be fetched (LazyOverlay): the toast's
    look, pinned where a toast would sit, over whatever page is open. */
 .lazy-overlay-notice {
-  bottom: max(16px, env(safe-area-inset-bottom));
+  bottom: calc(
+    max(16px, env(safe-area-inset-bottom)) + var(--dock-clearance) + var(--friend-invite-clearance)
+  );
   left: 50%;
   position: fixed;
   transform: translateX(-50%);
   width: min(440px, calc(100vw - 32px));
-  z-index: 1000;
+  z-index: var(--z-toast);
 }

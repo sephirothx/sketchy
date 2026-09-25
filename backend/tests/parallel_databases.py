@@ -60,15 +60,13 @@ class WorkerDatabases:
             self.admin_url.render_as_string(hide_password=False)
         )
         try:
-            # Workers have exited by now. FORCE also clears a connection left
-            # by a crashed worker, but only one the dropping role may end: a
-            # session of the application role that is still closing when this
-            # runs made the owner's DROP fail with "permission denied to
-            # terminate process" after a green run. So that role ends its own
-            # sessions first - any role may end its own.
+            # Workers have exited by now, but a crashed one may have left a
+            # connection, and one still closing is still in the database. The
+            # owner may not end the application role's sessions, so that role
+            # ends its own first - any role may end its own.
             for name in self.names[:]:
                 await self._end_role_sessions(name)
-                await connection.execute(f'DROP DATABASE "{name}" WITH (FORCE)')
+                await drop_database(connection, name)
                 self.names.remove(name)
         finally:
             await connection.close()
@@ -86,3 +84,25 @@ class WorkerDatabases:
             )
         finally:
             await role.close()
+
+
+async def drop_database(connection: asyncpg.Connection, name: str) -> None:
+    """Drop a test database, whatever autovacuum is doing in it.
+
+    Not `WITH (FORCE)`. Before ending anything, FORCE checks that the dropping
+    role may signal every backend in the database, and an autovacuum worker
+    belongs to no role: only a superuser or a member of pg_signal_backend may
+    end one. A database that has just taken a burst of writes is exactly where
+    autovacuum runs, so the owner's DROP failed with "permission denied to
+    terminate process" on a green run (PR #1117). A plain DROP cancels
+    autovacuum itself and waits up to five seconds for other sessions to
+    leave, so this ends the sessions the role may end - its own - and lets
+    the DROP wait for them to go. Another role's sessions are the caller's to
+    end first (`_end_role_sessions`).
+    """
+    await connection.execute(
+        "SELECT pg_terminate_backend(pid) FROM pg_stat_activity"
+        " WHERE datname = $1 AND usename = current_user AND pid <> pg_backend_pid()",
+        name,
+    )
+    await connection.execute(f'DROP DATABASE IF EXISTS "{name}"')

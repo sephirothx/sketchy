@@ -15,7 +15,11 @@ from app.handlers.payloads import (
     WheelLetterPayload,
     parse_payload,
 )
-from app.presenters import guessed_receipt, system_chat_message
+from app.presenters import (
+    correct_guess_payload,
+    guessed_receipt,
+    system_chat_message,
+)
 from app.prompts import MAX_PROMPT_LENGTH
 from app.handlers.refusals import ErrorCode
 from app.services.telemetry import telemetry
@@ -320,9 +324,7 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
 
     player.score += points
     await ctx.sio.emit(
-        "correct_guess",
-        {"playerId": player.id, "nickname": player.nickname, "points": points},
-        room=room.id,
+        "correct_guess", correct_guess_payload(game, player, points), room=room.id
     )
     # The receipt and the guesser's own line ride the acknowledgement (#884),
     # where `you_guessed_correctly` and a chat_message used to follow it. The

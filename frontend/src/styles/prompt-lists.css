@@ -24,7 +24,7 @@
    scroll on their own: the lists on the left, the list being edited on the
    right. A pinned sidebar was not enough - while the page itself scrolled, the
    header and the top of the lists went with it, so scrolling the form still
-   moved the lists. Below 700px it is one column and the page scrolls as usual.
+   moved the lists. Up to 720px it is one column and the page scrolls as usual.
 
    "What the viewport has left" rather than the viewport: the connection,
    maintenance and email-recovery banners sit above every page in normal flow,
@@ -33,7 +33,7 @@
    mounted the app's root becomes a column exactly the viewport's height, the
    banners keep their own height, and the page takes the rest. Scoped with
    :has() so no other page's layout changes. */
-@media (min-width: 701px) {
+@media (min-width: 721px) {
   #root:has(> .prompt-list-manager-page) {
     display: flex;
     flex-direction: column;
@@ -201,7 +201,7 @@
   justify-content: space-between;
   padding-block: 10px;
   position: sticky;
-  z-index: 2;
+  z-index: var(--z-dock);
 }
 
 .prompt-list-manager-buttons {
@@ -245,8 +245,6 @@
   text-decoration: underline;
   text-underline-offset: 2px;
 }
-
-.prompt-list-alert-action:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* Publication reads as a state with one action, not a value in a select: it is
    an act with a gate behind it, and the only way a list stops being private. */
@@ -390,8 +388,6 @@
 
 .tag-picker-trigger:hover,
 .tag-picker-trigger[aria-expanded="true"] { border-color: var(--primary); }
-.tag-picker-remove:focus-visible,
-.tag-picker-trigger:focus-visible { outline: 3px solid var(--primary-edge-soft); outline-offset: 2px; }
 
 /* The count changes as you pick, so it is tabular: 1 and 3 are different
    widths in this face, and the number would otherwise shift under the eye. */
@@ -420,7 +416,7 @@
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 30;
+  z-index: var(--z-popover);
 }
 
 .tag-picker-options { display: flex; flex-wrap: wrap; gap: 6px; }
@@ -577,7 +573,7 @@
 }
 .prompt-list-manager-empty { color: var(--muted); margin-top: 24px; }
 
-@media (max-width: 700px) {
+@media (max-width: 720px) {
   .prompt-list-manager-page { display: block; height: auto; padding-bottom: 64px; }
   .prompt-list-manager-card { display: block; padding: 18px; }
   .prompt-list-manager-layout { grid-template-columns: 1fr; grid-template-rows: none; }

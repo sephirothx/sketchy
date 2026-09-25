@@ -32,11 +32,6 @@
   display: inline-flex;
 }
 
-.header-home-link:focus-visible {
-  outline: 3px solid var(--primary-edge-soft);
-  outline-offset: 3px;
-}
-
 /* The way up from a nested page, after the wordmark, on a wide screen. */
 .header-crumb {
   align-items: center;
@@ -241,7 +236,7 @@
 }
 
 .lobby-room-search:focus-within {
-  border-color: var(--focus-field-border, var(--primary));
+  border-color: var(--focus-ring);
 }
 
 .lobby-room-search > svg {
@@ -338,7 +333,7 @@
   min-width: 132px;
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .public-room-card {
     align-items: stretch;
     flex-direction: column;
@@ -519,34 +514,6 @@
   margin-top: 10px;
 }
 
-.invite-primary-button,
-.invite-secondary-button {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  min-height: 44px;
-  border-radius: var(--radius-sm);
-  padding: 10px 16px;
-  font-size: 14.5px;
-  font-weight: 800;
-  font-family: var(--font-body);
-}
-
-.invite-primary-button {
-  border: 0;
-  background: var(--primary);
-  color: #fff;
-  box-shadow: 0 2px 0 var(--primary-edge);
-}
-
-.invite-secondary-button {
-  border: 1.5px solid var(--line-strong);
-  background: var(--card);
-  color: var(--ink);
-  box-shadow: var(--shadow);
-}
-
 .invite-action-hint {
   margin: 9px 0 0;
   color: var(--muted);
@@ -592,7 +559,7 @@
   }
 }
 
-@media (max-width: 600px) {
+@media (max-width: 640px) {
   .invite-entry-page {
     padding: 14px 12px 32px;
   }
@@ -632,11 +599,11 @@
     right: 0;
     bottom: 0;
     left: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     border-top: 1.5px solid var(--line);
     background: var(--card);
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
   }
 
   /* Beats the narrow rule below that stacks the two and turns Spectate into
@@ -705,7 +672,7 @@
     background: var(--card);
     border-top: 1.5px solid var(--line);
     bottom: 0;
-    box-shadow: 0 -6px 18px rgba(20, 16, 10, 0.06);
+    box-shadow: var(--shadow-sheet);
     display: flex;
     flex-direction: column;
     gap: 8px;
@@ -713,7 +680,7 @@
     padding: 10px 16px calc(10px + env(safe-area-inset-bottom, 0px));
     position: fixed;
     right: 0;
-    z-index: 30;
+    z-index: var(--z-dock);
   }
 
   .lobby-dock .btn {
@@ -997,11 +964,6 @@
   text-decoration-color: currentColor;
 }
 
-.lobby-chat-author:focus-visible {
-  outline: 2px solid var(--primary-edge-soft);
-  outline-offset: 1px;
-}
-
 /* A margin note, not part of the message: small, quiet, and out at the edge
    so a long line wraps under the name rather than under the time. */
 .lobby-chat-time {
@@ -1138,7 +1100,7 @@ a.online-player-name:focus-visible {
    a short desktop window: below it the panels would each be a few rows tall,
    which is less usable than the ordinary page, so the ordinary page is what
    it falls back to. */
-@media (min-width: 900px) and (min-height: 640px) {
+@media (min-width: 901px) and (min-height: 640px) {
   /* A visitor who has not chosen a name yet gets a page that can grow: the
      first-run block, the rooms and the social column together can outgrow a
      short window, and pinning the viewport around them left the rooms panel a
@@ -1497,13 +1459,14 @@ a.online-player-name:focus-visible {
 }
 
 /* An invitation asks a question, so it sits where a banner does rather than
-   passing by like a toast. */
+   passing by like a toast - above a phone page's dock rather than on it
+   (--dock-clearance, useBottomDock): it sat on Quick play and Create a room. */
 .friend-invite-notice {
   position: fixed;
   left: 50%;
-  bottom: 18px;
+  bottom: calc(18px + var(--dock-clearance));
   transform: translateX(-50%);
-  z-index: 40;
+  z-index: var(--z-notice);
   display: flex;
   align-items: center;
   gap: 12px;
@@ -1555,14 +1518,10 @@ a.online-player-name:focus-visible {
   text-decoration: underline;
 }
 
-.online-player-trigger:focus-visible {
-  outline: 2px solid var(--primary);
-  outline-offset: 1px;
-}
-
 /* The room's seat menu, restated for this list: two lists of people should
    not look like two different mechanisms. */
 .online-player-menu {
+  --focus-ring: var(--menu-ink);
   background: var(--menu);
   border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
   border-radius: 8px;
@@ -1575,7 +1534,7 @@ a.online-player-name:focus-visible {
   padding: 0.35rem;
   position: absolute;
   top: calc(100% + 4px);
-  z-index: 100;
+  z-index: var(--z-popover);
 }
 
 .online-player-menu-item {
@@ -1649,7 +1608,7 @@ a.online-player-name:focus-visible {
   grid-template-columns: 260px minmax(0, 1fr);
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-layout {
     grid-template-columns: 1fr;
   }
@@ -1661,7 +1620,7 @@ a.online-player-name:focus-visible {
   top: 16px;
 }
 
-@media (max-width: 860px) {
+@media (max-width: 900px) {
   .rules-rail {
     position: static;
   }

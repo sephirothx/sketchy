@@ -83,7 +83,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       });
       const session = sessionFrom(answer);
       if (!session) {
-        notify(refusalText(answer, ui.onlinePlayersPanel.couldNotJoinThatGame));
+        notify(refusalText(answer, ui.onlinePlayersPanel.couldNotJoinThatGame), "error");
         return;
       }
       // The seat is already taken by the time this answers, so the page has
@@ -91,7 +91,7 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       setSession(session);
       navigate(`/room/${session.code}`);
     } catch {
-      notify(ui.onlinePlayersPanel.couldNotJoinThatGame);
+      notify(ui.onlinePlayersPanel.couldNotJoinThatGame, "error");
     } finally {
       useRoomEntryStore.getState().end(token);
     }
