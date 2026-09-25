@@ -2044,7 +2044,10 @@ the window's 16px gutter when that is nearer. The window is `100vw` less
 `--scrollbar-width`, which
 [`lib/scrollbarWidth.ts`](../frontend/src/lib/scrollbarWidth.ts) keeps on
 `:root` from `innerWidth - clientWidth`: `100vw` counts a classic scrollbar's
-lane, and CSS has no unit that does not. A container that clips has to leave
+lane, and CSS has no unit that does not. That keeps the bar 16px from the
+window's edge; where a classic scrollbar takes its lane only on a page that
+scrolls, the bar still moves by half a lane between that page and the pinned
+lobby, as every centred column does. A container that clips has to leave
 the header's sideways reach alone — the pinned lobby clips top to bottom only
 (`overflow-y: clip`), since `overflow: hidden` cut the wordmark and the chip
 off at laptop widths. Rules is a reading page at 928px; its width is stated as

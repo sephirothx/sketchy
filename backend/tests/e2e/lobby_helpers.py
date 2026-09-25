@@ -217,18 +217,24 @@ async def open_public_rooms(browser, prefix: str, count: int) -> list:
     of spike that starves the tests beside it.
     """
     contexts = []
-    for index in range(count):
-        context = await browser.new_context()
-        contexts.append(context)
-        page = await context.new_page()
-        await use_guest_name(page, f"{prefix}Host{index}")
-        await page.goto(BASE_URL)
-        await page.wait_for_selector(".identity-chip")
-        await page.click(".lobby-rooms-actions .btn-primary")
-        await page.wait_for_selector(".create-room-page")
-        await page.fill(
-            'input[placeholder="Leave blank for a random name!"]', f"{prefix} room {index}"
-        )
-        await page.click(".create-room-submit")
-        await page.wait_for_selector('[data-testid="waiting-room"]')
+    try:
+        for index in range(count):
+            context = await browser.new_context()
+            contexts.append(context)
+            page = await context.new_page()
+            await use_guest_name(page, f"{prefix}Host{index}")
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".identity-chip")
+            await page.click(".lobby-rooms-actions .btn-primary")
+            await page.wait_for_selector(".create-room-page")
+            await page.fill(
+                'input[placeholder="Leave blank for a random name!"]', f"{prefix} room {index}"
+            )
+            await page.click(".create-room-submit")
+            await page.wait_for_selector('[data-testid="waiting-room"]')
+    except BaseException:
+        # The caller never gets the list, so it cannot close what was opened.
+        for context in contexts:
+            await context.close()
+        raise
     return contexts

@@ -484,6 +484,9 @@ function ProfileView({ userId }: { userId: string }) {
   // falling apart should still be findable.
   const [includeAbandoned, setIncludeAbandoned] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // Nobody behind this id: the page is that fact, as a heading, rather than a
+  // red alert over nothing.
+  const [missing, setMissing] = useState(false);
   // `null` until the shelf has been asked for; a signed-out viewer never asks.
   const [pins, setPins] = useState<ProfilePin[] | null>(null);
   const myTurnIds = usePinsStore((s) => s.turnIds);
@@ -541,11 +544,8 @@ function ProfileView({ userId }: { userId: string }) {
         }
       } catch (loadError) {
         if (cancelled) return;
-        setError(
-          loadError instanceof ApiError && loadError.status === 404
-            ? ui.profilePage.noSuchProfile
-            : ui.profilePage.couldNotLoadProfile,
-        );
+        if (loadError instanceof ApiError && loadError.status === 404) setMissing(true);
+        else setError(ui.profilePage.couldNotLoadProfile);
       }
     })();
     return () => {
@@ -600,7 +600,8 @@ function ProfileView({ userId }: { userId: string }) {
     <div className="profile-page">
       <AppHeader backLabel={ui.profilePage.backToLobby} />
 
-      {!subject && !error && <p className="loading-note" role="status">{ui.profilePage.loading}</p>}
+      {!subject && !error && !missing && <p className="loading-note" role="status">{ui.profilePage.loading}</p>}
+      {missing && !subject && <EmptyState heading title={ui.profilePage.noSuchProfile} />}
       {error && <p className="lobby-action-error" role="alert">{error}</p>}
 
       {subject && stats && (
