@@ -684,15 +684,10 @@ export function LobbyBrowserPage() {
             <BoltIcon size={16} />
             {quickPlayBusy ? ui.lobbyBrowserPage.quickPlayBusy : ui.lobbyBrowserPage.quickPlay}
           </button>
+          {/* Join by code, then Create room: the order the desktop's row
+              beside the room list has them in, so the two layouts are one
+              sequence rather than a mirror image. */}
           <div className="lobby-dock-row">
-            <Button
-              variant="primary"
-              iconLeft={<PlusIcon size={15} />}
-              disabled={Boolean(pendingJoin)}
-              onClick={() => void handleOpenCreateRoom()}
-            >
-              {ui.lobbyBrowserPage.createRoom2}
-            </Button>
             <button
               type="button"
               className="btn btn-secondary lobby-dock-code"
@@ -701,6 +696,14 @@ export function LobbyBrowserPage() {
             >
               {ui.lobbyBrowserPage.joinWithCode}
             </button>
+            <Button
+              variant="primary"
+              iconLeft={<PlusIcon size={15} />}
+              disabled={Boolean(pendingJoin)}
+              onClick={() => void handleOpenCreateRoom()}
+            >
+              {ui.lobbyBrowserPage.createRoom2}
+            </Button>
           </div>
         </div>
       )}
