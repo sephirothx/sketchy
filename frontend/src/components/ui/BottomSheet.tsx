@@ -18,8 +18,9 @@ interface BottomSheetProps {
   /** Sheet actions, pinned below the scrolling body. */
   footer?: ReactNode;
   testId?: string;
-  /** Accessible name for the close control; defaults to "Close". */
-  closeLabel?: string;
+  /** Accessible name for the close control, from the caller's catalogue
+      group - required, so no sheet falls back to an English "Close". */
+  closeLabel: string;
   /** Replaces the ✕ in the header — the grab handle still dismisses. */
   headerAction?: ReactNode;
   children: ReactNode;
@@ -47,7 +48,7 @@ export function BottomSheet({
   initialFocusRef,
   footer,
   testId,
-  closeLabel = "Close",
+  closeLabel,
   headerAction,
   children,
 }: BottomSheetProps) {

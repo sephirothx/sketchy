@@ -156,7 +156,12 @@ export function RoomMenuSheet({ actions, onDismiss }: {
     action();
   };
   return (
-    <BottomSheet title={ui.roomMenuSheet.room} onDismiss={onDismiss} testId="room-menu-sheet">
+    <BottomSheet
+      title={ui.roomMenuSheet.room}
+      closeLabel={ui.roomMenuSheet.close}
+      onDismiss={onDismiss}
+      testId="room-menu-sheet"
+    >
       <RoomMenuRows actions={actions} run={run} asMenu={false} />
     </BottomSheet>
   );

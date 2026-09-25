@@ -526,6 +526,7 @@ export function LobbyBrowserPage() {
         {filterSheetOpen && (
           <BottomSheet
             title={ui.lobbyBrowserPage.filters}
+            closeLabel={ui.lobbyBrowserPage.close}
             testId="lobby-filter-sheet"
             onDismiss={() => setFilterSheetOpen(false)}
             footer={

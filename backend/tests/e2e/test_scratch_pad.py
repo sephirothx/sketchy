@@ -17,7 +17,7 @@ INKED_PIXELS = """(canvas) => {
 
 
 CLEAR = ".clear-button, .toolbar-mobile-clear"
-UNDO = ".undo-button, .toolbar-mobile-chip[aria-label='Undo last stroke']"
+UNDO = ".undo-button, .toolbar-mobile-chip[aria-label='Undo']"
 
 
 async def scribble(page: Page, pad_selector: str) -> None:
