@@ -7,7 +7,6 @@ whose stamp outlives it.
 """
 from __future__ import annotations
 
-import asyncio
 import contextlib
 from unittest.mock import AsyncMock
 
@@ -18,6 +17,7 @@ from app.handlers import register_all_handlers as register_handlers
 from app.protocol import PROTOCOL_VERSION
 from app.rooms import RoomManager
 from app.services.afk import AfkWatch
+from tests.handlers.helpers import settle_capacity_closes
 
 
 class FakeClock:
@@ -157,8 +157,6 @@ async def test_refused_handshakes_do_not_pile_up_in_the_ledger(monkeypatch):
     """
     from socketio.exceptions import ConnectionRefusedError
 
-    from app.protocol import SERVER_FULL_CLOSE_SECONDS
-
     _, ctx, _, _, _ = build()
     ctx.room_capacity.sockets = 0  # the ceiling refuses everybody
 
@@ -175,7 +173,7 @@ async def test_refused_handshakes_do_not_pile_up_in_the_ledger(monkeypatch):
 
     # A socket turned away for capacity is held, counted, until the close
     # that follows its notice (#998); that close releases everything.
-    await asyncio.sleep(SERVER_FULL_CLOSE_SECONDS + 0.05)
+    await settle_capacity_closes(ctx)
     assert len(ctx.activity) == 0, "a refused handshake leaves no stamp"
     assert ctx.room_capacity.open_sockets == 0
 
