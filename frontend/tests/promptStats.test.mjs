@@ -128,11 +128,15 @@ test("the search note says how many matched, or that none did", () => {
   assert.ok(searchNote("zzz", 0)?.includes("No prompt"));
 });
 
-test("a slice with nothing ranked is told apart from an empty or a ranked one", () => {
-  assert.equal(nothingRanked({ ratedCount: 0, unratedCount: 40 }), true);
-  assert.equal(nothingRanked({ ratedCount: 1, unratedCount: 40 }), false);
+test("a slice with nothing ranked or drawn is told apart from one with something to show", () => {
+  const unplayed = [prompt("cat", { pickCount: 0, isRated: false }), prompt("dog", { pickCount: 0, isRated: false })];
+  assert.equal(nothingRanked({ ratedCount: 0, unratedCount: 2, prompts: unplayed }), true);
+  assert.equal(nothingRanked({ ratedCount: 1, unratedCount: 1, prompts: unplayed }), false);
   // An empty list has nothing to list plainly either.
-  assert.equal(nothingRanked({ ratedCount: 0, unratedCount: 0 }), false);
+  assert.equal(nothingRanked({ ratedCount: 0, unratedCount: 0, prompts: [] }), false);
+  // Drawn but not yet ranked keeps the table: its count, and "Most picked".
+  const drawnOnce = [unplayed[0], prompt("dog", { pickCount: 1, isRated: false })];
+  assert.equal(nothingRanked({ ratedCount: 0, unratedCount: 2, prompts: drawnOnce }), false);
 });
 
 test("an unranked list is named alphabetically in its own language", () => {

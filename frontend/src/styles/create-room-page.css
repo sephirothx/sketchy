@@ -382,6 +382,23 @@ details.form-section > .form-section-body {
   flex: none;
 }
 
+/* Nothing but the button to show (every rule is a new room's): the button
+   keeps its place on the right, and above the phone breakpoint loses the card
+   around it. A phone keeps it - there the footer is the fixed dock, whose
+   surface is what keeps the form from showing through. */
+.create-room-footer.is-bare {
+  justify-content: flex-end;
+}
+
+@media (min-width: 641px) {
+  .create-room-footer.is-bare {
+    background: none;
+    border: 0;
+    box-shadow: none;
+    padding: 0;
+  }
+}
+
 /* -------------------------------------------------- wide: form and preview */
 /* From 1200px the summary strip becomes a card beside the form (#581), and it
    stays in view while the form scrolls. The form keeps the 780px it had: it is
@@ -678,7 +695,13 @@ details.form-section > .form-section-body {
   outline: 3px solid var(--primary-edge-soft);
   outline-offset: 2px;
 }
+/* Out of the layout until it is shown: an invisible tooltip still widens the
+   page, and one centred over a "?" near a phone's right edge made the whole
+   form scroll sideways. `--tip-shift` is set by `FieldHint` to keep a shown
+   one inside the viewport; the arrow moves back by as much, so it still
+   points at its "?". */
 .m3-switch-hint-tooltip {
+  --tip-shift: 0px;
   background: var(--ink);
   border-radius: 8px;
   box-sizing: border-box;
@@ -694,7 +717,8 @@ details.form-section > .form-section-body {
   pointer-events: none;
   position: absolute;
   bottom: calc(100% + 8px);
-  transform: translateX(-50%) translateY(4px);
+  display: none;
+  transform: translateX(calc(-50% + var(--tip-shift))) translateY(4px);
   transition: opacity 120ms ease, transform 120ms ease;
   white-space: normal;
   width: max-content;
@@ -704,15 +728,38 @@ details.form-section > .form-section-body {
   border: 5px solid transparent;
   border-top-color: var(--ink);
   content: "";
-  left: 50%;
+  left: calc(50% - var(--tip-shift));
   position: absolute;
   top: 100%;
   transform: translateX(-50%);
 }
 .m3-switch-hint-wrap:hover .m3-switch-hint-tooltip,
 .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
+  display: block;
   opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  transform: translateX(calc(-50% + var(--tip-shift))) translateY(0);
+}
+@starting-style {
+  .m3-switch-hint-wrap:hover .m3-switch-hint-tooltip,
+  .m3-switch-hint-wrap:focus-within .m3-switch-hint-tooltip {
+    opacity: 0;
+    transform: translateX(calc(-50% + var(--tip-shift))) translateY(4px);
+  }
+}
+/* The link form (`FieldHint` with `href`): the same mark in a 24px target. */
+.m3-switch-hint-link {
+  align-items: center;
+  display: inline-flex;
+  height: 24px;
+  justify-content: center;
+  text-decoration: none;
+  width: 24px;
+}
+.m3-switch-hint-link > .m3-switch-hint {
+  cursor: pointer;
+}
+.m3-switch-hint-link:hover > .m3-switch-hint {
+  color: var(--primary);
 }
 .m3-switch-label.is-disabled .m3-switch-hint-wrap {
   opacity: 1;
@@ -769,8 +816,8 @@ details.form-section > .form-section-body {
 @media (max-width: 640px) {
   .create-room-heading-row { align-items: stretch; flex-direction: column; }
   .room-preset-bar { justify-content: flex-start; }
-  /* The name takes the width; the language and the visibility share the line
-     under it, which is what the two of them are - one short answer each. */
+  /* The name takes the width; the language and the visibility wrap under it,
+     each on its own line on a phone once the language carries its label. */
   .create-room-name-row {
     align-items: flex-end;
     flex-wrap: wrap;
@@ -781,8 +828,8 @@ details.form-section > .form-section-body {
     flex: 1 1 100%;
   }
 
-  /* Its label goes beside the flag here rather than above it: above, the
-     label's width pushed the visibility onto a line of its own. */
+  /* Its label goes beside the flag here rather than above it: the pair has a
+     line to itself, so a label above would only add a line. */
   .create-room-language-field {
     align-items: center;
     flex-direction: row;

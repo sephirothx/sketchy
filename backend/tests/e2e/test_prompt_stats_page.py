@@ -36,8 +36,8 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             # and each one's size is content, not a constant this test knows.
             #
             # Two shapes, and which one is not ours to predict - the suite
-            # shares one server with tests playing games: a table when
-            # anything is ranked, and the bare names when nothing is.
+            # shares one server with tests playing games: a table once
+            # anything has been drawn, and the bare names until then.
             listing = page.locator(".prompt-stats-table, .prompt-stats-plain")
             await listing.first.wait_for()
             plain = await page.locator(".prompt-stats-plain").count() > 0

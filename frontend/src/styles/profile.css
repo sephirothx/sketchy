@@ -395,32 +395,13 @@
 
 
 
-/* The info link riding along with a prompt-list chip. */
+/* A prompt-list chip, with its "how this list plays" hint riding along. */
 .prompt-list-chip-group {
   align-items: center;
   display: inline-flex;
   gap: 2px;
 }
 
-/* The mark is the form's "?" (`.m3-switch-hint`, create-room-page.css), but
-   the target it sits in is 24px square: below that it fails WCAG 2.2
-   target-size beside the chip, which the axe suite enforces. */
-.prompt-list-chip-info {
-  align-items: center;
-  display: inline-flex;
-  height: 24px;
-  justify-content: center;
-  text-decoration: none;
-  width: 24px;
-}
-
-.prompt-list-chip-info > .m3-switch-hint {
-  cursor: pointer;
-}
-
-.prompt-list-chip-info:hover > .m3-switch-hint {
-  color: var(--primary);
-}
 
 
 

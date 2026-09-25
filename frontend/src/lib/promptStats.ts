@@ -86,14 +86,23 @@ export function statsRows(prompts: PromptStats[]) {
 }
 
 /**
- * Is there nothing in this slice to rank?
+ * Is there nothing in this slice to show but names?
  *
  * Then the table has nothing to say: every row would read "Not played
- * enough", a dash, a dash and a count, forty to a page. The page says why
+ * enough", a dash, a dash and a zero, forty to a page. The page says why
  * once (`coverageNote`) and lists the prompts as names instead (R-STAT-02).
+ * Only while nothing has been drawn either: a prompt drawn a few times has a
+ * count worth showing and an order ("Most picked") worth keeping, ranked or
+ * not, and the table keeps both.
  */
-export function nothingRanked(stats: { ratedCount: number; unratedCount: number }): boolean {
-  return stats.ratedCount === 0 && stats.unratedCount > 0;
+export function nothingRanked(stats: {
+  ratedCount: number;
+  unratedCount: number;
+  prompts: readonly Pick<PromptStats, "pickCount">[];
+}): boolean {
+  return stats.ratedCount === 0
+    && stats.unratedCount > 0
+    && stats.prompts.every((prompt) => prompt.pickCount === 0);
 }
 
 /** The names of an unranked list, alphabetically in the list's own language:

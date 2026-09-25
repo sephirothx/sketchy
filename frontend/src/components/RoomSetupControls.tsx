@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import type { ReactNode } from "react";
 import { CheckIcon, PlusIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
@@ -35,21 +36,59 @@ function SegmentLabel({ children }: { children: ReactNode }) {
   );
 }
 
-export function FieldHint({ hint }: { hint: string }) {
+/** Keep a shown tooltip inside the viewport. It is centred over its "?",
+    and a "?" near the right edge of a phone put half of it past the edge. */
+const TOOLTIP_EDGE = 8;
+
+/**
+ * The form's one help mark: a "?" with its sentence in a tooltip.
+ *
+ * With `href` it is a link rather than a button - the prompt-list picker's
+ * "how this list plays" goes to the stats page - drawn the same, so the form
+ * has one help affordance and not a "?" beside an "ⓘ".
+ */
+export function FieldHint({ hint, href }: { hint: string; href?: string }) {
+  const tipRef = useRef<HTMLSpanElement | null>(null);
+
+  function place() {
+    const tip = tipRef.current;
+    if (!tip) return;
+    tip.style.setProperty("--tip-shift", "0px");
+    // A frame later, once :hover or :focus-within has displayed it.
+    requestAnimationFrame(() => {
+      const rect = tip.getBoundingClientRect();
+      if (rect.width === 0) return;
+      const right = document.documentElement.clientWidth - TOOLTIP_EDGE;
+      const shift = rect.right > right
+        ? right - rect.right
+        : rect.left < TOOLTIP_EDGE ? TOOLTIP_EDGE - rect.left : 0;
+      tip.style.setProperty("--tip-shift", `${shift}px`);
+    });
+  }
+
   return (
-    <span className="m3-switch-hint-wrap">
-      <button
-        type="button"
-        className="m3-switch-hint"
-        aria-label={hint}
-        onClick={(event) => {
-          event.preventDefault();
-          event.stopPropagation();
-        }}
-      >
-        ?
-      </button>
-      <span className="m3-switch-hint-tooltip" role="tooltip">
+    <span className="m3-switch-hint-wrap" onPointerEnter={place} onFocus={place}>
+      {href ? (
+        // A new tab: the picker also lives in the waiting-room settings,
+        // where navigating away would discard a half-made edit. The target
+        // is 24px square, which WCAG 2.2 target-size asks for beside a chip.
+        <a className="m3-switch-hint-link" href={href} target="_blank" rel="noreferrer" aria-label={hint}>
+          <span className="m3-switch-hint" aria-hidden="true">?</span>
+        </a>
+      ) : (
+        <button
+          type="button"
+          className="m3-switch-hint"
+          aria-label={hint}
+          onClick={(event) => {
+            event.preventDefault();
+            event.stopPropagation();
+          }}
+        >
+          ?
+        </button>
+      )}
+      <span ref={tipRef} className="m3-switch-hint-tooltip" role="tooltip">
         {hint}
       </span>
     </span>

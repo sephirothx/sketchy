@@ -211,7 +211,7 @@ export function PromptStatsPage() {
             >
               {lists.map((entry) => (
                 <option key={entry.slug} value={entry.slug}>
-                  {entry.name} — {promptLanguageLabel(entry.language)} ({entry.promptCount})
+                  {entry.name} ({entry.promptCount})
                 </option>
               ))}
             </select>

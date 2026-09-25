@@ -551,12 +551,12 @@ export function CreateRoomPage() {
     </div>
 
     {!isWide && (
-      <div className="create-room-footer">
-        <div className="create-room-footer-info">
-          {changedRules.length > 0 && (
+      <div className={`create-room-footer${changedRules.length > 0 ? "" : " is-bare"}`}>
+        {changedRules.length > 0 && (
+          <div className="create-room-footer-info">
             <span className="create-room-footer-summary">{changedRules.join(" · ")}</span>
-          )}
-        </div>
+          </div>
+        )}
         {submitButton}
       </div>
     )}
