@@ -594,7 +594,6 @@ export const FR: Catalogue = {
     pleaseWait: "Patiente…",
     sendAResetLink: "Envoyer un lien de réinitialisation",
     setPassword: "Définir le mot de passe",
-    oneMoment: "Patiente…",
     nothingToConfirm: "Rien à confirmer.",
     resetLinkOnItsWay:
       "Si ce compte existe et a une adresse e-mail confirmée, un lien de réinitialisation est en route.",
@@ -608,15 +607,8 @@ export const FR: Catalogue = {
     couldNotStartGamePleaseTry: "La partie n’a pas pu démarrer. Réessaie.",
     couldNotStartRestartVote: "Le vote de redémarrage n’a pas pu être lancé.",
     couldNotRecordYourRestartVote: "Ton vote de redémarrage n’a pas pu être enregistré.",
-    copyRoomInviteLink: "Copier le lien d’invitation du salon",
-    clickCopyRoomInviteLink: "Clique pour copier le lien d’invitation",
     roomMenu: "Menu du salon",
-    afk: "Absent",
-    saveImage: "Enregistrer l’image",
-    saveDrawnImageFile: "Enregistrer le dessin dans un fichier",
-    playerSettings: "Paramètres du joueur",
     leaveRoom: "Quitter le salon",
-    leave: "Quitter",
     players: "Joueurs",
     youWereKickedFromThe: "Tu as été exclu du salon.",
     thisRoomWasOpenedIn: "Ce salon a été ouvert dans un autre onglet.",
@@ -627,14 +619,7 @@ export const FR: Catalogue = {
     leaveActiveGame: "Quitter la partie en cours ?",
     youReTheCurrentDrawer: "C’est toi qui dessines. Si tu pars maintenant, ton tour sera interrompu et la partie avancera pour tout le monde.",
     theGameIsStillIn: "La partie est toujours en cours. Tu quitteras le salon et perdras ta place dans cette partie.",
-    restartVoteAvailableInRestartCooldownSeconds: (p: { restartCooldownSeconds: number }) =>
-      `Vote de redémarrage possible dans ${p.restartCooldownSeconds} secondes`,
-    proposeRestartingTheGame: "Proposer de redémarrer la partie",
-    restartVoteAvailableInRestartCooldownSeconds2: (p: { restartCooldownSeconds: number }) =>
-      `Vote de redémarrage possible dans ${p.restartCooldownSeconds} s`,
-    proposeAVoteToRestart: "Proposer un vote pour redémarrer la partie",
     backFromAfk: "Ne plus être AFK",
-    goAfk: "Me mettre absent",
     closePlayers: "Fermer les joueurs",
     acceptTheColorSuggestion: "accepter la suggestion de couleurs",
     dismissTheColorSuggestion: "ignorer la suggestion de couleurs",
@@ -1015,7 +1000,6 @@ export const FR: Catalogue = {
 
   friendInviteNotice: {
     couldNotJoinThatGame: "Cette partie n’a pas pu être rejointe.",
-    thatGameCouldNotBeJoined: "Cette partie n’a pas pu être rejointe.",
     invitedYouTheirGame: "t’a invité dans sa partie.",
     join: "Rejoindre",
     dismissInvitation: "Masquer l’invitation",
@@ -1024,9 +1008,7 @@ export const FR: Catalogue = {
   friendsOverlay: {
     declineWarning: (p: { name: string }) =>
       `${p.name} ne pourra pas redemander. Tu pourras toujours lui envoyer une demande plus tard.`,
-    decline2: "Refuser",
     youWillBothStopBeingAble: "Vous ne pourrez plus rejoindre les parties l’un de l’autre sans invitation. Chacun peut redemander.",
-    remove2: "Retirer",
     removeConfirm: (p: { name: string }) => `Retirer ${p.name} ?`,
     friends: "Amis",
     close: "Fermer",
@@ -1107,7 +1089,6 @@ export const FR: Catalogue = {
   inviteFriendsList: {
     invitationCouldNotBeSent: "Cette invitation n’a pas pu être envoyée.",
     invitationSent: (p: { name: string }) => `Invitation envoyée à ${p.name}.`,
-    thatInvitationCouldNotBeSent: "Cette invitation n’a pas pu être envoyée.",
     friendsLobby: "Amis dans le hall",
     invited: "Invité",
     invite: "Inviter",
@@ -1284,7 +1265,6 @@ export const FR: Catalogue = {
     showMore: "Afficher plus",
     tryAgain: "Réessayer",
     openDrawing: (p: { prompt: string; drawer: string }) => `Ouvrir « ${p.prompt} » par ${p.drawer}`,
-    byDrawer: (p: { drawer: string }) => `par ${p.drawer}`,
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `il y a ${counted(p.count, { one: { minute: "minute", hour: "heure", day: "jour" }[p.unit], other: { minute: "minutes", hour: "heures", day: "jours" }[p.unit] })}`,
     justNow: "à l’instant",
     byDrawerPrefix: "par",
@@ -1293,7 +1273,6 @@ export const FR: Catalogue = {
     endOfTheRest: "Rien de plus par ici.",
     tryTopOverAllTime: "Essayez Top depuis le début pour le reste",
     findARoom: "Trouver une salle",
-    signIn: "Se connecter",
     backToTop: "Retour en haut",
     topOfTheWeek: "Top de la semaine",
     nothingHereYetBody: "Chaque dessin conservé d’une partie publique finit ici.",
@@ -1429,7 +1408,6 @@ export const FR: Catalogue = {
         ? p.canReport ? `Vote d’exclusion, vote AFK ou signaler ${p.name}` : `Vote d’exclusion ou vote AFK pour ${p.name}`
         : `Signaler ${p.name}`,
     whatToDoAbout: (p: { name: string }) => `Que faire au sujet de ${p.name}`,
-    thatRequestCouldNotBeSent: "Cette demande n’a pas pu être envoyée.",
     drawing: "Dessine",
     gotIt: "Trouvé ·",
     afk: "AFK",
@@ -1695,7 +1673,6 @@ export const FR: Catalogue = {
     cancel: "Annuler",
   },
   reportDrawingDialog: {
-    report: "Signaler",
     reportThisDrawing: "Signaler ce dessin",
     nothingHappensYet: "Un modérateur regardera le dessin. Rien n’arrive au joueur avant cela.",
     anythingElseOptional: "Autre chose (facultatif)",
@@ -2053,7 +2030,6 @@ export const FR: Catalogue = {
     brushCursorStyle: "Style du curseur du pinceau",
     soundEffects: "Effets sonores",
     chimesCorrectGuessStartTurnLast: "Des sons pour une bonne réponse, le début d’un tour, les dix dernières secondes, et les joueurs qui arrivent et partent.",
-    volume2: "Volume",
     confetti: "Confettis",
     burstWhenYouGuessRightAgain: "Une salve quand tu trouves, et une autre pour le gagnant à la fin d’une partie.",
     clickKeyRebindEachActionCan: "Clique sur une touche pour la réassigner. Chaque action peut en garder deux. Échap pour annuler.",
@@ -2159,7 +2135,6 @@ export const FR: Catalogue = {
   },
 
   stepUpDialog: {
-    codeFromYourAuthenticatorApp2: "Code de ton application d’authentification",
     passkeyNotUsed: "Cette clé d’accès n’a pas été utilisée. Tu peux réessayer.",
     thatCodeWasNotAccepted: "Ce code n’a pas été accepté.",
     thatPasskeyWasNotAccepted: "Cette clé d’accès n’a pas été acceptée.",
@@ -2176,15 +2151,7 @@ export const FR: Catalogue = {
   },
 
   suspensionNotice: {
-    yourReportedDrawing: (p: { prompt: string }) =>
-      `Ton dessin de ${p.prompt}, tel qu’il a été signalé`,
-    recordedAs: "Enregistré comme {category}",
     yourAccountSuspended: "Ton compte est suspendu",
-    youWereAskedDraw: "C’était à toi de dessiner",
-    theMessageThisWasAbout: "Le message concerné :",
-    theMessagesThisWasAbout: "Les messages concernés :",
-    theDrawingThisWasAbout: "Le dessin concerné :",
-    theDrawingsThisWasAbout: "Les dessins concernés :",
     signingOut: "Déconnexion…",
     signOut: "Se déconnecter",
   },
@@ -2266,15 +2233,11 @@ export const FR: Catalogue = {
       ]
         .filter(Boolean)
         .join(" "),
-    confirmAuthenticatorFirst:
-      "Avant que ce compte puisse recevoir un rôle de modérateur ou d’administrateur, confirme avec ton mot de passe et un code que l’authentificateur est le tien.",
     copied: (p: { what: string }) => `${p.what} copié.`,
     couldNotCopy: (p: { what: string }) =>
       `Impossible de copier ${p.what}. Sélectionne-le et copie-le à la main.`,
     roleTaken: (p: { role: "admin" | "moderator" }) =>
       `Tu es maintenant ${p.role === "admin" ? "administrateur" : "modérateur"}. La double authentification est active, et le rôle qui l’attendait a pris effet. Tes autres appareils ont été déconnectés ; celui-ci continue, et chaque connexion depuis ici demandera un code.`,
-    recoveryCodesLeft: (p: { count: number }) =>
-      `Il te reste ${counted(p.count, { one: "code de récupération", other: "codes de récupération" })}.`,
     couldNotReadYourSecuritySettings: "Tes réglages de sécurité n’ont pas pu être lus.",
     yourPasswordConfirmsAuthenticatorYours: "Ton mot de passe confirme que l’authentificateur est le tien.",
     yourPasswordConfirmsThisPasskeyYours: "Ton mot de passe confirme que cette clé d’accès est la tienne.",
@@ -2344,8 +2307,6 @@ export const FR: Catalogue = {
 
   waitingRoomPanel: {
     editRoomRules: "Modifier les règles du salon",
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "manche", other: "manches" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Il manque 1 joueur", other: "Il manque des joueurs" })}`,
     hostWillStart: (p: { rematch: boolean }): string =>
@@ -2380,20 +2341,22 @@ export const FR: Catalogue = {
     waitingForAHost: "En attente d’un hôte",
   },
 
-  warningNotice: {
+  moderationNotice: {
     yourReportedDrawing: (p: { prompt: string }) =>
       `Ton dessin de ${p.prompt}, tel qu’il a été signalé`,
     recordedAs: "Enregistré comme {category}",
-    whatAWarningMeans:
-      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
     youWereAskedDraw: "C’était à toi de dessiner",
-    yourPictureWasRemoved: "Ta photo a été retirée",
-    aModeratorWarning: "Un avertissement de la modération",
-    aReportAboutYourPicture: "Un signalement concernant ta photo a été examiné, et voici le résultat. Rien d’autre sur ton compte n’est concerné.",
     theMessageThisWasAbout: "Le message concerné :",
     theMessagesThisWasAbout: "Les messages concernés :",
     theDrawingThisWasAbout: "Le dessin concerné :",
     theDrawingsThisWasAbout: "Les dessins concernés :",
+  },
+  warningNotice: {
+    whatAWarningMeans:
+      "Un signalement concernant ton comportement a été examiné, et voici le résultat. Rien n’est restreint, mais un nouveau signalement pourrait entraîner la suspension de ton compte.",
+    yourPictureWasRemoved: "Ta photo a été retirée",
+    aModeratorWarning: "Un avertissement de la modération",
+    aReportAboutYourPicture: "Un signalement concernant ta photo a été examiné, et voici le résultat. Rien d’autre sur ton compte n’est concerné.",
     oneMoment: "Patiente…",
     understood: "OK",
   },

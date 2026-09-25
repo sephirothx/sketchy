@@ -128,7 +128,7 @@ export function WarningNotice() {
             {/* The rule itself, not just its name: a decision you can read
                 the rule behind is one you can check rather than only be
                 told (R-RULES-02). */}
-            {fill(ui.warningNotice.recordedAs, {
+            {fill(ui.moderationNotice.recordedAs, {
               category: (
                 <a href={ruleAnchorFor(warning.category)}>
                   {humanizeCategory(warning.category)}
@@ -158,8 +158,8 @@ export function WarningNotice() {
           <>
             <p className="modal-body suspension-evidence-label">
               {warning.messages.length === 1
-                ? ui.warningNotice.theMessageThisWasAbout
-                : ui.warningNotice.theMessagesThisWasAbout}
+                ? ui.moderationNotice.theMessageThisWasAbout
+                : ui.moderationNotice.theMessagesThisWasAbout}
             </p>
             {/* Reuses the suspension notice's evidence styling: both lists
                 are "your own words, as reported". */}
@@ -181,16 +181,16 @@ export function WarningNotice() {
           <>
             <p className="modal-body suspension-evidence-label">
               {warning.drawings.length === 1
-                ? ui.warningNotice.theDrawingThisWasAbout
-                : ui.warningNotice.theDrawingsThisWasAbout}
+                ? ui.moderationNotice.theDrawingThisWasAbout
+                : ui.moderationNotice.theDrawingsThisWasAbout}
             </p>
             {warning.drawings.map((drawing) => (
               <ReportedDrawing
                 key={drawing.reportId}
                 className="suspension-drawing"
                 load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
-                label={ui.warningNotice.yourReportedDrawing({ prompt: drawing.prompt })}
-                caption={<>{ui.warningNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
+                label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
+                caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
               />
             ))}
           </>

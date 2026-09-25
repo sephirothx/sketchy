@@ -245,7 +245,7 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
         ) : (
           <>
             <p className="recovery-body">
-              {error ?? (busy ? ui.accountRecoveryPage.oneMoment : ui.accountRecoveryPage.nothingToConfirm)}
+              {error ?? (busy ? ui.accountRecoveryPage.pleaseWait : ui.accountRecoveryPage.nothingToConfirm)}
             </p>
             <Link className="modal-button" to="/">
               {ui.accountRecoveryPage.backLobby}

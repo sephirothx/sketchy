@@ -594,7 +594,6 @@ export const NL: Catalogue = {
     pleaseWait: "Even geduld…",
     sendAResetLink: "Herstellink sturen",
     setPassword: "Wachtwoord instellen",
-    oneMoment: "Even geduld…",
     nothingToConfirm: "Niets te bevestigen.",
     resetLinkOnItsWay:
       "Als dat account bestaat en een bevestigd e-mailadres heeft, is er een herstellink onderweg.",
@@ -608,15 +607,8 @@ export const NL: Catalogue = {
     couldNotStartGamePleaseTry: "Het spel kon niet gestart worden. Probeer het nog eens.",
     couldNotStartRestartVote: "Er kon geen herstartstemming gestart worden.",
     couldNotRecordYourRestartVote: "Je herstartstem kon niet vastgelegd worden.",
-    copyRoomInviteLink: "Uitnodigingslink van de kamer kopiëren",
-    clickCopyRoomInviteLink: "Klik om de uitnodigingslink te kopiëren",
     roomMenu: "Kamermenu",
-    afk: "Afwezig",
-    saveImage: "Afbeelding opslaan",
-    saveDrawnImageFile: "De tekening als bestand opslaan",
-    playerSettings: "Spelerinstellingen",
     leaveRoom: "Kamer verlaten",
-    leave: "Verlaten",
     players: "Spelers",
     youWereKickedFromThe: "Je bent uit de kamer gezet.",
     thisRoomWasOpenedIn: "Deze kamer is in een ander tabblad geopend.",
@@ -627,14 +619,7 @@ export const NL: Catalogue = {
     leaveActiveGame: "Lopend spel verlaten?",
     youReTheCurrentDrawer: "Jij tekent nu. Als je nu weggaat, wordt je beurt onderbroken en gaat het spel voor iedereen verder.",
     theGameIsStillIn: "Het spel is nog bezig. Je verlaat de kamer en geeft je plek in dit spel op.",
-    restartVoteAvailableInRestartCooldownSeconds: (p: { restartCooldownSeconds: number }) =>
-      `Herstartstemming mogelijk over ${p.restartCooldownSeconds} seconden`,
-    proposeRestartingTheGame: "Voorstellen het spel te herstarten",
-    restartVoteAvailableInRestartCooldownSeconds2: (p: { restartCooldownSeconds: number }) =>
-      `Herstartstemming over ${p.restartCooldownSeconds} s`,
-    proposeAVoteToRestart: "Een stemming voorstellen om het spel te herstarten",
     backFromAfk: "Terug van AFK",
-    goAfk: "Afwezig melden",
     closePlayers: "Spelers sluiten",
     acceptTheColorSuggestion: "de kleursuggestie accepteren",
     dismissTheColorSuggestion: "de kleursuggestie negeren",
@@ -1015,7 +1000,6 @@ export const NL: Catalogue = {
 
   friendInviteNotice: {
     couldNotJoinThatGame: "Dit spel kon niet betreden worden.",
-    thatGameCouldNotBeJoined: "Dit spel kon niet betreden worden.",
     invitedYouTheirGame: "heeft je uitgenodigd voor zijn spel.",
     join: "Meedoen",
     dismissInvitation: "Uitnodiging sluiten",
@@ -1024,9 +1008,7 @@ export const NL: Catalogue = {
   friendsOverlay: {
     declineWarning: (p: { name: string }) =>
       `${p.name} kan het niet opnieuw vragen. Jij kunt hem later zelf een verzoek sturen.`,
-    decline2: "Afwijzen",
     youWillBothStopBeingAble: "Jullie kunnen dan allebei niet meer zonder uitnodiging bij elkaars spellen. Ieder van jullie kan het opnieuw vragen.",
-    remove2: "Verwijderen",
     removeConfirm: (p: { name: string }) => `${p.name} verwijderen?`,
     friends: "Vrienden",
     close: "Sluiten",
@@ -1107,7 +1089,6 @@ export const NL: Catalogue = {
   inviteFriendsList: {
     invitationCouldNotBeSent: "Deze uitnodiging kon niet verstuurd worden.",
     invitationSent: (p: { name: string }) => `Uitnodiging gestuurd naar ${p.name}.`,
-    thatInvitationCouldNotBeSent: "Deze uitnodiging kon niet verstuurd worden.",
     friendsLobby: "Vrienden in de lobby",
     invited: "Uitgenodigd",
     invite: "Uitnodigen",
@@ -1284,7 +1265,6 @@ export const NL: Catalogue = {
     showMore: "Meer tonen",
     tryAgain: "Opnieuw proberen",
     openDrawing: (p: { prompt: string; drawer: string }) => `‘${p.prompt}’ van ${p.drawer} openen`,
-    byDrawer: (p: { drawer: string }) => `van ${p.drawer}`,
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: { minute: "minuut", hour: "uur", day: "dag" }[p.unit], other: { minute: "minuten", hour: "uur", day: "dagen" }[p.unit] })} geleden`,
     justNow: "zojuist",
     byDrawerPrefix: "van",
@@ -1293,7 +1273,6 @@ export const NL: Catalogue = {
     endOfTheRest: "Hier is niets meer.",
     tryTopOverAllTime: "Probeer Top aller tijden voor de rest",
     findARoom: "Zoek een kamer",
-    signIn: "Inloggen",
     backToTop: "Terug naar boven",
     topOfTheWeek: "Top van de week",
     nothingHereYetBody: "Elke bewaarde tekening uit een openbaar spel komt hier terecht.",
@@ -1429,7 +1408,6 @@ export const NL: Catalogue = {
         ? p.canReport ? `Stem eruit, stem AFK of meld ${p.name}` : `Stem eruit of stem AFK voor ${p.name}`
         : `${p.name} melden`,
     whatToDoAbout: (p: { name: string }) => `Wat te doen met ${p.name}`,
-    thatRequestCouldNotBeSent: "Dit verzoek kon niet verstuurd worden.",
     drawing: "Tekent",
     gotIt: "Geraden ·",
     afk: "AFK",
@@ -1693,7 +1671,6 @@ export const NL: Catalogue = {
     cancel: "Annuleren",
   },
   reportDrawingDialog: {
-    report: "Melden",
     reportThisDrawing: "Deze tekening melden",
     nothingHappensYet: "Een moderator bekijkt de tekening. Tot die tijd gebeurt er niets met de speler.",
     anythingElseOptional: "Nog iets (optioneel)",
@@ -2051,7 +2028,6 @@ export const NL: Catalogue = {
     brushCursorStyle: "Stijl van de penseelcursor",
     soundEffects: "Geluidseffecten",
     chimesCorrectGuessStartTurnLast: "Tonen bij een goede gok, het begin van een beurt, de laatste tien seconden, en spelers die komen en gaan.",
-    volume2: "Volume",
     confetti: "Confetti",
     burstWhenYouGuessRightAgain: "Een uitbarsting als je goed gokt, en nog een voor de winnaar aan het eind van een spel.",
     clickKeyRebindEachActionCan: "Klik op een toets om hem opnieuw toe te wijzen. Elke actie kan er twee hebben. Druk op Esc om te annuleren.",
@@ -2157,7 +2133,6 @@ export const NL: Catalogue = {
   },
 
   stepUpDialog: {
-    codeFromYourAuthenticatorApp2: "Code uit je authenticatie-app",
     passkeyNotUsed: "Deze passkey is niet gebruikt. Je kunt het nog eens proberen.",
     thatCodeWasNotAccepted: "Deze code is niet geaccepteerd.",
     thatPasskeyWasNotAccepted: "Deze passkey is niet geaccepteerd.",
@@ -2174,15 +2149,7 @@ export const NL: Catalogue = {
   },
 
   suspensionNotice: {
-    yourReportedDrawing: (p: { prompt: string }) =>
-      `Jouw tekening van ${p.prompt}, zoals hij gemeld werd`,
-    recordedAs: "Vastgelegd als {category}",
     yourAccountSuspended: "Je account is geschorst",
-    youWereAskedDraw: "Jij moest tekenen",
-    theMessageThisWasAbout: "Het bericht waar het om ging:",
-    theMessagesThisWasAbout: "De berichten waar het om ging:",
-    theDrawingThisWasAbout: "De tekening waar het om ging:",
-    theDrawingsThisWasAbout: "De tekeningen waar het om ging:",
     signingOut: "Uitloggen…",
     signOut: "Uitloggen",
   },
@@ -2264,15 +2231,11 @@ export const NL: Catalogue = {
       ]
         .filter(Boolean)
         .join(" "),
-    confirmAuthenticatorFirst:
-      "Voordat dit account een moderator- of beheerdersrol kan krijgen, bevestig met je wachtwoord en een code dat de authenticator van jou is.",
     copied: (p: { what: string }) => `${p.what} gekopieerd.`,
     couldNotCopy: (p: { what: string }) =>
       `Kon ${p.what} niet kopiëren. Selecteer het en kopieer het met de hand.`,
     roleTaken: (p: { role: "admin" | "moderator" }) =>
       `Je bent nu ${p.role === "admin" ? "beheerder" : "moderator"}. Tweestapsverificatie staat aan, en de rol die erop wachtte is ingegaan. Je andere apparaten zijn uitgelogd; dit apparaat gaat door, en elke aanmelding van hieraf vraagt om een code.`,
-    recoveryCodesLeft: (p: { count: number }) =>
-      `Je hebt nog ${counted(p.count, { one: "herstelcode", other: "herstelcodes" })}.`,
     couldNotReadYourSecuritySettings: "Je beveiligingsinstellingen konden niet gelezen worden.",
     yourPasswordConfirmsAuthenticatorYours: "Je wachtwoord bevestigt dat de authenticator van jou is.",
     yourPasswordConfirmsThisPasskeyYours: "Je wachtwoord bevestigt dat deze passkey van jou is.",
@@ -2342,8 +2305,6 @@ export const NL: Catalogue = {
 
   waitingRoomPanel: {
     editRoomRules: "Kamerregels bewerken",
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "ronde", other: "rondes" }),
     needMorePlayers: (p: { count: number }) =>
       `${counted(p.count, { one: "Nog 1 speler nodig", other: "Nog meer spelers nodig" })}`,
     hostWillStart: (p: { rematch: boolean }): string =>
@@ -2378,20 +2339,22 @@ export const NL: Catalogue = {
     waitingForAHost: "Wacht op een gastheer",
   },
 
-  warningNotice: {
+  moderationNotice: {
     yourReportedDrawing: (p: { prompt: string }) =>
       `Jouw tekening van ${p.prompt}, zoals hij gemeld werd`,
     recordedAs: "Vastgelegd als {category}",
-    whatAWarningMeans:
-      "Een melding over je gedrag is bekeken, en dit is de uitkomst. Er is niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
     youWereAskedDraw: "Jij moest tekenen",
-    yourPictureWasRemoved: "Je afbeelding is verwijderd",
-    aModeratorWarning: "Een waarschuwing van de moderatie",
-    aReportAboutYourPicture: "Een melding over je afbeelding is bekeken, en dit is de uitkomst. Verder is er niets aan je account veranderd.",
     theMessageThisWasAbout: "Het bericht waar het om ging:",
     theMessagesThisWasAbout: "De berichten waar het om ging:",
     theDrawingThisWasAbout: "De tekening waar het om ging:",
     theDrawingsThisWasAbout: "De tekeningen waar het om ging:",
+  },
+  warningNotice: {
+    whatAWarningMeans:
+      "Een melding over je gedrag is bekeken, en dit is de uitkomst. Er is niets beperkt, maar nog een melding kan tot schorsing van je account leiden.",
+    yourPictureWasRemoved: "Je afbeelding is verwijderd",
+    aModeratorWarning: "Een waarschuwing van de moderatie",
+    aReportAboutYourPicture: "Een melding over je afbeelding is bekeken, en dit is de uitkomst. Verder is er niets aan je account veranderd.",
     oneMoment: "Even geduld…",
     understood: "Oké",
   },

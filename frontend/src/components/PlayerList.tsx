@@ -116,7 +116,7 @@ export function PlayerList({
         notify(ui.playerList.friendRequestSent({ name: nickname }));
       }
     } catch {
-      notify(ui.playerList.thatRequestCouldNotBeSent);
+      notify(ui.playerList.requestCouldNotBeSent);
     }
   }
   const listRef = useRef<HTMLUListElement>(null);

@@ -51,7 +51,7 @@ export function InviteFriendsList() {
         notify(refusalText(answer, ui.inviteFriendsList.invitationCouldNotBeSent));
       }
     } catch {
-      notify(ui.inviteFriendsList.thatInvitationCouldNotBeSent);
+      notify(ui.inviteFriendsList.invitationCouldNotBeSent);
     } finally {
       setSending(null);
     }

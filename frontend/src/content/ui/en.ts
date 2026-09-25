@@ -602,7 +602,6 @@ export const EN = {
     pleaseWait: "Please wait…",
     sendAResetLink: "Send a reset link",
     setPassword: "Set password",
-    oneMoment: "Please wait…",
     nothingToConfirm: "Nothing to confirm.",
     resetLinkOnItsWay:
       "If that account exists and has a confirmed email address, a reset link is on its way.",
@@ -616,15 +615,8 @@ export const EN = {
     couldNotStartGamePleaseTry: "Could not start the game. Please try again.",
     couldNotStartRestartVote: "Could not start a restart vote.",
     couldNotRecordYourRestartVote: "Could not record your restart vote.",
-    copyRoomInviteLink: "Copy the room invite link",
-    clickCopyRoomInviteLink: "Click to copy room invite link",
     roomMenu: "Room menu",
-    afk: "AFK",
-    saveImage: "Save image",
-    saveDrawnImageFile: "Save drawn image to file",
-    playerSettings: "Player settings",
     leaveRoom: "Leave room",
-    leave: "Leave",
     players: "Players",
     youWereKickedFromThe: "You were kicked from the room.",
     thisRoomWasOpenedIn: "This room was opened in another tab.",
@@ -637,14 +629,7 @@ export const EN = {
       "You're the current drawer. Leaving now will interrupt your turn and advance the game for everyone.",
     theGameIsStillIn:
       "The game is still in progress. You'll leave the room and give up your place in this game.",
-    restartVoteAvailableInRestartCooldownSeconds:
-      (p: { restartCooldownSeconds: number }) => `Restart vote available in ${p.restartCooldownSeconds} seconds`,
-    proposeRestartingTheGame: "Propose restarting the game",
-    restartVoteAvailableInRestartCooldownSeconds2:
-      (p: { restartCooldownSeconds: number }) => `Restart vote available in ${p.restartCooldownSeconds}s`,
-    proposeAVoteToRestart: "Propose a vote to restart the game",
     backFromAfk: "Back from AFK",
-    goAfk: "Go AFK",
     closePlayers: "Close players",
     acceptTheColorSuggestion: "accept the color suggestion",
     dismissTheColorSuggestion: "dismiss the color suggestion",
@@ -1026,7 +1011,6 @@ export const EN = {
 
   friendInviteNotice: {
     couldNotJoinThatGame: "That game could not be joined.",
-    thatGameCouldNotBeJoined: "That game could not be joined.",
     invitedYouTheirGame: "invited you to their game.",
     join: "Join",
     dismissInvitation: "Dismiss invitation",
@@ -1035,9 +1019,7 @@ export const EN = {
   friendsOverlay: {
     declineWarning: (p: { name: string }) =>
       `${p.name} will not be able to ask again. You can still send them a request yourself later.`,
-    decline2: "Decline",
     youWillBothStopBeingAble: "You will both stop being able to join each other's games without an invitation. Either of you can ask again.",
-    remove2: "Remove",
     removeConfirm: (p: { name: string }) => `Remove ${p.name}?`,
     friends: "Friends",
     close: "Close",
@@ -1118,7 +1100,6 @@ export const EN = {
   inviteFriendsList: {
     invitationCouldNotBeSent: "That invitation could not be sent.",
     invitationSent: (p: { name: string }) => `Invitation sent to ${p.name}.`,
-    thatInvitationCouldNotBeSent: "That invitation could not be sent.",
     friendsLobby: "Friends in the lobby",
     invited: "Invited",
     invite: "Invite",
@@ -1295,7 +1276,6 @@ export const EN = {
     showMore: "Show more",
     tryAgain: "Try again",
     openDrawing: (p: { prompt: string; drawer: string }) => `Open "${p.prompt}" by ${p.drawer}`,
-    byDrawer: (p: { drawer: string }) => `by ${p.drawer}`,
     ago: (p: { count: number; unit: "minute" | "hour" | "day" }) => `${counted(p.count, { one: p.unit, other: `${p.unit}s` })} ago`,
     justNow: "just now",
     byDrawerPrefix: "by",
@@ -1304,7 +1284,6 @@ export const EN = {
     endOfTheRest: "Nothing more this way.",
     tryTopOverAllTime: "Try Top over all time for the rest",
     findARoom: "Find a room",
-    signIn: "Sign in",
     backToTop: "Back to top",
     topOfTheWeek: "Top of the week",
     nothingHereYetBody: "Every drawing kept from a public game ends up here.",
@@ -1437,7 +1416,6 @@ export const EN = {
         ? p.canReport ? `Kick vote, AFK vote or report ${p.name}` : `Kick vote or AFK vote for ${p.name}`
         : `Report ${p.name}`,
     whatToDoAbout: (p: { name: string }) => `What to do about ${p.name}`,
-    thatRequestCouldNotBeSent: "That request could not be sent.",
     drawing: "Drawing",
     gotIt: "Got it ·",
     afk: "AFK",
@@ -1699,7 +1677,6 @@ export const EN = {
     cancel: "Cancel",
   },
   reportDrawingDialog: {
-    report: "Report",
     reportThisDrawing: "Report this drawing",
     nothingHappensYet: "A moderator will look at the drawing. Nothing happens to the player until they do.",
     anythingElseOptional: "Anything else (optional)",
@@ -2055,7 +2032,6 @@ export const EN = {
     brushCursorStyle: "Brush cursor style",
     soundEffects: "Sound effects",
     chimesCorrectGuessStartTurnLast: "Chimes for a correct guess, the start of a turn, the last ten seconds, and players coming and going.",
-    volume2: "Volume",
     confetti: "Confetti",
     burstWhenYouGuessRightAgain: "A burst when you guess right, and again for the winner at the end of a game.",
     clickKeyRebindEachActionCan: "Click a key to rebind it. Each action can hold two. Press Esc to cancel.",
@@ -2167,7 +2143,6 @@ export const EN = {
   },
 
   stepUpDialog: {
-    codeFromYourAuthenticatorApp2: "Code from your authenticator app",
     passkeyNotUsed: "That passkey was not used. You can try again.",
     thatCodeWasNotAccepted: "That code was not accepted.",
     thatPasskeyWasNotAccepted: "That passkey was not accepted.",
@@ -2184,15 +2159,7 @@ export const EN = {
   },
 
   suspensionNotice: {
-    yourReportedDrawing: (p: { prompt: string }) =>
-      `Your drawing of ${p.prompt}, as it was reported`,
-    recordedAs: "Recorded as {category}",
     yourAccountSuspended: "Your account is suspended",
-    youWereAskedDraw: "You were asked to draw",
-    theMessageThisWasAbout: "The message this was about:",
-    theMessagesThisWasAbout: "The messages this was about:",
-    theDrawingThisWasAbout: "The drawing this was about:",
-    theDrawingsThisWasAbout: "The drawings this was about:",
     signingOut: "Signing out…",
     signOut: "Sign out",
   },
@@ -2274,15 +2241,11 @@ export const EN = {
       ]
         .filter(Boolean)
         .join(" "),
-    confirmAuthenticatorFirst:
-      "Before this account can be given a moderator or administrator role, confirm that the authenticator is yours with your password and a code from it.",
     copied: (p: { what: string }) => `${p.what} copied.`,
     couldNotCopy: (p: { what: string }) =>
       `Could not copy the ${p.what}. Select it and copy by hand.`,
     roleTaken: (p: { role: "admin" | "moderator" }) =>
       `You are now ${p.role === "admin" ? "an administrator" : "a moderator"}. Two-factor authentication is on, and the role that was waiting for it has taken effect. Your other devices have been signed out; this one carries on, and each sign-in from here asks for a code.`,
-    recoveryCodesLeft: (p: { count: number }) =>
-      `You have ${counted(p.count, { one: "recovery code", other: "recovery codes" })} left.`,
     couldNotReadYourSecuritySettings: "Could not read your security settings.",
     yourPasswordConfirmsAuthenticatorYours: "Your password confirms the authenticator is yours.",
     yourPasswordConfirmsThisPasskeyYours: "Your password confirms this passkey is yours.",
@@ -2352,8 +2315,6 @@ export const EN = {
 
   waitingRoomPanel: {
     editRoomRules: "Edit room rules",
-    roundCount: (p: { count: number }) =>
-      counted(p.count, { one: "round", other: "rounds" }),
     needMorePlayers: (p: { count: number }) =>
       `Need ${counted(p.count, { one: "more player", other: "more players" })}`,
     hostWillStart: (p: { rematch: boolean }): string =>
@@ -2388,21 +2349,24 @@ export const EN = {
     waitingForAHost: "Waiting for a host",
   },
 
-  warningNotice: {
+  /** What a warning and a suspension both show about the report behind them. */
+  moderationNotice: {
     yourReportedDrawing: (p: { prompt: string }) =>
       `Your drawing of ${p.prompt}, as it was reported`,
     recordedAs: "Recorded as {category}",
-    whatAWarningMeans:
-      "A report about your behavior was reviewed, and this is the outcome. Nothing is restricted, but a further report may lead to your account being suspended.",
     youWereAskedDraw: "You were asked to draw",
-    yourPictureWasRemoved: "Your picture was removed",
-    aModeratorWarning: "A moderator warning",
-    aReportAboutYourPicture:
-      "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected.",
     theMessageThisWasAbout: "The message this was about:",
     theMessagesThisWasAbout: "The messages this was about:",
     theDrawingThisWasAbout: "The drawing this was about:",
     theDrawingsThisWasAbout: "The drawings this was about:",
+  },
+  warningNotice: {
+    whatAWarningMeans:
+      "A report about your behavior was reviewed, and this is the outcome. Nothing is restricted, but a further report may lead to your account being suspended.",
+    yourPictureWasRemoved: "Your picture was removed",
+    aModeratorWarning: "A moderator warning",
+    aReportAboutYourPicture:
+      "A report about your picture was reviewed, and this is the outcome. Nothing else on your account is affected.",
     oneMoment: "Please wait…",
     understood: "OK",
   },

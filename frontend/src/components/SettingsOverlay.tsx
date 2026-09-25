@@ -1143,7 +1143,7 @@ function SoundPane() {
           }}
         />
         {soundEffects && (
-          <Row label={ui.settingsOverlay.volume2}>
+          <Row label={ui.settingsOverlay.volume}>
             <span
               className="settings-volume-control"
               style={{ ["--volume-progress" as string]: `${volume * 100}%` }}
