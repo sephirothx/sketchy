@@ -1216,7 +1216,6 @@ export const PT: Catalogue = {
     couldNotChangeTheStar: "Não foi possível alterar a estrela.",
     copiedToYourLists: "Copiada para as listas de palavras da conta.",
     couldNotCopyThatList: "Não foi possível copiar essa lista.",
-    reportSent: "Denúncia enviada.",
     // The count is part of the name: a screen reader hears one control, so it
     // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
@@ -1515,21 +1514,17 @@ export const PT: Catalogue = {
 
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Denunciar ${p.name}`,
-    couldNotSendReport: "Não foi possível enviar o relatório.",
     reportsAreReviewedAfterSubmissionList: "As denúncias são analisadas depois de enviadas. A lista continua disponível a menos que um moderador a oculte.",
+    sentWithTheListAttached: "Enviada, com uma cópia da lista tal como está agora.",
     content: "Conteúdo",
     entireList: "Lista inteira",
     reason: "Motivo",
-    whatShouldModeratorKnow: "O que deve o moderador saber?",
-    cancel: "Cancelar",
     inappropriateContent: "Conteúdo impróprio",
     hatefulOrAbusiveContent: "Conteúdo de ódio ou abusivo",
     sexualContent: "Conteúdo sexual",
     violence: "Violência",
     spam: "Spam",
     other: "Outro",
-    sending: "A enviar…",
-    sendReport: "Enviar denúncia",
   },
 
   promptDisplay: {
@@ -1641,36 +1636,30 @@ export const PT: Catalogue = {
     nothingHappensYet: (p: { name: string }) =>
       `Um moderador vai ver isto. Não acontece nada a ${p.name} neste momento, e não lhe é dito quem denunciou.`,
     theirPicture: (p: { name: string }) => `imagem de ${p.name}`,
-    thatReportCouldNotBeSent: "Não foi possível enviar essa denúncia. Tenta de novo.",
     whatWrongWith: "O que está mal",
     reportedTheirNameTheyHaveNo: "Denunciado pelo nome. Não tem imagem para denunciar.",
-    anythingElseOptional: "Mais alguma coisa (opcional)",
-    anythingModeratorShouldKnow: "Tudo o que um moderador deva saber",
     sentWithWhatAboutAttached: "Enviada, com o que lhe diz respeito em anexo.",
-    done: "OK",
     inappropriateName: "Nome impróprio",
     inappropriatePicture: "Imagem imprópria",
-    reportSent: "Denúncia enviada",
     reportDisplayName: (p: { displayName: string }) =>
       `Denunciar ${p.displayName}`,
     thePictureOnTheAccount: "A imagem da conta é anexada tal como está agora.",
     theNameOnTheAccount: "O nome da conta é anexado tal como está agora.",
-    sending: "A enviar…",
+  },
+  reportDialog: {
     sendReport: "Enviar denúncia",
-    cancel: "Cancelar",
+    sending: "A enviar…",
+    reportSent: "Denúncia enviada",
+    anythingElseOptional: "Mais alguma coisa (opcional)",
+    anythingModeratorShouldKnow: "Tudo o que um moderador deva saber",
+    couldNotSend: "Não foi possível enviar a denúncia.",
+    charactersLeft: (p: { count: number }) =>
+      `${plural(p.count, { one: "Resta", other: "Restam" })} ${counted(p.count, { one: "carácter", other: "caracteres" })}`,
   },
   reportDrawingDialog: {
     reportThisDrawing: "Denunciar este desenho",
     nothingHappensYet: "Um moderador vai ver o desenho. Até lá, não acontece nada ao jogador.",
-    anythingElseOptional: "Mais alguma coisa (opcional)",
-    anythingModeratorShouldKnow: "Tudo o que um moderador deva saber",
-    sendReport: "Enviar denúncia",
-    sending: "A enviar…",
-    reportSent: "Denúncia enviada",
     sentWithTheDrawingAttached: "Enviada, com o desenho em anexo.",
-    thatReportCouldNotBeSent: "Não foi possível enviar essa denúncia.",
-    done: "OK",
-    cancel: "Cancelar",
   },
 
   reportedDrawing: {
@@ -1682,37 +1671,26 @@ export const PT: Catalogue = {
   reportLobbyLineDialog: {
     nothingHappensYet: (p: { name: string }) =>
       `Um moderador vai ver esta linha. Não acontece nada a ${p.name} neste momento, e não lhe é dito quem denunciou.`,
-    thatReportCouldNotBeSent: "Não foi possível enviar essa denúncia. Tenta de novo.",
     whatWrongWith: "O que está mal",
-    anythingElseOptional: "Mais alguma coisa (opcional)",
-    anythingModeratorShouldKnow: "Tudo o que um moderador deva saber",
     thisLineAttachedWithWhatLobby: "Esta linha vai em anexo, com o que o átrio disse à volta.",
     sentWithLineWhatWasSaid: "Enviada, com a linha e o que se disse à volta em anexo.",
-    done: "OK",
     harassmentOrAbuse: "Assédio ou abuso",
     spam: "Spam",
     inappropriateName: "Nome impróprio",
-    reportSent: "Denúncia enviada",
     reportDisplayName: (p: { displayName: string }) =>
       `Denunciar ${p.displayName}`,
-    sending: "A enviar…",
-    sendReport: "Enviar denúncia",
-    cancel: "Cancelar",
   },
 
   reportPlayerDialog: {
-    reportCouldNotBeSent: "Não foi possível enviar essa denúncia.",
     recentMessages: (p: { count: number }) =>
       `${p.count} das suas ${plural(p.count, { one: "mensagem recente", other: "mensagens recentes" })}`,
     nothingHappensYet: (p: { name: string }) =>
       `Um moderador vai ver isto. Não acontece nada a ${p.name} neste momento, e não lhe é dito quem denunciou.`,
     whatHappened: "O que aconteceu",
-    anythingElseOptional: "Mais alguma coisa (opcional)",
     whatTheySaidDrewWhen: "O que disse ou desenhou, e quando",
     theirRecentMessagesThisRoomAre: "As mensagens recentes desta pessoa nesta sala vão em anexo automaticamente,\n                com o que se disse à volta, por isso isto pode ficar vazio.",
     includeTheirDrawing: "Incluir o desenho dela",
     canvasAsRightNowSoModerator: "A tela tal como está agora, para que um moderador veja o que\n                      tu viste.",
-    done: "OK",
     sentWithTheirDrawingAnd: (p: { messages: string }) =>
       `Enviada, com o desenho e ${p.messages} em anexo.`,
     sentWithTheirDrawingAttached: "Enviada, com o desenho em anexo.",
@@ -1730,10 +1708,6 @@ export const PT: Catalogue = {
     sendThatReport: "enviar essa denúncia",
     reportNickname: (p: { nickname: string }) =>
       `Denunciar ${p.nickname}`,
-    reportSent: "Denúncia enviada",
-    sending: "A enviar…",
-    sendReport: "Enviar denúncia",
-    cancel: "Cancelar",
   },
 
   reportsReviewedNotice: {

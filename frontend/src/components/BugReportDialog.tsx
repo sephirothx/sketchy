@@ -207,7 +207,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
       <textarea id={detailsId} className="report-details" rows={4} value={details} required maxLength={MAX_DETAILS}
         placeholder={ui.bugReportDialog.whatYouDidWhatYouExpected}
         onChange={(event) => setDetails(event.target.value)} />
-      <p className="bug-report-counter">{details.length} / {MAX_DETAILS}</p>
+      <p className="field-counter">{details.length} / {MAX_DETAILS}</p>
 
       {captureSupported && !descriptionOnly && (
         <section className="bug-report-shot">

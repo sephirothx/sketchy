@@ -285,8 +285,11 @@
   .bug-report-row { grid-template-columns: 1fr; }
 }
 
-.bug-report-counter {
-  color: var(--faint);
+/* How much room a text box has left, right-aligned under the box it counts:
+   the bug report's always, a moderation report's only near its limit.
+   Muted rather than faint - it is read, not decoration. */
+.field-counter {
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   margin: 0;

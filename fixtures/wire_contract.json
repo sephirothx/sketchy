@@ -753,7 +753,7 @@
     "properties": {
      "details": {
       "default": "",
-      "maxLength": 1000,
+      "maxLength": 2000,
       "title": "Details",
       "type": "string"
      },
@@ -2776,7 +2776,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 42,
+ "protocolVersion": 43,
  "refusal": {
   "codes": [
    "invalid_payload",

@@ -1586,7 +1586,8 @@ Any signed-in player, including a guest account, can submit a private **Report**
 with `POST /api/reports`. Reports use one of six bounded reasons—harassment,
 offensive drawing, inappropriate name, cheating, spam, or inappropriate
 picture—plus up to 2,000
-characters of detail and an optional 32 KiB JSON context snapshot. Game and
+characters of optional detail (the same limit on every report route, the room's
+socket report included) and an optional 32 KiB JSON context snapshot. Game and
 turn references are validated when supplied. Submitted context is preserved as
 versioned, reporter-supplied evidence; it is not treated as a server-verified
 fact merely because it was stored. The optional `messageIds` field pins up to
@@ -1606,7 +1607,7 @@ A signed-in player may use `POST /api/prompt-content-reports` to report a
 published list or an exact `promptVersionId` in one; official bundled content,
 lists that are not published, and self-reports are rejected. Reasons are inappropriate, hateful or abusive,
 sexual content, violence, spam, or other, with up to 2,000 characters of
-detail. Moderators and administrators list and one-time review the queue at
+optional detail. Moderators and administrators list and one-time review the queue at
 `/api/moderation/prompt-content-reports`. A resolved review explicitly chooses
 Active or Hidden; a dismissal cannot mutate content. The workflow is
 post-moderation, so a report alone never changes availability.

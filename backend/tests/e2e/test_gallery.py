@@ -110,8 +110,8 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await dialog.wait_for()
             await dialog.locator("textarea").fill("Not for a lobby.")
             await dialog.locator('[data-testid="report-drawing-send"]').click()
-            await dialog.get_by_role("button", name="OK", exact=True).wait_for()
-            await dialog.get_by_role("button", name="OK", exact=True).click()
+            await dialog.get_by_role("button", name="Close").wait_for()
+            await dialog.get_by_role("button", name="Close").click()
 
             # Back to the feed, which shows the reaction on the card.
             await stranger.go_back()

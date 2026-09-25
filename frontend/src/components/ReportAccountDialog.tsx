@@ -1,9 +1,7 @@
-import { useEffect, useId, useRef, useState } from "react";
-import { createPortal } from "react-dom";
+import { useState } from "react";
 
-import { ModalShell } from "./ui/ModalShell";
+import { ReportDialog, type ReportReasonChoice } from "./ReportDialog";
 import { submitPlayerReport, type ReportReason } from "../lib/moderation";
-import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { isUploadedPicture } from "../lib/avatarDoodles";
 
@@ -40,12 +38,7 @@ export function ReportAccountDialog({
   avatarUrl: string | null;
   onClose: () => void;
 }) {
-  const detailsRef = useRef<HTMLTextAreaElement | null>(null);
-  const reasonRef = useRef<HTMLSelectElement | null>(null);
-  const fieldId = useId();
-  const formId = `${fieldId}-form`;
-  const doneRef = useRef<HTMLButtonElement | null>(null);
-  const reasons: { value: ReportReason; label: string }[] = [
+  const reasons: ReportReasonChoice<ReportReason>[] = [
     { value: "inappropriate_name", label: ui.reportAccountDialog.inappropriateName },
     // A doodle is our drawing rather than something the player put up, so
     // it is no more a picture to complain about than no picture (R-AVA-09).
@@ -54,145 +47,40 @@ export function ReportAccountDialog({
       : []),
   ];
   const [reason, setReason] = useState<ReportReason>(reasons[0].value);
-  const [details, setDetails] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [sent, setSent] = useState(false);
 
-  // Sending swaps the form for the answer, and the submit button that held
-  // focus goes with it; focus follows to Done rather than dropping to the page.
-  useEffect(() => {
-    if (sent) doneRef.current?.focus();
-  }, [sent]);
-
-  async function submit(event: React.FormEvent) {
-    event.preventDefault();
-    if (busy) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await submitPlayerReport({
-        reportedUserId: userId,
-        reason,
-        // Sent as typed, empty included: the picture is the complaint, and
-        // the queue says "no details given" rather than reading a stand-in
-        // as the reporter's words.
-        details: details.trim(),
-      });
-      setSent(true);
-    } catch (problem) {
-      setError(
-        refusalText(problem, ui.reportAccountDialog.thatReportCouldNotBeSent),
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return createPortal(
-    <ModalShell
-      title={sent ? ui.reportAccountDialog.reportSent : ui.reportAccountDialog.reportDisplayName({ displayName })}
-      overlayClassName="report-player-overlay"
+  return (
+    <ReportDialog
+      title={ui.reportAccountDialog.reportDisplayName({ displayName })}
+      intro={ui.reportAccountDialog.nothingHappensYet({ name: displayName })}
       testId="report-account-dialog"
-      onDismiss={onClose}
-      initialFocusRef={reasons.length > 1 ? reasonRef : detailsRef}
-      footer={
-        !sent ? (
-          <>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
-              {ui.reportAccountDialog.cancel}
-            </button>
-            <button
-              type="submit"
-              form={formId}
-              className="btn btn-primary"
-              disabled={busy}
-            >
-              {busy ? ui.reportAccountDialog.sending : ui.reportAccountDialog.sendReport}
-            </button>
-          </>
-        ) : (
-          <button ref={doneRef} type="button" className="btn btn-primary" onClick={onClose}>
-            {ui.reportAccountDialog.done}
-          </button>
+      // Shown only while it is what the complaint is about: a picture beside
+      // a complaint about a name is the wrong evidence in front of the person
+      // choosing.
+      quoted={
+        avatarUrl && reason === "inappropriate_avatar" && (
+          <figure className="report-quoted-picture" data-testid="report-quoted-picture">
+            <img src={avatarUrl} alt={ui.reportAccountDialog.theirPicture({ name: displayName })} />
+          </figure>
         )
       }
-    >
-      {!sent ? (
-        <>
-          <p className="modal-body">
-            {ui.reportAccountDialog.nothingHappensYet({ name: displayName })}
-          </p>
-          {/* Shown only while it is what the complaint is about: a picture
-              beside a complaint about a name is the wrong evidence in front
-              of the person choosing. */}
-          {avatarUrl && reason === "inappropriate_avatar" && (
-            <figure className="report-quoted-picture" data-testid="report-quoted-picture">
-              <img src={avatarUrl} alt={ui.reportAccountDialog.theirPicture({ name: displayName })} />
-            </figure>
-          )}
-          <form id={formId} onSubmit={submit} className="auth-form">
-            {/* One reason is not a choice. An account with no picture can
-                only be reported for its name, and a select of one asks a
-                question with a single answer. */}
-            {reasons.length > 1 ? (
-              <>
-                <label htmlFor={`${fieldId}-reason`}>{ui.reportAccountDialog.whatWrongWith}</label>
-                <select
-                  id={`${fieldId}-reason`}
-                  ref={reasonRef}
-                  className="report-reason"
-                  value={reason}
-                  onChange={(change) =>
-                    setReason(change.target.value as ReportReason)
-                  }
-                >
-                  {reasons.map((option) => (
-                    <option key={option.value} value={option.value}>
-                      {option.label}
-                    </option>
-                  ))}
-                </select>
-              </>
-            ) : (
-              <p className="auth-hint">
-                {ui.reportAccountDialog.reportedTheirNameTheyHaveNo}
-              </p>
-            )}
-
-            <label htmlFor={`${fieldId}-details`}>{ui.reportAccountDialog.anythingElseOptional}</label>
-            <textarea
-              id={`${fieldId}-details`}
-              ref={detailsRef}
-              className="report-details"
-              rows={3}
-              maxLength={1000}
-              value={details}
-              onChange={(change) => {
-                setDetails(change.target.value);
-                setError(null);
-              }}
-              placeholder={ui.reportAccountDialog.anythingModeratorShouldKnow}
-            />
-            <p className="auth-hint">
-              {reason === "inappropriate_avatar"
-                ? ui.reportAccountDialog.thePictureOnTheAccount
-                : ui.reportAccountDialog.theNameOnTheAccount}
-            </p>
-
-            {error && (
-              <p className="auth-error" role="alert">
-                {error}
-              </p>
-            )}
-          </form>
-        </>
-      ) : (
-        <p className="modal-body">
-          {ui.reportAccountDialog.sentWithWhatAboutAttached}
-        </p>
-      )}
-    </ModalShell>,
-    document.body,
+      reason={{
+        label: ui.reportAccountDialog.whatWrongWith,
+        choices: reasons,
+        value: reason,
+        onChange: setReason,
+        // An account with no picture can only be reported for its name.
+        onlyChoice: ui.reportAccountDialog.reportedTheirNameTheyHaveNo,
+      }}
+      attachedHint={
+        reason === "inappropriate_avatar"
+          ? ui.reportAccountDialog.thePictureOnTheAccount
+          : ui.reportAccountDialog.theNameOnTheAccount
+      }
+      onSend={async (details) => {
+        await submitPlayerReport({ reportedUserId: userId, reason, details });
+        return ui.reportAccountDialog.sentWithWhatAboutAttached;
+      }}
+      onClose={onClose}
+    />
   );
 }

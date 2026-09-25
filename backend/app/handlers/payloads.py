@@ -46,7 +46,7 @@ from app.canvas_history import MAX_CANVAS_ACTIONS
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
 from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
 from app.handlers.refusals import ErrorCode, refuse
-from app.message_limits import MAX_CHAT_MESSAGE_LENGTH
+from app.message_limits import MAX_CHAT_MESSAGE_LENGTH, MAX_REPORT_DETAILS
 from app.rooms import (
     DEFAULT_ROOM_DRAWING_SECONDS,
     DEFAULT_ROOM_HINT_MODE,
@@ -568,7 +568,8 @@ class ReportPlayerPayload(RequestModel):
     # Optional: the server attaches the evidence itself, and for a report
     # from a room that evidence - the messages, the drawing - is usually the
     # whole complaint. Stripped, so a row of spaces is the same as nothing.
-    details: str = Field(default="", max_length=1000)
+    # Bounded as every report route is (`MAX_REPORT_DETAILS`).
+    details: str = Field(default="", max_length=MAX_REPORT_DETAILS)
     # A request, not a payload: the reporter asks for the canvas to be copied
     # and never sends it. The server takes the frame from the room's own state
     # and only when the reported seat is the one drawing on it.

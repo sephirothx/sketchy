@@ -589,10 +589,6 @@ export function CommunityCataloguePage() {
       {reporting && detail && <PromptContentReportDialog
         promptList={{ id: detail.id, name: detail.name, prompts: detail.prompts }}
         onClose={() => setReporting(false)}
-        onSubmitted={() => {
-          setReporting(false);
-          notify(ui.communityCataloguePage.reportSent, "success");
-        }}
       />}
     </div>
   );
