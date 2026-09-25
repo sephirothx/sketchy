@@ -203,15 +203,10 @@ function SiteNav() {
     return () => observer.disconnect();
   }, [wide, words, crowded]);
 
-  const pages: { to: string; label: string; name?: string; icon: ReactNode }[] = [
+  const pages: { to: string; label: string; icon: ReactNode }[] = [
     { to: "/", label: ui.lobbyBrowserPage.lobby, icon: <HomeIcon size={16} /> },
     ...(hasSession ? [{ to: "/gallery", label: ui.galleryPage.gallery, icon: <ImageIcon size={16} /> }] : []),
-    {
-      to: "/community-lists",
-      label: ui.appHeader.community,
-      name: ui.communityCataloguePage.communityCatalogue,
-      icon: <StarIcon size={16} />,
-    },
+    { to: "/community-lists", label: ui.communityCataloguePage.communityCatalogue, icon: <StarIcon size={16} /> },
     { to: "/prompt-lists", label: ui.accountMenu.promptStats, icon: <BarChartIcon size={16} /> },
     { to: "/rules", label: ui.accountMenu.rules, icon: <InfoIcon size={16} /> },
   ];
@@ -224,8 +219,7 @@ function SiteNav() {
               to={page.to}
               className="site-nav-link"
               aria-current={siteLinkCurrent(page.to, pathname)}
-              aria-label={page.name}
-              title={labelled ? page.name : (page.name ?? page.label)}
+              title={labelled ? undefined : page.label}
             >
               {page.icon}
               <span className="site-nav-label">{page.label}</span>
