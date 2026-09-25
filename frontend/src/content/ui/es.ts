@@ -979,6 +979,7 @@ export const ES: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameTooShort: (p: { min: number }) => `Un nombre necesita al menos ${p.min} caracteres.`,
     nameInUse: (p: { name: string }) =>
       `Alguien conectado ya juega como «${p.name}». Elige otro nombre para seguir jugando.`,
     couldNotSaveThatNamePlease: "No se pudo guardar ese nombre. Inténtalo de nuevo.",

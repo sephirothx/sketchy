@@ -1,9 +1,9 @@
-import { useId, useState, type CSSProperties } from "react";
+import { useId, useRef, useState, type CSSProperties } from "react";
 import { Link } from "react-router-dom";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
-import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { MIN_NICKNAME_LENGTH, nicknameError, nicknameInput } from "../lib/roomEntryState";
 import { refusalText } from "../lib/refusals.ts";
 import { firstRunLine } from "../lib/firstRunLines";
 import { DOODLE_SPRITE } from "../lib/avatarDoodles";
@@ -65,6 +65,10 @@ export function FirstRunIdentity() {
   const setName = useAuthStore((s) => s.setNameDraft);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // While an input method is composing, its text is left alone: filtering
+  // half a composition would fight the IME. What it commits is filtered.
+  const composing = useRef(false);
+  const fieldRef = useRef<HTMLInputElement>(null);
 
   // Nothing until the initial GET /api/auth/me settles. A null user means
   // "not known yet" as well as "nobody", and offering these controls in that
@@ -79,13 +83,35 @@ export function FirstRunIdentity() {
   if (!needsIdentity(user)) return null;
   const takenName = user?.nameInUse ? user.displayName : null;
 
+  /** Keep only what the name rule allows (`nicknameInput`). The field is
+      corrected in place, caret included, before React compares it with the
+      draft: a character that is refused leaves the draft as it was, and
+      React would otherwise restore the old value with the caret at the end. */
+  function enterName(field: HTMLInputElement) {
+    const next = nicknameInput(field.value, field.selectionStart ?? field.value.length);
+    if (next.value !== field.value) {
+      field.value = next.value;
+      field.setSelectionRange(next.caret, next.caret);
+    }
+    setName(next.value);
+    setError(null);
+  }
+
   async function nameMe(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
     const chosen = name.trim();
-    const invalid = nicknameError(chosen);
+    // The field only takes the rule's characters, so short (or reserved) is
+    // all a name here can still be; saying just that is also what keeps the
+    // message to the two lines held for it under the tag.
+    const invalid =
+      chosen.length < MIN_NICKNAME_LENGTH
+        ? ui.firstRunIdentity.nameTooShort({ min: MIN_NICKNAME_LENGTH })
+        : nicknameError(chosen);
     if (invalid) {
       setError(invalid);
+      // Back in the field that fixes it, rather than on the button.
+      fieldRef.current?.focus();
       return;
     }
     setBusy(true);
@@ -95,6 +121,7 @@ export function FirstRunIdentity() {
       setError(
         refusalText(saveError, ui.firstRunIdentity.couldNotSaveThatNamePlease),
       );
+      fieldRef.current?.focus();
     } finally {
       setBusy(false);
     }
@@ -119,23 +146,41 @@ export function FirstRunIdentity() {
           {ui.firstRunIdentity.nameInUse({ name: takenName })}
         </p>
       )}
+      {/* The tag and the line under it are one grid item, so the message
+          sits under the tag in every layout. The line is always there, a
+          message or not: shown inside the tag, an error made the tag taller
+          and moved everything under it; appearing under it, it would still
+          have pushed the card. */}
+      <div className="first-run-tag-block">
       <form className="first-run-tag" onSubmit={nameMe}>
         <label className="first-run-tag-top" htmlFor={`${fieldId}-name`}>
           {ui.firstRunIdentity.helloMyNameIs}
         </label>
         <div className="first-run-guest-row">
           {/* Search type suppresses Android Chrome's unrelated autofill toolbar,
-              matching every other name field in the app. */}
+              matching every other name field in the app. No `maxLength`: the
+              length is `nicknameInput`'s to cap, after the characters it
+              drops, or a paste with spaces in it lost letters to the limit. */}
           <input
+            ref={fieldRef}
             id={`${fieldId}-name`}
             type="search"
             inputMode="text"
             value={name}
             onChange={(event) => {
-              setName(event.target.value);
-              setError(null);
+              if (composing.current) {
+                setName(event.target.value);
+                return;
+              }
+              enterName(event.target);
             }}
-            maxLength={MAX_NICKNAME_LENGTH}
+            onCompositionStart={() => {
+              composing.current = true;
+            }}
+            onCompositionEnd={(event) => {
+              composing.current = false;
+              enterName(event.currentTarget);
+            }}
             placeholder={ui.firstRunIdentity.displayName}
             autoComplete="nickname"
             autoCapitalize="off"
@@ -149,9 +194,6 @@ export function FirstRunIdentity() {
         <button type="submit" className="first-run-guest-submit" disabled={busy}>
           {busy ? "\u2026" : ui.firstRunIdentity.stickItOn}
         </button>
-        {error && (
-          <p id={`${fieldId}-error`} className="auth-error" role="alert">{error}</p>
-        )}
         {/* The tag's fine print. Before a name there is no chip and its menu,
             and on a phone the header has no room for its site links, so
             without this a visitor could not read the rules of a game they
@@ -162,6 +204,12 @@ export function FirstRunIdentity() {
           {ui.accountMenu.rules}
         </Link>
       </form>
+      <div className="first-run-error-line">
+        {error && (
+          <p id={`${fieldId}-error`} className="auth-error" role="alert">{error}</p>
+        )}
+      </div>
+      </div>
 
       <div className="first-run-say">
         <h2 id={`${fieldId}-heading`} className="first-run-heading">{firstRunLine()}</h2>

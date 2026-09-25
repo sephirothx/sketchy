@@ -89,10 +89,18 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             assert await page.is_visible(".first-run-login")
             assert await page.is_visible(".first-run-signup")
 
-            # Guest play is one field and one click.
+            # The field only takes the name rule's characters: a space and a
+            # "!" typed key by key are simply not entered.
+            field = page.locator(".first-run-guest-row input")
+            await field.press_sequentially("a b!c")
+            assert await field.input_value() == "abc"
+
+            # Guest play is one field and one click. Too short is refused
+            # under the tag, not inside it, and the field says it is invalid.
             await page.fill(".first-run-guest-row input", "ab")
             await page.click(".first-run-guest-submit")
-            await page.wait_for_selector(".auth-error")
+            await page.wait_for_selector(".first-run-error-line .auth-error")
+            assert await field.get_attribute("aria-invalid") == "true"
 
             await page.fill(".first-run-guest-row input", "Marta")
             await page.click(".first-run-guest-submit")

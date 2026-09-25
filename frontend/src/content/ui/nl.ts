@@ -979,6 +979,7 @@ export const NL: Catalogue = {
   },
 
   firstRunIdentity: {
+    nameTooShort: (p: { min: number }) => `Een naam heeft minstens ${p.min} tekens nodig.`,
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
     couldNotSaveThatNamePlease: "Deze naam kon niet opgeslagen worden. Probeer het nog eens.",

@@ -664,12 +664,35 @@
 
 /* The tag itself: a red banner, a dashed rule to write on, and the button
    that sticks it on. Tilted a degree and a half, because a sticker is. */
-.first-run-tag {
-  background: #fff;
-  /* A name tag is a name tag: it never runs the width of the card. */
+/* The tag and the line under it: the grid item. A name tag is a name tag:
+   it never runs the width of the card. */
+.first-run-tag-block {
+  display: grid;
+  gap: 6px;
   justify-self: center;
   max-width: 360px;
+  min-width: 0;
   width: 100%;
+}
+
+/* Where the name's error goes, under the tag rather than in it: in it, the
+   message made the tag taller and moved the button and everything under it.
+   Two lines are always held for it, the most the longest message (the name
+   taken by somebody online) takes at the tag's narrowest, so a message that
+   appears or clears moves nothing. */
+.first-run-error-line {
+  min-height: calc(2 * 1.4 * 13px);
+}
+
+.first-run-error-line .auth-error {
+  line-height: 1.4;
+  margin: 0;
+  padding: 0 4px;
+  text-align: center;
+}
+
+.first-run-tag {
+  background: #fff;
   border: 2px solid var(--tag-edge, #c8102e);
   border-radius: 12px;
   box-shadow: 0 3px 0 rgba(20, 16, 10, 0.14);
@@ -716,6 +739,14 @@
   font-weight: 500;
 }
 
+/* A name the form refused: the line it is written on turns red, beside the
+   message under the tag. The light theme's `--danger`, written out: the tag
+   is white in both themes, and the dark theme's paler red is under 3:1 on
+   white, too faint for the one mark on the field itself. */
+.first-run-guest-row input[aria-invalid="true"] {
+  border-bottom-color: #c92a2a;
+}
+
 .first-run-guest-row input:focus-visible {
   border-bottom-color: var(--tag-edge, #c8102e);
   outline: 3px solid var(--primary-edge-soft);
@@ -737,9 +768,6 @@
   padding: 0 18px;
 }
 
-.first-run-tag .auth-error {
-  margin: 0 14px;
-}
 
 /* The tag's fine print: the Rules, under the button. The tag is a white
    sticker in both themes, so its ink is literal like the field's (#292520)
@@ -893,7 +921,7 @@
   }
 }
 
-.first-run-tag,
+.first-run-tag-block,
 .first-run-say {
   position: relative;
   z-index: 1;

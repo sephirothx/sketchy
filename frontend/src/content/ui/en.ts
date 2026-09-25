@@ -994,6 +994,8 @@ export const EN = {
   },
 
   firstRunIdentity: {
+    /** The name tag's one rule it can still break: its field only takes allowed characters. */
+    nameTooShort: (p: { min: number }) => `A name needs at least ${p.min} characters.`,
     nameInUse: (p: { name: string }) =>
       `Someone online is already playing as “${p.name}”. Choose another name to keep playing.`,
     couldNotSaveThatNamePlease: "Could not save that name. Please try again.",
