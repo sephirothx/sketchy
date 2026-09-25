@@ -30,7 +30,7 @@
      A percentage keeps the margin proportional at every width. */
   padding: 3.5%;
   border: 1.5px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow);
   margin-bottom: 16px;
   overflow: hidden;

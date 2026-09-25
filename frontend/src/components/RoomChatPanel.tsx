@@ -317,7 +317,7 @@ export function RoomChatPanel({
       aria-labelledby="room-chat-title"
     >
       <div className="room-panel-heading room-chat-heading">
-        <h2 id="room-chat-title">
+        <h2 id="room-chat-title" className="panel-title">
           {mode === "waiting"
             ? ui.roomChatPanel.chatWhileYouWait
             : mode === "game-end"
@@ -362,7 +362,7 @@ export function RoomChatPanel({
       )}
       {mode === "playing" && guessedPrompt && (
         <p className="guess-verdict-hit" data-testid="guess-verdict-hit">
-          <span className="guess-verdict-hit-head">
+          <span className="section-label guess-verdict-hit-head">
             {ui.roomChatPanel.correctWithPlace({
               place: guessPlace ? ui.format.ordinal({ value: guessPlace }) : null,
             })}

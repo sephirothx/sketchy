@@ -72,9 +72,9 @@ export function RoomPlayersPanel({
     <section className="room-players-panel" aria-labelledby="room-players-title">
       <div className="room-panel-heading">
         <div>
-          {showFinalStandings && <p className="room-panel-kicker">{ui.roomPlayersPanel.finalStandings}</p>}
+          {showFinalStandings && <p className="section-label room-panel-kicker">{ui.roomPlayersPanel.finalStandings}</p>}
           <div className="room-players-title-row">
-            <h2 id="room-players-title">{ui.roomPlayersPanel.players}</h2>
+            <h2 id="room-players-title" className="panel-title">{ui.roomPlayersPanel.players}</h2>
             <span
               className="room-player-occupancy"
               aria-label={ui.roomPlayersPanel.playersOfCapacity({ here: activePlayers.length, capacity: maxPlayers })}

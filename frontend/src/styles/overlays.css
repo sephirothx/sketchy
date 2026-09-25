@@ -7,7 +7,7 @@
   align-items: center;
   justify-content: center;
   background: var(--scrim);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   z-index: 10;
 }
 
@@ -19,7 +19,7 @@
   display: flex;
   flex-direction: column;
   background: var(--card);
-  border-radius: 16px;
+  border-radius: var(--radius);
   padding: 20px 24px;
   min-width: 280px;
   width: min(430px, 92%);
@@ -38,11 +38,6 @@
 .turn-results-panel h3 {
   margin: 0 0 2px;
   text-align: center;
-  color: var(--faint);
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
 }
 
 .turn-results-prompt {
@@ -63,7 +58,7 @@
 
 .turn-results-personal {
   background: var(--primary-soft);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   color: var(--primary-ink);
   font-weight: 700;
   margin: 0 0 10px;
@@ -102,7 +97,7 @@
   flex-direction: column;
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-raised);
   box-sizing: border-box;
   max-height: calc(100vh - 120px);
@@ -182,7 +177,7 @@
 
 .game-end-podium-block {
   width: 100%;
-  border-radius: 10px 10px 0 0;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -234,7 +229,7 @@
 
 .game-end-standings li.is-you {
   background: var(--primary-soft);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
 }
 
 .game-end-standing-rank {
@@ -279,7 +274,7 @@
   background: var(--primary);
   color: #fff;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 11px 26px 11px 15px;
   font-family: var(--font-display);
   font-weight: 600;
@@ -319,7 +314,7 @@
 .game-highlights-card {
   background: var(--card);
   border: 1.5px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius);
   box-shadow: var(--shadow-raised);
   box-sizing: border-box;
   max-height: calc(100vh - 120px);
@@ -394,18 +389,9 @@
   justify-content: center;
   width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--warm-soft);
   color: var(--warm-ink);
-}
-
-.game-highlights-label {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  margin: 0;
-  text-transform: uppercase;
 }
 
 .game-highlights-subject {
@@ -575,7 +561,7 @@
 
 .bottom-sheet {
   background: var(--card);
-  transition: transform 180ms ease;
+  transition: transform var(--dur) ease;
   border: 1.5px solid var(--line);
   border-radius: var(--radius);
   box-shadow: var(--shadow-raised);
@@ -627,7 +613,7 @@
   align-items: center;
   background: var(--well);
   border: 1.5px solid var(--line);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   color: var(--muted);
   cursor: pointer;
   display: inline-flex;
@@ -770,7 +756,6 @@
 
   /* The word, and what it did to your score, are the two things worth the
      top of the sheet; the standings scroll under them. */
-  .turn-results-panel h3 { font-size: 11px; }
   .turn-results-prompt { font-size: 1.35rem; margin-bottom: 8px; }
   .turn-results-prompt strong { font-size: 24px; }
 }

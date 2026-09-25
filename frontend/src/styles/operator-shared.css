@@ -70,9 +70,5 @@
 
 .notice-category {
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 600;
-  letter-spacing: .04em;
   margin-bottom: 2px;
-  text-transform: uppercase;
 }

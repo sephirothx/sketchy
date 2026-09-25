@@ -171,7 +171,7 @@
   width: 40px;
   height: 48px;
   border: 1.5px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--field);
   font-family: var(--font-display);
   font-weight: 600;
@@ -205,11 +205,6 @@
   flex-wrap: wrap;
   gap: 8px;
   margin-left: auto;
-}
-
-.lobby-rooms-heading h2 {
-  font-size: 22px;
-  margin: 0;
 }
 
 .lobby-rooms-count {
@@ -288,7 +283,7 @@
 .lobby-filter-toggle {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 9px 15px;
   font-family: var(--font-body);
   font-size: 13px;
@@ -430,7 +425,7 @@
   margin: 0 auto;
   padding: 28px;
   border: 1.5px solid var(--line);
-  border-radius: 18px;
+  border-radius: var(--radius);
   background: var(--card);
   box-shadow: var(--shadow-raised);
 }
@@ -452,19 +447,10 @@
   line-height: 1.15;
 }
 
-.invite-eyebrow {
-  margin: 0;
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-}
-
 .invite-state-badge {
   flex: 0 0 auto;
   padding: 5px 11px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--success-soft);
   color: var(--success-ink);
   font-size: 12px;
@@ -620,7 +606,7 @@
 }
 
 .invite-loading-card p,
-.invite-unavailable-card p:not(.invite-eyebrow) {
+.invite-unavailable-card p:not(.section-label) {
   color: var(--muted);
 }
 
@@ -917,7 +903,7 @@
 
 .lobby-filter-switch {
   background: var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   flex: 0 0 auto;
   height: 29px;
   position: relative;
@@ -933,7 +919,7 @@
   left: 3px;
   position: absolute;
   top: 3px;
-  transition: left 140ms ease;
+  transition: left var(--dur-fast) ease;
   width: 23px;
 }
 
@@ -978,7 +964,7 @@
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: inherit;
   cursor: pointer;
   display: inline-flex;
@@ -995,7 +981,7 @@
 }
 
 .public-room-roster-toggle > svg:last-child {
-  transition: transform 140ms ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 .public-room-roster-toggle.is-open > svg:last-child {
@@ -1220,7 +1206,7 @@ a.online-player-name:focus-visible {
 .online-player-name.is-guest {
   color: var(--muted);
   font-style: italic;
-  font-weight: 500;
+  font-weight: 400;
   /* Room for the synthesised slant, which this row clips - see
      `.colored-player-name.is-guest` in account.css for the measurement. */
   padding-right: 0.22em;
@@ -1433,15 +1419,10 @@ a.online-player-name:focus-visible {
 }
 
 .room-list-columns {
-  color: var(--faint);
   column-gap: 18px;
   display: grid;
-  font-size: 11px;
-  font-weight: 800;
   grid-template-columns: var(--room-row-columns);
-  letter-spacing: 0.09em;
   padding: 0 20px;
-  text-transform: uppercase;
 }
 
 .public-room-card.is-row {
@@ -1467,7 +1448,7 @@ a.online-player-name:focus-visible {
 /* Says what the buttons will do, as the card's flags do: a full room has no
    Join, and joining one in progress puts you in a later turn. */
 .public-room-status {
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 12px;
   font-weight: 800;
   padding: 2px 9px;
@@ -1520,7 +1501,7 @@ a.online-player-name:focus-visible {
 }
 
 .public-room-seats small > svg {
-  transition: transform 140ms ease;
+  transition: transform var(--dur-fast) ease;
 }
 
 .public-room-seats.is-open small > svg {
@@ -1690,7 +1671,7 @@ a.online-player-name:focus-visible {
 .online-player-menu {
   background: var(--menu);
   border: 1px solid color-mix(in srgb, var(--menu-ink) 20%, transparent);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   box-shadow: var(--shadow-raised);
   display: flex;
   flex-direction: column;
@@ -1706,7 +1687,7 @@ a.online-player-name:focus-visible {
 .online-player-menu-item {
   background: color-mix(in srgb, var(--menu-ink) 6%, transparent);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--menu-ink);
   cursor: pointer;
   display: block;
@@ -1901,12 +1882,7 @@ a.online-player-name:focus-visible {
 }
 
 .rules-examples-label {
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 800;
-  letter-spacing: 0.09em;
   margin: 0 0 6px;
-  text-transform: uppercase;
 }
 
 .rules-examples ul {

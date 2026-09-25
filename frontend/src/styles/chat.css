@@ -39,7 +39,7 @@
   background: var(--primary);
   color: #ffffff;
   border: none;
-  border-radius: 20px;
+  border-radius: var(--radius-pill);
   padding: 6px 14px;
   font-size: 12px;
   font-weight: 700;
@@ -49,7 +49,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  transition: all 0.2s ease;
+  transition: background-color var(--dur) ease, transform var(--dur) ease;
   animation: popIn 0.2s ease;
 }
 
@@ -81,7 +81,7 @@
 .chat-message.correct {
   background: var(--success-soft);
   border-left: 3px solid var(--success);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   padding: 8px 11px;
   margin: 2px 0;
   font-size: 13.5px;
@@ -100,7 +100,7 @@
   gap: 9px;
   background: var(--warning-soft);
   border: 1px solid var(--warning-edge);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 8px 12px;
   color: var(--warning);
   font-size: 13px;
@@ -170,7 +170,7 @@
   z-index: 30;
   margin: 0;
   padding: 8px 10px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   font-size: 13px;
   font-weight: 600;
   line-height: 1.35;
@@ -286,11 +286,9 @@
   padding: 9px 12px;
 }
 
+/* An eyebrow in the verdict's own green rather than the recipe's grey. */
 .guess-verdict-hit-head {
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  color: inherit;
   width: 100%;
 }
 

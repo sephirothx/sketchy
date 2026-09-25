@@ -63,7 +63,7 @@
   gap: 2px;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   padding: 12px;
 }
 
@@ -74,9 +74,6 @@
 }
 
 .profile-stat-label {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: var(--muted);
 }
 
@@ -90,7 +87,7 @@
 
 .profile-game {
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   background: var(--well);
   overflow: hidden;
 }
@@ -217,9 +214,6 @@
 .profile-turns th,
 .profile-score-events th {
   color: var(--muted);
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .profile-turn-prompt {
@@ -230,7 +224,7 @@
 .profile-drawing-button {
   background: none;
   border: 1px solid var(--line-strong);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--primary-ink);
   cursor: pointer;
   font: inherit;
@@ -281,7 +275,7 @@
   border: 0;
   padding: 0;
   cursor: pointer;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: block;
   width: 100%;
 }
@@ -295,7 +289,7 @@
   aspect-ratio: 4 / 3;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
   display: flex;
   align-items: center;
@@ -417,7 +411,7 @@
 .prompt-list-chip-info > span {
   align-items: center;
   border: 1px solid var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: inline-flex;
   font-family: Georgia, "Times New Roman", serif;
   font-size: 11px;
@@ -475,7 +469,7 @@
 
 .profile-game-outcome {
   border: 1px solid currentColor;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   font-size: 11px;
   letter-spacing: 0.03em;
   margin-left: 8px;
@@ -492,7 +486,7 @@
   justify-content: center;
   min-width: 40px;
   height: 40px;
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   background: var(--well);
   color: var(--muted);
   font-weight: 800;

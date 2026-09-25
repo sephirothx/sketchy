@@ -20,7 +20,7 @@
   max-width: 460px;
   max-height: calc(100dvh - 32px);
   padding: 14px 22px 18px;
-  border-radius: 16px;
+  border-radius: var(--radius);
   /* `.modal-card` centres its text for the confirmation dialogs it was
      built for. This is a list of names beside their avatars, which reads
      down a left edge. */
@@ -70,17 +70,13 @@
   align-items: center;
   gap: 8px;
   margin: 0 0 6px;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
   color: var(--muted);
 }
 
 .friends-section-count {
   font-variant-numeric: tabular-nums;
   padding: 1px 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--well);
   color: var(--muted);
   letter-spacing: 0;
@@ -100,7 +96,7 @@
   align-items: center;
   gap: 10px;
   padding: 6px 8px;
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
 }
 
 .friends-row:hover {

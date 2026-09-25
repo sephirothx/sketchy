@@ -31,7 +31,7 @@
 .connection-status-pad-button {
   background: transparent;
   border: 1.5px solid currentColor;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: inherit;
   cursor: pointer;
   font: inherit;
@@ -74,7 +74,7 @@
 .server-shutdown-banner.is-update-required button {
   background: var(--warm-ink);
   border: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--warm-soft);
   cursor: pointer;
   font: inherit;
@@ -114,7 +114,7 @@
   align-items: center;
   background: var(--card);
   border: 1.5px solid var(--primary-edge-soft);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow-raised);
   color: var(--primary-ink);
   display: flex;
@@ -147,7 +147,7 @@
   font-weight: 700;
   font-size: 13px;
   padding: 3px 10px !important;
-  border-radius: 999px !important;
+  border-radius: var(--radius-pill) !important;
   background: var(--primary) !important;
   color: var(--primary-ink) !important;
   white-space: nowrap;

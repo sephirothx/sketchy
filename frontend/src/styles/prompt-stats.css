@@ -68,9 +68,6 @@
 
 .prompt-stats-table thead th {
   color: var(--muted);
-  font-size: 12px;
-  letter-spacing: .04em;
-  text-transform: uppercase;
 }
 
 .prompt-stats-table th:first-child,
@@ -127,7 +124,7 @@
   display: inline-block;
   width: 64px;
   height: 7px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--line);
   overflow: hidden;
   flex: none;

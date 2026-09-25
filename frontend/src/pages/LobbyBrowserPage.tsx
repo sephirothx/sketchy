@@ -416,7 +416,7 @@ export function LobbyBrowserPage() {
 
       <section className="panel lobby-rooms-panel">
         <div className="lobby-rooms-heading">
-          <h2>{ui.lobbyBrowserPage.publicRooms}</h2>
+          <h2 className="panel-title">{ui.lobbyBrowserPage.publicRooms}</h2>
           <span className="lobby-rooms-count">
             {!roomsState.loaded ? ui.lobbyBrowserPage.loading : rooms.length > 0 ? ui.lobbyBrowserPage.showingFilteredRoomsCountOfRoomsCount({ filteredRoomsCount: filteredRooms.length, roomsCount: rooms.length }) : ui.lobbyBrowserPage.n0Rooms}
           </span>
@@ -595,7 +595,7 @@ export function LobbyBrowserPage() {
             {/* Headings for the row's columns. Hidden from assistive tech:
                 each row already says what its numbers are. */}
             {isWide && (
-              <div className="room-list-columns" aria-hidden="true">
+              <div className="section-label room-list-columns" aria-hidden="true">
                 <span>{ui.publicRoomCard.columnRoom}</span>
                 <span>{ui.publicRoomCard.columnSeats}</span>
                 <span>{ui.publicRoomCard.columnLength}</span>

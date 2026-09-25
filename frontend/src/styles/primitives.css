@@ -91,7 +91,7 @@
   align-items: center;
   gap: 5px;
   border: 1px solid transparent;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   padding: 4px 11px;
   font-size: 12px;
   font-weight: 800;
@@ -137,8 +137,32 @@
   box-shadow: var(--shadow);
 }
 
+/* Two heading styles, and only two (C10).
+
+   A panel's title is the display face in sentence case, in the lobby, the
+   room's side columns, and the phone's waiting room alike: it names the
+   panel, so it reads as a title rather than as a label. Only its size moves,
+   a step down in the room's narrow columns (game-room.css).
+
+   The eyebrow - a small label over a title, a group of fields, a column or a
+   figure - is the one place text is set in capitals, and this is the one
+   recipe for it. A label keeps its own colour where it has one (a tint on an
+   invite card, --muted where it has to be read rather than glanced at) and
+   its own spacing; its type comes from here. The body face is stated because
+   an eyebrow is sometimes an <h3> or <h4>, which reset.css gives the display
+   face. */
+.panel-title {
+  color: var(--ink);
+  font-family: var(--font-display);
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.2;
+  margin: 0;
+}
+
 .section-label {
   color: var(--faint);
+  font-family: var(--font-body);
   font-size: 11.5px;
   font-weight: 800;
   letter-spacing: 0.09em;
@@ -391,7 +415,7 @@
 .language-picker-list {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   display: flex;
   flex-direction: column;
@@ -412,7 +436,7 @@
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 7px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   cursor: pointer;
   display: flex;

@@ -59,7 +59,7 @@
 .prompt-list-manager-card {
   background: var(--card);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   flex: 1;
   flex-direction: column;
@@ -76,11 +76,7 @@
 
 .prompt-list-manager-heading p {
   color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: .07em;
   margin: 0 0 4px;
-  text-transform: uppercase;
 }
 
 .prompt-list-manager-heading h1 { margin: 0; }
@@ -126,7 +122,7 @@
 .prompt-list-manager-card .prompt-list-manager-layout aside button {
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 6px;
+  border-radius: var(--radius-xs);
   color: var(--ink);
   display: flex;
   flex-direction: column;
@@ -216,7 +212,7 @@
    soft wash, so it reads as a state rather than as another line of the form. */
 .prompt-list-alert {
   align-items: flex-start;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   display: flex;
   font-size: 13px;
   font-weight: 700;
@@ -254,7 +250,7 @@
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 10px;
+  border-radius: var(--radius-sm);
   display: flex;
   flex-wrap: wrap;
   gap: 10px 14px;
@@ -345,7 +341,7 @@
   align-items: center;
   background: var(--primary-soft);
   border: 1.5px solid var(--primary);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--primary-ink);
   display: inline-flex;
   font-size: 13px;
@@ -359,7 +355,7 @@
   align-items: center;
   background: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: inherit;
   cursor: pointer;
   display: inline-flex;
@@ -377,7 +373,7 @@
   align-items: center;
   background: none;
   border: 1.5px dashed var(--line-strong);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--primary-ink);
   cursor: pointer;
   display: inline-flex;
@@ -412,7 +408,7 @@
 .tag-picker-panel {
   background: var(--card);
   border: 1.5px solid var(--line-strong);
-  border-radius: 12px;
+  border-radius: var(--radius-sm);
   box-shadow: var(--shadow-raised);
   display: grid;
   gap: 10px;
@@ -434,7 +430,7 @@
   padding: 4px 12px;
 }
 
-.tag-picker-options .toggle-chip:disabled { cursor: not-allowed; opacity: 0.45; }
+.tag-picker-options .toggle-chip:disabled { cursor: not-allowed; opacity: var(--opacity-disabled); }
 
 .tag-picker-panel-foot { display: flex; justify-content: flex-end; }
 
@@ -540,7 +536,7 @@
   align-items: center;
   background: var(--well);
   border: 1px solid var(--line);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   display: flex;
   font-size: 14px;
   gap: 2px;
@@ -558,7 +554,7 @@
 .prompt-list-manager-card .prompt-list-entry-editor > li button {
   background: none;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   color: var(--muted);
   font-size: 16px;
   line-height: 1;
@@ -579,7 +575,7 @@
 .prompt-list-moderation-warning {
   background: var(--warning-soft);
   border: 1px solid var(--warning-edge);
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
   color: var(--warm-ink);
   margin: 0;
   padding: 10px 12px;

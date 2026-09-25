@@ -1899,7 +1899,15 @@ Files are named for their single concern; the directory says the role.
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and
 is the client half of the contract in [`wire-protocol.md`](wire-protocol.md).
-`frontend/src/styles/` is one CSS file per surface.
+`frontend/src/styles/` is one CSS file per surface. What they share is not restated in
+each: the scales — four radii, two motion durations, one disabled opacity — are tokens in
+[`theme.css`](../frontend/src/styles/theme.css), and the two heading styles, the display
+panel title and the capitals eyebrow `.section-label`, are recipes in
+[`primitives.css`](../frontend/src/styles/primitives.css).
+[`styleScales.test.mjs`](../frontend/tests/styleScales.test.mjs) fails on a value off
+a scale, on a weight [`main.tsx`](../frontend/src/main.tsx) does not load (the browser
+would quietly draw the nearest one that is), and on capitals outside the recipe; its
+exceptions are listed there with the reason for each.
 
 ### The phone layout
 

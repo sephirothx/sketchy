@@ -90,11 +90,29 @@
   --silver: #5a6472;
   --bronze: #8a5a2e;
 
-  /* shape and depth */
+  /* shape and depth. Four radii: cards and dialogs, controls and rows,
+     small marks inside them, and fully rounded chips. A radius between two
+     steps is invisible at these sizes, so it snaps to the nearer one; the few
+     left as literals (1-4px marks, the bottom sheet's 24px top, a two-row
+     segmented control) say why beside them. */
   --radius: 14px;
   --radius-sm: 10px;
+  --radius-xs: 8px;
+  --radius-pill: 999px;
   --shadow: 0 1px 2px rgba(20, 16, 10, 0.06);
   --shadow-raised: 0 10px 30px rgba(20, 16, 10, 0.14);
+
+  /* motion. Two speeds: --dur-fast for a control answering the pointer
+     (hover, press, selection), --dur for something that moves across the
+     screen or opens (a sheet, a thumb, a chevron). A transition that smooths
+     a clock's tick is tied to that clock's cadence instead, and keeps its own
+     number. Reduced motion switches all of them off in a11y.css. */
+  --dur-fast: 120ms;
+  --dur: 180ms;
+
+  /* A disabled control, dimmed by one amount everywhere so "unavailable"
+     reads the same on a button, a field, and a chip. */
+  --opacity-disabled: 0.55;
 
   /* visual-viewport vars written by useVisualViewportCssVars */
   --vv-height: 100dvh;

@@ -62,7 +62,7 @@ export function InviteEntryPage({ code }: { code: string }) {
       {state.status === "error" ? (
         <main className="invite-card invite-unavailable-card">
           <div className="invite-status-icon" aria-hidden="true"><XIcon size={20} /></div>
-          <p className="invite-eyebrow">{ui.inviteEntryPage.roomCode({ code })}</p>
+          <p className="section-label">{ui.inviteEntryPage.roomCode({ code })}</p>
           <h1>{ui.inviteEntryPage.roomUnavailable}</h1>
           <p>{state.message}</p>
           <button type="button" className="invite-primary-button" onClick={() => navigate("/")}>{ui.inviteEntryPage.backLobby}</button>
@@ -73,7 +73,7 @@ export function InviteEntryPage({ code }: { code: string }) {
         <main className="invite-card">
           <div className="invite-card-heading">
             <div>
-              <p className="invite-eyebrow">{room.isPublic ? ui.inviteEntryPage.publicRoom : ui.inviteEntryPage.privateInvite} · {room.code}</p>
+              <p className="section-label">{room.isPublic ? ui.inviteEntryPage.publicRoom : ui.inviteEntryPage.privateInvite} · {room.code}</p>
               <h1>{room.name}</h1>
             </div>
             <span className={`invite-state-badge ${room.state}`}>

@@ -58,7 +58,7 @@ function StatTile({ label, value }: { label: string; value: string }) {
   return (
     <div className="profile-stat">
       <span className="profile-stat-value">{value}</span>
-      <span className="profile-stat-label">{label}</span>
+      <span className="section-label profile-stat-label">{label}</span>
     </div>
   );
 }
@@ -370,13 +370,13 @@ function GameRow({
               <caption className="visually-hidden">{ui.profilePage.turnByTurn}</caption>
               <thead>
                 <tr>
-                  <th scope="col">{ui.profilePage.round}</th>
-                  <th scope="col">{ui.profilePage.prompt}</th>
-                  <th scope="col">{ui.profilePage.drawnBy}</th>
-                  <th scope="col">{ui.profilePage.time}</th>
-                  <th scope="col">{ui.profilePage.drawing}</th>
-                  <th scope="col">{ui.profilePage.reactions}</th>
-                  <th scope="col">{ui.profilePage.guesserOutcomes}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.round}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.prompt}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.drawnBy}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.time}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.drawing}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.reactions}</th>
+                  <th scope="col" className="section-label">{ui.profilePage.guesserOutcomes}</th>
                 </tr>
               </thead>
               <tbody>
