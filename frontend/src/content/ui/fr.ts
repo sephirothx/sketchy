@@ -1241,6 +1241,8 @@ export const FR: Catalogue = {
     couldNotChangeTheStar: "L’étoile n’a pas pu être modifiée.",
     copiedToYourLists: "Copiée dans vos listes de mots.",
     couldNotCopyThatList: "Cette liste n’a pas pu être copiée.",
+    // The count is part of the name: a screen reader hears one control, so it
+    // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
       p.starred ? `Retirer votre étoile (${counted(p.count, { one: "étoile", other: "étoiles" })})` : `Ajouter une étoile (${counted(p.count, { one: "étoile", other: "étoiles" })})`,
     chooseAList: "Choisissez une liste pour voir ce qu’elle contient",
@@ -1538,7 +1540,7 @@ export const FR: Catalogue = {
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Signaler ${p.name}`,
     reportsAreReviewedAfterSubmissionList: "Les signalements sont examinés après envoi. La liste reste disponible sauf si un modérateur la masque.",
-    sentWithWhatItSaysAttached: "Envoyé, avec le contenu tel qu'il est maintenant joint.",
+    sentWithTheListAttached: "Envoyé, avec la liste telle qu'elle est maintenant jointe.",
     content: "Contenu",
     entireList: "Liste entière",
     reason: "Motif",

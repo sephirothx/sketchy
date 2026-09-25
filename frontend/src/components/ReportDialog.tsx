@@ -16,6 +16,8 @@ export const MAX_REPORT_DETAILS = 2000;
     to somebody about to reach it. */
 const COUNTER_FROM = 200;
 
+const ignore = () => {};
+
 export interface ReportReasonChoice<R extends string> {
   value: R;
   label: string;
@@ -104,6 +106,9 @@ export function ReportDialog<R extends string>({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sent, setSent] = useState<string | null>(null);
+  // Nothing sets the dialog aside while a report is on its way: a reporter
+  // who closed it mid-send would never learn whether it went.
+  const dismiss = busy ? ignore : onClose;
 
   const picking = reason !== undefined && reason.choices.length > 1;
   const left = MAX_REPORT_DETAILS - details.length;
@@ -140,7 +145,7 @@ export function ReportDialog<R extends string>({
       title={sent === null ? title : ui.reportDialog.reportSent}
       overlayClassName="report-player-overlay"
       testId={testId}
-      onDismiss={onClose}
+      onDismiss={dismiss}
       // Once sent, the footer's Close is the one way out; Escape and the scrim
       // still dismiss, as they do everywhere.
       closeButton={sent === null}
@@ -148,14 +153,18 @@ export function ReportDialog<R extends string>({
       footer={
         sent === null ? (
           <>
-            <button type="button" className="btn btn-secondary" onClick={onClose}>
+            <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>
               {ui.dialog.cancel}
             </button>
+            {/* aria-disabled rather than disabled: the button holds focus
+                when it is pressed, and a disabled one drops it to the page,
+                so a refusal would be announced to somebody no longer in the
+                dialog. `submit` ignores a second press while busy. */}
             <button
               type="submit"
               form={formId}
               className="btn btn-primary"
-              disabled={busy}
+              aria-disabled={busy}
               data-testid={sendTestId}
             >
               {busy ? ui.reportDialog.sending : ui.reportDialog.sendReport}
@@ -212,7 +221,7 @@ export function ReportDialog<R extends string>({
               placeholder={detailsPlaceholder}
             />
             {counting && (
-              <p id={counterId} className="report-counter" data-testid="report-counter">
+              <p id={counterId} className="field-counter" data-testid="report-counter">
                 {ui.reportDialog.charactersLeft({ count: left })}
               </p>
             )}

@@ -1254,6 +1254,8 @@ export const EN = {
     couldNotChangeTheStar: "Could not change your star.",
     copiedToYourLists: "Copied to your prompt lists.",
     couldNotCopyThatList: "Could not copy that list.",
+    // The count is part of the name: a screen reader hears one control, so it
+    // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
       p.starred ? `Remove your star (${counted(p.count, { one: "star", other: "stars" })})` : `Star this list (${counted(p.count, { one: "star", other: "stars" })})`,
     chooseAList: "Choose a list to see what is in it",
@@ -1549,7 +1551,7 @@ export const EN = {
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Report ${p.name}`,
     reportsAreReviewedAfterSubmissionList: "Reports are reviewed after submission. The list stays available unless a moderator hides it.",
-    sentWithWhatItSaysAttached: "Sent, with what it says right now attached.",
+    sentWithTheListAttached: "Sent, with the list as it reads now attached.",
     content: "Content",
     entireList: "Entire list",
     reason: "Reason",

@@ -1241,6 +1241,8 @@ export const PT: Catalogue = {
     couldNotChangeTheStar: "Não foi possível alterar a estrela.",
     copiedToYourLists: "Copiada para as listas de palavras da conta.",
     couldNotCopyThatList: "Não foi possível copiar essa lista.",
+    // The count is part of the name: a screen reader hears one control, so it
+    // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
       p.starred ? `Remover a sua estrela (${counted(p.count, { one: "estrela", other: "estrelas" })})` : `Marcar com estrela (${counted(p.count, { one: "estrela", other: "estrelas" })})`,
     chooseAList: "Escolha uma lista para ver o que contém",
@@ -1538,7 +1540,7 @@ export const PT: Catalogue = {
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `Denunciar ${p.name}`,
     reportsAreReviewedAfterSubmissionList: "As denúncias são analisadas depois de enviadas. A lista continua disponível a menos que um moderador a oculte.",
-    sentWithWhatItSaysAttached: "Enviada, com o conteúdo tal como está agora em anexo.",
+    sentWithTheListAttached: "Enviada, com a lista tal como está agora em anexo.",
     content: "Conteúdo",
     entireList: "Lista inteira",
     reason: "Motivo",

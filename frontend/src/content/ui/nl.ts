@@ -1241,6 +1241,8 @@ export const NL: Catalogue = {
     couldNotChangeTheStar: "De ster kon niet gewijzigd worden.",
     copiedToYourLists: "Gekopieerd naar de eigen woordenlijsten.",
     couldNotCopyThatList: "Deze lijst kon niet gekopieerd worden.",
+    // The count is part of the name: a screen reader hears one control, so it
+    // has to hear both what the control does and the number it shows.
     starButton: (p: { count: number; starred: boolean }) =>
       p.starred ? `Je ster weghalen (${counted(p.count, { one: "ster", other: "sterren" })})` : `Een ster geven (${counted(p.count, { one: "ster", other: "sterren" })})`,
     chooseAList: "Kies een lijst om te zien wat erin staat",
@@ -1538,7 +1540,7 @@ export const NL: Catalogue = {
   promptContentReportDialog: {
     reportList: (p: { name: string }) => `${p.name} melden`,
     reportsAreReviewedAfterSubmissionList: "Meldingen worden na het versturen bekeken. De lijst blijft beschikbaar tenzij een moderator hem verbergt.",
-    sentWithWhatItSaysAttached: "Verstuurd, met de inhoud zoals die nu is erbij.",
+    sentWithTheListAttached: "Verstuurd, met de lijst zoals die er nu uitziet erbij.",
     content: "Inhoud",
     entireList: "Hele lijst",
     reason: "Reden",

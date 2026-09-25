@@ -112,7 +112,13 @@ async def test_a_registered_player_reports_a_lobby_line_by_its_author():
             await author.click()
             dialog = reporter.get_by_test_id("report-lobby-line-dialog")
             await dialog.wait_for(state="visible")
+            # The counter stays out of the way until the limit is near.
+            counter = dialog.get_by_test_id("report-counter")
+            await expect(counter).to_have_count(0)
+            await dialog.locator("textarea").fill("x" * 1850)
+            await expect(counter).to_have_text("150 characters left")
             await dialog.locator("textarea").fill("Again.")
+            await expect(counter).to_have_count(0)
             await dialog.get_by_role("button", name="Send report").click()
             await expect(dialog.get_by_role("alert")).to_contain_text("already reported")
             await dialog.get_by_role("button", name="Cancel").click()

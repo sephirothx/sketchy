@@ -68,7 +68,7 @@ export function PromptContentReportDialog({
           reason,
           details,
         });
-        return ui.promptContentReportDialog.sentWithWhatItSaysAttached;
+        return ui.promptContentReportDialog.sentWithTheListAttached;
       }}
       onClose={onClose}
     />

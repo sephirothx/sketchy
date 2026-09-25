@@ -200,16 +200,6 @@
   width: 100%;
 }
 
-/* How much room is left for a report's words - shown only near the limit,
-   right under the box it counts. */
-.report-counter {
-  color: var(--muted);
-  font-size: 12px;
-  font-weight: 700;
-  margin: 0;
-  text-align: right;
-}
-
 /* The line being reported, quoted so the reporter sees what they are citing.
    A quiet box rather than a chat bubble: it is evidence here, not a message. */
 .report-quoted-line {
@@ -321,8 +311,11 @@
   .bug-report-row { grid-template-columns: 1fr; }
 }
 
-.bug-report-counter {
-  color: var(--faint);
+/* How much room a text box has left, right-aligned under the box it counts:
+   the bug report's always, a moderation report's only near its limit.
+   Muted rather than faint - it is read, not decoration. */
+.field-counter {
+  color: var(--muted);
   font-size: 12px;
   font-weight: 700;
   margin: 0;
