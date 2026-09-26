@@ -19,6 +19,7 @@ from sqlalchemy.orm import defer, selectinload
 
 from app.api.errors import Refusal
 from app.message_limits import MAX_REPORT_DETAILS
+from app.prompt_content import languages_sharing_words
 from app.refusals import ErrorCode
 from app.auth.avatars import avatar_url, uploaded_avatar_key
 from app.services.avatars import remove_avatar
@@ -1083,7 +1084,9 @@ async def _carry_decision_to_copies(
         update(PromptVersion)
         .where(
             PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
-            PromptVersion.language == language,
+            # Everywhere the decision was carried to: the copies in lists in
+            # no language as well (#821).
+            PromptVersion.language.in_(languages_sharing_words(language)),
             PromptVersion.moderated_at == decided_at,
             (
                 PromptVersion.moderated_by_user_id == decided_by

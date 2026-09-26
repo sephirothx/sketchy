@@ -115,6 +115,31 @@ async def test_a_quick_prompt_shadows_the_curated_answer_of_the_same_name():
     assert game.prompt_source_kind("apple") == "custom"
 
 
+@pytest.mark.parametrize(
+    ("language", "quick", "listed"),
+    [("de", "Mueller", "Müller"), ("fr", "coeur", "Cœur"), ("nl", "ijs", "ĳs")],
+)
+async def test_a_quick_prompt_shadows_its_twin_in_a_list_in_no_language(
+    language, quick, listed
+):
+    """A list in no language (#821) stores its keys without the room's
+    transliteration, so the stored-key exclusion misses a quick prompt typed
+    the expanded way. The room accepts both as one answer, so the draw may
+    offer only one of them."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = language
+    room.custom_prompts = [quick]
+    repo = StubPromptListRepo([listed, "Pikachu", "Evoli"], language="zxx")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert quick in room.game.prompt_pool
+    assert listed not in room.game.prompt_pool
+
+
 async def test_a_custom_only_room_never_asks_the_prompt_store():
     room_manager, room, _ = build_room(rounds=1)
     room.max_players = 2

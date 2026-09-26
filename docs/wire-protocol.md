@@ -2244,7 +2244,7 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
 | `GET` | `/api/users/me/recent-players` | `{players}` — registered accounts the caller **finished a game with** in the last 30 days, most recent first, capped at 20. Not a search and not a directory (N-06): it answers only about games the caller sat in, so it can never name a stranger. Deliberately **unfiltered by friendship or block** — an absence from it would be readable, and "absent because they declined you" is the fact R-FRIEND-04 refuses to disclose, so the client drops the rows it can already see for itself and leaves a refusal in place |
 | `DELETE` | `/api/users/me/blocks/{user_id}` | Idempotent |
-| `GET`/`POST` | `/api/room-presets` | ≤ 20 per account. `settings` is `RoomSettingsFields`, so it carries `promptLanguage`; a preset whose lists are not in it is refused **422** |
+| `GET`/`POST` | `/api/room-presets` | ≤ 20 per account. `settings` is `RoomSettingsFields`, so it carries `promptLanguage`; a preset whose lists are not in it (or in no language, `zxx`) is refused **422** |
 | `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check. The `promptLanguage` read back is **stored** (since #821: a preset of lists in no language has none to derive) and checked against the saved lists on save and on read, so a preset and its lists can never disagree; applying a preset sets the new room's language and its lists together |
 
 ### Reports and moderation — [`backend/app/api/moderation.py`](../backend/app/api/moderation.py)

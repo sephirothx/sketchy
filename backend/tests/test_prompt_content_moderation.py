@@ -1361,6 +1361,49 @@ async def test_a_word_hidden_in_one_list_is_hidden_in_the_owners_others(env):
     assert elsewhere.prompts[0].moderation_state == "active", "keys mean one language"
 
 
+async def test_a_hidden_word_follows_the_owner_into_lists_in_no_language(env):
+    """#821: a list in no language is played in every room, so a word hidden
+    in one of the owner's lists and typed into an Any-language list - or the
+    other way round - is the same word, respelled by its language's fold."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "AnyLanguageHider")
+    english = await prompts.create_owned(
+        owner["id"], name="Names", description="", language="en",
+        prompts=(PromptListEntryInput(answer="Pikachu"),),
+    )
+    agnostic = await prompts.create_owned(
+        owner["id"], name="More names", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Müller"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            for version_id in (
+                english.prompts[0].prompt_version_id,
+                agnostic.prompts[0].prompt_version_id,
+            ):
+                (await session.get(PromptVersion, UUID(version_id))).moderation_state = "hidden"
+
+    into_agnostic = await prompts.create_owned(
+        owner["id"], name="Pokémon", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="pikachu"), PromptListEntryInput(answer="Evoli")),
+    )
+    assert {p.answer: p.moderation_state for p in into_agnostic.prompts} == {
+        "pikachu": "hidden",
+        "Evoli": "active",
+    }
+    # Stored as `muller` in no language and keyed `mueller` in German: the
+    # same word to a German room, so the same word here.
+    into_german = await prompts.create_owned(
+        owner["id"], name="Namen", description="", language="de",
+        prompts=(PromptListEntryInput(answer="Müller"), PromptListEntryInput(answer="Hund")),
+    )
+    assert {p.answer: p.moderation_state for p in into_german.prompts} == {
+        "Müller": "hidden",
+        "Hund": "active",
+    }
+
+
 async def _staff_member(factory, account: dict, role: UserRole) -> None:
     async with factory() as session:
         async with session.begin():
@@ -1409,6 +1452,12 @@ async def test_restoring_a_word_restores_the_copies_its_takedown_was_carried_to(
         prompts=(PromptListEntryInput(answer="borderline word"),),
     )
     assert copy.prompts[0].moderation_state == "hidden"
+    # A list in no language shares its words with every language (#821).
+    agnostic_copy = await prompts.create_owned(
+        owner["id"], name="Any language copy", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="borderline word"),),
+    )
+    assert agnostic_copy.prompts[0].moderation_state == "hidden"
 
     # Decided hidden a second time: the copy carries the new decision too,
     # or the restore below - matching on it - would miss the copy.
@@ -1417,6 +1466,10 @@ async def test_restoring_a_word_restores_the_copies_its_takedown_was_carried_to(
     async with factory() as session:
         carried = await session.get(PromptVersion, UUID(copy.prompts[0].prompt_version_id))
         assert carried.moderation_state == "active", "the carried copy comes back too"
+        carried_agnostic = await session.get(
+            PromptVersion, UUID(agnostic_copy.prompts[0].prompt_version_id)
+        )
+        assert carried_agnostic.moderation_state == "active", "and the one in no language"
     another = await prompts.create_owned(
         owner["id"], name="After the restore", description="", language="en",
         prompts=(PromptListEntryInput(answer="borderline word"),),

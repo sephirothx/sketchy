@@ -631,14 +631,17 @@ class Room:
         )
 
     def custom_prompt_exclusions(self) -> frozenset[str]:
-        """Every spelling a quick prompt shadows a list prompt under.
+        """Every spelling of this room's quick prompts, as a guess accepts them.
 
-        Wider than `custom_prompt_match_keys` because a draw compares against
-        keys stored under *another* fold: a language-agnostic list (#821)
-        stores "Müller" as `muller`, which a German room's own key for the
-        same quick prompt (`mueller`) would miss, and the word would be drawn
-        twice. The spellings are exactly what acceptance treats as one answer
-        (R-GUESS-01), so nothing a guess could tell apart is excluded.
+        Wider than `custom_prompt_match_keys` because the draw compares these
+        with keys stored under *another* fold: a list in no language (#821)
+        stores "Müller" as `muller`, which the German room's own key for the
+        quick prompt "Müller" (`mueller`) would miss. It cannot go the other
+        way - the quick prompt "Mueller" has no spelling `muller` - so the
+        draw also drops, in Python, whatever list prompt the room would accept
+        as a quick prompt's answer. The spellings are exactly what acceptance
+        treats as one answer (R-GUESS-01), so nothing a guess could tell
+        apart is excluded.
         """
         return frozenset(
             spelling

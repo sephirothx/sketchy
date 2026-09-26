@@ -216,7 +216,7 @@ async def test_rejects_guests_quick_prompts_shared_lists_and_duplicate_names(env
         assert (await other_client.get(f"/api/room-presets/{first.json()['id']}")).status_code == 404
 
 
-async def test_a_preset_carries_the_language_of_the_lists_it_saved(env):
+async def test_a_preset_declares_a_language_its_lists_must_be_in(env):
     """A preset is applied to a new room, and the room declares its language
     before it picks lists (R-PROMPT-02). The preset therefore has to say which
     language it is for, and refuse to save a language its lists are not in."""

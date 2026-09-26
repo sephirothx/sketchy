@@ -485,10 +485,11 @@ because `madchen` is nobody's spelling), French reads the `œ` ligature as `oe`,
 stored key stays one canonical string—it is an identity as well as a
 comparison—and a guess is accepted when its spellings meet the answer's; near
 misses and prompt provenance keep to the canonical one. Other BCP-47 tags are
-rejected until their matching semantics are implemented.
+rejected until their matching semantics are implemented; a *list* may also be in
+**Any language** (`zxx`), which no room can be.
 Each room **declares** its **Prompt language**: the host chooses it when the
 room is created, it is fixed for the room's life, and every selected list must
-be in it. It is carried into exact and near-match game logic — for the room's
+be in it or in **Any language**. It is carried into exact and near-match game logic — for the room's
 own custom prompts as much as for list content, so a room typing its own German
 prompts is no longer matched under English rules — and exposed in room
 payloads. Selecting a list never changes it: a list in another
@@ -575,7 +576,8 @@ playing or copying it — filtered by language and tag, sorted by stars or by
 recency, and narrowed to the lists that account starred. Browsing works without
 an account; starring, copying and reporting need one. **Play** opens the room form
 with that list chosen and the room's language set to the list's, since a room
-declares one language and its lists must agree. The picker also offers the lists
+declares one language and its lists must agree - unless the list is in **Any
+language**, which keeps the language the form already had. The picker also offers the lists
 an account starred, so a shortlist replaces hunting for one twice. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
 by language and tag and sorted by stars or by recency; it is a route of its own
 rather than a filter on the official one, so official content and player content

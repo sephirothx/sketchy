@@ -125,6 +125,22 @@ def validate_prompt_list_language(language: str) -> str:
     return validate_prompt_language(normalized)
 
 
+def languages_sharing_words(language: str) -> tuple[str, ...]:
+    """The content languages in which a word means what it means in `language`.
+
+    A moderator's decision on a word follows it into the owner's other lists
+    (#1091), but only where the word is the same word: `pain` in an English
+    list and in a French one are not. A list in no language (#821) is played
+    in every room, so it shares its words with every language, and every
+    language shares its words with it - otherwise a hidden word retyped into
+    an Any-language list would be born active, in the one list every room
+    can play.
+    """
+    if language == AGNOSTIC_PROMPT_LANGUAGE:
+        return (*PROMPT_LANGUAGES, AGNOSTIC_PROMPT_LANGUAGE)
+    return (language, AGNOSTIC_PROMPT_LANGUAGE)
+
+
 def best_supported_prompt_locale(accept_language: str | None) -> str:
     """Choose the first supported base locale from an Accept-Language value."""
     for preference in (accept_language or "").split(","):

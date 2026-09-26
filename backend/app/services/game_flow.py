@@ -41,7 +41,7 @@ from app.presenters import (
     system_chat_message,
     turn_payload,
 )
-from app.prompt_content import default_prompt_list_slug
+from app.prompt_content import default_prompt_list_slug, prompt_match_variants
 from app.prompts import letter_histogram, parse_custom_prompt_list
 from app.repositories.interfaces import (
     PromptListSelectionError,
@@ -631,7 +631,8 @@ class GameFlowService:
                 sample = await asyncio.wait_for(
                     self._ctx.prompt_list_repo.sample_prompts(
                         list(room.prompt_list_revision_ids),
-                        limit=needed,
+                        # Headroom for the twins the filter below removes.
+                        limit=needed + len(custom),
                         exclude_match_keys=room.custom_prompt_exclusions(),
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
@@ -645,7 +646,22 @@ class GameFlowService:
                     "Prompt lists could not be loaded. Please try again."
                 ) from error
 
-        total = len(custom) + sample.drawable
+        # The database compares stored keys, which cannot see every twin: a
+        # list in no language (#821) stores "Müller" as `muller`, and the
+        # quick prompt "Mueller" keys `mueller` - one answer to a German
+        # room's guesses, two to the draw. Anything the room would accept as
+        # a quick prompt's answer is the quick prompt, so it goes here.
+        shadowed = room.custom_prompt_exclusions()
+        candidates = [
+            prompt
+            for prompt in sample.prompts
+            if prompt_match_variants(prompt.answer, room.prompt_language).isdisjoint(
+                shadowed
+            )
+        ]
+        drawable = max(0, sample.drawable - (len(sample.prompts) - len(candidates)))
+
+        total = len(custom) + drawable
         if not total:
             # Authorization proved these lists held prompts, but moderation can
             # take the last of them away before the draw lands. Falling through
@@ -660,9 +676,7 @@ class GameFlowService:
             )
         indices = random.sample(range(total), min(needed, total))
         from_custom = sum(1 for index in indices if index < len(custom))
-        drawn: list[SampledPrompt] = list(
-            sample.prompts[: len(indices) - from_custom]
-        )
+        drawn: list[SampledPrompt] = candidates[: len(indices) - from_custom]
 
         pool = random.sample(custom, from_custom) + [
             prompt.answer for prompt in drawn
@@ -684,7 +698,7 @@ class GameFlowService:
         # this game can show.
         letter_counts: Counter[str] = Counter()
         letter_total = 0
-        if sample.drawable:
+        if drawable:
             letter_counts.update(room.prompt_letter_counts)
             letter_total += room.prompt_letter_total
         custom_counts, custom_total = letter_histogram(custom)

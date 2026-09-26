@@ -180,6 +180,7 @@ from app.prompt_content import (
     clean_list_tags,
     clean_prompt_aliases,
     normalize_prompt_answer,
+    languages_sharing_words,
     prompt_match_key,
     validate_prompt_list_language,
 )
@@ -4918,8 +4919,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # A decision covers every version of its concept, so any one says it.
         # And not this list's alone: a word hidden in one of the owner's lists
         # typed into another of theirs - or a new one - is the same word
-        # (#1091), so every list the owner has ever held is asked, in this
-        # list's language, where the keys mean the same thing. Anchored on
+        # (#1091), so every list the owner has ever held is asked, in the
+        # languages where the word means the same thing - this list's own, and
+        # no language at all (#821, `languages_sharing_words`). Anchored on
         # the hidden side - rare, and indexed - with the histories asked only
         # about those, so a save costs the number of hidden versions rather
         # than every item of every revision.
@@ -4934,7 +4936,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 .where(
                     PromptVersion.moderation_state
                     == PromptContentModerationState.HIDDEN.value,
-                    PromptVersion.language == prompt_list.language,
+                    PromptVersion.language.in_(
+                        languages_sharing_words(prompt_list.language)
+                    ),
                     select(PromptListRevisionItem.revision_id)
                     .join(
                         PromptListRevision,
@@ -4956,9 +4960,19 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         ).unique().all()
         hidden_by_key: dict[str, PromptVersion] = {}
         for hidden in hidden_versions:
-            hidden_by_key[hidden.match_key] = hidden
-            for link in hidden.version_aliases:
-                hidden_by_key[link.alias.match_key] = hidden
+            # Keyed again under this list's fold as well as by the stored key:
+            # a word hidden in a German list stores "Müller" as `mueller`, and
+            # the same word typed into an Any-language list keys `muller`.
+            texts = (
+                hidden.canonical_answer,
+                *(link.alias.answer for link in hidden.version_aliases),
+            )
+            for key in (
+                hidden.match_key,
+                *(link.alias.match_key for link in hidden.version_aliases),
+                *(prompt_match_key(text, prompt_list.language) for text in texts),
+            ):
+                hidden_by_key[key] = hidden
         supplied_ids = {
             UUID(entry.concept_id) for entry in entries if entry.concept_id is not None
         }
