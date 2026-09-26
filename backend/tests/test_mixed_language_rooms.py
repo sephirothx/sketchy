@@ -524,3 +524,12 @@ def test_a_spectator_neither_hurries_the_players_letters_nor_quiets_their_chat()
     # Still revealed to the spectator, up to its own share.
     game.reveal_hint_letter()
     assert game.masked_prompt("watcher").count("_") < 5
+
+
+def test_a_payload_for_one_socket_is_spelled_for_its_seat():
+    from app.presenters import spelled_for_seat
+
+    ended = {"prompt": "bow tie", "prompts": {"de": "Fliege"}}
+    assert spelled_for_seat(ended, "de")["prompt"] == "Fliege"
+    assert spelled_for_seat(ended, "it")["prompt"] == "bow tie"
+    assert spelled_for_seat({"prompt": "dog"}, "de") == {"prompt": "dog"}

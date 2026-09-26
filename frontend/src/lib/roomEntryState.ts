@@ -1,4 +1,4 @@
-import type { AckResponse, RoomPreviewResponse, RoomSummary } from "../types";
+import type { AckResponse, PromptLanguage, RoomPreviewResponse, RoomSummary } from "../types";
 import { refusalText } from "./refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -87,6 +87,8 @@ export interface RoomSession {
   roomId: string;
   code: string;
   playerId: string;
+  /** The language this seat plays in, which a mixed-language room asks (#1182). */
+  seatLanguage: PromptLanguage | null;
 }
 
 export interface RoomEntrySnapshot {
@@ -118,6 +120,7 @@ export function sessionFrom(response: AckResponse): RoomSession | null {
     roomId: response.roomId,
     code: response.code,
     playerId: response.playerId,
+    seatLanguage: response.seatLanguage ?? null,
   };
 }
 

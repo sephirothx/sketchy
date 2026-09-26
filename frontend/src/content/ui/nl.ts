@@ -1095,6 +1095,7 @@ export const NL: Catalogue = {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Alle talen",
     anyLanguage: "Taalonafhankelijk",
+    mixed: "Meertalig",
   },
 
   lobbyBrowserPage: {
@@ -1849,6 +1850,7 @@ export const NL: Catalogue = {
 
   roomSetupForm: {
     promptLanguage: "Woordtaal",
+    customPromptsOffInMixedRooms: "Eigen woorden staan uit in meertalige kamers: elke speler heeft het woord in zijn eigen taal nodig.",
     visibility: "Zichtbaarheid",
     maxPlayers: "Maximum aantal spelers",
     rounds: "Rondes",

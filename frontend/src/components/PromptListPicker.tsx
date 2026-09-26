@@ -1,10 +1,15 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../lib/api";
-import { AGNOSTIC_PROMPT_LANGUAGE, isPlayableIn, promptLanguageLabel } from "../lib/promptLanguages";
+import {
+  AGNOSTIC_PROMPT_LANGUAGE,
+  MIXED_PROMPT_LANGUAGE,
+  isPlayableIn,
+  promptLanguageLabel,
+} from "../lib/promptLanguages";
 import { listCommunityPromptLists, listOwnedPromptLists } from "../lib/promptLists";
 import { readEveryPage } from "../lib/communityLists";
 import { useAuthStore } from "../store/authStore";
-import type { PromptLanguage, PromptListSummary } from "../types";
+import type { PromptLanguage, PromptListSummary, RoomLanguage } from "../types";
 import { AnyLanguageIcon, CheckIcon, PlusIcon } from "./icons";
 import { FieldHint } from "./RoomSetupControls";
 import { refusalText } from "../lib/refusals.ts";
@@ -15,7 +20,10 @@ import "../styles/lazy/profile.css";
 interface PromptListPickerProps {
   /** The room's declared language. Lists answer to it; it is never read back
       off the selection (R-PROMPT-02). */
-  language: PromptLanguage;
+  language: RoomLanguage;
+  /** The language this player plays in, which a mixed-language room shows
+      Standard in (#1182). */
+  playLanguage?: PromptLanguage;
   selectedSlugs: string[];
   onChange: (slugs: string[]) => void;
   disabled?: boolean;
@@ -39,6 +47,7 @@ const NO_LISTS: PromptListSummary[] = [];
 
 export function PromptListPicker({
   language,
+  playLanguage = "en",
   selectedSlugs,
   onChange,
   disabled = false,
@@ -121,7 +130,8 @@ export function PromptListPicker({
     void readEveryPage(
       (cursor) => listCommunityPromptLists({
         starred: true,
-        language,
+        // A mixed room can play only the lists in no language of these (#1182).
+        language: language === MIXED_PROMPT_LANGUAGE ? AGNOSTIC_PROMPT_LANGUAGE : language,
         limit: STARRED_PAGE_SIZE,
         cursor,
       }),
@@ -156,9 +166,9 @@ export function PromptListPicker({
     ...promptLists,
     ...extraLists.filter((extra) => !promptLists.some((list) => list.slug === extra.slug)),
   ];
-  const visibleLists = known.filter((list) => isPlayableIn(list.language, language));
+  const visibleLists = known.filter((list) => isPlayableIn(list, language, playLanguage));
   const visibleStarred = shortlist.filter(
-    (list) => isPlayableIn(list.language, language)
+    (list) => isPlayableIn(list, language, playLanguage)
       && !visibleLists.some((shown) => shown.slug === list.slug),
   );
 

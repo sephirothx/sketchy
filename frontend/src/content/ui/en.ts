@@ -1115,6 +1115,9 @@ export const EN = {
     /** A prompt list in no language (#821): played in a room of any
     language (GLOSSARY: Any language). */
     anyLanguage: "Any language",
+    /** A mixed-language room (#1182): each seat plays in its own language
+    (GLOSSARY: Mixed-language room). */
+    mixed: "Mixed",
   },
 
   lobbyBrowserPage: {
@@ -1862,6 +1865,7 @@ export const EN = {
 
   roomSetupForm: {
     promptLanguage: "Prompt language",
+    customPromptsOffInMixedRooms: "Custom prompts are off in a mixed room: every player needs the prompt in their own language.",
     visibility: "Visibility",
     maxPlayers: "Max players",
     rounds: "Rounds",

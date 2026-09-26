@@ -1095,6 +1095,7 @@ export const DE: Catalogue = {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Alle Sprachen",
     anyLanguage: "Sprachunabhängig",
+    mixed: "Gemischt",
   },
 
   lobbyBrowserPage: {
@@ -1849,6 +1850,7 @@ export const DE: Catalogue = {
 
   roomSetupForm: {
     promptLanguage: "Begriffssprache",
+    customPromptsOffInMixedRooms: "Eigene Begriffe sind in gemischtsprachigen Räumen deaktiviert: Jeder braucht den Begriff in seiner Sprache.",
     visibility: "Sichtbarkeit",
     maxPlayers: "Maximale Spielerzahl",
     rounds: "Runden",

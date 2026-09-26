@@ -34,18 +34,13 @@ import {
   scoringNameFor,
 } from "../lib/roomSetup";
 import {
+  MIXED_PROMPT_LANGUAGE,
   availablePromptLanguages,
   selectionForLanguage,
 } from "../lib/promptLanguages";
+import { useSettingsStore } from "../store/settingsStore";
 import type { CustomPromptsAction, CustomPromptsState } from "../lib/customPrompts";
-import type {
-  ColorMode,
-  DrawingToolGroup,
-  HintMode,
-  PromptLanguage,
-  PromptListSummary,
-  ScoringMode,
-} from "../types";
+import type { ColorMode, DrawingToolGroup, HintMode, PromptLanguage, PromptListSummary, RoomLanguage, ScoringMode } from "../types";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/toolbar.css";
 
@@ -57,7 +52,7 @@ export interface RoomSetupValues {
   maxPlayers: number;
   rounds: number;
   drawingSeconds: number;
-  promptLanguage: PromptLanguage;
+  promptLanguage: RoomLanguage;
   promptListSlugs: string[];
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
@@ -85,6 +80,9 @@ interface RoomSetupFormProps {
   /** A room's language is fixed at creation, so the editor shows it rather
       than offering it. */
   languageLocked?: boolean;
+  /** The language this player plays in, where the page knows it better than
+      the settings do: a seat's own, in a room already made (#1182). */
+  playLanguage?: PromptLanguage;
   /** A community list the host arrived with, so the picker knows a list the
       catalogue would not have told it about. */
   extraLists?: PromptListSummary[];
@@ -112,6 +110,7 @@ export function RoomSetupForm({
   durationNote,
   loadedLists = [],
   languageLocked = false,
+  playLanguage: seatLanguage,
   extraLists,
 }: RoomSetupFormProps) {
   const {
@@ -132,6 +131,9 @@ export function RoomSetupForm({
 
   const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
   const languageOptions = availablePromptLanguages(loadedLists, promptLanguage);
+  // The language this player plays in: a mixed room shows Standard in it.
+  const preferredLanguage = useSettingsStore((state) => state.promptLanguage);
+  const playLanguage = seatLanguage ?? preferredLanguage;
 
   // No language in it: the official lists are named for theirs ("English —
   // Standard"), and the field that sets it is labelled in Basics above.
@@ -143,7 +145,7 @@ export function RoomSetupForm({
       const total = selectedLists.reduce((sum, list) => sum + list.promptCount, 0);
       if (total > 0) parts.push(ui.roomSetupForm.promptTotal({ count: total }));
     }
-    if (customPrompts.analysis.usableCount > 0) {
+    if (promptLanguage !== MIXED_PROMPT_LANGUAGE && customPrompts.analysis.usableCount > 0) {
       parts.push(ui.roomSetupForm.customCount({ count: customPrompts.analysis.usableCount }));
     }
     return parts.join(" · ");
@@ -204,10 +206,10 @@ export function RoomSetupForm({
                   value={promptLanguage}
                   options={languageOptions}
                   onChange={(next) => onChange({
-                    promptLanguage: next as PromptLanguage,
+                    promptLanguage: next as RoomLanguage,
                     // A list in a language cannot follow the room into
                     // another; one in no language can (#821).
-                    promptListSlugs: selectionForLanguage(loadedLists, next, promptListSlugs),
+                    promptListSlugs: selectionForLanguage(loadedLists, next, promptListSlugs, playLanguage),
                   })}
                 />
               )}
@@ -276,24 +278,34 @@ export function RoomSetupForm({
         <div className="form-section-body">
           <PromptListPicker
             language={promptLanguage}
+            playLanguage={playLanguage}
             selectedSlugs={promptListSlugs}
             onChange={(slugs) => onChange({ promptListSlugs: slugs })}
             onListsLoaded={onListsLoaded}
             extraLists={extraLists}
           />
-          <CustomPromptsEditor
-            value={customPrompts.value}
-            analysis={customPrompts.analysis}
-            onChange={(value) => dispatchCustomPrompts({ type: "change", value })}
-            footer={promptsFooter}
-          />
-          <Switch
-            label={ui.roomSetupForm.onlyUseCustomPrompts}
-            hint={ui.roomSetupForm.addUsableCustomPromptEnableThis}
-            checked={customPrompts.only}
-            disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
-            onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
-          />
+          {/* A quick prompt has one language, and every seat of a mixed room
+              needs the prompt in its own (#1182): said, rather than a field
+              the server would refuse. */}
+          {promptLanguage === MIXED_PROMPT_LANGUAGE ? (
+            <p className="prompt-list-fallback-note">{ui.roomSetupForm.customPromptsOffInMixedRooms}</p>
+          ) : (
+            <>
+              <CustomPromptsEditor
+                value={customPrompts.value}
+                analysis={customPrompts.analysis}
+                onChange={(value) => dispatchCustomPrompts({ type: "change", value })}
+                footer={promptsFooter}
+              />
+              <Switch
+                label={ui.roomSetupForm.onlyUseCustomPrompts}
+                hint={ui.roomSetupForm.addUsableCustomPromptEnableThis}
+                checked={customPrompts.only}
+                disabled={customPrompts.analysis.usableCount === 0 || customPrompts.analysis.hasErrors}
+                onChange={(only) => dispatchCustomPrompts({ type: "set-only", only })}
+              />
+            </>
+          )}
         </div>
       </details>
 

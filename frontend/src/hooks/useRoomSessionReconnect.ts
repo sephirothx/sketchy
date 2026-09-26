@@ -100,6 +100,10 @@ export function useRoomSessionReconnect() {
         nickname: currentPlayerName(),
         nameColor,
         colorblindSafeColors,
+        // The seat's language, kept if the seat is still held; used only if
+        // it is gone and a new one is made (#1182).
+        seatLanguage: useGameStore.getState().seatLanguage
+          ?? useSettingsStore.getState().promptLanguage,
         soft,
       });
       if (cancelled) return;

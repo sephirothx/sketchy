@@ -74,6 +74,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
   // change only moves the baseline — what "unchanged" means — and the field
   // itself follows only while the host has not touched it.
   const roomColorMode = useGameStore((state) => state.colorMode);
+  const seatLanguage = useGameStore((state) => state.seatLanguage);
   const [seenColorMode, setSeenColorMode] = useState(roomColorMode);
   if (roomColorMode !== seenColorMode) {
     setSeenColorMode(roomColorMode);
@@ -221,6 +222,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
           onListsLoaded={setLoadedLists}
           loadedLists={loadedLists}
           languageLocked
+          playLanguage={seatLanguage ?? undefined}
         />
       )}
       {error && <p className="create-room-error" role="alert">{error}</p>}

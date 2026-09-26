@@ -5,7 +5,7 @@ import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { RoomSetupForm } from "../components/RoomSetupForm";
 import { ClockIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import type { PromptListSummary } from "../types";
+import type { PromptListSummary, RoomLanguage } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE } from "../lib/roomSetup";
 import { changedRoomRules } from "../lib/roomCardFacts";
@@ -19,9 +19,10 @@ import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
 import {
   AGNOSTIC_PROMPT_LANGUAGE,
+  MIXED_PROMPT_LANGUAGE,
   reconcileSelectionForLanguage,
 } from "../lib/promptLanguages";
-import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, PromptLanguage, ScoringMode } from "../types";
+import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
 import { currentPlayerName, needsIdentity, useAuthStore } from "../store/authStore";
 import {
   createRoomPreset,
@@ -75,9 +76,10 @@ export function CreateRoomPage() {
   // The language this player plays in - their setting if they have an account,
   // and what their browser says otherwise. A host who wants another one says
   // so in the form; this is only where it starts.
-  const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>(
+  const [promptLanguage, setPromptLanguage] = useState<RoomLanguage>(
     () => useSettingsStore.getState().promptLanguage,
   );
+  const mixed = promptLanguage === MIXED_PROMPT_LANGUAGE;
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
   // A list the host arrived with, from the community catalogue's Play. The
   // room takes its language too: a room declares one and its lists must agree
@@ -153,7 +155,7 @@ export function CreateRoomPage() {
   function handleListsLoaded(lists: PromptListSummary[]) {
     setLoadedLists(lists);
     setPromptListSlugs((current) =>
-      reconcileSelectionForLanguage(lists, promptLanguage, current),
+      reconcileSelectionForLanguage(lists, promptLanguage, current, playLanguage),
     );
   }
 
@@ -211,7 +213,15 @@ export function CreateRoomPage() {
     // A preset carries the language of the lists it saved, and applying it
     // sets both together: a room declares its language before it has lists.
     setPromptLanguage(settings.promptLanguage);
-    setPromptListSlugs(settings.promptListSlugs);
+    // Reconciled: a mixed preset saved by a host playing another language
+    // names that language's Standard, which this picker shows in its own.
+    setPromptListSlugs(
+      loadedLists.length > 0
+        ? reconcileSelectionForLanguage(
+          loadedLists, settings.promptLanguage, settings.promptListSlugs, playLanguage,
+        )
+        : settings.promptListSlugs,
+    );
     dispatchCustomPrompts({ type: "reset", value: "", only: false });
   }
 
@@ -227,7 +237,9 @@ export function CreateRoomPage() {
 
   /** Quick prompts are room input, never stored settings. */
   function presetBlocker(): string | null {
-    if (customPrompts.analysis.usableCount > 0) {
+    // A mixed room keeps none (#1182): whatever the hidden editor holds is not
+    // part of what would be saved.
+    if (!mixed && customPrompts.analysis.usableCount > 0) {
       return ui.createRoomPage.saveCustomPromptsAsAList;
     }
     return null;
@@ -337,7 +349,7 @@ export function CreateRoomPage() {
   }
 
   async function handleCreate() {
-    if (customPrompts.analysis.hasErrors) {
+    if (!mixed && customPrompts.analysis.hasErrors) {
       setError(ui.createRoomPage.fixCustomPromptEntriesMarkedAbove);
       return;
     }
@@ -350,7 +362,9 @@ export function CreateRoomPage() {
     try {
       const settings = {
         nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
-        customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
+        // A mixed room takes no quick prompts (#1182); the form hides them.
+        customPrompts: mixed ? "" : customPrompts.value.trim(),
+        customPromptsOnly: mixed ? false : customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptLanguage,
         promptListSlugs,
         // The language the creator plays in, which a mixed-language room asks
@@ -394,8 +408,9 @@ export function CreateRoomPage() {
       hideMaskedPrompt,
       allowedTools,
       colorMode,
-      customPromptCount: customPrompts.analysis.usableCount,
-      customPromptsOnly: customPrompts.only,
+      // A mixed room is created with none (#1182), whatever the hidden editor holds.
+      customPromptCount: mixed ? 0 : customPrompts.analysis.usableCount,
+      customPromptsOnly: mixed ? false : customPrompts.only,
       spectatorsSeePrompt,
     }),
   ];
@@ -438,7 +453,7 @@ export function CreateRoomPage() {
   );
 
   const submitButton = (
-    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || entryPending || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
+    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || entryPending || awaitingName || (!mixed && customPrompts.analysis.hasErrors)} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
   );
 
   return <main className="create-room-page">

@@ -1,10 +1,10 @@
 import { memo, useState } from "react";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import { MIXED_PROMPT_LANGUAGE, promptLanguageLabel } from "../lib/promptLanguages";
 import { gameLength, changedRoomRules } from "../lib/roomCardFacts";
 import { emitWithAck } from "../lib/socket";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { Avatar } from "./ui/Avatar";
-import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, RoundsIcon, UsersIcon } from "./icons";
+import { ChevronDownIcon, ClockIcon, EyeIcon, Flag, MixedLanguageIcon, RoundsIcon, UsersIcon } from "./icons";
 import type { RoomSummary } from "../types";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
@@ -94,7 +94,10 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
     <h3 className="public-room-name">
       <span className="public-room-name-text">{room.name}</span>
       <span className="public-room-language" title={ui.publicRoomCard.promptLanguage({ language: languageLabel })}>
-        <Flag language={room.promptLanguage} />
+        {/* A mixed room has no one flag to fly (#1182). */}
+        {room.promptLanguage === MIXED_PROMPT_LANGUAGE
+          ? <MixedLanguageIcon size={15} />
+          : <Flag language={room.promptLanguage} />}
         <span className="visually-hidden">{languageLabel}</span>
       </span>
     </h3>

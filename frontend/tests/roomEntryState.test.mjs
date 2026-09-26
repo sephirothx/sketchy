@@ -28,6 +28,7 @@ const sessionResponse = {
   roomId: "room-1",
   code: "ABC123",
   playerId: "player-1",
+  seatLanguage: "de",
 };
 
 function deferred() {
@@ -64,6 +65,9 @@ test("an existing seat is reconnected without loading a preview", async () => {
     roomId: "room-1",
     code: "ABC123",
     playerId: "player-1",
+    // The seat's language rides the session: which of a mixed room's
+    // spellings is this player's (#1182).
+    seatLanguage: "de",
   }]);
   assert.equal(previewCalls, 0);
 });
