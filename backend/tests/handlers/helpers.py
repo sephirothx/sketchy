@@ -316,6 +316,14 @@ class StubPromptListRepo:
                 "Selected prompt lists are not in this room's language"
             )
         counts, total = letter_histogram(self.prompts)
+        by_language = {}
+        if expected_language == "mul":
+            # Each language priced from its own spellings, as the live store
+            # prices it from its own lists.
+            for language in {l for spelled in self.translations.values() for l in spelled}:
+                by_language[language] = letter_histogram(
+                    [spelled[language] for spelled in self.translations.values() if language in spelled]
+                )
         return PinnedPromptSelection(
             slugs=tuple(slugs),
             language=expected_language or self.language,
@@ -323,6 +331,8 @@ class StubPromptListRepo:
             prompt_count=len(self.prompts),
             letter_counts=counts,
             letter_total=total,
+            letter_counts_by_language={l: c for l, (c, _) in by_language.items()},
+            letter_total_by_language={l: t for l, (_, t) in by_language.items()},
         )
 
     async def sample_prompts(

@@ -132,8 +132,8 @@ A room holds only what its selected lists were pinned to - the revision IDs, how
 many prompts they hold, and a letter histogram for wheel pricing - and the
 prompts themselves stay in the database until a game starts and draws the
 bounded sample it can actually play (see `app/game.py` above). `to_state_payload()`
-([`backend/app/rooms.py:511`](../backend/app/rooms.py)) and `to_public_summary()`
-([`backend/app/rooms.py:483`](../backend/app/rooms.py)) are the two shapes the room is
+([`backend/app/rooms.py:768`](../backend/app/rooms.py)) and `to_public_summary()`
+([`backend/app/rooms.py:714`](../backend/app/rooms.py)) are the two shapes the room is
 published in.
 
 **`app/handlers/*` — transport adapters, nothing more.**
@@ -435,7 +435,7 @@ client emit ──▶ sio.on(event)  handlers/<domain>.py
 Validation completes **before** authorization or mutation, and values are never
 coerced: strings and booleans must have their JSON types, integers must be integers
 and not booleans, and unknown fields are rejected
-([`backend/app/handlers/payloads.py:78`](../backend/app/handlers/payloads.py)).
+([`backend/app/handlers/payloads.py:95`](../backend/app/handlers/payloads.py)).
 
 ### Data queries (REST)
 

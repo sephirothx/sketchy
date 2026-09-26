@@ -216,6 +216,27 @@ def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
     return previous.get(len_b, over_limit)
 
 
+def _near_miss(guess: str, answers: Sequence[str]) -> str | None:
+    """"close" if the guess is near a whole answer, "partial" if enough of a
+    multi-word answer's words are in it, else None (see `Game.guess_hint`)."""
+    if any(_is_close_pair(guess, answer) for answer in answers):
+        return "close"
+    guess_tokens = guess.split(" ")
+    for answer in answers:
+        word_tokens = answer.split(" ")
+        if len(word_tokens) <= 1 or abs(len(guess_tokens) - len(word_tokens)) > 1:
+            continue
+        # Bag-of-words intersection: matches regardless of word order,
+        # capping duplicate words at the lower count on either side.
+        overlap = Counter(guess_tokens) & Counter(word_tokens)
+        correct_letter_count = sum(
+            len(word) * count for word, count in overlap.items()
+        )
+        if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
+            return "partial"
+    return None
+
+
 def _checkpoint_share(total_slots: int) -> int:
     """How many letters timed hints may reveal of a spelling this long:
     about 40%, always keeping MIN_HIDDEN_LETTERS hidden."""
@@ -427,10 +448,13 @@ class Game:
     allowed_tools: tuple[str, ...] = DEFAULT_ALLOWED_TOOLS
     color_mode: str = DEFAULT_COLOR_MODE
     # The drawer's spelling's letter slots, and those a checkpoint revealed in
-    # it. A mixed game keeps each other language's reveals beside them.
+    # it. A mixed game keeps each other spelling's reveals beside them - by
+    # spelling, not by language, so seats that spell a word alike (a prompt in
+    # no language, "astronaut" in five) see the same letters and cannot pool
+    # different ones past R-HINT-04's hidden floor.
     letter_positions: list[int] = field(default_factory=list)
     revealed_positions: set[int] = field(default_factory=set)
-    revealed_by_language: dict[str, set[int]] = field(default_factory=dict)
+    revealed_by_spelling: dict[str, set[int]] = field(default_factory=dict)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
     purchased_letters: dict[str, set[str]] = field(default_factory=dict)  # letter hints ("wheel")
     # Per-turn accounting, also kept for the game record. Hints are bought on
@@ -580,12 +604,21 @@ class Game:
         return self.seat_language(self.current_drawer)
 
     def languages_in_play(self) -> tuple[str, ...]:
-        """Every language a seat of this game spells the prompt in."""
+        """Every language a seat of this game - spectators too, who read
+        the tiles - spells the prompt in."""
         if not self.is_mixed_language():
             return (self.prompt_language,)
         languages = {self.turn_language()}
         languages.update(self.seat_language(token) for token in self.turn_order)
+        languages.update(self.seat_languages.values())
         return tuple(sorted(languages))
+
+    def _spellings_in_play(self) -> list[str]:
+        """One language for each distinct spelling of the prompt in play."""
+        by_text: dict[str, str] = {}
+        for language in self.languages_in_play():
+            by_text.setdefault(self._positions_in(language)[0].casefold(), language)
+        return list(by_text.values())
 
     def prompt_choice_answers(self, token: str | None = None) -> list[str]:
         """This turn's offers as `token` reads them, in offer order."""
@@ -809,7 +842,7 @@ class Game:
         )
         self.letter_positions = []
         self.revealed_positions = set()
-        self.revealed_by_language = {}
+        self.revealed_by_spelling = {}
         self.purchased_hints = {}
         self.purchased_letters = {}
         self.hint_spend = {}
@@ -922,10 +955,15 @@ class Game:
 
     def _revealed_in(self, language: str) -> set[int]:
         """The slots a checkpoint revealed in `language`'s spelling: the same
-        share of each spelling, since they are not the same length."""
-        if language == self.turn_language() or not self.is_mixed_language():
+        share of each spelling, since they are not the same length, and the
+        same slots for every language that spells it alike."""
+        if not self.is_mixed_language():
             return self.revealed_positions
-        return self.revealed_by_language.setdefault(language, set())
+        # Casefolded: German "Avocado" and Dutch "avocado" show the same tiles.
+        spelling = self._positions_in(language)[0].casefold()
+        if spelling == (self.prompt or "").casefold():
+            return self.revealed_positions
+        return self.revealed_by_spelling.setdefault(spelling, set())
 
     def letter_occurrences(self, token: str, letter: str) -> int:
         """How often `letter` appears in the prompt as `token` reads it."""
@@ -1000,7 +1038,7 @@ class Game:
         # has given all its share away sits the rest out (`reveal_hint_letter`).
         return max(
             _checkpoint_share(len(self._positions_in(language)[1]))
-            for language in self.languages_in_play()
+            for language in self._spellings_in_play()
         )
 
     def reveal_hint_letter(self) -> bool:
@@ -1013,7 +1051,7 @@ class Game:
         if not self.prompt:
             return False
         revealed_any = False
-        for language in self.languages_in_play():
+        for language in self._spellings_in_play():
             positions = self._positions_in(language)[1]
             revealed = self._revealed_in(language)
             # Scheduled for the longest spelling's share, so a shorter one
@@ -1256,21 +1294,22 @@ class Game:
             # language read their own answer in the chat (#1182). Kept private
             # the way a near miss is.
             return "close"
-        if any(_is_close_pair(guess, answer) for answer in accepted_answers):
-            return "close"
-        guess_tokens = guess.split(" ")
-        for answer in accepted_answers:
-            word_tokens = answer.split(" ")
-            if len(word_tokens) <= 1 or abs(len(guess_tokens) - len(word_tokens)) > 1:
+        verdict = _near_miss(guess, accepted_answers)
+        if verdict is not None or not self.is_mixed_language():
+            return verdict
+        # Near another language's spelling: the room must not see it either,
+        # or the seats playing that language read their answer in a typo
+        # ("dogs" from a German seat). Measured in that language's fold.
+        key = self._current_key()
+        for other, form in self.prompt_translations.get(key, {}).items():
+            if other == language:
                 continue
-            # Bag-of-words intersection: matches regardless of word order,
-            # capping duplicate words at the lower count on either side.
-            overlap = Counter(guess_tokens) & Counter(word_tokens)
-            correct_letter_count = sum(
-                len(word) * count for word, count in overlap.items()
+            answers = tuple(
+                dict.fromkeys(_normalize(answer, other) for answer in (form.answer, *form.aliases))
             )
-            if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
-                return "partial"
+            verdict = _near_miss(_normalize(text, other), answers)
+            if verdict is not None:
+                return verdict
         return None
 
     def _accepted_answer_spellings(self, token: str | None = None) -> frozenset[str]:

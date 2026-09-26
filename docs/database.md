@@ -224,7 +224,7 @@ languages or `mul` for a mixed-language room (R-PROMPT-13, #1182),
 `CHECK ck_room_presets_prompt_language`, `en` by default. It used to be read
 back from the saved lists, and a preset of lists in no language (R-PROMPT-12) has none to
 read, so since #821 it is stored. The two still cannot drift apart: saving a preset whose
-lists are not in the declared language (or in none) is refused rather than stored, and
+lists are not in the declared language (or in none; for a mixed preset, not playable by a mixed room) is refused rather than stored, and
 reading one pins its lists against that language the way a room does, so a disagreement
 makes the preset visibly unavailable.
 

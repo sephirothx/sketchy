@@ -32,6 +32,7 @@ def _standard_stub():
             "cat": {"en": "cat", "de": "Katze", "fr": "chat", "es": "gato", "it": "gatto", "nl": "kat", "pt": "gato"},
         },
         revision_ids=("revision-standard",),
+        prompt_version_ids={"dog": "v-dog", "cat": "v-cat"},
     )
 
 
@@ -115,10 +116,83 @@ async def test_each_seat_plays_the_drawing_in_the_language_it_joined_with():
     # Tiles for the guesser's own spelling, not the drawer's.
     assert started[guesser.sid]["maskedPrompt"].split("  ")[-1] == str(len(guesser_word))
     answer = await sio.handlers["/"]["guess"](guesser.sid, {"text": english})
-    assert answer.get("ok", True) is True, answer
     assert guesser.id in game.correct_guessers
     # What they are told they guessed is their own language's word.
-    assert game.prompt_for(guesser.id) == guesser_word
-    from app.presenters import guessed_receipt
+    assert answer["correct"]["prompt"] == guesser_word
+    # Priced from the pinned languages' own letters, carried room to game.
+    assert game.letter_total_by_language["de"] and game.letter_total_by_language["fr"]
+    assert game.letter_counts_by_language["de"] != game.letter_counts_by_language["fr"]
 
-    assert guessed_receipt(game, guesser.id)["prompt"] == guesser_word
+
+async def test_a_mixed_room_refuses_custom_prompts_only_too():
+    """It would skip the re-check a start makes of the lists it draws from."""
+    room_manager = RoomManager()
+    sio, sessions = _server(room_manager, _standard_stub())
+
+    answer = await _create(sio, sessions, customPromptsOnly=True)
+
+    assert answer["ok"] is False
+    assert answer["errorCode"] == "mixed_room_custom_prompts"
+
+
+def test_a_friend_s_invitation_carries_the_seat_s_language():
+    """Joining through a friend is a way into a mixed room like any other."""
+    from app.handlers.payloads import JoinFriendRoomPayload
+
+    payload = JoinFriendRoomPayload.model_validate(
+        {"friendUserId": "friend", "seatLanguage": "DE"}
+    )
+    assert payload.seat_language == "de"
+
+
+async def test_a_seat_that_joins_mid_game_plays_in_its_own_language():
+    room_manager = RoomManager()
+    sio, sessions = _server(room_manager, _standard_stub())
+    created = await _create(sio, sessions, seat="de")
+    room = room_manager.get_room(created["roomId"])
+    await sessions.save("guest-sid", {"user_id": "user-guest"})
+    await sio.handlers["/"]["join_room"](
+        "guest-sid", {"code": room.code, "nickname": "Jean", "seatLanguage": "fr"}
+    )
+    assert (await sio.handlers["/"]["start_game"]("host-sid", None))["ok"] is True
+
+    await sessions.save("late-sid", {"user_id": "user-late"})
+    joined = await sio.handlers["/"]["join_room"](
+        "late-sid", {"code": room.code, "nickname": "Lucia", "seatLanguage": "it"}
+    )
+    assert joined["ok"] is True, joined
+    late = next(p for p in room.players.values() if p.nickname == "Lucia")
+    assert room.game.seat_language(late.id) == "it"
+
+
+async def test_a_start_refuses_a_list_that_stopped_being_playable_by_its_code():
+    room_manager = RoomManager()
+    repo = _standard_stub()
+    sio, sessions = _server(room_manager, repo)
+    created = await _create(sio, sessions, seat="de")
+    room = room_manager.get_room(created["roomId"])
+    await sessions.save("guest-sid", {"user_id": "user-guest"})
+    await sio.handlers["/"]["join_room"](
+        "guest-sid", {"code": room.code, "nickname": "Jean", "seatLanguage": "fr"}
+    )
+    repo.translations = {}
+    repo.language = "en"
+
+    started = await sio.handlers["/"]["start_game"]("host-sid", None)
+
+    assert started["ok"] is False
+    assert started["errorCode"] == "mixed_room_list_unsupported"
+    assert room.game is None
+
+
+def test_a_seat_plays_in_one_room_language_and_says_which():
+    from pydantic import ValidationError
+
+    from app.handlers.payloads import JoinRoomPayload
+
+    for refused in ("mul", "zxx", "ja", "english"):
+        try:
+            JoinRoomPayload.model_validate({"code": "ABCDEF", "seatLanguage": refused})
+        except ValidationError:
+            continue
+        raise AssertionError(f"accepted {refused!r}")

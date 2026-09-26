@@ -543,6 +543,19 @@
       "maxLength": 16,
       "title": "Nickname",
       "type": "string"
+     },
+     "seatLanguage": {
+      "anyOf": [
+       {
+        "maxLength": 32,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Seatlanguage"
      }
     },
     "required": [
@@ -2824,7 +2837,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 44,
+ "protocolVersion": 45,
  "refusal": {
   "codes": [
    "invalid_payload",

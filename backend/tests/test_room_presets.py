@@ -305,6 +305,22 @@ async def test_a_preset_may_declare_a_mixed_language_room(env):
     )
     assert refused.status_code == 422
 
+    # A list in a language is admitted when its content plays in every one:
+    # asked of the lists, as a room asks it, not of their language tag.
+    from app.db.seed import seed_prompt_lists
+
+    await seed_prompt_lists(prompt_lists)
+    standard = await client.post(
+        "/api/room-presets",
+        json={"name": "Standard for all", "settings": settings("german_standard", promptLanguage="mul")},
+    )
+    assert standard.status_code == 201, standard.text
+    extended = await client.post(
+        "/api/room-presets",
+        json={"name": "German extras", "settings": settings("german_extended", promptLanguage="mul")},
+    )
+    assert extended.status_code == 422
+
 
 async def test_deleted_prompt_list_makes_preset_visibly_unavailable(env):
     client, _, prompt_lists, _, _ = env

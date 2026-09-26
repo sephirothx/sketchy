@@ -274,9 +274,13 @@ class GameFlowService:
         prompt_letter_total_by_language = (
             dict(fallback.prompt_letter_total_by_language) if fallback else {}
         )
-        if declared_language == MIXED_PROMPT_LANGUAGE and custom_prompts:
+        if declared_language == MIXED_PROMPT_LANGUAGE and (
+            custom_prompts or value("custom_prompts_only")
+        ):
             # A quick prompt has one language and no translations, and every
             # seat of a mixed room must meet the prompt in its own (#1182).
+            # Custom-only is refused with them: it would skip the re-check a
+            # start makes of the lists the room still draws from.
             raise RoomPromptResolutionError(
                 "A mixed-language room cannot use custom prompts",
                 code=ErrorCode.MIXED_ROOM_CUSTOM_PROMPTS,

@@ -456,6 +456,14 @@ class JoinFriendRoomPayload(RequestModel):
         default=False, alias="colorblindSafeColors"
     )
     as_spectator: bool = Field(default=False, alias="asSpectator")
+    # The seat's language, as `join_room` carries it (#1182): a friend's
+    # room may be mixed-language, and this is the language they would play in.
+    seat_language: str | None = Field(default=None, alias="seatLanguage", max_length=32)
+
+    @field_validator("seat_language")
+    @classmethod
+    def valid_seat_language(cls, value: str | None) -> str | None:
+        return _seat_language(value)
 
     @field_validator("nickname")
     @classmethod
