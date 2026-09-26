@@ -4959,7 +4959,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
         ).unique().all()
         # A hidden word and an entry are the same word when a room that plays
-        # both would take them as one answer (#821 review), so each pair is
+        # both keys them as one word - its canonical key, not the wider set a
+        # guess is accepted under (#821 review) - so each pair is
         # compared in the fold of such a room - keyed by that fold, which the
         # entry is keyed under too. A list in a language meets its own hidden
         # words by their stored keys, and an agnostic list's as that

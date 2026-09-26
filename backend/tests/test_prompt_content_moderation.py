@@ -1483,6 +1483,22 @@ async def test_a_hidden_agnostic_word_meets_its_spellings_in_every_room_s_fold(e
         "Meier": "active",
     }
 
+    # Every room's fold, not German's alone: "Cœur" and "coeur" are one word
+    # to a French room.
+    third = await prompts.create_owned(
+        owner["id"], name="Hearts", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Cœur"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(third.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+    fourth = await prompts.create_owned(
+        owner["id"], name="More hearts", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="coeur"),),
+    )
+    assert fourth.prompts[0].moderation_state == "hidden"
+
 
 async def _staff_member(factory, account: dict, role: UserRole) -> None:
     async with factory() as session:

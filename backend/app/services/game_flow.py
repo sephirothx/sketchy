@@ -651,9 +651,8 @@ class GameFlowService:
         # without the room's transliteration - "Müller" is `muller` there and
         # `mueller` to a German room, and "Bär" is `bar`, which is another
         # German word. So its shadow is asked here, of the text, under the
-        # room's fold. The canonical key and not
-        # the wider spelling set (R-GUESS-01): which prompt a turn draws does
-        # not widen. For a list in the room's language this is the stored
+        # room's fold - by the canonical key and not the wider spelling set
+        # (R-GUESS-01): which prompt a turn draws does not widen. For a list in the room's language this is the stored
         # key again and removes nothing more; twins are few, so the sample is
         # not over-drawn for them.
         shadowed = room.custom_prompt_match_keys()
