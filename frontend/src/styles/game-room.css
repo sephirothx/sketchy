@@ -2766,13 +2766,23 @@ button.guess-pips {
 
   /* The side columns are kept tight on purpose: every pixel they take comes
      straight off the canvas, and the whole point of turning the phone is to
-     make the drawing bigger. */
+     make the drawing bigger.
+
+     The friend invite and the toasts, which stand at the bottom centre
+     outside this shell, keep the feed's width clear on each side
+     (--dock-inline-inset): a wide toast at 740px reached 17px into the
+     column, over the guess field and the verdict above it. The token mirrors
+     the column's width rather than setting it, so a browser without :has()
+     only loses the notices' narrowing, not the column. Change both together. */
+  :root:has(.game-room.game-room-playing) {
+    --dock-inline-inset: min(26vw, 180px);
+  }
+
   .game-room.game-room-playing .room-shell-chat {
     border-left: 1.5px solid var(--line);
     flex: 0 0 auto;
-    max-width: 180px;
     order: 2;
-    width: 26%;
+    width: min(26vw, 180px);
   }
 
   .game-room.game-room-playing .room-shell-chat .sidebar-box {
@@ -2784,6 +2794,19 @@ button.guess-pips {
   .game-room.game-room-playing .chat-messages-container,
   .game-room.game-room-playing .chat-messages {
     max-height: none;
+  }
+
+  /* With the keyboard up the feed goes (density mode, above), and the field
+     used to rise with it to the top of this column. The verdict on the last
+     guess hangs above the field, so it was drawn off the top of the screen:
+     "very close" was never seen (#1175). The field stays at the bottom, where
+     it was before the keyboard came up and where portrait keeps it, and the
+     verdict hangs above it in the space the feed left. Growing upward, a
+     verdict that wraps in the narrow column still has room. No --dock-reserve
+     is needed: this column is beside the bottom centre, not under it, and
+     what stands there keeps clear of it (--dock-inline-inset, above). */
+  .game-room.guess-focused .room-chat-panel.guess-chat {
+    justify-content: flex-end;
   }
 
   /* The turn bar rides above the canvas rather than across the whole width,
