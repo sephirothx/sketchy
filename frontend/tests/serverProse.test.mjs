@@ -50,8 +50,8 @@ const REVIEWED = {
   "lib/suspension.ts: body.reason":
     "the moderator's own words to the player, shown as written - a person's, not the server's",
   "components/SuspensionNotice.tsx: body.reason": "the same, as it arrives on the socket",
-  "components/InviteEntryPage.tsx: state.error":
-    "a room-entry state's error, always written on this side (refusalText or the catalogue)",
+  "components/InviteEntryPage.tsx: refusal.message":
+    "a room-entry refusal, always written on this side (refusalText or the catalogue)",
 };
 
 function sourceFiles(dir = ROOT, out = []) {

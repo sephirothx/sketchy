@@ -137,14 +137,21 @@ async def test_a_typed_name_is_enough_to_join_from_an_invite():
             await visitor.goto(f"{BASE_URL}/room/{code}")
             await visitor.wait_for_selector("#invite-name")
 
-            # Join with no name is refused in place; typing again takes the
+            # Join with no name is refused in a toast (R-UX-13): the field is
+            # marked and has the focus back, and nothing moves - a line above
+            # the buttons used to push them down. Typing again takes the
             # refusal back, rather than leaving the field marked invalid.
-            await visitor.click('button:text-is("Join")')
-            await visitor.wait_for_selector("#invite-entry-error")
+            join = visitor.locator('button:text-is("Join")')
+            before = await join.bounding_box()
+            await join.click()
+            await visitor.locator(".app-toast.error").get_by_text(
+                "Enter a nickname to continue."
+            ).wait_for()
             assert await visitor.get_attribute("#invite-name", "aria-invalid") == "true"
+            assert await visitor.evaluate("document.activeElement.id") == "invite-name"
+            assert await join.bounding_box() == before
             await visitor.fill("#invite-name", "InviteDrafter")
-            await visitor.wait_for_selector("#invite-entry-error", state="detached")
-            assert await visitor.get_attribute("#invite-name", "aria-invalid") is None
+            await visitor.wait_for_selector("#invite-name:not([aria-invalid])")
             await visitor.click('button:text-is("Join")')
 
             await visitor.wait_for_selector('[data-testid="room-header"]')

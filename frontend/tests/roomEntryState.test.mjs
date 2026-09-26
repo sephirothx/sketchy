@@ -106,13 +106,17 @@ test("a nickname breaking the shared name rule is rejected before joining", asyn
 
   for (const bad of ["ab", "has space", "Guest", "way-too-long-a-nickname"]) {
     machine.setNicknameInput(bad);
-    await machine.join("player");
+    const refusal = await machine.join("player");
     assert.equal(joins.length, 0, bad);
-    assert.ok(machine.getSnapshot().state.error, bad);
+    assert.ok(refusal.message, bad);
+    assert.equal(refusal.aboutName, true, bad);
+    // Said once, by whoever asked, and never left in the state (R-UX-13).
+    assert.equal(machine.getSnapshot().state.status, "preview", bad);
+    assert.equal("error" in machine.getSnapshot().state, false, bad);
   }
 
   machine.setNicknameInput("Ada-Lovelace");
-  await machine.join("player");
+  assert.equal(await machine.join("player"), null);
   assert.equal(joins.length, 1);
 });
 
@@ -199,14 +203,14 @@ test("a room-full player response returns to preview while keeping spectator joi
   }));
 
   await machine.load();
-  await machine.join("player");
+  const refusal = await machine.join("player");
 
   assert.equal(machine.getSnapshot().state.status, "preview");
   assert.equal(machine.getSnapshot().state.room.isFull, true);
-  assert.equal(
-    machine.getSnapshot().state.error,
-    "The last player seat was just taken, but you can still spectate.",
-  );
+  assert.deepEqual(refusal, {
+    message: "The last player seat was just taken, but you can still spectate.",
+    aboutName: false,
+  });
 });
 
 test("a refusal is recognised by its code, so a copy edit cannot change what happens", async () => {
@@ -223,8 +227,28 @@ test("a refusal is recognised by its code, so a copy edit cannot change what hap
     join: async () => ({ ok: false, errorCode: "room_full", error: "Full up, sorry!" }),
   }));
   await full.load();
-  await full.join("player");
+  const refusal = await full.join("player");
   assert.equal(full.getSnapshot().state.status, "preview");
   assert.equal(full.getSnapshot().state.room.isFull, true);
-  assert.match(full.getSnapshot().state.error, /still spectate/);
+  assert.match(refusal.message, /still spectate/);
+});
+
+test("a refusal says whether the name was the reason, from the server's field", async () => {
+  // The page marks the name field only for these; a full room or a lost
+  // connection is not the name's fault.
+  const taken = new RoomEntryMachine("ABC123", "Ada", dependencies({
+    join: async () => ({ ok: false, errorCode: "name_in_use", error: "Taken.", field: "nickname" }),
+  }));
+  await taken.load();
+  assert.equal((await taken.join("player")).aboutName, true);
+
+  const offline = new RoomEntryMachine("ABC123", "Ada", dependencies({
+    join: async () => { throw new Error("socket closed"); },
+  }));
+  await offline.load();
+  assert.deepEqual(await offline.join("spectator"), {
+    message: "Could not join as a spectator.",
+    aboutName: false,
+  });
+  assert.equal(offline.getSnapshot().state.status, "preview");
 });

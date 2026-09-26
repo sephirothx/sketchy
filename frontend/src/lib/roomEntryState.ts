@@ -79,9 +79,18 @@ export type RoomJoinMode = "player" | "spectator";
 
 export type RoomEntryState =
   | { status: "loading" }
-  | { status: "preview"; room: RoomSummary; notice?: string; error?: string }
+  | { status: "preview"; room: RoomSummary; notice?: string }
   | { status: "joining"; room: RoomSummary; mode: RoomJoinMode; notice?: string }
   | { status: "error"; message: string };
+
+/** Why a join was refused: returned by `join` rather than kept in the state,
+    because it is said once, in a toast, and not left on the page - a line
+    that appeared above Join and Spectate moved them (R-UX-13). `aboutName`
+    when the name was the reason, so the page can mark its field. */
+export interface RoomEntryRefusal {
+  message: string;
+  aboutName: boolean;
+}
 
 export interface RoomSession {
   roomId: string;
@@ -149,11 +158,7 @@ export class RoomEntryMachine {
   }
 
   setNicknameInput(nicknameInput: string): void {
-    const state = this.snapshot.state;
-    this.publish({
-      nicknameInput,
-      state: state.status === "preview" ? { ...state, error: undefined } : state,
-    });
+    this.publish({ ...this.snapshot, nicknameInput });
   }
 
   async load(): Promise<void> {
@@ -199,19 +204,15 @@ export class RoomEntryMachine {
     }
   }
 
-  async join(mode: RoomJoinMode): Promise<void> {
+  /** Join as `mode`. Resolves to the refusal when there is one, and to null
+      when the seat was taken or the answer is no longer this machine's. */
+  async join(mode: RoomJoinMode): Promise<RoomEntryRefusal | null> {
     const current = this.snapshot.state;
-    if (current.status !== "preview") return;
+    if (current.status !== "preview") return null;
 
     const nickname = this.snapshot.nicknameInput.trim();
     const invalid = nickname ? nicknameError(nickname) : ui.roomEntryState.enterANicknameToContinue;
-    if (invalid) {
-      this.publish({
-        ...this.snapshot,
-        state: { ...current, error: invalid },
-      });
-      return;
-    }
+    if (invalid) return { message: invalid, aboutName: true };
 
     const version = ++this.requestVersion;
     this.publish({
@@ -221,34 +222,34 @@ export class RoomEntryMachine {
 
     try {
       const response = await this.dependencies.join({ code: this.code, nickname, mode });
-      if (!this.isCurrent(version)) return;
+      if (!this.isCurrent(version)) return null;
       const session = sessionFrom(response);
       if (session) {
         this.dependencies.acceptSession(session);
-        return;
+        return null;
       }
 
       const justFilled = mode === "player" && response.errorCode === "room_full";
       const room = justFilled ? { ...current.room, isFull: true } : current.room;
-      const error = justFilled
-        ? ui.roomEntryState.theLastPlayerSeatWasTaken
-        : refusalText(response, ui.roomEntryState.couldNotJoinThisRoom);
       this.publish({
         ...this.snapshot,
-        state: { status: "preview", room, notice: current.notice, error },
+        state: { status: "preview", room, notice: current.notice },
       });
+      return {
+        message: justFilled
+          ? ui.roomEntryState.theLastPlayerSeatWasTaken
+          : refusalText(response, ui.roomEntryState.couldNotJoinThisRoom),
+        // The server names the payload field it refused (wire-protocol.md).
+        aboutName: response.field === "nickname",
+      };
     } catch (error) {
-      if (!this.isCurrent(version)) return;
+      if (!this.isCurrent(version)) return null;
       const action = mode === "spectator" ? ui.roomEntryState.joinAsASpectator : ui.roomEntryState.joinThisRoom;
       this.publish({
         ...this.snapshot,
-        state: {
-          status: "preview",
-          room: current.room,
-          notice: current.notice,
-          error: this.dependencies.requestErrorMessage(error, action),
-        },
+        state: { status: "preview", room: current.room, notice: current.notice },
       });
+      return { message: this.dependencies.requestErrorMessage(error, action), aboutName: false };
     }
   }
 
