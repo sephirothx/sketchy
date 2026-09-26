@@ -267,10 +267,7 @@ async def test_approved_restart_atomically_replaces_game_and_rejects_stale_canva
     assert room.restart_vote is None
     assert room.restart_vote_cooldown_until == 0
 
-    prompt = room.game.prompt_choices[0]
-    selected = await sio.handlers["/"]["select_prompt"](
-        proposer.sid, {"prompt": prompt}
-    )
+    selected = await sio.handlers["/"]["select_prompt"](proposer.sid, {"index": 0})
     assert selected == {"ok": True}
     stale_frame = encode_live_drawing(
         "draw_start",

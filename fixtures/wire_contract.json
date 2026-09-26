@@ -802,16 +802,17 @@
    "commandClass": "action",
    "payload": {
     "additionalProperties": false,
+    "description": "The drawer's pick, by the offer's position in `your_prompt_choices`.\n\nNot by its text (#1181): what a drawer reads is one language's spelling of\nthe offer, and it is the offer that is chosen.",
     "properties": {
-     "prompt": {
-      "maxLength": 32,
-      "minLength": 1,
-      "title": "Prompt",
-      "type": "string"
+     "index": {
+      "exclusiveMaximum": 3,
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer"
      }
     },
     "required": [
-     "prompt"
+     "index"
     ],
     "type": "object"
    },
@@ -2776,7 +2777,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 43,
+ "protocolVersion": 44,
  "refusal": {
   "codes": [
    "invalid_payload",

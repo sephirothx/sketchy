@@ -1569,7 +1569,7 @@ host: start_game
        ├─ emit your_prompt_choices {choices, seconds}                     → drawer only
        └─ schedule the choose-prompt (15s default) phase timer
 
-drawer: select_prompt  (or the timer forces a choice)
+drawer: select_prompt {index}  (or the timer forces a choice)
   └─ GameFlowService._begin_drawing
        ├─ Game.snapshot_turn_participants(...)       freezes eligibility, per seat
        ├─ emit turn_started {maskedPrompt, hintCost, letterPrices, …}     → per socket

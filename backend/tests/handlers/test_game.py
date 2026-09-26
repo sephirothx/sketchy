@@ -109,10 +109,11 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     sio.emit = AsyncMock()
 
     select_prompt = sio.handlers["/"]["select_prompt"]
-    rejected = await select_prompt("drawer-sid", {"prompt": "not-a-choice"})
+    # One prompt in the pool, so one offer: the third position is not there.
+    rejected = await select_prompt("drawer-sid", {"index": 2})
     assert rejected == {"ok": False, "errorCode": "prompt_unavailable", "error": "That prompt is no longer available"}
 
-    accepted = await select_prompt("drawer-sid", {"prompt": "banana"})
+    accepted = await select_prompt("drawer-sid", {"index": 0})
     assert accepted == {"ok": True}
     await asyncio.sleep(0.1)
 

@@ -189,7 +189,7 @@ def test_record_carries_the_settings_the_game_was_played_under():
         "b": "version-b",
         "c": "version-c",
     }
-    game.prompt_source_revision_ids_by_answer = {
+    game.prompt_source_revision_ids_by_key = {
         "jackpot": ("revision-one",),
         "b": ("revision-one", "revision-two"),
         "c": ("revision-two",),
@@ -256,7 +256,7 @@ def test_actual_pool_distinguishes_custom_curated_and_fallback_offers():
     game.custom_prompt_keys = frozenset({"jackpot"})
     game.prompt_version_ids = {"b": "version-b"}
     game.prompt_source_revision_ids = ("revision-curated",)
-    game.prompt_source_revision_ids_by_answer = {
+    game.prompt_source_revision_ids_by_key = {
         "b": ("revision-curated",)
     }
     game.completed_turns = [turn(players["Ann"].id)]

@@ -331,7 +331,13 @@ class Game:
     current_turn_id: str | None = None
     phase: Phase = Phase.CHOOSING_PROMPT
     current_drawer: str | None = None
+    # The chosen prompt as the room spells it: what is masked, matched and
+    # frozen into history. `prompt_key` is what the game tracks it by (#1181):
+    # a list prompt's concept, a quick or built-in prompt's own text.
     prompt: str | None = None
+    prompt_key: str | None = None
+    # Keys, like `prompt_pool` and `used_prompts`: a drawer is shown their
+    # answers (`prompt_choice_answers`) and picks one by its position.
     prompt_choices: list[str] = field(default_factory=list)
     correct_guessers: set[str] = field(default_factory=set)
     guess_points: dict[str, int] = field(default_factory=dict)
@@ -346,8 +352,10 @@ class Game:
     used_prompts: set[str] = field(default_factory=set)
     # The prompts this game can play: a sample drawn once at start, holding at
     # most `rounds x max_players x 3` entries rather than every prompt the
-    # room's lists contain. `None` means the built-in list.
+    # room's lists contain. `None` means the built-in list. Keys, spelled by
+    # `prompt_answers`; a key with no entry there is its own answer.
     prompt_pool: list[str] | None = None
+    prompt_answers: dict[str, str] = field(default_factory=dict)
     # How often each a-z letter appears across the pool this sample was drawn
     # from, summed from the pinned revisions. Empty means "count `prompt_pool`
     # instead", which is what the built-in and quick-prompt-only paths do -
@@ -357,12 +365,12 @@ class Game:
     letter_total: int = 0
     # Aliases belong to the exact localized prompt versions resolved when the
     # game starts. They never alter the canonical answer shown in the UI or
-    # frozen into history.
+    # frozen into history. Keyed like the pool, as is the provenance below.
     prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_language: str = "en"
     prompt_source_revision_ids: tuple[str, ...] = ()
     prompt_version_ids: dict[str, str] = field(default_factory=dict)
-    prompt_source_revision_ids_by_answer: dict[str, tuple[str, ...]] = field(
+    prompt_source_revision_ids_by_key: dict[str, tuple[str, ...]] = field(
         default_factory=dict
     )
     custom_prompt_keys: frozenset[str] = frozenset()
@@ -448,10 +456,36 @@ class Game:
             },
         }
 
-    def prompt_source_kind(self, answer: str) -> str:
-        if self.prompt_version_ids.get(answer) is not None:
+    def answer_for(self, key: str) -> str:
+        """How the room spells the prompt `key` names."""
+        return self.prompt_answers.get(key, key)
+
+    def key_for(self, answer: str) -> str:
+        """The key an answer this game offered is tracked by - the way back
+        from a display snapshot, for callers that only kept the text."""
+        for key, spelled in self.prompt_answers.items():
+            if spelled == answer:
+                return key
+        return answer
+
+    def _current_key(self) -> str | None:
+        """The chosen prompt's key; a prompt set without one is its own."""
+        return self.prompt_key if self.prompt_key is not None else self.prompt
+
+    def seat_language(self, token: str | None) -> str:
+        """The language a seat plays in: the one its guesses are folded
+        under and its prompt is spelled in. Every seat plays the room's for
+        now; mixed-language rooms (#1182) are what this is for."""
+        return self.prompt_language
+
+    def prompt_choice_answers(self, token: str | None = None) -> list[str]:
+        """This turn's offers as the drawer reads them, in offer order."""
+        return [self.answer_for(key) for key in self.prompt_choices]
+
+    def prompt_source_kind(self, key: str) -> str:
+        if self.prompt_version_ids.get(key) is not None:
             return PromptSourceKind.CURATED.value
-        if _normalize(answer, self.prompt_language) in self.custom_prompt_keys:
+        if _normalize(self.answer_for(key), self.prompt_language) in self.custom_prompt_keys:
             return PromptSourceKind.CUSTOM.value
         return PromptSourceKind.BUILTIN_FALLBACK.value
 
@@ -644,6 +678,7 @@ class Game:
         self.current_drawer = self.turn_order[self.turn_index % len(self.turn_order)]
         self.current_turn_id = str(generate_uuid7())
         self.prompt = None
+        self.prompt_key = None
         self.prompt_choices = self._next_prompt_choices()
         self.correct_guessers = set()
         self.guess_points = {}
@@ -667,13 +702,23 @@ class Game:
         self.phase = Phase.CHOOSING_PROMPT
         return self.prompt_choices
 
-    def choose_prompt(self, token: str, prompt: str) -> bool:
+    def choose_prompt(self, token: str, key: str) -> bool:
         if self.phase != Phase.CHOOSING_PROMPT or token != self.current_drawer:
             return False
-        if prompt not in self.prompt_choices:
+        if key not in self.prompt_choices:
             return False
-        self._set_prompt(prompt)
+        self._set_prompt(key)
         return True
+
+    def choose_prompt_option(self, token: str, index: int) -> bool:
+        """The drawer picks an offer by its position, as it was shown to them.
+
+        By position rather than by text (#1181): the text a drawer reads is
+        their language's spelling, and it is the offer that is chosen.
+        """
+        if not 0 <= index < len(self.prompt_choices):
+            return False
+        return self.choose_prompt(token, self.prompt_choices[index])
 
     def force_prompt_choice(self) -> None:
         if self.phase == Phase.CHOOSING_PROMPT and self.prompt_choices:
@@ -712,9 +757,11 @@ class Game:
             choices.append(self._prompt_queue.pop())
         return choices
 
-    def _set_prompt(self, prompt: str) -> None:
+    def _set_prompt(self, key: str) -> None:
+        prompt = self.answer_for(key)
+        self.prompt_key = key
         self.prompt = prompt
-        self.used_prompts.add(prompt)
+        self.used_prompts.add(key)
         self.letter_positions = [i for i, ch in enumerate(prompt) if ch.isalnum()]
         self.phase = Phase.DRAWING
 
@@ -888,7 +935,11 @@ class Game:
             counts = self.letter_counts
             total = self.letter_total
         else:
-            pool = self.prompt_pool or PROMPTS
+            pool = (
+                [self.answer_for(key) for key in self.prompt_pool]
+                if self.prompt_pool
+                else PROMPTS
+            )
             counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
             total = sum(counts.values()) or 1
         self._cached_letter_frequencies = {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
@@ -980,8 +1031,8 @@ class Game:
             return False, 0
         if len(text) > MAX_PROMPT_LENGTH:
             return False, 0
-        guessed_spellings = _accepted_spellings(text, self.prompt_language)
-        if guessed_spellings.isdisjoint(self._accepted_answer_spellings()):
+        guessed_spellings = _accepted_spellings(text, self.seat_language(token))
+        if guessed_spellings.isdisjoint(self._accepted_answer_spellings(token)):
             # Counted here rather than at the caller so that only real attempts
             # land: the drawer and players who already have it return above,
             # and their messages are chat, not guesses.
@@ -1032,10 +1083,11 @@ class Game:
             return None
         if len(text) > MAX_PROMPT_LENGTH:
             return None
-        guess = _normalize(text, self.prompt_language)
-        accepted_answers = self._accepted_answer_keys()
-        if not _accepted_spellings(text, self.prompt_language).isdisjoint(
-            self._accepted_answer_spellings()
+        language = self.seat_language(token)
+        guess = _normalize(text, language)
+        accepted_answers = self._accepted_answer_keys(token)
+        if not _accepted_spellings(text, language).isdisjoint(
+            self._accepted_answer_spellings(token)
         ):
             return None
         if any(_is_close_pair(guess, answer) for answer in accepted_answers):
@@ -1055,27 +1107,29 @@ class Game:
                 return "partial"
         return None
 
-    def _accepted_answer_spellings(self) -> frozenset[str]:
-        """Every spelling that wins the turn: the answer's and its aliases'."""
+    def _accepted_answer_spellings(self, token: str | None = None) -> frozenset[str]:
+        """Every spelling that wins the turn for `token`: the answer's and its
+        aliases', folded the way that seat's language folds them."""
         if not self.prompt:
             return frozenset()
-        aliases = self.prompt_aliases.get(self.prompt, ())
+        language = self.seat_language(token)
+        aliases = self.prompt_aliases.get(self._current_key(), ())
         return frozenset().union(
             *(
-                _accepted_spellings(answer, self.prompt_language)
+                _accepted_spellings(answer, language)
                 for answer in (self.prompt, *aliases)
             )
         )
 
-    def _accepted_answer_keys(self) -> tuple[str, ...]:
+    def _accepted_answer_keys(self, token: str | None = None) -> tuple[str, ...]:
         """Canonical answer plus aliases for this exact selected version."""
         if not self.prompt:
             return ()
-        aliases = self.prompt_aliases.get(self.prompt, ())
+        language = self.seat_language(token)
+        aliases = self.prompt_aliases.get(self._current_key(), ())
         return tuple(
             dict.fromkeys(
-                _normalize(answer, self.prompt_language)
-                for answer in (self.prompt, *aliases)
+                _normalize(answer, language) for answer in (self.prompt, *aliases)
             )
         )
 
@@ -1148,7 +1202,7 @@ class Game:
                 id=self.current_turn_id or str(generate_uuid7()),
                 round_number=self.round_number,
                 turn_number=len(self.completed_turns) + 1,
-                offered_prompts=list(self.prompt_choices),
+                offered_prompts=self.prompt_choice_answers(),
                 chosen_prompt=self.prompt or "",
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
@@ -1160,11 +1214,11 @@ class Game:
                     self.prompt_source_kind(prompt) for prompt in self.prompt_choices
                 ),
                 offered_prompt_source_revision_ids=tuple(
-                    self.prompt_source_revision_ids_by_answer.get(prompt, ())
+                    self.prompt_source_revision_ids_by_key.get(prompt, ())
                     for prompt in self.prompt_choices
                 ),
                 chosen_prompt_version_id=self.prompt_version_ids.get(
-                    self.prompt or ""
+                    self._current_key() or ""
                 ),
                 drawer_token=self.current_drawer or "",
                 # Floored: a turn ended the instant it began (#1005) lasted

@@ -123,17 +123,31 @@ class _PromptDraw:
 
     An empty `pool` means no lists and no quick prompts, which the game reads
     as the built-in list - the same thing an empty room resolved to before.
+
+    The pool holds **keys**, not answers (#1181): a list prompt's concept, a
+    quick prompt's own text. `answers` spells each list prompt in the room's
+    language; everything else the turns record is keyed the same way.
     """
 
     pool: list[str] | None = None
+    answers: dict[str, str] = field(default_factory=dict)
     aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     version_ids: dict[str, str] = field(default_factory=dict)
-    source_revision_ids_by_answer: dict[str, tuple[str, ...]] = field(
+    source_revision_ids_by_key: dict[str, tuple[str, ...]] = field(
         default_factory=dict
     )
     source_revision_ids: tuple[str, ...] = ()
     letter_counts: dict[str, int] = field(default_factory=dict)
     letter_total: int = 0
+
+
+def _prompt_key(prompt: SampledPrompt) -> str:
+    """What a game tracks a list prompt by: its concept (#1181).
+
+    The answer only where there is no concept to give - a stand-in store -
+    which is also what a quick prompt is keyed by.
+    """
+    return prompt.concept_id or prompt.answer
 
 
 class RoomNoLongerStartableError(RuntimeError):
@@ -681,7 +695,7 @@ class GameFlowService:
         drawn: list[SampledPrompt] = candidates[: len(indices) - from_custom]
 
         pool = random.sample(custom, from_custom) + [
-            prompt.answer for prompt in drawn
+            _prompt_key(prompt) for prompt in drawn
         ]
         if not pool:
             # Whatever the arithmetic said, this is the state that matters: a
@@ -709,16 +723,19 @@ class GameFlowService:
 
         return _PromptDraw(
             pool=pool,
+            answers={_prompt_key(prompt): prompt.answer for prompt in drawn},
             aliases={
-                prompt.answer: prompt.aliases for prompt in drawn if prompt.aliases
+                _prompt_key(prompt): prompt.aliases
+                for prompt in drawn
+                if prompt.aliases
             },
             version_ids={
-                prompt.answer: prompt.prompt_version_id
+                _prompt_key(prompt): prompt.prompt_version_id
                 for prompt in drawn
                 if prompt.prompt_version_id is not None
             },
-            source_revision_ids_by_answer={
-                prompt.answer: prompt.source_revision_ids for prompt in drawn
+            source_revision_ids_by_key={
+                _prompt_key(prompt): prompt.source_revision_ids for prompt in drawn
             },
             source_revision_ids=tuple(
                 revision_id
@@ -806,6 +823,7 @@ class GameFlowService:
             rounds_total=room.rounds,
             max_players=room.max_players,
             prompt_pool=draw.pool,
+            prompt_answers=draw.answers,
             prompt_aliases=draw.aliases,
             letter_counts=draw.letter_counts,
             letter_total=draw.letter_total,
@@ -819,7 +837,7 @@ class GameFlowService:
             prompt_language=room.prompt_language,
             prompt_source_revision_ids=draw.source_revision_ids,
             prompt_version_ids=draw.version_ids,
-            prompt_source_revision_ids_by_answer=draw.source_revision_ids_by_answer,
+            prompt_source_revision_ids_by_key=draw.source_revision_ids_by_key,
             custom_prompt_keys=room.custom_prompt_match_keys(),
         )
         await self._emit_room_state(room)
@@ -1016,7 +1034,7 @@ class GameFlowService:
                     await self._sio.emit(
                         "your_prompt_choices",
                         {
-                            "choices": game.prompt_choices,
+                            "choices": game.prompt_choice_answers(player.id),
                             "seconds": round(game.remaining_seconds()),
                         },
                         to=sid,
@@ -1219,7 +1237,7 @@ class GameFlowService:
         game = room.game
         assert game is not None
         afk_tokens = {p.id for p in room.player_list() if p.is_afk}
-        choices = game.start_next_turn(
+        game.start_next_turn(
             afk_tokens,
             canvas_generation=room.allocate_canvas_generation(),
         )
@@ -1251,7 +1269,10 @@ class GameFlowService:
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",
-                {"choices": choices, "seconds": timing.choose_prompt_seconds},
+                {
+                    "choices": game.prompt_choice_answers(drawer.id),
+                    "seconds": timing.choose_prompt_seconds,
+                },
                 to=drawer.sid,
             )
         if self._turn_moved_on(room, game, turn_id, Phase.CHOOSING_PROMPT):

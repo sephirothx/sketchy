@@ -136,9 +136,11 @@ export function PromptDisplay({
           <h2 className="prompt-choice-title">{ui.promptDisplay.pickSomethingDraw}</h2>
           <p className="prompt-choice-hint">{ui.promptDisplay.autoPicksWhenTimeRunsOut}</p>
           <div className="prompt-choices">
-            {promptChoices.map((prompt) => (
-              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, ui.promptDisplay.selectThePrompt)}>
-                {pendingAction === `prompt:${prompt}` ? ui.promptDisplay.choosing : prompt}
+            {/* Chosen by position, not by text (#1181): the text is how the
+                drawer's language spells the offer. */}
+            {promptChoices.map((prompt, index) => (
+              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", { index }, ui.promptDisplay.selectThePrompt)}>
+                {pendingAction === `prompt:${index}` ? ui.promptDisplay.choosing : prompt}
               </button>
             ))}
           </div>

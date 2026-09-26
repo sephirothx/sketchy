@@ -1538,3 +1538,41 @@ def test_end_turn_refuses_a_missing_terminal_state():
     game.snapshot_turn_participants({"p2": "eligible"})
     with pytest.raises(ValueError, match="terminal state"):
         game.end_turn(terminal_states={})
+
+
+def test_a_list_prompt_is_tracked_by_its_key_and_shown_by_its_answer():
+    """#1181: the pool, the offers and everything recorded about them are
+    keyed by the prompt's concept; the drawer is shown - and the turn masks,
+    matches and records - the room's spelling of it."""
+    concept = "0190aa00-0000-7000-8000-000000000001"
+    game = Game(
+        turn_order=["drawer", "guesser"],
+        rounds_total=1,
+        prompt_pool=[concept],
+        prompt_answers={concept: "Mädchen"},
+        prompt_aliases={concept: ("das Mädchen",)},
+        prompt_version_ids={concept: "version-de"},
+        prompt_source_revision_ids_by_key={concept: ("revision-de",)},
+        prompt_language="de",
+    )
+    game.start_next_turn(canvas_generation=1)
+
+    assert game.prompt_choices == [concept]
+    assert game.prompt_choice_answers() == ["Mädchen"]
+    assert not game.choose_prompt_option("drawer", 1)
+    assert not game.choose_prompt_option("guesser", 0)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert (game.prompt_key, game.prompt) == (concept, "Mädchen")
+    assert game.used_prompts == {concept}
+    assert game.prompt_source_kind(concept) == "curated"
+    # The alias is found by the key, and matching folds the room's spelling.
+    assert game.submit_guess("guesser", "das maedchen")[0] is True
+    game.end_turn(1)
+    [turn] = game.completed_turns
+    assert turn.offered_prompts == ["Mädchen"]
+    assert turn.chosen_prompt == "Mädchen"
+    assert turn.chosen_prompt_version_id == "version-de"
+    assert turn.offered_prompt_version_ids == ("version-de",)
+    assert turn.offered_prompt_source_revision_ids == (("revision-de",),)
+    assert game.key_for("Mädchen") == concept

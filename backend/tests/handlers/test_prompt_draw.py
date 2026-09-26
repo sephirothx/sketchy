@@ -192,6 +192,33 @@ async def test_a_list_whose_every_prompt_is_a_twin_prices_only_the_quick_ones():
     assert room.game.letter_total == total
 
 
+async def test_a_game_tracks_list_prompts_by_concept_and_quick_ones_by_text():
+    """#1181: a list prompt's key is its concept, spelled by the room's
+    answer; a quick prompt has no concept and is its own key."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.custom_prompts = ["lighthouse"]
+    repo = StubPromptListRepo(
+        ["anchor"],
+        concept_ids={"anchor": "concept-anchor"},
+        prompt_version_ids={"anchor": "version-anchor"},
+        aliases={"anchor": ("ship anchor",)},
+    )
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+    game = room.game
+
+    assert set(game.prompt_pool) == {"concept-anchor", "lighthouse"}
+    assert game.prompt_answers == {"concept-anchor": "anchor"}
+    assert game.prompt_version_ids == {"concept-anchor": "version-anchor"}
+    assert game.prompt_aliases == {"concept-anchor": ("ship anchor",)}
+    assert game.prompt_source_revision_ids_by_key == {"concept-anchor": ("revision-1",)}
+    assert game.prompt_source_kind("concept-anchor") == "curated"
+    assert game.prompt_source_kind("lighthouse") == "custom"
+
+
 async def test_a_custom_only_room_never_asks_the_prompt_store():
     room_manager, room, _ = build_room(rounds=1)
     room.max_players = 2
