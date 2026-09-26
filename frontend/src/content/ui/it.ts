@@ -997,6 +997,7 @@ export const IT: Catalogue = {
     invitedYouTheirGame: "ti ha invitato nella sua partita.",
     join: "Entra",
     dismissInvitation: "Chiudi l’invito",
+    notNow: "Non ora",
   },
 
   friendsOverlay: {
@@ -1806,11 +1807,13 @@ export const IT: Catalogue = {
   },
 
   roomNoticeChips: {
-    serverUpdate: (p: { seconds: number }) =>
-      p.seconds > 0 ? `Aggiornamento · ${p.seconds} s` : "Aggiornamento · ora",
+    serverUpdateWord: "Aggiornamento ·",
+    serverUpdateSeconds: (p: { seconds: number }) =>
+      p.seconds > 0 ? `${p.seconds} s` : "ora",
     reconnecting: "Riconnessione",
     disconnected: "Disconnesso",
     rejoinFailed: "Rientro fallito",
+    invitation: "Invito",
     serverUpdateStarted: "Aggiornamento del server in corso. Questa partita finirà a breve.",
   },
 

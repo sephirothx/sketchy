@@ -440,6 +440,46 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             await guess_input.blur()
             assert not await guess_input.evaluate("input => document.activeElement === input")
 
+            # A landscape phone with the keyboard up (#1175). The verdict on the
+            # guess just sent hangs above the field, and the field used to rise
+            # to the top of the feed column once the feed was hidden - so the
+            # verdict was drawn off the top of the screen. It must be on screen,
+            # above the field, with the field kept at the bottom of the column.
+            await guesser_page.set_viewport_size({"width": 844, "height": 390})
+            await guess_input.focus()
+            await guesser_page.wait_for_selector('.game-room.guess-focused')
+            await guess_input.fill('landscape-verdict-probe')
+            await guess_input.press('Enter')
+            await guesser_page.get_by_test_id("guess-focus-flash").get_by_text(
+                "landscape-verdict-probe"
+            ).wait_for()
+            placement = await guesser_page.evaluate(
+                """
+                () => {
+                  const flash = document
+                    .querySelector('[data-testid="guess-focus-flash"]')
+                    .getBoundingClientRect();
+                  const field = document.querySelector('.chat-input-box').getBoundingClientRect();
+                  return {
+                    flashTop: flash.top,
+                    flashBottom: flash.bottom,
+                    fieldTop: field.top,
+                    fieldBottom: field.bottom,
+                    height: window.innerHeight,
+                  };
+                }
+                """
+            )
+            assert placement["flashTop"] >= 0, f"verdict is off the top of the screen: {placement}"
+            assert placement["flashBottom"] <= placement["fieldTop"], (
+                f"verdict is not above the guess field: {placement}"
+            )
+            assert placement["fieldBottom"] > placement["height"] / 2, (
+                f"guess field rose to the top of the column: {placement}"
+            )
+            await guess_input.blur()
+            await guesser_page.set_viewport_size({"width": 1280, "height": 720})
+
             # Verify chat message container is present
             await guesser_page.wait_for_selector('.chat-messages')
 
