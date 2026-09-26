@@ -29,6 +29,7 @@ import {
 import { useAfkCheck } from "../hooks/useAfkCheck";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
+import { useRoomBarGiveWay } from "../hooks/useRoomBarGiveWay";
 import {
   exitRoomHistory,
   RoomHistoryProvider,
@@ -118,6 +119,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useRoomFriendSeats();
 
   useVisualViewportCssVars();
+
+  // A phone's bar gives way in a fixed order when it runs short, measured
+  // (R-UX-11); a desktop's has the width for all of it.
+  const headerRef = useRef<HTMLElement | null>(null);
+  useRoomBarGiveWay(headerRef, isMobile);
 
   // Stable, so the memoised regions below are not re-rendered by a new
   // function on every room render (#987).
@@ -406,9 +412,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
           The same component on both layouts, so a phone and a desktop can
           only differ in what they leave out: the room name and the wordmark
           are accessory and give way first, the clock, the round, the notice
-          chips and the Room menu never do. The room code and every action
-          that used to be an icon here are rows of the Room menu. */}
+          chips and the Room menu never do (a phone's chips may lose their
+          words, never their icons: useRoomBarGiveWay). The room code and
+          every action that used to be an icon here are rows of the Room menu. */}
       <header
+        ref={headerRef}
         className={`game-header${isMobile ? " game-header-mobile" : ""}`}
         data-testid="room-header"
         data-room-code={code}
@@ -438,7 +446,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         </div>
         <div className="game-header-center">
           <GameHeaderStatus />
-          <RoomNoticeChips compact={isMobile} />
+          <RoomNoticeChips />
           {/* Going AFK is a menu row; being away is worth seeing, because it
               skips your turns without asking. One click here comes back. */}
           {isAfk && (
@@ -450,7 +458,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               title={ui.activeGameRoom.backFromAfk}
             >
               <MoonIcon size={13} />
-              <span>{ui.roomMenuSheet.afk}</span>
+              <span className="game-header-away-label">{ui.roomMenuSheet.afk}</span>
             </button>
           )}
         </div>
