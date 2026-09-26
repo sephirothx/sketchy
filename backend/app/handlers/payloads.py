@@ -42,6 +42,7 @@ from app.drawing_rules import (
     clean_allowed_tools,
 )
 from app.domain_values import HINT_MODES, SCORING_MODES
+from app.game import PROMPT_CHOICES_PER_TURN
 from app.canvas_history import MAX_CANVAS_ACTIONS
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
 from app.auth.names import MAX_NAME_LENGTH, NAME_RULE_MESSAGE, NameError_, validate_name
@@ -586,7 +587,20 @@ class RestartVotePayload(RequestModel):
 
 
 class SelectPromptPayload(RequestModel):
-    prompt: str = Field(min_length=1, max_length=MAX_PROMPT_LENGTH)
+    """The drawer's pick, by the offer's position in `your_prompt_choices`.
+
+    Not by its text (#1181): what a drawer reads is one language's spelling of
+    the offer, and it is the offer that is chosen.
+    """
+
+    index: int = Field(ge=0, lt=PROMPT_CHOICES_PER_TURN)
+    # The turn the offers were made for, as `your_prompt_choices` named it. A
+    # position is valid in every turn's offers, where the text it replaced
+    # was not, so a pick that lands after the turn moved on - a restart while
+    # the drawer is choosing - is told apart by this instead.
+    turn_id: str | None = Field(
+        default=None, alias="turnId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
+    )
 
 
 class TextPayload(RequestModel):

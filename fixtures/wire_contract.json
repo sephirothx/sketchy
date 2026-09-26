@@ -802,16 +802,31 @@
    "commandClass": "action",
    "payload": {
     "additionalProperties": false,
+    "description": "The drawer's pick, by the offer's position in `your_prompt_choices`.\n\nNot by its text (#1181): what a drawer reads is one language's spelling of\nthe offer, and it is the offer that is chosen.",
     "properties": {
-     "prompt": {
-      "maxLength": 32,
-      "minLength": 1,
-      "title": "Prompt",
-      "type": "string"
+     "index": {
+      "exclusiveMaximum": 3,
+      "minimum": 0,
+      "title": "Index",
+      "type": "integer"
+     },
+     "turnId": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Turnid"
      }
     },
     "required": [
-     "prompt"
+     "index"
     ],
     "type": "object"
    },
@@ -2639,7 +2654,11 @@
    "drawerNameColor",
    "drawerNickname",
    "roundNumber",
-   "totalRounds"
+   "totalRounds",
+   "turnId"
+  ],
+  "services.game_flow:_sync_player_view": [
+   "turnId"
   ],
   "services.game_flow:note_presence": [
    "playerId"
@@ -2776,7 +2795,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 43,
+ "protocolVersion": 44,
  "refusal": {
   "codes": [
    "invalid_payload",

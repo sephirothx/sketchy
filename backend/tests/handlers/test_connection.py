@@ -192,7 +192,12 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
     room_manager.add_player(room, "Guesser")
     drawer.connected = False
     drawer.sid = None
-    room.game = Game(turn_order=list(room.players))
+    # Keyed by concept (#1181): what the drawer is sent is the answer.
+    room.game = Game(
+        turn_order=list(room.players),
+        prompt_pool=["c-anchor"],
+        prompt_answers={"c-anchor": "anchor"},
+    )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
     room.game.set_phase_deadline(15)
 
@@ -214,6 +219,13 @@ async def test_reconnecting_drawer_receives_word_choices_during_choosing_phase()
     assert "sync_game" in emitted_events
     assert "your_prompt_choices" in emitted_events
     assert "you_are_drawing" not in emitted_events
+    [offer] = [
+        call.args[1]
+        for call in sio.emit.await_args_list
+        if call.args[0] == "your_prompt_choices"
+    ]
+    assert offer["choices"] == ["anchor"]
+    assert offer["turnId"] == room.game.current_turn_id
 
 async def test_already_joined_socket_resyncs_active_drawing_state():
     """Soft health checks must refresh game state even when the sid is unchanged."""

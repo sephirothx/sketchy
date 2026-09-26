@@ -116,7 +116,7 @@ async def main() -> int:
 
     def wire(sio):
         async def on_choices(payload):
-            await sio.call("select_prompt", {"prompt": payload["choices"][0]})
+            await sio.call("select_prompt", {"index": 0})
             if not chosen.done():
                 chosen.set_result(sio)
 

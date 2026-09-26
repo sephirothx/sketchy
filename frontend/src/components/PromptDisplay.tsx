@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { promptPickPayload } from "../lib/promptPick";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { maskedWords, splitMaskedPrompt } from "../lib/maskedPrompt";
@@ -12,6 +13,7 @@ interface PromptDisplayProps {
   myPrompt: string | null;
   maskedPrompt: string;
   promptChoices: string[];
+  promptChoicesTurnId?: string | null;
   revealedPrompt?: string | null;
   hintMode?: HintMode;
   canBuyHint?: boolean;
@@ -102,6 +104,7 @@ export function PromptDisplay({
   myPrompt,
   maskedPrompt,
   promptChoices,
+  promptChoicesTurnId = null,
   revealedPrompt,
   hintMode = "none",
   canBuyHint = false,
@@ -136,9 +139,11 @@ export function PromptDisplay({
           <h2 className="prompt-choice-title">{ui.promptDisplay.pickSomethingDraw}</h2>
           <p className="prompt-choice-hint">{ui.promptDisplay.autoPicksWhenTimeRunsOut}</p>
           <div className="prompt-choices">
-            {promptChoices.map((prompt) => (
-              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${prompt}`, "select_prompt", { prompt }, ui.promptDisplay.selectThePrompt)}>
-                {pendingAction === `prompt:${prompt}` ? ui.promptDisplay.choosing : prompt}
+            {/* Chosen by position, not by text (#1181): the text is how the
+                drawer's language spells the offer. */}
+            {promptChoices.map((prompt, index) => (
+              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptPickPayload(index, promptChoicesTurnId), ui.promptDisplay.selectThePrompt)}>
+                {pendingAction === `prompt:${index}` ? ui.promptDisplay.choosing : prompt}
               </button>
             ))}
           </div>
