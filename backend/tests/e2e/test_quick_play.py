@@ -1,9 +1,11 @@
 """Quick play (#589): one press from the lobby into a room.
 
 Quick play only takes rooms in the player's prompt language, and the suite
-shares one server. So each test here runs in a language no other test uses -
-Dutch, Portuguese - and what it presses is decided by what it opened itself,
-not by whichever English room another test left waiting.
+shares one server. So each test here that presses it runs in a language no
+other test uses - Dutch, Portuguese, Italian, German, Spanish - and what it
+presses is decided by what it opened itself, not by whichever English room
+another test left waiting. Every other test's rooms are English and public by
+default; a press in English sits a stranger in one of them, and both tests fail.
 """
 
 import random
@@ -168,6 +170,11 @@ async def test_a_friend_s_invitation_waits_while_quick_play_is_in_flight():
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         host_context = await browser.new_context()
         guest_context = await browser.new_context()
+        # Spanish prompts: nobody else's, so the host's room is the only one
+        # this press can take. Set as the stored choice rather than the browser
+        # locale, which would also turn the buttons this test reads Spanish.
+        for context in (host_context, guest_context):
+            await context.add_init_script("localStorage.setItem('sketchy_promptlanguage', 'es')")
         host, guest = await host_context.new_page(), await guest_context.new_page()
         host_name, guest_name = unique("QpHost"), unique("QpPal")
         try:
@@ -178,6 +185,7 @@ async def test_a_friend_s_invitation_waits_while_quick_play_is_in_flight():
             await host.click(".lobby-rooms-actions .btn-primary")
             await host.click(".create-room-submit")
             await host.wait_for_selector('[data-testid="waiting-room"]')
+            code = await room_code(host)
             invite = host.locator(
                 f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
             ).get_by_role("button", name="Invite")
@@ -193,6 +201,7 @@ async def test_a_friend_s_invitation_waits_while_quick_play_is_in_flight():
             await expect(guest.locator(".lobby-rooms-actions .btn-primary")).to_be_disabled()
 
             await guest.wait_for_selector('[data-testid="waiting-room"]', timeout=SETTLE_MS)
+            assert await room_code(guest) == code
         finally:
             await host_context.close()
             await guest_context.close()
