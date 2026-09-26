@@ -140,6 +140,42 @@ async def test_a_quick_prompt_shadows_its_twin_in_a_list_in_no_language(
     assert listed not in room.game.prompt_pool
 
 
+async def test_the_shadow_stays_on_the_canonical_key():
+    """R-GUESS-01: the wider spelling set never widens which prompt a turn
+    draws. "Bar" and "Bär" are different German words; a quick "Bar" leaves
+    the list's "Bär" in the pool."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = "de"
+    room.custom_prompts = ["Bar"]
+    repo = StubPromptListRepo(["Bär", "Hund", "Katze"], language="de")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert {"Bar", "Bär"} <= set(room.game.prompt_pool)
+
+
+async def test_a_list_whose_every_prompt_is_a_twin_prices_only_the_quick_ones():
+    """Nothing the list offers survives the shadow, so nothing of it is
+    drawable, weighted or priced."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = "de"
+    room.custom_prompts = ["Mueller"]
+    repo = StubPromptListRepo(["Müller"], language="zxx")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert room.game.prompt_pool == ["Mueller"]
+    counts, total = letter_histogram(["Mueller"])
+    assert room.game.letter_counts == counts
+    assert room.game.letter_total == total
+
+
 async def test_a_custom_only_room_never_asks_the_prompt_store():
     room_manager, room, _ = build_room(rounds=1)
     room.max_players = 2

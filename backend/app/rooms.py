@@ -22,7 +22,7 @@ from app.game import Game
 from app.identifiers import generate_uuid7
 from app.domain_values import GamePromptSourceMode, RuntimeEventType
 from app.services.runtime_metrics import metrics
-from app.prompt_content import prompt_match_key, prompt_match_variants
+from app.prompt_content import prompt_match_key
 
 DEFAULT_ROOM_DRAWING_SECONDS = 90
 DEFAULT_ROOM_HINT_MODE = "checkpoints"
@@ -628,25 +628,6 @@ class Room:
         return frozenset(
             prompt_match_key(prompt, self.prompt_language)
             for prompt in self.custom_prompts
-        )
-
-    def custom_prompt_exclusions(self) -> frozenset[str]:
-        """Every spelling of this room's quick prompts, as a guess accepts them.
-
-        Wider than `custom_prompt_match_keys` because the draw compares these
-        with keys stored under *another* fold: a list in no language (#821)
-        stores "Müller" as `muller`, which the German room's own key for the
-        quick prompt "Müller" (`mueller`) would miss. It cannot go the other
-        way - the quick prompt "Mueller" has no spelling `muller` - so the
-        draw also drops, in Python, whatever list prompt the room would accept
-        as a quick prompt's answer. The spellings are exactly what acceptance
-        treats as one answer (R-GUESS-01), so nothing a guess could tell
-        apart is excluded.
-        """
-        return frozenset(
-            spelling
-            for prompt in self.custom_prompts
-            for spelling in prompt_match_variants(prompt, self.prompt_language)
         )
 
     def draws_from_prompt_lists(self) -> bool:

@@ -4958,21 +4958,36 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             )
         ).unique().all()
-        hidden_by_key: dict[str, PromptVersion] = {}
+        # Each hidden word is compared in the one fold where it and the entry
+        # are the same word, keyed by the fold the entry must be keyed under.
+        # In a list in a language, that is the language: its own hidden words
+        # by their stored keys, and an agnostic list's hidden words as this
+        # language's rooms would key them. In an agnostic list, it is the
+        # hidden word's own language, since an agnostic word is played in
+        # that language's rooms: "Bär" hidden in German stops a "Bär" here but
+        # not a "Bar", which is another word to a German room (#821 review).
+        hidden_by_key: dict[tuple[str, str], PromptVersion] = {}
         for hidden in hidden_versions:
-            # Keyed again under this list's fold as well as by the stored key:
-            # a word hidden in a German list stores "Müller" as `mueller`, and
-            # the same word typed into an Any-language list keys `muller`.
-            texts = (
-                hidden.canonical_answer,
-                *(link.alias.answer for link in hidden.version_aliases),
-            )
-            for key in (
+            stored = (
                 hidden.match_key,
                 *(link.alias.match_key for link in hidden.version_aliases),
-                *(prompt_match_key(text, prompt_list.language) for text in texts),
-            ):
-                hidden_by_key[key] = hidden
+            )
+            if prompt_list.language == AGNOSTIC_PROMPT_LANGUAGE:
+                fold, keys = hidden.language, stored
+            elif hidden.language == prompt_list.language:
+                fold, keys = prompt_list.language, stored
+            else:
+                fold = prompt_list.language
+                keys = tuple(
+                    prompt_match_key(text, fold)
+                    for text in (
+                        hidden.canonical_answer,
+                        *(link.alias.answer for link in hidden.version_aliases),
+                    )
+                )
+            for key in keys:
+                hidden_by_key[(fold, key)] = hidden
+        hidden_folds = {fold for fold, _ in hidden_by_key}
         supplied_ids = {
             UUID(entry.concept_id) for entry in entries if entry.concept_id is not None
         }
@@ -5048,15 +5063,23 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 # entry respelled into a hidden word is that word again.
                 decided_by = next(
                     (
-                        hidden_by_key[key]
+                        hidden_by_key[(fold, key)]
+                        for fold in hidden_folds
                         for key in (
-                            prompt_version.match_key,
-                            *(
-                                normalize_prompt_answer(alias, prompt_list.language)
-                                for alias in entry.aliases
-                            ),
+                            (
+                                prompt_version.match_key,
+                                *(
+                                    normalize_prompt_answer(alias, prompt_list.language)
+                                    for alias in entry.aliases
+                                ),
+                            )
+                            if fold == prompt_list.language
+                            else tuple(
+                                prompt_match_key(text, fold)
+                                for text in (entry.answer, *entry.aliases)
+                            )
                         )
-                        if key in hidden_by_key
+                        if (fold, key) in hidden_by_key
                     ),
                     existing,
                 )

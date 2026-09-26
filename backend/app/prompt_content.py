@@ -126,7 +126,7 @@ def validate_prompt_list_language(language: str) -> str:
 
 
 def languages_sharing_words(language: str) -> tuple[str, ...]:
-    """The content languages in which a word means what it means in `language`.
+    """The content languages whose hidden words a list in `language` asks about.
 
     A moderator's decision on a word follows it into the owner's other lists
     (#1091), but only where the word is the same word: `pain` in an English
@@ -134,7 +134,8 @@ def languages_sharing_words(language: str) -> tuple[str, ...]:
     in every room, so it shares its words with every language, and every
     language shares its words with it - otherwise a hidden word retyped into
     an Any-language list would be born active, in the one list every room
-    can play.
+    can play. Which fold the two are then compared in is the caller's
+    question: the one room language where both are played.
     """
     if language == AGNOSTIC_PROMPT_LANGUAGE:
         return (*PROMPT_LANGUAGES, AGNOSTIC_PROMPT_LANGUAGE)

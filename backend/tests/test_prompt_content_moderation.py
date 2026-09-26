@@ -1404,6 +1404,33 @@ async def test_a_hidden_word_follows_the_owner_into_lists_in_no_language(env):
     }
 
 
+async def test_an_agnostic_list_meets_a_hidden_word_in_that_word_s_own_fold(env):
+    """Compared where both are played - a German room - "Bär" is the hidden
+    German word and "Bar" is another one (#821 review): folding the hidden
+    word the agnostic way, `bar`, hid a word nobody took down."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "FoldOwner")
+    german = await prompts.create_owned(
+        owner["id"], name="Tiere", description="", language="de",
+        prompts=(PromptListEntryInput(answer="Bär"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(german.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+
+    agnostic = await prompts.create_owned(
+        owner["id"], name="Mixed", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Bar"), PromptListEntryInput(answer="Baer")),
+    )
+
+    assert {p.answer: p.moderation_state for p in agnostic.prompts} == {
+        "Bar": "active",
+        "Baer": "hidden",
+    }
+
+
 async def _staff_member(factory, account: dict, role: UserRole) -> None:
     async with factory() as session:
         async with session.begin():
@@ -1458,6 +1485,13 @@ async def test_restoring_a_word_restores_the_copies_its_takedown_was_carried_to(
         prompts=(PromptListEntryInput(answer="borderline word"),),
     )
     assert agnostic_copy.prompts[0].moderation_state == "hidden"
+    # ...and from there to every language that plays it: the carry crosses
+    # languages through it, so the restore below has to as well.
+    french_copy = await prompts.create_owned(
+        owner["id"], name="Copie", description="", language="fr",
+        prompts=(PromptListEntryInput(answer="Borderline Word"),),
+    )
+    assert french_copy.prompts[0].moderation_state == "hidden"
 
     # Decided hidden a second time: the copy carries the new decision too,
     # or the restore below - matching on it - would miss the copy.
@@ -1470,6 +1504,10 @@ async def test_restoring_a_word_restores_the_copies_its_takedown_was_carried_to(
             PromptVersion, UUID(agnostic_copy.prompts[0].prompt_version_id)
         )
         assert carried_agnostic.moderation_state == "active", "and the one in no language"
+        carried_french = await session.get(
+            PromptVersion, UUID(french_copy.prompts[0].prompt_version_id)
+        )
+        assert carried_french.moderation_state == "active", "and the one it reached from there"
     another = await prompts.create_owned(
         owner["id"], name="After the restore", description="", language="en",
         prompts=(PromptListEntryInput(answer="borderline word"),),

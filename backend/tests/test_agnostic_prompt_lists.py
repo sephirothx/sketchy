@@ -243,31 +243,6 @@ async def test_a_list_is_created_agnostic_through_the_api(env):
     assert response.json()["language"] == "zxx"
 
 
-async def test_a_quick_prompt_shadows_its_agnostic_twin_in_a_german_room(env):
-    """The agnostic list stores "Müller" as `muller`; the German room keys its
-    own quick prompt as `mueller`. Both are one answer to a German guess, so
-    the draw has to leave the list's copy out rather than offer it twice."""
-    from app.rooms import RoomManager
-
-    _, users, prompts, _ = env
-    owner = await _owner(users)
-    names = await _list(prompts, owner.id, "Names", "zxx", "Müller", "Pikachu")
-    pinned = await prompts.authorize_selection(
-        [names.slug], requesting_user_id=owner.id, expected_language="de"
-    )
-    room = RoomManager().create_room(
-        "Room", prompt_language="de", custom_prompts=["Müller"]
-    )
-
-    sample = await prompts.sample_prompts(
-        list(pinned.revision_ids),
-        limit=10,
-        exclude_match_keys=room.custom_prompt_exclusions(),
-    )
-
-    assert [prompt.answer for prompt in sample.prompts] == ["Pikachu"]
-
-
 async def test_the_official_catalogue_filter_offers_agnostic_lists_too(env):
     """Nothing bundled is agnostic today; the filter still answers the
     question a room asks - what could I pick? - the same way as the

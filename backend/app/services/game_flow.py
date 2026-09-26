@@ -41,7 +41,7 @@ from app.presenters import (
     system_chat_message,
     turn_payload,
 )
-from app.prompt_content import default_prompt_list_slug, prompt_match_variants
+from app.prompt_content import default_prompt_list_slug, prompt_match_key
 from app.prompts import letter_histogram, parse_custom_prompt_list
 from app.repositories.interfaces import (
     PromptListSelectionError,
@@ -631,9 +631,8 @@ class GameFlowService:
                 sample = await asyncio.wait_for(
                     self._ctx.prompt_list_repo.sample_prompts(
                         list(room.prompt_list_revision_ids),
-                        # Headroom for the twins the filter below removes.
-                        limit=needed + len(custom),
-                        exclude_match_keys=room.custom_prompt_exclusions(),
+                        limit=needed,
+                        exclude_match_keys=room.custom_prompt_match_keys(),
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )
@@ -646,18 +645,20 @@ class GameFlowService:
                     "Prompt lists could not be loaded. Please try again."
                 ) from error
 
-        # The database compares stored keys, which cannot see every twin: a
-        # list in no language (#821) stores "Müller" as `muller`, and the
-        # quick prompt "Mueller" keys `mueller` - one answer to a German
-        # room's guesses, two to the draw. Anything the room would accept as
-        # a quick prompt's answer is the quick prompt, so it goes here.
-        shadowed = room.custom_prompt_exclusions()
+        # The database compares stored keys, and a list in no language (#821)
+        # stores its keys without the room's transliteration: "Müller" is
+        # `muller` there and `mueller` to a German room, whose quick prompt
+        # of the same name the stored key cannot see. So the shadow is asked
+        # again of the text, under the room's fold. The canonical key and not
+        # the wider spelling set (R-GUESS-01): which prompt a turn draws does
+        # not widen. For a list in the room's language this is the stored
+        # key again and removes nothing more; twins are few, so the sample is
+        # not over-drawn for them.
+        shadowed = room.custom_prompt_match_keys()
         candidates = [
             prompt
             for prompt in sample.prompts
-            if prompt_match_variants(prompt.answer, room.prompt_language).isdisjoint(
-                shadowed
-            )
+            if prompt_match_key(prompt.answer, room.prompt_language) not in shadowed
         ]
         drawable = max(0, sample.drawable - (len(sample.prompts) - len(candidates)))
 
