@@ -22,6 +22,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon } from "../components/icons";
 import {
   SUPPORTED_PROMPT_LANGUAGES,
+  MIXED_PROMPT_LANGUAGE,
   sortRoomsByLanguage,
 } from "../lib/promptLanguages";
 import {
@@ -282,7 +283,13 @@ export function LobbyBrowserPage() {
       const codeMatch = room.code?.toLowerCase().includes(q);
       if (!nameMatch && !codeMatch) return false;
     }
-    if (languageFilter !== ANY_LANGUAGE && room.promptLanguage !== languageFilter) {
+    // A mixed room plays everyone in their own language, so it answers to
+    // every language filter (#1182).
+    if (
+      languageFilter !== ANY_LANGUAGE
+      && room.promptLanguage !== languageFilter
+      && room.promptLanguage !== MIXED_PROMPT_LANGUAGE
+    ) {
       return false;
     }
     if (hideFullRooms && room.playerCount >= room.maxPlayers) {

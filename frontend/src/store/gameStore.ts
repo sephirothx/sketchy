@@ -19,6 +19,7 @@ import type {
   ModerationState,
   PlayerInfo,
   PromptLanguage,
+  RoomLanguage,
   RoomStatePayload,
   RestartVoteState,
   GuessBreakdown,
@@ -28,6 +29,9 @@ import type {
 
 interface GameStore {
   playerId: string | null;
+  /** The language this seat plays in, as the join acknowledged it: which of a
+  mixed-language room's `prompts` is this player's (#1182). */
+  seatLanguage: PromptLanguage | null;
   /**
    * Set while deliberately leaving a room (leave, kick, or a seat taken over
    * elsewhere). Clearing the session makes the room route briefly look like an
@@ -50,7 +54,7 @@ interface GameStore {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
-  promptLanguage: PromptLanguage;
+  promptLanguage: RoomLanguage;
   promptListSlugs: string[];
   roomState: "waiting" | "playing";
   players: PlayerInfo[];
@@ -116,6 +120,7 @@ interface GameStore {
     roomId: string;
     code: string;
     playerId: string;
+    seatLanguage?: PromptLanguage | null;
   }) => void;
   clearSession: () => void;
   setExitingRoom: (isExiting: boolean) => void;
@@ -230,6 +235,7 @@ const initialGameFields = {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   playerId: null,
+  seatLanguage: null,
   isExitingRoom: false,
   roomId: null,
   code: null,
@@ -257,13 +263,13 @@ export const useGameStore = create<GameStore>((set, get) => ({
   error: null,
   ...initialGameFields,
 
-  setSession: ({ roomId, code, playerId }) => {
+  setSession: ({ roomId, code, playerId, seatLanguage }) => {
     // Nothing is persisted: the session cookie is the credential and the room
     // code comes from the URL.
-    set({ roomId, code, playerId });
+    set({ roomId, code, playerId, seatLanguage: seatLanguage ?? null });
   },
   clearSession: () => {
-    set({ playerId: null, roomId: null, code: null });
+    set({ playerId: null, roomId: null, code: null, seatLanguage: null });
   },
   setExitingRoom: (isExitingRoom) => set({ isExitingRoom }),
   setRoomState: (payload) =>
@@ -480,6 +486,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setError: (error) => set({ error }),
   reset: () => set({
     playerId: null,
+    seatLanguage: null,
     roomId: null,
     code: null,
     players: [],

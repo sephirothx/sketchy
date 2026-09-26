@@ -79,6 +79,9 @@ async def test_each_seat_plays_the_drawing_in_the_language_it_joined_with():
         "guest-sid", {"code": room.code, "nickname": "Jean", "seatLanguage": "fr"}
     )
     assert joined["ok"] is True, joined
+    # The seat's language rides the acknowledgement: which of the room's
+    # spellings the client shows this player.
+    assert (created["seatLanguage"], joined["seatLanguage"]) == ("de", "fr")
     host = next(p for p in room.players.values() if p.nickname == "Greta")
     guest = next(p for p in room.players.values() if p.nickname == "Jean")
     assert (room.seat_language(host), room.seat_language(guest)) == ("de", "fr")

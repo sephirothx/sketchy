@@ -24,6 +24,7 @@ import type {
   TurnEndedPayload,
 } from "../types";
 import { formatGuessTime } from "../lib/guessTime";
+import { gameEndSpelledForSeat, spelledForSeat } from "../lib/promptLanguages";
 import { ui } from "../content/ui/index.ts";
 import { providePrivateResultHandler } from "../lib/privateResults.ts";
 
@@ -208,7 +209,9 @@ export function useGameSocketListeners() {
       store.getState().setHintRevealed(payload);
     };
 
-    const onTurnEnded = (payload: TurnEndedPayload) => {
+    const onTurnEnded = (received: TurnEndedPayload) => {
+      // This seat's own word, in a mixed-language room (#1182).
+      const payload = spelledForSeat(received, store.getState().seatLanguage);
       store.getState().applyTurnEnded(payload, () => ({
         id: nextMessageId(),
         nickname: "",
@@ -220,11 +223,11 @@ export function useGameSocketListeners() {
 
     const onGameEnded = (payload: GameEndedPayload) => {
       triggerConfettiShower();
-      store.getState().endGame(payload);
+      store.getState().endGame(gameEndSpelledForSeat(payload, store.getState().seatLanguage));
     };
 
     const onLastGame = (payload: LastGamePayload) => {
-      store.getState().applyLastGame(payload);
+      store.getState().applyLastGame(gameEndSpelledForSeat(payload, store.getState().seatLanguage));
     };
 
     const onDrawingReaction = (payload: DrawingReactionEvent) => {
