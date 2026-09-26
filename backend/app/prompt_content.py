@@ -4,7 +4,11 @@ from __future__ import annotations
 import re
 import unicodedata
 
-from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
+from app.domain_values import (
+    AGNOSTIC_PROMPT_LANGUAGE,
+    PROMPT_LANGUAGES,
+    PromptLanguage,
+)
 from app.prompts import MAX_PROMPT_LENGTH
 
 # The width of `prompt_versions.match_key` and `prompt_aliases.match_key`.
@@ -105,6 +109,20 @@ def validate_prompt_language(language: str) -> str:
     if canonical not in PROMPT_LANGUAGES:
         raise ValueError("prompt language is not supported")
     return canonical
+
+
+def validate_prompt_list_language(language: str) -> str:
+    """Return the canonical tag a prompt list may declare, or reject it.
+
+    A list may be in one of the room languages or in none (`zxx`, #821). The
+    difference from `validate_prompt_language` is deliberate and one-way: a
+    room still has to declare a language its guesses can be folded under, so
+    `zxx` is refused there.
+    """
+    normalized = language.strip()
+    if normalized.lower() == AGNOSTIC_PROMPT_LANGUAGE:
+        return AGNOSTIC_PROMPT_LANGUAGE
+    return validate_prompt_language(normalized)
 
 
 def best_supported_prompt_locale(accept_language: str | None) -> str:
@@ -214,8 +232,13 @@ def prompt_match_key(answer: str, language: str = "en") -> str:
     This is one string, because it is also an identity: it backs the unique
     constraints on prompt versions and aliases. Matching a guess asks the wider
     question - see `prompt_match_variants`.
+
+    A language-agnostic list (`zxx`) keys with the shared rule alone: no
+    transliteration, because the key must not depend on which room plays it.
+    The room's own transliteration still reaches it at guess time, since
+    acceptance folds the answer's *text* under the room's language.
     """
-    language = validate_prompt_language(language)
+    language = validate_prompt_list_language(language)
     collapsed = _collapsed(answer)
     return _fold_accents(_transliterate(collapsed, language))
 
@@ -229,7 +252,7 @@ def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
     its own variants meet the answer's, so both spellings land without either
     becoming the identity.
     """
-    language = validate_prompt_language(language)
+    language = validate_prompt_list_language(language)
     collapsed = _collapsed(answer)
     return frozenset(
         {

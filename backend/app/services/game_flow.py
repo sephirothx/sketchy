@@ -632,7 +632,7 @@ class GameFlowService:
                     self._ctx.prompt_list_repo.sample_prompts(
                         list(room.prompt_list_revision_ids),
                         limit=needed,
-                        exclude_match_keys=room.custom_prompt_match_keys(),
+                        exclude_match_keys=room.custom_prompt_exclusions(),
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )

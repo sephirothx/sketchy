@@ -1,11 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../lib/api";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import { AGNOSTIC_PROMPT_LANGUAGE, isPlayableIn, promptLanguageLabel } from "../lib/promptLanguages";
 import { listCommunityPromptLists, listOwnedPromptLists } from "../lib/promptLists";
 import { readEveryPage } from "../lib/communityLists";
 import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary } from "../types";
-import { CheckIcon, PlusIcon } from "./icons";
+import { AnyLanguageIcon, CheckIcon, PlusIcon } from "./icons";
 import { FieldHint } from "./RoomSetupControls";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -156,9 +156,10 @@ export function PromptListPicker({
     ...promptLists,
     ...extraLists.filter((extra) => !promptLists.some((list) => list.slug === extra.slug)),
   ];
-  const visibleLists = known.filter((list) => list.language === language);
+  const visibleLists = known.filter((list) => isPlayableIn(list.language, language));
   const visibleStarred = shortlist.filter(
-    (list) => list.language === language && !visibleLists.some((shown) => shown.slug === list.slug),
+    (list) => isPlayableIn(list.language, language)
+      && !visibleLists.some((shown) => shown.slug === list.slug),
   );
 
   if (loading) {
@@ -202,6 +203,12 @@ export function PromptListPicker({
                   {isSelected ? <CheckIcon size={12} /> : <PlusIcon size={12} />}
                 </span>
                 <span className="toggle-chip-name">{wl.name}</span>
+                {wl.language === AGNOSTIC_PROMPT_LANGUAGE && (
+                  <span className="prompt-list-chip-language" title={ui.languagePicker.anyLanguage}>
+                    <AnyLanguageIcon size={13} />
+                    <span className="visually-hidden">{ui.languagePicker.anyLanguage}</span>
+                  </span>
+                )}
                 <span className="prompt-list-chip-count">{wl.promptCount}</span>
               </button>
               {wl.isBundled && <FieldHint

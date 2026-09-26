@@ -7,6 +7,7 @@ import {
 } from "../lib/communityLists";
 import type { CommunityPromptListDetail, PublishedPromptEntry } from "../types";
 import { SearchIcon } from "./icons";
+import { contentLocale } from "../lib/promptLanguages";
 import { SegmentedControl } from "./RoomSetupControls";
 import { ui } from "../content/ui/index.ts";
 import { EmptyState } from "./ui/EmptyState";
@@ -45,14 +46,14 @@ export function CommunityPromptsDialog({
   const found = useMemo<Found[]>(() => {
     const all = list.prompts.map((entry) => ({
       entry,
-      match: searching ? findInPrompt(entry.prompt, query, list.language) : null,
+      match: searching ? findInPrompt(entry.prompt, query, contentLocale(list.language)) : null,
     }));
     return searching ? all.filter((item) => item.match) : all;
   }, [list, query, searching]);
 
   const groups = useMemo(
     () => (order === "alphabetical"
-      ? groupAlphabetically(found, (item) => item.entry.prompt, list.language)
+      ? groupAlphabetically(found, (item) => item.entry.prompt, contentLocale(list.language))
       : null),
     [found, order, list.language],
   );

@@ -73,6 +73,7 @@ from app.services.gallery_ranking import (
     hot_score,
 )
 from app.domain_values import (
+    AGNOSTIC_PROMPT_LANGUAGE,
     RuntimeEventType,
     AccountState,
     AuditTargetType,
@@ -85,6 +86,7 @@ from app.domain_values import (
     GameOutcome,
     GalleryShelfDecision,
     GameVisibility,
+    PROMPT_LANGUAGES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
     PromptContentModerationState,
@@ -179,7 +181,7 @@ from app.prompt_content import (
     clean_prompt_aliases,
     normalize_prompt_answer,
     prompt_match_key,
-    validate_prompt_language,
+    validate_prompt_list_language,
 )
 from app.prompts import letter_histogram
 from app.refusals import ErrorCode
@@ -197,6 +199,15 @@ LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 # filter is the better answer than a longer scroll.
 MAX_COMMUNITY_PAGE = 48
 MAX_COMMUNITY_OFFSET = 480
+
+
+def _playable_in(language: str) -> ColumnElement[bool]:
+    """The lists a room in `language` could pick: its own, and every
+    language-agnostic one (#821), which is played in any room. Asking for
+    `zxx` itself narrows to the agnostic lists alone."""
+    if language == AGNOSTIC_PROMPT_LANGUAGE:
+        return PromptList.language == AGNOSTIC_PROMPT_LANGUAGE
+    return PromptList.language.in_((language, AGNOSTIC_PROMPT_LANGUAGE))
 
 
 def _published_by_a_player():
@@ -3682,7 +3693,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 .order_by(PromptList.name)
             )
             if language is not None:
-                stmt = stmt.where(PromptList.language == language)
+                stmt = stmt.where(_playable_in(language))
             result = await session.execute(stmt)
             return [
                 _to_prompt_list_summary(
@@ -3724,12 +3735,22 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 f"A prompt list can contain at most {MAX_PROMPTS_PER_OWNED_LIST} prompts."
             )
         cleaned: list[PromptListEntryInput] = []
-        seen_matches: set[str] = set()
+        # A list in a language is unambiguous under that language's fold. A
+        # language-agnostic one (#821) is played under whichever language the
+        # room declares, so it has to be unambiguous under every one of them:
+        # "Müller" and "Mueller" are two keys to the list and one to a German
+        # room, which would then refuse the list at the door as ambiguous.
+        folds = (
+            PROMPT_LANGUAGES if language == AGNOSTIC_PROMPT_LANGUAGE else (language,)
+        )
+        seen_matches: dict[str, set[str]] = {fold: set() for fold in folds}
         seen_concepts: set[str] = set()
         for entry in entries:
             answer = " ".join(entry.answer.split())
             try:
-                match_key = normalize_prompt_answer(answer, language)
+                # Validates the answer (length, folded length); the keys the
+                # ambiguity check compares are built per fold below.
+                normalize_prompt_answer(answer, language)
                 aliases = clean_prompt_aliases(
                     list(entry.aliases),
                     canonical_answer=answer,
@@ -3737,15 +3758,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             except ValueError as error:
                 raise PromptListMutationError(str(error)) from error
-            accepted_keys = {
-                match_key,
-                *(normalize_prompt_answer(alias, language) for alias in aliases),
-            }
-            if seen_matches.intersection(accepted_keys):
-                raise PromptListMutationError(
-                    "Prompt answers and aliases must be unambiguous within a list."
-                )
-            seen_matches.update(accepted_keys)
+            for fold, seen in seen_matches.items():
+                accepted_keys = {
+                    prompt_match_key(text, fold) for text in (answer, *aliases)
+                }
+                if seen.intersection(accepted_keys):
+                    raise PromptListMutationError(
+                        "Prompt answers and aliases must be unambiguous within a list."
+                    )
+                seen.update(accepted_keys)
             if entry.concept_id:
                 try:
                     concept_id = str(UUID(entry.concept_id))
@@ -3778,7 +3799,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         if len(description) > 255:
             raise PromptListMutationError("Description must be at most 255 characters.")
         try:
-            language = validate_prompt_language(language)
+            language = validate_prompt_list_language(language)
         except ValueError as error:
             raise PromptListMutationError(str(error)) from error
         return name, description, language
@@ -3825,7 +3846,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 .exists()
             )
         if language is not None:
-            filters.append(PromptList.language == language)
+            filters.append(_playable_in(language))
         for slug in tags:
             # One EXISTS per tag rather than an IN over all of them: a list
             # must carry *every* tag asked for, and an IN would match a list
@@ -5248,18 +5269,33 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 f"Prompt list{'s' if len(missing) != 1 else ''} not found: "
                 + ", ".join(missing)
             )
-        languages = {row.language for row in authorized_rows}
-        if len(languages) != 1:
+        # A language-agnostic list (#821) sits beside any language: it is
+        # matched under whatever the room declares, so it is left out of the
+        # agreement the lists owe each other.
+        languages = {
+            row.language
+            for row in authorized_rows
+            if row.language != AGNOSTIC_PROMPT_LANGUAGE
+        }
+        if len(languages) > 1:
             raise PromptListSelectionError(
                 "Selected prompt lists must use the same language"
             )
         # The room declares the language and the lists answer to it
         # (R-PROMPT-02). Without this the language would still be a property of
         # whatever was selected last, which is what a declared field replaces.
-        if expected_language is not None and expected_language not in languages:
+        if expected_language is not None and not languages <= {expected_language}:
             raise PromptListSelectionError(
                 "Selected prompt lists are not in this room's language"
             )
+        # What the selection is matched under: the room's language when it
+        # declared one, else the one the lists share - and `zxx` only when
+        # every list is agnostic and nobody said which room it is for.
+        language = (
+            expected_language
+            or next(iter(languages), None)
+            or AGNOSTIC_PROMPT_LANGUAGE
+        )
         rows_by_slug = {row.slug: row for row in authorized_rows}
         revisions: list[PromptListRevision] = []
         for slug in slugs:
@@ -5284,7 +5320,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     f"Prompt list has no seeded revision: {slug}"
                 )
             revisions.append(revision)
-        return revisions, languages.pop()
+        return revisions, language
 
     async def resolve_selection(
         self,
@@ -5303,8 +5339,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 load_items=True,
                 expected_language=expected_language,
             )
-            languages = {language}
-
             prompts: list[str] = []
             aliases: dict[str, tuple[str, ...]] = {}
             prompt_version_ids: dict[str, str] = {}
@@ -5360,7 +5394,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             return ResolvedPromptSelection(
                 slugs=tuple(slugs),
-                language=languages.pop(),
+                language=language,
                 prompts=tuple(prompts),
                 revision_ids=tuple(_public_id(revision.id) for revision in revisions),
                 aliases=aliases,

@@ -231,6 +231,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "c6d7e8f9a0b2",
         "a8b9c0d1e2f4",
         "b5c6d7e8f9a1",
         "d7e8f9a0b1c2",
@@ -405,6 +406,38 @@ async def test_a_migrated_sqlite_database_refuses_an_invented_outcome(tmp_path):
                     ),
                     {"id": uuid.uuid4().hex},
                 )
+    finally:
+        await engine.dispose()
+
+
+async def test_a_list_may_be_agnostic_but_a_room_may_not(tmp_path):
+    """`zxx` is a list language and never a room one (#821).
+
+    Autogenerate does not compare check constraints, so the chain test above
+    cannot see which values a migrated CHECK admits; the stored table
+    definitions can.
+    """
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'agnostic.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "head")
+        async with engine.connect() as connection:
+            tables = dict(
+                (
+                    await connection.execute(
+                        text("SELECT name, sql FROM sqlite_master WHERE type = 'table'")
+                    )
+                ).all()
+            )
+        for table in (
+            "prompt_lists",
+            "prompt_list_revisions",
+            "prompt_versions",
+            "prompt_aliases",
+        ):
+            assert "'zxx'" in tables[table], table
+        for table in ("room_presets", "user_settings"):
+            assert "'zxx'" not in tables[table], table
+        assert "ck_room_presets_prompt_language" in tables["room_presets"]
     finally:
         await engine.dispose()
 

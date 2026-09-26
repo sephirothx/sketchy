@@ -4,6 +4,7 @@ import type {
   CommunityPromptListDetail,
   OwnedPromptList,
   PromptLanguage,
+  PromptListLanguage,
   PromptTag,
 } from "../types";
 
@@ -16,7 +17,7 @@ export interface PromptListDraftEntry {
 export interface PromptListDraft {
   name: string;
   description: string;
-  language: PromptLanguage;
+  language: PromptListLanguage;
   prompts: PromptListDraftEntry[];
   /** Slugs from the vocabulary `listPromptTags` returns; a save refuses others. */
   tags: string[];

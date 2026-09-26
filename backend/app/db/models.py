@@ -69,6 +69,7 @@ from app.domain_values import (
     PROMPT_EDITORIAL_DIFFICULTIES,
     INTERFACE_LOCALES,
     PROMPT_LANGUAGES,
+    PROMPT_LIST_LANGUAGES,
     PROMPT_LIST_VISIBILITIES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
@@ -220,6 +221,9 @@ class RoomPreset(Base):
         ),
         _values_check("hint_mode", HINT_MODES, "ck_room_presets_hint_mode"),
         _values_check(
+            "prompt_language", PROMPT_LANGUAGES, "ck_room_presets_prompt_language"
+        ),
+        _values_check(
             "color_mode",
             ("all", "palette", "colorblind_safe", "black_and_white"),
             "ck_room_presets_color_mode",
@@ -257,6 +261,16 @@ class RoomPreset(Base):
     hide_masked_prompt: Mapped[bool] = mapped_column(Boolean, nullable=False)
     allowed_tools: Mapped[list[str]] = mapped_column(PortableJSON, nullable=False)
     color_mode: Mapped[str] = mapped_column(String(24), nullable=False)
+    # The language the room will declare. Stored since #821: a preset whose
+    # lists are all language-agnostic has no language to derive, and the two
+    # still cannot disagree, because save and apply both check the lists
+    # against it the way a room does (R-PROMPT-02).
+    prompt_language: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        default=PromptLanguage.ENGLISH.value,
+        server_default=PromptLanguage.ENGLISH.value,
+    )
     prompt_list_ids: Mapped[list[str]] = mapped_column(PortableJSON, nullable=False)
     version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
@@ -3599,7 +3613,7 @@ class PromptVersion(Base):
             name="uq_prompt_version_concept_language_version",
         ),
         _values_check(
-            "language", PROMPT_LANGUAGES, "ck_prompt_versions_language"
+            "language", PROMPT_LIST_LANGUAGES, "ck_prompt_versions_language"
         ),
         _values_check(
             "editorial_difficulty",
@@ -3685,7 +3699,7 @@ class PromptAlias(Base):
             "match_key",
             name="uq_prompt_alias_concept_language_match_key",
         ),
-        _values_check("language", PROMPT_LANGUAGES, "ck_prompt_aliases_language"),
+        _values_check("language", PROMPT_LIST_LANGUAGES, "ck_prompt_aliases_language"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -3786,7 +3800,7 @@ class PromptList(Base):
     __tablename__ = "prompt_lists"
     __table_args__ = (
         _actor_index("ix_prompt_lists_moderated_by", "moderated_by_user_id"),
-        _values_check("language", PROMPT_LANGUAGES, "ck_prompt_lists_language"),
+        _values_check("language", PROMPT_LIST_LANGUAGES, "ck_prompt_lists_language"),
         _values_check(
             "visibility", PROMPT_LIST_VISIBILITIES, "ck_prompt_lists_visibility"
         ),
@@ -3928,7 +3942,7 @@ class PromptListRevision(Base):
             "version >= 1", name="ck_prompt_list_revisions_version_positive"
         ),
         _values_check(
-            "language", PROMPT_LANGUAGES, "ck_prompt_list_revisions_language"
+            "language", PROMPT_LIST_LANGUAGES, "ck_prompt_list_revisions_language"
         ),
     )
 

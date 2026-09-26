@@ -11,7 +11,11 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import PromptList, RoomPreset, User
-from app.domain_values import AccountState, PromptContentModerationState
+from app.domain_values import (
+    AGNOSTIC_PROMPT_LANGUAGE,
+    AccountState,
+    PromptContentModerationState,
+)
 from app.repositories.interfaces import PromptListRepository, PromptListSelectionError
 
 
@@ -60,9 +64,11 @@ class RoomPresetConfig(RoomPresetSummary):
     hide_masked_prompt: bool
     allowed_tools: tuple[str, ...]
     color_mode: str
-    # Derived from the saved lists rather than stored beside them: a preset's
-    # language is whatever its lists are in, and the two can then never
-    # disagree. Applying a preset is what carries it into the new room.
+    # Stored beside the lists rather than derived from them (#821): a preset
+    # of language-agnostic lists alone has no language to derive. The two
+    # still cannot disagree - save refuses a list in another language, and
+    # reading pins the lists against it the way a room does. Applying a preset
+    # is what carries it into the new room.
     prompt_language: str
     prompt_list_ids: tuple[str, ...]
     prompt_list_slugs: tuple[str, ...]
@@ -140,7 +146,10 @@ class RoomPresetService:
             raise RoomPresetError(
                 "Room presets may use only active built-in prompt lists or lists you own"
             )
-        if any(by_slug[slug].language != expected_language for slug in slugs):
+        if any(
+            by_slug[slug].language not in (expected_language, AGNOSTIC_PROMPT_LANGUAGE)
+            for slug in slugs
+        ):
             raise RoomPresetError(
                 "A room preset's prompt lists must be in the preset's language"
             )
@@ -182,7 +191,9 @@ class RoomPresetService:
             # Only the slugs are wanted back, so pin rather than resolve: this
             # validates exactly the same things without reading a prompt.
             resolved = await self._prompt_list_repo.authorize_selection(
-                slugs, requesting_user_id=str(owner_id)
+                slugs,
+                requesting_user_id=str(owner_id),
+                expected_language=row.prompt_language,
             )
         except PromptListSelectionError as error:
             raise RoomPresetUnavailable(
@@ -211,6 +222,7 @@ class RoomPresetService:
             "hide_masked_prompt": settings["hide_masked_prompt"],
             "allowed_tools": list(settings["allowed_tools"]),
             "color_mode": settings["color_mode"],
+            "prompt_language": settings["prompt_language"],
         }
 
     async def create(

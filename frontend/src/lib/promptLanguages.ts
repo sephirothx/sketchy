@@ -1,5 +1,5 @@
-import type { PromptLanguage } from "../types";
-import { interfaceLocale } from "../content/ui/index.ts";
+import type { PromptLanguage, PromptListLanguage } from "../types";
+import { interfaceLocale, ui } from "../content/ui/index.ts";
 
 /** Not copy: English names, the fallback for an engine without
 `Intl.DisplayNames` (see `promptLanguageLabel`). */
@@ -35,10 +35,27 @@ export const PROMPT_LANGUAGE_ENDONYMS: Record<PromptLanguage, string> = {
   pt: "português",
 };
 
+/** BCP-47 "no linguistic content": a list in no language at all (#821), such
+as Pokémon or brands. Players see it as **Any language** (GLOSSARY). */
+export const AGNOSTIC_PROMPT_LANGUAGE = "zxx";
+
+/** Whether a room in `roomLanguage` can pick a list in `listLanguage`: its
+own language, or none at all (R-PROMPT-02). */
+export function isPlayableIn(listLanguage: string, roomLanguage: string): boolean {
+  return listLanguage === roomLanguage || listLanguage === AGNOSTIC_PROMPT_LANGUAGE;
+}
+
+/** The language to search and sort a list's prompts in. A list in no language
+has no collation of its own, so it takes the reader's. */
+export function contentLocale(language: PromptListLanguage | string): string {
+  return language === AGNOSTIC_PROMPT_LANGUAGE ? interfaceLocale() : language;
+}
+
 /** A prompt language as the prose around it names it: in the interface's own
 language, so a German reader is told about "Englisch". The browser already
 knows every one of these names; the table is only for an engine that does not. */
 export function promptLanguageLabel(language: string): string {
+  if (language === AGNOSTIC_PROMPT_LANGUAGE) return ui.languagePicker.anyLanguage;
   try {
     const name = new Intl.DisplayNames([interfaceLocale()], { type: "language" }).of(language);
     if (name && name !== language) return name;
@@ -49,6 +66,8 @@ export function promptLanguageLabel(language: string): string {
 }
 
 export function promptLanguageEndonym(language: string): string {
+  // "Any language" is not a language with a name for itself.
+  if (language === AGNOSTIC_PROMPT_LANGUAGE) return ui.languagePicker.anyLanguage;
   return PROMPT_LANGUAGE_ENDONYMS[language as PromptLanguage] ?? language;
 }
 
@@ -80,12 +99,15 @@ export function availablePromptLanguages(
 /**
  * What a room switching to `language` should have selected.
  *
- * Lists cannot span languages, so nothing carries over: the previous selection
- * and any bearer codes that authorized it belong to the language being left.
+ * A list in a language cannot follow the room into another one, so none of
+ * those carries over. A list in no language (#821) is played in any room, so
+ * whichever of those were in `carried` stay chosen beside the new language's
+ * Standard list.
  */
 export function selectionForLanguage(
   lists: { slug: string; language: string }[],
   language: string,
+  carried: readonly string[] = [],
 ): string[] {
   const inLanguage = lists.filter((list) => list.language === language);
   // That language's Standard list, which is where a room in it starts
@@ -93,7 +115,15 @@ export function selectionForLanguage(
   // first, which is alphabetical and so lands on Extended.
   const standard = inLanguage.find((list) => list.slug.endsWith("_standard"));
   const chosen = standard ?? inLanguage[0];
-  return chosen ? [chosen.slug] : [];
+  const agnostic = new Set(
+    lists
+      .filter((list) => list.language === AGNOSTIC_PROMPT_LANGUAGE)
+      .map((list) => list.slug),
+  );
+  return [
+    ...(chosen ? [chosen.slug] : []),
+    ...carried.filter((slug) => agnostic.has(slug)),
+  ];
 }
 
 /**
@@ -103,18 +133,19 @@ export function selectionForLanguage(
  * preference, the lists from the catalogue - and nothing kept them in step:
  * a German player opened the create form declaring German while the selection
  * still said `english_standard`, which the server refuses. Anything already
- * in the language is kept, and a selection with nothing left in it falls back
- * to that language's Standard list.
+ * in the language is kept, as is any list in no language at all (#821), and a
+ * selection with nothing left in it falls back to that language's Standard
+ * list.
  */
 export function reconcileSelectionForLanguage(
   lists: { slug: string; language: string }[],
   language: string,
   selected: readonly string[],
 ): string[] {
-  const inLanguage = new Set(
-    lists.filter((list) => list.language === language).map((list) => list.slug),
+  const playable = new Set(
+    lists.filter((list) => isPlayableIn(list.language, language)).map((list) => list.slug),
   );
-  const kept = selected.filter((slug) => inLanguage.has(slug));
+  const kept = selected.filter((slug) => playable.has(slug));
   return kept.length > 0 ? kept : selectionForLanguage(lists, language);
 }
 

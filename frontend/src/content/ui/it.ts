@@ -1092,6 +1092,7 @@ export const IT: Catalogue = {
   languagePicker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Tutte le lingue",
+    anyLanguage: "Qualsiasi lingua",
   },
 
   lobbyBrowserPage: {

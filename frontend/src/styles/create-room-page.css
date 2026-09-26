@@ -804,6 +804,13 @@ details.form-section > .form-section-body {
   font-weight: 700;
   padding: 1px 8px;
 }
+.prompt-list-chip-language {
+  color: var(--faint);
+  display: inline-flex;
+}
+.toggle-chip[aria-pressed="true"] .prompt-list-chip-language {
+  color: var(--primary);
+}
 .toggle-chip[aria-pressed="true"] .prompt-list-chip-count {
   background: var(--card);
   color: var(--primary);

@@ -74,3 +74,44 @@ async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_a_list_in_any_language_is_offered_to_a_room_in_another_language():
+    """A list of names is not in a language (#821, R-PROMPT-12): saved once as
+    Any language, it is offered to a German room beside German's own lists."""
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        owner = await context.new_page()
+        try:
+            await owner.goto(BASE_URL)
+            await register_account(owner, "AnyLanguageOwner")
+            await owner.goto(f"{BASE_URL}/my-prompt-lists")
+            await owner.get_by_role("heading", name="My prompt lists").wait_for()
+
+            await owner.get_by_label("Name").fill("Pocket monsters")
+            await owner.get_by_role("button", name="Language: English").click()
+            await owner.get_by_role("option", name="Any language").click()
+            await owner.get_by_label("Add prompts", exact=True).fill("Pikachu, Bulbasaur")
+            await owner.get_by_role("button", name="Add to list").click()
+            await owner.get_by_role("button", name="Remove Pikachu").wait_for()
+            await owner.get_by_role("button", name="Save list").click()
+            await owner.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
+            # Fixed once saved, like any list's language (R-LIST-05).
+            await owner.locator(".prompt-list-language").get_by_text("Any language").wait_for()
+
+            await owner.goto(f"{BASE_URL}/create")
+            await owner.get_by_role("button", name="Prompt language: English").click()
+            await owner.get_by_role("option", name="Deutsch").click()
+            await owner.click('summary:has-text("Prompts")')
+            names_chip = owner.locator(".toggle-chip").filter(has_text="Pocket monsters")
+            await names_chip.wait_for()
+            assert await names_chip.get_by_text("Any language").count() == 1
+            await names_chip.click()
+            assert await names_chip.get_attribute("aria-pressed") == "true"
+            await owner.locator(".toggle-chip").filter(has_text="Deutsch — Standard").click()
+            await owner.get_by_role("button", name="Create room", exact=True).click()
+            await owner.locator('[data-testid="waiting-room"]').wait_for()
+        finally:
+            await context.close()
+            await browser.close()

@@ -12,6 +12,7 @@ from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
 from app.services.game_handoff import FinishedGameHandoffWorker
 from tests.fake_envelope_store import MemoryEnvelopeStore
+from app.domain_values import AGNOSTIC_PROMPT_LANGUAGE
 from app.prompt_content import prompt_match_key
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
@@ -289,14 +290,19 @@ class StubPromptListRepo:
         # The live store refuses a selection that is not in the room's declared
         # language (R-PROMPT-02); a stub that answered anyway would let a test
         # pass on a room the server would never have opened.
-        if expected_language is not None and expected_language != self.language:
+        # A language-agnostic stub list (#821) answers to any room, as the
+        # live store's does.
+        if expected_language is not None and self.language not in (
+            expected_language,
+            AGNOSTIC_PROMPT_LANGUAGE,
+        ):
             raise PromptListSelectionError(
                 "Selected prompt lists are not in this room's language"
             )
         counts, total = letter_histogram(self.prompts)
         return PinnedPromptSelection(
             slugs=tuple(slugs),
-            language=self.language,
+            language=expected_language or self.language,
             revision_ids=self.revision_ids,
             prompt_count=len(self.prompts),
             letter_counts=counts,
