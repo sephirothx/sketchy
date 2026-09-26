@@ -104,6 +104,9 @@ async def test_a_list_in_any_language_is_offered_to_a_room_in_another_language()
             # host switches the room to German: the list has no language to
             # leave behind, so it stays chosen beside German's Standard list.
             await owner.goto(f"{BASE_URL}/create")
+            # Private: a public German room left waiting is one another test's
+            # German Quick play would land in (e2e global server state).
+            await owner.get_by_role("button", name="Private").click()
             await owner.click('summary:has-text("Prompts")')
             names_chip = owner.locator(".toggle-chip").filter(has_text="Pocket monsters")
             await names_chip.wait_for()

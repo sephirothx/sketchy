@@ -2412,7 +2412,8 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    arrive, before any room list has, and two people pressing at the same time land in the
    same room rather than one each — or create a room (public or private, with a max player count and number
    of rounds), pick a scoring mode, or join one by code. Quick play never joins a game
-   already under way or a room in another language.
+   already under way or a room in another language; when no room in yours is waiting it
+   takes a seat in a **mixed-language room** before opening a new one.
 2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. Wherever
    players are listed, the host's avatar wears a gold crown on its corner and your own
    avatar wears a ring, so neither needs a word beside the name.
@@ -2426,6 +2427,13 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    sit that turn out and rejoin the guessers on the next one.
 5. **Turn results** (5s by default): the prompt is revealed and scores update, reactions
    stay open on the drawing, then the next player's turn begins.
+
+In a **mixed-language room** every seat plays in the language it joined with: the drawer
+is offered prompts in theirs, each guesser's letter tiles, hints and near misses are in
+their own, and the reveal shows each player their own word. A guess naming the drawing
+in any of the seven languages scores - unless the word means another prompt of the game
+in the guesser's own language. Such a room plays Standard and lists in Any language;
+custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings, the highlights, and the drawing recap — where a registered
    player in a public room can **Pin** a drawing to their profile.

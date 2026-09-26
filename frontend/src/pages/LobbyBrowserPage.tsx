@@ -389,6 +389,8 @@ export function LobbyBrowserPage() {
         nickname: playerName,
         nameColor,
         colorblindSafeColors,
+        // Fixed on the seat: a mixed-language room plays it in this (#1182).
+        seatLanguage: playerLanguage,
         asSpectator,
         ...target,
       });

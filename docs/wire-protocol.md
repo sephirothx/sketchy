@@ -847,11 +847,12 @@ mirrors it with every field optional (absent means *unchanged*).
 | `hideMaskedPrompt` | boolean | `false` | forces hints off |
 | `allowedTools` | string[] | `["brush","fill","shapes"]` | at least one of `brush`/`shapes` must remain |
 | `colorMode` | string | `"all"` | `all \| palette \| colorblind_safe \| black_and_white` |
-| `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`. **Create only** — see below |
+| `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, or `mul` for a mixed-language room (#1182). **Create only** — see below |
 | `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12) |
 
 `create_room` adds `nickname`, `nameColor`
-(`#rrggbb`), and `colorblindSafeColors`.
+(`#rrggbb`), `colorblindSafeColors`, and `seatLanguage` - the language the creator plays
+in, one of the seven, read only when `promptLanguage` is `mul`.
 
 **`promptLanguage` is declared, not derived, and only at creation** (R-PROMPT-02).
 The room says what language it is in and its lists answer to that; selecting a list
@@ -860,6 +861,17 @@ unknown fields are rejected (§ payload policy), sending one is refused with
 `field: "promptLanguage"` rather than compared against what the room already holds.
 A room's own quick custom prompts are matched under the declared language too, which
 is what a room drawing on nothing but custom prompts gets out of the field.
+
+**A mixed-language room (`mul`, R-PROMPT-13, #1182)** plays each seat in the language it
+joined with (`seatLanguage` on `create_room` and `join_room`, the pressed language on
+`quick_play`; English for a client that sends none), fixed on the seat. It may draw only
+on lists every language can play, and says why it refuses the rest by code rather than
+by the generic `invalid_prompt_lists`: `mixed_room_list_unsupported` (field
+`promptListSlugs`) for a list in one language whose concepts not every room language
+spells, and `mixed_room_custom_prompts` (field `customPrompts`) for quick prompts, which
+have one language. Each seat's own `your_prompt_choices`, `turn_started`, `sync_game`,
+`hint_revealed` and hint acknowledgements are in its own language already, being
+per-socket; what reaches the whole room carries `prompts` beside `prompt` (below).
 
 ### `get_room_preview`
 
@@ -876,8 +888,9 @@ and no connection or AFK state: none of that helps somebody decide whether to
 join, and each one would say more about a stranger than the question needs.
 
 `join_room` takes `roomId` **or** `code` (at least one required; `code` is upper-cased),
-plus `nickname`, `nameColor`, `colorblindSafeColors`, `asSpectator`, `soft`,
-`reconnectOnly` — used by the invite screen to ask *"do I already hold a seat
+plus `nickname`, `nameColor`, `colorblindSafeColors`, `seatLanguage` (the language this
+player plays in, fixed on the seat when it is made, read only by a mixed-language room),
+`asSpectator`, `soft`, `reconnectOnly` — used by the invite screen to ask *"do I already hold a seat
 here?"* without seating a visitor who is still deciding whether to play or spectate. A
 join admits a game in progress; Quick play, below, does not.
 
@@ -885,7 +898,8 @@ join admits a game in progress; Quick play, below, does not.
 colorblindSafeColors, promptLanguage}` in, a seat out — the ordinary join acknowledgement
 plus `created`, which says whether the room was opened for it. The server picks the
 fullest **public** room that is **waiting with no game running**, plays in that language
-and has a seat free; failing that it opens one on its own defaults, public and in that
+and has a seat free - then, only if none does, a mixed-language room, which seats the
+player in the language they pressed with (#1182); failing that it opens one on its own defaults, public and in that
 language. The choice used to be the client's, from the lobby's room list: a `join_room`
 per candidate until one took the seat, so a press cost up to N+1 round trips, could not
 run until a list had arrived (ten seconds after naming a first-time visitor, whose naming
@@ -1268,11 +1282,17 @@ names anybody. The client reduces the list to a tally itself
 ([`lib/reactions.ts`](../frontend/src/lib/reactions.ts)). `emoji` is a stable code, never a
 glyph; the glyph table is the client's, so a code the server adds later still arrives.
 
-**`turn_ended`** carries `prompt`, `turnId`, `reactions[]`, `drawerId`, `drawerBonus`, `seconds`, the ordered
+**`turn_ended`** carries `prompt` - the drawer's spelling, which is what history keeps -
+and, in a mixed-language room, `prompts` (`{language: answer}` for every room language),
+so that one payload serves every seat and each client shows its own (R-I18N-03); absent
+wherever `prompt` is everyone's. The same `prompts` rides each recap entry of
+`game_ended.drawings` / `last_game.drawings` and each highlight that names a prompt.
+`you_guessed_correctly.prompt` and the `guessed` receipt are the guesser's own
+language's word. It also carries `turnId`, `reactions[]`, `drawerId`, `drawerBonus`, `seconds`, the ordered
 `guesses[]` (each with the guesser's `seconds`, the one `correct_guess` carried), and `scores[]` — each entry carrying
 `score`, `delta`, `previousRank`, and `newRank` so the client can animate the standings
 without recomputing ranks. Ranks use standard competition ranking (1, 2, 2, 4) via
-`competition_ranks()` ([`backend/app/game.py:53`](../backend/app/game.py)), shared with
+`competition_ranks()` ([`backend/app/game.py:52`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 
 **`server_shutdown`**:

@@ -548,6 +548,8 @@ export type ErrorCode =
   | "invalid_letter"
   | "invalid_prompt_lists"
   | "invalid_custom_prompts"
+  | "mixed_room_list_unsupported"
+  | "mixed_room_custom_prompts"
   | "max_players_below_seated"
   | "empty_message"
   | "too_fast"

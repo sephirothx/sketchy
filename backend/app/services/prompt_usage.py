@@ -46,6 +46,13 @@ def tally_prompt_usage(
         if chosen is None:
             continue
         picks[chosen] += 1
+        if turn.guess_totals_by_version:
+            # A mixed-language turn (#1182): the drawer picked their own
+            # language's version, and each language's guessers met theirs.
+            for version, correct, total in turn.guess_totals_by_version:
+                correct_guesses[version] += correct
+                total_guessers[version] += total
+            continue
         correct_guesses[chosen] += turn.correct_guess_count
         total_guessers[chosen] += turn.total_guesser_count
 
@@ -59,11 +66,11 @@ def tally_prompt_usage(
         offers=dict(offers),
         picks={
             prompt: PromptPickTotals(
-                picks=count,
+                picks=picks[prompt],
                 correct_guesses=correct_guesses[prompt],
                 total_guessers=total_guessers[prompt],
             )
-            for prompt, count in picks.items()
+            for prompt in sorted({*picks, *total_guessers})
         },
         **dimensions,
     )

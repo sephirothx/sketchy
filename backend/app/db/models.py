@@ -70,6 +70,7 @@ from app.domain_values import (
     INTERFACE_LOCALES,
     PROMPT_LANGUAGES,
     PROMPT_LIST_LANGUAGES,
+    ROOM_LANGUAGES,
     PROMPT_LIST_VISIBILITIES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
@@ -221,7 +222,7 @@ class RoomPreset(Base):
         ),
         _values_check("hint_mode", HINT_MODES, "ck_room_presets_hint_mode"),
         _values_check(
-            "prompt_language", PROMPT_LANGUAGES, "ck_room_presets_prompt_language"
+            "prompt_language", ROOM_LANGUAGES, "ck_room_presets_prompt_language"
         ),
         _values_check(
             "color_mode",

@@ -122,6 +122,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_letter: "Deze letter is ongeldig.",
   invalid_prompt_lists: "Deze woordenlijsten kunnen niet samen gebruikt worden.",
   invalid_custom_prompts: "Deze eigen woorden konden niet gelezen worden.",
+  mixed_room_list_unsupported: "Meertalige kamers kunnen alleen lijsten in alle talen of taalonafhankelijke lijsten gebruiken.",
+  mixed_room_custom_prompts: "Meertalige kamers kunnen geen eigen woorden gebruiken: elke speler heeft het woord in zijn eigen taal nodig.",
   max_players_below_seated: (params) =>
   `Het maximum aantal spelers kan niet lager zijn dan de ${count(params.seated, 2)} spelers die al in de kamer zitten.`,
   empty_message: "Typ eerst iets.",

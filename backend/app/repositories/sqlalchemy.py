@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from time import thread_time
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -74,6 +74,7 @@ from app.services.gallery_ranking import (
 )
 from app.domain_values import (
     AGNOSTIC_PROMPT_LANGUAGE,
+    MIXED_PROMPT_LANGUAGE,
     RuntimeEventType,
     AccountState,
     AuditTargetType,
@@ -167,6 +168,8 @@ from app.repositories.interfaces import (
     PromptListNotFoundError,
     PromptOfferDetail,
     PromptListSelectionError,
+    MixedRoomListError,
+    PromptTranslation,
     PromptSeedConflictError,
     PromptListSummary,
     OwnedPromptList,
@@ -5316,6 +5319,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 f"Prompt list{'s' if len(missing) != 1 else ''} not found: "
                 + ", ".join(missing)
             )
+        if expected_language == MIXED_PROMPT_LANGUAGE:
+            return (
+                await self._pinned_mixed_revisions(
+                    session, slugs, {row.slug: row for row in authorized_rows}
+                ),
+                MIXED_PROMPT_LANGUAGE,
+            )
         # A language-agnostic list (#821) sits beside any language: it is
         # matched under whatever the room declares, so it is left out of the
         # agreement the lists owe each other.
@@ -5368,6 +5378,99 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             revisions.append(revision)
         return revisions, language
+
+    async def _pinned_mixed_revisions(
+        self,
+        session: AsyncSession,
+        slugs: list[str],
+        rows_by_slug: dict[str, Row],
+    ) -> list[PromptListRevision]:
+        """Pin a mixed-language room's lists (#1182): every language of each.
+
+        A list in no language is pinned as it is. A list in a language is
+        admitted only with its **family** - the bundled lists whose current
+        revisions hold exactly its concepts - and only when that family spells
+        every concept in every room language, because every seat must be able
+        to play every prompt in its own. Today that is Standard alone
+        (R-PROMPT-01); a list in one language is refused by name rather than
+        quietly narrowing who may sit down. Asked of the data, not of a slug,
+        so a family made some other way is admitted the same way.
+        """
+        bundled_current = (
+            await session.execute(
+                select(PromptListRevision)
+                .join(
+                    PromptList,
+                    and_(
+                        PromptList.id == PromptListRevision.prompt_list_id,
+                        PromptList.version == PromptListRevision.version,
+                    ),
+                )
+                .where(
+                    PromptList.is_bundled.is_(True),
+                    PromptList.deleted_at.is_(None),
+                    PromptList.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                )
+            )
+        ).scalars().all()
+        concepts: dict[UUID, set[UUID]] = defaultdict(set)
+        if bundled_current:
+            for revision_id, concept_id in (
+                await session.execute(
+                    select(PromptListRevisionItem.revision_id, PromptVersion.concept_id)
+                    .join(
+                        PromptVersion,
+                        PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+                    )
+                    .where(
+                        PromptListRevisionItem.revision_id.in_(
+                            [revision.id for revision in bundled_current]
+                        )
+                    )
+                )
+            ).all():
+                concepts[revision_id].add(concept_id)
+        by_list = {revision.prompt_list_id: revision for revision in bundled_current}
+
+        pinned: list[PromptListRevision] = []
+        for slug in slugs:
+            row = rows_by_slug[slug]
+            if row.language == AGNOSTIC_PROMPT_LANGUAGE:
+                revision = await session.scalar(
+                    select(PromptListRevision).where(
+                        PromptListRevision.prompt_list_id == row.id,
+                        PromptListRevision.version
+                        == select(PromptList.version)
+                        .where(PromptList.id == row.id)
+                        .scalar_subquery(),
+                    )
+                )
+                if revision is None:
+                    raise PromptListSelectionError(
+                        f"Prompt list has no seeded revision: {slug}"
+                    )
+                pinned.append(revision)
+                continue
+            own = by_list.get(row.id) if row.is_bundled else None
+            if own is None:
+                raise MixedRoomListError(
+                    f"A mixed-language room cannot use this list: {slug}"
+                )
+            family: dict[str, PromptListRevision] = {own.language: own}
+            for revision in bundled_current:
+                if (
+                    revision.language not in family
+                    and concepts[revision.id] == concepts[own.id]
+                ):
+                    family[revision.language] = revision
+            if not set(PROMPT_LANGUAGES) <= set(family):
+                raise MixedRoomListError(
+                    f"A mixed-language room cannot use this list: {slug}"
+                )
+            pinned.extend(family[language] for language in PROMPT_LANGUAGES)
+        # A family chosen twice - two languages' Standard - is pinned once.
+        return list({revision.id: revision for revision in pinned}.values())
 
     async def resolve_selection(
         self,
@@ -5469,6 +5572,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 load_items=False,
                 expected_language=expected_language,
             )
+            if language == MIXED_PROMPT_LANGUAGE:
+                return await self._authorize_mixed(session, slugs, revisions)
             revision_ids = [revision.id for revision in revisions]
 
             active_versions = (
@@ -5552,6 +5657,209 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 letter_counts=dict(letter_counts),
                 letter_total=letter_total,
             )
+
+    async def sample_mixed_prompts(
+        self, revision_ids: Sequence[str], *, limit: int
+    ) -> PromptSample:
+        if limit <= 0 or not revision_ids:
+            return PromptSample()
+        pinned = [_entity_id(revision_id) for revision_id in revision_ids]
+        order = {revision_id: index for index, revision_id in enumerate(pinned)}
+        async with self._session_factory() as session:
+            in_pinned = [
+                PromptVersion.id.in_(
+                    select(PromptListRevisionItem.prompt_version_id).where(
+                        PromptListRevisionItem.revision_id.in_(pinned)
+                    )
+                ),
+                PromptVersion.moderation_state
+                == PromptContentModerationState.ACTIVE.value,
+            ]
+            # Concepts first, then their forms: a random order over versions
+            # would weigh a concept by how many languages spell it, and every
+            # Standard concept is spelled seven times against an agnostic
+            # prompt's once.
+            concepts = (
+                await session.scalars(
+                    select(PromptVersion.concept_id)
+                    .where(*in_pinned)
+                    .group_by(PromptVersion.concept_id)
+                    .order_by(func.random())
+                    .limit(limit)
+                )
+            ).all()
+            if not concepts:
+                return PromptSample()
+            if len(concepts) < limit:
+                drawable = len(concepts)
+            else:
+                drawable = max(
+                    await session.scalar(
+                        select(func.count(func.distinct(PromptVersion.concept_id))).where(
+                            *in_pinned
+                        )
+                    )
+                    or 0,
+                    len(concepts),
+                )
+            versions = (
+                await session.scalars(
+                    select(PromptVersion)
+                    .where(*in_pinned, PromptVersion.concept_id.in_(concepts))
+                    .options(
+                        selectinload(PromptVersion.version_aliases).selectinload(
+                            PromptVersionAlias.alias
+                        )
+                    )
+                )
+            ).all()
+            sources: dict[UUID, list[UUID]] = defaultdict(list)
+            for version_id, revision_id in (
+                await session.execute(
+                    select(
+                        PromptListRevisionItem.prompt_version_id,
+                        PromptListRevisionItem.revision_id,
+                    ).where(
+                        PromptListRevisionItem.revision_id.in_(pinned),
+                        PromptListRevisionItem.prompt_version_id.in_(
+                            [version.id for version in versions]
+                        ),
+                    )
+                )
+            ).all():
+                sources[version_id].append(revision_id)
+
+        def form(version: PromptVersion) -> PromptTranslation:
+            return PromptTranslation(
+                answer=version.canonical_answer,
+                aliases=tuple(sorted(link.alias.answer for link in version.version_aliases)),
+                prompt_version_id=_public_id(version.id),
+                source_revision_ids=tuple(
+                    _public_id(revision_id)
+                    for revision_id in sorted(sources[version.id], key=lambda rid: order[rid])
+                ),
+            )
+
+        forms: dict[UUID, dict[str, PromptTranslation]] = defaultdict(dict)
+        match_keys: dict[UUID, str] = {}
+        for version in versions:
+            forms[version.concept_id][version.language] = form(version)
+            match_keys[version.concept_id] = version.match_key
+        prompts: list[SampledPrompt] = []
+        for concept_id in concepts:
+            spelled = forms.get(concept_id, {})
+            agnostic = spelled.get(AGNOSTIC_PROMPT_LANGUAGE)
+            if agnostic is not None:
+                translations: dict[str, PromptTranslation] = {}
+                shown = agnostic
+            elif set(PROMPT_LANGUAGES) <= set(spelled):
+                translations = {language: spelled[language] for language in PROMPT_LANGUAGES}
+                shown = translations[PROMPT_LANGUAGES[0]]
+            else:
+                drawable = max(0, drawable - 1)
+                continue
+            prompts.append(
+                SampledPrompt(
+                    answer=shown.answer,
+                    match_key=match_keys[concept_id],
+                    aliases=shown.aliases,
+                    prompt_version_id=shown.prompt_version_id,
+                    source_revision_ids=shown.source_revision_ids,
+                    concept_id=_public_id(concept_id),
+                    translations=translations,
+                )
+            )
+        return PromptSample(prompts=tuple(prompts), drawable=drawable)
+
+    async def _authorize_mixed(
+        self,
+        session: AsyncSession,
+        slugs: list[str],
+        revisions: list[PromptListRevision],
+    ) -> PinnedPromptSelection:
+        """What `authorize_selection` establishes, for a mixed-language room.
+
+        Each room language sees its own lists and the lists in no language, so
+        each is asked on its own: whether any answer reaches two prompts under
+        that language's fold, and how often each letter appears, which prices
+        the wheel for the seats playing in it. The count is of concepts - one
+        prompt, however many languages spell it.
+        """
+        language_of = {revision.id: revision.language for revision in revisions}
+        rows = (
+            await session.execute(
+                select(
+                    PromptListRevisionItem.revision_id,
+                    PromptVersion.id,
+                    PromptVersion.concept_id,
+                    PromptVersion.canonical_answer,
+                )
+                .join(
+                    PromptVersion,
+                    PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+                )
+                .where(
+                    PromptListRevisionItem.revision_id.in_(list(language_of)),
+                    PromptVersion.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                )
+            )
+        ).all()
+        if not rows:
+            raise PromptListSelectionError(
+                "Selected prompt lists do not contain any prompts"
+            )
+        aliases: dict[UUID, list[str]] = defaultdict(list)
+        for version_id, answer in (
+            await session.execute(
+                select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
+                .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+                .where(
+                    PromptVersionAlias.prompt_version_id.in_(
+                        {version_id for _, version_id, _, _ in rows}
+                    )
+                )
+            )
+        ).all():
+            aliases[version_id].append(answer)
+
+        for room_language in PROMPT_LANGUAGES:
+            reached_by: dict[str, UUID] = {}
+            for revision_id, version_id, _concept, answer in rows:
+                if language_of[revision_id] not in (
+                    room_language,
+                    AGNOSTIC_PROMPT_LANGUAGE,
+                ):
+                    continue
+                for text in (answer, *aliases[version_id]):
+                    key = prompt_match_key(text, room_language)
+                    if reached_by.setdefault(key, version_id) != version_id:
+                        raise PromptListSelectionError(
+                            "Selected prompt lists contain ambiguous answers or aliases"
+                        )
+
+        counts: dict[str, Counter[str]] = {}
+        totals: dict[str, int] = {}
+        for room_language in PROMPT_LANGUAGES:
+            tally: Counter[str] = Counter()
+            total = 0
+            for revision in revisions:
+                if revision.language in (room_language, AGNOSTIC_PROMPT_LANGUAGE):
+                    tally.update(revision.letter_counts or {})
+                    total += revision.letter_total or 0
+            counts[room_language] = tally
+            totals[room_language] = total
+
+        return PinnedPromptSelection(
+            slugs=tuple(slugs),
+            language=MIXED_PROMPT_LANGUAGE,
+            revision_ids=tuple(_public_id(revision.id) for revision in revisions),
+            prompt_count=len({concept for _, _, concept, _ in rows}),
+            letter_counts_by_language={
+                language: dict(tally) for language, tally in counts.items()
+            },
+            letter_total_by_language=totals,
+        )
 
     async def sample_prompts(
         self,

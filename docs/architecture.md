@@ -109,12 +109,18 @@ app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 `Game` owns phases, the turn rotation, prompt choice, hint economics, guess matching,
 and scoring. It performs no I/O and touches no socket. `Phase` is
 `choosing_prompt | drawing | turn_results | game_end`
-([`backend/app/game.py:139`](../backend/app/game.py)). Scoring constants and the
+([`backend/app/game.py:140`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
-([`backend/app/game.py:38`](../backend/app/game.py),
-[`backend/app/game.py:370`](../backend/app/game.py)). This is the module to change when
+([`backend/app/game.py:47`](../backend/app/game.py),
+[`backend/app/game.py:454`](../backend/app/game.py)). This is the module to change when
 game rules change — and changing an outcome-producing constant requires bumping
 `SCORING_RULES_VERSION`.
+
+A game tracks its prompts by **key** - a list prompt's concept, a quick prompt's own
+text (#1181) - and spells each one per seat: `Game.seat_language(token)` is the one
+question every mask, offer, hint, wheel price and match asks. It answers the room's
+language, except in a mixed-language room (R-PROMPT-13, #1182), where each seat plays
+in the language it joined with and a prompt carries a `PromptForm` per language.
 
 **`app/rooms.py` — the live room model.**
 `Room`, `Player`, `RestartVote`, `DrawingRecapEntry`, and `RoomManager`. A `Room`

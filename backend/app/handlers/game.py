@@ -44,11 +44,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
                 room, requesting_user_id=player.user_id
             )
         except RoomPromptResolutionError as error:
-            return {
-                "ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS,
-                "error": str(error),
-                "field": "promptListSlugs",
-            }
+            return error.acknowledgement()
 
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             return ctx.shutdown.rejection_acknowledgement()
@@ -65,11 +61,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
             # the re-authorization above just made, and fails for the same
             # reasons. It is answered the same way rather than escaping the
             # handler, which would leave the host with no acknowledgement.
-            return {
-                "ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS,
-                "error": str(error),
-                "field": "promptListSlugs",
-            }
+            return error.acknowledgement()
     return {"ok": True}
 
 

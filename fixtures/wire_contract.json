@@ -281,6 +281,19 @@
       "title": "Scoringmode",
       "type": "string"
      },
+     "seatLanguage": {
+      "anyOf": [
+       {
+        "maxLength": 32,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Seatlanguage"
+     },
      "spectatorsSeePrompt": {
       "default": false,
       "title": "Spectatorsseeprompt",
@@ -603,6 +616,19 @@
       ],
       "default": null,
       "title": "Roomid"
+     },
+     "seatLanguage": {
+      "anyOf": [
+       {
+        "maxLength": 32,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Seatlanguage"
      },
      "soft": {
       "default": false,
@@ -2660,6 +2686,9 @@
   "services.game_flow:_sync_player_view": [
    "turnId"
   ],
+  "services.game_flow:acknowledgement": [
+   "errorCode"
+  ],
   "services.game_flow:note_presence": [
    "playerId"
   ],
@@ -2805,6 +2834,8 @@
    "invalid_letter",
    "invalid_prompt_lists",
    "invalid_custom_prompts",
+   "mixed_room_list_unsupported",
+   "mixed_room_custom_prompts",
    "max_players_below_seated",
    "empty_message",
    "too_fast",
