@@ -51,7 +51,6 @@ async def test_the_lobby_header_is_whole_and_where_every_page_has_it():
             await browser.close()
 
 
-
 async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
     """With a classic scrollbar, the header stands 16px from the window's
     edge on the pinned lobby, which does not scroll, and on Rules, which does
@@ -100,6 +99,7 @@ async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
         finally:
             await context.close()
             await browser.close()
+
 
 async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
     """The bar carries the site's pages (R-UX-11, R-UX-16): the lobby, the

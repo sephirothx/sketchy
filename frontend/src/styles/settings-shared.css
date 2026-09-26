@@ -24,12 +24,13 @@
      every page.
 
      The window is `100vw` less whatever of a classic scrollbar's lane `100vw`
-     still counts (`--scrollbar-width`, lib/scrollbarWidth.ts): Chromium leaves
-     the root's stable gutter out of `100vw`, a browser that does not counts
-     it, and a bar sized from either wrongly sat half a lane off 16px and
-     moved between pages that scroll and pages that do not (#1178). Where the page's column
-     already fills the window the reach is zero, and a page wider than the
-     shell - or one that runs the window's width - gets none either. */
+     still counts (`--scrollbar-width`, lib/scrollbarWidth.ts). Chromium leaves
+     the root's stable gutter out of `100vw` and other browsers count it; the
+     old `innerWidth - clientWidth` took the lane off a second time in
+     Chromium, on scrolling pages only, so the bar moved between pages that
+     scroll and pages that do not (#1178). Where the page's column already
+     fills the window the reach is zero, and a page wider than the shell - or
+     one that runs the window's width - gets none either. */
   --header-reach: calc((min(var(--shell-width), 100vw - var(--scrollbar-width) - 32px) - 100%) / 2);
   margin-inline: calc(-1 * max(0px, var(--header-reach)));
 }
