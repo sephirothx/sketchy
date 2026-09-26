@@ -533,7 +533,6 @@ def test_a_payload_for_one_socket_is_spelled_for_its_seat():
     assert spelled_for_seat(ended, "de")["prompt"] == "Fliege"
     assert spelled_for_seat(ended, "it")["prompt"] == "bow tie"
     assert spelled_for_seat({"prompt": "dog"}, "de") == {"prompt": "dog"}
-||||||| 57cdb03a
 
 
 async def test_a_mixed_draw_samples_among_playable_concepts_only(seeded):
