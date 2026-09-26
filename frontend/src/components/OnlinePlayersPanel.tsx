@@ -23,6 +23,7 @@ import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { refusalText } from "../lib/refusals.ts";
+import { useSettingsStore } from "../store/settingsStore";
 import { EmptyState } from "./ui/EmptyState";
 
 /** Who else is here, beside the room list.
@@ -82,6 +83,8 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
     try {
       const answer = await emitEntry<AckResponse>("join_friend_room", {
         friendUserId: player.userId,
+        // Fixed on the seat: a mixed-language room plays it in this (#1182).
+        seatLanguage: useSettingsStore.getState().promptLanguage,
       });
       const session = sessionFrom(answer);
       if (!session) {

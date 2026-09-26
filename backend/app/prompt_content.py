@@ -6,6 +6,7 @@ import unicodedata
 
 from app.domain_values import (
     AGNOSTIC_PROMPT_LANGUAGE,
+    MIXED_PROMPT_LANGUAGE,
     PROMPT_LANGUAGES,
     PromptLanguage,
 )
@@ -142,6 +143,19 @@ def languages_sharing_words(language: str) -> tuple[str, ...]:
     return (language, AGNOSTIC_PROMPT_LANGUAGE)
 
 
+def validate_room_language(language: str) -> str:
+    """Return the canonical tag a room may declare, or reject it.
+
+    One of the room languages, or several (`mul`, #1182): a room whose seats
+    each play in the language they joined with. Never `zxx`, which names no
+    language to fold a guess under.
+    """
+    normalized = language.strip()
+    if normalized.lower() == MIXED_PROMPT_LANGUAGE:
+        return MIXED_PROMPT_LANGUAGE
+    return validate_prompt_language(normalized)
+
+
 def best_supported_prompt_locale(accept_language: str | None) -> str:
     """Choose the first supported base locale from an Accept-Language value."""
     for preference in (accept_language or "").split(","):
@@ -166,6 +180,10 @@ def default_prompt_list_slug(language: str) -> str:
     that is simply not found, which is a visible refusal rather than a room
     quietly opening on English prompts.
     """
+    if language == MIXED_PROMPT_LANGUAGE:
+        # Any language's Standard names the whole family, which a mixed room
+        # pins in every language (#1182); English's is as good as any.
+        language = PromptLanguage.ENGLISH.value
     return f"{PromptLanguage(validate_prompt_language(language)).name.lower()}_standard"
 
 

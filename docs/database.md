@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c6d7e8f9a0b2_language_agnostic_prompt_lists.py` (#821). Both this line and the table
+`d7e8f9a0b1c3_mixed_language_room_presets.py` (#1182). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -220,10 +220,11 @@ future games*. Quick custom prompts are never stored; they must be saved as an o
 list first. ≤ 20 per account.
 
 `prompt_language` is the language the room will declare (R-PROMPT-02): one of the room
-languages, `CHECK ck_room_presets_prompt_language`, `en` by default. It used to be read
+languages or `mul` for a mixed-language room (R-PROMPT-13, #1182),
+`CHECK ck_room_presets_prompt_language`, `en` by default. It used to be read
 back from the saved lists, and a preset of lists in no language (R-PROMPT-12) has none to
 read, so since #821 it is stored. The two still cannot drift apart: saving a preset whose
-lists are not in the declared language (or in none) is refused rather than stored, and
+lists are not in the declared language (or in none; for a mixed preset, not playable by a mixed room) is refused rather than stored, and
 reading one pins its lists against that language the way a room does, so a disagreement
 makes the preset visibly unavailable.
 
@@ -1346,7 +1347,7 @@ cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # repla
 | `visibility` | `public \| private`, CHECK-enforced. The room's public flag, frozen when the game is saved (#469): a public room's game is listed on a profile for anyone, a private room's only for the players who sat in it (R-HIST-25). Defaults to `private` at both layers, so a writer that does not say discloses nothing |
 | `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
 
-**The rule snapshot** ([`backend/app/game.py:370`](../backend/app/game.py)) freezes the
+**The rule snapshot** ([`backend/app/game.py:454`](../backend/app/game.py)) freezes the
 numeric default/pressure/hint parameters, the drawer-bonus algorithm, the drawing time,
 the permitted tools and colors, prompt visibility and language, and the pinned prompt-
 source revision IDs. Historical points can therefore be interpreted under the rules that
@@ -2111,6 +2112,11 @@ Append-only per-game usage totals, **not** mutable counters on a display row.
 composite **PK** · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` ·
 `pick_count` · `correct_guess_count` · `total_guesser_count` · `created_at` — the
 idempotency triple is the identity, so it is the key.
+
+A mixed-language turn (R-PROMPT-13) records the offer and the pick against the drawer's
+language's version and each language's guessers against that language's version, so
+a version can carry guessers with `pick_count = 0`: a language's statistics count the
+players who met the prompt in it.
 
 **Flow.** Each finished game appends one idempotent fact per used prompt/version and
 pinned list revision, with the authoritative occurrence time plus scoring and hint modes

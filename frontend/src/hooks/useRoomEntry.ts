@@ -12,6 +12,9 @@ export function useRoomEntry(code: string) {
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
+  // The language this player plays in, fixed on the seat when it is made: a
+  // mixed-language room plays each seat in its own (#1182).
+  const seatLanguage = useSettingsStore((state) => state.promptLanguage);
   const machineRef = useRef<RoomEntryMachine | null>(null);
   // Read inside effects only: the machine is seeded with whatever name is
   // known when it is built and told about later ones by the effect below,
@@ -43,6 +46,7 @@ export function useRoomEntry(code: string) {
           nickname: playerNickname,
           nameColor,
           colorblindSafeColors,
+          seatLanguage,
           asSpectator: mode === "spectator",
         }).then((response) => {
           // Somebody who arrived first holds this guest's name (R-ACCT-09):
@@ -65,7 +69,7 @@ export function useRoomEntry(code: string) {
     // used to tear this down mid-join and build another that had to fetch the
     // preview again, which meant the join was aimed at a disposed machine and
     // went nowhere at all. The name is pushed in below instead.
-  }, [code, colorblindSafeColors, nameColor, setSession]);
+  }, [code, colorblindSafeColors, nameColor, seatLanguage, setSession]);
 
   useEffect(() => {
     nicknameRef.current = nickname;

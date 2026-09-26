@@ -14,6 +14,7 @@ import { XIcon } from "./icons";
 import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { refusalText } from "../lib/refusals.ts";
+import { useSettingsStore } from "../store/settingsStore";
 
 /** An invitation from a friend, and the one control that answers it.
 
@@ -125,6 +126,8 @@ export function FriendInviteNotice() {
       const answer = await emitEntry<AckResponse>("join_friend_room", {
         friendUserId: current.fromUserId,
         inviteToken: current.inviteToken,
+        // Fixed on the seat: a mixed-language room plays it in this (#1182).
+        seatLanguage: useSettingsStore.getState().promptLanguage,
       });
       const session = sessionFrom(answer);
       if (!session) {

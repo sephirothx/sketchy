@@ -38,6 +38,11 @@ class ErrorCode(StrEnum):
     INVALID_LETTER = "invalid_letter"
     INVALID_PROMPT_LISTS = "invalid_prompt_lists"
     INVALID_CUSTOM_PROMPTS = "invalid_custom_prompts"
+    # A mixed-language room (#1182) draws only on content every seat's
+    # language spells: a list in one language is refused, and so are quick
+    # prompts, which have one language and no translations.
+    MIXED_ROOM_LIST_UNSUPPORTED = "mixed_room_list_unsupported"
+    MIXED_ROOM_CUSTOM_PROMPTS = "mixed_room_custom_prompts"
     MAX_PLAYERS_BELOW_SEATED = "max_players_below_seated"
     EMPTY_MESSAGE = "empty_message"
 

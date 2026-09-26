@@ -46,7 +46,8 @@ export type ColorMode = "all" | "palette" | "colorblind_safe" | "black_and_white
 export type PromptLanguage = "de" | "en" | "es" | "fr" | "it" | "nl" | "pt";
 /** A list may also be in no language at all (`zxx`, #821): Pokémon, brands,
 places. It is played in a room of any language, under that room's matching
-rules. A room itself always declares a `PromptLanguage`. */
+rules. A room declares a `PromptLanguage`, or `mul` for a mixed-language room
+(#1182). */
 export type PromptListLanguage = PromptLanguage | "zxx";
 
 export interface PromptListSummary {
@@ -548,6 +549,8 @@ export type ErrorCode =
   | "invalid_letter"
   | "invalid_prompt_lists"
   | "invalid_custom_prompts"
+  | "mixed_room_list_unsupported"
+  | "mixed_room_custom_prompts"
   | "max_players_below_seated"
   | "empty_message"
   | "too_fast"
