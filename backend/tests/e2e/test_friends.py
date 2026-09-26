@@ -174,6 +174,67 @@ async def test_an_invitation_reaches_a_friend_and_seats_them():
             await browser.close()
 
 
+async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
+    """#1176: the card sat on the phone room's chat feed and hid its latest
+    lines. In a room the invitation is a chip in the bar instead, and its
+    Join is one tap away there."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context(
+            viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True
+        )
+        host, guest = await host_context.new_page(), await guest_context.new_page()
+        host_name, guest_name = unique("Host"), unique("Pal")
+
+        try:
+            await sign_up(host, host_name)
+            await sign_up(guest, guest_name)
+            await make_friends(host, guest, host_name, guest_name)
+
+            await host.click('button:has-text("Create room")')
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            invite = host.locator(
+                f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
+            ).get_by_role("button", name="Invite")
+            await expect(invite).to_be_visible(timeout=SETTLE_MS)
+            await invite.click()
+
+            # In the lobby it is the card, as before.
+            card = guest.locator('[data-testid="friend-invite"]')
+            await expect(card).to_be_visible(timeout=SETTLE_MS)
+
+            # The invitation outlives the lobby: in a room of the guest's own
+            # it moves into the bar rather than floating over the room.
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector(".create-room-page")
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            await expect(card).to_have_count(0)
+            chip = guest.locator(
+                '[data-testid="room-header"] .room-notice-chip[data-notice="invite"]'
+            )
+            await expect(chip).to_be_visible()
+            await expect(chip).to_have_attribute("aria-label", re.compile(host_name))
+            box = await chip.bounding_box()
+            assert box and box["x"] >= 0 and box["x"] + box["width"] <= 390, box
+
+            await chip.click()
+            popover = guest.locator('.room-notice-popover[data-notice="invite"]')
+            await expect(popover).to_contain_text(host_name)
+            await popover.get_by_role("button", name="Join").click()
+
+            await expect(host.locator(".player-row")).to_have_count(
+                2, timeout=SETTLE_MS
+            )
+            await expect(chip).to_have_count(0)
+        finally:
+            await host_context.close()
+            await guest_context.close()
+            await browser.close()
+
+
 async def test_a_guest_is_not_offered_a_friendship_it_cannot_have():
     """A guest identity is a browser, not a person, and is purged after a month."""
     async with async_playwright() as p:

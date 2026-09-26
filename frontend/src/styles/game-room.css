@@ -303,6 +303,18 @@
   margin-top: 8px;
 }
 
+/* A friend's invitation asks a question, so its popover carries both answers
+   on one row: Join first, Not now beside it. */
+.room-notice-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-notice-popover strong {
+  font-weight: 800;
+}
+
 /* On the phone the popover spans the band rather than hanging off a chip that
    sits in the middle of a 390px screen. */
 .game-header-mobile .room-notice-chips {
