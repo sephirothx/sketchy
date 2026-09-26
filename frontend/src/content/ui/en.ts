@@ -1015,6 +1015,7 @@ export const EN = {
     invitedYouTheirGame: "invited you to their game.",
     join: "Join",
     dismissInvitation: "Dismiss invitation",
+    notNow: "Not now",
   },
 
   friendsOverlay: {
@@ -1821,6 +1822,7 @@ export const EN = {
     reconnecting: "Reconnecting",
     disconnected: "Disconnected",
     rejoinFailed: "Rejoin failed",
+    invitation: "Invitation",
     serverUpdateStarted: "Server update in progress. This game will end soon.",
   },
 

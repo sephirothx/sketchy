@@ -997,6 +997,7 @@ export const PT: Catalogue = {
     invitedYouTheirGame: "convidou-te para a partida dele.",
     join: "Entrar",
     dismissInvitation: "Dispensar o convite",
+    notNow: "Agora não",
   },
 
   friendsOverlay: {
@@ -1809,6 +1810,7 @@ export const PT: Catalogue = {
     reconnecting: "A religar",
     disconnected: "Desligado",
     rejoinFailed: "Falha ao voltar",
+    invitation: "Convite",
     serverUpdateStarted: "Atualização do servidor a decorrer. Esta partida termina em breve.",
   },
 
