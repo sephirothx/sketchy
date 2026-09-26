@@ -11,6 +11,8 @@ import { needsIdentity, useAuthStore } from "../store/authStore";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useNameField } from "../hooks/useNameField";
+import { useToast } from "../lib/toast";
+import type { RoomJoinMode } from "../lib/roomEntryState";
 import { useBottomDock } from "../hooks/useBottomDock";
 import "../styles/lazy/toolbar.css";
 
@@ -37,7 +39,7 @@ function DelayedInviteLoader() {
 export function InviteEntryPage({ code }: { code: string }) {
   const dockRef = useBottomDock();
   const navigate = useNavigate();
-  const { state, join, setNicknameInput } = useRoomEntry(code);
+  const { state, join } = useRoomEntry(code);
   // Another way into a room already in flight - a friend's invitation, say -
   // holds the app's entry lock; this page waits for it (R-UX-14).
   const entryPending = useRoomEntryStore((state) => state.pending !== null);
@@ -48,15 +50,12 @@ export function InviteEntryPage({ code }: { code: string }) {
   const login = useAuthStore((store) => store.login);
   const register = useAuthStore((store) => store.register);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
-  // The same field as the first-run name tag's: only the name rule's
-  // characters get in (R-UX-13).
-  const { ref: nameRef, onChange: onNameChange } = useNameField((value) => {
-    setNameDraft(value);
-    // Also to the entry machine, which drops a refusal about the name once
-    // the name changes; otherwise the error and aria-invalid stay up over a
-    // name that is now fine.
-    setNicknameInput(value);
-  });
+  const { notify } = useToast();
+  // The same field as the first-run name tag's (R-UX-13): only the name
+  // rule's characters get in, and a refused name is said in a toast while the
+  // field is red and aria-invalid until the next edit. Never a line above
+  // Join and Spectate: it pushed them down, and back up when it cleared.
+  const { ref: nameRef, onChange: onNameChange, refused, refuse } = useNameField(setNameDraft);
   // Nothing until the first GET /api/auth/me settles: a null user means "not
   // known yet" as well as "nobody", and a join in that window races the
   // provisioning request (see FirstRunIdentity).
@@ -64,9 +63,20 @@ export function InviteEntryPage({ code }: { code: string }) {
   const offersLogIn = hasResolved && (!user || user.isAnonymous);
   const room = state.status === "preview" || state.status === "joining" ? state.room : null;
   const busy = state.status === "joining";
-  const entryError = state.status === "preview" ? state.error : undefined;
   const notice = state.status === "preview" || state.status === "joining" ? state.notice : undefined;
   useDocumentTitle(room?.name ?? code);
+
+  /** Join, and say a refusal the same way whatever it was about: a toast. Only
+      one about the name marks the field and puts the player back in it; a
+      full room or a lost connection is not the name's fault. Not gated on
+      the field being on screen: a guest name somebody online took brings
+      the field in with this very refusal, and it arrives marked. */
+  async function enter(mode: RoomJoinMode) {
+    const refusal = await join(mode);
+    if (!refusal) return;
+    if (refusal.aboutName) refuse(refusal.message);
+    else notify(refusal.message, "error");
+  }
 
   return (
     <div className="invite-entry-page">
@@ -139,7 +149,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                   onKeyDown={(event) => {
                     if (event.key === "Enter" && !busy && !entryPending && !room.isFull) {
                       event.preventDefault();
-                      void join("player");
+                      void enter("player");
                     }
                   }}
                   placeholder={ui.firstRunIdentity.whatShouldWeCallYou}
@@ -148,18 +158,16 @@ export function InviteEntryPage({ code }: { code: string }) {
                   autoCorrect="off"
                   spellCheck={false}
                   enterKeyHint="go"
-                  aria-invalid={entryError ? true : undefined}
-                  aria-describedby={entryError ? "invite-entry-error" : undefined}
+                  aria-invalid={refused ? true : undefined}
                 />
               </>
             )}
-            {entryError && <p id="invite-entry-error" className="invite-form-error" role="alert">{entryError}</p>}
             <div className="invite-actions">
               <button
                 type="button"
                 className="btn btn-primary invite-primary-button"
                 disabled={busy || entryPending || room.isFull || !hasResolved}
-                onClick={() => void join("player")}
+                onClick={() => void enter("player")}
               >
                 {room.isFull ? ui.inviteEntryPage.roomFull : busy ? ui.inviteEntryPage.joining : room.state === "playing" ? ui.inviteEntryPage.joinGameInProgress : ui.inviteEntryPage.join}
               </button>
@@ -167,7 +175,7 @@ export function InviteEntryPage({ code }: { code: string }) {
                 type="button"
                 className={room.isFull ? "btn btn-primary invite-primary-button" : "btn btn-secondary invite-secondary-button"}
                 disabled={busy || entryPending || !hasResolved}
-                onClick={() => void join("spectator")}
+                onClick={() => void enter("spectator")}
               >
                 <EyeIcon size={16} />
                 {busy ? ui.inviteEntryPage.joining : ui.inviteEntryPage.spectate}

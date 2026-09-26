@@ -239,10 +239,10 @@ async def test_an_invite_link_waits_while_another_way_in_is_in_flight():
             # no refusal the room never gave.
             await expect(guest.locator(".invite-primary-button")).to_be_disabled()
             await expect(guest.locator(".invite-secondary-button")).to_be_disabled()
-            assert await guest.locator("#invite-entry-error").count() == 0
+            assert await guest.locator(".app-toast.error").count() == 0
 
             await guest.wait_for_selector('[data-testid="waiting-room"]', timeout=SETTLE_MS)
-            assert await guest.locator("#invite-entry-error").count() == 0
+            assert await guest.locator(".app-toast.error").count() == 0
         finally:
             await friend_context.close()
             await guest_context.close()

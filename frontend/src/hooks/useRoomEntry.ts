@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { RoomEntryMachine, type RoomEntrySnapshot, type RoomJoinMode } from "../lib/roomEntryState";
+import { RoomEntryMachine, type RoomEntryRefusal, type RoomEntrySnapshot, type RoomJoinMode } from "../lib/roomEntryState";
 import { emitEntry, emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useGameStore } from "../store/gameStore";
 import { needsIdentity, useAuthStore } from "../store/authStore";
@@ -72,13 +72,11 @@ export function useRoomEntry(code: string) {
     machineRef.current?.setNicknameInput(nickname);
   }, [nickname]);
 
-  function setNicknameInput(value: string) {
-    machineRef.current?.setNicknameInput(value);
-  }
-
-  async function join(mode: RoomJoinMode) {
+  /** Join as `mode`; resolves to the refusal, if there was one, for the page
+      to say. */
+  async function join(mode: RoomJoinMode): Promise<RoomEntryRefusal | null> {
     const machine = machineRef.current;
-    if (!machine) return;
+    if (!machine) return null;
     // The app's one-entry-at-a-time lock (store/roomEntryStore.ts), taken
     // before the machine moves to "joining": while something else holds it -
     // a Quick play still answering, a friend's invitation - the press does
@@ -88,9 +86,9 @@ export function useRoomEntry(code: string) {
     const token = useRoomEntryStore
       .getState()
       .begin("invite-link", mode === "spectator" ? "spectate" : "join");
-    if (token === null) return;
+    if (token === null) return null;
     try {
-      await joinHoldingTheLock(machine, mode);
+      return await joinHoldingTheLock(machine, mode);
     } finally {
       useRoomEntryStore.getState().end(token);
     }
@@ -110,12 +108,12 @@ export function useRoomEntry(code: string) {
         machine.setNicknameInput(account.displayName);
       } catch {
         // An empty or invalid draft: let the machine say so in its own words,
-        // which are the words this screen already shows for a bad name.
+        // which are the words this screen already uses for a bad name.
         machine.setNicknameInput(useAuthStore.getState().nameDraft);
       }
     }
     return machine.join(mode);
   }
 
-  return { ...snapshot, setNicknameInput, join };
+  return { ...snapshot, join };
 }
