@@ -997,6 +997,7 @@ export const NL: Catalogue = {
     invitedYouTheirGame: "heeft je uitgenodigd voor zijn spel.",
     join: "Meedoen",
     dismissInvitation: "Uitnodiging sluiten",
+    notNow: "Nu niet",
   },
 
   friendsOverlay: {
@@ -1805,11 +1806,13 @@ export const NL: Catalogue = {
   },
 
   roomNoticeChips: {
-    serverUpdate: (p: { seconds: number }) =>
-      p.seconds > 0 ? `Update · ${p.seconds} s` : "Update · nu",
+    serverUpdateWord: "Update ·",
+    serverUpdateSeconds: (p: { seconds: number }) =>
+      p.seconds > 0 ? `${p.seconds} s` : "nu",
     reconnecting: "Opnieuw verbinden",
     disconnected: "Verbroken",
     rejoinFailed: "Terugkeren mislukt",
+    invitation: "Uitnodiging",
     serverUpdateStarted: "Serverupdate bezig. Dit spel eindigt binnenkort.",
   },
 

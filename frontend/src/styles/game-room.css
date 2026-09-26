@@ -161,7 +161,8 @@
    identity chip's name (the avatar stays, as the compact chip - see
    ActiveGameRoom). The wordmark, the clock, the round, the notice chips, the
    Room menu and the avatar stay at every width; only the phone's bar, below,
-   ever lets the wordmark go, and only while a notice needs its room. */
+   ever lets the wordmark go, and only once the round's word has gone and the
+   bar is still short. */
 @media (max-width: 1100px) {
   .game-header-room-name {
     display: none;
@@ -204,39 +205,96 @@
   position: relative;
 }
 
+/* Its width is the screen's, whatever it holds: the give-way below measures
+   what it holds against that width, so the width must not follow it. */
 .game-header-mobile {
-  container: room-bar / inline-size;
+  contain: inline-size;
 }
 
 .game-header-mobile .game-header-start {
   flex: none;
 }
 
-/* The one time the phone's wordmark gives way: a notice or the Away chip
-   beside the round and the clock, on a bar too narrow for all of them. It is
-   back the moment the notice ends. */
-@container room-bar (max-width: 470px) {
-  .game-header-mobile:has(.room-notice-chip, .game-header-away) .game-header-home {
-    display: none;
-  }
-}
+/* What the phone's bar gives up when it runs short, in this order and only as
+   far as it has to (R-UX-11). `useRoomBarGiveWay` measures the bar and writes
+   the steps it kept into `data-gave-way` - a later step can let an earlier
+   one back, as the wordmark's room lets the round keep its word - and each
+   rule below is one step. A 300px phone holding the round, the clock, a lost
+   connection, an invitation and AFK needs every step up to `tight`; with a
+   drain's countdown instead of the lost connection, or anything narrower, it
+   takes `wrap`. */
 
-/* The phone's round: "Round 2/3" where the bar has room for the word, "2/3"
-   where it does not. GameHeaderStatus renders both and measures the bar to
-   choose; the full label stays laid out, unseen and out of the flow, so it
-   can be measured while the short one shows. */
+/* 1. The round's word: "Round 2/3" becomes "2/3". Both labels are rendered;
+   the full one stays laid out, unseen and out of the flow, where it takes no
+   room. */
 .game-header-round-short {
   display: none;
 }
 
-.game-header-round.is-short .game-header-round-long {
+.game-header-mobile[data-gave-way~="round"] .game-header-round-long {
   pointer-events: none;
   position: absolute;
   visibility: hidden;
 }
 
-.game-header-round.is-short .game-header-round-short {
+.game-header-mobile[data-gave-way~="round"] .game-header-round-short {
   display: inline;
+}
+
+/* 2. The wordmark. It is the way out, and the Room menu's Leave is another. */
+.game-header-mobile[data-gave-way~="mark"] .game-header-start {
+  display: none;
+}
+
+/* 3. The chips' words: a notice, an invitation and AFK keep their icons, and a
+   drain its countdown (#806: the seconds are the point of that chip, so they
+   never go - the bar takes a second row first). Each is named by its
+   aria-label, so nothing is taken from a screen reader, and a notice's
+   sentence is still a tap away. */
+.game-header-mobile[data-gave-way~="labels"] :is(.room-notice-chip-label, .game-header-away-label) {
+  display: none;
+}
+
+/* 4. The room between things. */
+.game-header-mobile[data-gave-way~="tight"] {
+  column-gap: 6px;
+}
+
+.game-room.game-room-playing .game-header-mobile[data-gave-way~="tight"] {
+  padding-inline: 6px;
+}
+
+.game-header-mobile[data-gave-way~="tight"] :is(
+  .game-header-center,
+  .game-header-status,
+  .room-notice-chips,
+  .game-header-actions
+) {
+  gap: 4px;
+}
+
+.game-header-mobile[data-gave-way~="tight"] :is(.game-header-round, .room-notice-chip, .game-header-away) {
+  padding-inline: 7px;
+}
+
+/* 5. Two rows: the wordmark, the Room menu and the avatar above, the round,
+   the clock and the chips below - wrapping again themselves rather than
+   running off the screen. It costs the canvas a row, which is why it is
+   last, and it gives the wordmark its room back. */
+.game-header-mobile[data-gave-way~="wrap"] {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.game-header-mobile[data-gave-way~="wrap"] .game-header-start {
+  display: flex;
+}
+
+.game-header-mobile[data-gave-way~="wrap"] .game-header-center {
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  order: 1;
+  row-gap: 4px;
 }
 
 .game-header-mobile .game-header-center {
@@ -253,8 +311,8 @@
   min-width: 44px;
 }
 
-/* A drain or a dropped connection, said where the round and the clock are
-   (RoomNoticeChips). The chip recipe, as a button: the full sentence is a tap
+/* A drain, a dropped connection or a friend's invitation, said where the round
+   and the clock are (RoomNoticeChips). The chip recipe, as a button: the full sentence is a tap
    away in the popover below it. */
 .room-notice-chips {
   align-items: center;
@@ -301,6 +359,18 @@
 
 .room-notice-popover .btn {
   margin-top: 8px;
+}
+
+/* A friend's invitation asks a question, so its popover carries both answers
+   on one row: Join first, Not now beside it. */
+.room-notice-popover-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.room-notice-popover strong {
+  font-weight: 800;
 }
 
 /* On the phone the popover spans the band rather than hanging off a chip that
@@ -2754,13 +2824,23 @@ button.guess-pips {
 
   /* The side columns are kept tight on purpose: every pixel they take comes
      straight off the canvas, and the whole point of turning the phone is to
-     make the drawing bigger. */
+     make the drawing bigger.
+
+     The friend invite and the toasts, which stand at the bottom centre
+     outside this shell, keep the feed's width clear on each side
+     (--dock-inline-inset): a wide toast at 740px reached 17px into the
+     column, over the guess field and the verdict above it. The token mirrors
+     the column's width rather than setting it, so a browser without :has()
+     only loses the notices' narrowing, not the column. Change both together. */
+  :root:has(.game-room.game-room-playing) {
+    --dock-inline-inset: min(26vw, 180px);
+  }
+
   .game-room.game-room-playing .room-shell-chat {
     border-left: 1.5px solid var(--line);
     flex: 0 0 auto;
-    max-width: 180px;
     order: 2;
-    width: 26%;
+    width: min(26vw, 180px);
   }
 
   .game-room.game-room-playing .room-shell-chat .sidebar-box {
@@ -2772,6 +2852,19 @@ button.guess-pips {
   .game-room.game-room-playing .chat-messages-container,
   .game-room.game-room-playing .chat-messages {
     max-height: none;
+  }
+
+  /* With the keyboard up the feed goes (density mode, above), and the field
+     used to rise with it to the top of this column. The verdict on the last
+     guess hangs above the field, so it was drawn off the top of the screen:
+     "very close" was never seen (#1175). The field stays at the bottom, where
+     it was before the keyboard came up and where portrait keeps it, and the
+     verdict hangs above it in the space the feed left. Growing upward, a
+     verdict that wraps in the narrow column still has room. No --dock-reserve
+     is needed: this column is beside the bottom centre, not under it, and
+     what stands there keeps clear of it (--dock-inline-inset, above). */
+  .game-room.guess-focused .room-chat-panel.guess-chat {
+    justify-content: flex-end;
   }
 
   /* The turn bar rides above the canvas rather than across the whole width,

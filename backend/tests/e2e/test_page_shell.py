@@ -1,5 +1,8 @@
 """One header on every page (R-UX-11): the wordmark and the identity chip sit
 in the same place whatever width the page's own content keeps."""
+import sys
+
+import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import use_guest_name
 from tests.e2e.test_friends import unique
@@ -43,6 +46,56 @@ async def test_the_lobby_header_is_whole_and_where_every_page_has_it():
             rules_home = await home.bounding_box()
             assert abs(rules_chip["x"] - lobby_chip["x"]) <= 1, (rules_chip, lobby_chip)
             assert abs(rules_home["x"] - lobby_home["x"]) <= 1, (rules_home, lobby_home)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
+    """With a classic scrollbar, the header stands 16px from the window's
+    edge on the pinned lobby, which does not scroll, and on Rules, which does
+    (#1178). Below the shell's width the bar reaches to that gutter, measured
+    from `100vw`: Chromium leaves the root's stable gutter out of `100vw`, and
+    taking a scrollbar's width off it as well, on a page that scrolls only,
+    put the bar 23.5px in on Rules and 16px on the lobby.
+
+    Headless Chromium hides its scrollbars unless told not to; on Linux, as
+    on CI, they are then classic 15px ones. macOS draws overlay scrollbars,
+    which take no lane, and there is nothing to measure."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True, args=["--mute-audio"], ignore_default_args=["--hide-scrollbars"]
+        )
+        context = await browser.new_context(viewport={"width": 1200, "height": 800})
+        page = await context.new_page()
+        try:
+            await use_guest_name(page, unique("Lane"))
+            header = page.locator(".lobby-header")
+            chip = page.locator(".lobby-header .identity-chip")
+
+            await page.goto(f"{BASE_URL}/rules")
+            await page.get_by_role("heading", name="Rules", exact=True).wait_for()
+            lane = await page.evaluate("innerWidth - document.documentElement.clientWidth")
+            if lane == 0:
+                assert sys.platform != "linux", "Chromium on Linux drew no classic scrollbar"
+                pytest.skip("this platform's scrollbars take no lane")
+            rules_header = await header.bounding_box()
+            rules_chip = await chip.bounding_box()
+
+            await page.goto(BASE_URL)
+            await chip.wait_for()
+            assert await page.evaluate(
+                "document.documentElement.scrollHeight <= document.documentElement.clientHeight"
+            ), "the lobby is meant to be pinned to the window here, with nothing to scroll"
+            lobby_header = await header.bounding_box()
+            lobby_chip = await chip.bounding_box()
+
+            assert rules_header is not None and lobby_header is not None
+            assert abs(lobby_header["x"] - 16) <= 1, lobby_header
+            assert abs(rules_header["x"] - lobby_header["x"]) <= 1, (rules_header, lobby_header)
+            assert abs(rules_header["width"] - lobby_header["width"]) <= 1, (rules_header, lobby_header)
+            assert rules_chip is not None and lobby_chip is not None
+            assert abs(rules_chip["x"] - lobby_chip["x"]) <= 1, (rules_chip, lobby_chip)
         finally:
             await context.close()
             await browser.close()
