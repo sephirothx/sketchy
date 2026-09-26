@@ -1817,8 +1817,9 @@ export const EN = {
   },
 
   roomNoticeChips: {
-    serverUpdate: (p: { seconds: number }) =>
-      p.seconds > 0 ? `Update · ${p.seconds}s` : "Update · now",
+    serverUpdateWord: "Update ·",
+    serverUpdateSeconds: (p: { seconds: number }) =>
+      p.seconds > 0 ? `${p.seconds}s` : "now",
     reconnecting: "Reconnecting",
     disconnected: "Disconnected",
     rejoinFailed: "Rejoin failed",

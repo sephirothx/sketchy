@@ -2761,9 +2761,11 @@ A seated client checks with the server every five seconds that it still holds th
   (it becomes your round avatar); the wordmark, the clock, the menu and your avatar stay, down
   to a phone. A phone's bar gives up only what it has to, in order: the round's word ("Round
   2/3" becomes "2/3"), then the wordmark, then the chips' words (a notice, an invitation and
-  *AFK* keep their icons, and the sentence is a tap away), then the space between things, and
-  last a second row for the round, the clock and the chips - so nothing runs off even a
-  300px screen, and everything comes back as the notices end. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
+  *AFK* keep their icons, a server update keeps its countdown, and a notice's or an
+  invitation's sentence is still a tap away), then the space between things, and last a
+  second row for the round, the clock and the chips - so nothing runs off even a 300px
+  screen. Whatever the later steps made room for comes back (the wordmark's room usually
+  fits the round's word), and so does everything as the notices end. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
   that, where the bar has given the name up - with no status line under it: Start itself says
   what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
   On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,

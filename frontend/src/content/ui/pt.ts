@@ -1805,8 +1805,9 @@ export const PT: Catalogue = {
   },
 
   roomNoticeChips: {
-    serverUpdate: (p: { seconds: number }) =>
-      p.seconds > 0 ? `Atualização · ${p.seconds} s` : "Atualização · agora",
+    serverUpdateWord: "Atualização ·",
+    serverUpdateSeconds: (p: { seconds: number }) =>
+      p.seconds > 0 ? `${p.seconds} s` : "agora",
     reconnecting: "A religar",
     disconnected: "Desligado",
     rejoinFailed: "Falha ao voltar",

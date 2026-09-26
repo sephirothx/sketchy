@@ -11,23 +11,32 @@ test("a bar that fits gives nothing up", () => {
   assert.deepEqual(chooseGiveWay(() => true), []);
 });
 
-test("only as many steps as it takes, each with every step before it", () => {
+test("the round keeps its word when the wordmark's room is enough", () => {
+  // "Round 2/3" beside a notice on a 390px phone: the wordmark has to go, and
+  // once it has, the word fits again.
+  assert.deepEqual(chooseGiveWay((steps) => steps.includes("mark")), ["mark"]);
+});
+
+test("steps are taken in order, and handed back latest first while the bar still fits", () => {
   const tried = [];
   const steps = chooseGiveWay((given) => {
     tried.push(given.join(" "));
-    return given.includes("labels");
+    // Needs the wordmark's room and the chips' words; the round's word fits.
+    return given.includes("mark") && given.includes("labels");
   });
-  assert.deepEqual(steps, ["round", "mark", "labels"]);
-  assert.deepEqual(tried, ["", "round", "round mark", "round mark labels"]);
+  assert.deepEqual(steps, ["mark", "labels"]);
+  assert.deepEqual(tried, [
+    "", "round", "round mark", "round mark labels",
+    "round labels", "mark labels",
+  ]);
 });
 
-test("a bar nothing else fits takes the second row without asking", () => {
+test("a step still needed is kept", () => {
+  assert.deepEqual(chooseGiveWay((steps) => steps.length >= 2), ["round", "mark"]);
+});
+
+test("a bar nothing fits takes every step, so its row can wrap again", () => {
   const tried = [];
-  const steps = chooseGiveWay((given) => {
-    tried.push(given.length);
-    return false;
-  });
-  assert.deepEqual(steps, ROOM_BAR_STEPS);
-  // The row is the step that always fits, so it is never measured.
-  assert.deepEqual(tried, [0, 1, 2, 3, 4]);
+  assert.deepEqual(chooseGiveWay((given) => (tried.push(given.length), false)), ROOM_BAR_STEPS);
+  assert.deepEqual(tried, [0, 1, 2, 3, 4, 5]);
 });

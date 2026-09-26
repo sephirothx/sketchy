@@ -217,9 +217,12 @@
 
 /* What the phone's bar gives up when it runs short, in this order and only as
    far as it has to (R-UX-11). `useRoomBarGiveWay` measures the bar and writes
-   the steps it took into `data-gave-way`; each rule below is one step. A
-   300px phone holding the round, the clock, a notice, an invitation and AFK
-   needs every step up to `tight`; `wrap` is for anything narrower still. */
+   the steps it kept into `data-gave-way` - a later step can let an earlier
+   one back, as the wordmark's room lets the round keep its word - and each
+   rule below is one step. A 300px phone holding the round, the clock, a lost
+   connection, an invitation and AFK needs every step up to `tight`; with a
+   drain's countdown instead of the lost connection, or anything narrower, it
+   takes `wrap`. */
 
 /* 1. The round's word: "Round 2/3" becomes "2/3". Both labels are rendered;
    the full one stays laid out, unseen and out of the flow, where it takes no
@@ -243,9 +246,11 @@
   display: none;
 }
 
-/* 3. The chips' words: a notice, an invitation and AFK keep their icons. Each
-   is named by its aria-label, so nothing is taken from a screen reader, and
-   the notice's sentence is still a tap away. */
+/* 3. The chips' words: a notice, an invitation and AFK keep their icons, and a
+   drain its countdown (#806: the seconds are the point of that chip, so they
+   never go - the bar takes a second row first). Each is named by its
+   aria-label, so nothing is taken from a screen reader, and a notice's
+   sentence is still a tap away. */
 .game-header-mobile[data-gave-way~="labels"] :is(.room-notice-chip-label, .game-header-away-label) {
   display: none;
 }

@@ -38,7 +38,8 @@ its Not now, and the card steps aside for as long as this bar is mounted.
 Every chip always renders its word. On a phone the bar decides whether it
 shows: the band is a phone's width and already holds the round, the ring, the
 menu and the avatar, so once the round's word and the wordmark have gone the
-chips keep their icons alone (`useRoomBarGiveWay`, R-UX-11). Their accessible
+chips keep their icons alone - the drain its countdown too, which goes only if
+the bar takes a second row (`useRoomBarGiveWay`, R-UX-11). Their accessible
 names are their `aria-label`s, so hiding the word takes nothing from them. */
 export function RoomNoticeChips() {
   const shutdownNotice = useServerNoticesStore((state) => state.shutdownNotice);
@@ -104,7 +105,7 @@ export function RoomNoticeChips() {
         const label = isInvite
           ? ui.roomNoticeChips.invitation
           : isDrain
-            ? ui.roomNoticeChips.serverUpdate({ seconds: secondsLeft })
+            ? ui.roomNoticeChips.serverUpdateWord
             : connectionTrouble ? connectionLabel(connectionTrouble) : "";
         // Red for the drain's last seconds, when the stage says it too (#826).
         const finalStretch = secondsLeft > 0 && secondsLeft <= DRAIN_FINAL_SECONDS;
@@ -134,6 +135,14 @@ export function RoomNoticeChips() {
               <WifiOffIcon size={13} strokeWidth={2.4} />
             )}
             <span className="room-notice-chip-label">{label}</span>
+            {/* The drain's countdown is its own span: the bar may take the
+                chip's word, never its seconds, until it takes a second row
+                (#806, R-UX-11). */}
+            {isDrain && (
+              <span className="room-notice-chip-seconds">
+                {ui.roomNoticeChips.serverUpdateSeconds({ seconds: secondsLeft })}
+              </span>
+            )}
           </button>
         );
       })}
