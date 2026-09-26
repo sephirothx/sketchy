@@ -17,7 +17,10 @@ import { readCommunityPromptList } from "../lib/promptLists";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
-import { reconcileSelectionForLanguage } from "../lib/promptLanguages";
+import {
+  AGNOSTIC_PROMPT_LANGUAGE,
+  reconcileSelectionForLanguage,
+} from "../lib/promptLanguages";
 import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, PromptLanguage, ScoringMode } from "../types";
 import { currentPlayerName, needsIdentity, useAuthStore } from "../store/authStore";
 import {
@@ -161,7 +164,9 @@ export function CreateRoomPage() {
       .then((list) => {
         if (cancelled) return;
         setCarriedList({ ...list, isBundled: false });
-        setPromptLanguage(list.language);
+        // A list in no language (#821) is played in the room's language, so
+        // the form keeps the one it already had rather than inventing one.
+        if (list.language !== AGNOSTIC_PROMPT_LANGUAGE) setPromptLanguage(list.language);
         setPromptListSlugs([list.slug]);
       })
       // A list unpublished since the link was made leaves the form as it was,

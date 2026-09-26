@@ -7,6 +7,7 @@ import { ANY_LANGUAGE, LanguagePicker } from "../components/LanguagePicker";
 import { PromptContentReportDialog } from "../components/PromptContentReportDialog";
 import { SegmentedControl } from "../components/RoomSetupControls";
 import {
+  AnyLanguageIcon,
   BackIcon,
   CopyIcon,
   DeckIcon,
@@ -24,7 +25,11 @@ import {
   withTag,
   type CatalogueFilters,
 } from "../lib/communityLists";
-import { promptLanguageLabel, SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
+import {
+  AGNOSTIC_PROMPT_LANGUAGE,
+  promptLanguageLabel,
+  SUPPORTED_PROMPT_LANGUAGES,
+} from "../lib/promptLanguages";
 import {
   forkPromptList,
   listCommunityPromptLists,
@@ -39,6 +44,7 @@ import type {
   CommunityPromptList,
   CommunityPromptListDetail,
   PromptLanguage,
+  PromptListLanguage,
   PromptTag,
 } from "../types";
 import { ui } from "../content/ui/index.ts";
@@ -223,9 +229,13 @@ export function CommunityCataloguePage() {
 
   /** A list's language, as the lobby's room card shows a room's: the flag,
    * named for whoever cannot see it and on hover for whoever can. */
-  function languageFlag(language: PromptLanguage, width?: number) {
+  function languageFlag(language: PromptListLanguage, width?: number) {
     return <span className="community-catalogue-flag" title={promptLanguageLabel(language)}>
-      <Flag language={language} width={width} />
+      {/* A list in no language (#821) has no flag to fly: the same mark the
+          room's list picker gives it. */}
+      {language === AGNOSTIC_PROMPT_LANGUAGE
+        ? <AnyLanguageIcon size={Math.round((width ?? 18) * 0.85)} />
+        : <Flag language={language} width={width} />}
       <span className="visually-hidden">{promptLanguageLabel(language)}</span>
     </span>;
   }
@@ -350,7 +360,9 @@ export function CommunityCataloguePage() {
           compact
           onChange={(choice) => applyFilters({
             ...filters,
-            language: choice === ANY_LANGUAGE ? null : choice,
+            // The options are the seven room languages: a list in no language
+            // is shown under every one of them (#821), so it needs no filter.
+            language: choice === ANY_LANGUAGE ? null : (choice as PromptLanguage),
           })}
         />
 

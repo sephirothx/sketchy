@@ -422,6 +422,31 @@ async def test_a_list_in_another_language_is_refused_rather_than_switching_the_r
     assert room.prompt_list_slugs == ["english_standard"]
 
 
+async def test_a_language_agnostic_list_is_played_under_the_room_s_language():
+    """A list in no language (#821) is admitted to a German room and matched
+    under German folding, like the room's own quick custom prompts."""
+    room_manager = RoomManager()
+    room, sio = build_settings_room(
+        room_manager,
+        StubPromptListRepo(("Pokémon", "Müller"), language="zxx"),
+        prompt_language="de",
+        prompt_list_slugs=["german_standard"],
+        prompt_pool_size=2,
+    )
+    room_manager.add_player(room, "Guest")
+
+    result = await sio.handlers["/"]["update_room_settings"](
+        "host-sid", {"promptListSlugs": ["pokemon"]}
+    )
+
+    assert result == {"ok": True}
+    assert room.prompt_language == "de"
+    assert room.prompt_list_slugs == ["pokemon"]
+    started = await sio.handlers["/"]["start_game"]("host-sid", None)
+    assert started["ok"] is True
+    assert room.game.prompt_language == "de"
+
+
 async def test_the_room_language_cannot_be_edited_after_the_room_opens():
     """Fixed at creation, like a saved list's own content language."""
     room_manager = RoomManager()

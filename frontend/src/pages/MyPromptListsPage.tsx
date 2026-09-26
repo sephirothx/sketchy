@@ -33,14 +33,16 @@ import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { useToast } from "../lib/toast";
 import { useAuthStore } from "../store/authStore";
 import { useEmailStateStore } from "../store/emailStateStore";
-import type { CopiedFrom, OwnedPromptList, PromptLanguage, PromptTag } from "../types";
+import type { CopiedFrom, OwnedPromptList, PromptListLanguage, PromptTag } from "../types";
 import { refusalCode, refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import "../styles/lazy/community-lists.css";
 import "../styles/lazy/prompt-lists.css";
 
-const LANGUAGES: PromptLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt"];
+// Every room language, then none at all (#821): a list of names or brands is
+// played in whichever language the room declares.
+const LANGUAGES: PromptListLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt", "zxx"];
 const EMPTY_DRAFT: PromptListDraft = {
   name: "",
   description: "",
@@ -442,7 +444,7 @@ export function MyPromptListsPage() {
                     label={ui.myPromptListsPage.language}
                     value={draft.language}
                     options={LANGUAGES}
-                    onChange={(next) => setDraft({ ...draft, language: next as PromptLanguage })}
+                    onChange={(next) => setDraft({ ...draft, language: next as PromptListLanguage })}
                   />}
               </div>
             </div>
