@@ -613,7 +613,8 @@ class Game:
 
     def languages_in_play(self, *, spectators: bool = False) -> tuple[str, ...]:
         """Every language a player of this game plays the prompt in - and,
-        with `spectators`, every language somebody still here reads it in."""
+        with `spectators`, every language a seat of this game has read it in,
+        spectators and seats that have since left included."""
         if not self.is_mixed_language():
             return (self.prompt_language,)
         languages = {self.turn_language()}

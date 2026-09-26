@@ -514,7 +514,8 @@ def test_a_spectator_neither_hurries_the_players_letters_nor_quiets_their_chat()
     game.start_next_turn(canvas_generation=1)
     assert game.choose_prompt_option("drawer", 0)
 
-    # "cat" alone has 3 slots; a German spectator's "Katze" would make it 3.
+    # "cat" alone has 3 slots, a share of 1; a German spectator's five-letter
+    # "Katze" would make the schedule 2.
     from app.game import _checkpoint_share
 
     assert game.max_hint_checkpoints() == _checkpoint_share(3)
