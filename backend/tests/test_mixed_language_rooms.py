@@ -533,3 +533,33 @@ def test_a_payload_for_one_socket_is_spelled_for_its_seat():
     assert spelled_for_seat(ended, "de")["prompt"] == "Fliege"
     assert spelled_for_seat(ended, "it")["prompt"] == "bow tie"
     assert spelled_for_seat({"prompt": "dog"}, "de") == {"prompt": "dog"}
+||||||| 57cdb03a
+
+
+async def test_a_mixed_draw_samples_among_playable_concepts_only(seeded):
+    """Filtered before the limit (review of #1194): with every concept but one
+    short of a language, a draw of one still finds the one."""
+    from sqlalchemy import select, update
+    from app.db.models import PromptVersion
+
+    prompts, owner = seeded
+    pinned = await prompts.authorize_selection(
+        ["english_standard"], requesting_user_id=owner.id, expected_language="mul"
+    )
+    async with prompts.factory() as session:
+        async with session.begin():
+            dog = await session.scalar(
+                select(PromptVersion.concept_id).where(
+                    PromptVersion.language == "en", PromptVersion.canonical_answer == "dog"
+                )
+            )
+            await session.execute(
+                update(PromptVersion)
+                .where(PromptVersion.language == "de", PromptVersion.concept_id != dog)
+                .values(moderation_state="hidden")
+            )
+
+    for _ in range(5):
+        sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=1)
+        assert [prompt.translations["en"].answer for prompt in sample.prompts] == ["dog"]
+        assert sample.drawable == 1

@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from time import thread_time
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, delete, desc, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, case, delete, desc, exists, func, or_, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -5679,14 +5679,30 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             # would weigh a concept by how many languages spell it, and every
             # Standard concept is spelled seven times against an agnostic
             # prompt's once.
-            concepts = (
-                await session.scalars(
-                    select(PromptVersion.concept_id)
-                    .where(*in_pinned)
-                    .group_by(PromptVersion.concept_id)
-                    .order_by(func.random())
-                    .limit(limit)
+            # Only concepts every seat can play, decided before the limit: a
+            # concept a takedown left short of a language is not drawn, and
+            # asking afterwards could spend the whole random batch on those
+            # while playable ones went unsampled (review of #1194).
+            playable = (
+                select(PromptVersion.concept_id)
+                .where(*in_pinned)
+                .group_by(PromptVersion.concept_id)
+                .having(
+                    or_(
+                        func.max(
+                            case(
+                                (PromptVersion.language == AGNOSTIC_PROMPT_LANGUAGE, 1),
+                                else_=0,
+                            )
+                        )
+                        == 1,
+                        func.count(func.distinct(PromptVersion.language))
+                        >= len(PROMPT_LANGUAGES),
+                    )
                 )
+            )
+            concepts = (
+                await session.scalars(playable.order_by(func.random()).limit(limit))
             ).all()
             if not concepts:
                 return PromptSample()
@@ -5695,9 +5711,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             else:
                 drawable = max(
                     await session.scalar(
-                        select(func.count(func.distinct(PromptVersion.concept_id))).where(
-                            *in_pinned
-                        )
+                        select(func.count()).select_from(playable.subquery())
                     )
                     or 0,
                     len(concepts),
