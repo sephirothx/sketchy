@@ -809,6 +809,20 @@
       "minimum": 0,
       "title": "Index",
       "type": "integer"
+     },
+     "turnId": {
+      "anyOf": [
+       {
+        "maxLength": 128,
+        "minLength": 1,
+        "type": "string"
+       },
+       {
+        "type": "null"
+       }
+      ],
+      "default": null,
+      "title": "Turnid"
      }
     },
     "required": [
@@ -2640,7 +2654,11 @@
    "drawerNameColor",
    "drawerNickname",
    "roundNumber",
-   "totalRounds"
+   "totalRounds",
+   "turnId"
+  ],
+  "services.game_flow:_sync_player_view": [
+   "turnId"
   ],
   "services.game_flow:note_presence": [
    "playerId"

@@ -1036,6 +1036,7 @@ class GameFlowService:
                         {
                             "choices": game.prompt_choice_answers(player.id),
                             "seconds": round(game.remaining_seconds()),
+                            "turnId": game.current_turn_id,
                         },
                         to=sid,
                     )
@@ -1272,6 +1273,7 @@ class GameFlowService:
                 {
                     "choices": game.prompt_choice_answers(drawer.id),
                     "seconds": timing.choose_prompt_seconds,
+                    "turnId": game.current_turn_id,
                 },
                 to=drawer.sid,
             )

@@ -82,6 +82,8 @@ async def select_prompt(ctx: HandlerContext, sid, data):
     if not current or not current[0].game:
         return {"ok": False, "errorCode": ErrorCode.PROMPT_NOT_READY, "error": "Game is not ready for prompt selection"}
     room, player = current
+    if payload.turn_id is not None and payload.turn_id != room.game.current_turn_id:
+        return {"ok": False, "errorCode": ErrorCode.PROMPT_UNAVAILABLE, "error": "That prompt is no longer available"}
     if not room.game.choose_prompt_option(player.id, payload.index):
         return {"ok": False, "errorCode": ErrorCode.PROMPT_UNAVAILABLE, "error": "That prompt is no longer available"}
     ctx.timers.cancel_phase_timer(room.id)

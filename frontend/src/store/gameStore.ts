@@ -71,6 +71,10 @@ interface GameStore {
   myPrompt: string | null;
   guessedPrompt: string | null;
   promptChoices: string[];
+  /** The turn `promptChoices` were offered for, sent back with the pick so a
+  click that lands after the turn moved on is refused rather than taken as
+  a pick among offers nobody saw (#1181). */
+  promptChoicesTurnId: string | null;
   roundNumber: number;
   totalRounds: number;
   phaseSeconds: number;
@@ -127,7 +131,7 @@ interface GameStore {
     totalRounds: number;
     seconds: number;
   }) => void;
-  setMyPromptChoices: (choices: string[], seconds: number) => void;
+  setMyPromptChoices: (choices: string[], seconds: number, turnId: string | null) => void;
   startDrawing: (payload: {
     isSync?: boolean;
     turnId?: string;
@@ -202,6 +206,7 @@ const initialGameFields = {
   myPrompt: null as string | null,
   guessedPrompt: null as string | null,
   promptChoices: [] as string[],
+  promptChoicesTurnId: null as string | null,
   roundNumber: 0,
   totalRounds: 0,
   phaseSeconds: 0,
@@ -330,9 +335,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       lastTurnResult: null,
       turnCorrectGuesses: {},
     })),
-  setMyPromptChoices: (choices, seconds) =>
+  setMyPromptChoices: (choices, seconds, turnId) =>
     set({
       promptChoices: choices,
+      promptChoicesTurnId: turnId,
       phaseSeconds: seconds,
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: seconds,

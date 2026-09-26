@@ -2,12 +2,13 @@ import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock
 
+import pytest
 import socketio
 
 from app.identifiers import generate_uuid7
 from app.canvas_history import PackedCanvasHistory
 from app.handlers import register_all_handlers as register_handlers
-from app.game import Game
+from app.game import Game, Phase
 from app.rooms import DrawingRecapEntry, RoomManager
 
 
@@ -113,7 +114,15 @@ async def test_schedule_hint_checkpoints_emits_unmasked_word_to_drawer():
     rejected = await select_prompt("drawer-sid", {"index": 2})
     assert rejected == {"ok": False, "errorCode": "prompt_unavailable", "error": "That prompt is no longer available"}
 
-    accepted = await select_prompt("drawer-sid", {"index": 0})
+    # A position is valid in every turn's offers, so a pick naming an older
+    # turn is refused rather than taken among offers the drawer never saw.
+    stale = await select_prompt("drawer-sid", {"index": 0, "turnId": "an-earlier-turn"})
+    assert stale == {"ok": False, "errorCode": "prompt_unavailable", "error": "That prompt is no longer available"}
+    assert room.game.prompt is None
+
+    accepted = await select_prompt(
+        "drawer-sid", {"index": 0, "turnId": room.game.current_turn_id}
+    )
     assert accepted == {"ok": True}
     await asyncio.sleep(0.1)
 
@@ -329,3 +338,30 @@ async def test_a_drawer_released_during_turn_ended_does_not_shorten_the_next_cho
         else timing.turn_results_seconds
     )
     await ctx.timers.close()
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [{"index": True}, {"index": "0"}, {"index": 0.0}, {"index": -1}, {"index": 3},
+     {"prompt": "banana"}, {"index": 0, "prompt": "banana"}, {}],
+)
+async def test_a_pick_is_a_plain_position_and_nothing_else(payload):
+    """Strict: a boolean, a string or a float is not a position, and the text
+    the pick used to be is refused rather than ignored."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room", is_public=True)
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["banana"], rounds_total=1)
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": drawer.id})
+    sio.emit = AsyncMock()
+
+    response = await sio.handlers["/"]["select_prompt"]("drawer-sid", payload)
+
+    assert response["ok"] is False
+    assert response["errorCode"] == "invalid_payload"
+    assert room.game.phase == Phase.CHOOSING_PROMPT

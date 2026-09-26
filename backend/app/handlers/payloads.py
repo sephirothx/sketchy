@@ -594,6 +594,13 @@ class SelectPromptPayload(RequestModel):
     """
 
     index: int = Field(ge=0, lt=PROMPT_CHOICES_PER_TURN)
+    # The turn the offers were made for, as `your_prompt_choices` named it. A
+    # position is valid in every turn's offers, where the text it replaced
+    # was not, so a pick that lands after the turn moved on - a restart while
+    # the drawer is choosing - is told apart by this instead.
+    turn_id: str | None = Field(
+        default=None, alias="turnId", min_length=1, max_length=MAX_IDENTIFIER_LENGTH
+    )
 
 
 class TextPayload(RequestModel):

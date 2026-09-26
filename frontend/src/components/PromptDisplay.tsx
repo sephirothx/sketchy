@@ -12,6 +12,7 @@ interface PromptDisplayProps {
   myPrompt: string | null;
   maskedPrompt: string;
   promptChoices: string[];
+  promptChoicesTurnId?: string | null;
   revealedPrompt?: string | null;
   hintMode?: HintMode;
   canBuyHint?: boolean;
@@ -102,6 +103,7 @@ export function PromptDisplay({
   myPrompt,
   maskedPrompt,
   promptChoices,
+  promptChoicesTurnId = null,
   revealedPrompt,
   hintMode = "none",
   canBuyHint = false,
@@ -139,7 +141,7 @@ export function PromptDisplay({
             {/* Chosen by position, not by text (#1181): the text is how the
                 drawer's language spells the offer. */}
             {promptChoices.map((prompt, index) => (
-              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", { index }, ui.promptDisplay.selectThePrompt)}>
+              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptChoicesTurnId ? { index, turnId: promptChoicesTurnId } : { index }, ui.promptDisplay.selectThePrompt)}>
                 {pendingAction === `prompt:${index}` ? ui.promptDisplay.choosing : prompt}
               </button>
             ))}

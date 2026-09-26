@@ -1560,13 +1560,19 @@ def test_a_list_prompt_is_tracked_by_its_key_and_shown_by_its_answer():
     assert game.prompt_choices == [concept]
     assert game.prompt_choice_answers() == ["Mädchen"]
     assert not game.choose_prompt_option("drawer", 1)
+    assert not game.choose_prompt_option("drawer", -1)
     assert not game.choose_prompt_option("guesser", 0)
+    # Priced from the answers, not the keys, when there is no histogram.
+    assert game._letter_frequencies()["m"] > 0
+    assert game._letter_frequencies()["x"] == 0
     assert game.choose_prompt_option("drawer", 0)
 
     assert (game.prompt_key, game.prompt) == (concept, "Mädchen")
     assert game.used_prompts == {concept}
     assert game.prompt_source_kind(concept) == "curated"
-    # The alias is found by the key, and matching folds the room's spelling.
+    # The alias is found by the key, for near misses as for the win, and
+    # matching folds the room's spelling.
+    assert game.guess_hint("guesser", "das maedchn") == "close"
     assert game.submit_guess("guesser", "das maedchen")[0] is True
     game.end_turn(1)
     [turn] = game.completed_turns
@@ -1576,3 +1582,8 @@ def test_a_list_prompt_is_tracked_by_its_key_and_shown_by_its_answer():
     assert turn.offered_prompt_version_ids == ("version-de",)
     assert turn.offered_prompt_source_revision_ids == (("revision-de",),)
     assert game.key_for("Mädchen") == concept
+    # A turn ended before anything was chosen records no provenance - not the
+    # previous turn's.
+    game.rounds_total = 2
+    game.start_next_turn(canvas_generation=2)
+    assert game.prompt_key is None and game.prompt is None

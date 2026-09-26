@@ -312,6 +312,7 @@ export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPl
   const myPrompt = useGameStore((state) => state.myPrompt);
   const guessedPrompt = useGameStore((state) => state.guessedPrompt);
   const promptChoices = useGameStore((state) => state.promptChoices);
+  const promptChoicesTurnId = useGameStore((state) => state.promptChoicesTurnId);
   const phaseSeconds = useGameStore((state) => state.phaseSeconds);
   const phaseStartedAt = useGameStore((state) => state.phaseStartedAt);
   const phaseDurationSeconds = useGameStore((state) => state.phaseDurationSeconds);
@@ -379,6 +380,7 @@ export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPl
           myPrompt={myPrompt}
           maskedPrompt={maskedPrompt}
           promptChoices={promptChoices}
+          promptChoicesTurnId={promptChoicesTurnId}
           revealedPrompt={phase === "turn_results" ? lastTurnResult?.prompt ?? null : guessedPrompt}
           hintMode={hintMode}
           canBuyHint={phase === "drawing" && !amDrawer && !guessedPrompt}

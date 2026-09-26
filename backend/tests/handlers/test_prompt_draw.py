@@ -219,6 +219,30 @@ async def test_a_game_tracks_list_prompts_by_concept_and_quick_ones_by_text():
     assert game.prompt_source_kind("lighthouse") == "custom"
 
 
+async def test_the_drawer_is_offered_answers_never_keys():
+    """The pool holds concepts; what the drawer reads is how the room spells
+    them, with the turn the offers are for (#1181)."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    repo = StubPromptListRepo(
+        ["anchor", "balloon", "castle"],
+        concept_ids={"anchor": "c-anchor", "balloon": "c-balloon", "castle": "c-castle"},
+    )
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+    ctx.sio.emit = AsyncMock()
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    [offer] = [
+        call.args[1]
+        for call in ctx.sio.emit.await_args_list
+        if call.args[0] == "your_prompt_choices"
+    ]
+    assert sorted(offer["choices"]) == ["anchor", "balloon", "castle"]
+    assert offer["turnId"] == room.game.current_turn_id
+
+
 async def test_a_custom_only_room_never_asks_the_prompt_store():
     room_manager, room, _ = build_room(rounds=1)
     room.max_players = 2
