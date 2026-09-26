@@ -1,4 +1,5 @@
 import { useState, type ReactNode } from "react";
+import { promptPickPayload } from "../lib/promptPick";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { maskedWords, splitMaskedPrompt } from "../lib/maskedPrompt";
@@ -141,7 +142,7 @@ export function PromptDisplay({
             {/* Chosen by position, not by text (#1181): the text is how the
                 drawer's language spells the offer. */}
             {promptChoices.map((prompt, index) => (
-              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptChoicesTurnId ? { index, turnId: promptChoicesTurnId } : { index }, ui.promptDisplay.selectThePrompt)}>
+              <button key={prompt} disabled={pendingAction !== null} onClick={() => void runAction(`prompt:${index}`, "select_prompt", promptPickPayload(index, promptChoicesTurnId), ui.promptDisplay.selectThePrompt)}>
                 {pendingAction === `prompt:${index}` ? ui.promptDisplay.choosing : prompt}
               </button>
             ))}
