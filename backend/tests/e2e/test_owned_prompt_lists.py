@@ -100,16 +100,25 @@ async def test_a_list_in_any_language_is_offered_to_a_room_in_another_language()
             # Fixed once saved, like any list's language (R-LIST-05).
             await owner.locator(".prompt-list-language").get_by_text("Any language").wait_for()
 
+            # Chosen while the room is still English, then carried when the
+            # host switches the room to German: the list has no language to
+            # leave behind, so it stays chosen beside German's Standard list.
             await owner.goto(f"{BASE_URL}/create")
-            await owner.get_by_role("button", name="Prompt language: English").click()
-            await owner.get_by_role("option", name="Deutsch").click()
             await owner.click('summary:has-text("Prompts")')
             names_chip = owner.locator(".toggle-chip").filter(has_text="Pocket monsters")
             await names_chip.wait_for()
             assert await names_chip.get_by_text("Any language").count() == 1
             await names_chip.click()
             assert await names_chip.get_attribute("aria-pressed") == "true"
-            await owner.locator(".toggle-chip").filter(has_text="Deutsch — Standard").click()
+            await owner.get_by_role("button", name="Prompt language: English").click()
+            await owner.get_by_role("option", name="Deutsch").click()
+            await owner.get_by_role("button", name="Prompt language: Deutsch").wait_for()
+            assert await names_chip.get_attribute("aria-pressed") == "true"
+            german = owner.locator(".toggle-chip").filter(has_text="Deutsch — Standard")
+            assert await german.get_attribute("aria-pressed") == "true"
+            assert await owner.locator(".toggle-chip").filter(
+                has_text="English — Standard"
+            ).count() == 0
             await owner.get_by_role("button", name="Create room", exact=True).click()
             await owner.locator('[data-testid="waiting-room"]').wait_for()
         finally:

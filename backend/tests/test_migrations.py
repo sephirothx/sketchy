@@ -224,6 +224,58 @@ async def _assert_fillfactor(engine: AsyncEngine, *, declared: bool) -> None:
     assert {table: int(option.split("=", 1)[1]) for table, option in rows} == expected
 
 
+async def _assert_agnostic_is_a_list_language(engine: AsyncEngine) -> None:
+    """`zxx` is a list language and never a room one (#821).
+
+    Autogenerate does not compare check constraints, so `_schema_differences`
+    cannot see which values a migrated CHECK admits; the catalogue can, on
+    both engines.
+    """
+    async with engine.connect() as connection:
+        if engine.dialect.name == "postgresql":
+            rows = (
+                await connection.execute(
+                    text(
+                        "SELECT conname, pg_get_constraintdef(oid) FROM pg_constraint "
+                        "WHERE contype = 'c' AND conname LIKE 'ck_%language'"
+                    )
+                )
+            ).all()
+            definitions = {name: definition for name, definition in rows}
+        else:
+            rows = (
+                await connection.execute(
+                    text("SELECT name, sql FROM sqlite_master WHERE type = 'table'")
+                )
+            ).all()
+            tables = dict(rows)
+            definitions = {
+                name: tables[table]
+                for table, name in (
+                    ("prompt_lists", "ck_prompt_lists_language"),
+                    ("prompt_list_revisions", "ck_prompt_list_revisions_language"),
+                    ("prompt_versions", "ck_prompt_versions_language"),
+                    ("prompt_aliases", "ck_prompt_aliases_language"),
+                    ("room_presets", "ck_room_presets_prompt_language"),
+                    ("user_settings", "ck_user_settings_prompt_language"),
+                )
+            }
+    for name in (
+        "ck_prompt_lists_language",
+        "ck_prompt_list_revisions_language",
+        "ck_prompt_versions_language",
+        "ck_prompt_aliases_language",
+    ):
+        assert "zxx" in definitions[name], name
+    for name in ("ck_room_presets_prompt_language", "ck_user_settings_prompt_language"):
+        # On SQLite the definition is the whole table's SQL, which names the
+        # constraint and, holding no list language, never `zxx`.
+        assert name in definitions, name
+        if engine.dialect.name != "postgresql":
+            assert name in definitions[name], name
+        assert "zxx" not in definitions[name], name
+
+
 async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     """The baseline (#557) and what came after it: build to head, prove it
     matches the models, run the newest revision backward and forward, remove
@@ -285,6 +337,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     await _assert_pending_role_is_checked(engine)
     await _assert_payload_storage(engine, "e")
     await _assert_fillfactor(engine, declared=True)
+    await _assert_agnostic_is_a_list_language(engine)
 
     # Run the newest revisions backward and replay them.
     await _migrate(engine, alembic_command.downgrade, foundation)
@@ -313,6 +366,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     assert await _current_revisions(engine) == {head}
     assert await _schema_differences(engine) == []
     await _assert_hand_written_indexes(engine)
+    await _assert_agnostic_is_a_list_language(engine)
 
 
 async def test_sqlite_migration_chain_round_trip(tmp_path):
@@ -406,38 +460,6 @@ async def test_a_migrated_sqlite_database_refuses_an_invented_outcome(tmp_path):
                     ),
                     {"id": uuid.uuid4().hex},
                 )
-    finally:
-        await engine.dispose()
-
-
-async def test_a_list_may_be_agnostic_but_a_room_may_not(tmp_path):
-    """`zxx` is a list language and never a room one (#821).
-
-    Autogenerate does not compare check constraints, so the chain test above
-    cannot see which values a migrated CHECK admits; the stored table
-    definitions can.
-    """
-    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'agnostic.db'}")
-    try:
-        await _migrate(engine, alembic_command.upgrade, "head")
-        async with engine.connect() as connection:
-            tables = dict(
-                (
-                    await connection.execute(
-                        text("SELECT name, sql FROM sqlite_master WHERE type = 'table'")
-                    )
-                ).all()
-            )
-        for table in (
-            "prompt_lists",
-            "prompt_list_revisions",
-            "prompt_versions",
-            "prompt_aliases",
-        ):
-            assert "'zxx'" in tables[table], table
-        for table in ("room_presets", "user_settings"):
-            assert "'zxx'" not in tables[table], table
-        assert "ck_room_presets_prompt_language" in tables["room_presets"]
     finally:
         await engine.dispose()
 

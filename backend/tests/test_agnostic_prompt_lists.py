@@ -266,3 +266,53 @@ async def test_a_quick_prompt_shadows_its_agnostic_twin_in_a_german_room(env):
     )
 
     assert [prompt.answer for prompt in sample.prompts] == ["Pikachu"]
+
+
+async def test_the_official_catalogue_filter_offers_agnostic_lists_too(env):
+    """Nothing bundled is agnostic today; the filter still answers the
+    question a room asks - what could I pick? - the same way as the
+    community one."""
+    http, _, prompts, _ = env
+    await _bundled(prompts, "german_standard", "de", "Hund")
+    await _bundled(prompts, "english_standard", "en", "dog")
+    await _bundled(prompts, "flags", "zxx", "Brasil")
+
+    response = await http.get("/api/prompt-lists?language=de")
+
+    assert response.status_code == 200, response.text
+    assert {row["slug"] for row in response.json()} == {"german_standard", "flags"}
+
+
+async def test_a_copy_or_duplicate_of_an_agnostic_list_stays_agnostic(env):
+    _, users, prompts, factory = env
+    owner = await _owner(users, "Author")
+    reader = await _owner(users, "Reader")
+    await _bundled(prompts, "german_standard", "de", "Hund")
+    original = await _list(prompts, owner.id, "Pokémon", "zxx", "Pikachu", "Evoli")
+    await _publish(factory, original.id)
+
+    copy = await prompts.fork_published(reader.id, original.id)
+    duplicate = await prompts.duplicate_owned(owner.id, original.id, name="Pokémon 2")
+
+    assert copy.language == "zxx"
+    assert duplicate.language == "zxx"
+    pinned = await prompts.authorize_selection(
+        ["german_standard", copy.slug], requesting_user_id=reader.id, expected_language="de"
+    )
+    assert pinned.language == "de"
+
+
+async def test_resolving_refuses_an_agnostic_twin_under_the_room_s_fold(env):
+    """The same collision `authorize_selection` refuses, on the path that
+    loads the prompts."""
+    _, users, prompts, _ = env
+    owner = await _owner(users)
+    await _bundled(prompts, "german_standard", "de", "Mädchen")
+    names = await _list(prompts, owner.id, "Names", "zxx", "Maedchen")
+
+    with pytest.raises(PromptListSelectionError, match="ambiguous"):
+        await prompts.resolve_selection(
+            ["german_standard", names.slug],
+            requesting_user_id=owner.id,
+            expected_language="de",
+        )
