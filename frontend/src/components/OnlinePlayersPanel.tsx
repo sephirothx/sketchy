@@ -114,7 +114,15 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       {players.length === 0 ? (
         <EmptyState compact title={ui.onlinePlayersPanel.nobodyElseHereRightNow} />
       ) : (
-        <ul className="online-players-list" data-testid="online-players-list">
+        // Focusable because it scrolls once enough players are online: a
+        // keyboard user has to be able to reach the rows out of view, and axe
+        // refuses a scroll region nobody can focus.
+        <ul
+          className="online-players-list"
+          data-testid="online-players-list"
+          tabIndex={0}
+          aria-labelledby="online-heading"
+        >
           {players.map((player) => {
             const theyAreAFriend = isFriend(lists, player.userId);
             return (
