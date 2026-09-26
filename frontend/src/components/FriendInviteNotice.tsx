@@ -104,29 +104,44 @@ export function FriendInviteNotice() {
     };
   }, [shown]);
 
-  if (!invite || inRoomBar) return null;
+  // Said once when it arrives, whichever home draws it, from here rather than
+  // from either home: the room bar is not rendered at all while a phone's
+  // guess keyboard is up, so a region in it said nothing to exactly the
+  // player most likely to be mid-turn, and moving between the card and the
+  // chip would have said it again. Mounted for good, so it is there before
+  // the words are.
+  const announcer = (
+    <span className="visually-hidden" role="status" aria-live="polite" data-testid="friend-invite-announcer">
+      {invite ? `${invite.displayName} ${ui.friendInviteNotice.invitedYouTheirGame}` : ""}
+    </span>
+  );
+
+  if (!invite || inRoomBar) return announcer;
 
   return (
-    <div ref={cardRef} className="friend-invite-notice" role="status" data-testid="friend-invite">
-      <span className="friend-invite-text">
-        <strong>{invite.displayName}</strong> {ui.friendInviteNotice.invitedYouTheirGame}
-      </span>
-      <button
-        type="button"
-        className="btn btn-primary btn-compact"
-        disabled={entryPending}
-        onClick={() => void join()}
-      >
-        {ui.friendInviteNotice.join}
-      </button>
-      <button
-        type="button"
-        className="btn btn-icon friend-invite-dismiss"
-        aria-label={ui.friendInviteNotice.dismissInvitation}
-        onClick={dismiss}
-      >
-        <XIcon size={14} />
-      </button>
-    </div>
+    <>
+      {announcer}
+      <div ref={cardRef} className="friend-invite-notice" data-testid="friend-invite">
+        <span className="friend-invite-text">
+          <strong>{invite.displayName}</strong> {ui.friendInviteNotice.invitedYouTheirGame}
+        </span>
+        <button
+          type="button"
+          className="btn btn-primary btn-compact"
+          disabled={entryPending}
+          onClick={() => void join()}
+        >
+          {ui.friendInviteNotice.join}
+        </button>
+        <button
+          type="button"
+          className="btn btn-icon friend-invite-dismiss"
+          aria-label={ui.friendInviteNotice.dismissInvitation}
+          onClick={dismiss}
+        >
+          <XIcon size={14} />
+        </button>
+      </div>
+    </>
   );
 }

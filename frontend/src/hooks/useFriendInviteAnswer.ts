@@ -33,8 +33,8 @@ export function useFriendInviteAnswer() {
   async function join() {
     const current = invite;
     if (!current) return;
-    // Mounted above every page, so it is the one way in that the lobby's own
-    // controls cannot see: it takes the same lock they do, and while another
+    // Answered from above every page (the card) or from the room bar, so it is
+    // the one way in that the lobby's own controls cannot see: it takes the same lock they do, and while another
     // entry holds it the notice waits rather than racing it for the seat.
     const token = useRoomEntryStore.getState().begin("friend-invite");
     if (token === null) return;

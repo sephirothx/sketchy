@@ -118,7 +118,9 @@ export function RoomNoticeChips({ compact }: { compact: boolean }) {
             type="button"
             className={`chip chip-${tone} room-notice-chip`}
             data-notice={notice}
-            aria-label={full}
+            // The invitation's visible word leads its name, so saying the
+            // label the chip shows reaches it (WCAG 2.5.3).
+            aria-label={isInvite ? `${label}: ${full}` : full}
             aria-expanded={openNotice === notice}
             aria-controls={openNotice === notice ? popoverId : undefined}
             onClick={() => setOpen((current) => (current === notice ? null : notice))}
@@ -170,11 +172,6 @@ export function RoomNoticeChips({ compact }: { compact: boolean }) {
           that pauses the stage (RoomStageNotice), so it is not said twice. */}
       <span className="visually-hidden" role="status" aria-live="polite">
         {chips.includes("drain") ? ui.roomNoticeChips.serverUpdateStarted : ""}
-      </span>
-      {/* The card said itself when it arrived; the chip does the same, once,
-          and its own name keeps the sentence for anybody who looks later. */}
-      <span className="visually-hidden" role="status" aria-live="polite">
-        {inviteText}
       </span>
     </div>
   );
