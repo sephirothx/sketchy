@@ -105,14 +105,16 @@
    that (--friend-invite-clearance). The invite is the same bottom-centre
    spot, and the component that shows it is also what announces friend
    requests - onto its own Join button. It stays out of this stack on
-   purpose; see FriendInviteNotice. */
+   purpose; see FriendInviteNotice. Between a column docked down either side
+   rather than across it (--dock-inline-inset): the landscape room's feed,
+   where a wide toast sat on the guess field and its verdict. */
 .toast-viewport {
   bottom: calc(20px + var(--dock-clearance) + var(--friend-invite-clearance));
   display: flex;
   flex-direction: column;
   gap: 8px;
   left: 50%;
-  max-width: min(440px, calc(100vw - 32px));
+  max-width: min(440px, calc(100vw - 32px - 2 * var(--dock-inline-inset)));
   pointer-events: none;
   position: fixed;
   transform: translateX(-50%);
@@ -173,6 +175,6 @@
   left: 50%;
   position: fixed;
   transform: translateX(-50%);
-  width: min(440px, calc(100vw - 32px));
+  width: min(440px, calc(100vw - 32px - 2 * var(--dock-inline-inset)));
   z-index: var(--z-toast);
 }

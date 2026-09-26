@@ -2057,7 +2057,11 @@ order. What floats bottom-centre — the friend invite and the toasts — stands
 phone page's docked controls rather than on them: each dock publishes how far it reaches
 as `--dock-clearance` ([`useBottomDock`](../frontend/src/hooks/useBottomDock.ts)), the
 way the banner stack publishes `--banner-height`, and the invite adds its own reach as
-`--friend-invite-clearance` for the toasts (R-UX-07). Before the layers there were
+`--friend-invite-clearance` for the toasts (R-UX-07). A column docked down the side
+rather than across the bottom — the landscape phone room's feed, with its guess field
+and the verdict above it — is beside that spot, so it adds no clearance; instead the
+room publishes the column's width as `--dock-inline-inset` and what stands there is
+kept narrow enough to fit between (#1175). Before the layers there were
 nineteen literals and the report, suspension and AFK dialogs had each been lifted past
 the drawers by hand. The shell is the one place the scale does not reach: `position:
 fixed` makes `.game-room-playing` a stacking context whatever its `z-index`, so its
