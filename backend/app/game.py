@@ -237,6 +237,14 @@ def _near_miss(guess: str, answers: Sequence[str]) -> str | None:
     return None
 
 
+def _spelling_key(text: str) -> str:
+    """What makes two spellings one set of tiles: the letters, not their case -
+    unless folding the case changes the length ("Straße"), where the slots
+    would no longer line up."""
+    folded = text.casefold()
+    return folded if len(folded) == len(text) else text
+
+
 def _checkpoint_share(total_slots: int) -> int:
     """How many letters timed hints may reveal of a spelling this long:
     about 40%, always keeping MIN_HIDDEN_LETTERS hidden."""
@@ -603,21 +611,24 @@ class Game:
         """The language the drawer plays in: what the turn is recorded as."""
         return self.seat_language(self.current_drawer)
 
-    def languages_in_play(self) -> tuple[str, ...]:
-        """Every language a seat of this game - spectators too, who read
-        the tiles - spells the prompt in."""
+    def languages_in_play(self, *, spectators: bool = False) -> tuple[str, ...]:
+        """Every language a player of this game plays the prompt in - and,
+        with `spectators`, every language somebody still here reads it in."""
         if not self.is_mixed_language():
             return (self.prompt_language,)
         languages = {self.turn_language()}
         languages.update(self.seat_language(token) for token in self.turn_order)
-        languages.update(self.seat_languages.values())
+        if spectators:
+            languages.update(self.seat_languages.values())
         return tuple(sorted(languages))
 
-    def _spellings_in_play(self) -> list[str]:
+    def _spellings_in_play(self, *, spectators: bool = False) -> list[str]:
         """One language for each distinct spelling of the prompt in play."""
         by_text: dict[str, str] = {}
-        for language in self.languages_in_play():
-            by_text.setdefault(self._positions_in(language)[0].casefold(), language)
+        for language in self.languages_in_play(spectators=spectators):
+            by_text.setdefault(
+                _spelling_key(self._positions_in(language)[0]), language
+            )
         return list(by_text.values())
 
     def prompt_choice_answers(self, token: str | None = None) -> list[str]:
@@ -960,8 +971,8 @@ class Game:
         if not self.is_mixed_language():
             return self.revealed_positions
         # Casefolded: German "Avocado" and Dutch "avocado" show the same tiles.
-        spelling = self._positions_in(language)[0].casefold()
-        if spelling == (self.prompt or "").casefold():
+        spelling = _spelling_key(self._positions_in(language)[0])
+        if spelling == _spelling_key(self.prompt or ""):
             return self.revealed_positions
         return self.revealed_by_spelling.setdefault(spelling, set())
 
@@ -1036,6 +1047,8 @@ class Game:
         # In a mixed game each spelling has its own share; the turn schedules
         # as many checkpoints as the longest share needs, and a spelling that
         # has given all its share away sits the rest out (`reveal_hint_letter`).
+        # Scheduled for the players' spellings: a spectator, who cannot
+        # score, must not bring every player's letters forward.
         return max(
             _checkpoint_share(len(self._positions_in(language)[1]))
             for language in self._spellings_in_play()
@@ -1051,7 +1064,8 @@ class Game:
         if not self.prompt:
             return False
         revealed_any = False
-        for language in self._spellings_in_play():
+        # Spectators' spellings are revealed to as well, up to their own share.
+        for language in self._spellings_in_play(spectators=True):
             positions = self._positions_in(language)[1]
             revealed = self._revealed_in(language)
             # Scheduled for the longest spelling's share, so a shorter one
@@ -1301,8 +1315,11 @@ class Game:
         # or the seats playing that language read their answer in a typo
         # ("dogs" from a German seat). Measured in that language's fold.
         key = self._current_key()
+        played = set(self.languages_in_play())
         for other, form in self.prompt_translations.get(key, {}).items():
-            if other == language:
+            # Only a language somebody is playing: a word that is French for
+            # "cat" is ordinary chat in a room nobody plays French in.
+            if other == language or other not in played:
                 continue
             answers = tuple(
                 dict.fromkeys(_normalize(answer, other) for answer in (form.answer, *form.aliases))

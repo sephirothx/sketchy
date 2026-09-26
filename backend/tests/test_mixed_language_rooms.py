@@ -486,3 +486,40 @@ async def test_a_mixed_draw_counts_what_it_could_have_drawn(seeded):
 
     assert len(sample.prompts) == 10
     assert sample.drawable == 260
+
+
+def test_a_spectator_neither_hurries_the_players_letters_nor_quiets_their_chat():
+    """Only the players' spellings set the checkpoint schedule, and only the
+    languages somebody plays make a near word private."""
+    game = Game(
+        turn_order=["drawer", "english"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-cat"],
+        prompt_answers={"c-cat": "cat"},
+        prompt_translations={
+            "c-cat": {
+                "en": PromptForm("cat", (), "v-en"),
+                "fr": PromptForm("chat", (), "v-fr"),
+                "de": PromptForm("Katze", (), "v-de"),
+                "nl": PromptForm("kat", (), "v-nl"),
+                "pt": PromptForm("gato", (), "v-pt"),
+                "it": PromptForm("gatto", (), "v-it"),
+                "es": PromptForm("gato", (), "v-es"),
+            }
+        },
+        seat_languages={"drawer": "en", "english": "en", "watcher": "de"},
+        hint_mode="checkpoints",
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    # "cat" alone has 3 slots; a German spectator's "Katze" would make it 3.
+    from app.game import _checkpoint_share
+
+    assert game.max_hint_checkpoints() == _checkpoint_share(3)
+    # "what" is near French "chat", and nobody here plays French.
+    assert game.guess_hint("english", "what") is None
+    # Still revealed to the spectator, up to its own share.
+    game.reveal_hint_letter()
+    assert game.masked_prompt("watcher").count("_") < 5
