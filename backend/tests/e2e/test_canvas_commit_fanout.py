@@ -61,10 +61,16 @@ class FrameLog:
         something that has already happened on a live socket; a wait that
         spans a reconnect waits for the new socket first, on its own bound.
         """
-        async with asyncio.timeout(5):
-            while not any(_named(self.frames[since:], event) for event in events):
-                self._arrived.clear()
-                await self._arrived.wait()
+        try:
+            async with asyncio.timeout(5):
+                while not any(_named(self.frames[since:], event) for event in events):
+                    self._arrived.clear()
+                    await self._arrived.wait()
+        except TimeoutError as timeout:
+            # A bare TimeoutError names neither the event nor the mark.
+            raise AssertionError(
+                f"none of {events} arrived after frame {since} within 5 s"
+            ) from timeout
 
 
 async def _draw_stroke(page, box, offset: int) -> None:

@@ -18,9 +18,9 @@ from tests.e2e.test_canvas_commit_fanout import FrameLog, _draw_stroke, _named
 BASE_URL = "http://localhost:8000"
 CANVAS_PNG = "() => document.querySelector('canvas.drawing-canvas').toDataURL()"
 
-# Long enough for a reconnect whose first attempt fails: in the client's
-# backoff (`frontend/src/lib/reconnectPolicy.ts`) the first retry lands within
-# 1.5 s and the second within 3 s, and `CONNECT_TIMEOUT_MS`
+# Long enough for a reconnect whose first attempt is slow or fails: in the
+# client's backoff (`frontend/src/lib/reconnectPolicy.ts`) the first retry lands
+# within 1.5 s and the second within 3 s, and `CONNECT_TIMEOUT_MS`
 # (`frontend/src/lib/socket.ts`) gives each 6 s to open - 16.5 s in all.
 RECONNECT_BOUND_MS = (1_500 + 6_000) + (3_000 + 6_000)
 
@@ -89,7 +89,7 @@ async def test_a_mid_turn_entry_gets_one_canvas_and_a_reconnect_gets_a_tail():
             await viewing.evaluate("() => window.__SKETCHY_SOCKET__.io.engine.close()")
             # The client comes back on its own backoff, not at once: waiting on
             # the tail alone gave a reconnect the tail's five seconds, which a
-            # failed first attempt on a loaded runner overran.
+            # slow or failed first attempt on a loaded runner overran.
             await viewing.wait_for_function(
                 "(old) => { const s = window.__SKETCHY_SOCKET__; return s.connected && s.id !== old; }",
                 arg=old_socket,
