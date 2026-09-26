@@ -408,8 +408,9 @@ export function CreateRoomPage() {
       hideMaskedPrompt,
       allowedTools,
       colorMode,
-      customPromptCount: customPrompts.analysis.usableCount,
-      customPromptsOnly: customPrompts.only,
+      // A mixed room is created with none (#1182), whatever the hidden editor holds.
+      customPromptCount: mixed ? 0 : customPrompts.analysis.usableCount,
+      customPromptsOnly: mixed ? false : customPrompts.only,
       spectatorsSeePrompt,
     }),
   ];
@@ -452,7 +453,7 @@ export function CreateRoomPage() {
   );
 
   const submitButton = (
-    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || entryPending || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
+    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || entryPending || awaitingName || (!mixed && customPrompts.analysis.hasErrors)} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
   );
 
   return <main className="create-room-page">

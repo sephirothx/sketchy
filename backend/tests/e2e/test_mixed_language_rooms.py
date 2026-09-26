@@ -53,6 +53,11 @@ async def test_each_player_plays_the_drawing_in_their_own_language():
             await use_guest_name(host, "MixedHost")
             await host.goto(f"{BASE_URL}/create")
             await host.get_by_role("button", name="Private").click()
+            # A custom prompt that would stop an English room being created
+            # does not stop a Mixed one, which takes none.
+            await host.click('summary:has-text("Prompts")')
+            await host.locator("#custom-prompts").fill("x" * 40)
+            await host.click('summary:has-text("Prompts")')
             await host.get_by_role("button", name="Prompt language: English").click()
             await host.get_by_role("option", name="Mixed").click()
             # One language's quick prompts would leave the other players
