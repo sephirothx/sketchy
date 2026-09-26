@@ -2753,14 +2753,17 @@ A seated client checks with the server every five seconds that it still holds th
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
   home, and in a room the room's name, with a globe after it for a public room and a lock
   for a private one), what is going on (the round and the clock, a
-  server notice, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
+  server notice, a friend's invitation, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
   go AFK, save the image, start over, and Leave last in red - a dropdown on a
   desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the
-  room's. A phone's round reads "Round 2/3", or "2/3" when the bar has no room for the word. A short window gives way in a fixed
-  order: the room's name, then your chip's name (it becomes your round avatar); the wordmark,
-  the clock, the menu and your avatar stay, down to a phone - where a notice on a narrow bar
-  borrows the wordmark's room until it ends. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
+  room's. A short window gives way in a fixed order: the room's name, then your chip's name
+  (it becomes your round avatar); the wordmark, the clock, the menu and your avatar stay, down
+  to a phone. A phone's bar gives up only what it has to, in order: the round's word ("Round
+  2/3" becomes "2/3"), then the wordmark, then the chips' words (a notice, an invitation and
+  *AFK* keep their icons, and the sentence is a tap away), then the space between things, and
+  last a second row for the round, the clock and the chips - so nothing runs off even a
+  300px screen, and everything comes back as the notices end. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
   that, where the bar has given the name up - with no status line under it: Start itself says
   what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
   On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,

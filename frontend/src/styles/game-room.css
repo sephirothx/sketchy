@@ -161,7 +161,8 @@
    identity chip's name (the avatar stays, as the compact chip - see
    ActiveGameRoom). The wordmark, the clock, the round, the notice chips, the
    Room menu and the avatar stay at every width; only the phone's bar, below,
-   ever lets the wordmark go, and only while a notice needs its room. */
+   ever lets the wordmark go, and only once the round's word has gone and the
+   bar is still short. */
 @media (max-width: 1100px) {
   .game-header-room-name {
     display: none;
@@ -204,39 +205,91 @@
   position: relative;
 }
 
+/* Its width is the screen's, whatever it holds: the give-way below measures
+   what it holds against that width, so the width must not follow it. */
 .game-header-mobile {
-  container: room-bar / inline-size;
+  contain: inline-size;
 }
 
 .game-header-mobile .game-header-start {
   flex: none;
 }
 
-/* The one time the phone's wordmark gives way: a notice or the Away chip
-   beside the round and the clock, on a bar too narrow for all of them. It is
-   back the moment the notice ends. */
-@container room-bar (max-width: 470px) {
-  .game-header-mobile:has(.room-notice-chip, .game-header-away) .game-header-home {
-    display: none;
-  }
-}
+/* What the phone's bar gives up when it runs short, in this order and only as
+   far as it has to (R-UX-11). `useRoomBarGiveWay` measures the bar and writes
+   the steps it took into `data-gave-way`; each rule below is one step. A
+   300px phone holding the round, the clock, a notice, an invitation and AFK
+   needs every step up to `tight`; `wrap` is for anything narrower still. */
 
-/* The phone's round: "Round 2/3" where the bar has room for the word, "2/3"
-   where it does not. GameHeaderStatus renders both and measures the bar to
-   choose; the full label stays laid out, unseen and out of the flow, so it
-   can be measured while the short one shows. */
+/* 1. The round's word: "Round 2/3" becomes "2/3". Both labels are rendered;
+   the full one stays laid out, unseen and out of the flow, where it takes no
+   room. */
 .game-header-round-short {
   display: none;
 }
 
-.game-header-round.is-short .game-header-round-long {
+.game-header-mobile[data-gave-way~="round"] .game-header-round-long {
   pointer-events: none;
   position: absolute;
   visibility: hidden;
 }
 
-.game-header-round.is-short .game-header-round-short {
+.game-header-mobile[data-gave-way~="round"] .game-header-round-short {
   display: inline;
+}
+
+/* 2. The wordmark. It is the way out, and the Room menu's Leave is another. */
+.game-header-mobile[data-gave-way~="mark"] .game-header-start {
+  display: none;
+}
+
+/* 3. The chips' words: a notice, an invitation and AFK keep their icons. Each
+   is named by its aria-label, so nothing is taken from a screen reader, and
+   the notice's sentence is still a tap away. */
+.game-header-mobile[data-gave-way~="labels"] :is(.room-notice-chip-label, .game-header-away-label) {
+  display: none;
+}
+
+/* 4. The room between things. */
+.game-header-mobile[data-gave-way~="tight"] {
+  column-gap: 6px;
+}
+
+.game-room.game-room-playing .game-header-mobile[data-gave-way~="tight"] {
+  padding-inline: 6px;
+}
+
+.game-header-mobile[data-gave-way~="tight"] :is(
+  .game-header-center,
+  .game-header-status,
+  .room-notice-chips,
+  .game-header-actions
+) {
+  gap: 4px;
+}
+
+.game-header-mobile[data-gave-way~="tight"] :is(.game-header-round, .room-notice-chip, .game-header-away) {
+  padding-inline: 7px;
+}
+
+/* 5. Two rows: the wordmark, the Room menu and the avatar above, the round,
+   the clock and the chips below - wrapping again themselves rather than
+   running off the screen. It costs the canvas a row, which is why it is
+   last, and it gives the wordmark its room back. */
+.game-header-mobile[data-gave-way~="wrap"] {
+  flex-wrap: wrap;
+  row-gap: 4px;
+}
+
+.game-header-mobile[data-gave-way~="wrap"] .game-header-start {
+  display: flex;
+}
+
+.game-header-mobile[data-gave-way~="wrap"] .game-header-center {
+  flex-basis: 100%;
+  flex-wrap: wrap;
+  order: 1;
+  row-gap: 4px;
 }
 
 .game-header-mobile .game-header-center {

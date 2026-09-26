@@ -35,10 +35,12 @@ spot is the phone's chat feed and the desktop drawer's palette: it hid the
 latest guesses and the colours (#1176). Here it is one tap from its Join and
 its Not now, and the card steps aside for as long as this bar is mounted.
 
-On a phone the chip takes the place of the room code (which is also in the ⋯
-sheet) and of the mark, and a second chip shows only its icon: the band is a
-390px screen's width and already holds the round, the ring and the menu. */
-export function RoomNoticeChips({ compact }: { compact: boolean }) {
+Every chip always renders its word. On a phone the bar decides whether it
+shows: the band is a phone's width and already holds the round, the ring, the
+menu and the avatar, so once the round's word and the wordmark have gone the
+chips keep their icons alone (`useRoomBarGiveWay`, R-UX-11). Their accessible
+names are their `aria-label`s, so hiding the word takes nothing from them. */
+export function RoomNoticeChips() {
   const shutdownNotice = useServerNoticesStore((state) => state.shutdownNotice);
   const updateRequired = useServerNoticesStore((state) => state.updateRequired);
   const connection = useServerNoticesStore((state) => state.connection);
@@ -104,7 +106,6 @@ export function RoomNoticeChips({ compact }: { compact: boolean }) {
           : isDrain
             ? ui.roomNoticeChips.serverUpdate({ seconds: secondsLeft })
             : connectionTrouble ? connectionLabel(connectionTrouble) : "";
-        const iconOnly = compact && !isDrain && chips.length > 1;
         // Red for the drain's last seconds, when the stage says it too (#826).
         const finalStretch = secondsLeft > 0 && secondsLeft <= DRAIN_FINAL_SECONDS;
         const tone = isInvite
@@ -132,7 +133,7 @@ export function RoomNoticeChips({ compact }: { compact: boolean }) {
             ) : (
               <WifiOffIcon size={13} strokeWidth={2.4} />
             )}
-            {!iconOnly && <span className="room-notice-chip-label">{label}</span>}
+            <span className="room-notice-chip-label">{label}</span>
           </button>
         );
       })}
