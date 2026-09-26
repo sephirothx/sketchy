@@ -83,7 +83,7 @@ async def test_back_in_the_waiting_room_leaves_at_once_and_gives_up_the_seat():
             await expect(seat(host, guest_name)).to_have_count(0)
             await guest.go_forward()
             await guest.wait_for_url(f"{BASE_URL}/room/{code}")
-            await guest.click('button:has-text("Join game")')
+            await guest.get_by_role("button", name="Join", exact=True).click()
             await guest.wait_for_selector('[data-testid="waiting-room"]')
             await expect(seat(host, guest_name)).to_be_visible()
             await room_history_at(guest, 0)
@@ -94,7 +94,7 @@ async def test_back_in_the_waiting_room_leaves_at_once_and_gives_up_the_seat():
 
             # The host, the same way: Back leaves the waiting room at once.
             await guest.goto(f"{BASE_URL}/room/{code}")
-            await guest.click('button:has-text("Join game")')
+            await guest.get_by_role("button", name="Join", exact=True).click()
             await guest.wait_for_selector('[data-testid="waiting-room"]')
             await expect(seat(guest, host_name)).to_be_visible()
 

@@ -63,11 +63,21 @@ class WorkerDatabases:
             # Workers have exited by now, but a crashed one may have left a
             # connection, and one still closing is still in the database. The
             # owner may not end the application role's sessions, so that role
-            # ends its own first - any role may end its own.
+            # ends its own first - any role may end its own. Every clone is
+            # tried: one that will not drop used to stop the loop and leave
+            # all the clones after it behind for good.
+            failures: list[tuple[str, BaseException]] = []
             for name in self.names[:]:
-                await self._end_role_sessions(name)
-                await drop_database(connection, name)
-                self.names.remove(name)
+                try:
+                    await self._end_role_sessions(name)
+                    await drop_database(connection, name)
+                except Exception as error:  # noqa: BLE001 - reported below
+                    failures.append((name, error))
+                else:
+                    self.names.remove(name)
+            if failures:
+                listed = "; ".join(f"{name}: {error!r}" for name, error in failures)
+                raise RuntimeError(f"could not drop {len(failures)} test database(s): {listed}")
         finally:
             await connection.close()
 
