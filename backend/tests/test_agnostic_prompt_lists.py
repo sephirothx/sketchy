@@ -291,3 +291,24 @@ async def test_resolving_refuses_an_agnostic_twin_under_the_room_s_fold(env):
             requesting_user_id=owner.id,
             expected_language="de",
         )
+
+
+async def test_the_draw_compares_quick_prompts_only_with_keys_in_the_room_s_fold(env):
+    """The stored keys of an agnostic list are in another fold: "Bär" stores
+    `bar`, which a German room's quick "Bar" must not exclude."""
+    _, users, prompts, _ = env
+    owner = await _owner(users)
+    await _bundled(prompts, "german_standard", "de", "Bar", "Hund")
+    names = await _list(prompts, owner.id, "Names", "zxx", "Bär", "Pikachu")
+    pinned = await prompts.authorize_selection(
+        ["german_standard", names.slug], requesting_user_id=owner.id, expected_language="de"
+    )
+
+    sample = await prompts.sample_prompts(
+        list(pinned.revision_ids),
+        limit=10,
+        exclude_match_keys={prompt_match_key("Bar", "de")},
+        exclude_language="de",
+    )
+
+    assert {prompt.answer for prompt in sample.prompts} == {"Hund", "Bär", "Pikachu"}

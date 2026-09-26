@@ -1769,7 +1769,7 @@ A moderator's decision is the concept's, not one wording's: resolving a report s
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
 concept, an owner's edit that writes a new version (an alias added, an answer respelled)
 carries them to it, and a new version whose answer or alias matches any prompt that is hidden in
-any list its owner has ever held, in the same language or in no language (`zxx`, which shares its words with every language, #821) — compared in the one room language both are played in, so a hidden German **Bär** stops an agnostic **Bär** but not **Bar** (#1091) — a word typed back in, into
+any list its owner has ever held, in the same language or in no language (`zxx`, which shares its words with every language, #821) — the same word when a room that plays both would take them as one answer, so a hidden German **Bär** stops an agnostic **Bär** but not **Bar**, and between two agnostic lists, played in every room, any room's fold counts (#1091) — a word typed back in, into
 this list or another, or another entry respelled into it — is
 born with them — so a hidden word stays hidden (#1020). A concept belongs to
 one list; copies mint their own. Bundled seed versions are the operator's own editions and

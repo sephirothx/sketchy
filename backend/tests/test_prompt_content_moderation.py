@@ -1431,6 +1431,59 @@ async def test_an_agnostic_list_meets_a_hidden_word_in_that_word_s_own_fold(env)
     }
 
 
+async def test_a_hidden_word_typed_as_written_into_an_agnostic_list_stays_hidden(env):
+    """German "Bär" stores `baer`; typed into an agnostic list it keys `bar`.
+    A German room plays both as one answer, so the takedown follows it."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "AsWrittenOwner")
+    german = await prompts.create_owned(
+        owner["id"], name="Tiere", description="", language="de",
+        prompts=(PromptListEntryInput(answer="Bär"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(german.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+
+    as_written = await prompts.create_owned(
+        owner["id"], name="Written", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Bär"), PromptListEntryInput(answer="Wolf")),
+    )
+    assert {p.answer: p.moderation_state for p in as_written.prompts} == {
+        "Bär": "hidden",
+        "Wolf": "active",
+    }
+
+
+
+async def test_a_hidden_agnostic_word_meets_its_spellings_in_every_room_s_fold(env):
+    """Two agnostic lists are both played in every room, so a word hidden in
+    one is hidden in the other under any spelling some room takes as the
+    same answer - the rule an agnostic list's own save keeps (R-PROMPT-12)."""
+    new_client, factory, prompts = env
+    owner_http = new_client()
+    owner = await register(owner_http, "AgnosticHider")
+    first = await prompts.create_owned(
+        owner["id"], name="Names", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Müller"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptVersion, UUID(first.prompts[0].prompt_version_id))
+            row.moderation_state = "hidden"
+
+    second = await prompts.create_owned(
+        owner["id"], name="More", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Mueller"), PromptListEntryInput(answer="Meier")),
+    )
+
+    assert {p.answer: p.moderation_state for p in second.prompts} == {
+        "Mueller": "hidden",
+        "Meier": "active",
+    }
+
+
 async def _staff_member(factory, account: dict, role: UserRole) -> None:
     async with factory() as session:
         async with session.begin():

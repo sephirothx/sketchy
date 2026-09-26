@@ -309,9 +309,16 @@ class StubPromptListRepo:
             letter_total=total,
         )
 
-    async def sample_prompts(self, revision_ids, *, limit, exclude_match_keys=()):
+    async def sample_prompts(
+        self, revision_ids, *, limit, exclude_match_keys=(), exclude_language=None
+    ):
         self.draws += 1
-        excluded = set(exclude_match_keys)
+        # Keys in another fold are not compared, as in the live store.
+        excluded = (
+            set(exclude_match_keys)
+            if exclude_language in (None, self.language)
+            else set()
+        )
         drawable = [
             prompt
             for prompt in self.prompts

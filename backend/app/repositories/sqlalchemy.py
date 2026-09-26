@@ -4958,35 +4958,44 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             )
         ).unique().all()
-        # Each hidden word is compared in the one fold where it and the entry
-        # are the same word, keyed by the fold the entry must be keyed under.
-        # In a list in a language, that is the language: its own hidden words
-        # by their stored keys, and an agnostic list's hidden words as this
-        # language's rooms would key them. In an agnostic list, it is the
-        # hidden word's own language, since an agnostic word is played in
-        # that language's rooms: "Bär" hidden in German stops a "Bär" here but
-        # not a "Bar", which is another word to a German room (#821 review).
+        # A hidden word and an entry are the same word when a room that plays
+        # both would take them as one answer (#821 review), so each pair is
+        # compared in the fold of such a room - keyed by that fold, which the
+        # entry is keyed under too. A list in a language meets its own hidden
+        # words by their stored keys, and an agnostic list's as that
+        # language's rooms fold them. An agnostic list meets a hidden word in
+        # a language in that language's fold: "Bär" hidden in German stops a
+        # "Bär" here but not a "Bar", another word to a German room. And it
+        # meets another agnostic list's hidden word in every room's fold,
+        # since both are played in every room - the rule its own save keeps
+        # (R-PROMPT-12): hidden "Müller" stops "Mueller".
         hidden_by_key: dict[tuple[str, str], PromptVersion] = {}
         for hidden in hidden_versions:
+            texts = (
+                hidden.canonical_answer,
+                *(link.alias.answer for link in hidden.version_aliases),
+            )
             stored = (
                 hidden.match_key,
                 *(link.alias.match_key for link in hidden.version_aliases),
             )
-            if prompt_list.language == AGNOSTIC_PROMPT_LANGUAGE:
-                fold, keys = hidden.language, stored
-            elif hidden.language == prompt_list.language:
-                fold, keys = prompt_list.language, stored
+            if hidden.language == prompt_list.language != AGNOSTIC_PROMPT_LANGUAGE:
+                pairs = [(prompt_list.language, key) for key in stored]
+            elif prompt_list.language != AGNOSTIC_PROMPT_LANGUAGE:
+                pairs = [
+                    (prompt_list.language, prompt_match_key(text, prompt_list.language))
+                    for text in texts
+                ]
+            elif hidden.language != AGNOSTIC_PROMPT_LANGUAGE:
+                pairs = [(hidden.language, key) for key in stored]
             else:
-                fold = prompt_list.language
-                keys = tuple(
-                    prompt_match_key(text, fold)
-                    for text in (
-                        hidden.canonical_answer,
-                        *(link.alias.answer for link in hidden.version_aliases),
-                    )
-                )
-            for key in keys:
-                hidden_by_key[(fold, key)] = hidden
+                pairs = [
+                    (fold, prompt_match_key(text, fold))
+                    for fold in PROMPT_LANGUAGES
+                    for text in texts
+                ]
+            for pair in pairs:
+                hidden_by_key[pair] = hidden
         hidden_folds = {fold for fold, _ in hidden_by_key}
         supplied_ids = {
             UUID(entry.concept_id) for entry in entries if entry.concept_id is not None
@@ -5549,6 +5558,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         *,
         limit: int,
         exclude_match_keys: Collection[str] = (),
+        exclude_language: str | None = None,
     ) -> PromptSample:
         if limit <= 0 or not revision_ids:
             return PromptSample()
@@ -5569,7 +5579,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 == PromptContentModerationState.ACTIVE.value,
             ]
             if excluded:
-                eligible.append(PromptVersion.match_key.notin_(excluded))
+                shadowed = PromptVersion.match_key.notin_(excluded)
+                eligible.append(
+                    shadowed
+                    if exclude_language is None
+                    else or_(PromptVersion.language != exclude_language, shadowed)
+                )
 
             versions = (
                 (

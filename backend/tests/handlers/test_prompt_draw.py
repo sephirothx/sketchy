@@ -157,6 +157,22 @@ async def test_the_shadow_stays_on_the_canonical_key():
     assert {"Bar", "Bär"} <= set(room.game.prompt_pool)
 
 
+async def test_a_quick_prompt_leaves_an_agnostic_word_its_room_folds_apart():
+    """An agnostic "Bär" stores `bar`, the German room's key for a quick
+    "Bar" - a different German word, so it stays in the pool."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = "de"
+    room.custom_prompts = ["Bar"]
+    repo = StubPromptListRepo(["Bär", "Hund", "Katze"], language="zxx")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert {"Bar", "Bär"} <= set(room.game.prompt_pool)
+
+
 async def test_a_list_whose_every_prompt_is_a_twin_prices_only_the_quick_ones():
     """Nothing the list offers survives the shadow, so nothing of it is
     drawable, weighted or priced."""

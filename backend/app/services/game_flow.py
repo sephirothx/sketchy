@@ -633,6 +633,7 @@ class GameFlowService:
                         list(room.prompt_list_revision_ids),
                         limit=needed,
                         exclude_match_keys=room.custom_prompt_match_keys(),
+                        exclude_language=room.prompt_language,
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )
@@ -645,11 +646,12 @@ class GameFlowService:
                     "Prompt lists could not be loaded. Please try again."
                 ) from error
 
-        # The database compares stored keys, and a list in no language (#821)
-        # stores its keys without the room's transliteration: "Müller" is
-        # `muller` there and `mueller` to a German room, whose quick prompt
-        # of the same name the stored key cannot see. So the shadow is asked
-        # again of the text, under the room's fold. The canonical key and not
+        # The database compares stored keys, and only those stored in the
+        # room's language: a list in no language (#821) stores its keys
+        # without the room's transliteration - "Müller" is `muller` there and
+        # `mueller` to a German room, and "Bär" is `bar`, which is another
+        # German word. So its shadow is asked here, of the text, under the
+        # room's fold. The canonical key and not
         # the wider spelling set (R-GUESS-01): which prompt a turn draws does
         # not widen. For a list in the room's language this is the stored
         # key again and removes nothing more; twins are few, so the sample is
