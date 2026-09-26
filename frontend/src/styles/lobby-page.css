@@ -1603,7 +1603,7 @@ a.online-player-name:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: min(92vw, 460px, calc(100vw - 32px - 2 * var(--dock-inline-inset)));
+  max-width: min(calc(92vw - 2 * var(--dock-inline-inset)), 460px);
   padding: 10px 12px 10px 16px;
   background: var(--card);
   border: 1.5px solid var(--primary);

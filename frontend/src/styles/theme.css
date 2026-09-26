@@ -206,9 +206,9 @@
   /* how far a friend invite reaches above that, written by
      FriendInviteNotice while one is shown; the toasts stand on both */
   --friend-invite-clearance: 0px;
-  /* how wide a column a page docks down each side of the screen, set by the
-     landscape phone room for its feed (game-room.css); the friend invite and
-     the toasts stay narrow enough to stand between, rather than reach onto it */
+  /* the widest column docked down either side, set by the landscape phone
+     room for its feed (game-room.css); centred notices keep that much clear
+     on both */
   --dock-inline-inset: 0px;
 }
 

@@ -2756,11 +2756,12 @@ button.guess-pips {
      straight off the canvas, and the whole point of turning the phone is to
      make the drawing bigger.
 
-     The feed's width is published rather than restated, because the friend
-     invite and the toasts, which stand at the bottom centre outside this
-     shell, keep that much clear on each side (--dock-inline-inset). A wide
-     toast at 740px reached 17px into the column, over the guess field and the
-     verdict above it. */
+     The friend invite and the toasts, which stand at the bottom centre
+     outside this shell, keep the feed's width clear on each side
+     (--dock-inline-inset): a wide toast at 740px reached 17px into the
+     column, over the guess field and the verdict above it. The token mirrors
+     the column's width rather than setting it, so a browser without :has()
+     only loses the notices' narrowing, not the column. Change both together. */
   :root:has(.game-room.game-room-playing) {
     --dock-inline-inset: min(26vw, 180px);
   }
@@ -2769,7 +2770,7 @@ button.guess-pips {
     border-left: 1.5px solid var(--line);
     flex: 0 0 auto;
     order: 2;
-    width: var(--dock-inline-inset);
+    width: min(26vw, 180px);
   }
 
   .game-room.game-room-playing .room-shell-chat .sidebar-box {
