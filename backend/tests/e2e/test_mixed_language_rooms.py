@@ -55,6 +55,11 @@ async def test_each_player_plays_the_drawing_in_their_own_language():
             await host.get_by_role("button", name="Private").click()
             await host.get_by_role("button", name="Prompt language: English").click()
             await host.get_by_role("option", name="Mixed").click()
+            # One language's quick prompts would leave the other players
+            # without the word: the field is replaced by a sentence saying so.
+            await host.click('summary:has-text("Prompts")')
+            await host.get_by_text("Custom prompts are off in a mixed room").wait_for()
+            assert await host.locator("#custom-prompts").count() == 0
             await host.get_by_role("spinbutton", name="Rounds").fill("1")
             await host.get_by_role("button", name="Create room", exact=True).click()
             await host.locator('[data-testid="waiting-room"]').wait_for()

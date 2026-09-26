@@ -40,7 +40,7 @@ import {
 } from "../lib/promptLanguages";
 import { useSettingsStore } from "../store/settingsStore";
 import type { CustomPromptsAction, CustomPromptsState } from "../lib/customPrompts";
-import type { ColorMode, DrawingToolGroup, HintMode, PromptListSummary, RoomLanguage, ScoringMode } from "../types";
+import type { ColorMode, DrawingToolGroup, HintMode, PromptLanguage, PromptListSummary, RoomLanguage, ScoringMode } from "../types";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/toolbar.css";
 
@@ -80,6 +80,9 @@ interface RoomSetupFormProps {
   /** A room's language is fixed at creation, so the editor shows it rather
       than offering it. */
   languageLocked?: boolean;
+  /** The language this player plays in, where the page knows it better than
+      the settings do: a seat's own, in a room already made (#1182). */
+  playLanguage?: PromptLanguage;
   /** A community list the host arrived with, so the picker knows a list the
       catalogue would not have told it about. */
   extraLists?: PromptListSummary[];
@@ -107,6 +110,7 @@ export function RoomSetupForm({
   durationNote,
   loadedLists = [],
   languageLocked = false,
+  playLanguage: seatLanguage,
   extraLists,
 }: RoomSetupFormProps) {
   const {
@@ -128,7 +132,8 @@ export function RoomSetupForm({
   const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
   const languageOptions = availablePromptLanguages(loadedLists, promptLanguage);
   // The language this player plays in: a mixed room shows Standard in it.
-  const playLanguage = useSettingsStore((state) => state.promptLanguage);
+  const preferredLanguage = useSettingsStore((state) => state.promptLanguage);
+  const playLanguage = seatLanguage ?? preferredLanguage;
 
   // No language in it: the official lists are named for theirs ("English —
   // Standard"), and the field that sets it is labelled in Basics above.
@@ -140,7 +145,7 @@ export function RoomSetupForm({
       const total = selectedLists.reduce((sum, list) => sum + list.promptCount, 0);
       if (total > 0) parts.push(ui.roomSetupForm.promptTotal({ count: total }));
     }
-    if (customPrompts.analysis.usableCount > 0) {
+    if (promptLanguage !== MIXED_PROMPT_LANGUAGE && customPrompts.analysis.usableCount > 0) {
       parts.push(ui.roomSetupForm.customCount({ count: customPrompts.analysis.usableCount }));
     }
     return parts.join(" · ");

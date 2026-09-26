@@ -231,7 +231,13 @@ export function useGameSocketListeners() {
     };
 
     const onDrawingReaction = (payload: DrawingReactionEvent) => {
-      store.getState().applyDrawingReaction(payload);
+      // The refreshed "most reacted" card names a prompt: this seat's (#1182).
+      const highlight = payload.highlight;
+      store.getState().applyDrawingReaction(
+        highlight && "prompt" in highlight
+          ? { ...payload, highlight: spelledForSeat(highlight, store.getState().seatLanguage) }
+          : payload,
+      );
     };
 
     const onSyncGame = (payload: {

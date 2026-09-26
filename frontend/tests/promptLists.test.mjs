@@ -3,6 +3,8 @@ import test from "node:test";
 import { duplicateName, emailPublishBlocker, promptEntriesFromQuickInput } from "../src/lib/promptListDrafts.ts";
 import {
   availablePromptLanguages,
+  promptLanguageEndonym,
+  promptLanguageLabel,
   gameEndSpelledForSeat,
   spelledForSeat,
   isPlayableIn,
@@ -161,6 +163,8 @@ test("a mixed room plays Standard, once, and lists in no language", () => {
     ...standard,
     { slug: "german_extended", language: "de", isBundled: true },
     { slug: "mine", language: "de", isBundled: false },
+    // A player's own list named like Standard is not Standard.
+    { slug: "fake_standard", language: "de", isBundled: false },
     { slug: "pokemon", language: "zxx", isBundled: false },
   ];
   // Offered once Standard is there in every language, and last.
@@ -173,6 +177,15 @@ test("a mixed room plays Standard, once, and lists in no language", () => {
     selectionForLanguage(lists, "mul", ["german_extended", "pokemon"], "fr"),
     ["french_standard", "pokemon"],
   );
+  // Another host's Standard is shown in this player's language instead.
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "mul", ["english_standard"], "de"),
+    ["german_standard"],
+  );
+  // A room already mixed keeps saying so while its lists load.
+  assert.equal(availablePromptLanguages([], "mul").includes("mul"), true);
+  assert.equal(promptLanguageLabel("mul"), "Mixed");
+  assert.equal(promptLanguageEndonym("mul"), "Mixed");
 });
 
 test("a room-wide prompt is read in the seat's own language", () => {

@@ -180,6 +180,29 @@ def guessed_receipt(game: Game, player_id: str | None) -> dict | None:
     }
 
 
+def spelled_for_seat(entry: dict, language: str | None) -> dict:
+    """An entry naming a prompt, with `prompt` in `language` where the entry
+    carries that spelling (#1182).
+
+    For what goes to one socket before its seat is acknowledged - a join
+    mid-reveal, a reload after a game - whose client cannot yet know which of
+    `prompts` is its own. Room-wide sends stay as they are: each client picks.
+    """
+    own = (entry.get("prompts") or {}).get(language or "")
+    return {**entry, "prompt": own} if own else entry
+
+
+def last_game_for_seat(payload: dict, language: str | None) -> dict:
+    """`last_game`, every recap entry and highlight spelled for one seat."""
+    return {
+        **payload,
+        "drawings": [spelled_for_seat(entry, language) for entry in payload["drawings"]],
+        "highlights": [
+            spelled_for_seat(highlight, language) for highlight in payload["highlights"]
+        ],
+    }
+
+
 def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
     game = room.game
     assert game is not None

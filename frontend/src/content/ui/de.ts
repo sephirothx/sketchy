@@ -1850,8 +1850,7 @@ export const DE: Catalogue = {
 
   roomSetupForm: {
     promptLanguage: "Begriffssprache",
-    customPromptsOffInMixedRooms: "Eigene Begriffe sind in gemischten Räumen aus: Jeder braucht den Begriff in seiner Sprache.",
-    mixedRoomPlaysEachInTheirOwn: "Jeder spielt in seiner eigenen Sprache.",
+    customPromptsOffInMixedRooms: "Eigene Begriffe sind in gemischtsprachigen Räumen deaktiviert: Jeder braucht den Begriff in seiner Sprache.",
     visibility: "Sichtbarkeit",
     maxPlayers: "Maximale Spielerzahl",
     rounds: "Runden",

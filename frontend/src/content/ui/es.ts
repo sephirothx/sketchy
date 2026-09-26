@@ -1095,7 +1095,7 @@ export const ES: Catalogue = {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Todos los idiomas",
     anyLanguage: "Cualquier idioma",
-    mixed: "Mixta",
+    mixed: "Mixto",
   },
 
   lobbyBrowserPage: {
@@ -1850,7 +1850,6 @@ export const ES: Catalogue = {
   roomSetupForm: {
     promptLanguage: "Idioma de las palabras",
     customPromptsOffInMixedRooms: "Las palabras propias no se usan en salas mixtas: cada jugador necesita la palabra en su idioma.",
-    mixedRoomPlaysEachInTheirOwn: "Cada jugador juega en su propio idioma.",
     visibility: "Visibilidad",
     maxPlayers: "Máximo de jugadores",
     rounds: "Rondas",

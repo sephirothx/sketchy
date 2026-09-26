@@ -213,7 +213,15 @@ export function CreateRoomPage() {
     // A preset carries the language of the lists it saved, and applying it
     // sets both together: a room declares its language before it has lists.
     setPromptLanguage(settings.promptLanguage);
-    setPromptListSlugs(settings.promptListSlugs);
+    // Reconciled: a mixed preset saved by a host playing another language
+    // names that language's Standard, which this picker shows in its own.
+    setPromptListSlugs(
+      loadedLists.length > 0
+        ? reconcileSelectionForLanguage(
+          loadedLists, settings.promptLanguage, settings.promptListSlugs, playLanguage,
+        )
+        : settings.promptListSlugs,
+    );
     dispatchCustomPrompts({ type: "reset", value: "", only: false });
   }
 
@@ -229,7 +237,9 @@ export function CreateRoomPage() {
 
   /** Quick prompts are room input, never stored settings. */
   function presetBlocker(): string | null {
-    if (customPrompts.analysis.usableCount > 0) {
+    // A mixed room keeps none (#1182): whatever the hidden editor holds is not
+    // part of what would be saved.
+    if (!mixed && customPrompts.analysis.usableCount > 0) {
       return ui.createRoomPage.saveCustomPromptsAsAList;
     }
     return null;
@@ -339,7 +349,7 @@ export function CreateRoomPage() {
   }
 
   async function handleCreate() {
-    if (customPrompts.analysis.hasErrors) {
+    if (!mixed && customPrompts.analysis.hasErrors) {
       setError(ui.createRoomPage.fixCustomPromptEntriesMarkedAbove);
       return;
     }

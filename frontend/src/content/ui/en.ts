@@ -1866,7 +1866,6 @@ export const EN = {
   roomSetupForm: {
     promptLanguage: "Prompt language",
     customPromptsOffInMixedRooms: "Custom prompts are off in a mixed room: every player needs the prompt in their own language.",
-    mixedRoomPlaysEachInTheirOwn: "Each player plays in their own language.",
     visibility: "Visibility",
     maxPlayers: "Max players",
     rounds: "Rounds",

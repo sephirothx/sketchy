@@ -1852,7 +1852,6 @@ export const IT: Catalogue = {
   roomSetupForm: {
     promptLanguage: "Lingua delle parole",
     customPromptsOffInMixedRooms: "Le parole personalizzate sono disattivate nelle stanze miste: ogni giocatore ha bisogno della parola nella sua lingua.",
-    mixedRoomPlaysEachInTheirOwn: "Ogni giocatore gioca nella propria lingua.",
     visibility: "Visibilità",
     maxPlayers: "Numero massimo di giocatori",
     rounds: "Round",
