@@ -3,7 +3,7 @@ import { Link } from "react-router-dom";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
-import { MIN_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { typedNameError } from "../lib/roomEntryState";
 import { useNameField } from "../hooks/useNameField";
 import { refusalText } from "../lib/refusals.ts";
 import { firstRunLine } from "../lib/firstRunLines";
@@ -87,13 +87,7 @@ export function FirstRunIdentity() {
     event.preventDefault();
     if (busy) return;
     const chosen = name.trim();
-    // The field only takes the rule's characters, so short (or reserved) is
-    // all a name here can still be, and saying just that is shorter and truer
-    // than the whole rule.
-    const invalid =
-      chosen.length < MIN_NICKNAME_LENGTH
-        ? ui.firstRunIdentity.nameTooShort({ min: MIN_NICKNAME_LENGTH })
-        : nicknameError(chosen);
+    const invalid = typedNameError(chosen);
     if (invalid) {
       refuse(invalid);
       return;

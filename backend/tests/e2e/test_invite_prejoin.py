@@ -142,6 +142,7 @@ async def test_a_typed_name_is_enough_to_join_from_an_invite():
             # the buttons used to push them down. Typing again takes the
             # refusal back, rather than leaving the field marked invalid.
             join = visitor.locator('button:text-is("Join")')
+            await visitor.evaluate("document.fonts.ready")
             before = await join.bounding_box()
             await join.click()
             await visitor.locator(".app-toast.error").get_by_text(

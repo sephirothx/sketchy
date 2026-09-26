@@ -115,6 +115,13 @@ test("a nickname breaking the shared name rule is rejected before joining", asyn
     assert.equal("error" in machine.getSnapshot().state, false, bad);
   }
 
+  // Too short is said as just that, as the first-run tag says it: the whole
+  // rule told somebody whose field cannot take a space not to use one.
+  machine.setNicknameInput("ab");
+  assert.equal((await machine.join("player")).message, "A name needs at least 3 characters.");
+  machine.setNicknameInput("has space");
+  assert.match((await machine.join("player")).message, /No spaces/);
+
   machine.setNicknameInput("Ada-Lovelace");
   assert.equal(await machine.join("player"), null);
   assert.equal(joins.length, 1);

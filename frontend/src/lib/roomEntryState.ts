@@ -75,6 +75,17 @@ export function nicknameError(value: string): string | null {
   return null;
 }
 
+/** What to say about a name typed into a name field - the first-run tag's or
+ * the invite page's. The field only takes the rule's characters, so short (or
+ * reserved) is all such a name can still be, and saying just that is shorter
+ * and truer than the whole rule, which spells out that spaces are refused to
+ * somebody who could not type one. */
+export function typedNameError(value: string): string | null {
+  const trimmed = value.trim();
+  if (trimmed.length < MIN_NICKNAME_LENGTH) return ui.firstRunIdentity.nameTooShort({ min: MIN_NICKNAME_LENGTH });
+  return nicknameError(trimmed);
+}
+
 export type RoomJoinMode = "player" | "spectator";
 
 export type RoomEntryState =
@@ -211,7 +222,7 @@ export class RoomEntryMachine {
     if (current.status !== "preview") return null;
 
     const nickname = this.snapshot.nicknameInput.trim();
-    const invalid = nickname ? nicknameError(nickname) : ui.roomEntryState.enterANicknameToContinue;
+    const invalid = nickname ? typedNameError(nickname) : ui.roomEntryState.enterANicknameToContinue;
     if (invalid) return { message: invalid, aboutName: true };
 
     const version = ++this.requestVersion;

@@ -114,7 +114,7 @@ export function useNameField(onValue: (value: string) => void) {
     }
   }, [notify]);
 
-  return { ref, element, onChange, refused, refuse };
+  return { ref, onChange, refused, refuse };
 }
 
 /** The fallback: correct the field in place, caret included, before React
