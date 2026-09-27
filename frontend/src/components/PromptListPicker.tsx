@@ -1,11 +1,16 @@
 import { useEffect, useRef, useState } from "react";
 import { apiRequest } from "../lib/api";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import {
+  AGNOSTIC_PROMPT_LANGUAGE,
+  MIXED_PROMPT_LANGUAGE,
+  isPlayableIn,
+  promptLanguageLabel,
+} from "../lib/promptLanguages";
 import { listCommunityPromptLists, listOwnedPromptLists } from "../lib/promptLists";
 import { readEveryPage } from "../lib/communityLists";
 import { useAuthStore } from "../store/authStore";
-import type { PromptLanguage, PromptListSummary } from "../types";
-import { CheckIcon, PlusIcon } from "./icons";
+import type { PromptLanguage, PromptListSummary, RoomLanguage } from "../types";
+import { AnyLanguageIcon, CheckIcon, PlusIcon } from "./icons";
 import { FieldHint } from "./RoomSetupControls";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -15,12 +20,18 @@ import "../styles/lazy/profile.css";
 interface PromptListPickerProps {
   /** The room's declared language. Lists answer to it; it is never read back
       off the selection (R-PROMPT-02). */
-  language: PromptLanguage;
+  language: RoomLanguage;
+  /** The language this player plays in, which a mixed-language room shows
+      Standard in (#1182). */
+  playLanguage?: PromptLanguage;
   selectedSlugs: string[];
   onChange: (slugs: string[]) => void;
   disabled?: boolean;
   /** Reports the loaded lists so the host page can summarize the selection. */
   onListsLoaded?: (lists: PromptListSummary[]) => void;
+  /** The catalogue could not be read: nothing will be reported, so a host page
+  waiting on the lists to judge a choice has to judge it without them. */
+  onListsUnavailable?: () => void;
   /** Lists the host page already knows about — a community list carried in
   from the catalogue. Without them the selection would be reconciled against
   a catalogue that has never heard of the list, and quietly dropped. */
@@ -39,10 +50,12 @@ const NO_LISTS: PromptListSummary[] = [];
 
 export function PromptListPicker({
   language,
+  playLanguage = "en",
   selectedSlugs,
   onChange,
   disabled = false,
   onListsLoaded,
+  onListsUnavailable,
   extraLists = NO_LISTS,
 }: PromptListPickerProps) {
   const user = useAuthStore((state) => state.user);
@@ -60,6 +73,7 @@ export function PromptListPicker({
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const onListsLoadedRef = useRef(onListsLoaded);
+  const onListsUnavailableRef = useRef(onListsUnavailable);
 
   // Read only while it still belongs to whoever is signed in now. A pending
   // reply for a new account does not keep the old one's shortlist on screen
@@ -75,7 +89,8 @@ export function PromptListPicker({
 
   useEffect(() => {
     onListsLoadedRef.current = onListsLoaded;
-  }, [onListsLoaded]);
+    onListsUnavailableRef.current = onListsUnavailable;
+  }, [onListsLoaded, onListsUnavailable]);
 
   useEffect(() => {
     onListsLoadedRef.current?.([...promptLists, ...extraLists, ...shortlist]);
@@ -95,6 +110,7 @@ export function PromptListPicker({
       } catch (err) {
         if (!cancelled) {
           setFetchError(refusalText(err, ui.promptListPicker.couldNotLoadPromptLists));
+          onListsUnavailableRef.current?.();
         }
       } finally {
         if (!cancelled) {
@@ -121,7 +137,8 @@ export function PromptListPicker({
     void readEveryPage(
       (cursor) => listCommunityPromptLists({
         starred: true,
-        language,
+        // A mixed room can play only the lists in no language of these (#1182).
+        language: language === MIXED_PROMPT_LANGUAGE ? AGNOSTIC_PROMPT_LANGUAGE : language,
         limit: STARRED_PAGE_SIZE,
         cursor,
       }),
@@ -156,9 +173,10 @@ export function PromptListPicker({
     ...promptLists,
     ...extraLists.filter((extra) => !promptLists.some((list) => list.slug === extra.slug)),
   ];
-  const visibleLists = known.filter((list) => list.language === language);
+  const visibleLists = known.filter((list) => isPlayableIn(list, language, playLanguage));
   const visibleStarred = shortlist.filter(
-    (list) => list.language === language && !visibleLists.some((shown) => shown.slug === list.slug),
+    (list) => isPlayableIn(list, language, playLanguage)
+      && !visibleLists.some((shown) => shown.slug === list.slug),
   );
 
   if (loading) {
@@ -202,6 +220,12 @@ export function PromptListPicker({
                   {isSelected ? <CheckIcon size={12} /> : <PlusIcon size={12} />}
                 </span>
                 <span className="toggle-chip-name">{wl.name}</span>
+                {wl.language === AGNOSTIC_PROMPT_LANGUAGE && (
+                  <span className="prompt-list-chip-language" title={ui.languagePicker.anyLanguage}>
+                    <AnyLanguageIcon size={13} />
+                    <span className="visually-hidden">{ui.languagePicker.anyLanguage}</span>
+                  </span>
+                )}
                 <span className="prompt-list-chip-count">{wl.promptCount}</span>
               </button>
               {wl.isBundled && <FieldHint

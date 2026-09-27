@@ -1,7 +1,8 @@
 """Quick play, decided by the server (#931, R-UX-14).
 
-One command: the fullest public room that is waiting in the caller's language
-with a seat free, or a new public room on the payload's own defaults. It used
+One command: the fullest public room that is waiting in the caller's default
+language with a seat free - then a mixed one, then one in each of their other
+languages (#1211) - or a new public room on the payload's own defaults. It used
 to be a walk the client ran over the lobby's room list, one `join_room` per
 candidate - a round trip each, a dependency on a list that had to have
 arrived, and a room per presser when several pressed at the same moment.
@@ -228,3 +229,95 @@ async def test_a_room_whose_seats_are_all_taken_is_not_offered_even_if_somebody_
     answer = await press(sio)
     assert answer["created"] is True and answer["roomId"] != room.id
     assert players(room) == 2
+
+
+async def test_a_mixed_language_room_is_the_fallback_before_opening_one():
+    """A mixed room (#1182) plays everyone in their own language, so it is
+    worth a seat - after every room in the player's own, however full."""
+    room_manager = RoomManager()
+    mixed = waiting_room(room_manager, language="mul", seats=5)
+    german = waiting_room(room_manager, language="de", seats=1)
+    sio, _ = server(room_manager)
+
+    first = await press(sio, promptLanguage="de")
+    assert first["roomId"] == german.id
+
+    german.state = "playing"
+    second = await press(sio, sid="other-sid", nickname="Jonas", promptLanguage="de")
+    assert second["ok"] is True and second["created"] is False
+    assert second["roomId"] == mixed.id
+    seat = next(p for p in mixed.players.values() if p.nickname == "Jonas")
+    assert mixed.seat_language(seat) == "de"
+
+
+async def test_the_default_then_mixed_then_the_others_in_the_players_order():
+    """#1211: the default language's rooms, then mixed ones, then each of the
+    others the player ranked, in that order - fullest first within each, and
+    never a language the player does not play."""
+    room_manager = RoomManager()
+    spanish = waiting_room(room_manager, language="es", seats=6)
+    dutch = waiting_room(room_manager, language="nl", seats=2)
+    french = waiting_room(room_manager, language="fr", seats=7)
+    mixed = waiting_room(room_manager, language="mul", seats=1)
+    italian = waiting_room(room_manager, language="it", seats=1)
+    sio, _ = server(room_manager)
+    ranked = {"promptLanguage": "it", "extraPromptLanguages": ["nl", "es"]}
+
+    order = []
+    for index, room in enumerate((italian, mixed, dutch, spanish)):
+        answer = await press(sio, sid=f"sid-{index}", nickname=f"Marta{index}", **ranked)
+        assert answer["ok"] is True and answer["created"] is False
+        order.append(answer["roomId"])
+        room.state = "playing"
+    assert order == [italian.id, mixed.id, dutch.id, spanish.id]
+
+    # Every room they play in is under way now; the French one still waits,
+    # a seat free, and is never theirs - a new Italian room is.
+    fifth = await press(sio, sid="sid-5", nickname="Marta5", **ranked)
+    assert fifth["ok"] is True and fifth["created"] is True
+    assert room_manager.get_room(fifth["roomId"]).prompt_language == "it"
+    assert players(french) == 7, "a language the player does not play"
+
+    # A mixed room seats them in their default, never in one of the others.
+    seat = next(p for p in mixed.players.values() if p.nickname == "Marta1")
+    assert mixed.seat_language(seat) == "it"
+
+
+async def test_the_other_languages_are_canonical_once_and_never_the_default():
+    room_manager = RoomManager()
+    dutch = waiting_room(room_manager, language="nl", seats=1)
+    sio, _ = server(room_manager)
+
+    answer = await press(
+        sio, promptLanguage="it", extraPromptLanguages=["NL", "it", "nl"]
+    )
+    assert answer["roomId"] == dutch.id
+
+    for junk in (["kl"], ["mul"], "nl", ["nl"] * 7):
+        refused = await press(sio, sid="other", promptLanguage="it", extraPromptLanguages=junk)
+        assert refused["ok"] is False, junk
+
+
+async def test_a_room_about_to_open_in_the_default_outranks_one_in_another_language(monkeypatch):
+    """Two French presses at once, one of them also playing Dutch, with a Dutch
+    room waiting. The first opens a French room; the second waits for it
+    rather than taking the Dutch seat - a room in the default that is about to
+    exist ranks above a room in another language that exists now (#1211)."""
+    room_manager = RoomManager()
+    dutch = waiting_room(room_manager, language="nl", seats=2)
+    sio, _ = server(room_manager)
+    create = room_handlers._create_new_room
+
+    async def slow_create(*args, **kwargs):
+        await asyncio.sleep(0.05)
+        return await create(*args, **kwargs)
+
+    monkeypatch.setattr(room_handlers, "_create_new_room", slow_create)
+
+    opener, follower = await asyncio.gather(
+        press(sio, sid="fr-a", promptLanguage="fr"),
+        press(sio, sid="fr-b", nickname="Jonas", promptLanguage="fr", extraPromptLanguages=["nl"]),
+    )
+    assert opener["ok"] and follower["ok"]
+    assert follower["roomId"] == opener["roomId"]
+    assert players(dutch) == 2

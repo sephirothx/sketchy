@@ -22,10 +22,10 @@ keyboard that takes half the screen, and one thumb.
 
 ## Features
 
-- Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; it is also where a room you create starts. It is the language you *play* in, not the language you *read* in — two settings, side by side in **Settings → Appearance**, because reading in Dutch while playing an English room is perfectly ordinary. The language you read in is also a flag in the lobby header, at every width, since Settings is one more screen to find in a language you cannot read. Search and the filters appear once six rooms are open, and the list's count only when a filter has left some out. The header leads to the lobby, the Gallery (once you have a session), the Community catalogue, Prompt stats and the Rules from every page, the one you are on marked, so the pages are there before you have a name and an account menu to find them in. It shows as much as the bar has room for: the names where they fit (shortened in the header where a language's page title is too long, like Spanish *Catálogo* for *Catálogo de la comunidad*), icons where only they fit, and nothing where neither does - on a narrow phone the account menu is the way there, and before you have a name the name tag links the Rules.
+- Lobby with a live, polled list of public rooms, or join a private room by code. Rooms in the language you play in come first, then **Mixed** rooms - where every player plays in their own language - then rooms in the other languages you play in, in your order, and nothing is hidden — a lobby filtered to one language looks empty while rooms are open — and the language filter offers every supported language rather than only the ones with a room open right now. Which language that is comes from your account if you have one (it follows you between devices) and from your browser if you do not; a room you create starts **Mixed** instead, so anyone can play it, and falls back to that language only when Mixed has nothing to draw on. It is the language you *play* in, not the language you *read* in — two settings, side by side in **Settings → Appearance**, because reading in Dutch while playing an English room is perfectly ordinary. Beside it, **Also comfortable in** ranks any other languages you play in — drag them, or use their arrows — and your browser's other languages are suggested there, never added for you. An account's profile shows them all as flags, the default's first and larger. Each new identity - a guest naming themselves, or an account made from nothing, however many a browser has seen - is asked for both once, in the lobby, pre-filled from the browser; signing in to an existing account is never asked; Quick play and invite links, which seat them at once, leave the question for their next visit to the lobby. The language you read in is also a flag in the lobby header, at every width, since Settings is one more screen to find in a language you cannot read. Search and the filters appear once six rooms are open, and the list's count only when a filter has left some out. The header leads to the lobby, the Gallery (once you have a session), the Community catalogue, Prompt stats and the Rules from every page, the one you are on marked, so the pages are there before you have a name and an account menu to find them in. It shows as much as the bar has room for: the names where they fit (shortened in the header where a language's page title is too long, like Spanish *Catálogo* for *Catálogo de la comunidad*), icons where only they fit, and nothing where neither does - on a narrow phone the account menu is the way there, and before you have a name the name tag links the Rules.
 - The interface is written in all seven supported languages — English, German, Spanish, French, Italian, Dutch, Portuguese — and a language is offered only once its catalogue is **complete**: there is no screen that falls back to English halfway down, because offering a language and finishing it are the same act. Which one you read in comes from your account if you have one, from this browser if you have set it here, from your browser's own languages on a first visit, and English otherwise; it is applied before the first paint — only that language's words are downloaded, alongside the account lookup rather than after it, and a language that cannot be fetched leaves the page in English rather than blank — and `<html lang>` follows it so a screen reader picks the right voice. Dates and numbers follow the same language, while the **Time format** setting still decides 12- or 24-hour on top of it. The six non-English catalogues are machine-drafted and awaiting a native reader; the unreviewed count is reported per locale in CI.
-- Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped. A list is Private until its owner publishes it, and can be duplicated into a second list of your own - one you copied from somebody else excepted, so its credit stays. Every room declares one language when it is created - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page, which opens on the Standard list of the language you play in. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned, and a list nobody has played yet says so once and lists its prompts by name. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
-- A **Community catalogue** of prompt lists players published for anyone to play. Browse by language and tag, read every prompt in a list before choosing it, and play it straight away — no account needed to browse or play. With one, **star** a list to keep it on a shortlist the room picker offers, **make a copy** of your own to edit, or report one. Publishing is moderated after the fact, with an operator switch that holds new publications for review instead.
+- Prompt lists selectable during room creation, combined with optional custom prompts. A Standard and an Extended list ship for each of the seven supported languages - Standard is the same set of prompt concepts translated, Extended is written natively for its own language; registered players can also save, revise, reuse, and delete their own lists from **My prompt lists**, where prompts are pasted in batches - one per line or comma separated - and merged into the list with duplicates and overlong entries reported rather than silently dropped. A list is Private until its owner publishes it, and can be duplicated into a second list of your own - one you copied from somebody else excepted, so its credit stays. Every room declares one language when it is created - or is *Mixed*, where each player plays in their own, only Standard and Any-language lists apply and custom prompts are off - chosen at the top of the create form, fixed thereafter, and offered only for languages that have content, which is now all seven - and the picker shows the lists in it, plus any list saved in **Any language** - names, brands, Pokémon - which is played in whatever language the room declares and folded the way that language folds guesses; the stats catalogue shows each official list's content language. Pick rate and guess accuracy stats are tracked per official prompt and browsable from the lobby on a searchable, sortable prompt stats page, which opens on the Standard list of the language you play in. Difficulty is only ranked once enough guessers have faced a prompt, so a rarely offered one is never mistaken for a hard one; the rest are listed as unranked rather than shown a zero they have not earned, and a list nobody has played yet says so once and lists its prompts by name. If the lists cannot be read at all, creating a room or changing its settings is refused against the prompt-list field instead of the room opening quietly on the built-in prompts; a room drawing only on custom prompts is unaffected, since it was never going to read a list.
+- A **Community catalogue** of prompt lists players published for anyone to play. Browse by language and tag (Any-language lists show under every language), read every prompt in a list before choosing it, and play it straight away — no account needed to browse or play. With one, **star** a list to keep it on a shortlist the room picker offers, **make a copy** of your own to edit, or report one. Publishing is moderated after the fact, with an operator switch that holds new publications for review instead.
 - Turn-based rounds: each player draws once per round, choosing from 3 prompt options.
 - Real-time synced canvas (freehand brush + rectangle/ellipse/triangle shape tools). A triangle is dragged from a base corner to its apex — both ends of the drag are corners of it — and the base lies on the row the drag started from, reaching as far past the apex as the start is short of it; drag downwards and the triangle is drawn upside down. A brush stroke is thinned as it is drawn: samples that would move the line by less than a quarter of a pixel are not sent, with the error bounded for the whole stroke, and the drawer's own canvas is painted from the same samples the viewers get, so everyone rasterizes one line. Points go out every 80 ms, each frame relative to the last point sent, the last batch of a stroke carrying its end, and a viewer plays each batch out over the next 80 ms at the screen's own rate rather than painting it in one step, so it sees ink smoothly, up to 80 ms behind the drawer's hand. A pressure-sensitive pen draws a thinner brush stroke under a lighter hand: the selected brush size is what full pressure draws and the stroke never gets wider, the thinnest is 2 px whatever the brush (a 1 px line does not hold a fill), so the largest brush spans everything the toolbar offers; the whole brush arrives at 70% of the pen's pressure range rather than at its end; pressure moves the width by ratio rather than by pixels, so the fine end of a large brush is not a sliver of the range; and the line swells and tapers smoothly, to the pixel, with no levels to see — what is sent is a few width keyframes riding the frames already going out, and every screen ramps the width between them along the path, with the pen's pressure smoothed first so the keyframes describe the hand and not the sensor's jitter, so a pen costs a few percent more than a mouse (+1–10% on the uplink by brush size) and a mouse costs nothing. The eraser keeps its size, and a mouse or a finger draws exactly as before. The brush starts each turn at the player's **default brush size** (Settings → Appearance, 6 px until changed); the size slider marks it among its stops and **Default** goes back to it in one tap, and on a phone the slider lies along the panel rather than standing in it. **Pen pressure** in Settings → Appearance turns it off; it is on by default, since it acts only for such a pen.
 - The drawing is held as pixels the game owns; the canvas only shows them and is never read, and **Save image** makes its PNG from those pixels. A browser that scrambles canvas reads for privacy - Firefox's `privacy.resistFingerprinting`, the default in Tor Browser, Mullvad Browser and LibreWolf - used to turn every stroke into a rectangle of static, because painting read the canvas back; it now draws and saves like any other browser.
@@ -496,10 +496,11 @@ because `madchen` is nobody's spelling), French reads the `œ` ligature as `oe`,
 stored key stays one canonical string—it is an identity as well as a
 comparison—and a guess is accepted when its spellings meet the answer's; near
 misses and prompt provenance keep to the canonical one. Other BCP-47 tags are
-rejected until their matching semantics are implemented.
+rejected until their matching semantics are implemented; a *list* may also be in
+**Any language** (`zxx`), which no room can be.
 Each room **declares** its **Prompt language**: the host chooses it when the
 room is created, it is fixed for the room's life, and every selected list must
-be in it. It is carried into exact and near-match game logic — for the room's
+be in it or in **Any language**. It is carried into exact and near-match game logic — for the room's
 own custom prompts as much as for list content, so a room typing its own German
 prompts is no longer matched under English rules — and exposed in room
 payloads. Selecting a list never changes it: a list in another
@@ -556,7 +557,10 @@ in-memory room. A registered host can explicitly save usable custom prompts to
 merely because it was typed. An account may own at most 25 lists and a saved
 list may contain at most 500 prompts. Editing uses optimistic concurrency and
 creates a new immutable revision instead of rewriting the revision a running or
-finished game pinned. The content language cannot change after creation. A list
+finished game pinned. The content language - one of the seven, or **Any language**
+for a list of names or brands that is not in one - cannot change after creation. An
+Any-language list is refused if two of its prompts would be one answer in some room
+language ("Müller" and "Mueller" in German). A list
 may carry up to five **Prompt tags**, chosen from a curated vocabulary the server
 serves at `GET /api/prompt-tags` rather than the client guessing at it; the tags
 belong to the revision, so setting them is an edit like any other, and a tag the
@@ -583,7 +587,8 @@ playing or copying it — filtered by language and tag, sorted by stars or by
 recency, and narrowed to the lists that account starred. Browsing works without
 an account; starring, copying and reporting need one. **Play** opens the room form
 with that list chosen and the room's language set to the list's, since a room
-declares one language and its lists must agree. The picker also offers the lists
+declares one language and its lists must agree - unless the list is in **Any
+language**, which keeps the language the form already had. The picker also offers the lists
 an account starred, so a shortlist replaces hunting for one twice. The catalogue is browsed at `GET /api/prompt-lists/community`, filtered
 by language and tag and sorted by stars or by recency; it is a route of its own
 rather than a filter on the official one, so official content and player content
@@ -1345,7 +1350,8 @@ of its guest aliases; the guest's sessions are revoked during the merge.
 Registered players' **Player settings** follow them across devices. Theme,
 time format (the device's convention, or a 12- or 24-hour clock), sound and
 confetti switches, volume, brush cursor, pen pressure, default brush size, keyboard shortcuts, the
-colorblind-safe color preference, and the language the player plays in live in
+colorblind-safe color preference, and the languages the player plays in (a
+default, and the others in their order) live in
 `user_settings` and are read or partially updated through
 `GET`/`PATCH /api/users/me/settings`. Values are
 bounded at the API and database layers; keyboard shortcuts must describe the
@@ -1527,6 +1533,7 @@ your players share one address:
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 per hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
+| `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - per address |
 | `FRIEND_REQUEST_LIMIT` | 20 per hour | Friend requests, keyed by account. Every attempt spends one whatever became of it, so the limit cannot say whether a request landed (#1062) |
 
 In-room commands answer to their own per-caller budgets, which are **not** environment
@@ -2414,12 +2421,15 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 ## Game flow
 
 1. **Lobby**: pick a nickname, then press **Quick play** — into the fullest public room
-   waiting for players in your prompt language, or a new public one on the standard rules
-   when none is. The server decides it in one step, so the button works the moment you
+   waiting for players in your default play language, or a new public one in it on the
+   standard rules when none is (see below for mixed rooms and your other languages). The server decides it in one step, so the button works the moment you
    arrive, before any room list has, and two people pressing at the same time land in the
    same room rather than one each — or create a room (public or private, with a max player count and number
    of rounds), pick a scoring mode, or join one by code. Quick play never joins a game
-   already under way or a room in another language.
+   already under way or a room in a language you do not play; when no room in your
+   default is waiting it takes a seat in a **mixed-language room**, then in a room in
+   each of the other languages you play in, in your order, before opening a new one in
+   your default.
 2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. Wherever
    players are listed, the host's avatar wears a gold crown on its corner and your own
    avatar wears a ring, so neither needs a word beside the name.
@@ -2433,6 +2443,13 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    sit that turn out and rejoin the guessers on the next one.
 5. **Turn results** (5s by default): the prompt is revealed and scores update, reactions
    stay open on the drawing, then the next player's turn begins.
+
+In a **mixed-language room** every seat plays in the language it joined with: the drawer
+is offered prompts in theirs, each guesser's letter tiles, hints and near misses are in
+their own, and the reveal shows each player their own word. A guess naming the drawing
+in any of the seven languages scores - unless the word means another prompt of the game
+in the guesser's own language. Such a room plays Standard and lists in Any language;
+custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings, the highlights, and the drawing recap — where a registered
    player in a public room can **Pin** a drawing to their profile.

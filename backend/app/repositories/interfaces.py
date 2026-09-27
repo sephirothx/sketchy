@@ -666,6 +666,12 @@ class PinnedPromptSelection:
     prompt_count: int = 0
     letter_counts: Mapping[str, int] = field(default_factory=dict)
     letter_total: int = 0
+    # A mixed-language room (#1182) prices the wheel per seat language: each
+    # language's own lists plus the lists in no language. Empty otherwise.
+    letter_counts_by_language: Mapping[str, Mapping[str, int]] = field(
+        default_factory=dict
+    )
+    letter_total_by_language: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -674,6 +680,24 @@ class SampledPrompt:
 
     answer: str
     match_key: str
+    aliases: tuple[str, ...] = ()
+    prompt_version_id: str | None = None
+    source_revision_ids: tuple[str, ...] = ()
+    # What is being drawn, independent of how this language spells it: the
+    # key a game tracks the prompt by (#1181). `None` only where a caller has
+    # no concept to give - a stand-in store - and the answer serves instead.
+    concept_id: str | None = None
+    # In a mixed-language room (#1182), the concept in every room language, by
+    # language; `answer` and the fields above are then one of them. Empty for
+    # a prompt in no language, which every seat plays as `answer`.
+    translations: Mapping[str, "PromptTranslation"] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PromptTranslation:
+    """One language's form of a drawn concept, with its own provenance."""
+
+    answer: str
     aliases: tuple[str, ...] = ()
     prompt_version_id: str | None = None
     source_revision_ids: tuple[str, ...] = ()
@@ -696,6 +720,11 @@ class PromptSample:
 
 class PromptListSelectionError(ValueError):
     """A selected list is missing or cannot be combined with the others."""
+
+
+class MixedRoomListError(PromptListSelectionError):
+    """A list a mixed-language room cannot draw on (#1182): one that is in a
+    language but whose concepts not every room language spells."""
 
 
 class PromptSeedConflictError(ValueError):
@@ -904,6 +933,13 @@ class UserRepository(ABC):
     async def get_stats(self, user_id: str) -> UserStats:
         """Calculate aggregated lifetime statistics for a user."""
         ...
+
+    async def get_play_languages(self, user_id: str) -> tuple[str, ...]:
+        """The languages an account plays in, its default first and then the
+        others in its own order (#1212); empty for a guest, whose languages
+        live in its browser. Not abstract: a store without settings has
+        none to tell."""
+        return ()
 
 
 class GameHistoryRepository(ABC):
@@ -1225,6 +1261,7 @@ class PromptListRepository(ABC):
         *,
         limit: int,
         exclude_match_keys: Collection[str] = (),
+        exclude_language: str | None = None,
     ) -> PromptSample:
         """Draw up to `limit` random prompts from pinned revisions.
 
@@ -1232,8 +1269,26 @@ class PromptListRepository(ABC):
         is in `exclude_match_keys` - the room's own quick prompts, which shadow
         curated content of the same name. Returns `limit` prompts whenever that
         many remain after those exclusions, along with how many remained.
+
+        With `exclude_language`, only versions stored in that language are
+        compared: the keys are the room's fold, and a list in no language
+        (#821) stores another one, where "Bär" keys like the different German
+        word "Bar". The caller compares those itself, under the room's fold.
         """
         ...
+
+    async def sample_mixed_prompts(
+        self, revision_ids: Sequence[str], *, limit: int
+    ) -> PromptSample:
+        """Draw up to `limit` random concepts for a mixed-language room (#1182).
+
+        Each comes back with its form in every room language - or, for a list
+        in no language, the one form every seat plays - and the count is of
+        concepts. A concept a takedown left short of a language is not drawn,
+        since some seat could not play it. Not abstract: only a store that can
+        pin a mixed room needs it.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:

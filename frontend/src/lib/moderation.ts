@@ -1,6 +1,6 @@
 import { apiBinaryRequest, apiRequest } from "./api.ts";
 import { emitWithAck } from "./socket.ts";
-import type { GamePhase, ModerationState, PromptLanguage } from "../types";
+import type { GamePhase, ModerationState, PromptListLanguage } from "../types";
 import type { GalleryEntry } from "./gallery.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -609,7 +609,7 @@ export interface HeldPublication {
   id: string;
   name: string;
   description: string;
-  language: PromptLanguage;
+  language: PromptListLanguage;
   ownerDisplayName: string | null;
   promptCount: number;
   /** The revision on show. A decision names it, so an edit made after the

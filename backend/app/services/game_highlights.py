@@ -112,6 +112,7 @@ def _hardest_prompt(game: Game) -> dict | None:
     return {
         "kind": "hardest_prompt",
         "prompt": turn.chosen_prompt,
+        **_spellings(turn.chosen_prompt_spellings),
         "correctGuessCount": turn.correct_guess_count,
         "totalGuesserCount": turn.total_guesser_count,
     }
@@ -133,6 +134,7 @@ def _fastest_guess(game: Game, names: dict[str, _Name]) -> dict | None:
         {
             "kind": "fastest_guess",
             "prompt": turn.chosen_prompt,
+            **_spellings(turn.chosen_prompt_spellings),
             "seconds": guess_time_on_wire(guess.guess_time_seconds),
         },
         names[guess.token],
@@ -219,12 +221,19 @@ def _most_reacted_drawing(room: Room, names: dict[str, _Name]) -> dict | None:
         {
             "kind": MOST_REACTED_KIND,
             "prompt": entry.prompt,
+            **_spellings(entry.prompts),
             "reactionCount": count,
             "drawingIndex": index,
             "turnId": entry.turn_id,
         },
         name,
     )
+
+
+def _spellings(spellings: tuple[tuple[str, str], ...]) -> dict:
+    """A highlight's prompt in every language, where a mixed-language room
+    spelled it more than one way (#1182); nothing where `prompt` is all."""
+    return {"prompts": dict(spellings)} if spellings else {}
 
 
 def refresh_reaction_highlight(room: Room) -> None:

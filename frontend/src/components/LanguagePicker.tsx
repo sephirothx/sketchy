@@ -1,24 +1,29 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { CheckIcon, ChevronDownIcon, Flag, GlobeIcon } from "./icons";
+import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon, PlusIcon } from "./icons";
 import {
+  AGNOSTIC_PROMPT_LANGUAGE,
+  MIXED_PROMPT_LANGUAGE,
   promptLanguageEndonym,
   promptLanguageLabel,
 } from "../lib/promptLanguages";
 import { getFocusableElements, useEscapeLayer } from "../hooks/useFocusTrap";
-import type { PromptLanguage } from "../types";
+import type { PromptListLanguage, RoomLanguage } from "../types";
 import { ui } from "../content/ui/index.ts";
 
 /** The lobby's filter adds "every language" to the same list of choices. */
 export const ANY_LANGUAGE = "all";
 
-export type LanguageChoice = PromptLanguage | typeof ANY_LANGUAGE;
+/** A list may also be in no language (`zxx`, #821); a room may not, so only a
+list's own picker offers it. */
+export type LanguageChoice = PromptListLanguage | RoomLanguage | typeof ANY_LANGUAGE;
 
 interface LanguagePickerProps {
   label: string;
-  value: LanguageChoice;
-  options: readonly PromptLanguage[];
+  /** None when the picker adds a language rather than choosing one. */
+  value?: LanguageChoice;
+  options: readonly (PromptListLanguage | RoomLanguage)[];
   onChange: (value: LanguageChoice) => void;
   /** The lobby filters by language; a room picks one, and cannot pick "any". */
   includeAny?: boolean;
@@ -29,6 +34,9 @@ interface LanguagePickerProps {
   flagOnly?: boolean;
   /** A flag a size down, to sit among a header's buttons rather than a form's rows. */
   small?: boolean;
+  /** Adds one of `options` rather than choosing among them (#1210): the
+      trigger is a "+ Add" button naming this, and no row is the current one. */
+  addLabel?: string;
 }
 
 /**
@@ -59,6 +67,7 @@ export function LanguagePicker({
   compact = false,
   flagOnly = false,
   small = false,
+  addLabel,
 }: LanguagePickerProps) {
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -81,6 +90,57 @@ export function LanguagePicker({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, [open]);
+
+  // Placed in the window, not in whatever holds the trigger: a picker inside a
+  // dialog's scrolling body was clipped by it and scrolled it both ways. Under
+  // the trigger where it fits, over it where there is more room above, and
+  // held inside the window's edges - its right edge on the trigger's when the
+  // trigger sits at the end of a row. Placed before paint, and again as
+  // anything scrolls or the window changes size. Written to the list itself,
+  // which goes when the list closes.
+  useLayoutEffect(() => {
+    if (!open) return;
+    function place() {
+      const trigger = triggerRef.current?.getBoundingClientRect();
+      const list = listRef.current;
+      if (!trigger || !list) return;
+      const margin = 8;
+      const gap = 6;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight;
+      const below = viewportHeight - trigger.bottom - gap - margin;
+      const above = trigger.top - gap - margin;
+      // At the height it will have, and only then measured, so its width is
+      // the one it is drawn at.
+      list.style.top = "0px";
+      list.style.left = "0px";
+      list.style.right = "auto";
+      list.style.bottom = "auto";
+      list.style.minWidth = `${trigger.width}px`;
+      list.style.maxHeight = "";
+      const natural = list.scrollHeight;
+      const upward = natural > below && above > below;
+      list.style.maxHeight = `${Math.max(120, Math.min(360, upward ? above : below))}px`;
+      const width = Math.max(list.offsetWidth, trigger.width);
+      // An add button stands at the end of its row, so its list hangs from
+      // its right edge; a choice's list from its left, unless that runs out.
+      let left = addLabel !== undefined ? trigger.right - width : trigger.left;
+      if (left + width > viewportWidth - margin) left = trigger.right - width;
+      left = Math.max(margin, Math.min(left, viewportWidth - margin - width));
+      Object.assign(list.style, {
+        left: `${left}px`,
+        top: upward ? "auto" : `${trigger.bottom + gap}px`,
+        bottom: upward ? `${viewportHeight - trigger.top + gap}px` : "auto",
+      });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
+  }, [open, addLabel]);
 
   // The chosen row takes focus on open, so the list starts where the reader
   // already is rather than at the top of seven.
@@ -120,7 +180,8 @@ export function LanguagePicker({
   // One choice is not a choice: before the other six languages had content,
   // this was a dropdown that could only ever answer "English". It says what
   // the language is instead, in the same face the list would have shown.
-  if (choices.length < 2) {
+  // Adding one is still a choice, of whether to.
+  if (choices.length < 2 && addLabel === undefined && value !== undefined) {
     return (
       <span className="language-picker-static">
         <LanguageFace value={value} />
@@ -140,13 +201,26 @@ export function LanguagePicker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        aria-label={ui.languagePicker.currentChoice({ label, value: accessibleName(value) })}
-        title={flagOnly ? `${label}: ${accessibleName(value)}` : undefined}
+        aria-label={
+          value === undefined
+            ? label
+            : ui.languagePicker.currentChoice({ label, value: accessibleName(value) })
+        }
+        title={flagOnly && value !== undefined ? `${label}: ${accessibleName(value)}` : undefined}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
-        <LanguageFace value={value} nameHidden={flagOnly} fill={flagOnly} />
-        {!flagOnly && <ChevronDownIcon size={14} />}
+        {value === undefined ? (
+          <span className="language-picker-add">
+            <PlusIcon size={14} />
+            {addLabel}
+          </span>
+        ) : (
+          <>
+            <LanguageFace value={value} nameHidden={flagOnly} fill={flagOnly} />
+            {!flagOnly && <ChevronDownIcon size={14} />}
+          </>
+        )}
       </button>
 
       {open && (
@@ -166,6 +240,7 @@ export function LanguagePicker({
                 type="button"
                 role="option"
                 aria-selected={selected}
+                data-language={choice}
                 className={`language-picker-option${selected ? " is-selected" : ""}`}
                 onClick={() => choose(choice)}
               >
@@ -210,6 +285,18 @@ export function LanguageFace({
       </span>
     );
   }
+  if (value === AGNOSTIC_PROMPT_LANGUAGE) {
+    return (
+      <span className="language-picker-face">
+        <span className="language-picker-flag" aria-hidden="true">
+          <AnyLanguageIcon size={Math.round(flagWidth * 0.85)} />
+        </span>
+        <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
+          {ui.languagePicker.anyLanguage}
+        </span>
+      </span>
+    );
+  }
   const endonym = promptLanguageEndonym(value);
   const english = promptLanguageLabel(value);
   return (
@@ -230,6 +317,8 @@ export function LanguageFace({
 
 function accessibleName(value: LanguageChoice): string {
   if (value === ANY_LANGUAGE) return ui.languagePicker.everyLanguage;
+  if (value === AGNOSTIC_PROMPT_LANGUAGE) return ui.languagePicker.anyLanguage;
+  if (value === MIXED_PROMPT_LANGUAGE) return ui.languagePicker.mixed;
   const endonym = promptLanguageEndonym(value);
   const english = promptLanguageLabel(value);
   return english === endonym ? endonym : `${endonym} (${english})`;

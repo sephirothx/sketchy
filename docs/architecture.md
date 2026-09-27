@@ -109,12 +109,18 @@ app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 `Game` owns phases, the turn rotation, prompt choice, hint economics, guess matching,
 and scoring. It performs no I/O and touches no socket. `Phase` is
 `choosing_prompt | drawing | turn_results | game_end`
-([`backend/app/game.py:139`](../backend/app/game.py)). Scoring constants and the
+([`backend/app/game.py:140`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
-([`backend/app/game.py:38`](../backend/app/game.py),
-[`backend/app/game.py:370`](../backend/app/game.py)). This is the module to change when
+([`backend/app/game.py:47`](../backend/app/game.py),
+[`backend/app/game.py:454`](../backend/app/game.py)). This is the module to change when
 game rules change — and changing an outcome-producing constant requires bumping
 `SCORING_RULES_VERSION`.
+
+A game tracks its prompts by **key** - a list prompt's concept, a quick prompt's own
+text (#1181) - and spells each one per seat: `Game.seat_language(token)` is the one
+question every mask, offer, hint, wheel price and match asks. It answers the room's
+language, except in a mixed-language room (R-PROMPT-13, #1182), where each seat plays
+in the language it joined with and a prompt carries a `PromptForm` per language.
 
 **`app/rooms.py` — the live room model.**
 `Room`, `Player`, `RestartVote`, `DrawingRecapEntry`, and `RoomManager`. A `Room`
@@ -126,8 +132,8 @@ A room holds only what its selected lists were pinned to - the revision IDs, how
 many prompts they hold, and a letter histogram for wheel pricing - and the
 prompts themselves stay in the database until a game starts and draws the
 bounded sample it can actually play (see `app/game.py` above). `to_state_payload()`
-([`backend/app/rooms.py:511`](../backend/app/rooms.py)) and `to_public_summary()`
-([`backend/app/rooms.py:483`](../backend/app/rooms.py)) are the two shapes the room is
+([`backend/app/rooms.py:768`](../backend/app/rooms.py)) and `to_public_summary()`
+([`backend/app/rooms.py:714`](../backend/app/rooms.py)) are the two shapes the room is
 published in.
 
 **`app/handlers/*` — transport adapters, nothing more.**
@@ -440,7 +446,7 @@ client emit ──▶ sio.on(event)  handlers/<domain>.py
 Validation completes **before** authorization or mutation, and values are never
 coerced: strings and booleans must have their JSON types, integers must be integers
 and not booleans, and unknown fields are rejected
-([`backend/app/handlers/payloads.py:78`](../backend/app/handlers/payloads.py)).
+([`backend/app/handlers/payloads.py:95`](../backend/app/handlers/payloads.py)).
 
 ### Data queries (REST)
 
@@ -1577,10 +1583,10 @@ host: start_game
        │                          gameStarted?, …}                         → room
        │    (the new canvas identity and, on a game's first turn, its start:
        │     one message where canvas_reset and game_started used to go, #880)
-       ├─ emit your_prompt_choices {choices, seconds}                     → drawer only
+       ├─ emit your_prompt_choices {choices, seconds, turnId}             → drawer only
        └─ schedule the choose-prompt (15s default) phase timer
 
-drawer: select_prompt  (or the timer forces a choice)
+drawer: select_prompt {index, turnId}  (or the timer forces a choice)
   └─ GameFlowService._begin_drawing
        ├─ Game.snapshot_turn_participants(...)       freezes eligibility, per seat
        ├─ emit turn_started {maskedPrompt, hintCost, letterPrices, …}     → per socket
@@ -1964,10 +1970,10 @@ Files are named for their single concern; the directory says the role.
 | Directory | Files |
 | --- | --- |
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
-| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendInviteStore.ts`, `friendRequestNoticeStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
-| `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useFriendInviteAnswer.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `useRoomBarGiveWay.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollbarWidth.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
-| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
+| `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendInviteStore.ts`, `friendRequestNoticeStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `playLanguagesQuestionStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
+| `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useFriendInviteAnswer.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `usePlayLanguages.ts`, `useRoomBarGiveWay.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playLanguages.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptPick.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollbarWidth.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
+| `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayLanguageExtras.tsx`, `PlayLanguageFlags.tsx`, `PlayLanguagesQuestion.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
 | `frontend/src/components/ui/` | The shared recipes as components: `Avatar.tsx`, `AvatarPicture.tsx`, `BottomSheet.tsx`, `Button.tsx`, `Card.tsx` (with `SectionLabel`), `Chip.tsx`, `EmptyState.tsx`, `ModalShell.tsx` |
 
 `frontend/src/types.ts` holds the shared TypeScript types for every socket payload and

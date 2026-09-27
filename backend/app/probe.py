@@ -665,7 +665,9 @@ async def run_probe(
             raise ProbeError("prompt", "nobody was offered a prompt")
         drawer, viewer = (host, guest) if choices_task in finished else (guest, host)
         choices = next(iter(finished)).result().args[0]["choices"]
-        chosen = await drawer.call("select_prompt", {"prompt": choices[0]})
+        if not choices:
+            raise ProbeError("prompt", "the offer was empty")
+        chosen = await drawer.call("select_prompt", {"index": 0})
         if not chosen or chosen[0].get("ok") is not True:
             raise ProbeError("prompt", f"refused: {chosen}")
         await viewer.expect("turn_started")

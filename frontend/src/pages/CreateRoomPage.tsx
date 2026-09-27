@@ -5,7 +5,7 @@ import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { RoomSetupForm } from "../components/RoomSetupForm";
 import { ClockIcon } from "../components/icons";
 import { useMediaQuery } from "../hooks/useMediaQuery";
-import type { PromptListSummary } from "../types";
+import type { PromptListSummary, RoomLanguage } from "../types";
 import { DEFAULT_ALLOWED_TOOLS, DEFAULT_COLOR_MODE } from "../lib/drawingRules";
 import { DEFAULT_DRAWING_SECONDS, DEFAULT_HINT_MODE } from "../lib/roomSetup";
 import { changedRoomRules } from "../lib/roomCardFacts";
@@ -17,8 +17,13 @@ import { readCommunityPromptList } from "../lib/promptLists";
 import { sessionFrom } from "../lib/roomEntryState";
 import { useGameStore } from "../store/gameStore";
 import { useSettingsStore } from "../store/settingsStore";
-import { reconcileSelectionForLanguage } from "../lib/promptLanguages";
-import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, PromptLanguage, ScoringMode } from "../types";
+import {
+  AGNOSTIC_PROMPT_LANGUAGE,
+  MIXED_PROMPT_LANGUAGE,
+  availablePromptLanguages,
+  reconcileSelectionForLanguage,
+} from "../lib/promptLanguages";
+import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
 import { currentPlayerName, needsIdentity, useAuthStore } from "../store/authStore";
 import {
   createRoomPreset,
@@ -49,6 +54,7 @@ export function CreateRoomPage() {
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
+  const playLanguage = useSettingsStore((state) => state.promptLanguage);
   const authUser = useAuthStore((state) => state.user);
   // The server provisions on naming and will not open a room for a
   // visitor without an account, so the form waits rather than filling
@@ -68,12 +74,11 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
-  // The language this player plays in - their setting if they have an account,
-  // and what their browser says otherwise. A host who wants another one says
-  // so in the form; this is only where it starts.
-  const [promptLanguage, setPromptLanguage] = useState<PromptLanguage>(
-    () => useSettingsStore.getState().promptLanguage,
-  );
+  // Mixed by default (#1182): a room anybody can play in their own language.
+  // A host who wants one language - for custom prompts, or a list in it -
+  // picks it here, and a list carried from the catalogue sets it below.
+  const [promptLanguage, setPromptLanguage] = useState<RoomLanguage>(MIXED_PROMPT_LANGUAGE);
+  const mixed = promptLanguage === MIXED_PROMPT_LANGUAGE;
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
   // A list the host arrived with, from the community catalogue's Play. The
   // room takes its language too: a room declares one and its lists must agree
@@ -130,13 +135,13 @@ export function CreateRoomPage() {
   }, [authUser]);
 
   /**
-   * The catalogue arriving is when the guess above becomes checkable.
+   * The catalogue arriving is when the guesses above become checkable.
    *
-   * The language comes from the player's own preference and the selection
-   * from a constant, and nothing kept the two in step: someone who plays in
-   * German opened this form declaring German with `english_standard`
-   * selected, which the server refuses. The lists say which slugs belong to
-   * the language, so this is the first moment the selection can be put right.
+   * The form opens Mixed with a constant selection, before it knows whether
+   * this catalogue can play Mixed at all or which slugs belong to a language:
+   * a room declaring German with `english_standard` selected is one the
+   * server refuses. The lists say both, so this is the first moment the
+   * language and the selection can be put right.
    */
   // Memoized because the picker reports its lists back through an effect
   // keyed on this prop: a fresh array each render would report, re-render,
@@ -148,9 +153,25 @@ export function CreateRoomPage() {
 
   function handleListsLoaded(lists: PromptListSummary[]) {
     setLoadedLists(lists);
+    // Mixed needs Standard in every language; a catalogue without it opens
+    // on the host's own language rather than on a room the server refuses.
+    // Judged on the bundled catalogue only: the picker reports before its
+    // fetch lands, and an empty first report is not a catalogue without it.
+    const language = promptLanguage === MIXED_PROMPT_LANGUAGE
+      && lists.some((list) => list.isBundled)
+      && !availablePromptLanguages(lists, playLanguage).includes(MIXED_PROMPT_LANGUAGE)
+      ? playLanguage
+      : promptLanguage;
+    if (language !== promptLanguage) setPromptLanguage(language);
     setPromptListSlugs((current) =>
-      reconcileSelectionForLanguage(lists, promptLanguage, current),
+      reconcileSelectionForLanguage(lists, language, current, playLanguage),
     );
+  }
+
+  // No catalogue at all: Mixed has nothing to draw on and takes no custom
+  // prompts, so the host's own language keeps a custom-only room possible.
+  function handleListsUnavailable() {
+    if (promptLanguage === MIXED_PROMPT_LANGUAGE) setPromptLanguage(playLanguage);
   }
 
   useEffect(() => {
@@ -161,7 +182,9 @@ export function CreateRoomPage() {
       .then((list) => {
         if (cancelled) return;
         setCarriedList({ ...list, isBundled: false });
-        setPromptLanguage(list.language);
+        // A list in no language (#821) is played in the room's language, so
+        // the form keeps the one it already had rather than inventing one.
+        if (list.language !== AGNOSTIC_PROMPT_LANGUAGE) setPromptLanguage(list.language);
         setPromptListSlugs([list.slug]);
       })
       // A list unpublished since the link was made leaves the form as it was,
@@ -205,7 +228,15 @@ export function CreateRoomPage() {
     // A preset carries the language of the lists it saved, and applying it
     // sets both together: a room declares its language before it has lists.
     setPromptLanguage(settings.promptLanguage);
-    setPromptListSlugs(settings.promptListSlugs);
+    // Reconciled: a mixed preset saved by a host playing another language
+    // names that language's Standard, which this picker shows in its own.
+    setPromptListSlugs(
+      loadedLists.length > 0
+        ? reconcileSelectionForLanguage(
+          loadedLists, settings.promptLanguage, settings.promptListSlugs, playLanguage,
+        )
+        : settings.promptListSlugs,
+    );
     dispatchCustomPrompts({ type: "reset", value: "", only: false });
   }
 
@@ -221,7 +252,9 @@ export function CreateRoomPage() {
 
   /** Quick prompts are room input, never stored settings. */
   function presetBlocker(): string | null {
-    if (customPrompts.analysis.usableCount > 0) {
+    // A mixed room keeps none (#1182): whatever the hidden editor holds is not
+    // part of what would be saved.
+    if (!mixed && customPrompts.analysis.usableCount > 0) {
       return ui.createRoomPage.saveCustomPromptsAsAList;
     }
     return null;
@@ -331,7 +364,7 @@ export function CreateRoomPage() {
   }
 
   async function handleCreate() {
-    if (customPrompts.analysis.hasErrors) {
+    if (!mixed && customPrompts.analysis.hasErrors) {
       setError(ui.createRoomPage.fixCustomPromptEntriesMarkedAbove);
       return;
     }
@@ -344,9 +377,14 @@ export function CreateRoomPage() {
     try {
       const settings = {
         nickname: currentPlayerName(), nameColor, colorblindSafeColors, name: roomName.trim(), isPublic, maxPlayers, rounds, drawingSeconds,
-        customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
+        // A mixed room takes no quick prompts (#1182); the form hides them.
+        customPrompts: mixed ? "" : customPrompts.value.trim(),
+        customPromptsOnly: mixed ? false : customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptLanguage,
         promptListSlugs,
+        // The language the creator plays in, which a mixed-language room asks
+        // of every seat (#1182); the room's own is `promptLanguage`.
+        seatLanguage: playLanguage,
       };
       // The same press retried keeps its id, so a creation whose answer was
       // lost is handed back rather than made twice (#879).
@@ -385,8 +423,9 @@ export function CreateRoomPage() {
       hideMaskedPrompt,
       allowedTools,
       colorMode,
-      customPromptCount: customPrompts.analysis.usableCount,
-      customPromptsOnly: customPrompts.only,
+      // A mixed room is created with none (#1182), whatever the hidden editor holds.
+      customPromptCount: mixed ? 0 : customPrompts.analysis.usableCount,
+      customPromptsOnly: mixed ? false : customPrompts.only,
       spectatorsSeePrompt,
     }),
   ];
@@ -429,7 +468,7 @@ export function CreateRoomPage() {
   );
 
   const submitButton = (
-    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || entryPending || awaitingName || customPrompts.analysis.hasErrors} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
+    <button type="button" className="btn btn-primary btn-big create-room-submit" disabled={busy || entryPending || awaitingName || (!mixed && customPrompts.analysis.hasErrors)} onClick={() => void handleCreate()}>{busy ? ui.createRoomPage.creating : ui.createRoomPage.createRoom2}</button>
   );
 
   return <main className="create-room-page">
@@ -521,6 +560,7 @@ export function CreateRoomPage() {
       dispatchCustomPrompts={dispatchCustomPrompts}
       namePlaceholder={ui.createRoomPage.leaveBlankForARandom}
       onListsLoaded={handleListsLoaded}
+      onListsUnavailable={handleListsUnavailable}
       extraLists={carried}
       loadedLists={loadedLists}
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (

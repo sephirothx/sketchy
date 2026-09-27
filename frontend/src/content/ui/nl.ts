@@ -122,6 +122,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_letter: "Deze letter is ongeldig.",
   invalid_prompt_lists: "Deze woordenlijsten kunnen niet samen gebruikt worden.",
   invalid_custom_prompts: "Deze eigen woorden konden niet gelezen worden.",
+  mixed_room_list_unsupported: "Meertalige kamers kunnen alleen lijsten in alle talen of taalonafhankelijke lijsten gebruiken.",
+  mixed_room_custom_prompts: "Meertalige kamers kunnen geen eigen woorden gebruiken: elke speler heeft het woord in zijn eigen taal nodig.",
   max_players_below_seated: (params) =>
   `Het maximum aantal spelers kan niet lager zijn dan de ${count(params.seated, 2)} spelers die al in de kamer zitten.`,
   empty_message: "Typ eerst iets.",
@@ -1098,6 +1100,8 @@ export const NL: Catalogue = {
   languagePicker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Alle talen",
+    anyLanguage: "Taalonafhankelijk",
+    mixed: "Meertalig",
   },
 
   lobbyBrowserPage: {
@@ -1439,6 +1443,8 @@ export const NL: Catalogue = {
   },
 
   profilePage: {
+    playsIn: (p: { language: string }) => `Speelt in het ${p.language}`,
+    playsInAlso: (p: { language: string; others: string }) => `Speelt in het ${p.language}; ook in het ${p.others}`,
     gamesPlayed: "Gespeelde spellen",
     gamesWon: "Gewonnen spellen",
     winRate: "Winstpercentage",
@@ -1856,6 +1862,7 @@ export const NL: Catalogue = {
 
   roomSetupForm: {
     promptLanguage: "Woordtaal",
+    customPromptsOffInMixedRooms: "Eigen woorden staan uit in meertalige kamers: elke speler heeft het woord in zijn eigen taal nodig.",
     visibility: "Zichtbaarheid",
     maxPlayers: "Maximum aantal spelers",
     rounds: "Rondes",
@@ -1972,6 +1979,11 @@ export const NL: Catalogue = {
     wearing: "Draag je nu",
     couldNotChoose: "De tekening kon niet gewijzigd worden.",
   },
+  playLanguagesQuestion: {
+    title: "In welke talen speel je?",
+    changeLater: "Je kunt dit altijd wijzigen via Instellingen → Weergave.",
+    done: "Klaar",
+  },
   settingsOverlay: {
     email: "E-mail",
     password: "Wachtwoord",
@@ -1980,8 +1992,19 @@ export const NL: Catalogue = {
     downloadEverything: "Alles downloaden",
     colorScheme: "Kleurenschema",
     appliesMomentYouPick: "Geldt zodra je het kiest.",
-    languageYouPlay: "Taal waarin je speelt",
-    roomsThisLanguageComeFirstLobby: "Kamers in deze taal staan voorop in de lobby, en een kamer die je maakt begint erin. Dit staat los van de taal waarin je Sketchy leest.",
+    languageYouPlay: "Jouw taal",
+    roomsThisLanguageComeFirstLobby: "Kamers in deze taal staan voorop in de lobby, en in een meertalige kamer speel je de woorden in deze taal. Dit staat los van de taal waarin je Sketchy leest.",
+    alsoPlayIn: "Ook vertrouwd met",
+    alsoPlayInHint: "Kamers in deze talen komen in de lobby na meertalige kamers, in deze volgorde. Sleep een taal, of gebruik de pijlen, om hem te verplaatsen.",
+    addPlayLanguage: "Taal toevoegen waarin je speelt",
+    addPlayLanguageButton: "Toevoegen",
+    movePlayLanguageEarlier: (p: { name: string }) => `${p.name} naar voren`,
+    movePlayLanguageLater: (p: { name: string }) => `${p.name} naar achteren`,
+    removePlayLanguage: (p: { name: string }) => `${p.name} verwijderen`,
+    playLanguageMoved: (p: { name: string; position: number; total: number }) => `${p.name} staat nu op plaats ${p.position} van ${p.total}`,
+    yourBrowserAlsoReads: "Je browser staat ook op:",
+    addSuggestedPlayLanguage: (p: { name: string }) => `${p.name} toevoegen`,
+    notNow: "Nu niet",
     interfaceLanguage: "Taal waarin je leest",
     interfaceLanguageHint: "Elk woord van Sketchy zelf. Los van de taal waarin je speelt: in de ene lezen en in de andere spelen is heel gewoon.",
     timeFormat: "Tijdnotatie",

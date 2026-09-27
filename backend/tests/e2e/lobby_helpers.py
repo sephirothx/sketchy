@@ -101,6 +101,29 @@ async def register_account(page, username: str, password: str = "a-good-password
     # The unclaimed dot disappearing is the signal, and it works whether the
     # chip is showing its name or collapsed to the avatar inside a room.
     await page.wait_for_function("() => !document.querySelector('.identity-unclaimed')")
+    await answer_play_languages_question(page)
+
+
+PLAY_LANGUAGES_QUESTION = '[data-testid="play-languages-question"]'
+
+
+async def answer_play_languages_question(page) -> None:
+    """A new identity is asked which languages it plays in (#1219), in the
+    lobby. Tests about something else answer it the way a player would, with
+    Done; where the lobby is not showing (a room), the question this browser
+    holds for it is dropped instead, so no later page of the test meets it."""
+    due = await page.evaluate(
+        "() => localStorage.getItem('sketchy_playlanguages_question_due') === '1'"
+    )
+    if not due:
+        return
+    if await page.locator(".lobby-page").count():
+        question = page.locator(PLAY_LANGUAGES_QUESTION)
+        await question.wait_for()
+        await question.get_by_role("button", name="Done").click()
+        await question.wait_for(state="detached")
+        return
+    await page.evaluate("() => localStorage.removeItem('sketchy_playlanguages_question_due')")
 
 
 ROOM_HEADER = '[data-testid="room-header"]'
@@ -124,11 +147,43 @@ CREATE_ROOM_SUBMIT = ".create-room-submit"
 WAITING_ROOM = '[data-testid="waiting-room"]'
 
 
-async def open_create_room(page) -> None:
+# The page's play language, as the settings store reads it: the stored choice,
+# else the browser's first supported language, else English.
+PLAY_LANGUAGE_SCRIPT = """() => {
+  const known = ["en", "de", "es", "fr", "it", "nl", "pt"];
+  const stored = localStorage.getItem("sketchy_promptlanguage");
+  if (known.includes(stored)) return stored;
+  for (const tag of navigator.languages) {
+    const base = tag.trim().toLowerCase().split("-")[0];
+    if (known.includes(base)) return base;
+  }
+  return "en";
+}"""
+
+
+async def choose_room_language(page, language: str | None = None) -> None:
+    """Choose the room's prompt language on the setup form by its code - `en`,
+    `de`, `mul` for Mixed - or, by default, the language the page plays in."""
+    if language is None:
+        language = await page.evaluate(PLAY_LANGUAGE_SCRIPT)
+    trigger = page.locator(".create-room-language-field .language-picker-trigger")
+    await trigger.click()
+    await page.locator(f'.language-picker-option[data-language="{language}"]').click()
+    await trigger.and_(page.locator('[aria-expanded="false"]')).wait_for()
+
+
+async def open_create_room(page, *, mixed: bool = False) -> None:
     """Press the lobby's Create room and wait until the setup form is showing,
-    so whatever the caller does next lands on the form rather than the lobby."""
+    so whatever the caller does next lands on the form rather than the lobby.
+
+    The room is put in the page's own play language unless `mixed`: the form
+    opens on Mixed (#1182), which takes no custom prompts, and a public Mixed
+    room is one any parallel test's Quick play may land in.
+    """
     await page.click(LOBBY_CREATE_ROOM)
     await page.wait_for_selector(CREATE_ROOM_SUBMIT)
+    if not mixed:
+        await choose_room_language(page)
 
 
 async def submit_create_room(page) -> None:
@@ -137,10 +192,10 @@ async def submit_create_room(page) -> None:
     await page.wait_for_selector(WAITING_ROOM)
 
 
-async def open_new_room(page) -> None:
-    """From the lobby, create a room with the form's defaults and wait for its
-    waiting room."""
-    await open_create_room(page)
+async def open_new_room(page, *, mixed: bool = False) -> None:
+    """From the lobby, create a room - in the page's play language unless
+    `mixed` - and wait for its waiting room."""
+    await open_create_room(page, mixed=mixed)
     await submit_create_room(page)
 
 

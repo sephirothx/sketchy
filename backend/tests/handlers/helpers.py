@@ -12,12 +12,15 @@ from app.game import Game
 from app.handlers import register_all_handlers as register_handlers
 from app.services.game_handoff import FinishedGameHandoffWorker
 from tests.fake_envelope_store import MemoryEnvelopeStore
+from app.domain_values import AGNOSTIC_PROMPT_LANGUAGE
 from app.prompt_content import prompt_match_key
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
+    MixedRoomListError,
     PinnedPromptSelection,
     PromptListSelectionError,
     PromptSample,
+    PromptTranslation,
     SampledPrompt,
 )
 from app.rooms import RoomManager
@@ -260,8 +263,16 @@ class StubPromptListRepo:
         revision_ids=(),
         aliases=None,
         prompt_version_ids=None,
+        concept_ids=None,
+        translations=None,
     ):
         self.prompts = list(prompts)
+        # By answer: a prompt's form in each room language, for a stub that
+        # plays mixed-language rooms (#1182). A prompt left out is agnostic.
+        self.translations = dict(translations or {})
+        # By answer; a prompt left out is drawn with no concept, and keyed by
+        # its answer as a quick prompt is.
+        self.concept_ids = dict(concept_ids or {})
         self.language = language
         self.revision_ids = tuple(revision_ids)
         self.aliases = dict(aliases or {})
@@ -280,7 +291,9 @@ class StubPromptListRepo:
         self.draws = 0
 
     def _match_key(self, prompt: str) -> str:
-        return prompt_match_key(prompt, self.language)
+        return prompt_match_key(
+            prompt, self.language if self.language != "mul" else "en"
+        )
 
     async def authorize_selection(
         self, slugs, *, requesting_user_id=None, expected_language=None
@@ -289,23 +302,49 @@ class StubPromptListRepo:
         # The live store refuses a selection that is not in the room's declared
         # language (R-PROMPT-02); a stub that answered anyway would let a test
         # pass on a room the server would never have opened.
-        if expected_language is not None and expected_language != self.language:
+        # A language-agnostic stub list (#821) answers to any room, as the
+        # live store's does; a mixed room (#1182) takes a stub that spells its
+        # prompts in every language, or holds only agnostic ones.
+        if expected_language == "mul":
+            if self.language != AGNOSTIC_PROMPT_LANGUAGE and not self.translations:
+                raise MixedRoomListError("A mixed-language room cannot use this list")
+        elif expected_language is not None and self.language not in (
+            expected_language,
+            AGNOSTIC_PROMPT_LANGUAGE,
+        ):
             raise PromptListSelectionError(
                 "Selected prompt lists are not in this room's language"
             )
         counts, total = letter_histogram(self.prompts)
+        by_language = {}
+        if expected_language == "mul":
+            # Each language priced from its own spellings, as the live store
+            # prices it from its own lists.
+            for language in {l for spelled in self.translations.values() for l in spelled}:
+                by_language[language] = letter_histogram(
+                    [spelled[language] for spelled in self.translations.values() if language in spelled]
+                )
         return PinnedPromptSelection(
             slugs=tuple(slugs),
-            language=self.language,
+            language=expected_language or self.language,
             revision_ids=self.revision_ids,
             prompt_count=len(self.prompts),
             letter_counts=counts,
             letter_total=total,
+            letter_counts_by_language={l: c for l, (c, _) in by_language.items()},
+            letter_total_by_language={l: t for l, (_, t) in by_language.items()},
         )
 
-    async def sample_prompts(self, revision_ids, *, limit, exclude_match_keys=()):
+    async def sample_prompts(
+        self, revision_ids, *, limit, exclude_match_keys=(), exclude_language=None
+    ):
         self.draws += 1
-        excluded = set(exclude_match_keys)
+        # Keys in another fold are not compared, as in the live store.
+        excluded = (
+            set(exclude_match_keys)
+            if exclude_language in (None, self.language)
+            else set()
+        )
         drawable = [
             prompt
             for prompt in self.prompts
@@ -322,6 +361,33 @@ class StubPromptListRepo:
                     aliases=self.aliases.get(prompt, ()),
                     prompt_version_id=self.prompt_version_ids.get(prompt),
                     source_revision_ids=tuple(revision_ids),
+                    concept_id=self.concept_ids.get(prompt),
+                )
+                for prompt in drawable[:limit]
+            ),
+            drawable=len(drawable),
+        )
+
+    async def sample_mixed_prompts(self, revision_ids, *, limit):
+        self.draws += 1
+        drawable = list(self.prompts)
+        random.shuffle(drawable)
+        return PromptSample(
+            prompts=tuple(
+                SampledPrompt(
+                    answer=prompt,
+                    match_key=self._match_key(prompt),
+                    prompt_version_id=self.prompt_version_ids.get(prompt),
+                    source_revision_ids=tuple(revision_ids),
+                    concept_id=self.concept_ids.get(prompt),
+                    translations={
+                        language: PromptTranslation(
+                            answer=answer,
+                            prompt_version_id=f"{self.prompt_version_ids.get(prompt)}-{language}",
+                            source_revision_ids=tuple(revision_ids),
+                        )
+                        for language, answer in self.translations.get(prompt, {}).items()
+                    },
                 )
                 for prompt in drawable[:limit]
             ),

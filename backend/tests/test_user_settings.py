@@ -16,6 +16,7 @@ from app.api.user_settings import (
     create_user_settings_router,
     seed_user_settings,
 )
+from app.api.errors import install_refusal_handler
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import UserSettings
@@ -33,6 +34,7 @@ async def env(monkeypatch):
     factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     app = FastAPI()
+    install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(users, factory))
     app.include_router(create_user_settings_router(factory))
@@ -174,6 +176,16 @@ async def test_registration_seed_never_overwrites_existing_settings(env):
         {"locale": "kl"},
         {"locale": "en-GB"},
         {"keyBindings": {"brush": ["b"]}},
+        {"extraPromptLanguages": ["de", "de"]},
+        {"extraPromptLanguages": ["kl"]},
+        {"extraPromptLanguages": ["mul"]},
+        {"extraPromptLanguages": ["zxx"]},
+        {"extraPromptLanguages": "de"},
+        {"extraPromptLanguages": ["de", "es", "fr", "it", "nl", "pt", "en"]},
+        # The default is English; naming it among the others as well is two
+        # answers to one question.
+        {"extraPromptLanguages": ["de", "en"]},
+        {"promptLanguage": "de", "extraPromptLanguages": ["de"]},
     ],
 )
 async def test_patch_rejects_invalid_or_unbounded_values(env, body):
@@ -299,3 +311,215 @@ async def test_me_still_answers_when_the_settings_read_fails(env, monkeypatch):
     assert me.status_code == 200
     assert me.json()["username"] == "MeResilient"
     assert "settings" not in me.json()
+
+
+async def _register(http, username: str, settings: dict | None = None) -> None:
+    body = {"username": username, "password": PASSWORD}
+    if settings is not None:
+        body["settings"] = settings
+    assert (await http.post("/api/auth/register", json=body)).status_code == 200
+
+
+async def test_an_account_plays_a_default_and_other_languages_in_order(env):
+    """#1209: the default, then the others in the order the player ranked
+    them - kept exactly, since the lobby ranks their rooms by it."""
+    http, factory = env
+    await _register(
+        http,
+        "Polyglot",
+        {"promptLanguage": "it", "extraPromptLanguages": ["nl", "en"]},
+    )
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert (loaded["promptLanguage"], loaded["extraPromptLanguages"]) == ("it", ["nl", "en"])
+
+    reordered = await http.patch(
+        "/api/users/me/settings", json={"extraPromptLanguages": ["en", "nl", "pt"]}
+    )
+    assert reordered.status_code == 200
+    assert reordered.json()["extraPromptLanguages"] == ["en", "nl", "pt"]
+
+    cleared = await http.patch("/api/users/me/settings", json={"extraPromptLanguages": []})
+    assert cleared.json()["extraPromptLanguages"] == []
+    async with factory() as session:
+        row = await session.scalar(select(UserSettings))
+        assert (row.prompt_language, row.extra_prompt_languages) == ("it", [])
+
+
+async def test_an_account_that_never_chose_plays_one_language(env):
+    http, _ = env
+    await _register(http, "OneLanguage")
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert loaded["extraPromptLanguages"] == []
+
+
+async def test_promoting_another_language_swaps_the_default_into_its_place(env):
+    """Choosing one of the others as the default loses nothing: the old
+    default takes its place in the order. A default from outside the list
+    replaces the old one, as a single language always did."""
+    http, _ = env
+    await _register(
+        http,
+        "Promoter",
+        {"promptLanguage": "it", "extraPromptLanguages": ["nl", "en", "es"]},
+    )
+    promoted = (await http.patch("/api/users/me/settings", json={"promptLanguage": "en"})).json()
+    assert (promoted["promptLanguage"], promoted["extraPromptLanguages"]) == ("en", ["nl", "it", "es"])
+
+    replaced = (await http.patch("/api/users/me/settings", json={"promptLanguage": "fr"})).json()
+    assert (replaced["promptLanguage"], replaced["extraPromptLanguages"]) == ("fr", ["nl", "it", "es"])
+
+    # Sent together, the pair is taken as sent.
+    both = (
+        await http.patch(
+            "/api/users/me/settings",
+            json={"promptLanguage": "nl", "extraPromptLanguages": ["fr"]},
+        )
+    ).json()
+    assert (both["promptLanguage"], both["extraPromptLanguages"]) == ("nl", ["fr"])
+
+
+async def test_naming_the_default_among_the_others_is_refused_against_that_field(env):
+    http, _ = env
+    await _register(http, "Twice", {"promptLanguage": "de"})
+    refused = await http.patch(
+        "/api/users/me/settings", json={"extraPromptLanguages": ["en", "de"]}
+    )
+    assert refused.status_code == 422
+    assert refused.json()["field"] == "extraPromptLanguages"
+    assert (await http.get("/api/users/me/settings")).json()["extraPromptLanguages"] == []
+
+
+async def test_a_browser_copy_naming_its_default_twice_still_registers(env):
+    """The seed is the browser's copy becoming the account's (R-SET-03); a
+    registration is not refused over it, and the default is what it meant."""
+    http, _ = env
+    await _register(
+        http,
+        "SeedTwice",
+        {"promptLanguage": "pt", "extraPromptLanguages": ["pt", "es", "es"]},
+    )
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert (loaded["promptLanguage"], loaded["extraPromptLanguages"]) == ("pt", ["es"])
+
+    # Every language, the default among them: six others once it is dropped,
+    # which is the bound - counted after, not before.
+    await http.post("/api/auth/logout")
+    await _register(
+        http,
+        "SeedEvery",
+        {
+            "promptLanguage": "pt",
+            "extraPromptLanguages": ["en", "de", "pt", "es", "fr", "it", "nl"],
+        },
+    )
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert loaded["extraPromptLanguages"] == ["en", "de", "es", "fr", "it", "nl"]
+
+
+async def test_two_devices_at_once_never_list_the_default_twice(env):
+    """One device ranks a language among the others while another makes it
+    the default. Whichever lands second must see the first: on PostgreSQL the
+    row lock makes it read what the first wrote (so it is refused, or swaps);
+    on SQLite, which has no row lock, the CHECK refuses the second write, and
+    the refusal is the same one. No order may store the default among the
+    others."""
+    import asyncio
+
+    http, factory = env
+    await _register(
+        http,
+        "TwoDevices",
+        {"promptLanguage": "it", "extraPromptLanguages": ["en", "nl"]},
+    )
+    for _ in range(5):
+        ranked, promoted = await asyncio.gather(
+            http.patch("/api/users/me/settings", json={"extraPromptLanguages": ["fr", "en"]}),
+            http.patch("/api/users/me/settings", json={"promptLanguage": "fr"}),
+        )
+        assert {ranked.status_code, promoted.status_code} <= {200, 422}
+        async with factory() as session:
+            row = await session.scalar(select(UserSettings))
+            assert row.prompt_language not in row.extra_prompt_languages, (
+                row.prompt_language,
+                row.extra_prompt_languages,
+            )
+        reset = await http.patch(
+            "/api/users/me/settings",
+            json={"promptLanguage": "it", "extraPromptLanguages": ["en", "nl"]},
+        )
+        assert reset.status_code == 200
+
+
+async def test_the_database_holds_the_default_out_of_the_other_languages(env):
+    """What a JSON column can be held to on both engines: a short list, never
+    naming the default. The routes check it first; this is what holds when two
+    of them both passed that check against the same row."""
+    http, factory = env
+    await _register(http, "DbLanguages", {"promptLanguage": "de"})
+    for extras in (["de"], ["en", "de"], "de", {"de": 1}, ["en"] * 9):
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    row = await session.scalar(select(UserSettings))
+                    row.extra_prompt_languages = extras
+    async with factory() as session:
+        async with session.begin():
+            row = await session.scalar(select(UserSettings))
+            row.extra_prompt_languages = ["en", "es", "fr", "it", "nl", "pt"]
+    async with factory() as session:
+        row = await session.scalar(select(UserSettings))
+        assert row.extra_prompt_languages == ["en", "es", "fr", "it", "nl", "pt"]
+
+
+async def test_a_seed_carries_the_other_languages_over_a_row_another_tab_made(env):
+    """R-SET-03: the browser's copy becomes the account's even when another tab
+    made a defaults row first - the other languages included."""
+    http, factory = env
+    registered = await http.post(
+        "/api/auth/register", json={"username": "OtherTab", "password": PASSWORD}
+    )
+    user_id = registered.json()["id"]
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(UserSettings, UUID(user_id))
+            row.email_reminder_last_shown_at = None
+            row.extra_prompt_languages = []
+    seeded = await seed_user_settings(
+        factory,
+        user_id=user_id,
+        values=UserSettingsSeed(promptLanguage="de", extraPromptLanguages=["fr", "it"]),
+    )
+    assert (seeded["promptLanguage"], seeded["extraPromptLanguages"]) == ("de", ["fr", "it"])
+
+
+async def test_a_huge_seed_list_is_refused_by_its_bound_before_it_is_walked(env):
+    """The seed's clean-up runs ahead of registration's throttle; a list far
+    past any honest copy is left for the field's bound to refuse at once."""
+    import time
+
+    body = {
+        "promptLanguage": "en",
+        "extraPromptLanguages": list(range(60_000)),
+    }
+    started = time.perf_counter()
+    with pytest.raises(ValueError):
+        UserSettingsSeed.model_validate(body)
+    assert time.perf_counter() - started < 0.5
+
+
+def test_the_migration_and_the_model_bound_the_list_alike():
+    """The CHECK's text is written twice - the model and its migration - and
+    nothing in Alembic compares CHECKs, so the bound is compared here."""
+    import importlib.util
+    from pathlib import Path
+
+    from app.db.models import EXTRA_PROMPT_LANGUAGES_TEXT_MAX
+
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic/versions/e8f9a0b1c2d4_extra_prompt_languages.py"
+    )
+    spec = importlib.util.spec_from_file_location("extra_languages_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.TEXT_MAX == EXTRA_PROMPT_LANGUAGES_TEXT_MAX

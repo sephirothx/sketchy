@@ -44,13 +44,24 @@ export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default" | "pressure";
 export type ColorMode = "all" | "palette" | "colorblind_safe" | "black_and_white";
 export type PromptLanguage = "de" | "en" | "es" | "fr" | "it" | "nl" | "pt";
+/** A list may also be in no language at all (`zxx`, #821): Pokémon, brands,
+places. It is played in a room of any language, under that room's matching
+rules. A room declares a `PromptLanguage`, or `mul` for a mixed-language room
+(#1182). */
+export type PromptListLanguage = PromptLanguage | "zxx";
+/** What a room declares: one language, or `mul` - mixed, each seat playing
+in its own (#1182). */
+export type RoomLanguage = PromptLanguage | "mul";
+/** A prompt in every language, where a mixed-language room spelled it more
+than one way; absent wherever `prompt` is everyone's. */
+export type PromptSpellings = Partial<Record<PromptLanguage, string>>;
 
 export interface PromptListSummary {
   id: string;
   slug: string;
   name: string;
   description: string;
-  language: PromptLanguage;
+  language: PromptListLanguage;
   promptCount: number;
   isBundled: boolean;
   version: number;
@@ -116,7 +127,7 @@ export interface CommunityPromptList {
   slug: string;
   name: string;
   description: string;
-  language: PromptLanguage;
+  language: PromptListLanguage;
   promptCount: number;
   ownerDisplayName: string;
   tags: string[];
@@ -219,7 +230,7 @@ export interface RoomSummary {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
-  promptLanguage: PromptLanguage;
+  promptLanguage: RoomLanguage;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
 }
@@ -247,7 +258,7 @@ export interface RoomStatePayload {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
-  promptLanguage: PromptLanguage;
+  promptLanguage: RoomLanguage;
   promptListSlugs?: string[];
   state: "waiting" | "playing";
   moderation: ModerationState;
@@ -274,7 +285,7 @@ export interface EditableRoomSettings {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
-  promptLanguage: PromptLanguage;
+  promptLanguage: RoomLanguage;
   promptListSlugs?: string[];
 }
 
@@ -356,6 +367,7 @@ export interface ReactToDrawingResponse extends AckResponse {
 
 export interface TurnEndedPayload {
   prompt: string;
+  prompts?: PromptSpellings;
   /** The turn's durable id: what a reaction names. */
   turnId?: string;
   reactions?: DrawingReaction[];
@@ -406,15 +418,17 @@ export type GameHighlight =
   | {
       kind: "hardest_prompt";
       prompt: string;
+      prompts?: PromptSpellings;
       correctGuessCount: number;
       totalGuesserCount: number;
     }
-  | ({ kind: "fastest_guess"; prompt: string; seconds: number } & HighlightName)
+  | ({ kind: "fastest_guess"; prompt: string; prompts?: PromptSpellings; seconds: number } & HighlightName)
   | ({ kind: "best_drawer"; guessRatio: number } & HighlightName)
   | ({ kind: "quickest_average"; seconds: number } & HighlightName)
   | ({
       kind: "most_reacted_drawing";
       prompt: string;
+      prompts?: PromptSpellings;
       reactionCount: number;
       /** Position in the recap, so the card can open that drawing. */
       drawingIndex: number;
@@ -451,6 +465,7 @@ export interface DrawingRecapMetadata {
   drawerNickname: string;
   drawerNameColor?: string;
   prompt: string;
+  prompts?: PromptSpellings;
   actionCount: number;
   /** False once the room gave this bitmap up to stay inside its recap budget. */
   available?: boolean;
@@ -544,6 +559,8 @@ export type ErrorCode =
   | "invalid_letter"
   | "invalid_prompt_lists"
   | "invalid_custom_prompts"
+  | "mixed_room_list_unsupported"
+  | "mixed_room_custom_prompts"
   | "max_players_below_seated"
   | "empty_message"
   | "too_fast"
@@ -735,6 +752,8 @@ export interface AckResponse {
   retryAfterMs?: number;
   isAnonymous?: boolean;
   needsRebind?: boolean;
+  /** The language this seat plays in (#1182). */
+  seatLanguage?: PromptLanguage;
 }
 
 export interface ServerShutdownNotice {

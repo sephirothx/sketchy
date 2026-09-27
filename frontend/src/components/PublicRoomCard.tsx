@@ -94,6 +94,7 @@ export const PublicRoomCard = memo(function PublicRoomCard({ room, busy, pending
     <h3 className="public-room-name">
       <span className="public-room-name-text">{room.name}</span>
       <span className="public-room-language" title={ui.publicRoomCard.promptLanguage({ language: languageLabel })}>
+        {/* A mixed room flies the flag of the planet (#1182). */}
         <Flag language={room.promptLanguage} />
         <span className="visually-hidden">{languageLabel}</span>
       </span>

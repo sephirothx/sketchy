@@ -3,9 +3,15 @@ import test from "node:test";
 import { duplicateName, emailPublishBlocker, promptEntriesFromQuickInput } from "../src/lib/promptListDrafts.ts";
 import {
   availablePromptLanguages,
+  promptLanguageEndonym,
+  promptLanguageLabel,
+  gameEndSpelledForSeat,
+  spelledForSeat,
+  isPlayableIn,
   preferredPromptLanguage,
   reconcileSelectionForLanguage,
   selectionForLanguage,
+  rankedPromptLanguages,
   sortRoomsByLanguage,
 } from "../src/lib/promptLanguages.ts";
 
@@ -123,6 +129,96 @@ test("a selection that is not in the room's language is replaced, not kept", () 
   assert.deepEqual(reconcileSelectionForLanguage(lists, "it", ["english_standard"]), []);
 });
 
+test("a list in no language is played in every room and follows it across a switch", () => {
+  const lists = [
+    { slug: "english_standard", language: "en" },
+    { slug: "german_standard", language: "de" },
+    { slug: "pokemon", language: "zxx" },
+  ];
+  assert.equal(isPlayableIn(lists[2], "de"), true);
+  assert.equal(isPlayableIn(lists[0], "de"), false);
+  // Not a language a room can be opened in.
+  assert.deepEqual(availablePromptLanguages(lists, "en"), ["de", "en"]);
+  // Kept beside the room's own lists when they are reconciled...
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "de", ["english_standard", "pokemon"]),
+    ["pokemon"],
+  );
+  // ...and carried when the host switches the room's language, beside the new
+  // language's Standard list rather than instead of it.
+  assert.deepEqual(
+    selectionForLanguage(lists, "de", ["english_standard", "pokemon"]),
+    ["german_standard", "pokemon"],
+  );
+  assert.deepEqual(selectionForLanguage(lists, "de"), ["german_standard"]);
+});
+
+test("a mixed room plays Standard, once, and lists in no language", () => {
+  const languages = ["de", "en", "es", "fr", "it", "nl", "pt"];
+  const standard = languages.map((language) => ({
+    slug: `${{ de: "german", en: "english", es: "spanish", fr: "french", it: "italian", nl: "dutch", pt: "portuguese" }[language]}_standard`,
+    language,
+    isBundled: true,
+  }));
+  const lists = [
+    ...standard,
+    { slug: "german_extended", language: "de", isBundled: true },
+    { slug: "mine", language: "de", isBundled: false },
+    // A player's own list named like Standard is not Standard.
+    { slug: "fake_standard", language: "de", isBundled: false },
+    { slug: "pokemon", language: "zxx", isBundled: false },
+  ];
+  // Offered once Standard is there in every language, and last.
+  assert.equal(availablePromptLanguages(lists, "de").at(-1), "mul");
+  assert.equal(availablePromptLanguages(lists.slice(1), "de").includes("mul"), false);
+  // Standard shown in the language the player plays, beside lists in none.
+  const playable = lists.filter((list) => isPlayableIn(list, "mul", "de")).map((l) => l.slug);
+  assert.deepEqual(playable, ["german_standard", "pokemon"]);
+  assert.deepEqual(
+    selectionForLanguage(lists, "mul", ["german_extended", "pokemon"], "fr"),
+    ["french_standard", "pokemon"],
+  );
+  // Another host's Standard is shown in this player's language instead.
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "mul", ["english_standard"], "de"),
+    ["german_standard"],
+  );
+  // A room already mixed keeps saying so while its lists load.
+  assert.equal(availablePromptLanguages([], "mul").includes("mul"), true);
+  assert.equal(promptLanguageLabel("mul"), "Mixed");
+  assert.equal(promptLanguageEndonym("mul"), "Mixed");
+});
+
+test("a room-wide prompt is read in the seat's own language", () => {
+  const ended = { prompt: "bow tie", prompts: { de: "Fliege", fr: "nœud papillon" } };
+  assert.equal(spelledForSeat(ended, "de").prompt, "Fliege");
+  assert.equal(spelledForSeat(ended, "it").prompt, "bow tie");
+  assert.equal(spelledForSeat({ prompt: "dog" }, "de").prompt, "dog");
+  const game = gameEndSpelledForSeat(
+    {
+      scores: [],
+      drawings: [{ prompt: "bow tie", prompts: { de: "Fliege" } }],
+      highlights: [
+        { kind: "hardest_prompt", prompt: "bow tie", prompts: { de: "Fliege" } },
+        { kind: "best_drawer", guessRatio: 1 },
+      ],
+    },
+    "de",
+  );
+  assert.equal(game.drawings[0].prompt, "Fliege");
+  assert.equal(game.highlights[0].prompt, "Fliege");
+  assert.deepEqual(game.highlights[1], { kind: "best_drawer", guessRatio: 1 });
+});
+
+test("the lobby leads with your language, then mixed rooms", () => {
+  const rooms = [
+    { id: "it", promptLanguage: "it" },
+    { id: "mul", promptLanguage: "mul" },
+    { id: "de", promptLanguage: "de" },
+  ];
+  assert.deepEqual(sortRoomsByLanguage(rooms, "de").map((room) => room.id), ["de", "mul", "it"]);
+});
+
 test("a duplicate's name fits the server's 64 characters without splitting one", () => {
   assert.equal(duplicateName("Kitchen things"), "Kitchen things (duplicate)");
   // An odd number of code units before the emoji puts a UTF-16 cut in the
@@ -150,4 +246,33 @@ test("the Publish panel names what the email state is keeping it from", () => {
     emailPublishBlocker(state({ pendingAddress: "a@b.test", deliveryConfigured: false }), false),
     "undeliverable",
   );
+});
+
+test("then the other languages you play in, in your order, then the rest (#1211)", () => {
+  const rooms = [
+    { id: "fr", promptLanguage: "fr" },
+    { id: "es", promptLanguage: "es" },
+    { id: "nl", promptLanguage: "nl" },
+    { id: "mul", promptLanguage: "mul" },
+    { id: "it", promptLanguage: "it" },
+    { id: "es2", promptLanguage: "es" },
+  ];
+  assert.deepEqual(
+    sortRoomsByLanguage(rooms, "it", ["nl", "es"]).map((room) => room.id),
+    ["it", "mul", "nl", "es", "es2", "fr"],
+  );
+  // Nothing ranked twice, nothing hidden: the default listed again stays first.
+  assert.deepEqual(
+    sortRoomsByLanguage(rooms, "it", ["it", "es"]).map((room) => room.id),
+    ["it", "mul", "es", "es2", "fr", "nl"],
+  );
+});
+
+test("a picker lists your languages first, in your order, and all seven", () => {
+  const ranked = rankedPromptLanguages("it", ["nl", "es"]);
+  assert.deepEqual(ranked.slice(0, 3), ["it", "nl", "es"]);
+  assert.equal(ranked.length, 7);
+  assert.equal(new Set(ranked).size, 7);
+  // Within what a form can offer: a language it cannot is left out, not added.
+  assert.deepEqual(rankedPromptLanguages("it", ["nl"], ["en", "nl"]), ["nl", "en"]);
 });

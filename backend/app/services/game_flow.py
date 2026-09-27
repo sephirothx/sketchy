@@ -17,8 +17,9 @@ from typing import Mapping, Protocol
 from app.announcements import Announcement
 from app.auth.avatars import avatar_url
 from app.flow_timing import timing
-from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase
+from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase, PromptForm
 from app.domain_values import (
+    MIXED_PROMPT_LANGUAGE,
     GameOutcome,
     RuntimeEventType,
     TurnEligibilityReason,
@@ -36,14 +37,18 @@ from app.services.runtime_metrics import metrics
 from app.services.prompt_usage import tally_prompt_usage
 from app.services.telemetry import telemetry
 from app.presenters import (
+    last_game_for_seat,
+    spelled_for_seat,
     turn_ended_payload,
     room_state_payload,
     system_chat_message,
     turn_payload,
 )
-from app.prompt_content import default_prompt_list_slug
+from app.prompt_content import default_prompt_list_slug, prompt_match_key
 from app.prompts import letter_histogram, parse_custom_prompt_list
+from app.refusals import ErrorCode
 from app.repositories.interfaces import (
+    MixedRoomListError,
     PromptListSelectionError,
     PromptSample,
     SampledPrompt,
@@ -123,17 +128,35 @@ class _PromptDraw:
 
     An empty `pool` means no lists and no quick prompts, which the game reads
     as the built-in list - the same thing an empty room resolved to before.
+
+    The pool holds **keys**, not answers (#1181): a list prompt's concept, a
+    quick prompt's own text. `answers` spells each list prompt in the room's
+    language; everything else the turns record is keyed the same way.
     """
 
     pool: list[str] | None = None
+    answers: dict[str, str] = field(default_factory=dict)
     aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     version_ids: dict[str, str] = field(default_factory=dict)
-    source_revision_ids_by_answer: dict[str, tuple[str, ...]] = field(
+    source_revision_ids_by_key: dict[str, tuple[str, ...]] = field(
         default_factory=dict
     )
     source_revision_ids: tuple[str, ...] = ()
     letter_counts: dict[str, int] = field(default_factory=dict)
     letter_total: int = 0
+    # A mixed-language game's prompts in every room language (#1182).
+    translations: dict[str, dict[str, PromptForm]] = field(default_factory=dict)
+    letter_counts_by_language: dict[str, dict[str, int]] = field(default_factory=dict)
+    letter_total_by_language: dict[str, int] = field(default_factory=dict)
+
+
+def _prompt_key(prompt: SampledPrompt) -> str:
+    """What a game tracks a list prompt by: its concept (#1181).
+
+    The answer only where there is no concept to give - a stand-in store -
+    which is also what a quick prompt is keyed by.
+    """
+    return prompt.concept_id or prompt.answer
 
 
 class RoomNoLongerStartableError(RuntimeError):
@@ -145,7 +168,25 @@ class RoomNoLongerStartableError(RuntimeError):
 
 
 class RoomPromptResolutionError(ValueError):
-    """A safe room-configuration failure for selected prompt content."""
+    """A safe room-configuration failure for selected prompt content.
+
+    Refused against the prompt-list field unless it names another: a
+    mixed-language room refuses quick prompts against theirs (#1182).
+    """
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: ErrorCode = ErrorCode.INVALID_PROMPT_LISTS,
+        field: str = "promptListSlugs",
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.field = field
+
+    def acknowledgement(self) -> dict:
+        return {"ok": False, "errorCode": self.code, "error": str(self), "field": self.field}
 
 
 class RoomSettingsInput(Protocol):
@@ -229,6 +270,24 @@ class GameFlowService:
             dict(fallback.prompt_letter_counts) if fallback else {}
         )
         prompt_letter_total = fallback.prompt_letter_total if fallback else 0
+        prompt_letter_counts_by_language = (
+            dict(fallback.prompt_letter_counts_by_language) if fallback else {}
+        )
+        prompt_letter_total_by_language = (
+            dict(fallback.prompt_letter_total_by_language) if fallback else {}
+        )
+        if declared_language == MIXED_PROMPT_LANGUAGE and (
+            custom_prompts or value("custom_prompts_only")
+        ):
+            # A quick prompt has one language and no translations, and every
+            # seat of a mixed room must meet the prompt in its own (#1182).
+            # Custom-only is refused with them: it would skip the re-check a
+            # start makes of the lists the room still draws from.
+            raise RoomPromptResolutionError(
+                "A mixed-language room cannot use custom prompts",
+                code=ErrorCode.MIXED_ROOM_CUSTOM_PROMPTS,
+                field="customPrompts",
+            )
         # The host edits settings one change at a time, and most of those changes
         # leave the prompt lists alone; re-pinning them would cost a repository
         # round-trip per keystroke for an identical answer. An *empty* pin is
@@ -258,6 +317,15 @@ class GameFlowService:
                 prompt_pool_size = selection.prompt_count
                 prompt_letter_counts = dict(selection.letter_counts)
                 prompt_letter_total = selection.letter_total
+                prompt_letter_counts_by_language = {
+                    language: dict(counts)
+                    for language, counts in selection.letter_counts_by_language.items()
+                }
+                prompt_letter_total_by_language = dict(selection.letter_total_by_language)
+            except MixedRoomListError as error:
+                raise RoomPromptResolutionError(
+                    str(error), code=ErrorCode.MIXED_ROOM_LIST_UNSUPPORTED
+                ) from error
             except PromptListSelectionError as error:
                 raise RoomPromptResolutionError(str(error)) from error
             except Exception as error:
@@ -297,6 +365,8 @@ class GameFlowService:
             "prompt_pool_size": prompt_pool_size,
             "prompt_letter_counts": prompt_letter_counts,
             "prompt_letter_total": prompt_letter_total,
+            "prompt_letter_counts_by_language": prompt_letter_counts_by_language,
+            "prompt_letter_total_by_language": prompt_letter_total_by_language,
         }
 
     async def refresh_room_prompt_selection(
@@ -321,6 +391,10 @@ class GameFlowService:
                 selection = await self._ctx.prompt_list_repo.authorize_selection(
                     list(room.prompt_list_slugs), expected_language=room.prompt_language
                 )
+        except MixedRoomListError as error:
+            raise RoomPromptResolutionError(
+                str(error), code=ErrorCode.MIXED_ROOM_LIST_UNSUPPORTED
+            ) from error
         except PromptListSelectionError as error:
             raise RoomPromptResolutionError(str(error)) from error
         except Exception as error:
@@ -332,6 +406,11 @@ class GameFlowService:
         room.prompt_pool_size = selection.prompt_count
         room.prompt_letter_counts = dict(selection.letter_counts)
         room.prompt_letter_total = selection.letter_total
+        room.prompt_letter_counts_by_language = {
+            language: dict(counts)
+            for language, counts in selection.letter_counts_by_language.items()
+        }
+        room.prompt_letter_total_by_language = dict(selection.letter_total_by_language)
 
     def schedule_phase_timer(self, room: Room, seconds: float) -> None:
         async def _runner() -> None:
@@ -595,6 +674,74 @@ class GameFlowService:
             **({"to": to} if to else {"room": room.id}),
         )
 
+    async def _draw_mixed_prompt_sample(self, room: Room, needed: int) -> _PromptDraw:
+        """The draw for a mixed-language room (#1182): concepts, each with its
+        form in every room language, from the families the room pinned. No
+        quick prompts - the room refused them - so nothing is weighted or
+        shadowed; everything else is `_draw_prompt_sample`'s reasoning."""
+        try:
+            sample = await asyncio.wait_for(
+                self._ctx.prompt_list_repo.sample_mixed_prompts(
+                    list(room.prompt_list_revision_ids), limit=needed
+                ),
+                timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
+            )
+        except Exception as error:
+            logger.exception("Failed to draw prompts for room %s", room.id)
+            raise RoomPromptResolutionError(
+                "Prompt lists could not be loaded. Please try again."
+            ) from error
+        drawn = list(sample.prompts)
+        if not drawn:
+            logger.warning("Mixed room %s drew an empty prompt pool", room.id)
+            raise RoomPromptResolutionError(
+                "Prompt lists could not be loaded. Please try again."
+            )
+        pool = [_prompt_key(prompt) for prompt in drawn]
+        random.shuffle(pool)
+        return _PromptDraw(
+            pool=pool,
+            answers={_prompt_key(prompt): prompt.answer for prompt in drawn},
+            aliases={
+                _prompt_key(prompt): prompt.aliases for prompt in drawn if prompt.aliases
+            },
+            version_ids={
+                _prompt_key(prompt): prompt.prompt_version_id
+                for prompt in drawn
+                if prompt.prompt_version_id is not None
+            },
+            source_revision_ids_by_key={
+                _prompt_key(prompt): prompt.source_revision_ids for prompt in drawn
+            },
+            source_revision_ids=tuple(
+                revision_id
+                for revision_id in room.prompt_list_revision_ids
+                if any(
+                    revision_id in form.source_revision_ids
+                    for prompt in drawn
+                    for form in (prompt, *prompt.translations.values())
+                )
+            ),
+            translations={
+                _prompt_key(prompt): {
+                    language: PromptForm(
+                        answer=form.answer,
+                        aliases=form.aliases,
+                        version_id=form.prompt_version_id,
+                        source_revision_ids=form.source_revision_ids,
+                    )
+                    for language, form in prompt.translations.items()
+                }
+                for prompt in drawn
+                if prompt.translations
+            },
+            letter_counts_by_language={
+                language: dict(counts)
+                for language, counts in room.prompt_letter_counts_by_language.items()
+            },
+            letter_total_by_language=dict(room.prompt_letter_total_by_language),
+        )
+
     async def _draw_prompt_sample(self, room: Room) -> _PromptDraw:
         """Draw every prompt this game can possibly need, once, up front.
 
@@ -616,6 +763,8 @@ class GameFlowService:
         than it asked for.
         """
         needed = room.rounds * room.max_players * PROMPT_CHOICES_PER_TURN
+        if room.is_mixed_language():
+            return await self._draw_mixed_prompt_sample(room, needed)
         custom = list(room.custom_prompts)
 
         if not custom and not room.draws_from_prompt_lists():
@@ -633,6 +782,7 @@ class GameFlowService:
                         list(room.prompt_list_revision_ids),
                         limit=needed,
                         exclude_match_keys=room.custom_prompt_match_keys(),
+                        exclude_language=room.prompt_language,
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )
@@ -645,7 +795,24 @@ class GameFlowService:
                     "Prompt lists could not be loaded. Please try again."
                 ) from error
 
-        total = len(custom) + sample.drawable
+        # The database compares stored keys, and only those stored in the
+        # room's language: a list in no language (#821) stores its keys
+        # without the room's transliteration - "Müller" is `muller` there and
+        # `mueller` to a German room, and "Bär" is `bar`, which is another
+        # German word. So its shadow is asked here, of the text, under the
+        # room's fold - by the canonical key and not the wider spelling set
+        # (R-GUESS-01): which prompt a turn draws does not widen. For a list in the room's language this is the stored
+        # key again and removes nothing more; twins are few, so the sample is
+        # not over-drawn for them.
+        shadowed = room.custom_prompt_match_keys()
+        candidates = [
+            prompt
+            for prompt in sample.prompts
+            if prompt_match_key(prompt.answer, room.prompt_language) not in shadowed
+        ]
+        drawable = max(0, sample.drawable - (len(sample.prompts) - len(candidates)))
+
+        total = len(custom) + drawable
         if not total:
             # Authorization proved these lists held prompts, but moderation can
             # take the last of them away before the draw lands. Falling through
@@ -660,12 +827,10 @@ class GameFlowService:
             )
         indices = random.sample(range(total), min(needed, total))
         from_custom = sum(1 for index in indices if index < len(custom))
-        drawn: list[SampledPrompt] = list(
-            sample.prompts[: len(indices) - from_custom]
-        )
+        drawn: list[SampledPrompt] = candidates[: len(indices) - from_custom]
 
         pool = random.sample(custom, from_custom) + [
-            prompt.answer for prompt in drawn
+            _prompt_key(prompt) for prompt in drawn
         ]
         if not pool:
             # Whatever the arithmetic said, this is the state that matters: a
@@ -684,7 +849,7 @@ class GameFlowService:
         # this game can show.
         letter_counts: Counter[str] = Counter()
         letter_total = 0
-        if sample.drawable:
+        if drawable:
             letter_counts.update(room.prompt_letter_counts)
             letter_total += room.prompt_letter_total
         custom_counts, custom_total = letter_histogram(custom)
@@ -693,16 +858,19 @@ class GameFlowService:
 
         return _PromptDraw(
             pool=pool,
+            answers={_prompt_key(prompt): prompt.answer for prompt in drawn},
             aliases={
-                prompt.answer: prompt.aliases for prompt in drawn if prompt.aliases
+                _prompt_key(prompt): prompt.aliases
+                for prompt in drawn
+                if prompt.aliases
             },
             version_ids={
-                prompt.answer: prompt.prompt_version_id
+                _prompt_key(prompt): prompt.prompt_version_id
                 for prompt in drawn
                 if prompt.prompt_version_id is not None
             },
-            source_revision_ids_by_answer={
-                prompt.answer: prompt.source_revision_ids for prompt in drawn
+            source_revision_ids_by_key={
+                _prompt_key(prompt): prompt.source_revision_ids for prompt in drawn
             },
             source_revision_ids=tuple(
                 revision_id
@@ -790,6 +958,7 @@ class GameFlowService:
             rounds_total=room.rounds,
             max_players=room.max_players,
             prompt_pool=draw.pool,
+            prompt_answers=draw.answers,
             prompt_aliases=draw.aliases,
             letter_counts=draw.letter_counts,
             letter_total=draw.letter_total,
@@ -803,7 +972,15 @@ class GameFlowService:
             prompt_language=room.prompt_language,
             prompt_source_revision_ids=draw.source_revision_ids,
             prompt_version_ids=draw.version_ids,
-            prompt_source_revision_ids_by_answer=draw.source_revision_ids_by_answer,
+            prompt_source_revision_ids_by_key=draw.source_revision_ids_by_key,
+            prompt_translations=draw.translations,
+            letter_counts_by_language=draw.letter_counts_by_language,
+            letter_total_by_language=draw.letter_total_by_language,
+            # Every seat's language as it joined, spectators too: they read
+            # the prompt when the room lets them (#1182).
+            seat_languages={
+                player.id: room.seat_language(player) for player in room.player_list()
+            },
             custom_prompt_keys=room.custom_prompt_match_keys(),
         )
         await self._emit_room_state(room)
@@ -1000,15 +1177,22 @@ class GameFlowService:
                     await self._sio.emit(
                         "your_prompt_choices",
                         {
-                            "choices": game.prompt_choices,
+                            "choices": game.prompt_choice_answers(player.id),
                             "seconds": round(game.remaining_seconds()),
+                            "turnId": game.current_turn_id,
                         },
                         to=sid,
                     )
                 elif full:
                     await self._sio.emit("you_are_drawing", {"prompt": game.prompt}, to=sid)
         elif game.phase == Phase.TURN_RESULTS:
-            await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
+            # To this socket alone, before its seat is acknowledged: spelled
+            # here, since its client cannot yet know its own language (#1182).
+            await self._sio.emit(
+                "turn_ended",
+                spelled_for_seat(self._turn_ended_payload(room), room.seat_language(player)),
+                to=sid,
+            )
 
     async def release_seat(
         self, sid: str, room: Room, player: Player, *, defer_durable: bool = False
@@ -1142,6 +1326,11 @@ class GameFlowService:
         """
         payload = room.last_game_payload()
         if payload is not None:
+            # Spelled for the arriving seat, whose client does not know its own
+            # language until the join is acknowledged, after this (#1182).
+            seat = next((p for p in room.player_list() if p.sid == sid), None)
+            if seat is not None:
+                payload = last_game_for_seat(payload, room.seat_language(seat))
             await self._sio.emit("last_game", payload, to=sid)
 
     def _drawer_transport(self, room: Room) -> str | None:
@@ -1203,7 +1392,7 @@ class GameFlowService:
         game = room.game
         assert game is not None
         afk_tokens = {p.id for p in room.player_list() if p.is_afk}
-        choices = game.start_next_turn(
+        game.start_next_turn(
             afk_tokens,
             canvas_generation=room.allocate_canvas_generation(),
         )
@@ -1235,7 +1424,11 @@ class GameFlowService:
         if drawer and drawer.sid:
             await self._sio.emit(
                 "your_prompt_choices",
-                {"choices": choices, "seconds": timing.choose_prompt_seconds},
+                {
+                    "choices": game.prompt_choice_answers(drawer.id),
+                    "seconds": timing.choose_prompt_seconds,
+                    "turnId": game.current_turn_id,
+                },
                 to=drawer.sid,
             )
         if self._turn_moved_on(room, game, turn_id, Phase.CHOOSING_PROMPT):
@@ -1405,6 +1598,7 @@ class GameFlowService:
                     drawer.name_color if drawer else departed.name_color if departed else None
                 ),
                 prompt=game.prompt or "",
+                prompts=tuple(sorted(game.prompt_spellings().items())),
                 action_count=len(game.canvas.history),
                 canvas_history=game.canvas.sync_payload(),
             )

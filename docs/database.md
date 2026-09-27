@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a8b9c0d1e2f4_session_last_device_label.py` (#1016). Both this line and the table
+`e8f9a0b1c2d4_extra_prompt_languages.py` (#1209). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -219,10 +219,14 @@ canvas.** Applying one fills the create form but does not enable *Keep this room
 future games*. Quick custom prompts are never stored; they must be saved as an owned
 list first. ≤ 20 per account.
 
-It stores **no language column either**, although a room declares one (R-PROMPT-02):
-the preset's language is read back from the lists it saved, so the two cannot drift
-apart. Saving a preset whose lists are not in the declared language is refused rather
-than stored.
+`prompt_language` is the language the room will declare (R-PROMPT-02): one of the room
+languages or `mul` for a mixed-language room (R-PROMPT-13, #1182),
+`CHECK ck_room_presets_prompt_language`, `en` by default. It used to be read
+back from the saved lists, and a preset of lists in no language (R-PROMPT-12) has none to
+read, so since #821 it is stored. The two still cannot drift apart: saving a preset whose
+lists are not in the declared language (or in none; for a mixed preset, not playable by a mixed room) is refused rather than stored, and
+reading one pins its lists against that language the way a room does, so a disagreement
+makes the preset visibly unavailable.
 
 ### `planned_shutdown_abandonments`
 The privacy-safe fact that a planned drain expired with a game still live.
@@ -578,6 +582,8 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 `brush_cursor` (`crosshair \| circle`) · `default_brush_size` (one of the slider's stops, `2 \| 4 \| 6 \| 8 \| 12 \| 16 \| 24 \| 32`, 6 by default, R-DRAW-18) · `pen_pressure` (on by default; the client acts on it only for a pressure-sensitive pen, R-DRAW-17) · `time_format` (`system \| 12h \| 24h`) ·
 `key_bindings` (JSON) ·
 `colorblind_safe_colors` · `prompt_language` (the supported set, `en` by default) ·
+`extra_prompt_languages` (JSON list, `[]` by default: the other languages the player
+plays in, in their order — never the default, never twice, at most six; #1209) ·
 `locale` (the interface locales, `en` by default) ·
 `email_reminder_last_shown_at` · timestamps.
 
@@ -594,8 +600,22 @@ stamp is never re-seeded — which is how a registration that finds a defaults r
 made by another tab still carries the browser's settings over (R-SET-03).
 
 **Two languages, and they are not the same one.** `prompt_language` is the language
-this player *plays* in (R-PROMPT-11) — what the lobby leads with and what a new room
-starts in. `locale` is the language they *read* in (R-I18N-06): the interface, the
+this player *plays* in by default (R-PROMPT-11) — what the lobby leads with, the seat
+a mixed room gives them, and where Quick play opens a room.
+`extra_prompt_languages` are the others they play in, ranked: a list on the row
+rather than a table of its own, so `/api/auth/me` still reads settings in one
+statement (R-PLAT-17). The settings routes check the pair in one write under the
+row's lock — only the seven, each once, the default never among them — and promoting
+one of them to the default swaps the old default into its place (#1209). Two CHECKs
+hold what a JSON column can be held to on both engines, read as its text: a list
+(`ck_user_settings_extra_prompt_languages_list`, at most 48 characters, which six
+languages fit), and never naming the default (`ck_user_settings_default_not_extra`).
+The second is what stops two devices' PATCHes, each checked against the same row,
+from storing the default twice where the lock is not one (SQLite); the loser gets the
+same `422` as a PATCH that named it. An account that never chose any has `[]`, which
+is exactly the one-language behaviour it had before.
+
+`locale` is the language they *read* in (R-I18N-06): the interface, the
 refusals, the room's own announcements. A Dutch speaker playing an English room is
 ordinary, and one column could not describe them; it is the same line `prompt_lists`
 draws between its content language and its localized catalogue copy.
@@ -747,7 +767,7 @@ guesses, prompt-list revision history, the lists it starred, unexpired authored 
 messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v11_fields.json`](../fixtures/account_data_export_v11_fields.json).
+pinned by [`fixtures/account_data_export_v12_fields.json`](../fixtures/account_data_export_v12_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1343,7 +1363,7 @@ cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # repla
 | `visibility` | `public \| private`, CHECK-enforced. The room's public flag, frozen when the game is saved (#469): a public room's game is listed on a profile for anyone, a private room's only for the players who sat in it (R-HIST-25). Defaults to `private` at both layers, so a writer that does not say discloses nothing |
 | `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
 
-**The rule snapshot** ([`backend/app/game.py:370`](../backend/app/game.py)) freezes the
+**The rule snapshot** ([`backend/app/game.py:454`](../backend/app/game.py)) freezes the
 numeric default/pressure/hint parameters, the drawer-bonus algorithm, the drawing time,
 the permitted tools and colors, prompt visibility and language, and the pinned prompt-
 source revision IDs. Historical points can therefore be interpreted under the rules that
@@ -1766,7 +1786,7 @@ A moderator's decision is the concept's, not one wording's: resolving a report s
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
 concept, an owner's edit that writes a new version (an alias added, an answer respelled)
 carries them to it, and a new version whose answer or alias matches any prompt that is hidden in
-any list its owner has ever held, in the same language (#1091) — a word typed back in, into
+any list its owner has ever held, in the same language or in no language (`zxx`, which shares its words with every language, #821) — the same word when a room that plays both keys them as one word (its canonical key, not the spellings a guess is accepted under), so a hidden German **Bär** stops an agnostic **Bär** but not **Bar**, and between two agnostic lists, played in every room, any room's fold counts (#1091) — a word typed back in, into
 this list or another, or another entry respelled into it — is
 born with them — so a hidden word stays hidden (#1020). A concept belongs to
 one list; copies mint their own. Bundled seed versions are the operator's own editions and
@@ -1777,10 +1797,17 @@ registry, which case-folds, collapses whitespace, folds canonically decomposable
 accents, and reads every apostrophe a keyboard writes as the plain one (#1011; the
 bundled lists are written with the plain one, so no stored key changed)
 ([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
-BCP-47 tags are **rejected until their matching semantics are implemented.**
+BCP-47 tags are **rejected until their matching semantics are implemented.** Content may
+also be `zxx`, BCP-47's "no linguistic content": a list in no language (R-PROMPT-12). The
+four content tables that carry a language (`prompt_versions`, `prompt_aliases`,
+`prompt_lists`, `prompt_list_revisions`) admit it in their `CHECK`; `user_settings` and
+`room_presets` do not, because a room needs a language to fold guesses under.
 
 `match_key` is that fold for the row's own language, with the language's
 transliterations applied first (German **Mädchen** stores `maedchen`, not `madchen`).
+A `zxx` row folds with the shared rule alone — **Müller** stores `muller` — because the
+key must not depend on the room that plays it; a German room still accepts `mueller`,
+since acceptance folds the answer's text under the room's language.
 It is deliberately **one** string: it is the identity these unique constraints are
 built on. A language where two spellings are both correct accepts them at match time
 instead (R-GUESS-01) — the alternative would be an identity that is a set, and two
@@ -2065,7 +2092,7 @@ that answers a request.
 Editing a list uses **optimistic concurrency** and creates a new immutable revision
 instead of rewriting the revision a running or finished game pinned. Setting or clearing
 tags is such an edit and earns its own revision (R-LIST-05). The content
-language cannot change after creation. Rooms resolve, and games pin, exact revision IDs.
+language — a room language, or `zxx` — cannot change after creation. Rooms resolve, and games pin, exact revision IDs.
 
 ### `prompt_list_localizations`
 `id` · `prompt_list_id` (CASCADE) · `locale` · `name` · `description`, unique on
@@ -2101,6 +2128,11 @@ Append-only per-game usage totals, **not** mutable counters on a display row.
 composite **PK** · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` ·
 `pick_count` · `correct_guess_count` · `total_guesser_count` · `created_at` — the
 idempotency triple is the identity, so it is the key.
+
+A mixed-language turn (R-PROMPT-13) records the offer and the pick against the drawer's
+language's version and each language's guessers against that language's version, so
+a version can carry guessers with `pick_count = 0`: a language's statistics count the
+players who met the prompt in it.
 
 **Flow.** Each finished game appends one idempotent fact per used prompt/version and
 pinned list revision, with the authoritative occurrence time plus scoring and hint modes
