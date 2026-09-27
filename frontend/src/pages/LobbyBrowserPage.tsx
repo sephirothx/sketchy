@@ -262,9 +262,11 @@ export function LobbyBrowserPage() {
   const awaitingName = useAuthStore((state) => needsIdentity(state.user));
   const ensureIdentity = useAuthStore((state) => state.ensureIdentity);
 
-  // Arriving at the lobby means any room exit has completed.
+  // Arriving at the lobby means any room exit has completed. Not the only way
+  // one ends: an invitation's Join can overtake the lobby before it mounts,
+  // which is why the exit names its room (`exitingRoomCode`).
   useEffect(() => {
-    setExitingRoom(false);
+    setExitingRoom(null);
   }, [setExitingRoom]);
 
   // The languages the game has content in, not the ones that happen to have a

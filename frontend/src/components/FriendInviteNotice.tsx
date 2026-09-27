@@ -1,20 +1,13 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useEffect, useLayoutEffect, useRef } from "react";
 
-import { parseFriendInvite, type FriendInvite } from "../lib/friends";
-import { sessionFrom } from "../lib/roomEntryState";
-import { emitEntry, onConnectSpread, socket } from "../lib/socket";
-import { useAuthStore } from "../store/authStore";
+import { parseFriendInvite } from "../lib/friends";
+import { onConnectSpread, socket } from "../lib/socket";
 import { useFriendsStore } from "../store/friendsStore";
 import { useFriendArrivalNotices } from "../hooks/useFriendArrivalNotices";
-import { useGameStore } from "../store/gameStore";
-import { useRoomEntryStore } from "../store/roomEntryStore";
-import { useToast } from "../lib/toast";
+import { useFriendInviteAnswer } from "../hooks/useFriendInviteAnswer";
+import { useFriendInviteStore } from "../store/friendInviteStore";
 import { XIcon } from "./icons";
-import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
-import { refusalText } from "../lib/refusals.ts";
-import { useSettingsStore } from "../store/settingsStore";
 
 /** An invitation from a friend, and the one control that answers it.
 
@@ -25,24 +18,30 @@ somebody else's game. It stays until it is answered or it runs out.
 The notice holds a token, never a room. Pressing *Join* sends the token back
 and the server resolves the room from the sender's seat at that moment — so an
 invitation to a game that has since ended fails as one, rather than seating
-somebody somewhere stale. */
+somebody somewhere stale.
+
+This component always hears the invitation; it draws it only outside a room.
+In one, the room bar claims it and shows it as a chip (`RoomNoticeChips`),
+because down here it sat on the phone's chat feed and the desktop drawer's
+palette (R-UX-07, #1176). */
 export function FriendInviteNotice() {
-  const navigate = useNavigate();
-  const { notify } = useToast();
-  const [invite, setInvite] = useState<FriendInvite | null>(null);
+  const receive = useFriendInviteStore((state) => state.receive);
+  const clear = useFriendInviteStore((state) => state.clear);
+  const inRoomBar = useFriendInviteStore((state) => state.roomBarClaims > 0);
+  const { invite, entryPending, join, dismiss } = useFriendInviteAnswer();
   const refreshFriends = useFriendsStore((state) => state.refresh);
-  const myUserId = useAuthStore((state) => state.user?.id ?? null);
-  const setSession = useGameStore((state) => state.setSession);
 
   // Sits here because this is the one component mounted app-wide that already
   // owns the friends socket events: the refetch below is what produces the
-  // change this speaks about, so the two belong next to each other.
-  useFriendArrivalNotices();
+  // change this speaks about, so the two belong next to each other. What it
+  // returns is a request that went into the room bar, said below for the
+  // same reason the invitation is (#1197).
+  const requestAnnouncement = useFriendArrivalNotices();
 
   useEffect(() => {
     const onInvite = (payload: unknown) => {
       const parsed = parseFriendInvite(payload);
-      if (parsed) setInvite(parsed);
+      if (parsed) receive(parsed);
     };
     // The event stays contentless: one shape covers a request arriving and
     // one being answered, and the endpoint is the truth either way. What
@@ -64,23 +63,19 @@ export function FriendInviteNotice() {
       socket.off("friends_changed", onRequest);
       stopOnConnect();
     };
-  }, [refreshFriends]);
+  }, [refreshFriends, receive]);
 
   // The server forgets it at the same moment, so a notice that outlived its
-  // token would offer a button that cannot work.
+  // token would offer a button that cannot work - whichever of the two homes
+  // is drawing it, so the timer lives here, where the invitation arrives.
+  const stored = useFriendInviteStore((state) => state.invite);
   useEffect(() => {
-    if (!invite) return;
-    const timer = window.setTimeout(
-      () => setInvite(null),
-      invite.expiresIn * 1000,
-    );
+    if (!stored) return;
+    const timer = window.setTimeout(() => {
+      if (useFriendInviteStore.getState().invite === stored) clear();
+    }, stored.expiresIn * 1000);
     return () => window.clearTimeout(timer);
-  }, [invite]);
-
-  // Signing out mid-invitation leaves a notice addressed to nobody. Derived
-  // rather than cleared in an effect: the token is the server's to expire, and
-  // there is nothing to tidy up here beyond not drawing it.
-  const entryPending = useRoomEntryStore((state) => state.pending !== null);
+  }, [stored, clear]);
 
   // The toasts sit in the same bottom-centre spot, and this component is also
   // what announces friend requests - which landed on the card's own Join.
@@ -89,7 +84,7 @@ export function FriendInviteNotice() {
   // (R-UX-07). The card stays out of the stack: it is a question, not
   // something that happened.
   const cardRef = useRef<HTMLDivElement | null>(null);
-  const shown = invite !== null && myUserId !== null;
+  const shown = invite !== null && !inRoomBar;
   useLayoutEffect(() => {
     const card = cardRef.current;
     if (!shown || !card) return;
@@ -111,59 +106,51 @@ export function FriendInviteNotice() {
     };
   }, [shown]);
 
-  if (!invite || !myUserId) return null;
+  // Said once when it arrives, whichever home draws it, from here rather than
+  // from either home: the room bar is not rendered at all while a phone's
+  // guess keyboard is up, so a region in it said nothing to exactly the
+  // player most likely to be mid-turn, and moving between the card and the
+  // chip would have said it again. Mounted for good, so it is there before
+  // the words are.
+  const announcer = (
+    <>
+      <span className="visually-hidden" role="status" aria-live="polite" data-testid="friend-invite-announcer">
+        {invite ? `${invite.displayName} ${ui.friendInviteNotice.invitedYouTheirGame}` : ""}
+      </span>
+      {/* A friend request in a room is the bar's chip, and is said here once
+          as it lands; outside a room its toast says it. */}
+      <span className="visually-hidden" role="status" aria-live="polite" data-testid="friend-request-announcer">
+        {requestAnnouncement}
+      </span>
+    </>
+  );
 
-  async function join() {
-    const current = invite;
-    if (!current) return;
-    // Mounted above every page, so it is the one way in that the lobby's own
-    // controls cannot see: it takes the same lock they do, and while another
-    // entry holds it the notice waits rather than racing it for the seat.
-    const token = useRoomEntryStore.getState().begin("friend-invite");
-    if (token === null) return;
-    setInvite(null);
-    try {
-      const answer = await emitEntry<AckResponse>("join_friend_room", {
-        friendUserId: current.fromUserId,
-        inviteToken: current.inviteToken,
-        // Fixed on the seat: a mixed-language room plays it in this (#1182).
-        seatLanguage: useSettingsStore.getState().promptLanguage,
-      });
-      const session = sessionFrom(answer);
-      if (!session) {
-        notify(refusalText(answer, ui.friendInviteNotice.couldNotJoinThatGame), "error");
-        return;
-      }
-      setSession(session);
-      navigate(`/room/${session.code}`);
-    } catch {
-      notify(ui.friendInviteNotice.couldNotJoinThatGame, "error");
-    } finally {
-      useRoomEntryStore.getState().end(token);
-    }
-  }
+  if (!invite || inRoomBar) return announcer;
 
   return (
-    <div ref={cardRef} className="friend-invite-notice" role="status" data-testid="friend-invite">
-      <span className="friend-invite-text">
-        <strong>{invite.displayName}</strong> {ui.friendInviteNotice.invitedYouTheirGame}
-      </span>
-      <button
-        type="button"
-        className="btn btn-primary btn-compact"
-        disabled={entryPending}
-        onClick={() => void join()}
-      >
-        {ui.friendInviteNotice.join}
-      </button>
-      <button
-        type="button"
-        className="btn btn-icon friend-invite-dismiss"
-        aria-label={ui.friendInviteNotice.dismissInvitation}
-        onClick={() => setInvite(null)}
-      >
-        <XIcon size={14} />
-      </button>
-    </div>
+    <>
+      {announcer}
+      <div ref={cardRef} className="friend-invite-notice" data-testid="friend-invite">
+        <span className="friend-invite-text">
+          <strong>{invite.displayName}</strong> {ui.friendInviteNotice.invitedYouTheirGame}
+        </span>
+        <button
+          type="button"
+          className="btn btn-primary btn-compact"
+          disabled={entryPending}
+          onClick={() => void join()}
+        >
+          {ui.friendInviteNotice.join}
+        </button>
+        <button
+          type="button"
+          className="btn btn-icon friend-invite-dismiss"
+          aria-label={ui.friendInviteNotice.dismissInvitation}
+          onClick={dismiss}
+        >
+          <XIcon size={14} />
+        </button>
+      </div>
+    </>
   );
 }

@@ -10,7 +10,7 @@ import { emitWithAck, restartExpected, socket, transportIsAlive } from "../lib/s
 import { RESTART_PATIENCE_MS, afterFailedRebind, escalateHeartbeat, stallRecovery } from "../lib/reconnectPolicy";
 import { setRoomBindingStatus } from "../lib/roomSessionBinding";
 import { sessionFrom } from "../lib/roomEntryState";
-import { useGameStore } from "../store/gameStore";
+import { roomAnswerIsCurrent, useGameStore } from "../store/gameStore";
 import { currentPlayerName } from "../store/authStore";
 import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse } from "../types";
@@ -100,9 +100,19 @@ export function useRoomSessionReconnect() {
         nickname: currentPlayerName(),
         nameColor,
         colorblindSafeColors,
+        // The seat's language, kept if the seat is still held; used only if
+        // it is gone and a new one is made (#1182).
+        seatLanguage: useSettingsStore.getState().promptLanguage,
         soft,
       });
       if (cancelled) return;
+      // The room was left while this was in the air - Leave, a kick, an
+      // invitation's Join. The answer, seat or refusal, is about a room this
+      // tab has given up, and nothing in it applies any more.
+      if (!roomAnswerIsCurrent(useGameStore.getState(), code)) {
+        setRoomBindingStatus("ready");
+        return;
+      }
       const session = sessionFrom(response);
       if (session) {
         useGameStore.getState().setSession(session);

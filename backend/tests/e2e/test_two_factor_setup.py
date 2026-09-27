@@ -16,7 +16,7 @@ import time
 from playwright.async_api import async_playwright, expect
 
 from app.auth.totp import code_at, current_step
-from tests.e2e.lobby_helpers import register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import register_account, room_code, submit_create_room, use_guest_name
 from tests.e2e.staff_helpers import offer_role, set_role, type_code
 
 BASE_URL = "http://localhost:8000"
@@ -178,16 +178,12 @@ async def test_two_factor_is_set_up_once_and_then_asked_for_again():
             # for a second failed whichever room or game happened to be
             # starting elsewhere. A room of our own is the same gate with none
             # of the blast radius.
-            # Straight to the setup route rather than through the lobby's
-            # button. How a room is reached is not what this test is about,
-            # and going by click meant waiting on a navigation between two
-            # pages that both carry a "Create room" button - a race this lost
-            # twice on CI, where a shard is slower than anything local.
-            # `test_waiting_room` covers the lobby's own path to it.
+            # Straight to the setup route: how a room is reached is not what
+            # this test is about. The lobby's path to it, and the race between
+            # two pages that both carry a "Create room" button, are
+            # `open_new_room`'s in lobby_helpers.
             await page.goto(f"{BASE_URL}/create")
-            await page.wait_for_selector(".create-room-page h1")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await submit_create_room(page)
             # Found by its code rather than by a name typed into the setup
             # form: the operator's table lists every room on the server, so
             # the row has to be identified, and the code is issued rather than

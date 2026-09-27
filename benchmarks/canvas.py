@@ -39,7 +39,7 @@ if str(BACKEND_DIR) not in sys.path:
 
 # The room is created and joined the way the end-to-end suite does it, so a
 # lobby redesign is fixed in one helper rather than here as well.
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name  # noqa: E402
+from tests.e2e.lobby_helpers import join_by_code, open_new_room, room_code, use_guest_name  # noqa: E402
 
 CANVAS_WIDTH = 800
 CANVAS_HEIGHT = 600
@@ -525,12 +525,7 @@ async def create_game(
 
     await drawer.goto(base_url)
     await use_guest_name(drawer, f"{seat}-drawer")
-    # "Create room" in the header, "Create a room" in a phone's thumb dock.
-    await drawer.locator("button:visible", has_text=re.compile(r"^Create (a )?room$")).first.click()
-    await drawer.wait_for_url("**/create")
-    await drawer.get_by_role("button", name="Create room", exact=True).click()
-    await drawer.wait_for_url("**/room/**")
-    await drawer.wait_for_selector('[data-testid="waiting-room"]')
+    await open_new_room(drawer)
     code = await room_code(drawer)
 
     await guesser.goto(base_url)
