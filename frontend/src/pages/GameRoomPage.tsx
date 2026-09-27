@@ -4,25 +4,19 @@ import { CrashBoundary } from "../components/CrashBoundary";
 import { InviteEntryPage } from "../components/InviteEntryPage";
 import { exitRoomHistory } from "../hooks/useRoomHistory";
 import { emitTransient } from "../lib/socket";
-import { useGameStore } from "../store/gameStore";
+import { selectRoomRoute, useGameStore } from "../store/gameStore";
 import { CrashPage } from "./CrashPage";
 
 export function GameRoomPage() {
   const { code } = useParams<{ code: string }>();
   const navigate = useNavigate();
   const playerId = useGameStore((state) => state.playerId);
-  const isExitingRoom = useGameStore((state) => state.isExitingRoom);
-  const activeRoomId = useGameStore((state) => state.roomId);
-  const activeRoomCode = useGameStore((state) => state.code);
   const clearSession = useGameStore((state) => state.clearSession);
   const setExitingRoom = useGameStore((state) => state.setExitingRoom);
   const reset = useGameStore((state) => state.reset);
   const normalizedCode = code?.trim().toUpperCase() ?? "";
-
   // A credential stored for another room must never activate this route.
-  const hasActiveSession = Boolean(
-    playerId && activeRoomId && activeRoomCode?.toUpperCase() === normalizedCode,
-  );
+  const view = useGameStore((state) => selectRoomRoute(state, normalizedCode));
 
   // The clean leave from ActiveGameRoom.performLeave, without its confirmation:
   // there is no board left to confirm over. The seat has to be released here
@@ -32,7 +26,7 @@ export function GameRoomPage() {
   // state the crashed tree was reading, and the player's settings were not.
   function leaveAfterCrash() {
     const who = { code: normalizedCode, seat: playerId ?? "" };
-    setExitingRoom(true);
+    setExitingRoom(normalizedCode);
     clearSession();
     emitTransient("leave_room");
     reset();
@@ -42,10 +36,12 @@ export function GameRoomPage() {
 
   // On the way out the session is already cleared but the route has not
   // changed yet. Rendering the invite screen for that one frame would ask the
-  // server to reconnect a seat we just gave up.
-  if (isExitingRoom) return null;
+  // server to reconnect a seat we just gave up. Only this room's route: the
+  // next room an invitation's Join enters draws even if the lobby between
+  // them was overtaken before it mounted and ended the exit.
+  if (view === "leaving") return null;
 
-  if (!hasActiveSession) {
+  if (view === "invite") {
     return <InviteEntryPage key={normalizedCode} code={normalizedCode} />;
   }
   // Keyed on the code so a crash in one room is not carried into the next.
