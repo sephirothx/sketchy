@@ -3,11 +3,9 @@ import test from "node:test";
 
 import {
   MAX_EXTRA_PROMPT_LANGUAGES,
-  addExtraPromptLanguage,
   chooseDefaultPlayLanguage,
   moveExtraPromptLanguage,
   normalizeExtraPromptLanguages,
-  removeExtraPromptLanguage,
   suggestedExtraPromptLanguages,
 } from "../src/lib/playLanguages.ts";
 
@@ -37,13 +35,6 @@ test("a default from outside the others replaces the old one, as one language al
     extraPromptLanguages: ["nl", "en", "es"],
   });
   assert.equal(chooseDefaultPlayLanguage(current, "it"), current);
-});
-
-test("adding goes last and never repeats; removing keeps the rest in order", () => {
-  assert.deepEqual(addExtraPromptLanguage(current, "de").extraPromptLanguages, ["nl", "en", "es", "de"]);
-  assert.deepEqual(addExtraPromptLanguage(current, "en").extraPromptLanguages, ["nl", "en", "es"]);
-  assert.deepEqual(addExtraPromptLanguage(current, "it").extraPromptLanguages, ["nl", "en", "es"]);
-  assert.deepEqual(removeExtraPromptLanguage(current, "en").extraPromptLanguages, ["nl", "es"]);
 });
 
 test("a move lands where it was dropped, clamped to the list", () => {

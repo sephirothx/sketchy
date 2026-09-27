@@ -126,12 +126,17 @@ async def test_an_accounts_languages_follow_it_to_another_device():
             await register_account(page, username, password)
 
             dialog = await _open_appearance(page)
+            await _add(dialog, "português")
+            await _add(dialog, "italiano")
+            await dialog.get_by_role("button", name="Move italiano earlier").click()
+            # Promoting one goes through the server's own swap rule (#1209).
             async with page.expect_response(
                 lambda response: "/api/users/me/settings" in response.url
                 and response.request.method == "PATCH"
             ):
-                await _add(dialog, "português")
-            assert await _extras(page) == ["es", "pt"]
+                await dialog.get_by_role("button", name="Language you play in: English").click()
+                await dialog.get_by_role("option", name="português").click()
+            assert await _extras(page) == ["es", "it", "en"]
 
             fresh = await browser.new_context()
             fresh_page = await fresh.new_page()
@@ -144,14 +149,80 @@ async def test_an_accounts_languages_follow_it_to_another_device():
                 await login.get_by_role("button", name="Sign in", exact=True).click()
                 await login.wait_for(state="hidden")
                 await fresh_page.wait_for_function(
-                    "() => localStorage.getItem('sketchy_extrapromptlanguages') === '[\"es\",\"pt\"]'"
+                    "() => localStorage.getItem('sketchy_extrapromptlanguages') === '[\"es\",\"it\",\"en\"]'"
                 )
-                await _open_appearance(fresh_page)
-                assert await _extras(fresh_page) == ["es", "pt"]
+                fresh_dialog = await _open_appearance(fresh_page)
+                assert await _extras(fresh_page) == ["es", "it", "en"]
+                await fresh_dialog.get_by_role(
+                    "button", name="Language you play in: português (Portuguese)"
+                ).wait_for()
             finally:
                 await fresh.close()
         finally:
             await first.close()
+            await browser.close()
+
+
+async def _press_on(page: Page, chip) -> tuple[float, float]:
+    box = await chip.locator(".play-language-chip-position").bounding_box()
+    x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    return x, y
+
+
+async def test_a_drag_forward_and_off_the_end_lands_and_escape_puts_one_back():
+    """A chip dragged forward used to be moved in the DOM mid-drag, which
+    releases its pointer capture: let go past the last chip, the drag never
+    heard it, and the preview stuck until the next click committed it."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        await context.add_init_script(
+            "localStorage.setItem('sketchy_promptlanguage', 'de');"
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['nl', 'fr', 'es']));"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Dragger{uuid4().hex[:6]}")
+            dialog = await _open_appearance(page)
+            chips = dialog.locator(".play-language-chip")
+            await chips.nth(2).wait_for()
+
+            # Nederlands, first, carried to español's place - the last, which
+            # the chips wrap to - and let go just below the row, on no chip.
+            x, y = await _press_on(page, chips.nth(0))
+            last = await chips.nth(2).bounding_box()
+            await page.mouse.move(x + 20, y, steps=3)
+            await page.mouse.move(
+                last["x"] + last["width"] / 2, last["y"] + last["height"] + 14, steps=10
+            )
+            await page.mouse.up()
+            assert await _extras(page) == ["fr", "es", "nl"]
+            assert await dialog.locator(".play-language-chip.is-dragging").count() == 0
+            stored = await page.evaluate("localStorage.getItem('sketchy_extrapromptlanguages')")
+            assert stored == '["fr","es","nl"]'
+
+            # Escape mid-drag puts the chip back and leaves Settings open.
+            x, y = await _press_on(page, chips.nth(0))
+            await page.mouse.move(x + 200, y, steps=10)
+            await page.keyboard.press("Escape")
+            await page.mouse.up()
+            assert await dialog.is_visible()
+            assert await _extras(page) == ["fr", "es", "nl"]
+
+            # Adding the last language keeps the keyboard in the row.
+            for name in ("English", "italiano"):
+                await _add(dialog, name)
+            await _add(dialog, "português")
+            assert await dialog.get_by_role("button", name="Add a language you play in").count() == 0
+            await page.wait_for_function(
+                "() => document.activeElement?.closest('.play-language-chip')?.dataset.language === 'pt'",
+                timeout=3000,
+            )
+        finally:
+            await context.close()
             await browser.close()
 
 
@@ -180,14 +251,19 @@ async def test_the_ranked_languages_are_accessible(viewport):
             await assert_no_axe_violations(page, f"play languages {viewport['width']}")
             await dialog.get_by_role("button", name="Add a language you play in").click()
             await dialog.get_by_role("listbox", name="Add a language you play in").wait_for()
-            # An open popup lies over the rows below it, and axe counts the
-            # controls it half covers as undersized targets: true of any
-            # popup, and not what this checks.
+            # An open popup lies over the rows below it, and axe's target-size
+            # rule ignores stacking, so it counts the controls half covered as
+            # undersized. The rule is off for this scan, so its one new target
+            # - the popup's own rows - is measured here instead.
             await assert_no_axe_violations(
                 page,
                 f"play languages add {viewport['width']}",
                 disabled_rules=(*DEFAULT_DISABLED_RULES, "target-size"),
             )
+            heights = await dialog.get_by_role("option").evaluate_all(
+                "rows => rows.map(row => row.getBoundingClientRect().height)"
+            )
+            assert heights and min(heights) >= 24, heights
         finally:
             await context.close()
             await browser.close()
