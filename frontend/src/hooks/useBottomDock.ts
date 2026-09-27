@@ -18,9 +18,9 @@ column are beside that spot, not under it, and counting them pushed the invite
 into the middle of the canvas. What stands there is kept narrow enough to miss
 a column docked down the side instead (`--dock-inline-inset`, which the
 landscape room sets for its feed). An element may also reserve room above itself
-with `--dock-reserve` (the guess field keeps a slot for the verdict on the last
-guess, which floats outside its box). Several can be mounted at once; the
-highest reach wins. */
+with `--dock-reserve` (the guess field, while the keyboard is up, keeps a slot
+for the verdict on the last guess, which floats outside its box). Several can
+be mounted at once; the highest reach wins. */
 
 const reaches = new Map<HTMLElement, number>();
 
