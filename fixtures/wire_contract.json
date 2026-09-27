@@ -691,12 +691,20 @@
    "commandClass": "action",
    "payload": {
     "additionalProperties": false,
-    "description": "One press from the lobby into a room (#931, R-UX-14).\n\nWho is pressing and what language their words are in - nothing about the\nroom. The server picks a public room that is waiting in that language, or\nopens one on the defaults above, so the rule and the room are in one place\nrather than mirrored in a client that decides from a list a moment old.",
+    "description": "One press from the lobby into a room (#931, R-UX-14).\n\nWho is pressing and what languages their words are in - nothing about the\nroom. The server picks a public room that is waiting in the default\nlanguage, then a mixed one, then one in the others in the player's order\n(#1211), or opens one in the default on the defaults above, so the rule\nand the room are in one place rather than mirrored in a client that\ndecides from a list a moment old.",
     "properties": {
      "colorblindSafeColors": {
       "default": false,
       "title": "Colorblindsafecolors",
       "type": "boolean"
+     },
+     "extraPromptLanguages": {
+      "items": {
+       "type": "string"
+      },
+      "maxItems": 6,
+      "title": "Extrapromptlanguages",
+      "type": "array"
      },
      "nameColor": {
       "anyOf": [
@@ -2840,7 +2848,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 46,
+ "protocolVersion": 47,
  "refusal": {
   "codes": [
    "invalid_payload",

@@ -41,7 +41,7 @@ from app.drawing_rules import (
     check_color_mode,
     clean_allowed_tools,
 )
-from app.domain_values import HINT_MODES, SCORING_MODES
+from app.domain_values import HINT_MODES, PROMPT_LANGUAGES, SCORING_MODES
 from app.game import PROMPT_CHOICES_PER_TURN
 from app.canvas_history import MAX_CANVAS_ACTIONS
 from app.live_drawing import LiveDrawingPacket, decode_live_drawing
@@ -379,16 +379,25 @@ class JoinRoomPayload(RequestModel):
 class QuickPlayPayload(RequestModel):
     """One press from the lobby into a room (#931, R-UX-14).
 
-    Who is pressing and what language their words are in - nothing about the
-    room. The server picks a public room that is waiting in that language, or
-    opens one on the defaults above, so the rule and the room are in one place
-    rather than mirrored in a client that decides from a list a moment old.
+    Who is pressing and what languages their words are in - nothing about the
+    room. The server picks a public room that is waiting in the default
+    language, then a mixed one, then one in the others in the player's order
+    (#1211), or opens one in the default on the defaults above, so the rule
+    and the room are in one place rather than mirrored in a client that
+    decides from a list a moment old.
     """
 
     nickname: str = Field(default="Player", max_length=MAX_NICKNAME_LENGTH)
     name_color: str | None = Field(default=None, alias="nameColor", pattern=r"^#[0-9a-fA-F]{6}$")
     colorblind_safe_colors: bool = Field(default=False, alias="colorblindSafeColors")
     prompt_language: str = Field(default="en", alias="promptLanguage", max_length=32)
+    # The other languages the player plays in, ranked (#1211): their rooms come
+    # after mixed ones. Bounded like the setting they come from (#1209).
+    extra_prompt_languages: list[str] = Field(
+        default_factory=list,
+        alias="extraPromptLanguages",
+        max_length=len(PROMPT_LANGUAGES) - 1,
+    )
 
     @field_validator("prompt_language")
     @classmethod
@@ -399,6 +408,32 @@ class QuickPlayPayload(RequestModel):
             return validate_prompt_language(value)
         except ValueError as error:
             raise ValueError(str(error)) from error
+
+    @field_validator("extra_prompt_languages", mode="after")
+    @classmethod
+    def valid_extra_prompt_languages(cls, value: list[str]) -> list[str]:
+        """Canonical, each once. A tag the server does not play is refused
+        like the default's would be: the lobby could never rank it."""
+        languages: list[str] = []
+        for tag in value:
+            try:
+                language = validate_prompt_language(tag)
+            except ValueError as error:
+                raise ValueError(str(error)) from error
+            if language not in languages:
+                languages.append(language)
+        return languages
+
+    @model_validator(mode="after")
+    def default_is_not_an_extra(self):
+        """The default ranks first already; listed again it would only move a
+        room down its own list."""
+        self.extra_prompt_languages = [
+            language
+            for language in self.extra_prompt_languages
+            if language != self.prompt_language
+        ]
+        return self
 
     @field_validator("nickname")
     @classmethod

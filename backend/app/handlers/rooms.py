@@ -6,6 +6,7 @@ import logging
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
+from collections.abc import Sequence
 from functools import partial
 
 from app.announcements import Announcement
@@ -1442,7 +1443,9 @@ async def _quick_play(ctx: HandlerContext, sid, data, seated: list):
 
     entering = _EnteringAs(payload)
     while not entry_expired():
-        for room in _quick_play_candidates(ctx, payload.prompt_language):
+        for room in _quick_play_candidates(
+            ctx, payload.prompt_language, payload.extra_prompt_languages
+        ):
             answer = await _seat_in_room(
                 ctx, sid, room, entering, seated, quick_play=True, identity=identity
             )
@@ -1462,16 +1465,22 @@ async def _quick_play(ctx: HandlerContext, sid, data, seated: list):
     return BUSY_ACKNOWLEDGEMENT
 
 
-def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
-    """The rooms worth trying: this language's first, then mixed ones,
-    fullest first within each (R-UX-14).
+def _quick_play_candidates(
+    ctx: HandlerContext, language: str, extras: Sequence[str] = ()
+) -> list:
+    """The rooms worth trying: the default language's first, then mixed ones,
+    then each of the others in the player's order - fullest first within each
+    (R-UX-14, #1211).
 
-    Never a room in another language - it would hand the player words they
-    can neither draw nor guess - but a mixed-language room (#1182) plays
-    everyone in their own, so it is the fallback before opening a new room.
-    Never a game already under way. Fullest first, because the room one seat
-    short of a game is the one worth filling.
+    Never a room in a language the player does not play - it would hand them
+    words they can neither draw nor guess - but a mixed-language room (#1182)
+    plays everyone in their own, so it comes before the languages the player
+    ranked below their default. Never a game already under way. Fullest first,
+    because the room one seat short of a game is the one worth filling.
     """
+    tier = {language: 0, MIXED_PROMPT_LANGUAGE: 1}
+    for position, extra in enumerate(extras):
+        tier.setdefault(extra, 2 + position)
     # Seated rather than active: a seat held by somebody disconnected inside
     # their grace, or marked AFK, is still taken - `add_player` counts those,
     # and ranking by anything else offers a room that would refuse the seat.
@@ -1479,13 +1488,13 @@ def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
         room
         for room in ctx.room_manager.rooms.values()
         if _open_for_quick_play(room)
-        and room.prompt_language in (language, MIXED_PROMPT_LANGUAGE)
+        and room.prompt_language in tier
         and len(room.seated_players()) < room.max_players
     ]
     return sorted(
         open_rooms,
         key=lambda room: (
-            room.prompt_language != language,
+            tier[room.prompt_language],
             -len(room.seated_players()),
             room.id,
         ),

@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { AppHeader } from "../components/AppHeader";
+import { useSettingsStore } from "../store/settingsStore";
 import { CommunityPromptsDialog } from "../components/CommunityPromptsDialog";
 import { CopiedFromCredit } from "../components/CopiedFromCredit";
 import { ANY_LANGUAGE, LanguagePicker } from "../components/LanguagePicker";
@@ -28,7 +29,7 @@ import {
 import {
   AGNOSTIC_PROMPT_LANGUAGE,
   promptLanguageLabel,
-  SUPPORTED_PROMPT_LANGUAGES,
+  rankedPromptLanguages,
 } from "../lib/promptLanguages";
 import {
   forkPromptList,
@@ -92,6 +93,13 @@ export function CommunityCataloguePage() {
   >(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // The filter lists the reader's play languages first, in their order (#1211).
+  const playLanguage = useSettingsStore((state) => state.promptLanguage);
+  const extraLanguages = useSettingsStore((state) => state.extraPromptLanguages);
+  const rankedLanguages = useMemo(
+    () => rankedPromptLanguages(playLanguage, extraLanguages),
+    [playLanguage, extraLanguages],
+  );
   const [vocabulary, setVocabulary] = useState<PromptTag[]>([]);
   // Bumped to ask for the rows again when a star landed against a view that
   // is no longer the one on screen. Nothing else re-reads then: the filters
@@ -355,7 +363,7 @@ export function CommunityCataloguePage() {
         <LanguagePicker
           label={ui.communityCataloguePage.language}
           value={filters.language ?? ANY_LANGUAGE}
-          options={SUPPORTED_PROMPT_LANGUAGES}
+          options={rankedLanguages}
           includeAny
           compact
           onChange={(choice) => applyFilters({

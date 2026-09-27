@@ -21,7 +21,7 @@ import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon } from "../components/icons";
 import {
-  SUPPORTED_PROMPT_LANGUAGES,
+  rankedPromptLanguages,
   MIXED_PROMPT_LANGUAGE,
   sortRoomsByLanguage,
 } from "../lib/promptLanguages";
@@ -171,6 +171,7 @@ export function LobbyBrowserPage() {
   const nameColor = useSettingsStore((s) => s.nameColor);
   const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
   const playerLanguage = useSettingsStore((s) => s.promptLanguage);
+  const extraLanguages = useSettingsStore((s) => s.extraPromptLanguages);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
   // Pushed over the lobby channel rather than polled (#462). The store is
@@ -273,12 +274,17 @@ export function LobbyBrowserPage() {
   // The languages the game has content in, not the ones that happen to have a
   // room open: a control that appears and disappears with the population reads
   // as a bug, and "no rooms in Dutch" is an answer worth being able to get.
-  const roomLanguages = SUPPORTED_PROMPT_LANGUAGES;
+  // Yours first, in your order (#1211).
+  const roomLanguages = useMemo(
+    () => rankedPromptLanguages(playerLanguage, extraLanguages),
+    [playerLanguage, extraLanguages],
+  );
 
-  // Your language first, nobody hidden (R-PROMPT-11).
+  // Your languages first - the default, mixed rooms, then the others in your
+  // order (#1211) - and nobody hidden (R-PROMPT-11).
   // Memoised (#991): the room list's deltas arrive once a second, and the
   // search box and the chat beside it re-render the page on every keystroke.
-  const filteredRooms = useMemo(() => sortRoomsByLanguage(rooms, playerLanguage).filter((room) => {
+  const filteredRooms = useMemo(() => sortRoomsByLanguage(rooms, playerLanguage, extraLanguages).filter((room) => {
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       const nameMatch = room.name.toLowerCase().includes(q);
@@ -301,7 +307,7 @@ export function LobbyBrowserPage() {
       return false;
     }
     return true;
-  }), [rooms, playerLanguage, searchQuery, languageFilter, hideFullRooms, hideInProgressRooms]);
+  }), [rooms, playerLanguage, extraLanguages, searchQuery, languageFilter, hideFullRooms, hideInProgressRooms]);
 
   // No gate: every visitor already has a name, generated on their first load.
   async function handleOpenCreateRoom() {
@@ -343,6 +349,8 @@ export function LobbyBrowserPage() {
         nameColor,
         colorblindSafeColors,
         promptLanguage: playerLanguage,
+        // Ranked on the server by the same tiers as the list (#1211).
+        extraPromptLanguages: extraLanguages,
       });
       const session = sessionFrom(answer);
       if (!mountedRef.current) {

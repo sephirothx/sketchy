@@ -242,19 +242,42 @@ export function gameEndSpelledForSeat<T extends GameEndedPayload>(
 }
 
 /**
- * Your language first, everything else in the order it arrived.
+ * Your default language first, then mixed rooms - which play you in it
+ * (#1182) - then each of the others you play in, in your order (#1211), then
+ * everything else in the order it arrived.
  *
  * Nothing is hidden: a lobby filtered to one language looks empty while rooms
  * are open, which is a worse answer than a longer list. `sort` is stable, so
- * the server's ordering survives inside each group.
+ * the server's ordering survives inside each group. Quick play ranks by the
+ * same tiers on the server (`_quick_play_candidates`).
  */
 export function sortRoomsByLanguage<T extends { promptLanguage: string }>(
   rooms: readonly T[],
   language: string,
+  extras: readonly string[] = [],
 ): T[] {
-  // Your language first, then mixed rooms - which play you in it (#1182) -
-  // then everything else.
-  const rank = (room: T) =>
-    room.promptLanguage === language ? 0 : room.promptLanguage === MIXED_PROMPT_LANGUAGE ? 1 : 2;
+  const tier = new Map<string, number>([[language, 0], [MIXED_PROMPT_LANGUAGE, 1]]);
+  extras.forEach((extra, position) => {
+    if (!tier.has(extra)) tier.set(extra, 2 + position);
+  });
+  const rest = 2 + extras.length;
+  const rank = (room: T) => tier.get(room.promptLanguage) ?? rest;
   return [...rooms].sort((left, right) => rank(left) - rank(right));
+}
+
+/**
+ * The seven, in the order this player ranks them: their default, the others
+ * they play in, then the rest in the usual order - how every picker of a
+ * language to play lists them (#1211), so the ones they would choose are at
+ * the top without anything being left out.
+ */
+export function rankedPromptLanguages(
+  language: PromptLanguage,
+  extras: readonly PromptLanguage[] = [],
+  among: readonly PromptLanguage[] = SUPPORTED_PROMPT_LANGUAGES,
+): PromptLanguage[] {
+  const ranked = [language, ...extras].filter(
+    (item, index, all) => among.includes(item) && all.indexOf(item) === index,
+  );
+  return [...ranked, ...among.filter((item) => !ranked.includes(item))];
 }

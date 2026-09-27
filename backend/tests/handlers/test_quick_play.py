@@ -247,3 +247,45 @@ async def test_a_mixed_language_room_is_the_fallback_before_opening_one():
     assert second["roomId"] == mixed.id
     seat = next(p for p in mixed.players.values() if p.nickname == "Jonas")
     assert mixed.seat_language(seat) == "de"
+
+
+async def test_the_default_then_mixed_then_the_others_in_the_players_order():
+    """#1211: the default language's rooms, then mixed ones, then each of the
+    others the player ranked, in that order - fullest first within each, and
+    never a language the player does not play."""
+    room_manager = RoomManager()
+    spanish = waiting_room(room_manager, language="es", seats=6)
+    dutch = waiting_room(room_manager, language="nl", seats=2)
+    french = waiting_room(room_manager, language="fr", seats=7)
+    mixed = waiting_room(room_manager, language="mul", seats=1)
+    italian = waiting_room(room_manager, language="it", seats=1)
+    sio, _ = server(room_manager)
+    ranked = {"promptLanguage": "it", "extraPromptLanguages": ["nl", "es"]}
+
+    order = []
+    for index, room in enumerate((italian, mixed, dutch, spanish)):
+        answer = await press(sio, sid=f"sid-{index}", nickname=f"Marta{index}", **ranked)
+        assert answer["ok"] is True and answer["created"] is False
+        order.append(answer["roomId"])
+        room.state = "playing"
+    assert order == [italian.id, mixed.id, dutch.id, spanish.id]
+    assert players(french) == 7, "a language the player does not play"
+
+    # A mixed room seats them in their default, never in one of the others.
+    seat = next(p for p in mixed.players.values() if p.nickname == "Marta1")
+    assert mixed.seat_language(seat) == "it"
+
+
+async def test_the_other_languages_are_canonical_once_and_never_the_default():
+    room_manager = RoomManager()
+    dutch = waiting_room(room_manager, language="nl", seats=1)
+    sio, _ = server(room_manager)
+
+    answer = await press(
+        sio, promptLanguage="it", extraPromptLanguages=["NL", "it", "nl"]
+    )
+    assert answer["roomId"] == dutch.id
+
+    for junk in (["kl"], ["mul"], "nl", ["nl"] * 7):
+        refused = await press(sio, sid="other", promptLanguage="it", extraPromptLanguages=junk)
+        assert refused["ok"] is False, junk
