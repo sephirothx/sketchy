@@ -677,6 +677,10 @@ class SampledPrompt:
     aliases: tuple[str, ...] = ()
     prompt_version_id: str | None = None
     source_revision_ids: tuple[str, ...] = ()
+    # What is being drawn, independent of how this language spells it: the
+    # key a game tracks the prompt by (#1181). `None` only where a caller has
+    # no concept to give - a stand-in store - and the answer serves instead.
+    concept_id: str | None = None
 
 
 @dataclass(frozen=True)

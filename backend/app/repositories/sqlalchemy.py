@@ -5665,6 +5665,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                                 sources[version.id], key=lambda rid: order[rid]
                             )
                         ),
+                        concept_id=_public_id(version.concept_id),
                     )
                     for version in versions
                 ),

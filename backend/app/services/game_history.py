@@ -396,17 +396,17 @@ def build_game_history(
                 source_kind=(
                     turn.offered_prompt_source_kinds[position]
                     if position < len(turn.offered_prompt_source_kinds)
-                    else game.prompt_source_kind(prompt)
+                    else game.prompt_source_kind(game.key_for(prompt))
                 ),
                 prompt_version_id=(
                     turn.offered_prompt_version_ids[position]
                     if position < len(turn.offered_prompt_version_ids)
-                    else game.prompt_version_ids.get(prompt)
+                    else game.prompt_version_ids.get(game.key_for(prompt))
                 ),
                 source_revision_ids=(
                     turn.offered_prompt_source_revision_ids[position]
                     if position < len(turn.offered_prompt_source_revision_ids)
-                    else game.prompt_source_revision_ids_by_answer.get(prompt, ())
+                    else game.prompt_source_revision_ids_by_key.get(game.key_for(prompt), ())
                 ),
             )
             for position, prompt in enumerate(turn.offered_prompts)
@@ -423,12 +423,12 @@ def build_game_history(
                 duration_seconds=turn.duration_seconds,
                 prompt_version_id=(
                     turn.chosen_prompt_version_id
-                    or game.prompt_version_ids.get(turn.chosen_prompt)
+                    or game.prompt_version_ids.get(game.key_for(turn.chosen_prompt))
                 ),
                 prompt_source_kind=(
                     turn.offered_prompt_source_kinds[selected_position]
                     if selected_position < len(turn.offered_prompt_source_kinds)
-                    else game.prompt_source_kind(turn.chosen_prompt)
+                    else game.prompt_source_kind(game.key_for(turn.chosen_prompt))
                 ),
                 # Counted over the rows that are written, not the runtime
                 # seats the turn counted: an account that left and re-entered

@@ -261,8 +261,12 @@ class StubPromptListRepo:
         revision_ids=(),
         aliases=None,
         prompt_version_ids=None,
+        concept_ids=None,
     ):
         self.prompts = list(prompts)
+        # By answer; a prompt left out is drawn with no concept, and keyed by
+        # its answer as a quick prompt is.
+        self.concept_ids = dict(concept_ids or {})
         self.language = language
         self.revision_ids = tuple(revision_ids)
         self.aliases = dict(aliases or {})
@@ -335,6 +339,7 @@ class StubPromptListRepo:
                     aliases=self.aliases.get(prompt, ()),
                     prompt_version_id=self.prompt_version_ids.get(prompt),
                     source_revision_ids=tuple(revision_ids),
+                    concept_id=self.concept_ids.get(prompt),
                 )
                 for prompt in drawable[:limit]
             ),

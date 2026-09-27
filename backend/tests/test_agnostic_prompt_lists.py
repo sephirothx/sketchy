@@ -312,3 +312,5 @@ async def test_the_draw_compares_quick_prompts_only_with_keys_in_the_room_s_fold
     )
 
     assert {prompt.answer for prompt in sample.prompts} == {"Hund", "Bär", "Pikachu"}
+    # Every drawn prompt names its concept, which a game tracks it by (#1181).
+    assert all(prompt.concept_id for prompt in sample.prompts)

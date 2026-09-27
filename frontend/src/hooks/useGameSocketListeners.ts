@@ -103,8 +103,8 @@ export function useGameSocketListeners() {
       });
     };
 
-    const onYourPromptChoices = (payload: { choices: string[]; seconds: number }) => {
-      store.getState().setMyPromptChoices(payload.choices, payload.seconds);
+    const onYourPromptChoices = (payload: { choices: string[]; seconds: number; turnId?: string }) => {
+      store.getState().setMyPromptChoices(payload.choices, payload.seconds, payload.turnId ?? null);
     };
 
     const onYouAreDrawing = (payload: { prompt: string; choices?: string[] }) => {
