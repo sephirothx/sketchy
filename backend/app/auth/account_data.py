@@ -96,8 +96,9 @@ from app.domain_values import (
 # document's field surface changed, and a reader that keys off the version
 # should be able to tell which shape it has. To 5 when the account gained
 # `lastSeenAt` (#469). To 9 when a prompt list stopped having a share code
-# and `shareCode` left each list (R-LIST-03).
-EXPORT_SCHEMA_VERSION = 11
+# and `shareCode` left each list (R-LIST-03). To 12 when settings gained
+# `extraPromptLanguages`, the other languages a player plays in (#1209).
+EXPORT_SCHEMA_VERSION = 12
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -929,6 +930,7 @@ async def _write_export_artifact(
             "colorblindSafeColors": settings.colorblind_safe_colors,
             "timeFormat": settings.time_format,
             "promptLanguage": settings.prompt_language,
+            "extraPromptLanguages": list(settings.extra_prompt_languages),
             "locale": settings.locale,
             "createdAt": _timestamp(settings.created_at),
             "updatedAt": _timestamp(settings.updated_at),

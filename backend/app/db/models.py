@@ -507,6 +507,12 @@ class UserStatsDaily(Base):
     )
 
 
+# Six two-letter languages as JSONB writes them, `["de", "en", ...]`: 36
+# characters. Room for the brackets and separators of either engine's text
+# form, and not for anything a settings route would never write.
+EXTRA_PROMPT_LANGUAGES_TEXT_MAX = 48
+
+
 class UserSettings(Base):
     """Cross-device preferences for a registered account."""
 
@@ -528,6 +534,20 @@ class UserSettings(Base):
         CheckConstraint(
             "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",
             name="ck_user_settings_volume",
+        ),
+        # The other play languages (#1209), bounded where a JSON column can be
+        # on both engines: read as its text, it is a list no longer than every
+        # other language needs, and it never names the default. The routes
+        # hold the rest (each of the seven, once); these two hold even against
+        # two PATCHes that each passed the routes' check against the same row.
+        CheckConstraint(
+            "CAST(extra_prompt_languages AS TEXT) LIKE '[%' "
+            f"AND length(CAST(extra_prompt_languages AS TEXT)) <= {EXTRA_PROMPT_LANGUAGES_TEXT_MAX}",
+            name="ck_user_settings_extra_prompt_languages_list",
+        ),
+        CheckConstraint(
+            "CAST(extra_prompt_languages AS TEXT) NOT LIKE ('%\"' || prompt_language || '\"%')",
+            name="ck_user_settings_default_not_extra",
         ),
     )
 
@@ -596,14 +616,27 @@ class UserSettings(Base):
         server_default=TimeFormat.SYSTEM.value,
         nullable=False,
     )
-    # Which language this player plays in: the lobby leads with it and a new
-    # room starts in it (R-PROMPT-11). Stored per account rather than read from
-    # the browser every time, so it follows a player to their other devices;
-    # registration seeds it from the browser, and it is a setting afterwards.
+    # The language this player plays in by default (R-PROMPT-11): the lobby
+    # leads with it, a mixed room seats them in it, and Quick play opens a room
+    # in it. Stored per account rather than read from the browser every time,
+    # so it follows a player to their other devices; registration seeds it
+    # from the browser, and it is a setting afterwards.
     prompt_language: Mapped[str] = mapped_column(
         String(8),
         default=PromptLanguage.ENGLISH.value,
         server_default=PromptLanguage.ENGLISH.value,
+        nullable=False,
+    )
+    # The other languages they play in, in the order they ranked them (#1209),
+    # for discovery to rank their rooms by (#1211). Never the default, never
+    # twice - the settings routes hold both columns to that in one write, and
+    # the CHECKs above hold what a JSON column can. A list on the row rather
+    # than a table of its own, so `/api/auth/me` still reads settings in one
+    # statement (R-PLAT-17).
+    extra_prompt_languages: Mapped[list[str]] = mapped_column(
+        PortableJSON,
+        default=list,
+        server_default=text("'[]'"),
         nullable=False,
     )
     # Which language this player reads the interface in (R-I18N-06). Distinct

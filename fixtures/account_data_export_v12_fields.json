@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 11,
+  "schemaVersion": 12,
   "fieldPaths": [
     "account",
     "account.avatar",
@@ -259,6 +259,7 @@
     "settings.locale",
     "settings.penPressure",
     "settings.promptLanguage",
+    "settings.extraPromptLanguages",
     "settings.soundEffects",
     "settings.theme",
     "settings.timeFormat",
