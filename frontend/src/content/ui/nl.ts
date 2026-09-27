@@ -1979,6 +1979,11 @@ export const NL: Catalogue = {
     wearing: "Draag je nu",
     couldNotChoose: "De tekening kon niet gewijzigd worden.",
   },
+  playLanguagesQuestion: {
+    title: "In welke talen speel je?",
+    changeLater: "Je kunt dit altijd wijzigen via Instellingen → Weergave.",
+    done: "Klaar",
+  },
   settingsOverlay: {
     email: "E-mail",
     password: "Wachtwoord",

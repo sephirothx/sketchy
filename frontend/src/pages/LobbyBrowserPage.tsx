@@ -4,6 +4,8 @@ import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/sock
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { PlayLanguagesQuestion } from "../components/PlayLanguagesQuestion";
+import { usePlayLanguagesQuestionStore } from "../store/playLanguagesQuestionStore";
 import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
@@ -217,6 +219,22 @@ export function LobbyBrowserPage() {
   // so every entry control is disabled while one is pending. The lock is the
   // app's, not this page's (store/roomEntryStore.ts).
   const pendingJoin = useRoomEntryStore((state) => state.pending);
+  // A first-time player is asked which languages they play in once, here,
+  // and never while a press is taking them into a room (#1219).
+  const questionDue = usePlayLanguagesQuestionStore((state) => state.due);
+  const markQuestionAsked = usePlayLanguagesQuestionStore((state) => state.markAsked);
+  // Set once a press has decided to leave the lobby: navigating waits for the
+  // next page's code, and the question must not open over the way out.
+  const [leaving, setLeaving] = useState(false);
+
+  function answerQuestion() {
+    markQuestionAsked();
+    // The first-run block that had focus is gone by now; the lobby's first
+    // way into a game is where the keyboard picks up.
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-testid="quick-play"]')?.focus();
+    });
+  }
   const beginEntry = useRoomEntryStore((state) => state.begin);
   const endEntry = useRoomEntryStore((state) => state.end);
   const quickPlayBusy = pendingJoin?.key === "quick-play";
@@ -316,10 +334,14 @@ export function LobbyBrowserPage() {
     // A visitor who typed a name and pressed this plainly means to play under
     // it, so provision from the draft rather than sending them back to a form
     // they have already filled in.
+    // Leaving from here on: naming the player marks the question due, and it
+    // must not open over the way out while the next page loads.
+    setLeaving(true);
     if (awaitingName) {
       try {
         await ensureIdentity();
       } catch (identityError) {
+        setLeaving(false);
         setError(identityMessage(identityError));
         return;
       }
@@ -359,6 +381,7 @@ export function LobbyBrowserPage() {
       }
       if (session) {
         setSession(session);
+        setLeaving(true);
         navigate(`/room/${session.code}`);
         return;
       }
@@ -418,6 +441,7 @@ export function LobbyBrowserPage() {
       }
       if (session) {
         setSession(session);
+        setLeaving(true);
         navigate(`/room/${session.code}`);
       } else {
         setError(refusalText(res, ui.lobbyBrowserPage.couldNotJoinRoom));
@@ -470,6 +494,9 @@ export function LobbyBrowserPage() {
 
 
       <FirstRunIdentity />
+      {questionDue && pendingJoin === null && !leaving && !criticalError && (
+        <PlayLanguagesQuestion onDone={answerQuestion} />
+      )}
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 

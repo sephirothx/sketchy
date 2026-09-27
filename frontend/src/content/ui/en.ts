@@ -1994,6 +1994,11 @@ export const EN = {
     wearing: "Wearing now",
     couldNotChoose: "Could not change the doodle.",
   },
+  playLanguagesQuestion: {
+    title: "Which languages do you play in?",
+    changeLater: "You can change these any time in Settings → Appearance.",
+    done: "Done",
+  },
   settingsOverlay: {
     email: "Email",
     password: "Password",

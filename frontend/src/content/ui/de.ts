@@ -1979,6 +1979,11 @@ export const DE: Catalogue = {
     wearing: "Trägst du gerade",
     couldNotChoose: "Das Doodle konnte nicht geändert werden.",
   },
+  playLanguagesQuestion: {
+    title: "In welchen Sprachen spielst du?",
+    changeLater: "Du kannst das jederzeit unter Einstellungen → Darstellung ändern.",
+    done: "Fertig",
+  },
   settingsOverlay: {
     email: "E-Mail",
     password: "Passwort",

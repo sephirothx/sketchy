@@ -1981,6 +1981,11 @@ export const FR: Catalogue = {
     wearing: "Porté en ce moment",
     couldNotChoose: "Le dessin n’a pas pu être changé.",
   },
+  playLanguagesQuestion: {
+    title: "Dans quelles langues joues-tu ?",
+    changeLater: "Tu peux les changer à tout moment dans Paramètres → Apparence.",
+    done: "Terminé",
+  },
   settingsOverlay: {
     email: "E-mail",
     password: "Mot de passe",

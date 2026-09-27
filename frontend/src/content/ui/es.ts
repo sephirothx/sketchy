@@ -1978,6 +1978,11 @@ export const ES: Catalogue = {
     wearing: "Lo llevas ahora",
     couldNotChoose: "No se pudo cambiar el dibujo.",
   },
+  playLanguagesQuestion: {
+    title: "¿En qué idiomas juegas?",
+    changeLater: "Puedes cambiarlos cuando quieras en Ajustes → Apariencia.",
+    done: "Listo",
+  },
   settingsOverlay: {
     email: "Correo",
     password: "Contraseña",

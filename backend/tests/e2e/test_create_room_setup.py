@@ -5,7 +5,12 @@ from uuid import uuid4
 
 from playwright.async_api import Error as PlaywrightError, async_playwright
 
-from tests.e2e.lobby_helpers import choose_room_language, open_new_room, use_guest_name
+from tests.e2e.lobby_helpers import (
+    answer_play_languages_question,
+    choose_room_language,
+    open_new_room,
+    use_guest_name,
+)
 
 BASE_URL = "http://localhost:8000"
 
@@ -86,6 +91,7 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await nickname_input.fill("SetupHost")
             await page.click(".first-run-guest-submit")
             await page.wait_for_selector('.identity-name:has-text("SetupHost")')
+            await answer_play_languages_question(page)
             await page.click('button:has-text("Create room")')
             await page.wait_for_url(f"{BASE_URL}/create")
             # History updates before React finishes the route swap; wait for the

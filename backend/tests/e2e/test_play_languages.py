@@ -13,7 +13,14 @@ import pytest
 from playwright.async_api import Page, async_playwright
 
 from tests.e2e.a11y import DEFAULT_DISABLED_RULES, assert_no_axe_violations
-from tests.e2e.lobby_helpers import register_account, use_guest_name
+from tests.e2e.lobby_helpers import (
+    PLAY_LANGUAGES_QUESTION,
+    leave_room,
+    open_create_room,
+    register_account,
+    room_code,
+    use_guest_name,
+)
 
 BASE_URL = "http://localhost:8000"
 
@@ -200,6 +207,13 @@ async def test_a_drag_forward_and_off_the_end_lands_and_escape_puts_one_back():
             await page.mouse.up()
             assert await _extras(page) == ["fr", "es", "nl"]
             assert await dialog.locator(".play-language-chip.is-lifted").count() == 0
+            # Settled, and nothing left behind that would override the
+            # stylesheet's own transitions on the next drag.
+            await page.wait_for_timeout(400)
+            leftovers = await chips.evaluate_all(
+                "cs => cs.map(c => c.style.transition + '|' + c.style.translate)"
+            )
+            assert leftovers == ["|"] * 3, leftovers
             stored = await page.evaluate("localStorage.getItem('sketchy_extrapromptlanguages')")
             assert stored == '["fr","es","nl"]'
 
@@ -485,6 +499,208 @@ async def test_seven_flags_wrap_rather_than_push_the_header_off_a_phone():
             await browser.close()
 
 
+async def test_a_first_name_is_followed_by_the_one_question_about_languages():
+    """#1219: naming yourself in the lobby opens the question, pre-filled
+    from the browser; what is chosen in it is kept, and it never returns."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(locale="it-IT")
+        await context.add_init_script(
+            "Object.defineProperty(navigator, 'languages', { get: () => ['it-IT', 'fr-FR'] });"
+            "localStorage.setItem('sketchy_locale', 'en');"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.fill(".first-run-guest-row input", f"Asked{uuid4().hex[:6]}")
+            await page.click(".first-run-guest-submit")
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.wait_for()
+            await question.get_by_role(
+                "button", name="Your language: italiano (Italian)"
+            ).wait_for()
+            await question.get_by_text("Settings → Appearance").wait_for()
+            await question.get_by_role("button", name="Add français").click()
+            assert await _extras(page) == ["fr"]
+            await assert_no_axe_violations(page, "play languages question")
+            await question.get_by_role("button", name="Done").click()
+            await question.wait_for(state="detached")
+
+            await page.reload()
+            await page.wait_for_selector(".identity-chip")
+            await page.wait_for_timeout(500)
+            assert await page.locator(PLAY_LANGUAGES_QUESTION).count() == 0
+            dialog = await _open_appearance(page)
+            assert await _extras(page) == ["fr"]
+            await dialog.get_by_role("button", name="Your language: italiano (Italian)").wait_for()
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_an_account_made_from_nothing_is_asked_once_and_a_sign_in_never():
+    username = f"Fresh{uuid4().hex[:6]}"
+    password = "a-good-password"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        first = await browser.new_context()
+        page = await first.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.click(".first-run-signup")
+            account = page.locator(".modal-card").filter(has_text="Password")
+            await account.locator("input").nth(0).fill(username)
+            await account.locator("input").nth(1).fill(password)
+            await account.locator('button[type="submit"]').click()
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.wait_for()
+            # Escape sets it aside for good, as Done does.
+            await page.keyboard.press("Escape")
+            await question.wait_for(state="detached")
+
+            fresh = await browser.new_context()
+            fresh_page = await fresh.new_page()
+            try:
+                await fresh_page.goto(BASE_URL)
+                await fresh_page.click(".first-run-login")
+                login = fresh_page.get_by_role("dialog", name="Sign in")
+                await login.get_by_label("Username").fill(username)
+                await login.get_by_label("Password").fill(password)
+                await login.get_by_role("button", name="Sign in", exact=True).click()
+                await login.wait_for(state="hidden")
+                await fresh_page.wait_for_selector(".identity-chip")
+                await fresh_page.wait_for_timeout(500)
+                assert await fresh_page.locator(PLAY_LANGUAGES_QUESTION).count() == 0
+            finally:
+                await fresh.close()
+        finally:
+            await first.close()
+            await browser.close()
+
+
+async def test_a_player_named_on_the_way_into_a_room_is_asked_back_in_the_lobby():
+    """An invite link names its visitor and seats them at once: the question
+    waits for the lobby rather than opening over the room."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        visitor_context = await browser.new_context()
+        host = await host_context.new_page()
+        visitor = await visitor_context.new_page()
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"Inviter{uuid4().hex[:6]}")
+            await open_create_room(host)
+            await host.get_by_role("button", name="Private").click()
+            await host.click(".create-room-submit")
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            code = await room_code(host)
+
+            await visitor.goto(f"{BASE_URL}/room/{code}")
+            await visitor.fill("#invite-name", f"Invited{uuid4().hex[:6]}")
+            await visitor.press("#invite-name", "Enter")
+            await visitor.wait_for_selector('[data-testid="waiting-room"]')
+            await visitor.wait_for_timeout(500)
+            assert await visitor.locator(PLAY_LANGUAGES_QUESTION).count() == 0
+
+            await leave_room(visitor)
+            await visitor.locator(PLAY_LANGUAGES_QUESTION).wait_for()
+        finally:
+            await host_context.close()
+            await visitor_context.close()
+            await browser.close()
+
+
+# Counts every time the question is drawn, however briefly.
+WATCH_QUESTION = """
+(() => {
+  window.__questionSeen = 0;
+  new MutationObserver(() => {
+    if (document.querySelector('[data-testid="play-languages-question"]')) window.__questionSeen += 1;
+  }).observe(document, { childList: true, subtree: true });
+})();
+"""
+
+
+async def test_a_name_given_on_the_way_to_create_asks_back_in_the_lobby_and_a_sign_in_cancels():
+    """Create room with a typed name names the player and leaves: the question
+    is never drawn on the way out (it once flashed, or stayed up while the
+    next page loaded), and waits for the lobby. Signing in to an account that
+    already exists answers it - that account chose long ago."""
+    username = f"Known{uuid4().hex[:6]}"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        existing = await browser.new_context()
+        owner = await existing.new_page()
+        await owner.goto(BASE_URL)
+        await use_guest_name(owner, username)
+        await register_account(owner, username)
+        await existing.close()
+
+        context = await browser.new_context()
+        await context.add_init_script(WATCH_QUESTION)
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.fill(".first-run-guest-row input", f"Leaver{uuid4().hex[:6]}")
+            await page.locator(
+                ".lobby-rooms-actions .btn-primary:visible, .lobby-dock-row .btn-primary:visible"
+            ).click()
+            await page.wait_for_selector(".create-room-submit")
+            assert await page.evaluate("window.__questionSeen") == 0
+
+            # Back in the lobby it is asked; set aside, and asked again on
+            # another visit it would not be - but first, sign in instead.
+            await page.goto(BASE_URL)
+            await page.locator(PLAY_LANGUAGES_QUESTION).wait_for()
+            await page.goto(f"{BASE_URL}/create")
+            await page.wait_for_selector(".create-room-submit")
+            await page.click(".identity-chip")
+            await page.get_by_role("menuitem", name="Sign in").click()
+            login = page.get_by_role("dialog", name="Sign in")
+            await login.get_by_label("Username").fill(username)
+            await login.get_by_label("Password").fill("a-good-password")
+            await login.get_by_role("button", name="Sign in", exact=True).click()
+            await login.wait_for(state="hidden")
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".identity-chip")
+            await page.wait_for_timeout(500)
+            assert await page.locator(PLAY_LANGUAGES_QUESTION).count() == 0
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_every_new_identity_on_one_browser_is_asked():
+    """Per identity, not per browser: an account made here is asked, and so
+    is the next guest named here after signing out of it."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.click(".first-run-signup")
+            account = page.locator(".modal-card").filter(has_text="Password")
+            await account.locator("input").nth(0).fill(f"First{uuid4().hex[:6]}")
+            await account.locator("input").nth(1).fill("a-good-password")
+            await account.locator('button[type="submit"]').click()
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.wait_for()
+            await question.get_by_role("button", name="Done").click()
+            await question.wait_for(state="detached")
+
+            await page.click(".identity-chip")
+            await page.get_by_role("menuitem", name="Sign out").click()
+            await page.wait_for_selector(".first-run-guest-row input")
+            await page.fill(".first-run-guest-row input", f"Second{uuid4().hex[:6]}")
+            await page.click(".first-run-guest-submit")
+            await question.wait_for()
+        finally:
+            await context.close()
+            await browser.close()
+
+
 async def _add_list_hangs_from_the_button(page: Page, scope) -> None:
     button = scope.get_by_role("button", name="Add a language you play in")
     await button.click()
@@ -518,6 +734,30 @@ async def test_the_add_list_hangs_from_its_button_with_a_classic_scrollbar():
             dialog = await _open_appearance(page)
             await dialog.locator(".play-language-chip").nth(1).wait_for()
             await _add_list_hangs_from_the_button(page, dialog)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_the_add_list_hangs_from_its_button_in_the_first_run_question():
+    """Where the list was once a scrollbar short: inside the question's
+    dialog, which laid it out squeezed before it was placed."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True, args=["--mute-audio"], ignore_default_args=["--hide-scrollbars"]
+        )
+        context = await browser.new_context(viewport={"width": 1200, "height": 560})
+        await context.add_init_script(
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['it', 'de']));"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.fill(".first-run-guest-row input", f"Hung{uuid4().hex[:6]}")
+            await page.click(".first-run-guest-submit")
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.locator(".play-language-chip").nth(1).wait_for()
+            await _add_list_hangs_from_the_button(page, question)
         finally:
             await context.close()
             await browser.close()

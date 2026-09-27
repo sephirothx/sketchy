@@ -101,6 +101,29 @@ async def register_account(page, username: str, password: str = "a-good-password
     # The unclaimed dot disappearing is the signal, and it works whether the
     # chip is showing its name or collapsed to the avatar inside a room.
     await page.wait_for_function("() => !document.querySelector('.identity-unclaimed')")
+    await answer_play_languages_question(page)
+
+
+PLAY_LANGUAGES_QUESTION = '[data-testid="play-languages-question"]'
+
+
+async def answer_play_languages_question(page) -> None:
+    """A new identity is asked which languages it plays in (#1219), in the
+    lobby. Tests about something else answer it the way a player would, with
+    Done; where the lobby is not showing (a room), the question this browser
+    holds for it is dropped instead, so no later page of the test meets it."""
+    due = await page.evaluate(
+        "() => localStorage.getItem('sketchy_playlanguages_question_due') === '1'"
+    )
+    if not due:
+        return
+    if await page.locator(".lobby-page").count():
+        question = page.locator(PLAY_LANGUAGES_QUESTION)
+        await question.wait_for()
+        await question.get_by_role("button", name="Done").click()
+        await question.wait_for(state="detached")
+        return
+    await page.evaluate("() => localStorage.removeItem('sketchy_playlanguages_question_due')")
 
 
 ROOM_HEADER = '[data-testid="room-header"]'
