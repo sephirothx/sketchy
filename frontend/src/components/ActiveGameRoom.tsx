@@ -157,7 +157,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     function onKicked(data: { code?: string }) {
       const who = heldSeat();
       exitingRoomRef.current = true;
-      setExitingRoom(true);
+      setExitingRoom(normalizedCode);
       clearSession();
       reset();
       exitRoomHistory(who, (replace) => {
@@ -181,7 +181,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       if (data?.code === "signed_out" && isSigningOut()) return;
       const who = heldSeat();
       exitingRoomRef.current = true;
-      setExitingRoom(true);
+      setExitingRoom(normalizedCode);
       clearSession();
       reset();
       exitRoomHistory(who, (replace) => {
@@ -209,7 +209,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     const who = { code: normalizedCode, seat: playerId ?? "" };
     const roomId = useGameStore.getState().roomId;
     exitingRoomRef.current = true;
-    setExitingRoom(true);
+    setExitingRoom(normalizedCode);
     clearSession();
     // Named when another room comes next: `leave_room` is momentary, and a
     // bare one that reached the server after the join had seated this socket

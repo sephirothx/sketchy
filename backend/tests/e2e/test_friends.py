@@ -6,6 +6,7 @@ made in the lobby is what lets somebody through a door they can never name.
 """
 import re
 import uuid
+from contextlib import asynccontextmanager
 
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
@@ -27,6 +28,25 @@ SETTLE_MS = 10000
 def unique(prefix: str) -> str:
     """A name no other worker in the suite is using."""
     return f"{prefix}{uuid.uuid4().hex[:8]}"
+
+
+@asynccontextmanager
+async def slow_cpu(page, rate: int = 8):
+    """Run the block on a CPU `rate` times slower, as a loaded runner's is.
+
+    For a race between the page drawing something and an answer arriving over
+    the socket: a slower page widens the window until the answer lands inside
+    it every time, where on a fast machine it lands there now and then.
+    """
+    cdp = await page.context.new_cdp_session(page)
+    await cdp.send("Emulation.setCPUThrottlingRate", {"rate": rate})
+    try:
+        yield
+    finally:
+        try:
+            await cdp.send("Emulation.setCPUThrottlingRate", {"rate": 1})
+        finally:
+            await cdp.detach()
 
 
 def row_for(page, name: str):
@@ -252,11 +272,15 @@ async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
             await invite_guest()
             await guest_opens_a_room()
             await chip.click()
-            await popover.get_by_role("button", name="Join").click()
-
-            await expect(host.locator(".player-row")).to_have_count(
-                2, timeout=SETTLE_MS
-            )
+            # On a slow page: Join leaves for the lobby and enters the friend's
+            # room when the server answers, and an answer that arrived before
+            # the lobby had drawn once left the friend's room blank - the exit
+            # was only ever ended by the lobby, which never mounted.
+            async with slow_cpu(guest):
+                await popover.get_by_role("button", name="Join").click()
+                await expect(host.locator(".player-row")).to_have_count(
+                    2, timeout=SETTLE_MS
+                )
             await expect(chip).to_have_count(0)
             # A waiting room is left at once, as its own Leave leaves it: no
             # question (#1198), and the guest is in the friend's room.
