@@ -207,6 +207,25 @@ export function RoomChatPanel({
     }
   }, [messages, isScrolledUp]);
 
+  // The feed's box changes size under it, not only its lines: a landscape
+  // phone hides it while the keyboard is up and gives the verdict a slot out
+  // of its height (#1199). Its scroll offset stays where it was, so the newest
+  // line ended up below the fold - the lines that arrived while it was hidden
+  // were scrolled to in a box of no height. A reader who scrolled up stays put.
+  const scrolledUpRef = useRef(isScrolledUp);
+  useEffect(() => {
+    scrolledUpRef.current = isScrolledUp;
+  }, [isScrolledUp]);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (!scrolledUpRef.current) list.scrollTop = list.scrollHeight;
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
+
   function handleScroll() {
     const element = listRef.current;
     if (!element) return;

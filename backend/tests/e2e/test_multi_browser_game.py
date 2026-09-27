@@ -478,6 +478,42 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
                 f"guess field rose to the top of the column: {placement}"
             )
             await guess_input.blur()
+
+            # And with the keyboard down again (#1199). The feed is back, and
+            # the verdict - which stays until the next keystroke - hung over its
+            # newest line; the feed also came back scrolled short of that line,
+            # which arrived while it was hidden. The newest line must be inside
+            # the feed's box and clear of the verdict. Two frames let the feed's
+            # resize pin it to the bottom before it is measured.
+            await guesser_page.wait_for_function(
+                "() => !document.querySelector('.game-room.guess-focused')"
+            )
+            feed = await guesser_page.evaluate(
+                """
+                async () => {
+                  await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+                  const box = (element) => {
+                    const rect = element.getBoundingClientRect();
+                    return { top: rect.top, bottom: rect.bottom };
+                  };
+                  const lines = document.querySelectorAll('.chat-messages .chat-message');
+                  return {
+                    flash: box(document.querySelector('[data-testid="guess-focus-flash"]')),
+                    list: box(document.querySelector('.chat-messages')),
+                    newest: box(lines[lines.length - 1]),
+                    newestText: lines[lines.length - 1].textContent,
+                  };
+                }
+                """
+            )
+            assert "landscape-verdict-probe" in feed["newestText"], feed
+            assert feed["list"]["top"] <= feed["newest"]["top"] < feed["newest"]["bottom"] <= (
+                feed["list"]["bottom"] + 1
+            ), f"the feed's newest line is scrolled out of view: {feed}"
+            assert (
+                feed["flash"]["top"] >= feed["newest"]["bottom"]
+                or feed["flash"]["bottom"] <= feed["newest"]["top"]
+            ), f"verdict covers the feed's newest line: {feed}"
             await guesser_page.set_viewport_size({"width": 1280, "height": 720})
 
             # Verify chat message container is present
