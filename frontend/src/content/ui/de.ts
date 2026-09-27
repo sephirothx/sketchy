@@ -998,6 +998,11 @@ export const DE: Catalogue = {
     join: "Beitreten",
     dismissInvitation: "Einladung ausblenden",
     notNow: "Jetzt nicht",
+    leaveAndJoin: "Verlassen und beitreten",
+    leaveYourTurnForTheirGame: (p: { name: string }) =>
+      `Du zeichnest gerade. Wenn du der Runde von ${p.name} beitrittst, wird dein Zug unterbrochen und dieses Spiel geht für alle weiter.`,
+    leaveThisGameForTheirs: (p: { name: string }) =>
+      `Das Spiel läuft noch. Du gibst deinen Platz in diesem Spiel auf, um der Runde von ${p.name} beizutreten.`,
   },
 
   friendsOverlay: {

@@ -46,6 +46,8 @@ import {
   Wordmark,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
+import { useFriendInviteStore } from "../store/friendInviteStore";
+import type { FriendInvite } from "../lib/friends";
 import { recordRender } from "../lib/renderDiagnostics";
 import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
@@ -53,6 +55,10 @@ import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { isKick, kickedText, supersededText } from "../lib/roomNotices.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+
+/** What the Leave question is asked for: the lobby, from the room's own Leave,
+or a friend's game, from an invitation's Join (#1198). */
+type LeaveQuestion = { to: "lobby" } | { to: "invite"; invite: FriendInvite; enter: () => void };
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -96,7 +102,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const normalizedCode = code.trim().toUpperCase();
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
+  const [leaveQuestion, setLeaveQuestion] = useState<LeaveQuestion | null>(null);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
@@ -195,25 +201,67 @@ export function ActiveGameRoom({ code }: { code: string }) {
     };
   }, [clearSession, navigate, normalizedCode, notify, reset, setExitingRoom]);
 
-  function performLeave() {
+  /** Leave for the lobby, then `then` - a friend's game, when an invitation
+  is what took the player out. */
+  function exitRoom(then?: () => void) {
     const who = { code: normalizedCode, seat: playerId ?? "" };
+    const roomId = useGameStore.getState().roomId;
     exitingRoomRef.current = true;
     setExitingRoom(true);
     clearSession();
-    emitTransient("leave_room");
+    // Named when another room comes next: `leave_room` is momentary, and a
+    // bare one that reached the server after the join had seated this socket
+    // would give up the new seat instead of the old (#879).
+    emitTransient("leave_room", ...(then && roomId ? [{ roomId }] : []));
     reset();
     // The room's history entries go with it, and the lobby takes the place of
     // the entry the room was entered on: Back from the lobby then goes to
-    // wherever that was, not to a room this player has left.
-    exitRoomHistory(who, (replace) => navigate("/", { replace }));
+    // wherever that was, not to a room this player has left. A friend's game
+    // is then entered from the lobby, as its Join there would: Back from it
+    // is the lobby, never the game that was given up for it.
+    exitRoomHistory(who, (replace) => {
+      navigate("/", { replace });
+      then?.();
+    });
   }
 
+  function performLeave() {
+    exitRoom();
+  }
+
+  // Whether Leave asks first. One rule for the Room menu's Leave, Back on the
+  // room, and an invitation's Join, which leaves the room just the same.
+  const leaveAsks = roomState === "playing";
+
   function handleLeave() {
-    if (roomState === "playing") {
-      setLeaveConfirmationOpen(true);
+    if (leaveAsks) {
+      setLeaveQuestion({ to: "lobby" });
       return;
     }
     performLeave();
+  }
+
+  // An invitation's Join, answered here because it is this room that is left
+  // (#1198). Registered once and read through a ref, so the answer is the one
+  // Leave would give at the moment Join is pressed.
+  const leaveForInviteRef = useRef<(invite: FriendInvite, enter: () => void) => void>(() => {});
+  useEffect(() => {
+    leaveForInviteRef.current = (invite, enter) => {
+      if (leaveAsks) setLeaveQuestion({ to: "invite", invite, enter });
+      else exitRoom(enter);
+    };
+  });
+  const holdRoomExit = useFriendInviteStore((state) => state.holdRoomExit);
+  useEffect(
+    () => holdRoomExit((invite, enter) => leaveForInviteRef.current(invite, enter)),
+    [holdRoomExit],
+  );
+  // The question names the invitation it was asked for. One that runs out or
+  // is replaced while it is open takes the question with it: a Yes would
+  // leave the game for an invitation that is no longer there.
+  const waitingInvite = useFriendInviteStore((state) => state.invite);
+  if (leaveQuestion?.to === "invite" && leaveQuestion.invite !== waitingInvite) {
+    setLeaveQuestion(null);
   }
 
   // Back from the room is the Leave the room offers at that moment: the
@@ -394,17 +442,32 @@ export function ActiveGameRoom({ code }: { code: string }) {
           onAnswer={afkCheck.answer}
         />
       )}
-      {leaveConfirmationOpen && (
+      {leaveQuestion?.to === "lobby" && (
         <ConfirmationDialog
           title={amDrawer ? ui.activeGameRoom.leaveDuringYourTurn : ui.activeGameRoom.leaveActiveGame}
           description={amDrawer
             ? ui.activeGameRoom.youReTheCurrentDrawer
             : ui.activeGameRoom.theGameIsStillIn}
           confirmLabel={ui.activeGameRoom.leaveGame}
-          onCancel={() => setLeaveConfirmationOpen(false)}
+          onCancel={() => setLeaveQuestion(null)}
           onConfirm={() => {
-            setLeaveConfirmationOpen(false);
+            setLeaveQuestion(null);
             performLeave();
+          }}
+        />
+      )}
+      {/* The same question, saying where the player is going instead. */}
+      {leaveQuestion?.to === "invite" && (
+        <ConfirmationDialog
+          title={amDrawer ? ui.activeGameRoom.leaveDuringYourTurn : ui.activeGameRoom.leaveActiveGame}
+          description={amDrawer
+            ? ui.friendInviteNotice.leaveYourTurnForTheirGame({ name: leaveQuestion.invite.displayName })
+            : ui.friendInviteNotice.leaveThisGameForTheirs({ name: leaveQuestion.invite.displayName })}
+          confirmLabel={ui.friendInviteNotice.leaveAndJoin}
+          onCancel={() => setLeaveQuestion(null)}
+          onConfirm={() => {
+            setLeaveQuestion(null);
+            exitRoom(leaveQuestion.enter);
           }}
         />
       )}

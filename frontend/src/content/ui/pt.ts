@@ -998,6 +998,11 @@ export const PT: Catalogue = {
     join: "Entrar",
     dismissInvitation: "Dispensar o convite",
     notNow: "Agora não",
+    leaveAndJoin: "Sair e entrar",
+    leaveYourTurnForTheirGame: (p: { name: string }) =>
+      `És tu quem está a desenhar. Se entrares na partida de ${p.name}, interrompes a tua vez e este jogo avança para todos.`,
+    leaveThisGameForTheirs: (p: { name: string }) =>
+      `O jogo ainda está a decorrer. Vais perder o teu lugar neste jogo para entrar na partida de ${p.name}.`,
   },
 
   friendsOverlay: {

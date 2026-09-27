@@ -1016,6 +1016,11 @@ export const EN = {
     join: "Join",
     dismissInvitation: "Dismiss invitation",
     notNow: "Not now",
+    leaveAndJoin: "Leave and join",
+    leaveYourTurnForTheirGame: (p: { name: string }) =>
+      `You're the current drawer. Joining ${p.name}'s game will interrupt your turn and advance this one for everyone.`,
+    leaveThisGameForTheirs: (p: { name: string }) =>
+      `The game is still in progress. You'll give up your seat in it to join ${p.name}'s game.`,
   },
 
   friendsOverlay: {

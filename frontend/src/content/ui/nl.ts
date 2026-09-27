@@ -998,6 +998,11 @@ export const NL: Catalogue = {
     join: "Meedoen",
     dismissInvitation: "Uitnodiging sluiten",
     notNow: "Nu niet",
+    leaveAndJoin: "Verlaten en meedoen",
+    leaveYourTurnForTheirGame: (p: { name: string }) =>
+      `Jij tekent nu. Als je meedoet aan het spel van ${p.name}, wordt je beurt onderbroken en gaat dit spel voor iedereen verder.`,
+    leaveThisGameForTheirs: (p: { name: string }) =>
+      `Het spel is nog bezig. Je geeft je plek in dit spel op om mee te doen aan het spel van ${p.name}.`,
   },
 
   friendsOverlay: {

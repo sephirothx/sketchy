@@ -112,7 +112,8 @@ keyboard that takes half the screen, and one thumb.
   lingers long enough to reach mid-turn. An invitation is a card at the foot of the
   screen outside a room; inside one it is an *Invitation* chip in the room header, beside
   the round and the clock, whose tap shows who sent it with **Join** and **Not now**, so it
-  never covers the chat or the drawing tools. Declining
+  never covers the chat or the drawing tools. **Join** there leaves your room the way its
+  Leave does: in the middle of a game it asks first, naming whose game you are going to. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
   leaves nothing behind. Guests are not offered friendships, since a guest name belongs

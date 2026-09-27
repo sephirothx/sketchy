@@ -27,3 +27,17 @@ test("the card steps aside while any room bar holds the invitation (#1176)", () 
   second();
   assert.equal(useFriendInviteStore.getState().roomBarClaims, 0);
 });
+
+test("the room in view says how it is left for an invitation, and only it takes that back (#1198)", () => {
+  const { holdRoomExit } = useFriendInviteStore.getState();
+  assert.equal(useFriendInviteStore.getState().roomExit, null);
+  const first = () => {};
+  const second = () => {};
+  const releaseFirst = holdRoomExit(first);
+  // A room that mounts before the last one's cleanup ran holds the newer exit.
+  const releaseSecond = holdRoomExit(second);
+  releaseFirst();
+  assert.equal(useFriendInviteStore.getState().roomExit, second);
+  releaseSecond();
+  assert.equal(useFriendInviteStore.getState().roomExit, null);
+});
