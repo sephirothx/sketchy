@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon, MixedLanguageIcon } from "./icons";
+import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon } from "./icons";
 import {
   AGNOSTIC_PROMPT_LANGUAGE,
   MIXED_PROMPT_LANGUAGE,
@@ -170,6 +170,7 @@ export function LanguagePicker({
                 type="button"
                 role="option"
                 aria-selected={selected}
+                data-language={choice}
                 className={`language-picker-option${selected ? " is-selected" : ""}`}
                 onClick={() => choose(choice)}
               >
@@ -210,18 +211,6 @@ export function LanguageFace({
         </span>
         <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
           {ui.languagePicker.everyLanguage}
-        </span>
-      </span>
-    );
-  }
-  if (value === MIXED_PROMPT_LANGUAGE) {
-    return (
-      <span className="language-picker-face">
-        <span className="language-picker-flag" aria-hidden="true">
-          <MixedLanguageIcon size={Math.round(flagWidth * 0.85)} />
-        </span>
-        <span className={nameHidden ? "visually-hidden" : "language-picker-name"}>
-          {ui.languagePicker.mixed}
         </span>
       </span>
     );

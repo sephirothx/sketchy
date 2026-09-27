@@ -183,13 +183,6 @@ details.form-section > .form-section-body {
   gap: 6px;
 }
 
-/* Worded like the room name's label beside it, which it sits level with. */
-.create-room-language-label {
-  color: var(--ink);
-  font-size: 14.5px;
-  font-weight: 800;
-}
-
 .form-section input[type="text"],
 .form-section input[type="search"],
 .form-section select,
@@ -654,8 +647,7 @@ details.form-section > .form-section-body {
 @media (max-width: 640px) {
   .create-room-heading-row { align-items: stretch; flex-direction: column; }
   .room-preset-bar { justify-content: flex-start; }
-  /* The name takes the width; the language and the visibility wrap under it,
-     each on its own line on a phone once the language carries its label. */
+  /* The name takes the width; the language and the visibility wrap under it. */
   .create-room-name-row {
     align-items: flex-end;
     flex-wrap: wrap;
@@ -666,8 +658,7 @@ details.form-section > .form-section-body {
     flex: 1 1 100%;
   }
 
-  /* Its label goes beside the flag here rather than above it: the pair has a
-     line to itself, so a label above would only add a line. */
+  /* A row, like the visibility beside it, now that the flag has no title. */
   .create-room-language-field {
     align-items: center;
     flex-direction: row;

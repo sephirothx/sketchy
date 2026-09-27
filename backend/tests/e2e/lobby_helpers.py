@@ -124,11 +124,43 @@ CREATE_ROOM_SUBMIT = ".create-room-submit"
 WAITING_ROOM = '[data-testid="waiting-room"]'
 
 
-async def open_create_room(page) -> None:
+# The page's play language, as the settings store reads it: the stored choice,
+# else the browser's first supported language, else English.
+PLAY_LANGUAGE_SCRIPT = """() => {
+  const known = ["en", "de", "es", "fr", "it", "nl", "pt"];
+  const stored = localStorage.getItem("sketchy_promptlanguage");
+  if (known.includes(stored)) return stored;
+  for (const tag of navigator.languages) {
+    const base = tag.trim().toLowerCase().split("-")[0];
+    if (known.includes(base)) return base;
+  }
+  return "en";
+}"""
+
+
+async def choose_room_language(page, language: str | None = None) -> None:
+    """Choose the room's prompt language on the setup form by its code - `en`,
+    `de`, `mul` for Mixed - or, by default, the language the page plays in."""
+    if language is None:
+        language = await page.evaluate(PLAY_LANGUAGE_SCRIPT)
+    trigger = page.locator(".create-room-language-field .language-picker-trigger")
+    await trigger.click()
+    await page.locator(f'.language-picker-option[data-language="{language}"]').click()
+    await trigger.and_(page.locator('[aria-expanded="false"]')).wait_for()
+
+
+async def open_create_room(page, *, mixed: bool = False) -> None:
     """Press the lobby's Create room and wait until the setup form is showing,
-    so whatever the caller does next lands on the form rather than the lobby."""
+    so whatever the caller does next lands on the form rather than the lobby.
+
+    The room is put in the page's own play language unless `mixed`: the form
+    opens on Mixed (#1182), which takes no custom prompts, and a public Mixed
+    room is one any parallel test's Quick play may land in.
+    """
     await page.click(LOBBY_CREATE_ROOM)
     await page.wait_for_selector(CREATE_ROOM_SUBMIT)
+    if not mixed:
+        await choose_room_language(page)
 
 
 async def submit_create_room(page) -> None:
@@ -137,10 +169,10 @@ async def submit_create_room(page) -> None:
     await page.wait_for_selector(WAITING_ROOM)
 
 
-async def open_new_room(page) -> None:
-    """From the lobby, create a room with the form's defaults and wait for its
-    waiting room."""
-    await open_create_room(page)
+async def open_new_room(page, *, mixed: bool = False) -> None:
+    """From the lobby, create a room - in the page's play language unless
+    `mixed` - and wait for its waiting room."""
+    await open_create_room(page, mixed=mixed)
     await submit_create_room(page)
 
 

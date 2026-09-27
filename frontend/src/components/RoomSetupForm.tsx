@@ -185,11 +185,10 @@ export function RoomSetupForm({
                 enterKeyHint="done"
               />
             </label>
-            {/* Labelled in words: the flag alone is the same picture as the
-                interface-language flag in the header, which means something
-                else (GLOSSARY: Prompt language, Interface locale). */}
+            {/* The flag beside the name says it without a title; the words stay
+                for a screen reader, which the picker's own label also names. */}
             <div className="create-room-language-field">
-              <span className="create-room-language-label">
+              <span className="visually-hidden">
                 {ui.roomSetupForm.promptLanguage}
               </span>
               {languageLocked ? (

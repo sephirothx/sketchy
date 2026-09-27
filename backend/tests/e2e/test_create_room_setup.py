@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from playwright.async_api import Error as PlaywrightError, async_playwright
 
-from tests.e2e.lobby_helpers import open_new_room, use_guest_name
+from tests.e2e.lobby_helpers import choose_room_language, open_new_room, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -94,6 +94,9 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             await page.locator(".lobby-page").wait_for(state="detached")
             assert not await page.is_visible('#custom-prompts')
             assert not await page.locator('label:has-text("Nickname")').count()
+            # A new room is Mixed (#1182); custom prompts want one language.
+            await page.get_by_role("button", name="Prompt language: Mixed").wait_for()
+            await choose_room_language(page, "en")
 
             room_name_input = page.locator(
                 'input[placeholder="Leave blank for a random name!"]'

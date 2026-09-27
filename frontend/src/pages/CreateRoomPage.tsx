@@ -20,6 +20,7 @@ import { useSettingsStore } from "../store/settingsStore";
 import {
   AGNOSTIC_PROMPT_LANGUAGE,
   MIXED_PROMPT_LANGUAGE,
+  availablePromptLanguages,
   reconcileSelectionForLanguage,
 } from "../lib/promptLanguages";
 import type { AckResponse, ColorMode, DrawingToolGroup, HintMode, ScoringMode } from "../types";
@@ -73,12 +74,10 @@ export function CreateRoomPage() {
   const [maxPlayers, setMaxPlayers] = useState(8);
   const [rounds, setRounds] = useState(3);
   const [drawingSeconds, setDrawingSeconds] = useState(DEFAULT_DRAWING_SECONDS);
-  // The language this player plays in - their setting if they have an account,
-  // and what their browser says otherwise. A host who wants another one says
-  // so in the form; this is only where it starts.
-  const [promptLanguage, setPromptLanguage] = useState<RoomLanguage>(
-    () => useSettingsStore.getState().promptLanguage,
-  );
+  // Mixed by default (#1182): a room anybody can play in their own language.
+  // A host who wants one language - for custom prompts, or a list in it -
+  // picks it here, and a list carried from the catalogue sets it below.
+  const [promptLanguage, setPromptLanguage] = useState<RoomLanguage>(MIXED_PROMPT_LANGUAGE);
   const mixed = promptLanguage === MIXED_PROMPT_LANGUAGE;
   const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
   // A list the host arrived with, from the community catalogue's Play. The
@@ -154,8 +153,18 @@ export function CreateRoomPage() {
 
   function handleListsLoaded(lists: PromptListSummary[]) {
     setLoadedLists(lists);
+    // Mixed needs Standard in every language; a catalogue without it opens
+    // on the host's own language rather than on a room the server refuses.
+    // Judged on the bundled catalogue only: the picker reports before its
+    // fetch lands, and an empty first report is not a catalogue without it.
+    const language = promptLanguage === MIXED_PROMPT_LANGUAGE
+      && lists.some((list) => list.isBundled)
+      && !availablePromptLanguages(lists, playLanguage).includes(MIXED_PROMPT_LANGUAGE)
+      ? playLanguage
+      : promptLanguage;
+    if (language !== promptLanguage) setPromptLanguage(language);
     setPromptListSlugs((current) =>
-      reconcileSelectionForLanguage(lists, promptLanguage, current, playLanguage),
+      reconcileSelectionForLanguage(lists, language, current, playLanguage),
     );
   }
 

@@ -192,9 +192,6 @@ export function GlobeIcon(p: IconProps) { return <IconBase {...p}><circle cx="12
 /** A list in no language (#821): two speech bubbles, so it reads as "any
 language" beside the lobby filter's globe, which means "every language". */
 export function AnyLanguageIcon(p: IconProps) { return <IconBase {...p}><path d="M4 3.5h9a2 2 0 0 1 2 2V11a2 2 0 0 1-2 2H8.5L5.5 16v-3H4a2 2 0 0 1-2-2V5.5a2 2 0 0 1 2-2Z" /><path d="M18 8.5h2a2 2 0 0 1 2 2V16a2 2 0 0 1-2 2h-1.5v3l-3-3H11a2 2 0 0 1-2-2v-1" /></IconBase>; }
-/** A mixed-language room (#1182): three overlapping rings, one room of
-several languages - not the globe, which is the filter's "every language". */
-export function MixedLanguageIcon(p: IconProps) { return <IconBase {...p}><circle cx="9" cy="9" r="5.5" /><circle cx="15" cy="9" r="5.5" /><circle cx="12" cy="15" r="5.5" /></IconBase>; }
 export function LockIcon(p: IconProps) { return <IconBase {...p}><rect x="4" y="11" width="16" height="10" rx="2" /><path d="M8 11V7a4 4 0 0 1 8 0v4" /></IconBase>; }
 export function InfoIcon(p: IconProps) { return <IconBase {...p}><circle cx="12" cy="12" r="9" /><path d="M12 11v5" /><path d="M12 7.5h.01" /></IconBase>; }
 export function MailIcon(p: IconProps) { return <IconBase {...p}><rect x="2.5" y="5" width="19" height="14" rx="2" /><path d="m3 7 9 6.5L21 7" /></IconBase>; }
@@ -239,6 +236,7 @@ const FLAG = {
   ptGreen: "#287927",
   ptRed: "#F84B4A",
   ptYellow: "#F9F85A",
+  earthBlue: "#013BA6",
   /* Warm rather than pure, so a white stripe still shows on a white panel. */
   white: "#FDFBF6",
 } as const;
@@ -285,6 +283,23 @@ const FLAG_SHAPES: Record<string, ReactNode> = {
       <rect width="18" height="4.33" fill={FLAG.nlRed} />
       <rect y="4.33" width="18" height="4.34" fill={FLAG.white} />
       <rect y="8.67" width="18" height="4.33" fill={FLAG.nlBlue} />
+    </>
+  ),
+  // The International Flag of Planet Earth (Oskar Pernefeldt, 2015) for a
+  // mixed-language room (#1182): seven rings on blue. The interlacing of the
+  // original is left out - at eighteen pixels it reads as noise.
+  mul: (
+    <>
+      <rect width="18" height="13" fill={FLAG.earthBlue} />
+      <g fill="none" stroke={FLAG.white} strokeWidth="0.45">
+      <circle cx="9.00" cy="6.50" r="2.37" />
+      <circle cx="11.37" cy="6.50" r="2.37" />
+      <circle cx="10.18" cy="8.55" r="2.37" />
+      <circle cx="7.82" cy="8.55" r="2.37" />
+      <circle cx="6.63" cy="6.50" r="2.37" />
+      <circle cx="7.82" cy="4.45" r="2.37" />
+      <circle cx="10.18" cy="4.45" r="2.37" />
+      </g>
     </>
   ),
   pt: (

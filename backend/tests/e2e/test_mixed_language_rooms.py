@@ -11,7 +11,7 @@ from pathlib import Path
 
 from playwright.async_api import Page, async_playwright
 
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import choose_room_language, join_by_code, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 LISTS = Path(__file__).resolve().parents[2] / "data" / "prompt_lists"
@@ -55,11 +55,11 @@ async def test_each_player_plays_the_drawing_in_their_own_language():
             await host.get_by_role("button", name="Private").click()
             # A custom prompt that would stop an English room being created
             # does not stop a Mixed one, which takes none.
+            await choose_room_language(host, "en")
             await host.click('summary:has-text("Prompts")')
             await host.locator("#custom-prompts").fill("x" * 40)
             await host.click('summary:has-text("Prompts")')
-            await host.get_by_role("button", name="Prompt language: English").click()
-            await host.get_by_role("option", name="Mixed").click()
+            await choose_room_language(host, "mul")
             # One language's quick prompts would leave the other players
             # without the word: the field is replaced by a sentence saying so.
             await host.click('summary:has-text("Prompts")')
