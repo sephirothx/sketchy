@@ -26,10 +26,16 @@
    the default a size up, the others after it in their order. They wrap
    under the name rather than push it, since a name can be long. */
 /* Allowed to shrink below its content, so seven flags wrap under the name
-   rather than push the friend and report buttons off a phone. */
+   rather than push the friend and report buttons off a phone - but not to
+   grow, or it takes the room that keeps Report away from the name. A name
+   has no spaces to wrap at, so on the narrowest phone it breaks anywhere
+   rather than run under the buttons. */
 .profile-identity-text {
-  flex: 1 1 auto;
   min-width: 0;
+}
+
+.profile-identity-text h1 {
+  overflow-wrap: anywhere;
 }
 
 .profile-name-row {

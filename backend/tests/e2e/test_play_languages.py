@@ -427,7 +427,8 @@ async def test_a_profile_shows_the_languages_its_player_plays_in():
 async def test_seven_flags_wrap_rather_than_push_the_header_off_a_phone():
     """Seven flags beside a name are wider than a phone: they wrap under it,
     and the friend and report buttons stay on the screen."""
-    username = f"Seven{uuid4().hex[:6]}"
+    # As long as a name may be, and with no space to wrap at.
+    username = f"Seven{uuid4().hex[:11]}"
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         owner_context = await browser.new_context()
@@ -462,6 +463,24 @@ async def test_seven_flags_wrap_rather_than_push_the_header_off_a_phone():
                 box = await button.bounding_box()
                 if box:
                     assert box["x"] + box["width"] <= header["x"] + header["width"] + 0.5
+
+            # The narrowest phone: the name breaks rather than run under them.
+            await viewer.set_viewport_size({"width": 320, "height": 700})
+            name = await viewer.locator(".profile-identity h1").bounding_box()
+            for button in await viewer.locator(".profile-identity button").all():
+                box = await button.bounding_box()
+                if not box:
+                    continue
+                apart = (
+                    name["x"] + name["width"] <= box["x"] + 0.5
+                    or box["x"] + box["width"] <= name["x"] + 0.5
+                    or name["y"] + name["height"] <= box["y"] + 0.5
+                    or box["y"] + box["height"] <= name["y"] + 0.5
+                )
+                assert apart, (name, box)
+            assert await viewer.evaluate(
+                "document.documentElement.scrollWidth - window.innerWidth"
+            ) <= 0
         finally:
             await owner_context.close()
             await viewer_context.close()
