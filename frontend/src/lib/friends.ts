@@ -352,6 +352,48 @@ export function friendListChanges(
   };
 }
 
+/** Which of the requests a notice named are still waiting for an answer.
+
+A notice about a request is only true while the request is: accepted on the
+friends surface, in another tab, or withdrawn by the person who asked, and it
+is gone from `incoming` on the next read - which `friends_changed` triggers
+for every one of those. So whatever shows a request, the toast outside a room
+or the room bar's chip, keys off this rather than off its own timer: the
+toast's Accept used to stay up after the answer had been given elsewhere
+(#1197). Keeps the notice's order, and each row as the latest read has it. */
+export function stillWaiting(named: FriendEntry[], incoming: FriendEntry[]): FriendEntry[] {
+  const current = new Map(incoming.map((entry) => [entry.userId, entry]));
+  return named.flatMap((entry) => {
+    const now = current.get(entry.userId);
+    return now ? [now] : [];
+  });
+}
+
+/** Requests that arrived, added to the ones a notice already shows.
+
+Newest first, once each: somebody who withdrew and asked again is one request,
+at the front, where a fresh ask belongs. */
+export function withArrivals(shown: FriendEntry[], arrived: FriendEntry[]): FriendEntry[] {
+  const seen = new Set<string>();
+  return [...arrived, ...shown].filter((entry) => {
+    if (seen.has(entry.userId)) return false;
+    seen.add(entry.userId);
+    return true;
+  });
+}
+
+/** The sentence a notice of friend requests says: who asked, or the first and
+    how many others, since one button cannot mean four people (R-FRIEND-12). */
+export function friendRequestSentence(askers: FriendEntry[]): string {
+  if (askers.length === 1) {
+    return ui.useFriendArrivalNotices.wantsToBeFriends({ name: askers[0].displayName });
+  }
+  return ui.useFriendArrivalNotices.manyArrived({
+    name: askers[0]?.displayName ?? "",
+    others: askers.length - 1,
+  });
+}
+
 /** How many requests are waiting for an answer.
 
 The badge's number, and the only count worth showing: a friendship needs

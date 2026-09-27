@@ -2,10 +2,12 @@ import { useEffect, useRef } from "react";
 
 import { announcedFriendships } from "../lib/friendsApi";
 import { useFriendsStore } from "../store/friendsStore";
+import { useFriendInviteStore } from "../store/friendInviteStore";
+import { useFriendRequestNoticeStore } from "../store/friendRequestNoticeStore";
 import { useToast } from "../lib/toast";
 import { useOpenOverlay } from "./useOverlayRoute";
 import { FRIENDS_PATH } from "../lib/overlayRoutes";
-import type { FriendEntry } from "../lib/friends";
+import { friendRequestSentence, stillWaiting, type FriendEntry } from "../lib/friends";
 import { ui } from "../content/ui/index.ts";
 
 /** Say when a friend request arrives, and when one is accepted.
@@ -33,39 +35,74 @@ Actionable toasts last longer than the default, because the default is sized
 for something you only have to read, and this one has to be reached before it
 goes. Names one person and counts the rest rather than firing one toast per
 row: a game ending can settle several at once, and four stacked toasts over a
-canvas is worse than the news is good. */
+canvas is worse than the news is good.
+
+In a room a request is not a toast at all but a chip in the room bar, beside a
+friend's **Invitation** (`RoomNoticeChips`): the toast's spot there is the
+phone's chat feed and the desktop drawer's palette (R-UX-07, #1197). The room
+bar holds the invitation's claim while it is up, and the same claim says where
+a request goes. A toast still standing when a room opens moves into the bar,
+and the chip is put away when the room is left - the **Request badge** keeps
+the count from there, which is what it is for.
+
+Either way it goes the moment it stops being true. A request answered on the
+friends surface, in another tab, or withdrawn by the person who asked leaves
+`incoming` on the next read, and the toast or the chip naming it goes with it:
+the toast's Accept used to stand for the rest of its twelve seconds offering
+an answer that had already been given. */
 
 /** Long enough to notice, read, and reach the button, mid-turn.
 
 Not indefinite: it is still a toast, and something that never leaves on its
 own is a notice, which this deliberately is not. */
 const ACTIONABLE_MS = 12000;
-export function useFriendArrivalNotices(): void {
+
+/** A request toast on screen, and whom it named. */
+interface RequestToast {
+  id: number;
+  askers: FriendEntry[];
+  until: number;
+}
+
+/** Says the news, and returns what the app-level region should say for a
+    request that went into the room bar - which says nothing itself, since the
+    bar is not drawn while a phone's guess keyboard is up (#1176). */
+export function useFriendArrivalNotices(): string {
   const notices = useFriendsStore((state) => state.notices);
+  const incoming = useFriendsStore((state) => state.lists.incoming);
   const accept = useFriendsStore((state) => state.accept);
-  const { notify } = useToast();
+  const inRoomBar = useFriendInviteStore((state) => state.roomBarClaims > 0);
+  const inBar = useFriendRequestNoticeStore((state) => state.askers);
+  const showInBar = useFriendRequestNoticeStore((state) => state.show);
+  const clearBar = useFriendRequestNoticeStore((state) => state.clear);
+  const keepInBar = useFriendRequestNoticeStore((state) => state.keep);
+  const announcement = useFriendRequestNoticeStore((state) => state.announcement);
+  const { notify, dismiss } = useToast();
   const openOverlay = useOpenOverlay();
   // The seq this has already spoken about. A ref rather than state: reacting
   // to it must not itself cause a render, and the store's counter is the only
   // thing that decides whether there is anything to say.
   const spoken = useRef(notices.seq);
+  const requestToasts = useRef<RequestToast[]>([]);
 
   useEffect(() => {
     if (notices.seq === spoken.current) return;
     spoken.current = notices.seq;
 
     const { arrived, accepted } = notices;
-    if (arrived.length === 1) {
-      const asker = arrived[0];
-      notify(ui.useFriendArrivalNotices.wantsToBeFriends({ name: asker.displayName }), "info", ACTIONABLE_MS, {
-        label: ui.useFriendArrivalNotices.accept,
-        onClick: () => void accept(asker.userId),
-      });
-    } else if (arrived.length > 1) {
-      notify(manyArrived(arrived), "info", ACTIONABLE_MS, {
-        label: ui.useFriendArrivalNotices.open,
-        onClick: () => openOverlay(FRIENDS_PATH),
-      });
+    if (arrived.length > 0 && inRoomBar) {
+      // Said once, here, when it lands; the chip carries it from then on.
+      showInBar(arrived, friendRequestSentence(arrived));
+    } else if (arrived.length > 0) {
+      const id = notify(
+        friendRequestSentence(arrived),
+        "info",
+        ACTIONABLE_MS,
+        arrived.length === 1
+          ? { label: ui.useFriendArrivalNotices.accept, onClick: () => void accept(arrived[0].userId) }
+          : { label: ui.useFriendArrivalNotices.open, onClick: () => openOverlay(FRIENDS_PATH) },
+      );
+      requestToasts.current.push({ id, askers: arrived, until: Date.now() + ACTIONABLE_MS });
     }
 
     // Nothing to do about an acceptance - it is already a friendship - so
@@ -86,12 +123,41 @@ export function useFriendArrivalNotices(): void {
         },
       );
     }
-  }, [notices, notify, accept, openOverlay]);
-}
+  }, [notices, notify, accept, openOverlay, inRoomBar, showInBar]);
 
-function manyArrived(arrived: FriendEntry[]): string {
-  return ui.useFriendArrivalNotices.manyArrived({
-    name: arrived[0].displayName,
-    others: arrived.length - 1,
-  });
+  // Answered anywhere: a toast goes as soon as anyone it named stops
+  // waiting, since its words - "Ada and 2 others" - no longer hold and a toast
+  // cannot be reworded; the Request badge keeps the count. The chip shrinks.
+  useEffect(() => {
+    const now = Date.now();
+    requestToasts.current = requestToasts.current.filter((toast) => {
+      if (toast.until <= now) return false;
+      if (stillWaiting(toast.askers, incoming).length === toast.askers.length) return true;
+      dismiss(toast.id);
+      return false;
+    });
+  }, [incoming, dismiss]);
+  useEffect(() => {
+    // Every time it shrinks, not only when it empties: a request withdrawn
+    // and asked again is a new arrival, so it must not still be on the chip -
+    // or in the region's words, which would then not change and say nothing.
+    const waiting = stillWaiting(inBar, incoming);
+    if (waiting.length < inBar.length) keepInBar(waiting);
+  }, [inBar, incoming, keepInBar]);
+
+  // A room opening takes a request toast still standing into its bar, because
+  // there the toast covers the chat; leaving puts the chip away. Not said
+  // again on the way in - the toast already said it.
+  useEffect(() => {
+    if (!inRoomBar) {
+      clearBar();
+      return;
+    }
+    const moving = requestToasts.current.filter((toast) => dismiss(toast.id));
+    requestToasts.current = [];
+    const waiting = stillWaiting(moving.flatMap((toast) => toast.askers), useFriendsStore.getState().lists.incoming);
+    if (waiting.length > 0) showInBar(waiting);
+  }, [inRoomBar, dismiss, showInBar, clearBar]);
+
+  return announcement;
 }

@@ -8,8 +8,9 @@ acts on:
 - `round` - the round's word: *Round 2/3* becomes *2/3*;
 - `mark` - the wordmark, which is also the way out, and the Room menu's Leave
   is the other one;
-- `labels` - the words on the notice chips and the *AFK* chip, which keep their
-  icons and their accessible names, and the drain's chip its countdown;
+- `labels` - the words on the notice chips (a server notice, an **Invitation**,
+  a **Friend request**) and the *AFK* chip, which keep their icons and their
+  accessible names, and the drain's chip its countdown;
 - `tight` - the room between things: the gaps, the chips' own padding and the
   bar's edges shrink;
 - `wrap` - the round, the clock and the chips take a row of their own under the
@@ -20,12 +21,13 @@ later ones made room for is handed back: the wordmark's room is usually
 enough for the round's word, and a bar that has given up the wordmark should
 still say *Round 2/3*. Past `labels` nothing on the bar depends on the
 language, so `tight` is what a 300px phone needs for the round, the clock, a
-lost connection, an invitation and *AFK*. A drain's countdown is wider than
-the lost connection's icon and never goes (#806), so with the invitation and
-*AFK* beside it a 300px bar takes `wrap`: the guarantee, for that and for
-anything narrower or a larger text size, that the bar is never wider than the
-screen and nothing on it lies over anything else. It costs the canvas a row,
-so it comes last.
+lost connection, an invitation and *AFK*, or a friend request in the lost
+connection's place. A drain's countdown is wider than the lost connection's
+icon and never goes (#806), so with the invitation and *AFK* beside it a 300px
+bar takes `wrap`, as it does for a friend request beside all four (#1197):
+the guarantee, for those and for anything narrower or a larger text size, that
+the bar is never wider than the screen and nothing on it lies over anything
+else. It costs the canvas a row, so it comes last.
 
 The clock, the round's numbers, the drain's seconds, the Room menu and the
 avatar never give way. */
