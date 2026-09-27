@@ -36,11 +36,13 @@ from __future__ import annotations
 from typing import Any, Mapping
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.encoders import jsonable_encoder
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 
 from app.refusals import ErrorCode
 
-__all__ = ["Refusal", "install_refusal_handler"]
+__all__ = ["Refusal", "install_refusal_handler", "install_validation_handler"]
 
 
 class Refusal(HTTPException):
@@ -98,3 +100,23 @@ def install_refusal_handler(api: FastAPI) -> None:
             content=exc.body(),
             headers=exc.headers,
         )
+
+
+def install_validation_handler(api: FastAPI) -> None:
+    """Render a request that failed validation as FastAPI does, minus its input.
+
+    FastAPI's own handler echoes each failing value back as `input`, through
+    `jsonable_encoder`, which recurses: a field sent five thousand lists deep -
+    ten kilobytes, inside every body limit - raised RecursionError while the
+    422 was being written, and the refusal became a 500. The value is the
+    caller's own, so echoing it tells them nothing; `type`, `loc` and `msg`
+    are what a 422 is read for, and they keep FastAPI's shape.
+    """
+
+    @api.exception_handler(RequestValidationError)
+    async def _render(_request: Request, exc: RequestValidationError) -> JSONResponse:
+        errors = [
+            {key: value for key, value in error.items() if key != "input"}
+            for error in exc.errors()
+        ]
+        return JSONResponse(status_code=422, content={"detail": jsonable_encoder(errors)})

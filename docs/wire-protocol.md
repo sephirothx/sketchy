@@ -664,6 +664,12 @@ Defined and enforced in
   so the database never sees a byte of it — and it is checked at every proof an account
   makes, so refusing a byte the policy accepted would lock its owner out of every door,
   the recovery link included.
+- **No value nests more than 32 lists and objects deep** (`MAX_NESTING_DEPTH`, same
+  module). Nothing a screen sends goes past four; the bound is what keeps the walk above
+  safe. Ten kilobytes of brackets is five thousand levels — inside the packet ceiling and
+  every REST body limit — and a recursive walk over it raised `RecursionError`: a 500 on
+  every REST body, a crashed handler on the socket. The walk is iterative and refuses the
+  value as invalid at the bound, so it is an `invalid_payload` here and a 422 over REST.
 - Camel-case wire names are declared as pydantic `Field(alias=…)`; the alias is what the
   client sends.
 
@@ -2084,8 +2090,11 @@ plain `{"detail": "..."}`: the moderation queue and the operations pages are rea
 operators in one language, and the split is written down as an allowlist in
 [`backend/tests/test_rest_refusals.py`](../backend/tests/test_rest_refusals.py), which
 fails on a player-facing route that refuses with prose and on a stale exemption.
-FastAPI's own validation failures keep their `{"detail": [...]}` shape; a client that
-provoked one sent a payload no screen can produce.
+FastAPI's own validation failures keep their `{"detail": [...]}` shape, less the
+`input` FastAPI would echo back ([`install_validation_handler`](../backend/app/api/errors.py)):
+its encoder recurses, so a value nested thousands deep crashed the 422 into a 500, and
+the caller already has what it sent. A client that provoked one sent a payload no
+screen can produce.
 Every body model descends from `ControlFreeModel`
 ([`backend/app/request_text.py`](../backend/app/request_text.py)), so a string carrying a
 control character (§3) is one of those failures — 422, naming the field — rather than
