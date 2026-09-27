@@ -125,14 +125,14 @@ export function useFriendArrivalNotices(): string {
     }
   }, [notices, notify, accept, openOverlay, inRoomBar, showInBar]);
 
-  // Answered anywhere: a toast goes once nobody it named is still waiting,
-  // and so does the chip. A toast for several stays while any of them is,
-  // because its Open still leads somewhere worth going.
+  // Answered anywhere: a toast goes as soon as anyone it named stops
+  // waiting, since its words - "Ada and 2 others" - no longer hold and a toast
+  // cannot be reworded; the Request badge keeps the count. The chip shrinks.
   useEffect(() => {
     const now = Date.now();
     requestToasts.current = requestToasts.current.filter((toast) => {
       if (toast.until <= now) return false;
-      if (stillWaiting(toast.askers, incoming).length > 0) return true;
+      if (stillWaiting(toast.askers, incoming).length === toast.askers.length) return true;
       dismiss(toast.id);
       return false;
     });
