@@ -2001,18 +2001,21 @@
      composer's box, the dock already reaches over it, so the slot the field
      reserves for it (--dock-reserve, chat.css) is not added on top.
 
-     In flow it has to be bounded: a guess may run to 500 characters, and a
-     400-character one grew the chip past the feed until it pushed the field
-     and Send off the bottom of a landscape phone. Two lines at most, broken
-     anywhere so a single long word wraps too; the whole line is in the feed
-     just above. And no raised shadow - it no longer floats over anything, and
-     the shadow painted a grey band across the composer. */
+     No raised shadow here - it no longer floats over anything, and the
+     shadow painted a grey band across the composer.
+
+     Keyboard up or down, the verdict has to be bounded: a guess may run to
+     500 characters. In flow a 400-character one grew the chip past the feed
+     until it pushed the field and Send off the bottom of a landscape phone;
+     floating with the keyboard up it grew off the top of the screen (-89px
+     at 844x390). Two lines at most, broken anywhere so a single long word
+     wraps too; the whole line is in the feed. */
   .game-room.game-room-playing:not(.guess-focused) .guess-focus-flash {
     position: static;
     box-shadow: none;
   }
 
-  .game-room.game-room-playing:not(.guess-focused) .guess-focus-flash-body {
+  .game-room.game-room-playing .guess-focus-flash-body {
     display: -webkit-box;
     overflow: hidden;
     overflow-wrap: anywhere;
