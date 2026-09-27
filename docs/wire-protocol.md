@@ -866,8 +866,8 @@ A room's own quick custom prompts are matched under the declared language too, w
 is what a room drawing on nothing but custom prompts gets out of the field.
 
 **A mixed-language room (`mul`, R-PROMPT-13, #1182)** plays each seat in the language it
-joined with (`seatLanguage` on `create_room` and `join_room`, the pressed language on
-`quick_play`; English for a client that sends none), fixed on the seat. It may draw only
+joined with (`seatLanguage` on `create_room` and `join_room`, the default play language -
+`promptLanguage` - on `quick_play`; English for a client that sends none), fixed on the seat. It may draw only
 on lists every language can play, and says why it refuses the rest by code rather than
 by the generic `invalid_prompt_lists`: `mixed_room_list_unsupported` (field
 `promptListSlugs`) for a list in one language whose concepts not every room language
