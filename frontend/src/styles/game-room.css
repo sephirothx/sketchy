@@ -1990,6 +1990,24 @@
     padding-top: 0;
   }
 
+  /* With the keyboard down the feed is on screen, in portrait below the
+     canvas and in landscape down the side, and a verdict hanging above the
+     field hung over its newest line - often somebody else's guess, which
+     arrives under a verdict that stays until you type (#1199). Here the
+     verdict takes a slot of its own at the top of the composer and the feed
+     gives up that much height, staying pinned to its newest line
+     (RoomChatPanel); the field does not move. A line's worth of feed is the
+     cheaper loss than its newest line hidden. With the verdict inside the
+     composer's box, the dock already reaches over it, so the slot the field
+     reserves for it (--dock-reserve, chat.css) is not added on top. */
+  .game-room.game-room-playing:not(.guess-focused) .guess-focus-flash {
+    position: static;
+  }
+
+  .game-room.game-room-playing:not(.guess-focused) .chat-input:has(> .guess-focus-flash) {
+    --dock-reserve: 0px;
+  }
+
   /* The verdict on the guess being typed is the one thing worth interrupting
      the drawing for, so it goes over the canvas rather than beside it, and
      stays translucent enough to keep the strokes underneath readable. */
@@ -2865,17 +2883,6 @@ button.guess-pips {
      what stands there keeps clear of it (--dock-inline-inset, above). */
   .game-room.guess-focused .room-chat-panel.guess-chat {
     justify-content: flex-end;
-  }
-
-  /* With the keyboard down the feed is back, and a verdict hanging above the
-     field hung over its newest line - somebody else's guess, which arrives
-     under a verdict that stays until you type (#1199). Here the verdict takes
-     a slot of its own at the top of the composer, and the feed gives up that
-     much height, staying pinned to its newest line (RoomChatPanel). A column
-     this narrow has no spare room beside the field, and a line's worth of
-     feed is the cheaper loss than a line of it hidden. */
-  .game-room.game-room-playing:not(.guess-focused) .guess-focus-flash {
-    position: static;
   }
 
   /* The turn bar rides above the canvas rather than across the whole width,
