@@ -10,7 +10,7 @@ proxy ignoring `no-cache`, a service worker serving the old shell.
 """
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import room_code, use_guest_name
+from tests.e2e.lobby_helpers import room_code, use_guest_name, open_new_room
 
 BASE_URL = "http://localhost:8000"
 
@@ -60,9 +60,7 @@ async def test_a_stale_tab_reloads_once_then_says_it_is_out_of_date_and_recovers
             await page.wait_for_selector(".first-run, .identity-chip")
             await expect(page.get_by_role("alert").filter(has_text="out of date")).to_have_count(0)
             await use_guest_name(page, "StaleTab")
-            await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
             assert len(await room_code(page)) > 0
         finally:
             await context.close()

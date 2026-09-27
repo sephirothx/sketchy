@@ -1,5 +1,11 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, open_public_rooms, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    open_public_rooms,
+    room_code,
+    use_guest_name,
+    open_create_room,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -26,7 +32,7 @@ async def test_public_room_cards_explain_status_settings_and_actions(
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "CardHost")
-            await host.click('button:has-text("Create room")')
+            await open_create_room(host)
             await host.fill('input[placeholder="Leave blank for a random name!"]', "Room cards")
             await host.fill('label:has-text("Max players") input', "3")
             await host.fill('label:has-text("Rounds") input', "2")
@@ -166,8 +172,7 @@ async def test_a_typed_name_is_enough_to_join_without_pressing_play_as_guest():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "DraftHost")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".create-room-page")
+            await open_create_room(host)
             await host.fill(
                 'input[placeholder="Leave blank for a random name!"]', "Draft welcome"
             )
@@ -208,7 +213,7 @@ async def test_a_wide_row_never_hides_a_rule_it_has_not_counted():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "ManyRulesHost")
-            await host.click('button:has-text("Create room")')
+            await open_create_room(host)
             await host.fill('input[placeholder="Leave blank for a random name!"]', "Many rules")
             await host.click('summary:has-text("Prompts")')
             await host.fill('#custom-prompts', "apple, pear, plum")

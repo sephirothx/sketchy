@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from playwright.async_api import async_playwright
 
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, open_create_room
 
 
 BASE_URL = "http://localhost:8000"
@@ -115,7 +115,7 @@ async def test_the_toolbar_holds_together_at_every_desktop_width():
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "WideHost")
-            await host_page.click('button:has-text("Create room")')
+            await open_create_room(host_page)
             # Private, so it stays out of the lobby list other tests read.
             await host_page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
             await host_page.click('button:has-text("Create room")')

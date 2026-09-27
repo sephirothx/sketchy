@@ -7,7 +7,13 @@ sat with no caller, and the review queue could only ever be empty.
 import asyncio
 
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    register_account,
+    room_code,
+    use_guest_name,
+    open_new_room,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -29,9 +35,7 @@ async def test_a_player_reports_another_from_the_room_menu():
             # Reporting needs an account: a report a moderator cannot follow up
             # on helps nobody, so the control is not offered to a guest.
             await register_account(host_page, "ReportingHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
 
             code = await room_code(host_page)
             await player_page.goto(BASE_URL)
@@ -117,9 +121,7 @@ async def test_a_guest_votes_but_is_offered_no_way_to_report():
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "GuestHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
 
             code = await room_code(host_page)
             await player_page.goto(BASE_URL)
@@ -183,9 +185,7 @@ async def test_a_report_about_the_drawer_carries_the_drawing():
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "DrawReportHost")
             await register_account(host_page, "DrawReportHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
 
             code = await room_code(host_page)
             await player_page.goto(BASE_URL)

@@ -8,6 +8,7 @@ from tests.e2e.lobby_helpers import (
     room_code,
     save_room_settings,
     use_guest_name,
+    open_new_room,
 )
 
 
@@ -41,8 +42,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "RecapHost")
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
+            await open_new_room(host)
             await host.locator('[data-testid="waiting-room"]').wait_for()
 
             code = await room_code(host)

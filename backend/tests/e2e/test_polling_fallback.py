@@ -15,7 +15,7 @@ import re
 
 from playwright.async_api import async_playwright
 
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, open_new_room
 
 BASE_URL = "http://localhost:8000"
 CANVAS_WIDTH = 800
@@ -83,9 +83,7 @@ async def test_a_browser_that_cannot_open_websockets_plays_over_polling():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "WsHost")
-            await host.get_by_role("button", name="Create room", exact=True).click()
-            await host.wait_for_url("**/create")
-            await host.get_by_role("button", name="Create room", exact=True).click()
+            await open_new_room(host)
             await host.wait_for_url("**/room/**")
             await host.wait_for_selector('[data-testid="waiting-room"]')
             code = await room_code(host)

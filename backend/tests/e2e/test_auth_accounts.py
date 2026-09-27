@@ -4,7 +4,15 @@ import asyncio
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name, open_player_settings
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    register_account,
+    room_code,
+    use_guest_name,
+    open_player_settings,
+    open_create_room,
+    open_new_room,
+)
 
 BASE_URL = "http://localhost:8000"
 
@@ -12,9 +20,7 @@ BASE_URL = "http://localhost:8000"
 async def _create_room(page, name):
     await page.goto(BASE_URL)
     await use_guest_name(page, name)
-    await page.click('button:has-text("Create room")')
-    await page.click('button:has-text("Create room")')
-    await page.wait_for_selector('[data-testid="waiting-room"]')
+    await open_new_room(page)
     return await room_code(page)
 
 
@@ -134,9 +140,7 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             assert await page.locator(".first-run").count() == 0
 
             # And it is the name they play under.
-            await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
             assert "Marta" == await page.inner_text(
                 ".player-name .colored-player-name"
             )
@@ -249,7 +253,7 @@ async def test_game_end_asks_a_guest_to_claim_and_holds_the_countdown():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "EndHost")
-            await host.click('button:has-text("Create room")')
+            await open_create_room(host)
             rounds = int(await host.get_by_label("Rounds", exact=True).input_value())
             while rounds > 1:
                 await host.get_by_role("button", name="Decrease Rounds").click()

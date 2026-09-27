@@ -19,6 +19,7 @@ from tests.e2e.lobby_helpers import (
     room_code,
     save_room_settings,
     use_guest_name,
+    open_new_room,
 )
 
 BASE_URL = "http://localhost:8000"
@@ -105,8 +106,7 @@ async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profil
             await register_account(host, "reacthost")
             await register_account(other, "reactother")
 
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
+            await open_new_room(host)
             await host.locator('[data-testid="waiting-room"]').wait_for()
             code = await room_code(host)
             for page in (other, guest):

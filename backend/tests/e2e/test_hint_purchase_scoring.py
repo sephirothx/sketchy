@@ -9,6 +9,7 @@ from tests.e2e.lobby_helpers import (
     room_code,
     save_room_settings,
     use_guest_name,
+    open_new_room,
 )
 
 
@@ -42,8 +43,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "HintHost")
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
+            await open_new_room(host)
             await host.locator('[data-testid="waiting-room"]').wait_for()
 
             code = await room_code(host)

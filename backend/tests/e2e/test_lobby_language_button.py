@@ -12,6 +12,8 @@ import re
 import pytest
 from playwright.async_api import async_playwright
 
+from tests.e2e.lobby_helpers import open_new_room
+
 
 BASE_URL = "http://localhost:8000"
 
@@ -61,9 +63,7 @@ async def test_a_language_switch_reaches_the_memoised_lobby_panels():
             await host.goto(BASE_URL)
             await host.request.post(f"{BASE_URL}/api/auth/display-name", data={"displayName": "PanelHost"})
             await host.reload()
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
 
             await reader.goto(BASE_URL)
             await reader.get_by_role("heading", name="Who is online").wait_for()

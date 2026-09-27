@@ -7,7 +7,7 @@ online at the same time and any exact total would be a coin flip.
 import re
 
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import use_guest_name, open_new_room
 
 BASE_URL = "http://localhost:8000"
 
@@ -47,8 +47,7 @@ async def test_the_lobby_shows_who_else_is_online_and_what_they_are_doing():
 
             # Taking a seat flips the status, and nothing about the room they
             # took it in appears anywhere in the list.
-            await subject.click('button:has-text("Create room")')
-            await subject.click('button:has-text("Create room")')
+            await open_new_room(subject)
             await subject.wait_for_selector('[data-testid="room-header"]')
             await expect(
                 row_for(watcher, "PresenceSubject").locator(".online-player-status")

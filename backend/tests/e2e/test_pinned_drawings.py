@@ -12,6 +12,7 @@ from tests.e2e.lobby_helpers import (
     room_code,
     save_room_settings,
     use_guest_name,
+    open_new_room,
 )
 from tests.e2e.test_profile_page import choose_prompt
 
@@ -44,8 +45,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await host.goto(BASE_URL)
             await use_guest_name(host, "PinHost")
             await register_account(host, "pinhost")
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
+            await open_new_room(host)
             await host.locator('[data-testid="waiting-room"]').wait_for()
             code = await room_code(host)
 

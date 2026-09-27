@@ -1,6 +1,11 @@
 import pytest
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import register_account, use_guest_name, open_player_settings
+from tests.e2e.lobby_helpers import (
+    register_account,
+    use_guest_name,
+    open_player_settings,
+    open_new_room,
+)
 
 BASE_URL = "http://localhost:8000"
 
@@ -63,8 +68,7 @@ async def test_settings_apply_as_they_change_without_a_save():
             )
             assert migrated_cursor == "circle", "the legacy value should survive the read"
             await use_guest_name(page, "SettingsTester")
-            await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
+            await open_new_room(page)
             # Wait for the room before claiming the account. The create-room
             # page carries an identity chip of its own, so registering while
             # the room is still in flight opens the menu on that page and the
@@ -444,8 +448,7 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             assert "immutable" in picture["cache"]
 
             # And the seat wears it too.
-            await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
+            await open_new_room(page)
             seat = page.locator(".player-list .avatar img").first
             await seat.wait_for(state="visible")
             assert (await seat.get_attribute("src")).endswith(key)
@@ -521,8 +524,7 @@ async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
             ).wait_for(state="visible")
 
             # The seat wears it too, drawn the same way.
-            await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
+            await open_new_room(page)
             await page.locator(
                 f'.player-list .avatar svg.avatar-doodle[data-doodle="{target}"]'
             ).first.wait_for(state="visible")

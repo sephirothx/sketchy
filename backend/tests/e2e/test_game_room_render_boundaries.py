@@ -7,6 +7,7 @@ from tests.e2e.lobby_helpers import (
     room_code,
     save_room_settings,
     use_guest_name,
+    open_new_room,
 )
 
 
@@ -43,9 +44,7 @@ async def test_chat_score_and_drawing_updates_stop_at_their_render_boundaries():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "BoundaryHost")
-            await host.get_by_role("button", name="Create room", exact=True).click()
-            await host.get_by_role("button", name="Create room", exact=True).click()
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
 
             for page, nickname in (
@@ -162,9 +161,7 @@ async def test_a_timed_hint_reveal_stops_at_the_prompt_it_changes():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "HintEdgeHost")
-            await host.get_by_role("button", name="Create room", exact=True).click()
-            await host.get_by_role("button", name="Create room", exact=True).click()
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
 
             await guest.goto(BASE_URL)

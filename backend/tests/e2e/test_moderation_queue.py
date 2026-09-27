@@ -10,7 +10,13 @@ import asyncio
 from playwright.async_api import async_playwright, expect
 
 from app.domain_values import UserRole
-from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    register_account,
+    room_code,
+    use_guest_name,
+    open_new_room,
+)
 
 # Grants the role *and* the second factor R-AUTH-20 now requires of one.
 from tests.e2e.staff_helpers import set_role
@@ -58,9 +64,7 @@ async def test_a_moderator_sees_the_drawing_and_can_find_the_case_once_decided()
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "QueueHost")
             await register_account(host_page, "QueueHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
             code = await room_code(host_page)
 
             await player_page.goto(BASE_URL)
@@ -194,9 +198,7 @@ async def test_two_players_reporting_one_thing_are_one_case_decided_once():
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "PileHost")
             await register_account(host_page, "PileHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
             code = await room_code(host_page)
 
             for page, name in ((first_page, "PileOne"), (second_page, "PileTwo")):

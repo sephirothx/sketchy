@@ -10,7 +10,7 @@ Asserts on this test's own room. The suite's workers share one server, so
 every other test's rooms are in the same list.
 """
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import use_guest_name, leave_room
+from tests.e2e.lobby_helpers import use_guest_name, leave_room, open_create_room
 
 BASE_URL = "http://localhost:8000"
 
@@ -35,7 +35,7 @@ async def test_a_room_opening_and_closing_reaches_a_lobby_nobody_touched():
 
             await host.goto(BASE_URL)
             await use_guest_name(host, "FeedHost")
-            await host.click('button:has-text("Create room")')
+            await open_create_room(host)
             await host.fill(
                 'input[placeholder="Leave blank for a random name!"]', "Feed room"
             )

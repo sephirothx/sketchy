@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import BugReport
 from tests.e2e.a11y import assert_no_axe_violations
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, open_new_room
 
 BASE_URL = "http://localhost:8000"
 HEADING = "A bug crawled onto the page"
@@ -122,9 +122,7 @@ async def test_a_crash_in_the_room_can_leave_it_and_the_seat_goes_too():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "CrashHost")
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
 
             await guest.goto(BASE_URL)
@@ -166,9 +164,7 @@ async def test_reloading_after_a_room_crash_keeps_the_seat():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "ReloadingHost")
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
 
             await guest.goto(BASE_URL)
