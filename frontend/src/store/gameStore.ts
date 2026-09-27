@@ -283,9 +283,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       roomState: payload.state,
       // The recap is not in the room state (#871); it arrives with
       // `game_ended` or `last_game` and stays until a game starts - or until
-      // this is a different room: a friend's invite moves the socket straight
-      // from one room to another, and the new one sends `last_game` only if
-      // it has a finished game of its own.
+      // this is a different room: an entry that does not leave first moves
+      // the socket straight from one room to another (the server gives the
+      // old seat up itself), and the new one sends `last_game` only if it has
+      // a finished game of its own. An invitation's Join no longer does that
+      // (#1198), but nothing here may rely on every way in leaving first.
       ...(payload.state === "playing" || payload.id !== state.roomId
         ? {
             finalScores: null,

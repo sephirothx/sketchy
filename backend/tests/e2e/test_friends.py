@@ -258,9 +258,112 @@ async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
                 2, timeout=SETTLE_MS
             )
             await expect(chip).to_have_count(0)
+            # A waiting room is left at once, as its own Leave leaves it: no
+            # question (#1198), and the guest is in the friend's room.
+            await expect(guest.get_by_role("alertdialog")).to_have_count(0)
+            host_code = await host.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await expect(guest.locator('[data-testid="room-header"]')).to_have_attribute(
+                "data-room-code", host_code
+            )
         finally:
             await host_context.close()
             await guest_context.close()
+            await browser.close()
+
+
+async def test_joining_an_invitation_mid_game_asks_what_leave_asks():
+    """#1198: Join on an invitation leaves the room the player is in, and in
+    the middle of a game it skipped the question the room's own Leave asks.
+    It asks the same one now, naming where the player is going: No keeps them
+    in the game with the invitation still up, Yes leaves and joins."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context()
+        other_context = await browser.new_context()
+        host = await host_context.new_page()
+        guest = await guest_context.new_page()
+        other = await other_context.new_page()
+        host_name, guest_name, other_name = unique("Host"), unique("Pal"), unique("Other")
+        chip = guest.locator(
+            '[data-testid="room-header"] .room-notice-chip[data-notice="invite"]'
+        )
+        popover = guest.locator('.room-notice-popover[data-notice="invite"]')
+        question = guest.get_by_role("alertdialog")
+
+        try:
+            await sign_up(host, host_name)
+            await sign_up(guest, guest_name)
+            await make_friends(host, guest, host_name, guest_name)
+
+            await host.click('button:has-text("Create room")')
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            invite = host.locator(
+                f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
+            ).get_by_role("button", name="Invite")
+            await expect(invite).to_be_visible(timeout=SETTLE_MS)
+            await invite.click()
+            await expect(guest.locator('[data-testid="friend-invite"]')).to_be_visible(
+                timeout=SETTLE_MS
+            )
+
+            # The invitee goes into a game of their own before answering.
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector(".create-room-page")
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            code = await guest.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await other.goto(BASE_URL)
+            await use_guest_name(other, other_name)
+            await join_by_code(other, code)
+            await other.wait_for_selector('[data-testid="waiting-room"]')
+            await guest.get_by_role("button", name="Start game").click()
+            await guest.wait_for_selector(".game-room-playing")
+
+            await chip.click()
+            await popover.get_by_role("button", name="Join").click()
+            await expect(question).to_be_visible()
+            await expect(question).to_contain_text(host_name)
+
+            # No: still in the game, and the invitation is still there.
+            await question.get_by_role("button", name="Cancel").click()
+            await expect(question).to_have_count(0)
+            await expect(guest.locator(".game-room-playing")).to_be_visible()
+            await expect(chip).to_be_visible()
+            await expect(host.locator(".player-row")).to_have_count(1)
+
+            # Yes: out of the game, and into the friend's room.
+            await chip.click()
+            await popover.get_by_role("button", name="Join").click()
+            await question.get_by_role("button", name="Leave and join").click()
+            await expect(host.locator(".player-row")).to_have_count(
+                2, timeout=SETTLE_MS
+            )
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            host_code = await host.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await expect(guest.locator('[data-testid="room-header"]')).to_have_attribute(
+                "data-room-code", host_code
+            )
+            await expect(chip).to_have_count(0)
+
+            # The game given up is gone from the history too (R-UX-15): Back
+            # from the friend's room is that room's Leave, and lands on the
+            # lobby rather than on the old room's code.
+            await guest.go_back()
+            await guest.wait_for_selector('[data-testid="quick-play"]')
+            assert guest.url.rstrip("/") == BASE_URL, guest.url
+            assert f"/room/{code}" not in guest.url, guest.url
+        finally:
+            await host_context.close()
+            await guest_context.close()
+            await other_context.close()
             await browser.close()
 
 
