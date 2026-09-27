@@ -4,11 +4,12 @@ import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon } from "./icons";
 import {
   AGNOSTIC_PROMPT_LANGUAGE,
+  MIXED_PROMPT_LANGUAGE,
   promptLanguageEndonym,
   promptLanguageLabel,
 } from "../lib/promptLanguages";
 import { getFocusableElements, useEscapeLayer } from "../hooks/useFocusTrap";
-import type { PromptListLanguage } from "../types";
+import type { PromptListLanguage, RoomLanguage } from "../types";
 import { ui } from "../content/ui/index.ts";
 
 /** The lobby's filter adds "every language" to the same list of choices. */
@@ -16,12 +17,12 @@ export const ANY_LANGUAGE = "all";
 
 /** A list may also be in no language (`zxx`, #821); a room may not, so only a
 list's own picker offers it. */
-export type LanguageChoice = PromptListLanguage | typeof ANY_LANGUAGE;
+export type LanguageChoice = PromptListLanguage | RoomLanguage | typeof ANY_LANGUAGE;
 
 interface LanguagePickerProps {
   label: string;
   value: LanguageChoice;
-  options: readonly PromptListLanguage[];
+  options: readonly (PromptListLanguage | RoomLanguage)[];
   onChange: (value: LanguageChoice) => void;
   /** The lobby filters by language; a room picks one, and cannot pick "any". */
   includeAny?: boolean;
@@ -169,6 +170,7 @@ export function LanguagePicker({
                 type="button"
                 role="option"
                 aria-selected={selected}
+                data-language={choice}
                 className={`language-picker-option${selected ? " is-selected" : ""}`}
                 onClick={() => choose(choice)}
               >
@@ -246,6 +248,7 @@ export function LanguageFace({
 function accessibleName(value: LanguageChoice): string {
   if (value === ANY_LANGUAGE) return ui.languagePicker.everyLanguage;
   if (value === AGNOSTIC_PROMPT_LANGUAGE) return ui.languagePicker.anyLanguage;
+  if (value === MIXED_PROMPT_LANGUAGE) return ui.languagePicker.mixed;
   const endonym = promptLanguageEndonym(value);
   const english = promptLanguageLabel(value);
   return english === endonym ? endonym : `${endonym} (${english})`;

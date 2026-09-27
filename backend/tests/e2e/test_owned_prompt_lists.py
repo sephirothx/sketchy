@@ -1,7 +1,7 @@
 """A player saves and revises reusable prompt content, and plays it."""
 from playwright.async_api import async_playwright
 
-from tests.e2e.lobby_helpers import register_account
+from tests.e2e.lobby_helpers import choose_room_language, register_account
 
 BASE_URL = "http://localhost:8000"
 
@@ -62,6 +62,7 @@ async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
 
             # Its owner can play it: a room whose only selected list is this one.
             await owner.goto(f"{BASE_URL}/create")
+            await choose_room_language(owner, "en")
             await owner.click('summary:has-text("Prompts")')
             owned_chip = owner.locator(".toggle-chip").filter(has_text="Party animals")
             await owned_chip.click()
@@ -107,6 +108,7 @@ async def test_a_list_in_any_language_is_offered_to_a_room_in_another_language()
             # Private: a public German room left waiting is one another test's
             # German Quick play would land in (e2e global server state).
             await owner.get_by_role("button", name="Private").click()
+            await choose_room_language(owner, "en")
             await owner.click('summary:has-text("Prompts")')
             names_chip = owner.locator(".toggle-chip").filter(has_text="Pocket monsters")
             await names_chip.wait_for()

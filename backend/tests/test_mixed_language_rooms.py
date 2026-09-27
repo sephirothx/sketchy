@@ -526,6 +526,14 @@ def test_a_spectator_neither_hurries_the_players_letters_nor_quiets_their_chat()
     assert game.masked_prompt("watcher").count("_") < 5
 
 
+def test_a_payload_for_one_socket_is_spelled_for_its_seat():
+    from app.presenters import spelled_for_seat
+
+    ended = {"prompt": "bow tie", "prompts": {"de": "Fliege"}}
+    assert spelled_for_seat(ended, "de")["prompt"] == "Fliege"
+    assert spelled_for_seat(ended, "it")["prompt"] == "bow tie"
+    assert spelled_for_seat({"prompt": "dog"}, "de") == {"prompt": "dog"}
+
 
 async def test_a_mixed_draw_samples_among_playable_concepts_only(seeded):
     """Filtered before the limit (review of #1194): with every concept but one

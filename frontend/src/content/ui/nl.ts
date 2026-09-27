@@ -1101,6 +1101,7 @@ export const NL: Catalogue = {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Alle talen",
     anyLanguage: "Taalonafhankelijk",
+    mixed: "Meertalig",
   },
 
   lobbyBrowserPage: {
@@ -1859,6 +1860,7 @@ export const NL: Catalogue = {
 
   roomSetupForm: {
     promptLanguage: "Woordtaal",
+    customPromptsOffInMixedRooms: "Eigen woorden staan uit in meertalige kamers: elke speler heeft het woord in zijn eigen taal nodig.",
     visibility: "Zichtbaarheid",
     maxPlayers: "Maximum aantal spelers",
     rounds: "Rondes",
@@ -1984,7 +1986,7 @@ export const NL: Catalogue = {
     colorScheme: "Kleurenschema",
     appliesMomentYouPick: "Geldt zodra je het kiest.",
     languageYouPlay: "Taal waarin je speelt",
-    roomsThisLanguageComeFirstLobby: "Kamers in deze taal staan voorop in de lobby, en een kamer die je maakt begint erin. Dit staat los van de taal waarin je Sketchy leest.",
+    roomsThisLanguageComeFirstLobby: "Kamers in deze taal staan voorop in de lobby, en in een meertalige kamer speel je de woorden in deze taal. Dit staat los van de taal waarin je Sketchy leest.",
     interfaceLanguage: "Taal waarin je leest",
     interfaceLanguageHint: "Elk woord van Sketchy zelf. Los van de taal waarin je speelt: in de ene lezen en in de andere spelen is heel gewoon.",
     timeFormat: "Tijdnotatie",

@@ -3,7 +3,6 @@ import type {
   CommunityPromptList,
   CommunityPromptListDetail,
   OwnedPromptList,
-  PromptLanguage,
   PromptListLanguage,
   PromptTag,
 } from "../types";
@@ -42,7 +41,7 @@ export interface CommunityPromptListPage {
 }
 
 export interface CommunityPromptListQuery {
-  language?: PromptLanguage;
+  language?: PromptListLanguage;
   tags?: string[];
   sort?: "stars" | "newest";
   /** Only the lists this account starred — its shortlist. Needs an account. */

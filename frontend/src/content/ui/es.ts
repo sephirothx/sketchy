@@ -1101,6 +1101,7 @@ export const ES: Catalogue = {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Todos los idiomas",
     anyLanguage: "Cualquier idioma",
+    mixed: "Mixto",
   },
 
   lobbyBrowserPage: {
@@ -1858,6 +1859,7 @@ export const ES: Catalogue = {
 
   roomSetupForm: {
     promptLanguage: "Idioma de las palabras",
+    customPromptsOffInMixedRooms: "Las palabras propias no se usan en salas mixtas: cada jugador necesita la palabra en su idioma.",
     visibility: "Visibilidad",
     maxPlayers: "Máximo de jugadores",
     rounds: "Rondas",
@@ -1983,7 +1985,7 @@ export const ES: Catalogue = {
     colorScheme: "Esquema de color",
     appliesMomentYouPick: "Se aplica en cuanto lo eliges.",
     languageYouPlay: "Idioma en el que juegas",
-    roomsThisLanguageComeFirstLobby: "Las salas en este idioma salen primero en el vestíbulo, y una sala que crees empieza en él. Es distinto del idioma en el que lees Sketchy.",
+    roomsThisLanguageComeFirstLobby: "Las salas en este idioma salen primero en el vestíbulo, y en una sala mixta es el idioma en el que juegas las palabras. Es distinto del idioma en el que lees Sketchy.",
     interfaceLanguage: "Idioma en el que lees",
     interfaceLanguageHint: "Cada palabra del propio Sketchy. Distinto del idioma en el que juegas: leer en uno y jugar en otro es de lo más normal.",
     timeFormat: "Formato de hora",

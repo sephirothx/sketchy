@@ -37,6 +37,8 @@ from app.services.runtime_metrics import metrics
 from app.services.prompt_usage import tally_prompt_usage
 from app.services.telemetry import telemetry
 from app.presenters import (
+    last_game_for_seat,
+    spelled_for_seat,
     turn_ended_payload,
     room_state_payload,
     system_chat_message,
@@ -1184,7 +1186,13 @@ class GameFlowService:
                 elif full:
                     await self._sio.emit("you_are_drawing", {"prompt": game.prompt}, to=sid)
         elif game.phase == Phase.TURN_RESULTS:
-            await self._sio.emit("turn_ended", self._turn_ended_payload(room), to=sid)
+            # To this socket alone, before its seat is acknowledged: spelled
+            # here, since its client cannot yet know its own language (#1182).
+            await self._sio.emit(
+                "turn_ended",
+                spelled_for_seat(self._turn_ended_payload(room), room.seat_language(player)),
+                to=sid,
+            )
 
     async def release_seat(
         self, sid: str, room: Room, player: Player, *, defer_durable: bool = False
@@ -1318,6 +1326,11 @@ class GameFlowService:
         """
         payload = room.last_game_payload()
         if payload is not None:
+            # Spelled for the arriving seat, whose client does not know its own
+            # language until the join is acknowledged, after this (#1182).
+            seat = next((p for p in room.player_list() if p.sid == sid), None)
+            if seat is not None:
+                payload = last_game_for_seat(payload, room.seat_language(seat))
             await self._sio.emit("last_game", payload, to=sid)
 
     def _drawer_transport(self, room: Room) -> str | None:

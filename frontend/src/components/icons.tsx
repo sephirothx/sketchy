@@ -236,6 +236,7 @@ const FLAG = {
   ptGreen: "#287927",
   ptRed: "#F84B4A",
   ptYellow: "#F9F85A",
+  earthBlue: "#013BA6",
   /* Warm rather than pure, so a white stripe still shows on a white panel. */
   white: "#FDFBF6",
 } as const;
@@ -282,6 +283,23 @@ const FLAG_SHAPES: Record<string, ReactNode> = {
       <rect width="18" height="4.33" fill={FLAG.nlRed} />
       <rect y="4.33" width="18" height="4.34" fill={FLAG.white} />
       <rect y="8.67" width="18" height="4.33" fill={FLAG.nlBlue} />
+    </>
+  ),
+  // The International Flag of Planet Earth (Oskar Pernefeldt, 2015) for a
+  // mixed-language room (#1182): seven rings on blue. The interlacing of the
+  // original is left out - at eighteen pixels it reads as noise.
+  mul: (
+    <>
+      <rect width="18" height="13" fill={FLAG.earthBlue} />
+      <g fill="none" stroke={FLAG.white} strokeWidth="0.45">
+      <circle cx="9.00" cy="6.50" r="2.37" />
+      <circle cx="11.37" cy="6.50" r="2.37" />
+      <circle cx="10.18" cy="8.55" r="2.37" />
+      <circle cx="7.82" cy="8.55" r="2.37" />
+      <circle cx="6.63" cy="6.50" r="2.37" />
+      <circle cx="7.82" cy="4.45" r="2.37" />
+      <circle cx="10.18" cy="4.45" r="2.37" />
+      </g>
     </>
   ),
   pt: (

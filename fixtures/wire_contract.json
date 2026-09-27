@@ -2549,7 +2549,8 @@
   "presenters:session_payload": [
    "isAnonymous",
    "playerId",
-   "roomId"
+   "roomId",
+   "seatLanguage"
   ],
   "presenters:system_chat_message": [
    "playerId"
@@ -2837,7 +2838,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 45,
+ "protocolVersion": 46,
  "refusal": {
   "codes": [
    "invalid_payload",

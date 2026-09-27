@@ -409,7 +409,10 @@ it is sent every few seconds by every seat and carries no refusal a player could
 
 Command-specific **success** additions, all optional: `roomId`, `code` (the invite
 code — which is why the refusal discriminator is `errorCode`, not `code`), `playerId`,
-`isAnonymous`, `needsRebind`.
+`isAnonymous`, `needsRebind`, and on every seat - `create_room`, `join_room`,
+`join_friend_room`, `quick_play` - `seatLanguage`: the language this seat plays in, the
+room's own except in a mixed-language room (#1182), where it is what the client reads a
+room-wide `prompts` map by.
 
 **Refusals are one shape** (#565): `{"ok": false, "errorCode": …, "error": …}` plus
 `field` or `retryAfterMs` where they apply. Before #565 a refusal carried its reason as
@@ -2462,7 +2465,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (45) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (46) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

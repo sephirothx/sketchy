@@ -1,4 +1,10 @@
-import type { PromptLanguage, PromptListLanguage } from "../types";
+import type {
+  GameEndedPayload,
+  PromptLanguage,
+  PromptListLanguage,
+  PromptSpellings,
+  RoomLanguage,
+} from "../types";
 import { interfaceLocale, ui } from "../content/ui/index.ts";
 
 /** Not copy: English names, the fallback for an engine without
@@ -39,10 +45,30 @@ export const PROMPT_LANGUAGE_ENDONYMS: Record<PromptLanguage, string> = {
 as Pokémon or brands. Players see it as **Any language** (GLOSSARY). */
 export const AGNOSTIC_PROMPT_LANGUAGE = "zxx";
 
-/** Whether a room in `roomLanguage` can pick a list in `listLanguage`: its
-own language, or none at all (R-PROMPT-02). */
-export function isPlayableIn(listLanguage: string, roomLanguage: string): boolean {
-  return listLanguage === roomLanguage || listLanguage === AGNOSTIC_PROMPT_LANGUAGE;
+/** BCP-47 "multiple languages": a mixed-language room (#1182), where each seat
+plays in its own. Players see it as **Mixed** (GLOSSARY). */
+export const MIXED_PROMPT_LANGUAGE = "mul";
+
+/** Whether a list is one of the Standard lists: the same concepts in every
+language (R-PROMPT-01), which is what a mixed room can play. */
+function isStandard(list: { slug: string; isBundled?: boolean }): boolean {
+  return list.slug.endsWith("_standard") && list.isBundled !== false;
+}
+
+/** Whether a room in `roomLanguage` can pick `list`: one in its own language,
+or in none at all (R-PROMPT-02). A mixed room (R-PROMPT-13) takes lists in no
+language and Standard - shown once, in `playLanguage`, since choosing any
+language's Standard is choosing all of them. */
+export function isPlayableIn(
+  list: { slug: string; language: string; isBundled?: boolean },
+  roomLanguage: string,
+  playLanguage: string = "en",
+): boolean {
+  if (list.language === AGNOSTIC_PROMPT_LANGUAGE) return true;
+  if (roomLanguage === MIXED_PROMPT_LANGUAGE) {
+    return isStandard(list) && list.language === playLanguage;
+  }
+  return list.language === roomLanguage;
 }
 
 /** The language to search and sort a list's prompts in. A list in no language
@@ -56,6 +82,7 @@ language, so a German reader is told about "Englisch". The browser already
 knows every one of these names; the table is only for an engine that does not. */
 export function promptLanguageLabel(language: string): string {
   if (language === AGNOSTIC_PROMPT_LANGUAGE) return ui.languagePicker.anyLanguage;
+  if (language === MIXED_PROMPT_LANGUAGE) return ui.languagePicker.mixed;
   try {
     const name = new Intl.DisplayNames([interfaceLocale()], { type: "language" }).of(language);
     if (name && name !== language) return name;
@@ -66,8 +93,9 @@ export function promptLanguageLabel(language: string): string {
 }
 
 export function promptLanguageEndonym(language: string): string {
-  // "Any language" is not a language with a name for itself.
+  // "Any language" and "Mixed" are not languages with names for themselves.
   if (language === AGNOSTIC_PROMPT_LANGUAGE) return ui.languagePicker.anyLanguage;
+  if (language === MIXED_PROMPT_LANGUAGE) return ui.languagePicker.mixed;
   return PROMPT_LANGUAGE_ENDONYMS[language as PromptLanguage] ?? language;
 }
 
@@ -88,12 +116,23 @@ export const SUPPORTED_PROMPT_LANGUAGES = (
  * catalogue is loading or after a list is withdrawn.
  */
 export function availablePromptLanguages(
-  lists: { language: string }[],
+  lists: { slug: string; language: string; isBundled?: boolean }[],
   current: string,
-): PromptLanguage[] {
+): RoomLanguage[] {
   const languages = new Set<string>([current]);
   for (const list of lists) languages.add(list.language);
-  return SUPPORTED_PROMPT_LANGUAGES.filter((language) => languages.has(language));
+  const offered: RoomLanguage[] = SUPPORTED_PROMPT_LANGUAGES.filter(
+    (language) => languages.has(language),
+  );
+  // Mixed, last, once Standard is there in every language to play (#1182).
+  const standard = new Set(lists.filter(isStandard).map((list) => list.language));
+  if (
+    current === MIXED_PROMPT_LANGUAGE
+    || SUPPORTED_PROMPT_LANGUAGES.every((language) => standard.has(language))
+  ) {
+    offered.push(MIXED_PROMPT_LANGUAGE);
+  }
+  return offered;
 }
 
 /**
@@ -105,11 +144,16 @@ export function availablePromptLanguages(
  * Standard list.
  */
 export function selectionForLanguage(
-  lists: { slug: string; language: string }[],
+  lists: { slug: string; language: string; isBundled?: boolean }[],
   language: string,
   carried: readonly string[] = [],
+  playLanguage: string = "en",
 ): string[] {
-  const inLanguage = lists.filter((list) => list.language === language);
+  const inLanguage = language === MIXED_PROMPT_LANGUAGE
+    // A mixed room starts on Standard, shown in the language its host plays.
+    ? lists.filter((list) => isPlayableIn(list, language, playLanguage)
+      && list.language !== AGNOSTIC_PROMPT_LANGUAGE)
+    : lists.filter((list) => list.language === language);
   // That language's Standard list, which is where a room in it starts
   // (R-PROMPT-02) - not whichever list the catalogue happened to return
   // first, which is alphabetical and so lands on Extended.
@@ -138,15 +182,18 @@ export function selectionForLanguage(
  * list.
  */
 export function reconcileSelectionForLanguage(
-  lists: { slug: string; language: string }[],
+  lists: { slug: string; language: string; isBundled?: boolean }[],
   language: string,
   selected: readonly string[],
+  playLanguage: string = "en",
 ): string[] {
   const playable = new Set(
-    lists.filter((list) => isPlayableIn(list.language, language)).map((list) => list.slug),
+    lists
+      .filter((list) => isPlayableIn(list, language, playLanguage))
+      .map((list) => list.slug),
   );
   const kept = selected.filter((slug) => playable.has(slug));
-  return kept.length > 0 ? kept : selectionForLanguage(lists, language);
+  return kept.length > 0 ? kept : selectionForLanguage(lists, language, [], playLanguage);
 }
 
 /**
@@ -169,6 +216,31 @@ export function preferredPromptLanguage(
   return "en";
 }
 
+/** A payload naming a prompt, as this seat reads it: a mixed-language room
+(#1182) sends every spelling in `prompts` beside the drawer's `prompt`, and
+each client shows its own seat's. Everywhere else `prompt` is everyone's. */
+export function spelledForSeat<T extends { prompt: string; prompts?: PromptSpellings }>(
+  entry: T,
+  seatLanguage: PromptLanguage | null,
+): T {
+  const own = seatLanguage ? entry.prompts?.[seatLanguage] : undefined;
+  return own ? { ...entry, prompt: own } : entry;
+}
+
+/** A finished game's recap and highlights, each prompt as this seat reads it. */
+export function gameEndSpelledForSeat<T extends GameEndedPayload>(
+  payload: T,
+  seatLanguage: PromptLanguage | null,
+): T {
+  return {
+    ...payload,
+    drawings: payload.drawings.map((entry) => spelledForSeat(entry, seatLanguage)),
+    highlights: payload.highlights?.map((highlight) => (
+      "prompt" in highlight ? spelledForSeat(highlight, seatLanguage) : highlight
+    )),
+  };
+}
+
 /**
  * Your language first, everything else in the order it arrived.
  *
@@ -180,8 +252,9 @@ export function sortRoomsByLanguage<T extends { promptLanguage: string }>(
   rooms: readonly T[],
   language: string,
 ): T[] {
-  return [...rooms].sort((left, right) =>
-    Number(right.promptLanguage === language)
-    - Number(left.promptLanguage === language),
-  );
+  // Your language first, then mixed rooms - which play you in it (#1182) -
+  // then everything else.
+  const rank = (room: T) =>
+    room.promptLanguage === language ? 0 : room.promptLanguage === MIXED_PROMPT_LANGUAGE ? 1 : 2;
+  return [...rooms].sort((left, right) => rank(left) - rank(right));
 }

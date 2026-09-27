@@ -3,6 +3,10 @@ import test from "node:test";
 import { duplicateName, emailPublishBlocker, promptEntriesFromQuickInput } from "../src/lib/promptListDrafts.ts";
 import {
   availablePromptLanguages,
+  promptLanguageEndonym,
+  promptLanguageLabel,
+  gameEndSpelledForSeat,
+  spelledForSeat,
   isPlayableIn,
   preferredPromptLanguage,
   reconcileSelectionForLanguage,
@@ -130,8 +134,8 @@ test("a list in no language is played in every room and follows it across a swit
     { slug: "german_standard", language: "de" },
     { slug: "pokemon", language: "zxx" },
   ];
-  assert.equal(isPlayableIn("zxx", "de"), true);
-  assert.equal(isPlayableIn("en", "de"), false);
+  assert.equal(isPlayableIn(lists[2], "de"), true);
+  assert.equal(isPlayableIn(lists[0], "de"), false);
   // Not a language a room can be opened in.
   assert.deepEqual(availablePromptLanguages(lists, "en"), ["de", "en"]);
   // Kept beside the room's own lists when they are reconciled...
@@ -146,6 +150,72 @@ test("a list in no language is played in every room and follows it across a swit
     ["german_standard", "pokemon"],
   );
   assert.deepEqual(selectionForLanguage(lists, "de"), ["german_standard"]);
+});
+
+test("a mixed room plays Standard, once, and lists in no language", () => {
+  const languages = ["de", "en", "es", "fr", "it", "nl", "pt"];
+  const standard = languages.map((language) => ({
+    slug: `${{ de: "german", en: "english", es: "spanish", fr: "french", it: "italian", nl: "dutch", pt: "portuguese" }[language]}_standard`,
+    language,
+    isBundled: true,
+  }));
+  const lists = [
+    ...standard,
+    { slug: "german_extended", language: "de", isBundled: true },
+    { slug: "mine", language: "de", isBundled: false },
+    // A player's own list named like Standard is not Standard.
+    { slug: "fake_standard", language: "de", isBundled: false },
+    { slug: "pokemon", language: "zxx", isBundled: false },
+  ];
+  // Offered once Standard is there in every language, and last.
+  assert.equal(availablePromptLanguages(lists, "de").at(-1), "mul");
+  assert.equal(availablePromptLanguages(lists.slice(1), "de").includes("mul"), false);
+  // Standard shown in the language the player plays, beside lists in none.
+  const playable = lists.filter((list) => isPlayableIn(list, "mul", "de")).map((l) => l.slug);
+  assert.deepEqual(playable, ["german_standard", "pokemon"]);
+  assert.deepEqual(
+    selectionForLanguage(lists, "mul", ["german_extended", "pokemon"], "fr"),
+    ["french_standard", "pokemon"],
+  );
+  // Another host's Standard is shown in this player's language instead.
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "mul", ["english_standard"], "de"),
+    ["german_standard"],
+  );
+  // A room already mixed keeps saying so while its lists load.
+  assert.equal(availablePromptLanguages([], "mul").includes("mul"), true);
+  assert.equal(promptLanguageLabel("mul"), "Mixed");
+  assert.equal(promptLanguageEndonym("mul"), "Mixed");
+});
+
+test("a room-wide prompt is read in the seat's own language", () => {
+  const ended = { prompt: "bow tie", prompts: { de: "Fliege", fr: "nœud papillon" } };
+  assert.equal(spelledForSeat(ended, "de").prompt, "Fliege");
+  assert.equal(spelledForSeat(ended, "it").prompt, "bow tie");
+  assert.equal(spelledForSeat({ prompt: "dog" }, "de").prompt, "dog");
+  const game = gameEndSpelledForSeat(
+    {
+      scores: [],
+      drawings: [{ prompt: "bow tie", prompts: { de: "Fliege" } }],
+      highlights: [
+        { kind: "hardest_prompt", prompt: "bow tie", prompts: { de: "Fliege" } },
+        { kind: "best_drawer", guessRatio: 1 },
+      ],
+    },
+    "de",
+  );
+  assert.equal(game.drawings[0].prompt, "Fliege");
+  assert.equal(game.highlights[0].prompt, "Fliege");
+  assert.deepEqual(game.highlights[1], { kind: "best_drawer", guessRatio: 1 });
+});
+
+test("the lobby leads with your language, then mixed rooms", () => {
+  const rooms = [
+    { id: "it", promptLanguage: "it" },
+    { id: "mul", promptLanguage: "mul" },
+    { id: "de", promptLanguage: "de" },
+  ];
+  assert.deepEqual(sortRoomsByLanguage(rooms, "de").map((room) => room.id), ["de", "mul", "it"]);
 });
 
 test("a duplicate's name fits the server's 64 characters without splitting one", () => {

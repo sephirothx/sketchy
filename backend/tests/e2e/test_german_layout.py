@@ -19,7 +19,7 @@ from __future__ import annotations
 import pytest
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import choose_room_language, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -129,6 +129,7 @@ async def test_german_room_facts_keep_their_words_whole_on_a_phone():
             await use_guest_name(page, "LangeFakten390")
             await page.goto(f"{BASE_URL}/create")
             await page.wait_for_selector(".create-room-page")
+            await choose_room_language(page)
             await page.click(".create-room-submit")
             await page.wait_for_selector('[data-testid="waiting-room"]')
 

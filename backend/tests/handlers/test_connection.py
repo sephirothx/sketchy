@@ -258,6 +258,7 @@ async def test_already_joined_socket_resyncs_active_drawing_state():
         "code": room.code,
         "playerId": drawer.id,
         "isAnonymous": drawer.is_anonymous,
+        "seatLanguage": "en",
     }
     assert "sync_game" in emitted_events
     assert "you_are_drawing" in emitted_events

@@ -79,6 +79,9 @@ async def test_each_seat_plays_the_drawing_in_the_language_it_joined_with():
         "guest-sid", {"code": room.code, "nickname": "Jean", "seatLanguage": "fr"}
     )
     assert joined["ok"] is True, joined
+    # The seat's language rides the acknowledgement: which of the room's
+    # spellings the client shows this player.
+    assert (created["seatLanguage"], joined["seatLanguage"]) == ("de", "fr")
     host = next(p for p in room.players.values() if p.nickname == "Greta")
     guest = next(p for p in room.players.values() if p.nickname == "Jean")
     assert (room.seat_language(host), room.seat_language(guest)) == ("de", "fr")
@@ -196,3 +199,43 @@ def test_a_seat_plays_in_one_room_language_and_says_which():
         except ValidationError:
             continue
         raise AssertionError(f"accepted {refused!r}")
+
+
+async def test_a_seat_arriving_after_a_game_is_sent_the_recap_in_its_own_language():
+    """`last_game` reaches the arriving socket before its join is
+    acknowledged, so its client cannot yet pick from `prompts`: the server
+    spells it for the seat."""
+    from app.rooms import DrawingRecapEntry
+
+    room_manager = RoomManager()
+    sio, sessions = _server(room_manager, _standard_stub())
+    created = await _create(sio, sessions, seat="fr")
+    room = room_manager.get_room(created["roomId"])
+    room.last_game_scores = [{"playerId": "x", "score": 10}]
+    room.last_game_drawings = [
+        DrawingRecapEntry(
+            turn_id="t-1", round_number=1, turn_number=1, drawer_id="x",
+            drawer_nickname="Jean", drawer_name_color=None, prompt="chien",
+            action_count=0, canvas_history=b"",
+            prompts=(("de", "Hund"), ("en", "dog"), ("fr", "chien")),
+        )
+    ]
+    room.last_game_highlights = [
+        {"kind": "hardest_prompt", "prompt": "chien", "prompts": {"de": "Hund", "fr": "chien"},
+         "correctGuessCount": 0, "totalGuesserCount": 1},
+    ]
+    sio.emit.reset_mock()
+    await sessions.save("late-sid", {"user_id": "user-late"})
+
+    joined = await sio.handlers["/"]["join_room"](
+        "late-sid", {"code": room.code, "nickname": "Hanna", "seatLanguage": "de"}
+    )
+
+    assert joined["ok"] is True, joined
+    [recap] = [
+        call.args[1]
+        for call in sio.emit.await_args_list
+        if call.args[0] == "last_game" and call.kwargs.get("to") == "late-sid"
+    ]
+    assert recap["drawings"][0]["prompt"] == "Hund"
+    assert recap["highlights"][0]["prompt"] == "Hund"
