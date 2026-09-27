@@ -120,7 +120,8 @@ async def test_the_profile_stats_read_is_bounded_too(monkeypatch):
         response = await http.get(f"/api/users/{user_id}/stats")
         assert response.status_code == 200
         # The session, the account, the alias set the projection is keyed by,
-        # and the projection sum: no fact table (R-HIST-20).
+        # the projection sum, and the account's play languages (#1212): no
+        # fact table (R-HIST-20).
         assert len(statements) <= 5, statements
         assert not any("game_participants" in s or "turn_records" in s for s in statements)
         await http.aclose()

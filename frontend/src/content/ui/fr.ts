@@ -1443,6 +1443,8 @@ export const FR: Catalogue = {
   },
 
   profilePage: {
+    playsIn: (p: { language: string }) => `Joue en ${p.language}`,
+    playsInAlso: (p: { language: string; others: string }) => `Joue en ${p.language} ; aussi en ${p.others}`,
     gamesPlayed: "Parties jouées",
     gamesWon: "Parties gagnées",
     winRate: "Taux de victoire",

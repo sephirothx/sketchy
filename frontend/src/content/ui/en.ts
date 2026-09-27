@@ -1462,6 +1462,8 @@ export const EN = {
   },
 
   profilePage: {
+    playsIn: (p: { language: string }) => `Plays in ${p.language}`,
+    playsInAlso: (p: { language: string; others: string }) => `Plays in ${p.language}; also ${p.others}`,
     gamesPlayed: "Games played",
     gamesWon: "Games won",
     winRate: "Win rate",

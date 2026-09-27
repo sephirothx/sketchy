@@ -934,6 +934,13 @@ class UserRepository(ABC):
         """Calculate aggregated lifetime statistics for a user."""
         ...
 
+    async def get_play_languages(self, user_id: str) -> tuple[str, ...]:
+        """The languages an account plays in, its default first and then the
+        others in its own order (#1212); empty for a guest, whose languages
+        live in its browser. Not abstract: a store without settings has
+        none to tell."""
+        return ()
+
 
 class GameHistoryRepository(ABC):
     """Data access boundary for finished game history and turn logs."""

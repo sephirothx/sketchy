@@ -52,6 +52,7 @@ import { hintLabelFor, scoringNameFor } from "../lib/roomSetup";
 import { AvatarPicture } from "../components/ui/AvatarPicture";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { EmptyState } from "../components/ui/EmptyState";
+import { PlayLanguageFlags } from "../components/PlayLanguageFlags";
 import "../styles/lazy/profile.css";
 
 /** A game's prompt source mode, named the way the glossary names it. */
@@ -542,6 +543,7 @@ function ProfileView({ userId }: { userId: string }) {
   // following such a link would find their own shelf read-only.
   const isOwnProfile = Boolean(subject && currentUser && subject.id === currentUser.id);
   const [stats, setStats] = useState<ProfileStats | null>(null);
+  const [playLanguages, setPlayLanguages] = useState<string[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -593,6 +595,7 @@ function ProfileView({ userId }: { userId: string }) {
         listGeneration.current += 1;
         setSubject(profile.user);
         setStats(profile.stats);
+        setPlayLanguages(profile.playLanguages ?? []);
         setGames(page.games);
         setHasMore(page.hasMore);
         // The shelf is a separate question with a separate answer: any
@@ -706,17 +709,22 @@ function ProfileView({ userId }: { userId: string }) {
               </span>
             )}
             </span>
-            <div>
-              <h1>
-                {/* The disc's mark is decorative, so the heading carries the
-                    word for a screen reader. */}
-                {viewerIsFriend && <span className="visually-hidden">{ui.profilePage.friend} </span>}
-                <PlayerName
-                  name={shownName}
-                  nameColor={subject.nameColor}
-                  isAnonymous={subject.isAnonymous}
-                />
-              </h1>
+            <div className="profile-identity-text">
+              <div className="profile-name-row">
+                <h1>
+                  {/* The disc's mark is decorative, so the heading carries the
+                      word for a screen reader. */}
+                  {viewerIsFriend && <span className="visually-hidden">{ui.profilePage.friend} </span>}
+                  <PlayerName
+                    name={shownName}
+                    nameColor={subject.nameColor}
+                    isAnonymous={subject.isAnonymous}
+                  />
+                </h1>
+                {/* Beside the name rather than in it: the heading stays the
+                    player's name for a screen reader (#1212). */}
+                <PlayLanguageFlags languages={playLanguages} />
+              </div>
               <p className="profile-subtitle">
                 {subject.isAnonymous ? ui.profilePage.guest : ui.profilePage.registeredPlayer}
                 {/* The day, not the minute: when somebody joined is a fact

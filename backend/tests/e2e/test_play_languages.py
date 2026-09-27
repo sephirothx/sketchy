@@ -383,6 +383,108 @@ async def test_discovery_asks_for_the_ranked_languages():
             await browser.close()
 
 
+async def test_a_profile_shows_the_languages_its_player_plays_in():
+    """#1212: every flag, the default's first and larger, the others after it
+    in the player's order - one picture, named once, for a screen reader -
+    and the same to another viewer."""
+    username = f"Flags{uuid4().hex[:6]}"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        owner_context = await browser.new_context()
+        await owner_context.add_init_script(
+            "localStorage.setItem('sketchy_promptlanguage', 'it');"
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['en', 'es']));"
+        )
+        viewer_context = await browser.new_context()
+        owner = await owner_context.new_page()
+        viewer = await viewer_context.new_page()
+        try:
+            await owner.goto(BASE_URL)
+            await use_guest_name(owner, username)
+            await register_account(owner, username)
+            owner_id = await owner.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json()).id"
+            )
+
+            for page in (owner, viewer):
+                await page.goto(f"{BASE_URL}/profile/{owner_id}")
+                flags = page.get_by_role("img", name="Plays in Italian; also English and Spanish")
+                await flags.wait_for()
+                order = await flags.locator(".play-language-flag").evaluate_all(
+                    "flags => flags.map(flag => [flag.dataset.language, flag.getBoundingClientRect().width])"
+                )
+                assert [language for language, _ in order] == ["it", "en", "es"]
+                assert order[0][1] > order[1][1] == order[2][1]
+                await assert_no_axe_violations(page, "profile play languages")
+        finally:
+            await owner_context.close()
+            await viewer_context.close()
+            await browser.close()
+
+
+async def test_seven_flags_wrap_rather_than_push_the_header_off_a_phone():
+    """Seven flags beside a name are wider than a phone: they wrap under it,
+    and the friend and report buttons stay on the screen."""
+    # As long as a name may be, and with no space to wrap at.
+    username = f"Seven{uuid4().hex[:11]}"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        owner_context = await browser.new_context()
+        await owner_context.add_init_script(
+            "localStorage.setItem('sketchy_promptlanguage', 'it');"
+            "localStorage.setItem('sketchy_extrapromptlanguages',"
+            " JSON.stringify(['en', 'es', 'nl', 'fr', 'de', 'pt']));"
+        )
+        viewer_context = await browser.new_context(viewport={"width": 375, "height": 812})
+        owner = await owner_context.new_page()
+        viewer = await viewer_context.new_page()
+        try:
+            await owner.goto(BASE_URL)
+            await use_guest_name(owner, username)
+            await register_account(owner, username)
+            owner_id = await owner.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json()).id"
+            )
+            await viewer.goto(BASE_URL)
+            await use_guest_name(viewer, f"Viewer{uuid4().hex[:6]}")
+            await register_account(viewer, f"Viewer{uuid4().hex[:6]}")
+
+            await viewer.goto(f"{BASE_URL}/profile/{owner_id}")
+            flags = viewer.locator(".play-language-flags .play-language-flag")
+            await flags.nth(6).wait_for()
+            overflow = await viewer.evaluate(
+                "document.documentElement.scrollWidth - window.innerWidth"
+            )
+            assert overflow <= 0, overflow
+            header = await viewer.locator(".profile-identity").bounding_box()
+            for button in await viewer.locator(".profile-identity button").all():
+                box = await button.bounding_box()
+                if box:
+                    assert box["x"] + box["width"] <= header["x"] + header["width"] + 0.5
+
+            # The narrowest phone: the name breaks rather than run under them.
+            await viewer.set_viewport_size({"width": 320, "height": 700})
+            name = await viewer.locator(".profile-identity h1").bounding_box()
+            for button in await viewer.locator(".profile-identity button").all():
+                box = await button.bounding_box()
+                if not box:
+                    continue
+                apart = (
+                    name["x"] + name["width"] <= box["x"] + 0.5
+                    or box["x"] + box["width"] <= name["x"] + 0.5
+                    or name["y"] + name["height"] <= box["y"] + 0.5
+                    or box["y"] + box["height"] <= name["y"] + 0.5
+                )
+                assert apart, (name, box)
+            assert await viewer.evaluate(
+                "document.documentElement.scrollWidth - window.innerWidth"
+            ) <= 0
+        finally:
+            await owner_context.close()
+            await viewer_context.close()
+            await browser.close()
+
+
 async def _add_list_hangs_from_the_button(page: Page, scope) -> None:
     button = scope.get_by_role("button", name="Add a language you play in")
     await button.click()

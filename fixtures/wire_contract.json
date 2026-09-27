@@ -1830,7 +1830,8 @@
    "displayName"
   ],
   "api.profiles:create_profile_router": [
-   "hasMore"
+   "hasMore",
+   "playLanguages"
   ],
   "api.profiles:pin_entry_payload": [
    "drawerDisplayName",
@@ -1856,6 +1857,9 @@
   ],
   "api.profiles:user_games": [
    "hasMore"
+  ],
+  "api.profiles:user_stats": [
+   "playLanguages"
   ],
   "api.prompt_lists:_set_star": [
    "starCount",

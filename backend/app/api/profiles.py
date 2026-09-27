@@ -6,6 +6,7 @@ from collections import OrderedDict
 from collections.abc import Awaitable, Callable
 import gzip
 import logging
+import os
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import ConfigDict, Field, field_validator
@@ -47,7 +48,22 @@ DEFAULT_PAGE_SIZE = 20
 # These endpoints need no session. Statistics now read a bounded daily
 # projection rather than scanning lifetime game/turn/guess facts, but the
 # ceiling still makes automated account-id walking inconvenient.
-profile_limiter = RateLimiter(limit=120, window_seconds=60)
+def _read_limit() -> int:
+    """Profile reads per address per minute: `PROFILE_READ_LIMIT`, 120 unset.
+
+    Configurable like the auth limits beside it, for the same reason: every
+    player behind one address shares the bucket, and a test harness - every
+    browser on one loopback address - needs it out of the way.
+    """
+    raw = os.environ.get("PROFILE_READ_LIMIT", "").strip()
+    try:
+        value = int(raw) if raw else 120
+    except ValueError:
+        return 120
+    return value if value > 0 else 120
+
+
+profile_limiter = RateLimiter(limit=_read_limit(), window_seconds=60)
 
 logger = logging.getLogger("sketchy.api.profiles")
 
@@ -418,6 +434,11 @@ def create_profile_router(
             # `get_by_id` resolved a merged guest's id to.
             "user": public_user_payload(user, online=is_online(user.id)),
             "stats": stats_payload(stats),
+            # The languages they play in, the default first (#1212): public
+            # like the rest of a profile, since it says what rooms a player
+            # would join and nothing about who they are. A guest's live in
+            # its browser, so a guest shows none.
+            "playLanguages": list(await user_repo.get_play_languages(user.id)),
         }
 
     @router.get("/users/{user_id}/games")
