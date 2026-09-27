@@ -110,12 +110,8 @@ export function LanguagePicker({
       const viewportHeight = window.innerHeight;
       const below = viewportHeight - trigger.bottom - gap - margin;
       const above = trigger.top - gap - margin;
-      // Into the window first, at the height it will have, and only then
-      // measured: laid out inside a dialog the list can be squeezed into
-      // scrolling, and its width then carried a scrollbar it does not have
-      // once free - which left its right edge a scrollbar short of the
-      // trigger's.
-      list.style.position = "fixed";
+      // At the height it will have, and only then measured, so its width is
+      // the one it is drawn at.
       list.style.top = "0px";
       list.style.left = "0px";
       list.style.right = "auto";
