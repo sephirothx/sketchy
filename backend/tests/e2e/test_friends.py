@@ -850,7 +850,8 @@ async def test_an_acceptance_mid_game_waits_for_the_lobby():
     a phone room it stood on the chat feed's newest line. It has nothing to
     offer, so it is not a chip either: it is held while the room is up and
     said as the usual toast once the room is left - once, and recorded as told
-    only then (R-FRIEND-14), so a reload in the lobby does not say it again."""
+    only then (R-FRIEND-14), so a reload in the lobby does not say it again.
+    A reload mid-game is still in the room, though the bar is not drawn yet."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         asker_context = await browser.new_context(
@@ -872,6 +873,16 @@ async def test_an_acceptance_mid_game_waits_for_the_lobby():
             lambda response: reads.append(response)
             if response.url.endswith("/api/users/me/friends")
             and response.request.method == "GET"
+            else None,
+        )
+
+        # Recorded as told (R-FRIEND-14): a toast that flashed and was taken
+        # down again as the room drew its bar leaves this behind.
+        told: list[str] = []
+        asker.on(
+            "request",
+            lambda request: told.append(asker.url)
+            if request.method == "POST" and request.url.endswith("/friends/announced")
             else None,
         )
 
@@ -920,12 +931,24 @@ async def test_an_acceptance_mid_game_waits_for_the_lobby():
                 assert await accepted.count() == 0, "an acceptance was said mid-game"
                 await asker.wait_for_timeout(100)
 
+            # Nor on a reload mid-game, whose first read can land before the
+            # room has drawn its bar again: still owed, so still named.
+            reads.clear()
+            await asker.reload()
+            await asker.wait_for_selector(".game-room-playing")
+            await a_read_names_the_acceptance()
+            for _ in range(15):
+                assert await accepted.count() == 0, "an acceptance was said on a reload mid-game"
+                await asker.wait_for_timeout(100)
+            assert told == [], told
+
             await leave_room(asker)
             question = asker.get_by_role("alertdialog")
             await question.get_by_role("button", name="Leave game").click()
             await asker.wait_for_selector('[data-testid="quick-play"]')
             await expect(accepted).to_have_count(1, timeout=SETTLE_MS)
             await expect(accepted).to_contain_text(target_name)
+            assert told, "the acceptance was never recorded as told"
 
             # Told, and recorded as told: the next visit does not say it again.
             await expect(accepted).to_have_count(0, timeout=SETTLE_MS)

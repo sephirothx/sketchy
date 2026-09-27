@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useRef } from "react";
+import { matchPath, useMatch } from "react-router-dom";
 
 import { announcedFriendships } from "../lib/friendsApi";
 import { useFriendsStore } from "../store/friendsStore";
 import { useFriendInviteStore } from "../store/friendInviteStore";
 import { useFriendRequestNoticeStore } from "../store/friendRequestNoticeStore";
+import { useRoomEntryStore } from "../store/roomEntryStore";
 import { useToast } from "../lib/toast";
 import { useOpenOverlay } from "./useOverlayRoute";
 import { FRIENDS_PATH } from "../lib/overlayRoutes";
@@ -57,25 +59,45 @@ friendship - so there is no chip for it to be, and a toast there stood on the
 phone's newest chat line for its whole five seconds. Held rather than said
 quietly: it is good news that keeps, and a game is exactly the moment not to
 interrupt with it. Nothing is announced to a screen reader in the room
-either, for the same reason. Several held are one toast, not a burst on the
-way out; one that is no longer a friendship by then is dropped, because it is
-read off the friends list when it is finally said; and it is recorded as told
-only when it is (R-FRIEND-14), so a tab closed mid-game tells it on the next
-visit. An acceptance toast still standing when a room opens is taken down and
-held with the rest. Each tab holds its own, as each tab has always had its own
-toasts.
+either, for the same reason.
 
-Either way a request's notice goes the moment it stops being true. A request answered on the
-friends surface, in another tab, or withdrawn by the person who asked leaves
-`incoming` on the next read, and the toast or the chip naming it goes with it:
-the toast's Accept used to stand for the rest of its twelve seconds offering
-an answer that had already been given. */
+"In a room" is wider than the bar's claim, which drops for a moment on ways
+between rooms that never reach the lobby: Join on an invitation leaves one
+room for another, and a reload mid-game reads the lists before the room has
+drawn its bar. Keyed on the claim alone, both said the news over the room,
+recorded it as told, and then took it down to hold it again. So it is also
+held while a room entry is in flight and while the route is a room's - and
+the URL is read as well as the matched route, because an entry releases its
+lock in the same breath as it navigates, and the lock's release renders
+before the router has committed the room it navigated to.
+
+Several held are one toast, not a burst on the way out. One that is no longer
+a friendship by then is dropped, because the news is no longer true. It is
+recorded as told only when it is said (R-FRIEND-14), so one still held when
+the tab closes is still owed, and the next visit's first read says it. An
+acceptance toast still standing when a room opens is taken down and held with
+the rest. Each tab holds its own, as each tab has always had its own toasts,
+and a change of account drops them: they were news for somebody else.
+
+Either way a request's notice goes the moment it stops being true. A request
+answered on the friends surface, in another tab, or withdrawn by the person
+who asked leaves `incoming` on the next read, and the toast or the chip naming
+it goes with it: the toast's Accept used to stand for the rest of its twelve
+seconds offering an answer that had already been given. */
 
 /** Long enough to notice, read, and reach the button, mid-turn.
 
 Not indefinite: it is still a toast, and something that never leaves on its
 own is a notice, which this deliberately is not. */
 const ACTIONABLE_MS = 12000;
+
+const ROOM_ROUTE = "/room/:code";
+
+/** Whether this tab is on a room's URL now. `navigate` has already pushed it
+    when the router's own match still names the page being left. */
+function onRoomUrl(): boolean {
+  return matchPath(ROOM_ROUTE, window.location.pathname) !== null;
+}
 
 /** How long an acceptance toast stands: `notify`'s default, since it is
     only read. Kept here so a toast still up when a room opens can be found. */
@@ -96,6 +118,12 @@ export function useFriendArrivalNotices(): string {
   const incoming = useFriendsStore((state) => state.lists.incoming);
   const accept = useFriendsStore((state) => state.accept);
   const inRoomBar = useFriendInviteStore((state) => state.roomBarClaims > 0);
+  const onRoomRoute = useMatch(ROOM_ROUTE) !== null;
+  const entering = useRoomEntryStore((state) => state.pending !== null);
+  // Where an acceptance waits: wider than the bar, whose claim drops between
+  // rooms and before a reloaded room has drawn it.
+  const holding = inRoomBar || onRoomRoute || entering;
+  const ownerId = useFriendsStore((state) => state.ownerId);
   const inBar = useFriendRequestNoticeStore((state) => state.askers);
   const showInBar = useFriendRequestNoticeStore((state) => state.show);
   const clearBar = useFriendRequestNoticeStore((state) => state.clear);
@@ -139,6 +167,13 @@ export function useFriendArrivalNotices(): string {
     [notify],
   );
 
+  // Another account's news is not this one's: dropped before this account's
+  // first read can be said (declared first, so it runs first).
+  useEffect(() => {
+    held.current = [];
+    acceptedToasts.current = [];
+  }, [ownerId]);
+
   useEffect(() => {
     if (notices.seq === spoken.current) return;
     spoken.current = notices.seq;
@@ -162,7 +197,7 @@ export function useFriendArrivalNotices(): string {
     // Nothing to do about an acceptance - it is already a friendship - so
     // this one is only read, and keeps the ordinary length. In a room it
     // waits, unrecorded, so every read there names it again: kept once each.
-    if (accepted.length > 0 && inRoomBar) {
+    if (accepted.length > 0 && (holding || onRoomUrl())) {
       held.current = withArrivals(held.current, accepted);
     } else if (accepted.length > 0) {
       // Anything still held goes out with it, as one toast.
@@ -170,7 +205,7 @@ export function useFriendArrivalNotices(): string {
       held.current = [];
       tellAccepted(owed);
     }
-  }, [notices, notify, accept, openOverlay, inRoomBar, showInBar, tellAccepted]);
+  }, [notices, notify, accept, openOverlay, inRoomBar, holding, showInBar, tellAccepted]);
 
   // Answered anywhere: a toast goes as soon as anyone it named stops
   // waiting, since its words - "Ada and 2 others" - no longer hold and a toast
@@ -195,13 +230,10 @@ export function useFriendArrivalNotices(): string {
   // A room opening takes a request toast still standing into its bar, because
   // there the toast covers the chat; leaving puts the chip away. Not said
   // again on the way in - the toast already said it. An acceptance toast
-  // still standing is taken down and held; leaving says what was held.
+  // still standing is taken down and held.
   useEffect(() => {
     if (!inRoomBar) {
       clearBar();
-      const owed = stillFriends(held.current, useFriendsStore.getState().lists.friends);
-      held.current = [];
-      tellAccepted(owed);
       return;
     }
     const moving = requestToasts.current.filter((toast) => dismiss(toast.id));
@@ -211,7 +243,15 @@ export function useFriendArrivalNotices(): string {
     const standing = acceptedToasts.current.filter((toast) => dismiss(toast.id));
     acceptedToasts.current = [];
     held.current = withArrivals(held.current, standing.flatMap((toast) => toast.named));
-  }, [inRoomBar, dismiss, showInBar, clearBar, tellAccepted]);
+  }, [inRoomBar, dismiss, showInBar, clearBar]);
+
+  // Out of every room, and not on the way into one: say what was held.
+  useEffect(() => {
+    if (holding || onRoomUrl()) return;
+    const owed = stillFriends(held.current, useFriendsStore.getState().lists.friends);
+    held.current = [];
+    tellAccepted(owed);
+  }, [holding, tellAccepted]);
 
   return announcement;
 }
