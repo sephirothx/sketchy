@@ -109,10 +109,17 @@ keyboard that takes half the screen, and one thumb.
   always among its rows, and in the waiting room's invite list, even when the list is
   capped and they sort past the cut: each account asks for its own friends' status
   apart from the public list, every 15 seconds while one of those is on screen. A request that arrives offers **Accept** on the notice itself, and
-  lingers long enough to reach mid-turn. An invitation is a card at the foot of the
+  lingers long enough to reach mid-turn: a toast outside a room, and inside one a *Friend
+  request* chip in the room header, whose tap shows who asked with **Accept** and **Not
+  now** (which only puts it away; nobody is told). Either goes as soon as the request is
+  answered anywhere - on **Friends**, in another tab, or withdrawn by the person who
+  asked - and leaving the room puts the chip away, the count staying on your chip's
+  badge. An invitation is a card at the foot of the
   screen outside a room; inside one it is an *Invitation* chip in the room header, beside
   the round and the clock, whose tap shows who sent it with **Join** and **Not now**, so it
-  never covers the chat or the drawing tools. Declining
+  never covers the chat or the drawing tools. **Join** there leaves your room the way
+  its Leave does: in the middle of a game it asks first, naming whose game you are
+  going to. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
   leaves nothing behind. Guests are not offered friendships, since a guest name belongs
@@ -2754,16 +2761,16 @@ A seated client checks with the server every five seconds that it still holds th
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
   home, and in a room the room's name, with a globe after it for a public room and a lock
   for a private one), what is going on (the round and the clock, a
-  server notice, a friend's invitation, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
+  server notice, a friend's invitation or friend request, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
   go AFK, save the image, start over, and Leave last in red - a dropdown on a
   desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the
   room's. A short window gives way in a fixed order: the room's name, then your chip's name
   (it becomes your round avatar); the wordmark, the clock, the menu and your avatar stay, down
   to a phone. A phone's bar gives up only what it has to, in order: the round's word ("Round
-  2/3" becomes "2/3"), then the wordmark, then the chips' words (a notice, an invitation and
-  *AFK* keep their icons, a server update keeps its countdown, and a notice's or an
-  invitation's sentence is still a tap away), then the space between things, and last a
+  2/3" becomes "2/3"), then the wordmark, then the chips' words (a notice, an invitation, a
+  friend request and *AFK* keep their icons, a server update keeps its countdown, and each
+  one's sentence is still a tap away), then the space between things, and last a
   second row for the round, the clock and the chips - so nothing runs off even a 300px
   screen. Whatever the later steps made room for comes back (the wordmark's room usually
   fits the round's word), and so does everything as the notices end. The waiting room names the room once - in the bar above 1100px, as the stage's heading below

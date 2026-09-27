@@ -33,8 +33,10 @@ export function FriendInviteNotice() {
 
   // Sits here because this is the one component mounted app-wide that already
   // owns the friends socket events: the refetch below is what produces the
-  // change this speaks about, so the two belong next to each other.
-  useFriendArrivalNotices();
+  // change this speaks about, so the two belong next to each other. What it
+  // returns is a request that went into the room bar, said below for the
+  // same reason the invitation is (#1197).
+  const requestAnnouncement = useFriendArrivalNotices();
 
   useEffect(() => {
     const onInvite = (payload: unknown) => {
@@ -111,9 +113,16 @@ export function FriendInviteNotice() {
   // chip would have said it again. Mounted for good, so it is there before
   // the words are.
   const announcer = (
-    <span className="visually-hidden" role="status" aria-live="polite" data-testid="friend-invite-announcer">
-      {invite ? `${invite.displayName} ${ui.friendInviteNotice.invitedYouTheirGame}` : ""}
-    </span>
+    <>
+      <span className="visually-hidden" role="status" aria-live="polite" data-testid="friend-invite-announcer">
+        {invite ? `${invite.displayName} ${ui.friendInviteNotice.invitedYouTheirGame}` : ""}
+      </span>
+      {/* A friend request in a room is the bar's chip, and is said here once
+          as it lands; outside a room its toast says it. */}
+      <span className="visually-hidden" role="status" aria-live="polite" data-testid="friend-request-announcer">
+        {requestAnnouncement}
+      </span>
+    </>
   );
 
   if (!invite || inRoomBar) return announcer;

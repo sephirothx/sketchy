@@ -258,9 +258,112 @@ async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
                 2, timeout=SETTLE_MS
             )
             await expect(chip).to_have_count(0)
+            # A waiting room is left at once, as its own Leave leaves it: no
+            # question (#1198), and the guest is in the friend's room.
+            await expect(guest.get_by_role("alertdialog")).to_have_count(0)
+            host_code = await host.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await expect(guest.locator('[data-testid="room-header"]')).to_have_attribute(
+                "data-room-code", host_code
+            )
         finally:
             await host_context.close()
             await guest_context.close()
+            await browser.close()
+
+
+async def test_joining_an_invitation_mid_game_asks_what_leave_asks():
+    """#1198: Join on an invitation leaves the room the player is in, and in
+    the middle of a game it skipped the question the room's own Leave asks.
+    It asks the same one now, naming where the player is going: No keeps them
+    in the game with the invitation still up, Yes leaves and joins."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context()
+        other_context = await browser.new_context()
+        host = await host_context.new_page()
+        guest = await guest_context.new_page()
+        other = await other_context.new_page()
+        host_name, guest_name, other_name = unique("Host"), unique("Pal"), unique("Other")
+        chip = guest.locator(
+            '[data-testid="room-header"] .room-notice-chip[data-notice="invite"]'
+        )
+        popover = guest.locator('.room-notice-popover[data-notice="invite"]')
+        question = guest.get_by_role("alertdialog")
+
+        try:
+            await sign_up(host, host_name)
+            await sign_up(guest, guest_name)
+            await make_friends(host, guest, host_name, guest_name)
+
+            await host.click('button:has-text("Create room")')
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            invite = host.locator(
+                f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
+            ).get_by_role("button", name="Invite")
+            await expect(invite).to_be_visible(timeout=SETTLE_MS)
+            await invite.click()
+            await expect(guest.locator('[data-testid="friend-invite"]')).to_be_visible(
+                timeout=SETTLE_MS
+            )
+
+            # The invitee goes into a game of their own before answering.
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector(".create-room-page")
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            code = await guest.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await other.goto(BASE_URL)
+            await use_guest_name(other, other_name)
+            await join_by_code(other, code)
+            await other.wait_for_selector('[data-testid="waiting-room"]')
+            await guest.get_by_role("button", name="Start game").click()
+            await guest.wait_for_selector(".game-room-playing")
+
+            await chip.click()
+            await popover.get_by_role("button", name="Join").click()
+            await expect(question).to_be_visible()
+            await expect(question).to_contain_text(host_name)
+
+            # No: still in the game, and the invitation is still there.
+            await question.get_by_role("button", name="Cancel").click()
+            await expect(question).to_have_count(0)
+            await expect(guest.locator(".game-room-playing")).to_be_visible()
+            await expect(chip).to_be_visible()
+            await expect(host.locator(".player-row")).to_have_count(1)
+
+            # Yes: out of the game, and into the friend's room.
+            await chip.click()
+            await popover.get_by_role("button", name="Join").click()
+            await question.get_by_role("button", name="Leave and join").click()
+            await expect(host.locator(".player-row")).to_have_count(
+                2, timeout=SETTLE_MS
+            )
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            host_code = await host.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await expect(guest.locator('[data-testid="room-header"]')).to_have_attribute(
+                "data-room-code", host_code
+            )
+            await expect(chip).to_have_count(0)
+
+            # The game given up is gone from the history too (R-UX-15): Back
+            # from the friend's room is that room's Leave, and lands on the
+            # lobby rather than on the old room's code.
+            await guest.go_back()
+            await guest.wait_for_selector('[data-testid="quick-play"]')
+            assert guest.url.rstrip("/") == BASE_URL, guest.url
+            assert f"/room/{code}" not in guest.url, guest.url
+        finally:
+            await host_context.close()
+            await guest_context.close()
+            await other_context.close()
             await browser.close()
 
 
@@ -543,6 +646,9 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
     A request arriving used to be silent unless the recipient happened to be
     looking at the lobby's online panel. Here the recipient is in a room, and
     is told anyway - and the badge points at the surface that answers it.
+
+    In a room it is a chip in the bar, not a toast: the toast stood on the
+    phone's chat feed and the desktop drawer's palette (R-UX-07, #1197).
     """
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
@@ -551,22 +657,33 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
         asker = await asker_context.new_page()
         target = await target_context.new_page()
         asker_name, target_name = unique("Asker"), unique("Busy")
+        chip = target.locator(
+            '[data-testid="room-header"] .room-notice-chip[data-notice="friend-request"]'
+        )
+        popover = target.locator('.room-notice-popover[data-notice="friend-request"]')
 
         try:
             await sign_up(asker, asker_name)
             await sign_up(target, target_name)
 
             # The target goes into a room, where the lobby cannot be seen
-            # at all - which is the whole point of the toast and the badge.
+            # at all - which is the whole point of the chip and the badge.
             await target.click('button:has-text("Create room")')
             await target.click('button:has-text("Create room")')
             await target.wait_for_selector('[data-testid="waiting-room"]')
 
             await ask_from_profile(asker, target_name)
 
-            # Said, by name, over the game.
-            toast = target.locator(".app-toast").filter(has_text=asker_name).first
-            await expect(toast).to_be_visible(timeout=SETTLE_MS)
+            # Said, by name, in the bar rather than over the room - and once,
+            # from outside it, where a hidden bar cannot swallow it.
+            await expect(chip).to_be_visible(timeout=SETTLE_MS)
+            await expect(chip).to_have_attribute(
+                "aria-label", re.compile(rf"^Friend request: {asker_name} ")
+            )
+            await expect(target.get_by_test_id("friend-request-announcer")).to_contain_text(
+                asker_name
+            )
+            await expect(target.locator(".app-toast")).to_have_count(0)
             # And counted, on the control that opens the way to answer it.
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
@@ -574,13 +691,13 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
 
             # Declining is deliberately not on it: a refusal is kept, so it
             # belongs behind the confirmation the friends surface gives it.
-            await expect(
-                toast.get_by_role("button", name="Decline")
-            ).to_have_count(0)
+            await chip.click()
+            await expect(popover).to_contain_text(asker_name)
+            await expect(popover.get_by_role("button", name="Decline")).to_have_count(0)
 
-            # Answered from the toast itself - without opening the menu, the
+            # Answered from the chip itself - without opening the menu, the
             # surface, or leaving the room.
-            await toast.get_by_role("button", name="Accept").click()
+            await popover.get_by_role("button", name="Accept").click()
 
             # The asker is told, and this is checked first because it is the
             # only assertion here with a deadline: an acceptance is read
@@ -593,10 +710,145 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
             ).to_have_count(0, timeout=SETTLE_MS)
-            # The toast goes with the answer: a button that would now do
+            # The chip goes with the answer: a button that would now do
             # nothing is worse than no button.
-            await expect(toast).to_have_count(0, timeout=SETTLE_MS)
+            await expect(chip).to_have_count(0, timeout=SETTLE_MS)
             await expect(target.locator('[data-testid="waiting-room"]')).to_be_visible()
+        finally:
+            await asker_context.close()
+            await target_context.close()
+            await browser.close()
+
+
+async def test_a_request_notice_goes_once_it_is_answered_anywhere():
+    """#1197: the toast's Accept stood for the rest of its twelve seconds after
+    the request had been accepted on the friends surface. Whatever shows a
+    request - the toast outside a room, the chip in one - goes as soon as it
+    stops waiting: answered in another tab, or withdrawn by the asker. The
+    chip's Not now puts it away without telling anybody (R-FRIEND-05); leaving
+    the room puts it away too, and a toast still up when a room opens moves
+    into the bar rather than standing over the room."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        asker_context = await browser.new_context()
+        target_context = await browser.new_context()
+        asker = await asker_context.new_page()
+        target = await target_context.new_page()
+        asker_name, target_name = unique("Asker"), unique("Twotabs")
+        toast = target.locator(".app-toast").filter(has_text=asker_name)
+        chip = target.locator(
+            '[data-testid="room-header"] .room-notice-chip[data-notice="friend-request"]'
+        )
+        any_chip = target.locator('.room-notice-chip[data-notice="friend-request"]')
+        popover = target.locator('.room-notice-popover[data-notice="friend-request"]')
+        announcer = target.get_by_test_id("friend-request-announcer")
+
+        # Everything the target says to the server while `listening` holds:
+        # HTTP writes to the friends API, and every Socket.IO event it emits.
+        listening: list[bool] = []
+        writes: list[str] = []
+        emitted: list[str] = []
+
+        def on_frame(payload) -> None:
+            # "42" is an event, "45" a binary one. The health report is the
+            # socket's own minute timer and says nothing about anybody.
+            if (listening and isinstance(payload, str) and payload[:2] in ("42", "45")
+                    and "client_health" not in payload):
+                emitted.append(payload)
+
+        target.on("websocket", lambda ws: ws.on("framesent", on_frame))
+        target.on(
+            "request",
+            lambda request: writes.append(request.url)
+            if listening and "/api/friends" in request.url and request.method != "GET"
+            else None,
+        )
+
+        async def create_room() -> None:
+            await target.click('button:has-text("Create room")')
+            await target.click('button:has-text("Create room")')
+            await target.wait_for_selector('[data-testid="waiting-room"]')
+
+        async def withdraw() -> None:
+            await open_friends(asker)
+            outgoing = asker.locator('[data-testid="friends-outgoing"]')
+            await expect(outgoing).to_contain_text(target_name, timeout=SETTLE_MS)
+            await outgoing.get_by_role("button", name="Cancel").click()
+            await expect(outgoing).to_have_count(0, timeout=SETTLE_MS)
+            await asker.goto(BASE_URL)
+
+        try:
+            await sign_up(asker, asker_name)
+            await sign_up(target, target_name)
+
+            # In a room: put off with Not now, which sends nothing at all -
+            # no request, no socket event - so nobody can learn of it.
+            await create_room()
+            await ask_from_profile(asker, target_name)
+            await expect(chip).to_be_visible(timeout=SETTLE_MS)
+            await chip.click()
+            listening.append(True)
+            await popover.get_by_role("button", name="Not now").click()
+            await expect(chip).to_have_count(0)
+            # Long enough for anything the click set off to have gone out.
+            await target.wait_for_timeout(1000)
+            listening.clear()
+            assert writes == [], writes
+            assert emitted == [], emitted
+            # Still waiting, under its badge, where it is answered.
+            await expect(
+                target.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1")
+
+            # Withdrawn by the asker, a request shown again takes its chip.
+            await withdraw()
+            await ask_from_profile(asker, target_name)
+            await expect(chip).to_be_visible(timeout=SETTLE_MS)
+            await withdraw()
+            await expect(chip).to_have_count(0, timeout=SETTLE_MS)
+
+            # Leaving the room with the chip up puts it away: the lobby gets
+            # neither a chip nor a toast for it, only the badge's count.
+            await ask_from_profile(asker, target_name)
+            await expect(chip).to_be_visible(timeout=SETTLE_MS)
+            await leave_room(target)
+            await target.wait_for_selector('[data-testid="quick-play"]')
+            # A toast would be raised on the way out, if at all; give it the
+            # moment it would take.
+            await target.wait_for_timeout(1000)
+            await expect(toast).to_have_count(0)
+            await expect(any_chip).to_have_count(0)
+            await expect(
+                target.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1")
+
+            # Asked while in the lobby, it is a toast; opening a room moves it
+            # into the bar, and it is not said a second time on the way in.
+            await withdraw()
+            await ask_from_profile(asker, target_name)
+            await expect(toast).to_be_visible(timeout=SETTLE_MS)
+            await create_room()
+            await expect(chip).to_be_visible(timeout=SETTLE_MS)
+            await expect(toast).to_have_count(0)
+            await expect(announcer).to_have_text("")
+
+            # Outside a room it is a toast, and accepting in another tab of
+            # the same account takes it down well inside its twelve seconds.
+            await leave_room(target)
+            await target.wait_for_selector('[data-testid="quick-play"]')
+            await withdraw()
+            await ask_from_profile(asker, target_name)
+            await expect(toast).to_be_visible(timeout=SETTLE_MS)
+            second = await target_context.new_page()
+            await second.goto(BASE_URL)
+            await open_friends(second)
+            accept = second.locator('[data-testid="friends-incoming"]').get_by_role(
+                "button", name="Accept"
+            )
+            await expect(accept).to_be_visible(timeout=SETTLE_MS)
+            await expect(toast).to_be_visible()
+            await accept.click()
+            await expect(toast).to_have_count(0, timeout=5000)
         finally:
             await asker_context.close()
             await target_context.close()

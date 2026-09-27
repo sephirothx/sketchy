@@ -220,9 +220,10 @@
    the steps it kept into `data-gave-way` - a later step can let an earlier
    one back, as the wordmark's room lets the round keep its word - and each
    rule below is one step. A 300px phone holding the round, the clock, a lost
-   connection, an invitation and AFK needs every step up to `tight`; with a
-   drain's countdown instead of the lost connection, or anything narrower, it
-   takes `wrap`. */
+   connection, an invitation and AFK needs every step up to `tight`, and so
+   does one with a friend request in the lost connection's place; with a
+   friend request beside all of them, a drain's countdown instead of the lost
+   connection, or anything narrower, it takes `wrap`. */
 
 /* 1. The round's word: "Round 2/3" becomes "2/3". Both labels are rendered;
    the full one stays laid out, unseen and out of the flow, where it takes no
@@ -246,11 +247,11 @@
   display: none;
 }
 
-/* 3. The chips' words: a notice, an invitation and AFK keep their icons, and a
-   drain its countdown (#806: the seconds are the point of that chip, so they
-   never go - the bar takes a second row first). Each is named by its
-   aria-label, so nothing is taken from a screen reader, and a notice's
-   sentence is still a tap away. */
+/* 3. The chips' words: a notice, an invitation, a friend request and AFK keep
+   their icons, and a drain its countdown (#806: the seconds are the point of
+   that chip, so they never go - the bar takes a second row first). Each is
+   named by its aria-label, so nothing is taken from a screen reader, and a
+   notice's sentence is still a tap away. */
 .game-header-mobile[data-gave-way~="labels"] :is(.room-notice-chip-label, .game-header-away-label) {
   display: none;
 }
@@ -311,9 +312,9 @@
   min-width: 44px;
 }
 
-/* A drain, a dropped connection or a friend's invitation, said where the round
-   and the clock are (RoomNoticeChips). The chip recipe, as a button: the full sentence is a tap
-   away in the popover below it. */
+/* A drain, a dropped connection, a friend's invitation or a friend request,
+   said where the round and the clock are (RoomNoticeChips). The chip recipe,
+   as a button: the full sentence is a tap away in the popover below it. */
 .room-notice-chips {
   align-items: center;
   display: flex;
@@ -361,8 +362,8 @@
   margin-top: 8px;
 }
 
-/* A friend's invitation asks a question, so its popover carries both answers
-   on one row: Join first, Not now beside it. */
+/* An invitation and a friend request ask a question, so their popovers carry
+   both answers on one row: Join or Accept first, Not now beside it. */
 .room-notice-popover-actions {
   display: flex;
   flex-wrap: wrap;

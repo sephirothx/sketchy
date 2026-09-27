@@ -998,6 +998,11 @@ export const PT: Catalogue = {
     join: "Entrar",
     dismissInvitation: "Dispensar o convite",
     notNow: "Agora não",
+    leaveAndJoin: "Sair e entrar",
+    leaveYourTurnForTheirGame: (p: { name: string }) =>
+      `És tu quem está a desenhar. Se entrares na partida de ${p.name}, interrompes a tua vez e este jogo avança para todos.`,
+    leaveThisGameForTheirs: (p: { name: string }) =>
+      `O jogo ainda está a decorrer. Vais perder o teu lugar neste jogo para entrar na partida de ${p.name}.`,
   },
 
   friendsOverlay: {
@@ -1812,6 +1817,8 @@ export const PT: Catalogue = {
     disconnected: "Desligado",
     rejoinFailed: "Falha ao voltar",
     invitation: "Convite",
+    friendRequest: (p: { count: number }) =>
+      plural(p.count, { one: "Pedido de amizade", other: "Pedidos de amizade" }),
     serverUpdateStarted: "Atualização do servidor a decorrer. Esta partida termina em breve.",
   },
 
