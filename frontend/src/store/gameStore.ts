@@ -526,6 +526,15 @@ export function selectRoomRoute(
   return "invite";
 }
 
+/** Whether an answer to a request made for the seat in `askedCode` still
+belongs to this tab's session: false once that room was left - the session
+cleared, or replaced by the next room's - while the request was in the air.
+A seat applied from such an answer would end the exit (`exitingRoomCode`) and
+draw the left room again over a seat the server is releasing. */
+export function roomAnswerIsCurrent(state: Pick<GameStore, "code">, askedCode: string): boolean {
+  return state.code !== null && sameRoom(state.code, askedCode);
+}
+
 /** The local player's own row, or undefined before the roster arrives. */
 export function selectMe(state: GameStore): PlayerInfo | undefined {
   return state.players.find((player) => player.playerId === state.playerId);

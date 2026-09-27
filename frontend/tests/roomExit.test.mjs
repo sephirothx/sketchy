@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { selectRoomRoute, useGameStore } from "../src/store/gameStore.ts";
+import { roomAnswerIsCurrent, selectRoomRoute, useGameStore } from "../src/store/gameStore.ts";
 
 // What `/room/:code` draws while a room is being left. The exit used to be a
 // bare flag that only the lobby's mount cleared, and an invitation's Join
@@ -68,6 +68,38 @@ test("a seat taken again in the room being left ends the exit", () => {
   seatIn("aaaaaa");
   assert.equal(useGameStore.getState().exitingRoomCode, null);
   assert.equal(route("AAAAAA"), "room");
+});
+
+// useRoomSessionReconnect.joinWithSession: the room is read when the rebind
+// is asked, and the seat in its answer applied only if it is still current.
+function reconnectAnswer(askedCode, session) {
+  if (!roomAnswerIsCurrent(useGameStore.getState(), askedCode)) return;
+  useGameStore.getState().setSession(session);
+}
+
+test("a reconnect answered after the room was left does not draw it again", () => {
+  fresh();
+  seatIn("AAAAAA");
+  const asked = useGameStore.getState().code;
+  const seat = { roomId: "id-AAAAAA", code: "AAAAAA", playerId: "p-AAAAAA" };
+  leave("AAAAAA");
+  reconnectAnswer(asked, seat);
+  assert.equal(route("AAAAAA"), "leaving", "the seat is being given up");
+  assert.equal(useGameStore.getState().exitingRoomCode, "AAAAAA");
+
+  // Or once an invitation's room has already been entered.
+  seatIn("BBBBBB");
+  reconnectAnswer(asked, seat);
+  assert.equal(useGameStore.getState().code, "BBBBBB");
+  assert.equal(route("AAAAAA"), "leaving");
+  assert.equal(route("BBBBBB"), "room");
+});
+
+test("a reconnect answered while still seated applies", () => {
+  fresh();
+  seatIn("AAAAAA");
+  reconnectAnswer("AAAAAA", { roomId: "id-AAAAAA", code: "AAAAAA", playerId: "p-new" });
+  assert.equal(useGameStore.getState().playerId, "p-new");
 });
 
 test("the reset on the way out keeps the exit", () => {

@@ -36,8 +36,10 @@ async def slow_cpu(page, rate: int = 8):
     try:
         yield
     finally:
-        await cdp.send("Emulation.setCPUThrottlingRate", {"rate": 1})
-        await cdp.detach()
+        try:
+            await cdp.send("Emulation.setCPUThrottlingRate", {"rate": 1})
+        finally:
+            await cdp.detach()
 
 
 def row_for(page, name: str):

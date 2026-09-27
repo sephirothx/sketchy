@@ -298,10 +298,13 @@ but it is not guaranteed to happen: navigations are transitions, and an invitati
 *Join* navigates on to the friend's room when the server answers, which on a slow page
 can be before the lobby has committed. The lobby is then never drawn, so the mark is
 scoped to the room left rather than being a flag the next room would also obey, and a
-seat taken again in that same room ends it too. `go` is asynchronous, which is where the edge cases are: the
-port counts the traversals it asked for so that their `popstate` is not read as Back,
-nothing is pushed while one is in flight, a leave waits for one already moving before
-counting its rewind, and one the browser drops is given up after a second. The rules and
+seat taken again in that same room ends it too. A rebind answered after the room was
+left is dropped rather than applied (`roomAnswerIsCurrent`): its seat would put the
+session back, end the exit and draw the left room over a seat being released. `go` is
+asynchronous, which is where the edge cases are: the port counts the traversals it asked
+for so that their `popstate` is not read as Back, nothing is pushed while one is in
+flight, a leave waits for one already moving before counting its rewind, and one the
+browser drops is given up after a second. The rules and
 that port are [`lib/roomHistory.ts`](../frontend/src/lib/roomHistory.ts), tested against
 a simulated history; the React half is
 [`hooks/useRoomHistory.ts`](../frontend/src/hooks/useRoomHistory.ts), whose context only
