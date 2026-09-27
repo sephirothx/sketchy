@@ -737,3 +737,27 @@ async def test_the_add_list_hangs_from_its_button_with_a_classic_scrollbar():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_the_add_list_hangs_from_its_button_in_the_first_run_question():
+    """Where the list was once a scrollbar short: inside the question's
+    dialog, which laid it out squeezed before it was placed."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True, args=["--mute-audio"], ignore_default_args=["--hide-scrollbars"]
+        )
+        context = await browser.new_context(viewport={"width": 1200, "height": 560})
+        await context.add_init_script(
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['it', 'de']));"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.fill(".first-run-guest-row input", f"Hung{uuid4().hex[:6]}")
+            await page.click(".first-run-guest-submit")
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.locator(".play-language-chip").nth(1).wait_for()
+            await _add_list_hangs_from_the_button(page, question)
+        finally:
+            await context.close()
+            await browser.close()
