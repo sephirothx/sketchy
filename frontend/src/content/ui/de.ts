@@ -1986,7 +1986,7 @@ export const DE: Catalogue = {
     colorScheme: "Farbschema",
     appliesMomentYouPick: "Gilt sofort ab der Auswahl.",
     languageYouPlay: "Sprache, in der du spielst",
-    roomsThisLanguageComeFirstLobby: "Räume in dieser Sprache stehen in der Lobby vorn, und ein Raum, den du erstellst, startet in ihr. Sie ist getrennt von der Sprache, in der du Sketchy liest.",
+    roomsThisLanguageComeFirstLobby: "Räume in dieser Sprache stehen in der Lobby vorn, und in einem gemischtsprachigen Raum spielst du die Begriffe in ihr. Sie ist getrennt von der Sprache, in der du Sketchy liest.",
     interfaceLanguage: "Sprache, in der du liest",
     interfaceLanguageHint: "Jedes Wort von Sketchy selbst. Getrennt von der Sprache, in der du spielst: in der einen lesen und in der anderen spielen ist völlig normal.",
     timeFormat: "Zeitformat",

@@ -72,6 +72,7 @@ interface RoomSetupFormProps {
   /** Create offers "Save as reusable list" under the prompt box. */
   promptsFooter?: ReactNode;
   onListsLoaded?: (lists: PromptListSummary[]) => void;
+  onListsUnavailable?: () => void;
   /** Create puts its running-time estimate under the three numbers. */
   durationNote?: ReactNode;
   /** Every list the host may choose from, in any language: what the language
@@ -107,6 +108,7 @@ export function RoomSetupForm({
   namePlaceholder,
   promptsFooter,
   onListsLoaded,
+  onListsUnavailable,
   durationNote,
   loadedLists = [],
   languageLocked = false,
@@ -281,6 +283,7 @@ export function RoomSetupForm({
             selectedSlugs={promptListSlugs}
             onChange={(slugs) => onChange({ promptListSlugs: slugs })}
             onListsLoaded={onListsLoaded}
+            onListsUnavailable={onListsUnavailable}
             extraLists={extraLists}
           />
           {/* A quick prompt has one language, and every seat of a mixed room

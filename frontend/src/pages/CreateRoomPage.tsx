@@ -135,13 +135,13 @@ export function CreateRoomPage() {
   }, [authUser]);
 
   /**
-   * The catalogue arriving is when the guess above becomes checkable.
+   * The catalogue arriving is when the guesses above become checkable.
    *
-   * The language comes from the player's own preference and the selection
-   * from a constant, and nothing kept the two in step: someone who plays in
-   * German opened this form declaring German with `english_standard`
-   * selected, which the server refuses. The lists say which slugs belong to
-   * the language, so this is the first moment the selection can be put right.
+   * The form opens Mixed with a constant selection, before it knows whether
+   * this catalogue can play Mixed at all or which slugs belong to a language:
+   * a room declaring German with `english_standard` selected is one the
+   * server refuses. The lists say both, so this is the first moment the
+   * language and the selection can be put right.
    */
   // Memoized because the picker reports its lists back through an effect
   // keyed on this prop: a fresh array each render would report, re-render,
@@ -166,6 +166,12 @@ export function CreateRoomPage() {
     setPromptListSlugs((current) =>
       reconcileSelectionForLanguage(lists, language, current, playLanguage),
     );
+  }
+
+  // No catalogue at all: Mixed has nothing to draw on and takes no custom
+  // prompts, so the host's own language keeps a custom-only room possible.
+  function handleListsUnavailable() {
+    if (promptLanguage === MIXED_PROMPT_LANGUAGE) setPromptLanguage(playLanguage);
   }
 
   useEffect(() => {
@@ -554,6 +560,7 @@ export function CreateRoomPage() {
       dispatchCustomPrompts={dispatchCustomPrompts}
       namePlaceholder={ui.createRoomPage.leaveBlankForARandom}
       onListsLoaded={handleListsLoaded}
+      onListsUnavailable={handleListsUnavailable}
       extraLists={carried}
       loadedLists={loadedLists}
       promptsFooter={authUser && !authUser.isAnonymous && customPrompts.analysis.usableCount > 0 && !customPrompts.analysis.hasErrors ? (

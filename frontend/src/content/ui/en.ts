@@ -2001,7 +2001,7 @@ export const EN = {
     colorScheme: "Color scheme",
     appliesMomentYouPick: "Applies the moment you pick it.",
     languageYouPlay: "Language you play in",
-    roomsThisLanguageComeFirstLobby: "Rooms in this language come first in the lobby, and a room you create starts in it. It is separate from the language you read Sketchy in.",
+    roomsThisLanguageComeFirstLobby: "Rooms in this language come first in the lobby, and in a mixed room it is the language you play the prompts in. It is separate from the language you read Sketchy in.",
     interfaceLanguage: "Language you read in",
     interfaceLanguageHint: "Every word of Sketchy itself. Separate from the language you play in: reading in one and playing in another is perfectly ordinary.",
     timeFormat: "Time format",

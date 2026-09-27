@@ -186,3 +186,24 @@ async def test_a_slow_setup_page_still_gets_its_form_submitted():
             assert held, "the setup page's chunk was never requested"
         finally:
             await browser.close()
+
+
+async def test_a_form_without_a_catalogue_leaves_mixed_for_the_players_language():
+    """The form opens Mixed (#1182), which draws only on lists and takes no
+    custom prompts. With the catalogue unreadable it has nothing to draw on,
+    so it moves to the player's language, where a custom-only room still
+    works - rather than a one-choice picker stuck on a room nobody can make."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        try:
+            await page.route(re.compile(r"/api/prompt-lists(\?.*)?$"), lambda route: route.abort())
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"NoLists{uuid4().hex[:6]}")
+            await page.goto(f"{BASE_URL}/create")
+            await page.wait_for_selector(".create-room-page")
+            await page.click('summary:has-text("Prompts")')
+            await page.locator("#custom-prompts").wait_for()
+            await page.locator(".create-room-language-field").get_by_text("English").wait_for()
+        finally:
+            await browser.close()

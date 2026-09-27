@@ -1987,7 +1987,7 @@ export const IT: Catalogue = {
     colorScheme: "Schema di colori",
     appliesMomentYouPick: "Vale dal momento in cui lo scegli.",
     languageYouPlay: "Lingua in cui giochi",
-    roomsThisLanguageComeFirstLobby: "Le stanze in questa lingua vengono prima nella lobby, e una stanza che crei parte in questa lingua. È separata dalla lingua in cui leggi Sketchy.",
+    roomsThisLanguageComeFirstLobby: "Le stanze in questa lingua vengono prima nella lobby, e in una stanza mista è la lingua in cui giochi le parole. È separata dalla lingua in cui leggi Sketchy.",
     interfaceLanguage: "Lingua in cui leggi",
     interfaceLanguageHint: "Ogni parola di Sketchy stesso. Separata dalla lingua in cui giochi: leggere in una e giocare in un’altra è del tutto normale.",
     timeFormat: "Formato dell’ora",

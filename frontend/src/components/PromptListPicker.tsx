@@ -29,6 +29,9 @@ interface PromptListPickerProps {
   disabled?: boolean;
   /** Reports the loaded lists so the host page can summarize the selection. */
   onListsLoaded?: (lists: PromptListSummary[]) => void;
+  /** The catalogue could not be read: nothing will be reported, so a host page
+  waiting on the lists to judge a choice has to judge it without them. */
+  onListsUnavailable?: () => void;
   /** Lists the host page already knows about — a community list carried in
   from the catalogue. Without them the selection would be reconciled against
   a catalogue that has never heard of the list, and quietly dropped. */
@@ -52,6 +55,7 @@ export function PromptListPicker({
   onChange,
   disabled = false,
   onListsLoaded,
+  onListsUnavailable,
   extraLists = NO_LISTS,
 }: PromptListPickerProps) {
   const user = useAuthStore((state) => state.user);
@@ -69,6 +73,7 @@ export function PromptListPicker({
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
   const onListsLoadedRef = useRef(onListsLoaded);
+  const onListsUnavailableRef = useRef(onListsUnavailable);
 
   // Read only while it still belongs to whoever is signed in now. A pending
   // reply for a new account does not keep the old one's shortlist on screen
@@ -84,7 +89,8 @@ export function PromptListPicker({
 
   useEffect(() => {
     onListsLoadedRef.current = onListsLoaded;
-  }, [onListsLoaded]);
+    onListsUnavailableRef.current = onListsUnavailable;
+  }, [onListsLoaded, onListsUnavailable]);
 
   useEffect(() => {
     onListsLoadedRef.current?.([...promptLists, ...extraLists, ...shortlist]);
@@ -104,6 +110,7 @@ export function PromptListPicker({
       } catch (err) {
         if (!cancelled) {
           setFetchError(refusalText(err, ui.promptListPicker.couldNotLoadPromptLists));
+          onListsUnavailableRef.current?.();
         }
       } finally {
         if (!cancelled) {
