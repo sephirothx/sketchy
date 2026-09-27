@@ -226,6 +226,42 @@ async def test_a_drag_forward_and_off_the_end_lands_and_escape_puts_one_back():
             await browser.close()
 
 
+async def test_a_pane_scrolled_mid_drag_still_drops_where_the_pointer_is():
+    """The places a drag can land were measured when it began; measured in
+    the window, a pane scrolled mid-drag left them where the chips had been."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 700})
+        await context.add_init_script(
+            "localStorage.setItem('sketchy_promptlanguage', 'de');"
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['nl', 'fr', 'es']));"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Scroller{uuid4().hex[:6]}")
+            dialog = await _open_appearance(page)
+            chips = dialog.locator(".play-language-chip")
+            await chips.nth(2).wait_for()
+            await chips.nth(0).scroll_into_view_if_needed()
+            pane = dialog.locator(".play-language-extras")
+            before = await pane.evaluate("row => row.getBoundingClientRect().top")
+
+            x, y = await _press_on(page, chips.nth(0))
+            await page.mouse.move(x + 20, y, steps=3)
+            await page.mouse.wheel(0, 80)
+            await page.wait_for_function(
+                f"() => Math.abs(document.querySelector('.play-language-extras').getBoundingClientRect().top - {before}) > 20"
+            )
+            target = await chips.nth(2).locator(".play-language-chip-position").bounding_box()
+            await page.mouse.move(target["x"] + 4, target["y"] + 4, steps=8)
+            await page.mouse.up()
+            assert await _extras(page) == ["fr", "es", "nl"]
+        finally:
+            await context.close()
+            await browser.close()
+
+
 @pytest.mark.parametrize(
     "viewport",
     [{"width": 390, "height": 844}, {"width": 1280, "height": 900}],

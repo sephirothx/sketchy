@@ -20,8 +20,9 @@ interface Drag {
   startY: number;
   moving: boolean;
   to: number;
-  /** Where each place in the row was when the drag began: the target is the
-  nearest of these, so it does not hang on the preview having rendered. */
+  /** Where each place in the row was when the drag began, from the row's own
+  corner: the target is the nearest of these, so it does not hang on the
+  preview having rendered, and a pane scrolled mid-drag moves them with it. */
   slots: { x: number; y: number }[];
 }
 
@@ -52,6 +53,12 @@ export function PlayLanguageExtras({
   const [drag, setDrag] = useState<Drag | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const chipRefs = useRef(new Map<PromptLanguage, HTMLLIElement>());
+  const rowRef = useRef<HTMLDivElement | null>(null);
+
+  function rowOrigin(): { x: number; y: number } {
+    const box = rowRef.current?.getBoundingClientRect();
+    return { x: box?.left ?? 0, y: box?.top ?? 0 };
+  }
 
   // The order the chips show in: the committed one, or the one a drag would
   // make. Chips stay in `extras` order in the DOM; this only sets their place.
@@ -109,10 +116,11 @@ export function PlayLanguageExtras({
   chips stood in when the drag began - nearest by centre, since chips wrap
   onto several lines and neither axis alone orders them. */
   function slotAt(slots: Drag["slots"], x: number, y: number): number {
+    const origin = rowOrigin();
     let best = 0;
     let bestDistance = Number.POSITIVE_INFINITY;
     slots.forEach((slot, position) => {
-      const distance = Math.hypot(slot.x - x, slot.y - y);
+      const distance = Math.hypot(slot.x - (x - origin.x), slot.y - (y - origin.y));
       if (distance < bestDistance) {
         best = position;
         bestDistance = distance;
@@ -134,10 +142,11 @@ export function PlayLanguageExtras({
   function handlePointerDown(event: ReactPointerEvent<HTMLLIElement>, index: number) {
     if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
     event.currentTarget.setPointerCapture(event.pointerId);
+    const origin = rowOrigin();
     const slots = extras.map((language) => {
       const box = chipRefs.current.get(language)?.getBoundingClientRect();
       return box
-        ? { x: box.left + box.width / 2, y: box.top + box.height / 2 }
+        ? { x: box.left + box.width / 2 - origin.x, y: box.top + box.height / 2 - origin.y }
         : { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY };
     });
     updateDrag({
@@ -178,7 +187,7 @@ export function PlayLanguageExtras({
   }
 
   return (
-    <div className="play-language-extras">
+    <div className="play-language-extras" ref={rowRef}>
       {extras.length > 0 && (
         <ol className="play-language-extras-list" aria-label={ui.settingsOverlay.alsoPlayIn}>
           {extras.map((language, domIndex) => {
