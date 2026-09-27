@@ -699,3 +699,41 @@ async def test_every_new_identity_on_one_browser_is_asked():
         finally:
             await context.close()
             await browser.close()
+
+
+async def _add_list_hangs_from_the_button(page: Page, scope) -> None:
+    button = scope.get_by_role("button", name="Add a language you play in")
+    await button.click()
+    listbox = page.get_by_role("listbox", name="Add a language you play in")
+    await listbox.wait_for()
+    trigger, popup = await button.bounding_box(), await listbox.bounding_box()
+    assert abs((trigger["x"] + trigger["width"]) - (popup["x"] + popup["width"])) <= 1, (
+        trigger,
+        popup,
+    )
+    assert popup["y"] >= trigger["y"] + trigger["height"] or popup["y"] + popup["height"] <= trigger["y"]
+    await page.keyboard.press("Escape")
+
+
+async def test_the_add_list_hangs_from_its_button_with_a_classic_scrollbar():
+    """The list is measured once it is in the window: measured where it was
+    laid out first, its width carried a scrollbar it did not keep, and its
+    right edge stopped a scrollbar short of the button's."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True, args=["--mute-audio"], ignore_default_args=["--hide-scrollbars"]
+        )
+        context = await browser.new_context(viewport={"width": 1200, "height": 560})
+        await context.add_init_script(
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['it', 'de']));"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Hang{uuid4().hex[:6]}")
+            dialog = await _open_appearance(page)
+            await dialog.locator(".play-language-chip").nth(1).wait_for()
+            await _add_list_hangs_from_the_button(page, dialog)
+        finally:
+            await context.close()
+            await browser.close()

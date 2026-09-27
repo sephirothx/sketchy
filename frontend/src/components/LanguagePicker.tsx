@@ -108,22 +108,31 @@ export function LanguagePicker({
       const gap = 6;
       const viewportWidth = document.documentElement.clientWidth;
       const viewportHeight = window.innerHeight;
-      const width = Math.max(list.offsetWidth, trigger.width);
-      const natural = list.scrollHeight;
       const below = viewportHeight - trigger.bottom - gap - margin;
       const above = trigger.top - gap - margin;
+      // Into the window first, at the height it will have, and only then
+      // measured: laid out inside a dialog the list can be squeezed into
+      // scrolling, and its width then carried a scrollbar it does not have
+      // once free - which left its right edge a scrollbar short of the
+      // trigger's.
+      list.style.position = "fixed";
+      list.style.top = "0px";
+      list.style.left = "0px";
+      list.style.right = "auto";
+      list.style.bottom = "auto";
+      list.style.minWidth = `${trigger.width}px`;
+      list.style.maxHeight = "";
+      const natural = list.scrollHeight;
       const upward = natural > below && above > below;
+      list.style.maxHeight = `${Math.max(120, Math.min(360, upward ? above : below))}px`;
+      const width = Math.max(list.offsetWidth, trigger.width);
       // An add button stands at the end of its row, so its list hangs from
       // its right edge; a choice's list from its left, unless that runs out.
       let left = addLabel !== undefined ? trigger.right - width : trigger.left;
       if (left + width > viewportWidth - margin) left = trigger.right - width;
       left = Math.max(margin, Math.min(left, viewportWidth - margin - width));
       Object.assign(list.style, {
-        position: "fixed",
         left: `${left}px`,
-        right: "auto",
-        minWidth: `${trigger.width}px`,
-        maxHeight: `${Math.max(120, Math.min(360, upward ? above : below))}px`,
         top: upward ? "auto" : `${trigger.bottom + gap}px`,
         bottom: upward ? `${viewportHeight - trigger.top + gap}px` : "auto",
       });
