@@ -1817,6 +1817,8 @@ export const PT: Catalogue = {
     disconnected: "Desligado",
     rejoinFailed: "Falha ao voltar",
     invitation: "Convite",
+    friendRequest: (p: { count: number }) =>
+      plural(p.count, { one: "Pedido de amizade", other: "Pedidos de amizade" }),
     serverUpdateStarted: "Atualização do servidor a decorrer. Esta partida termina em breve.",
   },
 

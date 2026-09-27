@@ -18,6 +18,12 @@ import type { FriendInvite } from "../lib/friends";
  * room says how it is left (#1198): the way its own Leave leaves it, asking
  * first whenever Leave would ask. It holds that here, because neither home is
  * inside the room - the card is drawn above every page.
+ *
+ * The same claim decides where a **Friend request** goes (#1197): while one is
+ * held, a request arriving is the bar's chip rather than a toast
+ * (`useFriendArrivalNotices`, `friendRequestNoticeStore`), for the same reason
+ * - the toast stood on the same two spots. A claim is the one fact both
+ * notices need, "a room bar is up", so it is kept once, here.
  */
 
 /** Leave the room for this invitation - or ask first, and only on a yes.
@@ -28,7 +34,8 @@ export type RoomExit = (invite: FriendInvite, begin: () => (() => void) | null) 
 
 interface FriendInviteStore {
   invite: FriendInvite | null;
-  /** How many room bars are showing invitations; the card draws at zero. */
+  /** How many room bars are up. At zero the invitation is the card and a
+      friend request a toast; above it, both are chips in the bar. */
   roomBarClaims: number;
   receive: (invite: FriendInvite) => void;
   /** Answered, dismissed or expired: nothing is left to draw. */

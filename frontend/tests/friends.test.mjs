@@ -5,6 +5,7 @@ import {
   NO_FRIENDS,
   friendListChanges,
   friendListOwner,
+  friendRequestSentence,
   friendsSurface,
   friendsSurfaceIsEmpty,
   isNoFriendListRefusal,
@@ -15,9 +16,12 @@ import {
   parseRecentPlayers,
   lobbyRowMayOfferFriendship,
   profileFriendActionFor,
+  stillWaiting,
   waitingRequestCount,
+  withArrivals,
   withFriendsFirst,
 } from "../src/lib/friends.ts";
+import { useFriendRequestNoticeStore } from "../src/store/friendRequestNoticeStore.ts";
 
 const entry = (userId, extra = {}) => ({
   userId,
@@ -419,4 +423,69 @@ test("a registered account owns its friends list", () => {
   // Registering keeps the guest's id, so the owner goes null -> id and the
   // store clears its baseline rather than announcing existing requests.
   assert.equal(friendListOwner({ id: "acct-1", isAnonymous: false }), "acct-1");
+});
+
+test("a request notice names only who is still waiting (#1197)", () => {
+  // Accepted on the friends surface, in another tab, or withdrawn by the
+  // asker: each leaves `incoming` on the next read, and the toast's Accept
+  // stood on screen after the answer had been given elsewhere.
+  const ada = entry("ada", { status: "pending" });
+  const bob = entry("bob", { status: "pending" });
+  assert.deepEqual(stillWaiting([ada, bob], [bob]), [bob]);
+  assert.deepEqual(stillWaiting([ada], []), []);
+  // The row as the latest read has it, in the notice's order.
+  const renamed = { ...bob, displayName: "Bobby" };
+  assert.deepEqual(stillWaiting([bob, ada], [ada, renamed]), [renamed, ada]);
+});
+
+test("requests that arrive join the ones shown, newest first and once each", () => {
+  const ada = entry("ada", { status: "pending" });
+  const bob = entry("bob", { status: "pending" });
+  const cy = entry("cy", { status: "pending" });
+  assert.deepEqual(withArrivals([ada, bob], [cy]), [cy, ada, bob]);
+  // Withdrawn and asked again: one request, at the front.
+  assert.deepEqual(withArrivals([ada, bob], [bob]), [bob, ada]);
+  assert.deepEqual(withArrivals([], [ada, ada]), [ada]);
+});
+
+test("a request notice names one person, or the first and a count", () => {
+  const ada = entry("ada", { status: "pending", displayName: "Ada" });
+  const bob = entry("bob", { status: "pending", displayName: "Bob" });
+  const cy = entry("cy", { status: "pending", displayName: "Cy" });
+  assert.equal(friendRequestSentence([ada]), "Ada wants to be friends.");
+  assert.equal(friendRequestSentence([ada, bob, cy]), "Ada and 2 others want to be friends.");
+});
+
+test("the room bar's requests are put away without sending anything", () => {
+  const { show, clear } = useFriendRequestNoticeStore.getState();
+  const ada = entry("ada", { status: "pending" });
+  const bob = entry("bob", { status: "pending" });
+  show([ada], "ada wants to be friends.");
+  // A toast's requests moving into the bar are not said a second time.
+  show([bob]);
+  assert.deepEqual(useFriendRequestNoticeStore.getState().askers, [bob, ada]);
+  assert.equal(useFriendRequestNoticeStore.getState().announcement, "ada wants to be friends.");
+  // Not now is a local fact only (R-FRIEND-05): the store has no way to
+  // reach the server, and clearing it is all the chip's second button does.
+  // The words go too, so the next request is said even in the same words.
+  clear();
+  assert.deepEqual(useFriendRequestNoticeStore.getState().askers, []);
+  assert.equal(useFriendRequestNoticeStore.getState().announcement, "");
+});
+
+test("a request withdrawn from the chip is dropped, so asking again is said again", () => {
+  const { show, keep, clear } = useFriendRequestNoticeStore.getState();
+  const ada = entry("ada", { status: "pending" });
+  const bob = entry("bob", { status: "pending" });
+  show([bob], "bob wants to be friends.");
+  show([ada], "ada wants to be friends.");
+  // Ada withdraws: the chip keeps Bob, and the region's words go, so Ada
+  // asking again changes them and is heard (#1197).
+  keep(stillWaiting(useFriendRequestNoticeStore.getState().askers, [bob]));
+  assert.deepEqual(useFriendRequestNoticeStore.getState().askers, [bob]);
+  assert.equal(useFriendRequestNoticeStore.getState().announcement, "");
+  show([ada], "ada wants to be friends.");
+  assert.deepEqual(useFriendRequestNoticeStore.getState().askers, [ada, bob]);
+  assert.equal(useFriendRequestNoticeStore.getState().announcement, "ada wants to be friends.");
+  clear();
 });
