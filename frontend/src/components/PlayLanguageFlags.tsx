@@ -7,6 +7,9 @@ import { interfaceLocale, ui } from "../content/ui/index.ts";
  * the others in the order the player ranked them - the order the lobby ranks
  * those rooms in (#1211).
  *
+ * 24 and 18 wide are 17 and 13 tall: whole pixels, and both odd, so the
+ * smaller ones centre on the larger without a half-pixel edge (see `Flag`).
+ *
  * One picture with one name, not a row of images: a screen reader hears
  * "Plays in Italian; also English and Spanish" once, in the reader's own
  * language, where seven flags would be seven announcements of nothing. The
@@ -34,7 +37,7 @@ export function PlayLanguageFlags({ languages }: { languages: readonly string[] 
       </span>
       {others.map((other) => (
         <span key={other} className="play-language-flag" data-language={other}>
-          <Flag language={other} width={16} />
+          <Flag language={other} width={18} />
         </span>
       ))}
     </span>
