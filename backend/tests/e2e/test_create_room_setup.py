@@ -1,5 +1,11 @@
-from playwright.async_api import async_playwright
+import asyncio
+import contextlib
+import re
+from uuid import uuid4
 
+from playwright.async_api import Error as PlaywrightError, async_playwright
+
+from tests.e2e.lobby_helpers import open_new_room, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -132,4 +138,48 @@ async def test_create_room_uses_progressive_disclosure_and_validates_custom_prom
             assert not await page.evaluate("window.__inviteLoaderSeen")
         finally:
             await context.close()
+            await browser.close()
+
+
+async def test_a_slow_setup_page_still_gets_its_form_submitted():
+    """The setup page is a chunk of its own, and the lobby stays on screen
+    until it arrives. Both pages have a "Create room" button, so a second
+    click by those words inside that window pressed the lobby's again and the
+    form was never sent (two CI failures on 2026-09-27). The chunk is held
+    back here until the lobby's button has been pressed, and a second past
+    that, so the window is certain rather than a matter of runner load:
+    `open_new_room`, which every test creating a room goes through, has to
+    wait it out."""
+    chunk = re.compile(r"/assets/CreateRoomPage-[^/]*\.js$")
+    held = 0
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        page = await browser.new_page()
+        page.set_default_timeout(10000)
+
+        async def hold_back(route):
+            nonlocal held
+            held += 1
+            try:
+                # The address changes as soon as the lobby's button is
+                # pressed; the page changes only once this chunk arrives.
+                await page.wait_for_url("**/create", wait_until="commit")
+                await asyncio.sleep(1)
+            finally:
+                # A request from before the naming reload is gone by now.
+                with contextlib.suppress(PlaywrightError):
+                    await route.continue_()
+
+        try:
+            # Before the first load, so the lobby's idle-time prefetch of the
+            # chunk is held back as well.
+            await page.route(chunk, hold_back)
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"SlowSetup{uuid4().hex[:6]}")
+            await open_new_room(page)
+            # A renamed chunk would leave nothing held back and this passing
+            # for no reason.
+            assert held, "the setup page's chunk was never requested"
+        finally:
             await browser.close()

@@ -999,6 +999,12 @@ export const IT: Catalogue = {
     invitedYouTheirGame: "ti ha invitato nella sua partita.",
     join: "Entra",
     dismissInvitation: "Chiudi l’invito",
+    notNow: "Non ora",
+    leaveAndJoin: "Esci ed entra",
+    leaveYourTurnForTheirGame: (p: { name: string }) =>
+      `Stai disegnando tu. Se entri nella partita di ${p.name} interromperai il tuo turno e questa partita andrà avanti per tutti.`,
+    leaveThisGameForTheirs: (p: { name: string }) =>
+      `La partita è ancora in corso. Perderai il tuo posto in questa partita per entrare in quella di ${p.name}.`,
   },
 
   friendsOverlay: {
@@ -1810,11 +1816,15 @@ export const IT: Catalogue = {
   },
 
   roomNoticeChips: {
-    serverUpdate: (p: { seconds: number }) =>
-      p.seconds > 0 ? `Aggiornamento · ${p.seconds} s` : "Aggiornamento · ora",
+    serverUpdateWord: "Aggiornamento ·",
+    serverUpdateSeconds: (p: { seconds: number }) =>
+      p.seconds > 0 ? `${p.seconds} s` : "ora",
     reconnecting: "Riconnessione",
     disconnected: "Disconnesso",
     rejoinFailed: "Rientro fallito",
+    invitation: "Invito",
+    friendRequest: (p: { count: number }) =>
+      plural(p.count, { one: "Richiesta di amicizia", other: "Richieste di amicizia" }),
     serverUpdateStarted: "Aggiornamento del server in corso. Questa partita finirà a breve.",
   },
 

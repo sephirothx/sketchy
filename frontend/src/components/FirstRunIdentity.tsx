@@ -3,9 +3,8 @@ import { Link } from "react-router-dom";
 import { needsIdentity, useAuthStore } from "../store/authStore";
 import { AuthDialog } from "./AccountMenu";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
-import { MIN_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { typedNameError } from "../lib/roomEntryState";
 import { useNameField } from "../hooks/useNameField";
-import { useToast } from "../lib/toast";
 import { refusalText } from "../lib/refusals.ts";
 import { firstRunLine } from "../lib/firstRunLines";
 import { DOODLE_SPRITE } from "../lib/avatarDoodles";
@@ -65,16 +64,11 @@ export function FirstRunIdentity() {
   // this form's own button means the same thing.
   const name = useAuthStore((s) => s.nameDraft);
   const setName = useAuthStore((s) => s.setNameDraft);
-  const { notify } = useToast();
-  // Whether the name on the field was just refused: its line turns red and it
-  // is aria-invalid until the next edit. The message itself is a toast (R-UX-13).
-  const [refused, setRefused] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Only the name rule's characters get in, however they arrive.
-  const { ref: nameRef, onChange: onNameChange, element: nameElement } = useNameField((value) => {
-    setName(value);
-    setRefused(false);
-  });
+  // Only the name rule's characters get in, however they arrive. A refusal is
+  // a toast, and the field is red and aria-invalid until the next edit
+  // (R-UX-13); the hook does both, for the invite page's field as well.
+  const { ref: nameRef, onChange: onNameChange, refused, refuse } = useNameField(setName);
 
   // Nothing until the initial GET /api/auth/me settles. A null user means
   // "not known yet" as well as "nobody", and offering these controls in that
@@ -89,36 +83,11 @@ export function FirstRunIdentity() {
   if (!needsIdentity(user)) return null;
   const takenName = user?.nameInUse ? user.displayName : null;
 
-  /** Say why, in a toast, and mark the field that fixes it. On a desktop the
-      player is put back in it. With a touch screen they are not: the toast
-      is fixed to the bottom of the layout viewport, and iOS Safari lays the
-      keyboard over that rather than resizing it (it ignores
-      `interactive-widget=resizes-content`), so a refocused field kept the
-      keyboard up and the toast under it - the refusal went unread. There
-      the keyboard is let go, and the red line says which field to tap. */
-  function refuse(message: string) {
-    setRefused(true);
-    notify(message, "error");
-    const field = nameElement.current;
-    if (!field) return;
-    if (window.matchMedia?.("(pointer: coarse)").matches) {
-      if (document.activeElement === field) field.blur();
-    } else {
-      field.focus();
-    }
-  }
-
   async function nameMe(event: React.FormEvent) {
     event.preventDefault();
     if (busy) return;
     const chosen = name.trim();
-    // The field only takes the rule's characters, so short (or reserved) is
-    // all a name here can still be, and saying just that is shorter and truer
-    // than the whole rule.
-    const invalid =
-      chosen.length < MIN_NICKNAME_LENGTH
-        ? ui.firstRunIdentity.nameTooShort({ min: MIN_NICKNAME_LENGTH })
-        : nicknameError(chosen);
+    const invalid = typedNameError(chosen);
     if (invalid) {
       refuse(invalid);
       return;

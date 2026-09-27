@@ -1,6 +1,7 @@
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     close_room_settings,
+    open_create_room,
     open_room_settings,
     open_settings_section,
     room_code,
@@ -25,7 +26,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "LobbyHost")
-            await host_page.click('button:has-text("Create room")')
+            await open_create_room(host_page)
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Lobby details")
             await host_page.fill('label:has-text("Rounds") input', "2")
             await host_page.fill('label:has-text("Drawing time") input', "90")

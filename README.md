@@ -109,7 +109,17 @@ keyboard that takes half the screen, and one thumb.
   always among its rows, and in the waiting room's invite list, even when the list is
   capped and they sort past the cut: each account asks for its own friends' status
   apart from the public list, every 15 seconds while one of those is on screen. A request that arrives offers **Accept** on the notice itself, and
-  lingers long enough to reach mid-turn. Declining
+  lingers long enough to reach mid-turn: a toast outside a room, and inside one a *Friend
+  request* chip in the room header, whose tap shows who asked with **Accept** and **Not
+  now** (which only puts it away; nobody is told). Either goes as soon as the request is
+  answered anywhere - on **Friends**, in another tab, or withdrawn by the person who
+  asked - and leaving the room puts the chip away, the count staying on your chip's
+  badge. An invitation is a card at the foot of the
+  screen outside a room; inside one it is an *Invitation* chip in the room header, beside
+  the round and the clock, whose tap shows who sent it with **Join** and **Not now**, so it
+  never covers the chat or the drawing tools. **Join** there leaves your room the way
+  its Leave does: in the middle of a game it asks first, naming whose game you are
+  going to. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
   leaves nothing behind. Guests are not offered friendships, since a guest name belongs
@@ -127,9 +137,10 @@ keyboard that takes half the screen, and one thumb.
   for the room's host, and like those it is drawn for whoever is reading: two players
   looking at the same roster see different marks.
   A request arriving, and one you sent being accepted, are both announced wherever
-  you are — a live game included — and the number waiting for an answer sits on your
-  account chip. A request that was declined is not announced: your list simply stops
-  showing it.
+  you are — a live game included, where an acceptance waits until you are back in the
+  lobby and is said then, as one notice however many came in, so it never stands over
+  the game — and the number waiting for an answer sits on your account chip. A
+  request that was declined is not announced: your list simply stops showing it.
 - *Hide letter tiles*: a room option that hides the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
 - Grace period (30s) — refreshing mid-game reconnects you with your score intact.
@@ -830,10 +841,11 @@ production database.
 
 The lobby's first landing asks for one thing: a name, on a name tag — *Hello, my
 name is …*, and a button that sticks it on. The field takes only what a name can
-hold — letters, digits, `_` and `-` — so a space or a "!" is simply not entered (the
-invite page's name field works the same way), and a name the form refuses is said in
-a toast, with the field's line turned red and, on a desktop, the cursor back in it (a
-phone lets its keyboard close instead, so the toast is not hidden under it). It saves
+hold — letters, digits, `_` and `-` — so a space or a "!" is simply not entered, and
+a name the form refuses is said in a toast, with the field's line turned red and, on a
+desktop, the cursor back in it (a phone lets its keyboard close instead, so the toast
+is not hidden under it). The invite page's name field works the same way, and says any
+refusal of Join or Spectate in a toast too, so its buttons never move. It saves
 the name and nothing else; what puts you in a game is Quick play, beside the room
 list. Next to the tag, one line drawn from a pool on each visit ("Cubism, but by
 accident.") over the sentence that never changes: one player draws, everybody else tries to guess, and no account,
@@ -2763,14 +2775,19 @@ A seated client checks with the server every five seconds that it still holds th
 - One bar on every screen, in three places: where you are (the wordmark, which is the way
   home, and in a room the room's name, with a globe after it for a public room and a lock
   for a private one), what is going on (the round and the clock, a
-  server notice, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
+  server notice, a friend's invitation or friend request, and an *AFK* chip while you are AFK), and you (your chip, whose menu opens
   Player settings). In a room the rest is the **Room menu** - copy the invite link and code,
   go AFK, save the image, start over, and Leave last in red - a dropdown on a
   desktop and the ⋯ sheet on a phone, with the same rows; settings are your chip's, not the
-  room's. A phone's round reads "Round 2/3", or "2/3" when the bar has no room for the word. A short window gives way in a fixed
-  order: the room's name, then your chip's name (it becomes your round avatar); the wordmark,
-  the clock, the menu and your avatar stay, down to a phone - where a notice on a narrow bar
-  borrows the wordmark's room until it ends. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
+  room's. A short window gives way in a fixed order: the room's name, then your chip's name
+  (it becomes your round avatar); the wordmark, the clock, the menu and your avatar stay, down
+  to a phone. A phone's bar gives up only what it has to, in order: the round's word ("Round
+  2/3" becomes "2/3"), then the wordmark, then the chips' words (a notice, an invitation, a
+  friend request and *AFK* keep their icons, a server update keeps its countdown, and each
+  one's sentence is still a tap away), then the space between things, and last a
+  second row for the round, the clock and the chips - so nothing runs off even a 300px
+  screen. Whatever the later steps made room for comes back (the wordmark's room usually
+  fits the round's word), and so does everything as the notices end. The waiting room names the room once - in the bar above 1100px, as the stage's heading below
   that, where the bar has given the name up - with no status line under it: Start itself says
   what is missing ("Need 1 more player"), and a server update's notice says when no game can start.
   On a desktop its invite copies the link; a phone shares it. Below it, the room's rules read as six cells - six, three or two to a row, as many as keep every word whole - players, rounds,

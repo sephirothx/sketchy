@@ -17,6 +17,7 @@ import random
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     open_player_settings,
     room_code,
     use_guest_name,
@@ -59,10 +60,7 @@ async def test_back_in_the_waiting_room_leaves_at_once_and_gives_up_the_seat():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, host_name)
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".create-room-page")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
             await room_history_at(host, 0)
 
@@ -136,10 +134,7 @@ async def test_back_during_a_game_closes_sheets_then_asks_before_leaving():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, host_name)
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".create-room-page")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
 
             await phone.goto(BASE_URL)

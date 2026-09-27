@@ -114,9 +114,9 @@ export const OnlinePlayersPanel = memo(function OnlinePlayersPanel() {
       {players.length === 0 ? (
         <EmptyState compact title={ui.onlinePlayersPanel.nobodyElseHereRightNow} />
       ) : (
-        // Focusable because it scrolls once enough players are online: a
-        // keyboard user has to be able to reach the rows out of view, and axe
-        // refuses a scroll region nobody can focus.
+        /* Focusable because it can scroll: on a pinned lobby with more people
+           than fit, a keyboard user has to be able to reach the rows below,
+           and a row may have nothing focusable of its own to get there by. */
         <ul
           className="online-players-list"
           data-testid="online-players-list"

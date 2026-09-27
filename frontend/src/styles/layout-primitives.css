@@ -93,8 +93,8 @@
    the room's sheets and the invite dock are fixed. Phones are untouched -
    everything here is at or above 1240px of content. */
 :root {
-  /* A classic scrollbar's lane, written by lib/scrollbarWidth.ts: `100vw`
-     counts it, and nothing measured from the window should. */
+  /* The part of a classic scrollbar's lane that `100vw` counts, written by
+     lib/scrollbarWidth.ts: nothing measured from the window should count it. */
   --scrollbar-width: 0px;
   --shell-width: 1240px;
   --canvas-cap: 760px;

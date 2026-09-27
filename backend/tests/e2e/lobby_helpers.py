@@ -105,6 +105,44 @@ async def register_account(page, username: str, password: str = "a-good-password
 
 ROOM_HEADER = '[data-testid="room-header"]'
 
+# The lobby's button and the setup form's submit both say "Create room", so a
+# selector for the words matches whichever page is on screen - and the lobby
+# stays on screen after its button is pressed, until the setup page's chunk has
+# arrived (the page is lazy, and React Router renders it in a transition). A
+# second click by those words inside that window pressed the lobby's button
+# again, the form was never submitted, and the test timed out waiting for a
+# waiting room (two CI runs on 2026-09-27). The submit has a class of its own;
+# waiting for it is what says the form is there.
+#
+# The lobby's button is found by where it sits rather than by its words, so a
+# test in another language can use this too: beside the room list on a wide
+# screen, in the thumb dock on a narrow one, and only one of those is drawn.
+LOBBY_CREATE_ROOM = (
+    ".lobby-rooms-actions .btn-primary:visible, .lobby-dock-row .btn-primary:visible"
+)
+CREATE_ROOM_SUBMIT = ".create-room-submit"
+WAITING_ROOM = '[data-testid="waiting-room"]'
+
+
+async def open_create_room(page) -> None:
+    """Press the lobby's Create room and wait until the setup form is showing,
+    so whatever the caller does next lands on the form rather than the lobby."""
+    await page.click(LOBBY_CREATE_ROOM)
+    await page.wait_for_selector(CREATE_ROOM_SUBMIT)
+
+
+async def submit_create_room(page) -> None:
+    """Submit the setup form and wait for the new room's waiting room."""
+    await page.click(CREATE_ROOM_SUBMIT)
+    await page.wait_for_selector(WAITING_ROOM)
+
+
+async def open_new_room(page) -> None:
+    """From the lobby, create a room with the form's defaults and wait for its
+    waiting room."""
+    await open_create_room(page)
+    await submit_create_room(page)
+
 
 async def room_code(page) -> str:
     """The current room's code, from the room bar's `data-room-code`.
@@ -233,13 +271,11 @@ async def open_public_rooms(browser, prefix: str, count: int) -> list:
             await use_guest_name(page, f"{prefix}Host{index}")
             await page.goto(BASE_URL)
             await page.wait_for_selector(".identity-chip")
-            await page.click(".lobby-rooms-actions .btn-primary")
-            await page.wait_for_selector(".create-room-page")
+            await open_create_room(page)
             await page.fill(
                 'input[placeholder="Leave blank for a random name!"]', f"{prefix} room {index}"
             )
-            await page.click(".create-room-submit")
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await submit_create_room(page)
     except BaseException:
         # The caller never gets the list, so it cannot close what was opened.
         for context in contexts:

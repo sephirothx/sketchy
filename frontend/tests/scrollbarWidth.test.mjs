@@ -3,8 +3,14 @@ import test from "node:test";
 
 import { scrollbarLane } from "../src/lib/scrollbarWidth.ts";
 
-test("a classic scrollbar's lane is the window less the root", () => {
+test("a lane that 100vw counts is taken off the window", () => {
   assert.equal(scrollbarLane(1280, 1265), 15);
+});
+
+test("a lane that 100vw already leaves out is not taken off twice", () => {
+  // Chromium with `scrollbar-gutter: stable` on the root: 100vw and the page
+  // are both 1185 in a 1200px window, scrolling or not (#1178).
+  assert.equal(scrollbarLane(1185, 1185), 0);
 });
 
 test("an overlay scrollbar takes no lane", () => {

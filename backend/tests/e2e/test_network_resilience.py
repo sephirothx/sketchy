@@ -2,7 +2,13 @@ import asyncio
 
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    open_create_room,
+    open_new_room,
+    room_code,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -116,9 +122,7 @@ async def test_mid_session_socket_reconnects_to_room():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "HostReconnect")
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="room-header"]')
+            await open_new_room(host)
             code = await room_code(host)
 
             await guest.goto(BASE_URL)
@@ -196,7 +200,7 @@ async def test_a_dropped_socket_keeps_the_rooms_it_last_knew():
 
             await host.goto(BASE_URL)
             await use_guest_name(host, "ListHost")
-            await host.click('button:has-text("Create room")')
+            await open_create_room(host)
             await host.fill(
                 'input[placeholder="Leave blank for a random name!"]', "Last known room"
             )
@@ -267,10 +271,7 @@ async def test_a_notice_never_covers_a_phone_room_header():
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "PhoneNotices")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector(".create-room-page")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
 
             await context.set_offline(True)
             chip = page.locator('.room-notice-chip[data-notice="connection"]')
