@@ -315,6 +315,9 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             assert owner_row is not None and other_row is not None
             owner_row.email = "owner@example.test"
             other_row.email = "private-bob@example.test"
+            owner_settings = await session.get(UserSettings, owner_row.id)
+            assert owner_settings is not None
+            owner_settings.extra_prompt_languages = ["nl", "fr"]
             session.add(
                 PlayerReport(
                     id=submitted_report_id,
@@ -611,6 +614,9 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "private-bob@example.test" not in encoded
     assert PASSWORD not in encoded
     assert "$argon2" not in encoded
+
+    # The other play languages, in their order (#1209).
+    assert artifact["settings"]["extraPromptLanguages"] == ["nl", "fr"]
 
     contract = json.loads(
         (REPO_ROOT / "fixtures" / "account_data_export_v12_fields.json").read_text(

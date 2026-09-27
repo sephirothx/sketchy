@@ -396,15 +396,33 @@ async def test_a_browser_copy_naming_its_default_twice_still_registers(env):
     await _register(
         http,
         "SeedTwice",
-        {"promptLanguage": "pt", "extraPromptLanguages": ["pt", "es"]},
+        {"promptLanguage": "pt", "extraPromptLanguages": ["pt", "es", "es"]},
     )
     loaded = (await http.get("/api/users/me/settings")).json()
     assert (loaded["promptLanguage"], loaded["extraPromptLanguages"]) == ("pt", ["es"])
 
+    # Every language, the default among them: six others once it is dropped,
+    # which is the bound - counted after, not before.
+    await http.post("/api/auth/logout")
+    await _register(
+        http,
+        "SeedEvery",
+        {
+            "promptLanguage": "pt",
+            "extraPromptLanguages": ["en", "de", "pt", "es", "fr", "it", "nl"],
+        },
+    )
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert loaded["extraPromptLanguages"] == ["en", "de", "es", "fr", "it", "nl"]
 
-async def test_two_devices_promoting_at_once_never_list_the_default_twice(env):
-    """Each PATCH reads the row it writes under a lock, so a second device's
-    promotion swaps against what the first one left, not what it read."""
+
+async def test_two_devices_at_once_never_list_the_default_twice(env):
+    """One device ranks a language among the others while another makes it
+    the default. Whichever lands second must see the first: on PostgreSQL the
+    row lock makes it read what the first wrote (so it is refused, or swaps);
+    on SQLite, which has no row lock, the CHECK refuses the second write, and
+    the refusal is the same one. No order may store the default among the
+    others."""
     import asyncio
 
     http, factory = env
@@ -413,11 +431,62 @@ async def test_two_devices_promoting_at_once_never_list_the_default_twice(env):
         "TwoDevices",
         {"promptLanguage": "it", "extraPromptLanguages": ["en", "nl"]},
     )
-    await asyncio.gather(
-        http.patch("/api/users/me/settings", json={"promptLanguage": "en"}),
-        http.patch("/api/users/me/settings", json={"promptLanguage": "nl"}),
-    )
+    for _ in range(5):
+        ranked, promoted = await asyncio.gather(
+            http.patch("/api/users/me/settings", json={"extraPromptLanguages": ["fr", "en"]}),
+            http.patch("/api/users/me/settings", json={"promptLanguage": "fr"}),
+        )
+        assert {ranked.status_code, promoted.status_code} <= {200, 422}
+        async with factory() as session:
+            row = await session.scalar(select(UserSettings))
+            assert row.prompt_language not in row.extra_prompt_languages, (
+                row.prompt_language,
+                row.extra_prompt_languages,
+            )
+        reset = await http.patch(
+            "/api/users/me/settings",
+            json={"promptLanguage": "it", "extraPromptLanguages": ["en", "nl"]},
+        )
+        assert reset.status_code == 200
+
+
+async def test_the_database_holds_the_default_out_of_the_other_languages(env):
+    """What a JSON column can be held to on both engines: a short list, never
+    naming the default. The routes check it first; this is what holds when two
+    of them both passed that check against the same row."""
+    http, factory = env
+    await _register(http, "DbLanguages", {"promptLanguage": "de"})
+    for extras in (["de"], ["en", "de"], "de", {"de": 1}, ["en"] * 9):
+        with pytest.raises(IntegrityError):
+            async with factory() as session:
+                async with session.begin():
+                    row = await session.scalar(select(UserSettings))
+                    row.extra_prompt_languages = extras
+    async with factory() as session:
+        async with session.begin():
+            row = await session.scalar(select(UserSettings))
+            row.extra_prompt_languages = ["en", "es", "fr", "it", "nl", "pt"]
     async with factory() as session:
         row = await session.scalar(select(UserSettings))
-        languages = [row.prompt_language, *row.extra_prompt_languages]
-        assert sorted(languages) == ["en", "it", "nl"], languages
+        assert row.extra_prompt_languages == ["en", "es", "fr", "it", "nl", "pt"]
+
+
+async def test_a_seed_carries_the_other_languages_over_a_row_another_tab_made(env):
+    """R-SET-03: the browser's copy becomes the account's even when another tab
+    made a defaults row first - the other languages included."""
+    http, factory = env
+    registered = await http.post(
+        "/api/auth/register", json={"username": "OtherTab", "password": PASSWORD}
+    )
+    user_id = registered.json()["id"]
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(UserSettings, UUID(user_id))
+            row.email_reminder_last_shown_at = None
+            row.extra_prompt_languages = []
+    seeded = await seed_user_settings(
+        factory,
+        user_id=user_id,
+        values=UserSettingsSeed(promptLanguage="de", extraPromptLanguages=["fr", "it"]),
+    )
+    assert (seeded["promptLanguage"], seeded["extraPromptLanguages"]) == ("de", ["fr", "it"])

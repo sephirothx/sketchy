@@ -604,11 +604,18 @@ this player *plays* in by default (R-PROMPT-11) — what the lobby leads with, t
 a mixed room gives them, and where Quick play opens a room.
 `extra_prompt_languages` are the others they play in, ranked: a list on the row
 rather than a table of its own, so `/api/auth/me` still reads settings in one
-statement (R-PLAT-17). Its bounds are held by the settings routes, the only writers,
-which check the pair in one write under the row's lock: no repeats, only the seven,
-and the default never among them — promoting one of them to the default swaps the old
-default into its place (#1209). An account that never chose any has `[]`, which is
-exactly the one-language behaviour it had before. `locale` is the language they *read* in (R-I18N-06): the interface, the
+statement (R-PLAT-17). The settings routes check the pair in one write under the
+row's lock — only the seven, each once, the default never among them — and promoting
+one of them to the default swaps the old default into its place (#1209). Two CHECKs
+hold what a JSON column can be held to on both engines, read as its text: a list
+(`ck_user_settings_extra_prompt_languages_list`, at most 48 characters, which six
+languages fit), and never naming the default (`ck_user_settings_default_not_extra`).
+The second is what stops two devices' PATCHes, each checked against the same row,
+from storing the default twice where the lock is not one (SQLite); the loser gets the
+same `422` as a PATCH that named it. An account that never chose any has `[]`, which
+is exactly the one-language behaviour it had before.
+
+`locale` is the language they *read* in (R-I18N-06): the interface, the
 refusals, the room's own announcements. A Dutch speaker playing an English room is
 ordinary, and one column could not describe them; it is the same line `prompt_lists`
 draws between its content language and its localized catalogue copy.
