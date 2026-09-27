@@ -1,5 +1,5 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, open_new_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -92,11 +92,8 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # Step 1: Host creates a room
             await page1.goto(BASE_URL)
             await use_guest_name(page1, "HostAlice")
-            await page1.click('button:has-text("Create room")')
-            await page1.click('button:has-text("Create room")')
+            await open_new_room(page1)
 
-            # Wait for navigation to room waiting panel
-            await page1.wait_for_selector('[data-testid="room-header"]')
             code = await room_code(page1)
             assert len(code) > 0
 
@@ -439,6 +436,97 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             assert await guess_input.input_value() == 'semantic-history-probe'
             await guess_input.blur()
             assert not await guess_input.evaluate("input => document.activeElement === input")
+
+            # A landscape phone with the keyboard up (#1175). The verdict on the
+            # guess just sent hangs above the field, and the field used to rise
+            # to the top of the feed column once the feed was hidden - so the
+            # verdict was drawn off the top of the screen. It must be on screen,
+            # above the field, with the field kept at the bottom of the column.
+            await guesser_page.set_viewport_size({"width": 844, "height": 390})
+            await guess_input.focus()
+            await guesser_page.wait_for_selector('.game-room.guess-focused')
+            await guess_input.fill('landscape-verdict-probe')
+            await guess_input.press('Enter')
+            await guesser_page.get_by_test_id("guess-focus-flash").get_by_text(
+                "landscape-verdict-probe"
+            ).wait_for()
+            placement = await guesser_page.evaluate(
+                """
+                () => {
+                  const flash = document
+                    .querySelector('[data-testid="guess-focus-flash"]')
+                    .getBoundingClientRect();
+                  const field = document.querySelector('.chat-input-box').getBoundingClientRect();
+                  return {
+                    flashTop: flash.top,
+                    flashBottom: flash.bottom,
+                    fieldTop: field.top,
+                    fieldBottom: field.bottom,
+                    height: window.innerHeight,
+                  };
+                }
+                """
+            )
+            assert placement["flashTop"] >= 0, f"verdict is off the top of the screen: {placement}"
+            assert placement["flashBottom"] <= placement["fieldTop"], (
+                f"verdict is not above the guess field: {placement}"
+            )
+            assert placement["fieldBottom"] > placement["height"] / 2, (
+                f"guess field rose to the top of the column: {placement}"
+            )
+            await guess_input.blur()
+
+            # And with the keyboard down (#1199), in both orientations. The
+            # verdict is not shown then, as on desktop: the feed is back and its
+            # newest line carries the result, and a verdict above the field
+            # either covered that line or repeated it. The feed also came back
+            # scrolled short of that line, which arrived while it was hidden, so
+            # it must be wholly inside the feed's box. A near miss, because the
+            # verdict stays until the next keystroke and "close" is the one a
+            # guesser most needs to read. Two frames let the feed's resize pin
+            # it to the bottom before it is measured.
+            target = (await drawer_page.locator('.prompt-reveal').inner_text()).strip()
+            near_miss = target[:-1] + ("a" if target[-1] != "a" else "e")
+            await guess_input.focus()
+            await guesser_page.wait_for_selector('.game-room.guess-focused')
+            await guess_input.fill(near_miss)
+            await guess_input.press('Enter')
+            await guesser_page.locator('.chat-messages .chat-message.close-hint').wait_for(
+                state="attached"
+            )
+            await guess_input.blur()
+            await guesser_page.wait_for_function(
+                "() => !document.querySelector('.game-room.guess-focused')"
+            )
+            for size in ({"width": 844, "height": 390}, {"width": 390, "height": 844}):
+                await guesser_page.set_viewport_size(size)
+                feed = await guesser_page.evaluate(
+                    """
+                    async () => {
+                      await new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)));
+                      const box = (element) => {
+                        const rect = element.getBoundingClientRect();
+                        return { top: rect.top, bottom: rect.bottom, height: rect.height };
+                      };
+                      const flash = document.querySelector('[data-testid="guess-focus-flash"]');
+                      const lines = document.querySelectorAll('.chat-messages .chat-message');
+                      const newest = lines[lines.length - 1];
+                      return {
+                        verdictShown: !!flash && getComputedStyle(flash).display !== 'none'
+                          && flash.getBoundingClientRect().height > 0,
+                        list: box(document.querySelector('.chat-messages')),
+                        newest: box(newest),
+                        newestIsNearMiss: newest.classList.contains('close-hint'),
+                      };
+                    }
+                    """
+                )
+                assert not feed["verdictShown"], f"verdict shown with the keyboard down at {size}: {feed}"
+                assert feed["newestIsNearMiss"], (size, feed)
+                assert feed["list"]["top"] <= feed["newest"]["top"] < feed["newest"]["bottom"] <= (
+                    feed["list"]["bottom"] + 1
+                ), f"the feed's newest line is not wholly in view at {size}: {feed}"
+            await guesser_page.set_viewport_size({"width": 1280, "height": 720})
 
             # Verify chat message container is present
             await guesser_page.wait_for_selector('.chat-messages')

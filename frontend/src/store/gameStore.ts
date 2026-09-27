@@ -29,12 +29,21 @@ import type {
 interface GameStore {
   playerId: string | null;
   /**
-   * Set while deliberately leaving a room (leave, kick, or a seat taken over
-   * elsewhere). Clearing the session makes the room route briefly look like an
-   * un-joined visitor, which would otherwise flash the invite screen and fire
-   * a pointless reconnect probe on the way out.
+   * The room being deliberately left (leave, kick, a seat taken over
+   * elsewhere, the crash page, an invitation's Join), or null. Clearing the
+   * session makes that room's route briefly look like an un-joined visitor,
+   * which would otherwise flash the invite screen and fire a reconnect probe
+   * for the seat just given up; the route draws nothing instead.
+   *
+   * Named rather than a yes/no, because the lobby's mount - which ends the
+   * exit - is not guaranteed to happen: navigations are transitions, and an
+   * invitation's Join navigates on to the friend's room as soon as its answer
+   * arrives. When that lands before the lobby has committed, the lobby is
+   * superseded and never mounts, and a bare flag stayed up and blanked the
+   * friend's room too. Only the room being left is blanked, so the next one
+   * draws whether the lobby came first or not.
    */
-  isExitingRoom: boolean;
+  exitingRoomCode: string | null;
   roomId: string | null;
   code: string | null;
   name: string;
@@ -118,7 +127,8 @@ interface GameStore {
     playerId: string;
   }) => void;
   clearSession: () => void;
-  setExitingRoom: (isExiting: boolean) => void;
+  /** Name the room being left, or null once the exit is over. */
+  setExitingRoom: (code: string | null) => void;
   setRoomState: (payload: RoomStatePayload) => void;
   setColorblindSafeSuggestion: (suggestion: ColorblindSafeSuggestion) => void;
   addMessage: (message: ChatMessage) => void;
@@ -230,7 +240,7 @@ const initialGameFields = {
 
 export const useGameStore = create<GameStore>((set, get) => ({
   playerId: null,
-  isExitingRoom: false,
+  exitingRoomCode: null,
   roomId: null,
   code: null,
   name: "",
@@ -260,12 +270,23 @@ export const useGameStore = create<GameStore>((set, get) => ({
   setSession: ({ roomId, code, playerId }) => {
     // Nothing is persisted: the session cookie is the credential and the room
     // code comes from the URL.
-    set({ roomId, code, playerId });
+    set((state) => ({
+      roomId,
+      code,
+      playerId,
+      // A seat in the room being left again ends that exit: the route has a
+      // session to draw. A seat anywhere else leaves it standing - the left
+      // room's route can still be on screen until the navigation to the new
+      // one commits, and without the mark it would draw the invite screen.
+      ...(state.exitingRoomCode !== null && sameRoom(state.exitingRoomCode, code)
+        ? { exitingRoomCode: null }
+        : {}),
+    }));
   },
   clearSession: () => {
     set({ playerId: null, roomId: null, code: null });
   },
-  setExitingRoom: (isExitingRoom) => set({ isExitingRoom }),
+  setExitingRoom: (code) => set({ exitingRoomCode: code === null ? null : code.toUpperCase() }),
   setRoomState: (payload) =>
     set((state) => ({
       roomId: payload.id,
@@ -288,9 +309,11 @@ export const useGameStore = create<GameStore>((set, get) => ({
       roomState: payload.state,
       // The recap is not in the room state (#871); it arrives with
       // `game_ended` or `last_game` and stays until a game starts - or until
-      // this is a different room: a friend's invite moves the socket straight
-      // from one room to another, and the new one sends `last_game` only if
-      // it has a finished game of its own.
+      // this is a different room: an entry that does not leave first moves
+      // the socket straight from one room to another (the server gives the
+      // old seat up itself), and the new one sends `last_game` only if it has
+      // a finished game of its own. An invitation's Join no longer does that
+      // (#1198), but nothing here may rely on every way in leaving first.
       ...(payload.state === "playing" || payload.id !== state.roomId
         ? {
             finalScores: null,
@@ -490,6 +513,33 @@ export const useGameStore = create<GameStore>((set, get) => ({
     ...initialGameFields,
   }),
 }));
+
+function sameRoom(a: string, b: string): boolean {
+  return a.toUpperCase() === b.toUpperCase();
+}
+
+/** What `/room/:code` draws: nothing while that room is being left, the live
+room when this tab holds a seat in it, and otherwise the invite screen. A
+session for another room never activates this route. */
+export function selectRoomRoute(
+  state: Pick<GameStore, "exitingRoomCode" | "playerId" | "roomId" | "code">,
+  code: string,
+): "leaving" | "room" | "invite" {
+  if (state.exitingRoomCode !== null && sameRoom(state.exitingRoomCode, code)) return "leaving";
+  if (state.playerId && state.roomId && state.code !== null && sameRoom(state.code, code)) {
+    return "room";
+  }
+  return "invite";
+}
+
+/** Whether an answer to a request made for the seat in `askedCode` still
+belongs to this tab's session: false once that room was left - the session
+cleared, or replaced by the next room's - while the request was in the air.
+A seat applied from such an answer would end the exit (`exitingRoomCode`) and
+draw the left room again over a seat the server is releasing. */
+export function roomAnswerIsCurrent(state: Pick<GameStore, "code">, askedCode: string): boolean {
+  return state.code !== null && sameRoom(state.code, askedCode);
+}
 
 /** The local player's own row, or undefined before the roster arrives. */
 export function selectMe(state: GameStore): PlayerInfo | undefined {

@@ -206,6 +206,10 @@
   /* how far a friend invite reaches above that, written by
      FriendInviteNotice while one is shown; the toasts stand on both */
   --friend-invite-clearance: 0px;
+  /* the widest column docked down either side, set by the landscape phone
+     room for its feed (game-room.css); centred notices keep that much clear
+     on both */
+  --dock-inline-inset: 0px;
 }
 
 /* Dark: the shipped slate ground (#0f172a / #1e293b / #334155 / #475569 and

@@ -2,7 +2,12 @@
 
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import open_room_settings, register_account, use_guest_name
+from tests.e2e.lobby_helpers import (
+    open_create_room,
+    open_room_settings,
+    register_account,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -16,7 +21,7 @@ async def test_registered_player_saves_applies_and_uses_room_preset():
             await page.goto(BASE_URL)
             await use_guest_name(page, "PresetHost")
             await register_account(page, "PresetHost")
-            await page.get_by_role("button", name="Create room").click()
+            await open_create_room(page)
             await page.get_by_label("Room name").fill("Friday finals")
             await page.get_by_role("spinbutton", name="Max players").fill("12")
             await page.get_by_role("spinbutton", name="Rounds").fill("5")

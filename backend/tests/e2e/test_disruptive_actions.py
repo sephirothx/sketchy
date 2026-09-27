@@ -1,5 +1,12 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code as get_room_code, use_guest_name, room_menu_action, leave_room
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    room_code as get_room_code,
+    use_guest_name,
+    room_menu_action,
+    leave_room,
+    open_new_room,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -20,9 +27,7 @@ async def test_invite_feedback_and_active_game_leave_confirmation():
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "SafeHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
 
             await room_menu_action(host_page, "Copy the invite link")
             await host_page.wait_for_selector(
@@ -116,9 +121,7 @@ async def test_waiting_room_leave_remains_immediate():
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "WaitingLeaver")
-            await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
 
             room_code = await get_room_code(page)
             await page.evaluate("window.__sentSocketFrames = []")

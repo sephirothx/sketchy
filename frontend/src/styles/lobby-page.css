@@ -521,8 +521,7 @@
 
 
 .invite-callout,
-.invite-notice,
-.invite-form-error {
+.invite-notice {
   margin: 0 0 16px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -558,14 +557,6 @@
   border-top: 1.5px solid var(--line);
 }
 
-.invite-form-error {
-  margin-top: 8px;
-  margin-bottom: 0;
-  padding: 8px 10px;
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
 .invite-name-input {
   width: 100%;
   min-height: 48px;
@@ -579,6 +570,12 @@
   font: inherit;
   font-size: 16px;
   font-weight: 700;
+}
+
+/* A name the page refused: the field's line turns red while a toast says why
+   (R-UX-13). Nothing is added under it, so Join and Spectate stay put. */
+.invite-name-input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 
 .invite-name-input::placeholder {
@@ -612,8 +609,7 @@
   margin-top: 14px;
 }
 
-.invite-name-input + .invite-actions,
-.invite-name-input + .invite-form-error + .invite-actions {
+.invite-name-input + .invite-actions {
   margin-top: 10px;
 }
 
@@ -1592,7 +1588,8 @@ a.online-player-name:focus-visible {
 
 /* An invitation asks a question, so it sits where a banner does rather than
    passing by like a toast - above a phone page's dock rather than on it
-   (--dock-clearance, useBottomDock): it sat on Quick play and Create a room. */
+   (--dock-clearance, useBottomDock): it sat on Quick play and Create a room.
+   And between a column docked down either side (--dock-inline-inset). */
 .friend-invite-notice {
   position: fixed;
   left: 50%;
@@ -1602,7 +1599,7 @@ a.online-player-name:focus-visible {
   display: flex;
   align-items: center;
   gap: 12px;
-  max-width: min(92vw, 460px);
+  max-width: min(calc(92vw - 2 * var(--dock-inline-inset)), 460px);
   padding: 10px 12px 10px 16px;
   background: var(--card);
   border: 1.5px solid var(--primary);

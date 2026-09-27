@@ -6,6 +6,7 @@ from __future__ import annotations
 from playwright.async_api import Page, async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     open_room_settings,
     open_settings_section,
     register_account,
@@ -44,9 +45,7 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await host.goto(BASE_URL)
             await use_guest_name(host, "PinHost")
             await register_account(host, "pinhost")
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.locator('[data-testid="waiting-room"]').wait_for()
+            await open_new_room(host)
             code = await room_code(host)
 
             await other.goto(BASE_URL)

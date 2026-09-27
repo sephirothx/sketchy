@@ -2,6 +2,7 @@
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_create_room,
     open_room_settings,
     open_settings_section,
     room_code,
@@ -24,7 +25,7 @@ async def test_the_rules_the_host_sets_reach_the_lobby_and_then_the_toolbar():
             # The host picks the rules while creating the room.
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "RulesHost")
-            await host_page.click('button:has-text("Create room")')
+            await open_create_room(host_page)
             await host_page.fill(
                 'input[placeholder="Leave blank for a random name!"]', "Freehand studio"
             )

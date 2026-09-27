@@ -15,6 +15,7 @@ export interface ToastAction {
 }
 
 export interface ToastContextValue {
+  /** Show a toast; the id it returns is what `dismiss` takes. */
   notify: (
     message: string,
     // Required: a failure left on the default rendered as blue news with
@@ -22,7 +23,14 @@ export interface ToastContextValue {
     tone: ToastTone,
     durationMs?: number,
     action?: ToastAction,
-  ) => void;
+  ) => number;
+  /** Take a toast down before its timer does, and say whether it was still up.
+
+  For a toast whose news stopped being true while it stood: a friend request
+  answered somewhere else left its Accept on screen for the rest of its twelve
+  seconds (#1197). `false` means it had already gone - timed out, closed, or
+  pushed off the stack - so nothing was on screen to take down. */
+  dismiss: (id: number) => boolean;
 }
 
 /** How many toasts stand at once.

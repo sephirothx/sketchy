@@ -11,7 +11,12 @@ default; a press in English sits a stranger in one of them, and both tests fail.
 import random
 
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import room_code, room_name as current_room_name, use_guest_name
+from tests.e2e.lobby_helpers import (
+    open_new_room,
+    room_code,
+    room_name as current_room_name,
+    use_guest_name,
+)
 from tests.e2e.test_friends import SETTLE_MS, make_friends, sign_up, unique
 
 # Holds every outgoing room entry - `join_room`, `create_room`,
@@ -56,10 +61,7 @@ async def open_public_room(page, name: str) -> tuple[str, str]:
     """
     await page.goto(BASE_URL)
     await use_guest_name(page, name)
-    await page.click(".lobby-rooms-actions .btn-primary")
-    await page.wait_for_selector(".create-room-page")
-    await page.click(".create-room-submit")
-    await page.wait_for_selector('[data-testid="waiting-room"]')
+    await open_new_room(page)
     return await room_code(page), await current_room_name(page)
 
 
@@ -182,9 +184,7 @@ async def test_a_friend_s_invitation_waits_while_quick_play_is_in_flight():
             await sign_up(guest, guest_name)
             await make_friends(host, guest, host_name, guest_name)
 
-            await host.click(".lobby-rooms-actions .btn-primary")
-            await host.click(".create-room-submit")
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
             invite = host.locator(
                 f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
@@ -231,9 +231,7 @@ async def test_an_invite_link_waits_while_another_way_in_is_in_flight():
             await guest.wait_for_selector(".invite-primary-button:not([disabled])")
 
             # The friend's invitation arrives on top of that page.
-            await friend.click(".lobby-rooms-actions .btn-primary")
-            await friend.click(".create-room-submit")
-            await friend.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(friend)
             invite = friend.locator(
                 f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
             ).get_by_role("button", name="Invite")
@@ -248,10 +246,10 @@ async def test_an_invite_link_waits_while_another_way_in_is_in_flight():
             # no refusal the room never gave.
             await expect(guest.locator(".invite-primary-button")).to_be_disabled()
             await expect(guest.locator(".invite-secondary-button")).to_be_disabled()
-            assert await guest.locator("#invite-entry-error").count() == 0
+            assert await guest.locator(".app-toast.error").count() == 0
 
             await guest.wait_for_selector('[data-testid="waiting-room"]', timeout=SETTLE_MS)
-            assert await guest.locator("#invite-entry-error").count() == 0
+            assert await guest.locator(".app-toast.error").count() == 0
         finally:
             await friend_context.close()
             await guest_context.close()

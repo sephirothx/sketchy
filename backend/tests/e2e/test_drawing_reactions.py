@@ -13,6 +13,7 @@ import asyncio
 from playwright.async_api import Page, async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     open_room_settings,
     open_settings_section,
     register_account,
@@ -105,9 +106,7 @@ async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profil
             await register_account(host, "reacthost")
             await register_account(other, "reactother")
 
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.locator('[data-testid="waiting-room"]').wait_for()
+            await open_new_room(host)
             code = await room_code(host)
             for page in (other, guest):
                 await join_by_code(page, code)

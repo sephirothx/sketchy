@@ -3369,15 +3369,33 @@ async def test_an_acknowledgement_cannot_name_somebody_elses_report(env):
     assert (await theirs_http.get("/api/reports/reviewed")).json()["count"] == 1
 
 
+def _retention_held_until_flushed(factory):
+    """A retention writer that writes only when a report's flush asks it to.
+
+    These tests cite a line "said just now", which is to say still queued, and
+    the default linger (0.25 s) let the writer go ahead on its own whenever a
+    request ran longer than that - which a loaded CI runner does. The test
+    database is one connection under a StaticPool, shared by every session, so
+    a writer that went ahead mid-request had its INSERT rolled back by the
+    request's own read-only session closing, then committed nothing and counted
+    the line written: the report after it found no row and was refused as
+    unavailable (PR #1205's CI). Production never shares a connection between
+    sessions, so the race is the fixture's, not the service's. Holding the
+    linger removes it, and makes the flush the only way the line reaches the
+    table - which is what these tests are about.
+    """
+    from app.services.message_retention import MessageRetentionService
+
+    return MessageRetentionService(factory, linger_seconds=60)
+
+
 async def test_a_rest_report_that_will_be_refused_never_waits_for_the_queue(monkeypatch):
     """R-MOD-21 is a rule about both paths: a refused report must not pay the
     flush. On this one the flush ran before every database-side refusal, so an
     unknown player or a duplicate cost the whole bound (#972 sixth review)."""
-    from app.services.message_retention import MessageRetentionService
-
     monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
     factory, engine = await create_test_db()
-    retention = MessageRetentionService(factory)
+    retention = _retention_held_until_flushed(factory)
     users = SqlAlchemyUserRepository(factory)
     flushes: list[int] = []
 
@@ -3440,11 +3458,9 @@ async def test_a_picture_report_with_no_picture_never_waits_for_the_queue(monkey
     about a picture that is not there paid the whole bound, and - worse - the
     key it would have stored was read after the flush rather than before it,
     which is the defect the socket path was fixed for (#972 seventh review)."""
-    from app.services.message_retention import MessageRetentionService
-
     monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
     factory, engine = await create_test_db()
-    retention = MessageRetentionService(factory)
+    retention = _retention_held_until_flushed(factory)
     users = SqlAlchemyUserRepository(factory)
     flushes: list[int] = []
 
@@ -3487,11 +3503,9 @@ async def test_a_lobby_line_cited_the_moment_it_was_said_is_found(monkeypatch):
     """The line's id is handed out when it is queued, and the writer lingers
     a quarter of a second for the rest of a batch (#972): a report citing it
     at once was refused as unavailable until the router flushed the queue."""
-    from app.services.message_retention import MessageRetentionService
-
     monkeypatch.setenv("IP_HASH_SECRET", "moderation-test-secret")
     factory, engine = await create_test_db()
-    retention = MessageRetentionService(factory)
+    retention = _retention_held_until_flushed(factory)
     users = SqlAlchemyUserRepository(factory)
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
