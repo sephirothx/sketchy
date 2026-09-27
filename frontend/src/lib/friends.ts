@@ -362,7 +362,25 @@ or the room bar's chip, keys off this rather than off its own timer: the
 toast's Accept used to stay up after the answer had been given elsewhere
 (#1197). Keeps the notice's order, and each row as the latest read has it. */
 export function stillWaiting(named: FriendEntry[], incoming: FriendEntry[]): FriendEntry[] {
-  const current = new Map(incoming.map((entry) => [entry.userId, entry]));
+  return stillOn(named, incoming);
+}
+
+/** Which of the held acceptances are still friendships.
+
+An acceptance that arrives in a room is held until the room is left (#1200),
+and a game is long enough for the friendship to be removed in the meantime -
+from another tab, or by the other person. Telling somebody they were accepted
+by a person who is no longer a friend is news that stopped being true, so the
+held ones are read off `friends` when they are finally said, the way a
+request notice is read off `incoming`. */
+export function stillFriends(held: FriendEntry[], friends: FriendEntry[]): FriendEntry[] {
+  return stillOn(held, friends);
+}
+
+/** The named entries still on *list*, in the naming order, each as the list
+    has it now. */
+function stillOn(named: FriendEntry[], list: FriendEntry[]): FriendEntry[] {
+  const current = new Map(list.map((entry) => [entry.userId, entry]));
   return named.flatMap((entry) => {
     const now = current.get(entry.userId);
     return now ? [now] : [];

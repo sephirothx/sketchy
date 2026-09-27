@@ -16,6 +16,7 @@ import {
   parseRecentPlayers,
   lobbyRowMayOfferFriendship,
   profileFriendActionFor,
+  stillFriends,
   stillWaiting,
   waitingRequestCount,
   withArrivals,
@@ -436,6 +437,20 @@ test("a request notice names only who is still waiting (#1197)", () => {
   // The row as the latest read has it, in the notice's order.
   const renamed = { ...bob, displayName: "Bobby" };
   assert.deepEqual(stillWaiting([bob, ada], [ada, renamed]), [renamed, ada]);
+});
+
+test("acceptances held through a room are said once each, if still friends (#1200)", () => {
+  // Every read in the room names what is still owed, so the same acceptance
+  // arrives again and again until it is said: held once each.
+  const ada = entry("ada");
+  const bob = entry("bob");
+  const held = withArrivals(withArrivals([], [ada]), [ada, bob]);
+  assert.deepEqual(held, [ada, bob]);
+  // Removed during the game: no longer news worth giving.
+  assert.deepEqual(stillFriends(held, [bob]), [bob]);
+  assert.deepEqual(stillFriends(held, []), []);
+  const renamed = { ...ada, displayName: "Ada L." };
+  assert.deepEqual(stillFriends(held, [bob, renamed]), [renamed, bob]);
 });
 
 test("requests that arrive join the ones shown, newest first and once each", () => {
