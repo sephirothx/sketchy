@@ -13,10 +13,17 @@ import type { FriendInvite } from "../lib/friends";
  * room's chat feed and the desktop drawer's palette, and a notice may not
  * cover either. The room bar says it is there by holding a claim; the card
  * steps aside while any claim is held.
+ *
+ * The same claim decides where a **Friend request** goes (#1197): while one is
+ * held, a request arriving is the bar's chip rather than a toast
+ * (`useFriendArrivalNotices`, `friendRequestNoticeStore`), for the same reason
+ * - the toast stood on the same two spots. A claim is the one fact both
+ * notices need, "a room bar is up", so it is kept once, here.
  */
 interface FriendInviteStore {
   invite: FriendInvite | null;
-  /** How many room bars are showing invitations; the card draws at zero. */
+  /** How many room bars are up. At zero the invitation is the card and a
+      friend request a toast; above it, both are chips in the bar. */
   roomBarClaims: number;
   receive: (invite: FriendInvite) => void;
   /** Answered, dismissed or expired: nothing is left to draw. */

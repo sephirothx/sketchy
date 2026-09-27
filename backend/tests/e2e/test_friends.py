@@ -621,8 +621,10 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
     """#1197: the toast's Accept stood for the rest of its twelve seconds after
     the request had been accepted on the friends surface. Whatever shows a
     request - the toast outside a room, the chip in one - goes as soon as it
-    stops waiting: answered in another tab, or withdrawn by the asker. And the
-    chip's Not now puts it away without telling anybody (R-FRIEND-05)."""
+    stops waiting: answered in another tab, or withdrawn by the asker. The
+    chip's Not now puts it away without telling anybody (R-FRIEND-05); leaving
+    the room puts it away too, and a toast still up when a room opens moves
+    into the bar rather than standing over the room."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
         asker_context = await browser.new_context()
@@ -634,7 +636,35 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
         chip = target.locator(
             '[data-testid="room-header"] .room-notice-chip[data-notice="friend-request"]'
         )
+        any_chip = target.locator('.room-notice-chip[data-notice="friend-request"]')
         popover = target.locator('.room-notice-popover[data-notice="friend-request"]')
+        announcer = target.get_by_test_id("friend-request-announcer")
+
+        # Everything the target says to the server while `listening` holds:
+        # HTTP writes to the friends API, and every Socket.IO event it emits.
+        listening: list[bool] = []
+        writes: list[str] = []
+        emitted: list[str] = []
+
+        def on_frame(payload) -> None:
+            # "42" is an event, "45" a binary one. The health report is the
+            # socket's own minute timer and says nothing about anybody.
+            if (listening and isinstance(payload, str) and payload[:2] in ("42", "45")
+                    and "client_health" not in payload):
+                emitted.append(payload)
+
+        target.on("websocket", lambda ws: ws.on("framesent", on_frame))
+        target.on(
+            "request",
+            lambda request: writes.append(request.url)
+            if listening and "/api/friends" in request.url and request.method != "GET"
+            else None,
+        )
+
+        async def create_room() -> None:
+            await target.click('button:has-text("Create room")')
+            await target.click('button:has-text("Create room")')
+            await target.wait_for_selector('[data-testid="waiting-room"]')
 
         async def withdraw() -> None:
             await open_friends(asker)
@@ -648,23 +678,20 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
             await sign_up(asker, asker_name)
             await sign_up(target, target_name)
 
-            # In a room: put off with Not now, which writes nothing.
-            await target.click('button:has-text("Create room")')
-            await target.click('button:has-text("Create room")')
-            await target.wait_for_selector('[data-testid="waiting-room"]')
+            # In a room: put off with Not now, which sends nothing at all -
+            # no request, no socket event - so nobody can learn of it.
+            await create_room()
             await ask_from_profile(asker, target_name)
             await expect(chip).to_be_visible(timeout=SETTLE_MS)
-            writes = []
-            target.on(
-                "request",
-                lambda request: writes.append(request.url)
-                if "/api/friends" in request.url and request.method != "GET"
-                else None,
-            )
             await chip.click()
+            listening.append(True)
             await popover.get_by_role("button", name="Not now").click()
             await expect(chip).to_have_count(0)
+            # Long enough for anything the click set off to have gone out.
+            await target.wait_for_timeout(1000)
+            listening.clear()
             assert writes == [], writes
+            assert emitted == [], emitted
             # Still waiting, under its badge, where it is answered.
             await expect(
                 target.locator('[data-testid="friend-request-badge"]')
@@ -677,10 +704,36 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
             await withdraw()
             await expect(chip).to_have_count(0, timeout=SETTLE_MS)
 
+            # Leaving the room with the chip up puts it away: the lobby gets
+            # neither a chip nor a toast for it, only the badge's count.
+            await ask_from_profile(asker, target_name)
+            await expect(chip).to_be_visible(timeout=SETTLE_MS)
+            await leave_room(target)
+            await target.wait_for_selector('[data-testid="quick-play"]')
+            # A toast would be raised on the way out, if at all; give it the
+            # moment it would take.
+            await target.wait_for_timeout(1000)
+            await expect(toast).to_have_count(0)
+            await expect(any_chip).to_have_count(0)
+            await expect(
+                target.locator('[data-testid="friend-request-badge"]')
+            ).to_have_text("1")
+
+            # Asked while in the lobby, it is a toast; opening a room moves it
+            # into the bar, and it is not said a second time on the way in.
+            await withdraw()
+            await ask_from_profile(asker, target_name)
+            await expect(toast).to_be_visible(timeout=SETTLE_MS)
+            await create_room()
+            await expect(chip).to_be_visible(timeout=SETTLE_MS)
+            await expect(toast).to_have_count(0)
+            await expect(announcer).to_have_text("")
+
             # Outside a room it is a toast, and accepting in another tab of
             # the same account takes it down well inside its twelve seconds.
             await leave_room(target)
             await target.wait_for_selector('[data-testid="quick-play"]')
+            await withdraw()
             await ask_from_profile(asker, target_name)
             await expect(toast).to_be_visible(timeout=SETTLE_MS)
             second = await target_context.new_page()

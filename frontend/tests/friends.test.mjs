@@ -472,3 +472,20 @@ test("the room bar's requests are put away without sending anything", () => {
   assert.deepEqual(useFriendRequestNoticeStore.getState().askers, []);
   assert.equal(useFriendRequestNoticeStore.getState().announcement, "");
 });
+
+test("a request withdrawn from the chip is dropped, so asking again is said again", () => {
+  const { show, keep, clear } = useFriendRequestNoticeStore.getState();
+  const ada = entry("ada", { status: "pending" });
+  const bob = entry("bob", { status: "pending" });
+  show([bob], "bob wants to be friends.");
+  show([ada], "ada wants to be friends.");
+  // Ada withdraws: the chip keeps Bob, and the region's words go, so Ada
+  // asking again changes them and is heard (#1197).
+  keep(stillWaiting(useFriendRequestNoticeStore.getState().askers, [bob]));
+  assert.deepEqual(useFriendRequestNoticeStore.getState().askers, [bob]);
+  assert.equal(useFriendRequestNoticeStore.getState().announcement, "");
+  show([ada], "ada wants to be friends.");
+  assert.deepEqual(useFriendRequestNoticeStore.getState().askers, [ada, bob]);
+  assert.equal(useFriendRequestNoticeStore.getState().announcement, "ada wants to be friends.");
+  clear();
+});

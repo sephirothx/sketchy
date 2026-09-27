@@ -75,6 +75,7 @@ export function useFriendArrivalNotices(): string {
   const inBar = useFriendRequestNoticeStore((state) => state.askers);
   const showInBar = useFriendRequestNoticeStore((state) => state.show);
   const clearBar = useFriendRequestNoticeStore((state) => state.clear);
+  const keepInBar = useFriendRequestNoticeStore((state) => state.keep);
   const announcement = useFriendRequestNoticeStore((state) => state.announcement);
   const { notify, dismiss } = useToast();
   const openOverlay = useOpenOverlay();
@@ -137,8 +138,12 @@ export function useFriendArrivalNotices(): string {
     });
   }, [incoming, dismiss]);
   useEffect(() => {
-    if (inBar.length > 0 && stillWaiting(inBar, incoming).length === 0) clearBar();
-  }, [inBar, incoming, clearBar]);
+    // Every time it shrinks, not only when it empties: a request withdrawn
+    // and asked again is a new arrival, so it must not still be on the chip -
+    // or in the region's words, which would then not change and say nothing.
+    const waiting = stillWaiting(inBar, incoming);
+    if (waiting.length < inBar.length) keepInBar(waiting);
+  }, [inBar, incoming, keepInBar]);
 
   // A room opening takes a request toast still standing into its bar, because
   // there the toast covers the chat; leaving puts the chip away. Not said

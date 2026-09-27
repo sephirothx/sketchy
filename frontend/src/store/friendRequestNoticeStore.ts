@@ -25,6 +25,10 @@ interface FriendRequestNoticeStore {
   announcement: string;
   /** Requests that arrived, or a toast's that moved into the bar. */
   show: (arrived: FriendEntry[], announcement?: string) => void;
+  /** Narrowed to the ones still waiting, when some were answered or withdrawn.
+      The words go too: they named who arrived, and the next arrival - the
+      same person asking again included - is said afresh. */
+  keep: (waiting: FriendEntry[]) => void;
   /** Answered, put off with *Not now*, or the room left. Sends nothing. */
   clear: () => void;
 }
@@ -37,6 +41,7 @@ export const useFriendRequestNoticeStore = create<FriendRequestNoticeStore>((set
       askers: withArrivals(state.askers, arrived),
       announcement: announcement ?? state.announcement,
     })),
+  keep: (waiting) => set({ askers: waiting, announcement: "" }),
   // The words go with the chip, so the next request is said afresh even when
   // its sentence is the same one.
   clear: () => set((state) => (state.askers.length === 0 && state.announcement === "" ? state : { askers: [], announcement: "" })),

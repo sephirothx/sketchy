@@ -14,6 +14,21 @@ import { FRIENDS_PATH } from "../lib/overlayRoutes";
 import { friendRequestSentence, stillWaiting } from "../lib/friends";
 import { ui } from "../content/ui/index.ts";
 
+/** "*Ada* wants to be friends.", with the name in bold wherever the
+    language puts it: the sentence is formatted around a placeholder and split
+    there, so no catalogue has to be written in two halves. */
+function AskerSentence({ name }: { name: string }) {
+  const MARK = "\u0000";
+  const [before, after = ""] = ui.useFriendArrivalNotices.wantsToBeFriends({ name: MARK }).split(MARK);
+  return (
+    <>
+      {before}
+      <strong>{name}</strong>
+      {after}
+    </>
+  );
+}
+
 function connectionLabel(status: Exclude<ConnectionStatus, "connected">): string {
   // "Disconnected", never "offline": the glossary's word for a dropped
   // connection (R-UX-02).
@@ -204,7 +219,8 @@ export function RoomNoticeChips() {
       )}
       {openNotice === "friend-request" && requests.length > 0 && (
         <div id={popoverId} className="room-notice-popover" data-notice="friend-request">
-          <p>{requestText}</p>
+          {/* One asker is named in bold, as the invitation's sender is. */}
+          <p>{requests.length === 1 ? <AskerSentence name={requests[0].displayName} /> : requestText}</p>
           <div className="room-notice-popover-actions">
             {requests.length === 1 ? (
               <button
