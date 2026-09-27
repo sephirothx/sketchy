@@ -8,7 +8,7 @@ import re
 import uuid
 
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import join_by_code, register_account, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, leave_room, register_account, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -168,6 +168,96 @@ async def test_an_invitation_reaches_a_friend_and_seats_them():
             await expect(host.locator(".player-row")).to_have_count(
                 2, timeout=SETTLE_MS
             )
+        finally:
+            await host_context.close()
+            await guest_context.close()
+            await browser.close()
+
+
+async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
+    """#1176: the card sat on the phone room's chat feed and hid its latest
+    lines. In a room the invitation is a chip in the bar instead, whose
+    popover answers it with Join or Not now.
+
+    The rooms here are waiting rooms, not games: the bar is one component for
+    both, so what holds in one holds in the other, and a game would cost a
+    second guest for nothing."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context(
+            viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True
+        )
+        host, guest = await host_context.new_page(), await guest_context.new_page()
+        host_name, guest_name = unique("Host"), unique("Pal")
+        card = guest.locator('[data-testid="friend-invite"]')
+        chip = guest.locator(
+            '[data-testid="room-header"] .room-notice-chip[data-notice="invite"]'
+        )
+        popover = guest.locator('.room-notice-popover[data-notice="invite"]')
+
+        async def invite_guest() -> None:
+            invite = host.locator(
+                f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
+            ).get_by_role("button", name="Invite")
+            await expect(invite).to_be_visible(timeout=SETTLE_MS)
+            await invite.click()
+            # In the lobby it is the card, as before.
+            await expect(card).to_be_visible(timeout=SETTLE_MS)
+
+        async def guest_opens_a_room() -> None:
+            # The invitation outlives the lobby: in a room of the guest's own
+            # it moves into the bar rather than floating over the room.
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector(".create-room-page")
+            await guest.click('button:has-text("Create room")')
+            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            await expect(card).to_have_count(0)
+            await expect(chip).to_be_visible()
+
+        try:
+            await sign_up(host, host_name)
+            await sign_up(guest, guest_name)
+            await make_friends(host, guest, host_name, guest_name)
+
+            await host.click('button:has-text("Create room")')
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await invite_guest()
+            await guest_opens_a_room()
+
+            # Named by the word it shows, then the sentence; said once from
+            # outside the room, where a hidden bar cannot swallow it.
+            await expect(chip).to_have_attribute(
+                "aria-label", re.compile(rf"^Invitation: {host_name} ")
+            )
+            await expect(guest.get_by_test_id("friend-invite-announcer")).to_contain_text(
+                host_name
+            )
+            box = await chip.bounding_box()
+            assert box and box["x"] >= 0 and box["x"] + box["width"] <= 390, box
+
+            await chip.click()
+            await expect(popover).to_contain_text(host_name)
+            await popover.get_by_role("button", name="Not now").click()
+            await expect(chip).to_have_count(0)
+            await expect(card).to_have_count(0)
+
+            # A second invitation, answered with Join from the chip. The host's
+            # list marks the first as sent until it is drawn afresh.
+            await leave_room(guest)
+            await guest.wait_for_selector('[data-testid="quick-play"]')
+            await host.reload()
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await invite_guest()
+            await guest_opens_a_room()
+            await chip.click()
+            await popover.get_by_role("button", name="Join").click()
+
+            await expect(host.locator(".player-row")).to_have_count(
+                2, timeout=SETTLE_MS
+            )
+            await expect(chip).to_have_count(0)
         finally:
             await host_context.close()
             await guest_context.close()

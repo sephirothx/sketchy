@@ -997,6 +997,7 @@ export const DE: Catalogue = {
     invitedYouTheirGame: "hat dich in seine Runde eingeladen.",
     join: "Beitreten",
     dismissInvitation: "Einladung ausblenden",
+    notNow: "Jetzt nicht",
   },
 
   friendsOverlay: {
@@ -1810,6 +1811,7 @@ export const DE: Catalogue = {
     reconnecting: "Verbinde neu",
     disconnected: "Getrennt",
     rejoinFailed: "Rückkehr fehlgeschlagen",
+    invitation: "Einladung",
     serverUpdateStarted: "Server-Update läuft. Diese Runde endet bald.",
   },
 

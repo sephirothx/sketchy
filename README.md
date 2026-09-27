@@ -109,7 +109,10 @@ keyboard that takes half the screen, and one thumb.
   always among its rows, and in the waiting room's invite list, even when the list is
   capped and they sort past the cut: each account asks for its own friends' status
   apart from the public list, every 15 seconds while one of those is on screen. A request that arrives offers **Accept** on the notice itself, and
-  lingers long enough to reach mid-turn. Declining
+  lingers long enough to reach mid-turn. An invitation is a card at the foot of the
+  screen outside a room; inside one it is an *Invitation* chip in the room header, beside
+  the round and the clock, whose tap shows who sent it with **Join** and **Not now**, so it
+  never covers the chat or the drawing tools. Declining
   and removing are confirmed first: a decline is kept, so the person refused cannot ask
   again, though the one who declined may still ask them. Cancelling a request you sent
   leaves nothing behind. Guests are not offered friendships, since a guest name belongs
