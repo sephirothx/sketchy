@@ -521,8 +521,7 @@
 
 
 .invite-callout,
-.invite-notice,
-.invite-form-error {
+.invite-notice {
   margin: 0 0 16px;
   padding: 10px 12px;
   border-radius: var(--radius-sm);
@@ -558,14 +557,6 @@
   border-top: 1.5px solid var(--line);
 }
 
-.invite-form-error {
-  margin-top: 8px;
-  margin-bottom: 0;
-  padding: 8px 10px;
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
 .invite-name-input {
   width: 100%;
   min-height: 48px;
@@ -579,6 +570,12 @@
   font: inherit;
   font-size: 16px;
   font-weight: 700;
+}
+
+/* A name the page refused: the field's line turns red while a toast says why
+   (R-UX-13). Nothing is added under it, so Join and Spectate stay put. */
+.invite-name-input[aria-invalid="true"] {
+  border-color: var(--danger);
 }
 
 .invite-name-input::placeholder {
@@ -612,8 +609,7 @@
   margin-top: 14px;
 }
 
-.invite-name-input + .invite-actions,
-.invite-name-input + .invite-form-error + .invite-actions {
+.invite-name-input + .invite-actions {
   margin-top: 10px;
 }
 
