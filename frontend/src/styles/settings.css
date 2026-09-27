@@ -1222,6 +1222,12 @@
   min-width: 0;
 }
 
+/* After every chip whatever order a drag has given them: the chips are
+   placed by `order` while one is held (PlayLanguageExtras says why). */
+.play-language-extras > .language-picker {
+  order: 99;
+}
+
 /* Its own line under the chips: the row's control wraps, and a suggestion
    beside the chips would read as one of them. */
 .play-language-suggestions {

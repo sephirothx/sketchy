@@ -54,29 +54,6 @@ export function chooseDefaultPlayLanguage(
   return { promptLanguage: next, extraPromptLanguages: extras };
 }
 
-export function addExtraPromptLanguage(
-  current: PlayLanguages,
-  language: PromptLanguage,
-): PlayLanguages {
-  return {
-    ...current,
-    extraPromptLanguages: normalizeExtraPromptLanguages(
-      [...current.extraPromptLanguages, language],
-      current.promptLanguage,
-    ),
-  };
-}
-
-export function removeExtraPromptLanguage(
-  current: PlayLanguages,
-  language: PromptLanguage,
-): PlayLanguages {
-  return {
-    ...current,
-    extraPromptLanguages: current.extraPromptLanguages.filter((item) => item !== language),
-  };
-}
-
 /** `extras` with the one at `from` moved to `to`, both clamped to the list. */
 export function moveExtraPromptLanguage(
   extras: readonly PromptLanguage[],
