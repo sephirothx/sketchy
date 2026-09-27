@@ -1,0 +1,193 @@
+"""The languages a player plays in: a default and the others, ranked (#1210).
+
+Settings → Appearance holds both. The others are chips that can be added,
+moved - by their arrows or by dragging - promoted to the default and removed;
+a guest keeps them in this browser, an account on every device it signs in on.
+"""
+from __future__ import annotations
+
+from uuid import uuid4
+
+import pytest
+from playwright.async_api import Page, async_playwright
+
+from tests.e2e.a11y import DEFAULT_DISABLED_RULES, assert_no_axe_violations
+from tests.e2e.lobby_helpers import register_account, use_guest_name
+
+BASE_URL = "http://localhost:8000"
+
+
+async def _extras(page: Page) -> list[str]:
+    return await page.locator(".play-language-chip").evaluate_all(
+        "chips => chips.map(chip => chip.dataset.language)"
+    )
+
+
+async def _open_appearance(page: Page):
+    await page.goto(f"{BASE_URL}/settings/appearance")
+    dialog = page.locator(".settings-modal-card")
+    await dialog.wait_for(state="visible")
+    return dialog
+
+
+async def _add(dialog, name: str) -> None:
+    await dialog.get_by_role("button", name="Add a language you play in").click()
+    await dialog.get_by_role("option", name=name).click()
+
+
+async def test_a_player_ranks_the_other_languages_they_play_in():
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        # Italian first, then English: the browser's second language is only
+        # ever suggested, never added for the player.
+        context = await browser.new_context(locale="it-IT")
+        await context.add_init_script(
+            "Object.defineProperty(navigator, 'languages', { get: () => ['it-IT', 'en-GB', 'fr'] });"
+            "localStorage.setItem('sketchy_locale', 'en');"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Ranker{uuid4().hex[:6]}")
+            dialog = await _open_appearance(page)
+            await dialog.get_by_role(
+                "button", name="Language you play in: italiano (Italian)"
+            ).wait_for()
+            assert await _extras(page) == []
+            suggestions = dialog.locator(".play-language-suggestions")
+            await suggestions.get_by_role("button", name="Add English").wait_for()
+            assert await suggestions.get_by_role("button", name="Add français").count() == 1
+
+            # A suggestion taken is a chip, and no longer suggested.
+            await suggestions.get_by_role("button", name="Add English").click()
+            await _add(dialog, "Nederlands")
+            await _add(dialog, "Deutsch")
+            assert await _extras(page) == ["en", "nl", "de"]
+            assert await suggestions.get_by_role("button", name="Add English").count() == 0
+
+            # By the arrows, which say where it went.
+            await dialog.get_by_role("button", name="Move Deutsch earlier").click()
+            assert await _extras(page) == ["en", "de", "nl"]
+            await dialog.get_by_text("Deutsch is now 2 of 3").wait_for()
+            assert await dialog.get_by_role("button", name="Move English earlier").is_disabled()
+
+            # By dragging: Nederlands, held and dropped on English, goes first.
+            chips = dialog.locator(".play-language-chip")
+            source = await chips.nth(2).locator(".play-language-chip-position").bounding_box()
+            target = await chips.nth(0).locator(".play-language-chip-position").bounding_box()
+            await page.mouse.move(source["x"] + 4, source["y"] + 4)
+            await page.mouse.down()
+            await page.mouse.move(source["x"] - 20, source["y"] + 4, steps=4)
+            await page.mouse.move(target["x"] + 4, target["y"] + 4, steps=8)
+            await page.mouse.up()
+            assert await _extras(page) == ["nl", "en", "de"]
+
+            # Promoting one of them swaps the old default into its place.
+            await dialog.get_by_role(
+                "button", name="Language you play in: italiano (Italian)"
+            ).click()
+            await dialog.get_by_role("option", name="English").click()
+            assert await _extras(page) == ["nl", "it", "de"]
+
+            await dialog.get_by_role("button", name="Remove Deutsch").click()
+            assert await _extras(page) == ["nl", "it"]
+
+            # "Not now" puts the rest of the suggestions away for this browser.
+            await suggestions.get_by_role("button", name="Not now").click()
+            assert await dialog.locator(".play-language-suggestions").count() == 0
+
+            # A guest's are this browser's, and survive a reload.
+            await page.reload()
+            dialog = await _open_appearance(page)
+            await dialog.get_by_role(
+                "button", name="Language you play in: English"
+            ).wait_for()
+            assert await _extras(page) == ["nl", "it"]
+            assert await dialog.locator(".play-language-suggestions").count() == 0
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_an_accounts_languages_follow_it_to_another_device():
+    username = f"Polyglot{uuid4().hex[:6]}"
+    password = "a-good-password"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        first = await browser.new_context()
+        page = await first.new_page()
+        try:
+            # Chosen as a guest, then carried into the account at registration.
+            await page.goto(BASE_URL)
+            await use_guest_name(page, username)
+            dialog = await _open_appearance(page)
+            await _add(dialog, "español")
+            await dialog.get_by_role("button", name="Close settings").click()
+            await register_account(page, username, password)
+
+            dialog = await _open_appearance(page)
+            async with page.expect_response(
+                lambda response: "/api/users/me/settings" in response.url
+                and response.request.method == "PATCH"
+            ):
+                await _add(dialog, "português")
+            assert await _extras(page) == ["es", "pt"]
+
+            fresh = await browser.new_context()
+            fresh_page = await fresh.new_page()
+            try:
+                await fresh_page.goto(BASE_URL)
+                await fresh_page.click(".first-run-login")
+                login = fresh_page.get_by_role("dialog", name="Sign in")
+                await login.get_by_label("Username").fill(username)
+                await login.get_by_label("Password").fill(password)
+                await login.get_by_role("button", name="Sign in", exact=True).click()
+                await login.wait_for(state="hidden")
+                await fresh_page.wait_for_function(
+                    "() => localStorage.getItem('sketchy_extrapromptlanguages') === '[\"es\",\"pt\"]'"
+                )
+                await _open_appearance(fresh_page)
+                assert await _extras(fresh_page) == ["es", "pt"]
+            finally:
+                await fresh.close()
+        finally:
+            await first.close()
+            await browser.close()
+
+
+@pytest.mark.parametrize(
+    "viewport",
+    [{"width": 390, "height": 844}, {"width": 1280, "height": 900}],
+    ids=lambda v: f"{v['width']}px",
+)
+async def test_the_ranked_languages_are_accessible(viewport):
+    """Chips, their arrows (one of each disabled at the ends), the add picker
+    open, and a suggestion row: every state the row has, through axe."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport=viewport)
+        await context.add_init_script(
+            "Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'fr-FR'] });"
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['nl', 'de']));"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Axe{uuid4().hex[:6]}")
+            dialog = await _open_appearance(page)
+            await dialog.locator(".play-language-suggestions").wait_for()
+            assert await _extras(page) == ["nl", "de"]
+            await assert_no_axe_violations(page, f"play languages {viewport['width']}")
+            await dialog.get_by_role("button", name="Add a language you play in").click()
+            await dialog.get_by_role("listbox", name="Add a language you play in").wait_for()
+            # An open popup lies over the rows below it, and axe counts the
+            # controls it half covers as undersized targets: true of any
+            # popup, and not what this checks.
+            await assert_no_axe_violations(
+                page,
+                f"play languages add {viewport['width']}",
+                disabled_rules=(*DEFAULT_DISABLED_RULES, "target-size"),
+            )
+        finally:
+            await context.close()
+            await browser.close()

@@ -1,7 +1,7 @@
 import { useEffect, useId, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
-import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon } from "./icons";
+import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon, PlusIcon } from "./icons";
 import {
   AGNOSTIC_PROMPT_LANGUAGE,
   MIXED_PROMPT_LANGUAGE,
@@ -21,7 +21,8 @@ export type LanguageChoice = PromptListLanguage | RoomLanguage | typeof ANY_LANG
 
 interface LanguagePickerProps {
   label: string;
-  value: LanguageChoice;
+  /** None when the picker adds a language rather than choosing one. */
+  value?: LanguageChoice;
   options: readonly (PromptListLanguage | RoomLanguage)[];
   onChange: (value: LanguageChoice) => void;
   /** The lobby filters by language; a room picks one, and cannot pick "any". */
@@ -33,6 +34,9 @@ interface LanguagePickerProps {
   flagOnly?: boolean;
   /** A flag a size down, to sit among a header's buttons rather than a form's rows. */
   small?: boolean;
+  /** Adds one of `options` rather than choosing among them (#1210): the
+      trigger is a "+ Add" button naming this, and no row is the current one. */
+  addLabel?: string;
 }
 
 /**
@@ -63,6 +67,7 @@ export function LanguagePicker({
   compact = false,
   flagOnly = false,
   small = false,
+  addLabel,
 }: LanguagePickerProps) {
   const listId = useId();
   const [open, setOpen] = useState(false);
@@ -124,7 +129,8 @@ export function LanguagePicker({
   // One choice is not a choice: before the other six languages had content,
   // this was a dropdown that could only ever answer "English". It says what
   // the language is instead, in the same face the list would have shown.
-  if (choices.length < 2) {
+  // Adding one is still a choice, of whether to.
+  if (choices.length < 2 && addLabel === undefined && value !== undefined) {
     return (
       <span className="language-picker-static">
         <LanguageFace value={value} />
@@ -144,13 +150,26 @@ export function LanguagePicker({
         aria-haspopup="listbox"
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
-        aria-label={ui.languagePicker.currentChoice({ label, value: accessibleName(value) })}
-        title={flagOnly ? `${label}: ${accessibleName(value)}` : undefined}
+        aria-label={
+          value === undefined
+            ? label
+            : ui.languagePicker.currentChoice({ label, value: accessibleName(value) })
+        }
+        title={flagOnly && value !== undefined ? `${label}: ${accessibleName(value)}` : undefined}
         disabled={disabled}
         onClick={() => setOpen((current) => !current)}
       >
-        <LanguageFace value={value} nameHidden={flagOnly} fill={flagOnly} />
-        {!flagOnly && <ChevronDownIcon size={14} />}
+        {value === undefined ? (
+          <span className="language-picker-add">
+            <PlusIcon size={14} />
+            {addLabel}
+          </span>
+        ) : (
+          <>
+            <LanguageFace value={value} nameHidden={flagOnly} fill={flagOnly} />
+            {!flagOnly && <ChevronDownIcon size={14} />}
+          </>
+        )}
       </button>
 
       {open && (
