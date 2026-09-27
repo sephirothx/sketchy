@@ -137,8 +137,9 @@ keyboard that takes half the screen, and one thumb.
   for the room's host, and like those it is drawn for whoever is reading: two players
   looking at the same roster see different marks.
   A request arriving, and one you sent being accepted, are both announced wherever
-  you are — a live game included — and the number waiting for an answer sits on your
-  account chip. A request that was declined is not announced: your list simply stops
+  you are — a live game included, where an acceptance waits until you are back in the
+  lobby and is said then, as one notice however many came in, so it never stands over
+  the game — and the number waiting for an answer sits on your account chip. A request that was declined is not announced: your list simply stops
   showing it.
 - *Hide letter tiles*: a room option that hides the masked prompt's length and composition from guessers (forces hints off).
 - Optional scoring, selected when the room is created.
