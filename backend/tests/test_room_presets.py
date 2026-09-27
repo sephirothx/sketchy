@@ -277,6 +277,51 @@ async def test_a_preset_of_agnostic_lists_keeps_the_language_it_was_saved_for(en
     assert fetched.json()["settings"]["promptListSlugs"] == [pokemon.slug]
 
 
+async def test_a_preset_may_declare_a_mixed_language_room(env):
+    """#1182: a preset carries `mul` like any other room language, and only
+    lists every language can play - here, one in no language."""
+    client, _, prompt_lists, _, _ = env
+    owner = await register(client)
+    names = await prompt_lists.create_owned(
+        owner["id"], name="Names", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Pikachu"),),
+    )
+    english = await prompt_lists.create_owned(
+        owner["id"], name="Words", description="", language="en",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+
+    created = await client.post(
+        "/api/room-presets",
+        json={"name": "Everyone", "settings": settings(names.slug, promptLanguage="mul")},
+    )
+    assert created.status_code == 201, created.text
+    fetched = await client.get(f"/api/room-presets/{created.json()['id']}")
+    assert fetched.json()["settings"]["promptLanguage"] == "mul"
+
+    refused = await client.post(
+        "/api/room-presets",
+        json={"name": "English only", "settings": settings(english.slug, promptLanguage="mul")},
+    )
+    assert refused.status_code == 422
+
+    # A list in a language is admitted when its content plays in every one:
+    # asked of the lists, as a room asks it, not of their language tag.
+    from app.db.seed import seed_prompt_lists
+
+    await seed_prompt_lists(prompt_lists)
+    standard = await client.post(
+        "/api/room-presets",
+        json={"name": "Standard for all", "settings": settings("german_standard", promptLanguage="mul")},
+    )
+    assert standard.status_code == 201, standard.text
+    extended = await client.post(
+        "/api/room-presets",
+        json={"name": "German extras", "settings": settings("german_extended", promptLanguage="mul")},
+    )
+    assert extended.status_code == 422
+
+
 async def test_deleted_prompt_list_makes_preset_visibly_unavailable(env):
     client, _, prompt_lists, _, _ = env
     owner = await register(client)

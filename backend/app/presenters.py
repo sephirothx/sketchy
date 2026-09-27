@@ -169,7 +169,8 @@ def guessed_receipt(game: Game, player_id: str | None) -> dict | None:
     points = game.guess_points[player_id]
     hint_spend = game.hint_spend.get(player_id, 0)
     return {
-        "prompt": game.prompt,
+        # In the guesser's own language (#1182): the word they were playing.
+        "prompt": game.prompt_for(player_id),
         "points": points,
         "basePoints": points + hint_spend,
         "hintSpend": hint_spend,
@@ -208,8 +209,14 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
             strict=True,
         )
     }
+    spellings = game.prompt_spellings()
     return {
         "prompt": game.prompt,
+        # One payload for the whole room (R-I18N-03), so a mixed-language room
+        # (#1182) sends the prompt in every language and each client shows its
+        # own seat's; `prompt` stays the drawer's, which is what was drawn and
+        # what history keeps. Absent wherever `prompt` is everyone's.
+        **({"prompts": spellings} if spellings else {}),
         # end_turn has appended this turn, and current_turn_id is never
         # cleared, so it still names the turn whose results these are.
         "turnId": game.current_turn_id,

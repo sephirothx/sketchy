@@ -35,7 +35,7 @@ from app.handlers.identity import (
 )
 from app.presenters import editable_room_settings_payload, session_payload
 from app.services.guest_names import online_guest_holding
-from app.domain_values import RuntimeEventType
+from app.domain_values import MIXED_PROMPT_LANGUAGE, RuntimeEventType
 from app.services.game_flow import RoomPromptResolutionError
 from app.services.room_quotas import RoomQuotaExceeded
 from app.rooms import (
@@ -395,7 +395,7 @@ async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: 
             "resolving the room's prompt lists",
         )
     except RoomPromptResolutionError as error:
-        return {"ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS, "error": str(error), "field": "promptListSlugs"}
+        return error.acknowledgement()
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     try:
@@ -496,6 +496,7 @@ async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: 
         is_anonymous=identity.is_anonymous,
         colorblind_safe_colors=identity.colorblind_safe_colors,
         avatar_key=identity.avatar_key,
+        prompt_language=payload.seat_language,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     if ctx.is_ending(sid):
@@ -513,6 +514,11 @@ class _EnteringAs:
         self.name_color = payload.name_color
         self.colorblind_safe_colors = payload.colorblind_safe_colors
         self.as_spectator = False
+        # The seat's language (#1182): a creation says it as `seatLanguage`,
+        # Quick play as the language it was asked to find a room in.
+        self.seat_language = getattr(payload, "seat_language", None) or (
+            payload.prompt_language if isinstance(payload, QuickPlayPayload) else None
+        )
 
 
 def _remember_creation(ctx: HandlerContext, user_id: str, request_id: str | None, room_id: str) -> None:
@@ -619,7 +625,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
                 requesting_user_id=player.user_id,
             )
         except RoomPromptResolutionError as error:
-            return {"ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS, "error": str(error), "field": "promptListSlugs"}
+            return error.acknowledgement()
         active_count = len(room.seated_players())
         if settings["max_players"] < active_count:
             # The count is a value, not a sentence: the client says how many
@@ -1016,6 +1022,7 @@ async def _seat_in_room(
             is_anonymous=identity.is_anonymous,
             colorblind_safe_colors=identity.colorblind_safe_colors,
             avatar_key=identity.avatar_key,
+            prompt_language=getattr(payload, "seat_language", None),
         )
     except RoomFullError:
         # Flagged rather than left for the client to recognise by its prose:
@@ -1456,11 +1463,14 @@ async def _quick_play(ctx: HandlerContext, sid, data, seated: list):
 
 
 def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
-    """The rooms worth trying, fullest first (R-UX-14).
+    """The rooms worth trying: this language's first, then mixed ones,
+    fullest first within each (R-UX-14).
 
-    Only this language - a room in another would hand the player words they
-    can neither draw nor guess - and never a game already under way. Fullest
-    first, because the room one seat short of a game is the one worth filling.
+    Never a room in another language - it would hand the player words they
+    can neither draw nor guess - but a mixed-language room (#1182) plays
+    everyone in their own, so it is the fallback before opening a new room.
+    Never a game already under way. Fullest first, because the room one seat
+    short of a game is the one worth filling.
     """
     # Seated rather than active: a seat held by somebody disconnected inside
     # their grace, or marked AFK, is still taken - `add_player` counts those,
@@ -1469,10 +1479,17 @@ def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
         room
         for room in ctx.room_manager.rooms.values()
         if _open_for_quick_play(room)
-        and room.prompt_language == language
+        and room.prompt_language in (language, MIXED_PROMPT_LANGUAGE)
         and len(room.seated_players()) < room.max_players
     ]
-    return sorted(open_rooms, key=lambda room: (-len(room.seated_players()), room.id))
+    return sorted(
+        open_rooms,
+        key=lambda room: (
+            room.prompt_language != language,
+            -len(room.seated_players()),
+            room.id,
+        ),
+    )
 
 
 async def _open_a_quick_play_room(

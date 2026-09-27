@@ -55,7 +55,11 @@ from app.rooms import (
     MAX_PLAYERS_MAX,
     MAX_PLAYERS_MIN,
 )
-from app.prompt_content import default_prompt_list_slug, validate_prompt_language
+from app.prompt_content import (
+    default_prompt_list_slug,
+    validate_prompt_language,
+    validate_room_language,
+)
 from app.prompts import MAX_RAW_INPUT_LENGTH, MAX_PROMPT_LENGTH
 
 MAX_CANVAS_SEQUENCE = 2**31 - 1
@@ -165,8 +169,9 @@ class RoomSettingsFields(RequestModel):
     @field_validator("prompt_language")
     @classmethod
     def valid_prompt_language(cls, value: str) -> str:
+        # A room may also be mixed (`mul`, #1182); a list or a player may not.
         try:
-            return validate_prompt_language(value)
+            return validate_room_language(value)
         except ValueError as error:
             raise ValueError(str(error)) from error
 
@@ -239,6 +244,14 @@ class CreateRoomPayload(RoomSettingsFields):
     colorblind_safe_colors: bool = Field(
         default=False, alias="colorblindSafeColors"
     )
+    # The language the creator plays in, which only a mixed-language room
+    # asks (#1182): every other room's seats play in the room's language.
+    seat_language: str | None = Field(default=None, alias="seatLanguage", max_length=32)
+
+    @field_validator("seat_language")
+    @classmethod
+    def valid_seat_language(cls, value: str | None) -> str | None:
+        return _seat_language(value)
 
     @field_validator("nickname")
     @classmethod
@@ -308,6 +321,16 @@ class UpdateRoomSettingsPayload(RequestModel):
         return _check_scoring_mode(value) if value is not None else None
 
 
+def _seat_language(value: str | None) -> str | None:
+    """A seat plays in one of the room languages - never several, never none."""
+    if value is None:
+        return None
+    try:
+        return validate_prompt_language(value)
+    except ValueError as error:
+        raise ValueError(str(error)) from error
+
+
 class JoinRoomPayload(RequestModel):
     room_id: str | None = Field(default=None, alias="roomId", max_length=MAX_IDENTIFIER_LENGTH)
     code: str | None = Field(default=None, max_length=16)
@@ -321,6 +344,15 @@ class JoinRoomPayload(RequestModel):
     # "Do I already hold a seat here?" - used by the invite screen, which must
     # not seat a visitor who is still deciding whether to play or spectate.
     reconnect_only: bool = Field(default=False, alias="reconnectOnly")
+    # The language this player plays in, fixed on the seat when it is made
+    # (#1182). Read only by a mixed-language room; a returning seat keeps the
+    # one it had.
+    seat_language: str | None = Field(default=None, alias="seatLanguage", max_length=32)
+
+    @field_validator("seat_language")
+    @classmethod
+    def valid_seat_language(cls, value: str | None) -> str | None:
+        return _seat_language(value)
 
     @field_validator("nickname")
     @classmethod
@@ -424,6 +456,14 @@ class JoinFriendRoomPayload(RequestModel):
         default=False, alias="colorblindSafeColors"
     )
     as_spectator: bool = Field(default=False, alias="asSpectator")
+    # The seat's language, as `join_room` carries it (#1182): a friend's
+    # room may be mixed-language, and this is the language they would play in.
+    seat_language: str | None = Field(default=None, alias="seatLanguage", max_length=32)
+
+    @field_validator("seat_language")
+    @classmethod
+    def valid_seat_language(cls, value: str | None) -> str | None:
+        return _seat_language(value)
 
     @field_validator("nickname")
     @classmethod

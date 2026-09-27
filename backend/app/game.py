@@ -23,7 +23,9 @@ from app.drawing_rules import (
     allowed_colors,
 )
 from app.domain_values import (
+    MIXED_PROMPT_LANGUAGE,
     GamePromptSourceMode,
+    PromptLanguage,
     PromptSourceKind,
     TurnEligibilityReason,
     TurnEndReason,
@@ -104,6 +106,8 @@ PRESSURE_MIN_POINTS = 50
 #   the letter turns out to be in the prompt.
 # Each hint a player buys in a turn costs more than the last: 12, 24, 36, ...
 HINT_BASE_COST = 12
+# The language a seat of a mixed game plays in when its client never said.
+DEFAULT_SEAT_LANGUAGE = PromptLanguage.ENGLISH.value
 MIN_HIDDEN_LETTERS = 2
 
 # Wheel-of-fortune letter pricing: a flat base cost depending on whether the
@@ -212,6 +216,43 @@ def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
     return previous.get(len_b, over_limit)
 
 
+def _near_miss(guess: str, answers: Sequence[str]) -> str | None:
+    """"close" if the guess is near a whole answer, "partial" if enough of a
+    multi-word answer's words are in it, else None (see `Game.guess_hint`)."""
+    if any(_is_close_pair(guess, answer) for answer in answers):
+        return "close"
+    guess_tokens = guess.split(" ")
+    for answer in answers:
+        word_tokens = answer.split(" ")
+        if len(word_tokens) <= 1 or abs(len(guess_tokens) - len(word_tokens)) > 1:
+            continue
+        # Bag-of-words intersection: matches regardless of word order,
+        # capping duplicate words at the lower count on either side.
+        overlap = Counter(guess_tokens) & Counter(word_tokens)
+        correct_letter_count = sum(
+            len(word) * count for word, count in overlap.items()
+        )
+        if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
+            return "partial"
+    return None
+
+
+def _spelling_key(text: str) -> str:
+    """What makes two spellings one set of tiles: the letters, not their case -
+    unless folding the case changes the length ("Straße"), where the slots
+    would no longer line up."""
+    folded = text.casefold()
+    return folded if len(folded) == len(text) else text
+
+
+def _checkpoint_share(total_slots: int) -> int:
+    """How many letters timed hints may reveal of a spelling this long:
+    about 40%, always keeping MIN_HIDDEN_LETTERS hidden."""
+    if total_slots <= MIN_HIDDEN_LETTERS:
+        return 0
+    return min(total_slots - MIN_HIDDEN_LETTERS, max(1, round(total_slots * 0.4)))
+
+
 def _is_close_pair(guess: str, target: str) -> bool:
     """Whether `guess` is close to `target` (already known to differ).
 
@@ -232,6 +273,16 @@ def _is_close_pair(guess: str, target: str) -> bool:
     if distance <= CLOSE_GUESS_MAX_DISTANCE:
         return difflib.SequenceMatcher(None, guess, target).ratio() >= CLOSE_GUESS_SIMILARITY_THRESHOLD
     return False
+
+
+@dataclass(frozen=True)
+class PromptForm:
+    """One language's form of a prompt in a mixed-language game (#1182)."""
+
+    answer: str
+    aliases: tuple[str, ...] = ()
+    version_id: str | None = None
+    source_revision_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -291,6 +342,15 @@ class CompletedTurnStats:
     offered_prompt_source_kinds: tuple[str, ...] = ()
     offered_prompt_source_revision_ids: tuple[tuple[str, ...], ...] = ()
     chosen_prompt_version_id: str | None = None
+    # A mixed game's guessers each met the prompt in their own language's
+    # version (#1182): (version id, correct guesses, guessers) per version, so
+    # a language's statistics count its own guessers. Empty in a game in one
+    # language, where the chosen version carries them all.
+    guess_totals_by_version: tuple[tuple[str, int, int], ...] = ()
+    # The chosen prompt in every language that spells it (#1182), for the
+    # surfaces a whole room reads after the turn; empty where `chosen_prompt`
+    # is everyone's.
+    chosen_prompt_spellings: tuple[tuple[str, str], ...] = ()
     drawer_token: str = ""
     # Real elapsed drawing time, not the configured limit: a turn ends as soon
     # as everyone has guessed.
@@ -374,6 +434,16 @@ class Game:
         default_factory=dict
     )
     custom_prompt_keys: frozenset[str] = frozenset()
+    # A mixed-language game (#1182): each seat plays in its own language, and
+    # a prompt with a form per language is spelled for each seat by its own.
+    # A prompt with none - one in no language - is played as `prompt_answers`
+    # spells it by every seat. Empty in a game in one language.
+    seat_languages: dict[str, str] = field(default_factory=dict)
+    prompt_translations: dict[str, dict[str, PromptForm]] = field(default_factory=dict)
+    letter_counts_by_language: dict[str, dict[str, int]] = field(
+        default_factory=dict, repr=False
+    )
+    letter_total_by_language: dict[str, int] = field(default_factory=dict)
     # Where this game's prompts come from, decided from the room's settings.
     # Empty means "work it out from the pool", which is what a bare `Game` in a
     # test wants; `_start_fresh_game` always passes the room's own answer.
@@ -385,8 +455,14 @@ class Game:
     # reinterpret its drawing record after they change.
     allowed_tools: tuple[str, ...] = DEFAULT_ALLOWED_TOOLS
     color_mode: str = DEFAULT_COLOR_MODE
+    # The drawer's spelling's letter slots, and those a checkpoint revealed in
+    # it. A mixed game keeps each other spelling's reveals beside them - by
+    # spelling, not by language, so seats that spell a word alike (a prompt in
+    # no language, "astronaut" in five) see the same letters and cannot pool
+    # different ones past R-HINT-04's hidden floor.
     letter_positions: list[int] = field(default_factory=list)
     revealed_positions: set[int] = field(default_factory=set)
+    revealed_by_spelling: dict[str, set[int]] = field(default_factory=dict)
     purchased_hints: dict[str, set[int]] = field(default_factory=dict)  # slot hints ("purchase")
     purchased_letters: dict[str, set[str]] = field(default_factory=dict)  # letter hints ("wheel")
     # Per-turn accounting, also kept for the game record. Hints are bought on
@@ -456,9 +532,59 @@ class Game:
             },
         }
 
-    def answer_for(self, key: str) -> str:
-        """How the room spells the prompt `key` names."""
+    def is_mixed_language(self) -> bool:
+        """Whether each seat plays in its own language (#1182)."""
+        return self.prompt_language == MIXED_PROMPT_LANGUAGE
+
+    def answer_for(self, key: str, language: str | None = None) -> str:
+        """How `language` spells the prompt `key` names - the room's spelling
+        when it has no form in that language, or no language is asked for."""
+        form = self.prompt_translations.get(key, {}).get(language or "")
+        if form is not None:
+            return form.answer
         return self.prompt_answers.get(key, key)
+
+    def aliases_for(self, key: str, language: str | None = None) -> tuple[str, ...]:
+        form = self.prompt_translations.get(key, {}).get(language or "")
+        if form is not None:
+            return form.aliases
+        return self.prompt_aliases.get(key, ())
+
+    def version_id_for(self, key: str, language: str | None = None) -> str | None:
+        form = self.prompt_translations.get(key, {}).get(language or "")
+        if form is not None:
+            return form.version_id
+        return self.prompt_version_ids.get(key)
+
+    def source_revision_ids_for(
+        self, key: str, language: str | None = None
+    ) -> tuple[str, ...]:
+        form = self.prompt_translations.get(key, {}).get(language or "")
+        if form is not None:
+            return form.source_revision_ids
+        return self.prompt_source_revision_ids_by_key.get(key, ())
+
+    def prompt_for(self, token: str | None) -> str | None:
+        """The chosen prompt as `token`'s language spells it: `prompt` itself
+        for every seat playing the drawer's language, which is every seat of a
+        game in one."""
+        language = self.seat_language(token)
+        if not self.is_mixed_language() or language == self.turn_language():
+            return self.prompt
+        key = self._current_key()
+        return None if key is None else self.answer_for(key, language)
+
+    def prompt_spellings(self) -> dict[str, str]:
+        """The chosen prompt in every language that spells it, for a payload
+        every seat reads its own from (#1182). Empty in a single-language game
+        and for a prompt in no language, where `prompt` is everyone's."""
+        key = self._current_key()
+        if key is None:
+            return {}
+        return {
+            language: form.answer
+            for language, form in self.prompt_translations.get(key, {}).items()
+        }
 
     def key_for(self, answer: str) -> str:
         """The key an answer this game offered is tracked by - the way back
@@ -474,18 +600,50 @@ class Game:
 
     def seat_language(self, token: str | None) -> str:
         """The language a seat plays in: the one its guesses are folded
-        under and its prompt is spelled in. Every seat plays the room's for
-        now; mixed-language rooms (#1182) are what this is for."""
-        return self.prompt_language
+        under and its prompt is spelled in. The room's, unless the game is
+        mixed (#1182) - then the seat's own, and English for one that never
+        said, so every seat has exactly one set of answer rules."""
+        if not self.is_mixed_language():
+            return self.prompt_language
+        return self.seat_languages.get(token or "", DEFAULT_SEAT_LANGUAGE)
+
+    def turn_language(self) -> str:
+        """The language the drawer plays in: what the turn is recorded as."""
+        return self.seat_language(self.current_drawer)
+
+    def languages_in_play(self, *, spectators: bool = False) -> tuple[str, ...]:
+        """Every language a player of this game plays the prompt in - and,
+        with `spectators`, every language a seat of this game has read it in,
+        spectators and seats that have since left included."""
+        if not self.is_mixed_language():
+            return (self.prompt_language,)
+        languages = {self.turn_language()}
+        languages.update(self.seat_language(token) for token in self.turn_order)
+        if spectators:
+            languages.update(self.seat_languages.values())
+        return tuple(sorted(languages))
+
+    def _spellings_in_play(self, *, spectators: bool = False) -> list[str]:
+        """One language for each distinct spelling of the prompt in play."""
+        by_text: dict[str, str] = {}
+        for language in self.languages_in_play(spectators=spectators):
+            by_text.setdefault(
+                _spelling_key(self._positions_in(language)[0]), language
+            )
+        return list(by_text.values())
 
     def prompt_choice_answers(self, token: str | None = None) -> list[str]:
-        """This turn's offers as the drawer reads them, in offer order."""
-        return [self.answer_for(key) for key in self.prompt_choices]
+        """This turn's offers as `token` reads them, in offer order."""
+        language = self.seat_language(token)
+        return [self.answer_for(key, language) for key in self.prompt_choices]
 
     def prompt_source_kind(self, key: str) -> str:
-        if self.prompt_version_ids.get(key) is not None:
+        if key in self.prompt_translations or self.prompt_version_ids.get(key) is not None:
             return PromptSourceKind.CURATED.value
-        if _normalize(self.answer_for(key), self.prompt_language) in self.custom_prompt_keys:
+        # A mixed game has no quick prompts (#1182), and no one fold to ask in.
+        if not self.is_mixed_language() and _normalize(
+            self.answer_for(key), self.prompt_language
+        ) in self.custom_prompt_keys:
             return PromptSourceKind.CUSTOM.value
         return PromptSourceKind.BUILTIN_FALLBACK.value
 
@@ -512,7 +670,12 @@ class Game:
     # played this game?" once the game is over.
     roster: list[str] = field(default_factory=list)
     history_seat_ids: dict[str, str] = field(default_factory=dict)
-    _cached_letter_frequencies: dict[str, float] | None = field(default=None, repr=False, compare=False)
+    _cached_letter_frequencies: dict[str, dict[str, float]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
+    _taken_keys: dict[tuple[str | None, str], frozenset[str]] = field(
+        default_factory=dict, repr=False, compare=False
+    )
     # The sample, shuffled and handed out three at a time. Filled on the first
     # turn rather than at construction, so callers may still set `prompt_pool`
     # on a freshly built game. Offers used to be resampled per turn against the
@@ -691,6 +854,7 @@ class Game:
         )
         self.letter_positions = []
         self.revealed_positions = set()
+        self.revealed_by_spelling = {}
         self.purchased_hints = {}
         self.purchased_letters = {}
         self.hint_spend = {}
@@ -758,7 +922,8 @@ class Game:
         return choices
 
     def _set_prompt(self, key: str) -> None:
-        prompt = self.answer_for(key)
+        # The drawer's spelling: what they draw, and what the turn records.
+        prompt = self.answer_for(key, self.turn_language())
         self.prompt_key = key
         self.prompt = prompt
         self.used_prompts.add(key)
@@ -793,6 +958,30 @@ class Game:
         """Compatibility aggregate; durable outcomes retain the per-seat split."""
         return sum(self.near_misses.values())
 
+    def _positions_in(self, language: str) -> tuple[str, list[int]]:
+        """The prompt as `language` spells it, and its letter slots."""
+        if language == self.turn_language() or not self.is_mixed_language():
+            return self.prompt or "", self.letter_positions
+        text = self.answer_for(self._current_key() or "", language)
+        return text, [i for i, ch in enumerate(text) if ch.isalnum()]
+
+    def _revealed_in(self, language: str) -> set[int]:
+        """The slots a checkpoint revealed in `language`'s spelling: the same
+        share of each spelling, since they are not the same length, and the
+        same slots for every language that spells it alike."""
+        if not self.is_mixed_language():
+            return self.revealed_positions
+        # Casefolded: German "Avocado" and Dutch "avocado" show the same tiles.
+        spelling = _spelling_key(self._positions_in(language)[0])
+        if spelling == _spelling_key(self.prompt or ""):
+            return self.revealed_positions
+        return self.revealed_by_spelling.setdefault(spelling, set())
+
+    def letter_occurrences(self, token: str, letter: str) -> int:
+        """How often `letter` appears in the prompt as `token` reads it."""
+        text, positions = self._positions_in(self.seat_language(token))
+        return sum(1 for i in positions if text[i].lower() == letter)
+
     def masked_prompt(
         self,
         token: str | None = None,
@@ -817,21 +1006,23 @@ class Game:
         """
         if not self.prompt:
             return ""
+        language = self.seat_language(token)
+        prompt, letter_positions = self._positions_in(language)
         if (is_spectator and spectators_see_prompt) or (
             token and (token == self.current_drawer or token in self.correct_guessers)
         ):
-            return self.prompt
+            return prompt
         if self.hide_masked_prompt:
             return "???"
-        revealed_slots = self.revealed_positions | self.purchased_hints.get(token, set())
+        revealed_slots = self._revealed_in(language) | self.purchased_hints.get(token, set())
         revealed_indices = {
-            self.letter_positions[slot] for slot in revealed_slots if slot < len(self.letter_positions)
+            letter_positions[slot] for slot in revealed_slots if slot < len(letter_positions)
         }
         bought_letters = self.purchased_letters.get(token, set())
         if bought_letters:
-            revealed_indices |= {i for i in self.letter_positions if self.prompt[i].lower() in bought_letters}
+            revealed_indices |= {i for i in letter_positions if prompt[i].lower() in bought_letters}
         masked_words = []
-        for match in re.finditer(r"\S+", self.prompt):
+        for match in re.finditer(r"\S+", prompt):
             start = match.start()
             masked_words.append(
                 "".join(
@@ -841,7 +1032,7 @@ class Game:
             )
         letter_counts = [
             str(len(list(run)))
-            for is_alnum, run in groupby(self.prompt, key=str.isalnum)
+            for is_alnum, run in groupby(prompt, key=str.isalnum)
             if is_alnum
         ]
         return "  ".join(masked_words) + "  " + " ".join(letter_counts)
@@ -854,12 +1045,15 @@ class Game:
         """
         if not self.prompt:
             return 0
-        total_slots = len(self.letter_positions)
-        if total_slots <= MIN_HIDDEN_LETTERS:
-            return 0
-        max_possible = total_slots - MIN_HIDDEN_LETTERS
-        scaled = max(1, round(total_slots * 0.4))
-        return min(max_possible, scaled)
+        # In a mixed game each spelling has its own share; the turn schedules
+        # as many checkpoints as the longest share needs, and a spelling that
+        # has given all its share away sits the rest out (`reveal_hint_letter`).
+        # Scheduled for the players' spellings: a spectator, who cannot
+        # score, must not bring every player's letters forward.
+        return max(
+            _checkpoint_share(len(self._positions_in(language)[1]))
+            for language in self._spellings_in_play()
+        )
 
     def reveal_hint_letter(self) -> bool:
         """Reveal one more random letter to every player (hint_mode="checkpoints").
@@ -870,13 +1064,23 @@ class Game:
         """
         if not self.prompt:
             return False
-        available = [
-            slot for slot in range(len(self.letter_positions)) if slot not in self.revealed_positions
-        ]
-        if len(available) <= MIN_HIDDEN_LETTERS:
-            return False
-        self.revealed_positions.add(random.choice(available))
-        return True
+        revealed_any = False
+        # Spectators' spellings are revealed to as well, up to their own share.
+        for language in self._spellings_in_play(spectators=True):
+            positions = self._positions_in(language)[1]
+            revealed = self._revealed_in(language)
+            # Scheduled for the longest spelling's share, so a shorter one
+            # stops at its own; one language has only its own share anyway.
+            if self.is_mixed_language() and len(revealed) >= _checkpoint_share(
+                len(positions)
+            ):
+                continue
+            available = [slot for slot in range(len(positions)) if slot not in revealed]
+            if len(available) <= MIN_HIDDEN_LETTERS:
+                continue
+            revealed.add(random.choice(available))
+            revealed_any = True
+        return revealed_any
 
     def hint_cost(self, token: str) -> int:
         """Cost in points of the next hint `token` would buy this turn.
@@ -901,9 +1105,10 @@ class Game:
             return False
         if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return False
-        if slot < 0 or slot >= len(self.letter_positions):
+        language = self.seat_language(token)
+        if slot < 0 or slot >= len(self._positions_in(language)[1]):
             return False
-        if slot in self.revealed_positions:
+        if slot in self._revealed_in(language):
             return False
         purchased = self.purchased_hints.setdefault(token, set())
         if slot in purchased:
@@ -917,7 +1122,7 @@ class Game:
         purchased.add(slot)
         return True
 
-    def _letter_frequencies(self) -> dict[str, float]:
+    def _letter_frequencies(self, language: str | None = None) -> dict[str, float]:
         """Relative frequency (0-1) of each a-z letter across the prompts this
         game could have drawn - used to price wheel-of-fortune letters by how
         rare they are among the actual possible solutions, rather than
@@ -929,9 +1134,16 @@ class Game:
         the pool *is* everything the game can play - the built-in list, or a
         room's own quick prompts - and counting it is exact.
         """
-        if self._cached_letter_frequencies is not None:
-            return self._cached_letter_frequencies
-        if self.letter_total:
+        cache_key = language or ""
+        cached = self._cached_letter_frequencies.get(cache_key)
+        if cached is not None:
+            return cached
+        if language is not None and self.letter_total_by_language.get(language):
+            # A mixed game prices each seat's wheel from its own language's
+            # lists (#1182): an English seat's rare letter is not a German's.
+            counts = self.letter_counts_by_language.get(language, {})
+            total = self.letter_total_by_language[language]
+        elif self.letter_total:
             counts = self.letter_counts
             total = self.letter_total
         else:
@@ -942,10 +1154,11 @@ class Game:
             )
             counts = Counter(ch for w in pool for ch in w.lower() if ch.isalpha())
             total = sum(counts.values()) or 1
-        self._cached_letter_frequencies = {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
-        return self._cached_letter_frequencies
+        frequencies = {letter: counts.get(letter, 0) / total for letter in string.ascii_lowercase}
+        self._cached_letter_frequencies[cache_key] = frequencies
+        return frequencies
 
-    def letter_price(self, letter: str) -> int:
+    def letter_price(self, letter: str, language: str | None = None) -> int:
         """Base cost (before the per-turn escalation in `wheel_hint_cost`) of
         buying `letter` in hint_mode="wheel": a flat vowel/consonant cost,
         scaled up the more common that letter is across `prompt_pool`/`PROMPTS`
@@ -954,7 +1167,7 @@ class Game:
         """
         letter = letter.lower()
         base = WHEEL_VOWEL_BASE_COST if letter in VOWELS else WHEEL_CONSONANT_BASE_COST
-        frequencies = self._letter_frequencies()
+        frequencies = self._letter_frequencies(language)
         max_frequency = max(frequencies.values()) or 1e-9
         relative_frequency = frequencies.get(letter, 0.0)
         frequency_multiplier = min(
@@ -976,7 +1189,8 @@ class Game:
         cheaply), on top of that letter's own base price.
         """
         already_bought = len(self.purchased_letters.get(token, set()))
-        return self.letter_price(letter) * (already_bought + 1)
+        language = self.seat_language(token) if self.is_mixed_language() else None
+        return self.letter_price(letter, language) * (already_bought + 1)
 
     def wheel_letter_prices(self, token: str) -> dict[str, int]:
         """Current price of every a-z letter `token` hasn't already bought this
@@ -1086,52 +1300,132 @@ class Game:
         language = self.seat_language(token)
         guess = _normalize(text, language)
         accepted_answers = self._accepted_answer_keys(token)
-        if not _accepted_spellings(text, language).isdisjoint(
-            self._accepted_answer_spellings(token)
-        ):
+        guessed = _accepted_spellings(text, language)
+        if not guessed.isdisjoint(self._accepted_answer_spellings(token)):
             return None
-        if any(_is_close_pair(guess, answer) for answer in accepted_answers):
+        if self._spells_the_prompt_elsewhere(guessed):
+            # Another language's spelling the false-friend guard refused: not
+            # this seat's answer, but broadcast it and the seats playing that
+            # language read their own answer in the chat (#1182). Kept private
+            # the way a near miss is.
             return "close"
-        guess_tokens = guess.split(" ")
-        for answer in accepted_answers:
-            word_tokens = answer.split(" ")
-            if len(word_tokens) <= 1 or abs(len(guess_tokens) - len(word_tokens)) > 1:
+        verdict = _near_miss(guess, accepted_answers)
+        if verdict is not None or not self.is_mixed_language():
+            return verdict
+        # Near another language's spelling: the room must not see it either,
+        # or the seats playing that language read their answer in a typo
+        # ("dogs" from a German seat). Measured in that language's fold.
+        key = self._current_key()
+        played = set(self.languages_in_play())
+        for other, form in self.prompt_translations.get(key, {}).items():
+            # Only a language somebody is playing: a word that is French for
+            # "cat" is ordinary chat in a room nobody plays French in.
+            if other == language or other not in played:
                 continue
-            # Bag-of-words intersection: matches regardless of word order,
-            # capping duplicate words at the lower count on either side.
-            overlap = Counter(guess_tokens) & Counter(word_tokens)
-            correct_letter_count = sum(
-                len(word) * count for word, count in overlap.items()
+            answers = tuple(
+                dict.fromkeys(_normalize(answer, other) for answer in (form.answer, *form.aliases))
             )
-            if correct_letter_count >= CLOSE_GUESS_MIN_CORRECT_LETTERS:
-                return "partial"
+            verdict = _near_miss(_normalize(text, other), answers)
+            if verdict is not None:
+                return verdict
         return None
 
     def _accepted_answer_spellings(self, token: str | None = None) -> frozenset[str]:
         """Every spelling that wins the turn for `token`: the answer's and its
-        aliases', folded the way that seat's language folds them."""
+        aliases', folded the way that seat's language folds them.
+
+        In a mixed game (#1182) the prompt in any language wins too - a German
+        who types "dog" has named the drawing - each spelling folded the way
+        its own language folds it. Except where that spelling is a different
+        prompt of this game in the guesser's own language: a French seat's
+        "papillon" means butterfly, and does not win the Italian bow tie.
+        """
         if not self.prompt:
             return frozenset()
+        key = self._current_key()
         language = self.seat_language(token)
-        aliases = self.prompt_aliases.get(self._current_key(), ())
-        return frozenset().union(
-            *(
-                _accepted_spellings(answer, language)
-                for answer in (self.prompt, *aliases)
-            )
+        own = (self.prompt_for(token) or "", *self.aliases_for(key, language))
+        spellings = frozenset().union(
+            *(_accepted_spellings(answer, language) for answer in own)
         )
+        if not self.is_mixed_language():
+            return spellings
+        taken = self._other_prompts_keys(language)
+        for other, form in self.prompt_translations.get(key, {}).items():
+            if other == language:
+                continue
+            for answer in (form.answer, *form.aliases):
+                if _normalize(answer, language) in taken:
+                    continue
+                spellings = spellings | _accepted_spellings(answer, other)
+        return spellings
+
+    def _spells_the_prompt_elsewhere(self, guessed: frozenset[str]) -> bool:
+        """Whether a guess is the current prompt in some language's spelling."""
+        key = self._current_key()
+        if not self.is_mixed_language() or key is None:
+            return False
+        return any(
+            not guessed.isdisjoint(_accepted_spellings(answer, other))
+            for other, form in self.prompt_translations.get(key, {}).items()
+            for answer in (form.answer, *form.aliases)
+        )
+
+    def _other_prompts_keys(self, language: str) -> frozenset[str]:
+        """The canonical keys, in `language`'s fold, of every other prompt
+        this game could play - what a word already means to that seat."""
+        current = self._current_key()
+        cached = self._taken_keys.get((current, language))
+        if cached is not None:
+            return cached
+        taken = frozenset(
+            _normalize(answer, language)
+            for key in self.prompt_pool or []
+            if key != current
+            for answer in (self.answer_for(key, language), *self.aliases_for(key, language))
+        )
+        self._taken_keys[(current, language)] = taken
+        return taken
 
     def _accepted_answer_keys(self, token: str | None = None) -> tuple[str, ...]:
         """Canonical answer plus aliases for this exact selected version."""
         if not self.prompt:
             return ()
+        key = self._current_key()
         language = self.seat_language(token)
-        aliases = self.prompt_aliases.get(self._current_key(), ())
-        return tuple(
-            dict.fromkeys(
-                _normalize(answer, language) for answer in (self.prompt, *aliases)
-            )
-        )
+        # A near miss is measured against the seat's own spelling only: "very
+        # close" to another language's word would be a hint in a language the
+        # guesser is not playing (R-GUESS-01).
+        answers = (self.prompt_for(token) or "", *self.aliases_for(key, language))
+        return tuple(dict.fromkeys(_normalize(answer, language) for answer in answers))
+
+    def _guess_totals_by_version(self) -> tuple[tuple[str, int, int], ...]:
+        """Each language's guessers against the version they played (#1182).
+
+        Only a mixed game's prompt with a form per language has more than one
+        version in play; everything else leaves the chosen version to carry
+        the turn's counts, as a game in one language always has.
+        """
+        key = self._current_key()
+        if not self.is_mixed_language() or key not in self.prompt_translations:
+            return ()
+        if self.turn_eligibility_reasons is not None:
+            guessers = [
+                token
+                for token, reason in self.turn_eligibility_reasons.items()
+                if reason == TurnEligibilityReason.ELIGIBLE.value
+            ]
+        else:
+            guessers = [token for token in self.turn_order if token != self.current_drawer]
+        totals: dict[str, list[int]] = {}
+        for token in guessers:
+            version = self.version_id_for(key, self.seat_language(token))
+            if version is None:
+                continue
+            tally = totals.setdefault(version, [0, 0])
+            tally[0] += token in self.correct_guessers
+            tally[1] += 1
+        return tuple((version, correct, total) for version, (correct, total) in totals.items())
 
     def all_guessed(self, total_guessers: int) -> bool:
         return total_guessers > 0 and len(self.correct_guessers) >= total_guessers
@@ -1197,29 +1491,32 @@ class Game:
                 )
             participant_outcomes = tuple(rows)
 
+        turn_language = self.turn_language()
         self.completed_turns.append(
             CompletedTurnStats(
                 id=self.current_turn_id or str(generate_uuid7()),
                 round_number=self.round_number,
                 turn_number=len(self.completed_turns) + 1,
-                offered_prompts=self.prompt_choice_answers(),
+                offered_prompts=self.prompt_choice_answers(self.current_drawer),
                 chosen_prompt=self.prompt or "",
                 correct_guess_count=len(self.correct_guessers),
                 total_guesser_count=total_guesser_count,
                 offered_prompt_version_ids=tuple(
-                    self.prompt_version_ids.get(prompt)
+                    self.version_id_for(prompt, turn_language)
                     for prompt in self.prompt_choices
                 ),
                 offered_prompt_source_kinds=tuple(
                     self.prompt_source_kind(prompt) for prompt in self.prompt_choices
                 ),
                 offered_prompt_source_revision_ids=tuple(
-                    self.prompt_source_revision_ids_by_key.get(prompt, ())
+                    self.source_revision_ids_for(prompt, turn_language)
                     for prompt in self.prompt_choices
                 ),
-                chosen_prompt_version_id=self.prompt_version_ids.get(
-                    self._current_key() or ""
+                chosen_prompt_version_id=self.version_id_for(
+                    self._current_key() or "", turn_language
                 ),
+                guess_totals_by_version=self._guess_totals_by_version(),
+                chosen_prompt_spellings=tuple(sorted(self.prompt_spellings().items())),
                 drawer_token=self.current_drawer or "",
                 # Floored: a turn ended the instant it began (#1005) lasted
                 # nothing, and the record refuses a duration of nothing.

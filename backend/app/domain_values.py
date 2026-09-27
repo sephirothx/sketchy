@@ -105,6 +105,14 @@ class PromptLanguage(StrEnum):
 # its stored key is an identity and must not depend on the room it is played in.
 AGNOSTIC_PROMPT_LANGUAGE = "zxx"
 
+# A room whose seats each play in their own language (#1182): BCP-47's `mul`,
+# "multiple languages". A *room* language only, the mirror of `zxx`: no list
+# is in it and no player plays in it. Each seat plays in the prompt language
+# it joined with, and the room may only draw on content that exists in all of
+# them - lists in no language, and lists whose concepts every room language
+# spells (Standard, R-PROMPT-01).
+MIXED_PROMPT_LANGUAGE = "mul"
+
 
 class InterfaceLocale(StrEnum):
     """The languages the interface itself is written in.
@@ -549,6 +557,7 @@ RETAINED_MESSAGE_AUDIENCES = tuple(
 NEAR_MISS_KINDS = tuple(kind.value for kind in NearMissKind)
 PROMPT_LANGUAGES = tuple(language.value for language in PromptLanguage)
 PROMPT_LIST_LANGUAGES = (*PROMPT_LANGUAGES, AGNOSTIC_PROMPT_LANGUAGE)
+ROOM_LANGUAGES = (*PROMPT_LANGUAGES, MIXED_PROMPT_LANGUAGE)
 INTERFACE_LOCALES = tuple(locale.value for locale in InterfaceLocale)
 PROMPT_EDITORIAL_DIFFICULTIES = tuple(
     difficulty.value for difficulty in PromptEditorialDifficulty

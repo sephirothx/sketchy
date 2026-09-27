@@ -52,6 +52,7 @@ export function CreateRoomPage() {
   const setSession = useGameStore((state) => state.setSession);
   const nameColor = useSettingsStore((state) => state.nameColor);
   const colorblindSafeColors = useSettingsStore((state) => state.colorblindSafeColors);
+  const playLanguage = useSettingsStore((state) => state.promptLanguage);
   const authUser = useAuthStore((state) => state.user);
   // The server provisions on naming and will not open a room for a
   // visitor without an account, so the form waits rather than filling
@@ -352,6 +353,9 @@ export function CreateRoomPage() {
         customPrompts: customPrompts.value.trim(), customPromptsOnly: customPrompts.only, hintMode, scoringMode,
         spectatorsSeePrompt, hideMaskedPrompt, allowedTools, colorMode, promptLanguage,
         promptListSlugs,
+        // The language the creator plays in, which a mixed-language room asks
+        // of every seat (#1182); the room's own is `promptLanguage`.
+        seatLanguage: playLanguage,
       };
       // The same press retried keeps its id, so a creation whose answer was
       // lost is handed back rather than made twice (#879).

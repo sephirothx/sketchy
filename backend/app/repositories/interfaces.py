@@ -666,6 +666,12 @@ class PinnedPromptSelection:
     prompt_count: int = 0
     letter_counts: Mapping[str, int] = field(default_factory=dict)
     letter_total: int = 0
+    # A mixed-language room (#1182) prices the wheel per seat language: each
+    # language's own lists plus the lists in no language. Empty otherwise.
+    letter_counts_by_language: Mapping[str, Mapping[str, int]] = field(
+        default_factory=dict
+    )
+    letter_total_by_language: Mapping[str, int] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -681,6 +687,20 @@ class SampledPrompt:
     # key a game tracks the prompt by (#1181). `None` only where a caller has
     # no concept to give - a stand-in store - and the answer serves instead.
     concept_id: str | None = None
+    # In a mixed-language room (#1182), the concept in every room language, by
+    # language; `answer` and the fields above are then one of them. Empty for
+    # a prompt in no language, which every seat plays as `answer`.
+    translations: Mapping[str, "PromptTranslation"] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
+class PromptTranslation:
+    """One language's form of a drawn concept, with its own provenance."""
+
+    answer: str
+    aliases: tuple[str, ...] = ()
+    prompt_version_id: str | None = None
+    source_revision_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -700,6 +720,11 @@ class PromptSample:
 
 class PromptListSelectionError(ValueError):
     """A selected list is missing or cannot be combined with the others."""
+
+
+class MixedRoomListError(PromptListSelectionError):
+    """A list a mixed-language room cannot draw on (#1182): one that is in a
+    language but whose concepts not every room language spells."""
 
 
 class PromptSeedConflictError(ValueError):
@@ -1244,6 +1269,19 @@ class PromptListRepository(ABC):
         word "Bar". The caller compares those itself, under the room's fold.
         """
         ...
+
+    async def sample_mixed_prompts(
+        self, revision_ids: Sequence[str], *, limit: int
+    ) -> PromptSample:
+        """Draw up to `limit` random concepts for a mixed-language room (#1182).
+
+        Each comes back with its form in every room language - or, for a list
+        in no language, the one form every seat plays - and the count is of
+        concepts. A concept a takedown left short of a language is not drawn,
+        since some seat could not play it. Not abstract: only a store that can
+        pin a mixed room needs it.
+        """
+        raise NotImplementedError
 
     @abstractmethod
     async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:

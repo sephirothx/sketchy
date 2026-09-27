@@ -122,6 +122,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_letter: "Dieser Buchstabe ist ungültig.",
   invalid_prompt_lists: "Diese Begriffslisten lassen sich nicht zusammen verwenden.",
   invalid_custom_prompts: "Diese eigenen Begriffe konnten nicht gelesen werden.",
+  mixed_room_list_unsupported: "Gemischtsprachige Räume können nur Listen in allen Sprachen oder sprachunabhängige Listen verwenden.",
+  mixed_room_custom_prompts: "Gemischtsprachige Räume können keine eigenen Begriffe verwenden: Jeder braucht den Begriff in seiner Sprache.",
   max_players_below_seated: (params) =>
   `Die Höchstzahl darf nicht unter den ${count(params.seated, 2)} Spielern liegen, die schon im Raum sind.`,
   empty_message: "Schreib erst etwas.",

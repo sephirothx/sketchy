@@ -8,6 +8,7 @@ import { useAuthStore } from "../store/authStore";
 import { useFriendInviteStore } from "../store/friendInviteStore";
 import { useGameStore } from "../store/gameStore";
 import { useRoomEntryStore } from "../store/roomEntryStore";
+import { useSettingsStore } from "../store/settingsStore";
 import type { AckResponse } from "../types";
 import type { FriendInvite } from "../lib/friends";
 import { ui } from "../content/ui/index.ts";
@@ -63,6 +64,8 @@ export function useFriendInviteAnswer() {
       const answer = await emitEntry<AckResponse>("join_friend_room", {
         friendUserId: current.fromUserId,
         inviteToken: current.inviteToken,
+        // Fixed on the seat: a mixed-language room plays it in this (#1182).
+        seatLanguage: useSettingsStore.getState().promptLanguage,
       });
       const session = sessionFrom(answer);
       if (!session) {

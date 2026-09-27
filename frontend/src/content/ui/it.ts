@@ -122,6 +122,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_letter: "Questa lettera non è valida.",
   invalid_prompt_lists: "Queste liste di parole non si possono usare insieme.",
   invalid_custom_prompts: "Non è stato possibile leggere queste parole personalizzate.",
+  mixed_room_list_unsupported: "Le stanze miste possono usare solo liste in tutte le lingue o di «Qualsiasi lingua».",
+  mixed_room_custom_prompts: "Le stanze miste non possono usare parole personalizzate: ogni giocatore ha bisogno della parola nella sua lingua.",
   max_players_below_seated: (params) =>
   `Il massimo di giocatori non può essere inferiore ai ${count(params.seated, 2)} già presenti nella stanza.`,
   empty_message: "Scrivi prima qualcosa.",

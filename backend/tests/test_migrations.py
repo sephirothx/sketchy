@@ -274,6 +274,9 @@ async def _assert_agnostic_is_a_list_language(engine: AsyncEngine) -> None:
         if engine.dialect.name != "postgresql":
             assert name in definitions[name], name
         assert "zxx" not in definitions[name], name
+    # A preset may declare a mixed room (#1182); a player never plays in one.
+    assert "mul" in definitions["ck_room_presets_prompt_language"]
+    assert "mul" not in definitions["ck_user_settings_prompt_language"]
 
 
 async def _exercise_migration_chain(engine: AsyncEngine) -> None:
@@ -283,6 +286,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "d7e8f9a0b1c3",
         "c6d7e8f9a0b2",
         "a8b9c0d1e2f4",
         "b5c6d7e8f9a1",

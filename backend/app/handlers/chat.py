@@ -401,7 +401,7 @@ async def buy_wheel_letter(ctx: HandlerContext, sid, data):
         return {"ok": False, "errorCode": ErrorCode.HINT_UNAVAILABLE, "error": "Letter unavailable"}
 
     hint_spend = game.hint_spend.get(player.id, 0)
-    found_count = sum(1 for i in game.letter_positions if game.prompt[i].lower() == letter)
+    found_count = game.letter_occurrences(player.id, letter)
     # All of it rides the acknowledgement (#884) - the revealed prompt and
     # prices `hint_revealed` carried, and the line: the letter, its price and
     # how often it landed, three values the client says in the reader's

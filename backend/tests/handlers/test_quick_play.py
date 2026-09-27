@@ -228,3 +228,22 @@ async def test_a_room_whose_seats_are_all_taken_is_not_offered_even_if_somebody_
     answer = await press(sio)
     assert answer["created"] is True and answer["roomId"] != room.id
     assert players(room) == 2
+
+
+async def test_a_mixed_language_room_is_the_fallback_before_opening_one():
+    """A mixed room (#1182) plays everyone in their own language, so it is
+    worth a seat - after every room in the player's own, however full."""
+    room_manager = RoomManager()
+    mixed = waiting_room(room_manager, language="mul", seats=5)
+    german = waiting_room(room_manager, language="de", seats=1)
+    sio, _ = server(room_manager)
+
+    first = await press(sio, promptLanguage="de")
+    assert first["roomId"] == german.id
+
+    german.state = "playing"
+    second = await press(sio, sid="other-sid", nickname="Jonas", promptLanguage="de")
+    assert second["ok"] is True and second["created"] is False
+    assert second["roomId"] == mixed.id
+    seat = next(p for p in mixed.players.values() if p.nickname == "Jonas")
+    assert mixed.seat_language(seat) == "de"

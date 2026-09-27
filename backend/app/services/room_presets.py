@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.db.models import PromptList, RoomPreset, User
 from app.domain_values import (
     AGNOSTIC_PROMPT_LANGUAGE,
+    MIXED_PROMPT_LANGUAGE,
     AccountState,
     PromptContentModerationState,
 )
@@ -146,7 +147,20 @@ class RoomPresetService:
             raise RoomPresetError(
                 "Room presets may use only active built-in prompt lists or lists you own"
             )
-        if any(
+        if expected_language == MIXED_PROMPT_LANGUAGE:
+            # A mixed-language preset (#1182): which lists qualify is asked
+            # of their content, the way a room asks it.
+            try:
+                await self._prompt_list_repo.authorize_selection(
+                    list(slugs),
+                    requesting_user_id=str(owner_id),
+                    expected_language=MIXED_PROMPT_LANGUAGE,
+                )
+            except PromptListSelectionError as error:
+                raise RoomPresetError(
+                    "A mixed-language preset may use only lists every language can play"
+                ) from error
+        elif any(
             by_slug[slug].language not in (expected_language, AGNOSTIC_PROMPT_LANGUAGE)
             for slug in slugs
         ):
