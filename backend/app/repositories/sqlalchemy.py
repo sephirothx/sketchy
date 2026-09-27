@@ -1396,7 +1396,8 @@ class SqlAlchemyUserRepository(UserRepository):
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
             return ()
-        async with self._session_factory() as session:
+        # One statement, so one round trip under `read_session`.
+        async with read_session(self._session_factory) as session:
             row = (
                 await session.execute(
                     select(UserSettings.prompt_language, UserSettings.extra_prompt_languages)

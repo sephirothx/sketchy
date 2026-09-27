@@ -1,5 +1,5 @@
 import { Flag } from "./icons";
-import { promptLanguageLabel } from "../lib/promptLanguages";
+import { PROMPT_LANGUAGE_LABELS, promptLanguageLabel } from "../lib/promptLanguages";
 import { interfaceLocale, ui } from "../content/ui/index.ts";
 
 /**
@@ -13,8 +13,11 @@ import { interfaceLocale, ui } from "../content/ui/index.ts";
  * same sentence is the tooltip, for a flag nobody recognises.
  */
 export function PlayLanguageFlags({ languages }: { languages: readonly string[] }) {
-  if (languages.length === 0) return null;
-  const [language, ...others] = languages;
+  // Only languages this build can draw and name: one from a newer server
+  // would be a gap in the row and a code in the sentence.
+  const known = languages.filter((language) => language in PROMPT_LANGUAGE_LABELS);
+  if (known.length === 0) return null;
+  const [language, ...others] = known;
   const named = promptLanguageLabel(language);
   const label = others.length === 0
     ? ui.profilePage.playsIn({ language: named })

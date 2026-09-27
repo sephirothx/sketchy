@@ -1807,3 +1807,19 @@ async def test_a_profile_shows_the_languages_its_account_plays_in(env):
     ]
     assert (await http.get(f"/api/users/{guest.id}/stats")).json()["playLanguages"] == []
     assert (await http.get(f"/api/users/{quiet.id}/stats")).json()["playLanguages"] == []
+
+    # A merged guest's id - how a game from before the account reaches its
+    # profile - shows the account's languages.
+    merged = await users.create_anonymous(display_name="Merged")
+    await users.merge_guest_into_account(merged.id, polyglot.id)
+    assert (await http.get(f"/api/users/{merged.id}/stats")).json()["playLanguages"] == [
+        "it",
+        "en",
+        "es",
+    ]
+
+    # A row left behind on an account that is not registered shows nothing.
+    async with session_factory() as session:
+        async with session.begin():
+            session.add(UserSettings(user_id=UUID(guest.id), prompt_language="nl"))
+    assert (await http.get(f"/api/users/{guest.id}/stats")).json()["playLanguages"] == []

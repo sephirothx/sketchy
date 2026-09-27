@@ -709,7 +709,7 @@ function ProfileView({ userId }: { userId: string }) {
               </span>
             )}
             </span>
-            <div>
+            <div className="profile-identity-text">
               <div className="profile-name-row">
                 <h1>
                   {/* The disc's mark is decorative, so the heading carries the

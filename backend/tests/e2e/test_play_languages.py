@@ -422,3 +422,47 @@ async def test_a_profile_shows_the_languages_its_player_plays_in():
             await owner_context.close()
             await viewer_context.close()
             await browser.close()
+
+
+async def test_seven_flags_wrap_rather_than_push_the_header_off_a_phone():
+    """Seven flags beside a name are wider than a phone: they wrap under it,
+    and the friend and report buttons stay on the screen."""
+    username = f"Seven{uuid4().hex[:6]}"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        owner_context = await browser.new_context()
+        await owner_context.add_init_script(
+            "localStorage.setItem('sketchy_promptlanguage', 'it');"
+            "localStorage.setItem('sketchy_extrapromptlanguages',"
+            " JSON.stringify(['en', 'es', 'nl', 'fr', 'de', 'pt']));"
+        )
+        viewer_context = await browser.new_context(viewport={"width": 375, "height": 812})
+        owner = await owner_context.new_page()
+        viewer = await viewer_context.new_page()
+        try:
+            await owner.goto(BASE_URL)
+            await use_guest_name(owner, username)
+            await register_account(owner, username)
+            owner_id = await owner.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json()).id"
+            )
+            await viewer.goto(BASE_URL)
+            await use_guest_name(viewer, f"Viewer{uuid4().hex[:6]}")
+            await register_account(viewer, f"Viewer{uuid4().hex[:6]}")
+
+            await viewer.goto(f"{BASE_URL}/profile/{owner_id}")
+            flags = viewer.locator(".play-language-flags .play-language-flag")
+            await flags.nth(6).wait_for()
+            overflow = await viewer.evaluate(
+                "document.documentElement.scrollWidth - window.innerWidth"
+            )
+            assert overflow <= 0, overflow
+            header = await viewer.locator(".profile-identity").bounding_box()
+            for button in await viewer.locator(".profile-identity button").all():
+                box = await button.bounding_box()
+                if box:
+                    assert box["x"] + box["width"] <= header["x"] + header["width"] + 0.5
+        finally:
+            await owner_context.close()
+            await viewer_context.close()
+            await browser.close()
