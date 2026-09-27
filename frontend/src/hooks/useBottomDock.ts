@@ -15,7 +15,9 @@ itself, or inside a fixed shell such as the phone's playing room - and only
 where it spans the bottom centre, which is where the invite and the toasts
 stand: the landscape room's toolbar rail and its guess field in the right-hand
 column are beside that spot, not under it, and counting them pushed the invite
-into the middle of the canvas. An element may also reserve room above itself
+into the middle of the canvas. What stands there is kept narrow enough to miss
+a column docked down the side instead (`--dock-inline-inset`, which the
+landscape room sets for its feed). An element may also reserve room above itself
 with `--dock-reserve` (the guess field keeps a slot for the verdict on the last
 guess, which floats outside its box). Several can be mounted at once; the
 highest reach wins. */
