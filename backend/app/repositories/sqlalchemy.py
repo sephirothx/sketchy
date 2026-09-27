@@ -1392,6 +1392,25 @@ class SqlAlchemyUserRepository(UserRepository):
                     .values(last_seen_at=datetime.now(timezone.utc))
                 )
 
+    async def get_play_languages(self, user_id: str) -> tuple[str, ...]:
+        db_user_id = _optional_entity_id(user_id)
+        if db_user_id is None:
+            return ()
+        async with self._session_factory() as session:
+            row = (
+                await session.execute(
+                    select(UserSettings.prompt_language, UserSettings.extra_prompt_languages)
+                    .join(User, User.id == UserSettings.user_id)
+                    .where(
+                        UserSettings.user_id == db_user_id,
+                        User.state == AccountState.REGISTERED.value,
+                    )
+                )
+            ).first()
+        if row is None:
+            return ()
+        return (row[0], *row[1])
+
     async def get_stats(self, user_id: str) -> UserStats:
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:

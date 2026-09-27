@@ -1776,3 +1776,34 @@ async def test_behind_the_real_middleware_the_answer_is_encoded_once(monkeypatch
             # route's own half.
     finally:
         await engine.dispose()
+
+
+async def test_a_profile_shows_the_languages_its_account_plays_in(env):
+    """#1212: the default first, then the others in the player's own order.
+    A guest's languages live in its browser, so a guest shows none; so does an
+    account that never had settings stored."""
+    from app.db.models import UserSettings
+
+    http, users, _, session_factory = env
+    guest = await users.create_anonymous(display_name="Guest")
+    polyglot = await users.create_anonymous(display_name="Polyglot")
+    await users.claim_account(polyglot.id, "polyglot", "hash")
+    async with session_factory() as session:
+        async with session.begin():
+            session.add(
+                UserSettings(
+                    user_id=UUID(polyglot.id),
+                    prompt_language="it",
+                    extra_prompt_languages=["en", "es"],
+                )
+            )
+    quiet = await users.create_anonymous(display_name="Quiet")
+    await users.claim_account(quiet.id, "quiet", "hash")
+
+    assert (await http.get(f"/api/users/{polyglot.id}/stats")).json()["playLanguages"] == [
+        "it",
+        "en",
+        "es",
+    ]
+    assert (await http.get(f"/api/users/{guest.id}/stats")).json()["playLanguages"] == []
+    assert (await http.get(f"/api/users/{quiet.id}/stats")).json()["playLanguages"] == []

@@ -204,7 +204,9 @@ export interface HistoryReactionResult {
 export const HISTORY_PAGE_SIZE = 10;
 
 export function fetchProfile(userId: string) {
-  return apiRequest<{ user: PublicProfile; stats: ProfileStats }>(
+  // `playLanguages`: the default first, then the others in order (#1212);
+  // empty for a guest, whose languages live in its browser.
+  return apiRequest<{ user: PublicProfile; stats: ProfileStats; playLanguages?: string[] }>(
     `/api/users/${encodeURIComponent(userId)}/stats`,
   );
 }

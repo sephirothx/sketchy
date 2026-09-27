@@ -418,6 +418,11 @@ def create_profile_router(
             # `get_by_id` resolved a merged guest's id to.
             "user": public_user_payload(user, online=is_online(user.id)),
             "stats": stats_payload(stats),
+            # The languages they play in, the default first (#1212): public
+            # like the rest of a profile, since it says what rooms a player
+            # would join and nothing about who they are. A guest's live in
+            # its browser, so a guest shows none.
+            "playLanguages": list(await user_repo.get_play_languages(user.id)),
         }
 
     @router.get("/users/{user_id}/games")

@@ -247,3 +247,6 @@ class FakeUserRepository(UserRepository):
         self.last_seen.append(user_id)
     async def get_stats(self, user_id: str) -> UserStats:
         return UserStats(user_id=user_id)
+
+    async def get_play_languages(self, user_id: str) -> tuple[str, ...]:
+        return tuple(getattr(self, "play_languages", {}).get(user_id, ()))
