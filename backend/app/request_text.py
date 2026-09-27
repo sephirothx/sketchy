@@ -20,6 +20,12 @@ never stored or compared as text, so the database never sees a byte of one;
 and a password is checked at every proof - sign-in, change, second-factor
 enrolment, deletion - so refusing a byte the policy once accepted would lock
 its owner out of every door at once, the recovery link included.
+
+The walk is iterative and bounded at :data:`MAX_NESTING_DEPTH`. It used to
+recurse, and a body five thousand lists deep - ten kilobytes, inside every
+body limit - raised RecursionError in the validator: a 500 on every route with
+a body. Past the bound the value is refused like a control character, as a
+validation failure naming its field.
 """
 
 from __future__ import annotations
@@ -36,6 +42,16 @@ CONTROL_CHARACTER_MESSAGE = "Text must not contain control characters"
 # Fields that carry a secret rather than text: hashed, never stored, and the
 # key to every proof an account can make (see the module docstring).
 SECRET_FIELDS = frozenset({"password", "current_password"})
+
+# How many lists and objects deep a field's value may nest. Nothing a screen
+# sends goes past four - a prompt list's entries and their aliases, a bug
+# report's recent errors - so thirty-two refuses no real request. The bound is
+# what keeps a hostile one cheap: ten kilobytes of brackets is five thousand
+# levels, inside every body limit, and a recursive walk over it raised
+# RecursionError, which a route answered 500 and a socket handler crashed on.
+MAX_NESTING_DEPTH = 32
+
+NESTING_MESSAGE = "Value is nested too deeply"
 
 
 def has_control_characters(value: str) -> bool:
@@ -54,15 +70,27 @@ def reject_control_characters(value: str) -> str:
 
 
 def _walk(value: Any) -> None:
-    if isinstance(value, str):
-        reject_control_characters(value)
-    elif isinstance(value, (list, tuple, set, frozenset)):
-        for item in value:
-            _walk(item)
-    elif isinstance(value, dict):
-        for key, item in value.items():
-            _walk(key)
-            _walk(item)
+    """Refuse a control character anywhere in `value`, or nesting past the bound.
+
+    Iterative, with the depth carried beside each value, so no input can reach
+    the interpreter's recursion limit and the refusal is a ``ValueError`` -
+    a validation failure naming the field - rather than a crash.
+    """
+    pending: list[tuple[Any, int]] = [(value, 0)]
+    while pending:
+        item, depth = pending.pop()
+        if isinstance(item, str):
+            reject_control_characters(item)
+            continue
+        if isinstance(item, dict):
+            children = [part for pair in item.items() for part in pair]
+        elif isinstance(item, (list, tuple, set, frozenset)):
+            children = list(item)
+        else:
+            continue
+        if depth >= MAX_NESTING_DEPTH:
+            raise ValueError(NESTING_MESSAGE)
+        pending.extend((child, depth + 1) for child in children)
 
 
 class ControlFreeModel(BaseModel):

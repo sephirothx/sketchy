@@ -23,7 +23,7 @@ from starlette.exceptions import HTTPException
 from starlette.responses import FileResponse
 from starlette.staticfiles import NotModifiedResponse
 
-from app.api.errors import install_refusal_handler
+from app.api.errors import install_refusal_handler, install_validation_handler
 from app.auth.password import password_hash_workers
 from app.compression import (
     NO_DYNAMIC_COMPRESSION,
@@ -903,6 +903,9 @@ api = FastAPI(title="Sketchy", lifespan=lifespan)
 # A refusal that names its reason renders with its code in the body; anything
 # still raising a plain HTTPException keeps FastAPI's own shape (#760).
 install_refusal_handler(api)
+# A 422 does not echo the failing value back: FastAPI's recursive encoder
+# crashed on a deeply nested one, and the caller already has it.
+install_validation_handler(api)
 # The frontend is served from this same origin, so the session cookie rides
 # along without CORS involvement, and no other origin is read by a browser:
 # CORS is granted only to the origins named in ALLOWED_ORIGINS (a frontend
