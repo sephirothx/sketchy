@@ -236,9 +236,13 @@ async def test_a_wide_row_never_hides_a_rule_it_has_not_counted():
             assert await rules.locator(".chip").count() == 4
             more = rules.locator(".public-room-rules-more")
             assert "+2" in await more.inner_text()
-            # Inside what the row shows, not only in the DOM.
-            box, row_box = await more.bounding_box(), await row.bounding_box()
-            assert box["y"] + box["height"] <= row_box["y"] + row_box["height"]
+            # Inside what the row shows, not only in the DOM. Both boxes in one
+            # read: the list re-sorts as other tests' rooms come and go, and a
+            # row measured an await after its chip may have moved in between.
+            assert await more.evaluate(
+                "(chip) => chip.getBoundingClientRect().bottom"
+                " <= chip.closest('.public-room-card').getBoundingClientRect().bottom + 0.5"
+            )
             assert await more.evaluate(
                 "(chip) => { const list = chip.parentElement.getBoundingClientRect();"
                 " const own = chip.getBoundingClientRect();"
