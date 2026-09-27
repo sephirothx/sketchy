@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import type { KeyboardEvent as ReactKeyboardEvent } from "react";
 
 import { AnyLanguageIcon, CheckIcon, ChevronDownIcon, Flag, GlobeIcon, PlusIcon } from "./icons";
@@ -89,6 +89,50 @@ export function LanguagePicker({
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, [open]);
+
+  // Placed in the window, not in whatever holds the trigger: a picker inside a
+  // dialog's scrolling body was clipped by it and scrolled it both ways. Under
+  // the trigger where it fits, over it where there is more room above, and
+  // held inside the window's edges - its right edge on the trigger's when the
+  // trigger sits at the end of a row. Placed before paint, and again as
+  // anything scrolls or the window changes size. Written to the list itself,
+  // which goes when the list closes.
+  useLayoutEffect(() => {
+    if (!open) return;
+    function place() {
+      const trigger = triggerRef.current?.getBoundingClientRect();
+      const list = listRef.current;
+      if (!trigger || !list) return;
+      const margin = 8;
+      const gap = 6;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight;
+      const width = Math.max(list.offsetWidth, trigger.width);
+      const natural = list.scrollHeight;
+      const below = viewportHeight - trigger.bottom - gap - margin;
+      const above = trigger.top - gap - margin;
+      const upward = natural > below && above > below;
+      let left = trigger.left;
+      if (left + width > viewportWidth - margin) left = trigger.right - width;
+      left = Math.max(margin, Math.min(left, viewportWidth - margin - width));
+      Object.assign(list.style, {
+        position: "fixed",
+        left: `${left}px`,
+        right: "auto",
+        minWidth: `${trigger.width}px`,
+        maxHeight: `${Math.max(120, Math.min(360, upward ? above : below))}px`,
+        top: upward ? "auto" : `${trigger.bottom + gap}px`,
+        bottom: upward ? `${viewportHeight - trigger.top + gap}px` : "auto",
+      });
+    }
+    place();
+    window.addEventListener("resize", place);
+    window.addEventListener("scroll", place, true);
+    return () => {
+      window.removeEventListener("resize", place);
+      window.removeEventListener("scroll", place, true);
+    };
   }, [open]);
 
   // The chosen row takes focus on open, so the list starts where the reader
