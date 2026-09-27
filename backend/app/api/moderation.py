@@ -1057,7 +1057,6 @@ async def _carry_decision_to_copies(
     prior: tuple[str, UUID | None, datetime | None],
     decision: str,
     owner_user_id: UUID | None,
-    language: str,
     reviewer_id: UUID,
     now: datetime,
 ) -> None:
@@ -1083,7 +1082,12 @@ async def _carry_decision_to_copies(
         update(PromptVersion)
         .where(
             PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
-            PromptVersion.language == language,
+            # Not narrowed by language: the byline - this decision's own
+            # instant and moderator - is what marks a copy it was carried to,
+            # and a carry can cross languages through a list in no language
+            # (#821): French "pain" hidden, typed into an Any-language list,
+            # and from there into English. A restore that stopped at the
+            # original's language left that copy hidden with nobody to decide it.
             PromptVersion.moderated_at == decided_at,
             (
                 PromptVersion.moderated_by_user_id == decided_by
@@ -2273,7 +2277,6 @@ def create_moderation_router(
                             prior=prior_decision,
                             decision=body.moderation_state,
                             owner_user_id=report.reported_owner_user_id,
-                            language=target.language,
                             reviewer_id=reviewer.id,
                             now=now,
                         )

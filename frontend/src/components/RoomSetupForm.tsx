@@ -205,8 +205,9 @@ export function RoomSetupForm({
                   options={languageOptions}
                   onChange={(next) => onChange({
                     promptLanguage: next as PromptLanguage,
-                    // Lists cannot span languages, so none carries over.
-                    promptListSlugs: selectionForLanguage(loadedLists, next),
+                    // A list in a language cannot follow the room into
+                    // another; one in no language can (#821).
+                    promptListSlugs: selectionForLanguage(loadedLists, next, promptListSlugs),
                   })}
                 />
               )}

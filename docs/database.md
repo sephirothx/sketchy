@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a8b9c0d1e2f4_session_last_device_label.py` (#1016). Both this line and the table
+`c6d7e8f9a0b2_language_agnostic_prompt_lists.py` (#821). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -219,10 +219,13 @@ canvas.** Applying one fills the create form but does not enable *Keep this room
 future games*. Quick custom prompts are never stored; they must be saved as an owned
 list first. ≤ 20 per account.
 
-It stores **no language column either**, although a room declares one (R-PROMPT-02):
-the preset's language is read back from the lists it saved, so the two cannot drift
-apart. Saving a preset whose lists are not in the declared language is refused rather
-than stored.
+`prompt_language` is the language the room will declare (R-PROMPT-02): one of the room
+languages, `CHECK ck_room_presets_prompt_language`, `en` by default. It used to be read
+back from the saved lists, and a preset of lists in no language (R-PROMPT-12) has none to
+read, so since #821 it is stored. The two still cannot drift apart: saving a preset whose
+lists are not in the declared language (or in none) is refused rather than stored, and
+reading one pins its lists against that language the way a room does, so a disagreement
+makes the preset visibly unavailable.
 
 ### `planned_shutdown_abandonments`
 The privacy-safe fact that a planned drain expired with a game still live.
@@ -1766,7 +1769,7 @@ A moderator's decision is the concept's, not one wording's: resolving a report s
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
 concept, an owner's edit that writes a new version (an alias added, an answer respelled)
 carries them to it, and a new version whose answer or alias matches any prompt that is hidden in
-any list its owner has ever held, in the same language (#1091) — a word typed back in, into
+any list its owner has ever held, in the same language or in no language (`zxx`, which shares its words with every language, #821) — the same word when a room that plays both keys them as one word (its canonical key, not the spellings a guess is accepted under), so a hidden German **Bär** stops an agnostic **Bär** but not **Bar**, and between two agnostic lists, played in every room, any room's fold counts (#1091) — a word typed back in, into
 this list or another, or another entry respelled into it — is
 born with them — so a hidden word stays hidden (#1020). A concept belongs to
 one list; copies mint their own. Bundled seed versions are the operator's own editions and
@@ -1777,10 +1780,17 @@ registry, which case-folds, collapses whitespace, folds canonically decomposable
 accents, and reads every apostrophe a keyboard writes as the plain one (#1011; the
 bundled lists are written with the plain one, so no stored key changed)
 ([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other
-BCP-47 tags are **rejected until their matching semantics are implemented.**
+BCP-47 tags are **rejected until their matching semantics are implemented.** Content may
+also be `zxx`, BCP-47's "no linguistic content": a list in no language (R-PROMPT-12). The
+four content tables that carry a language (`prompt_versions`, `prompt_aliases`,
+`prompt_lists`, `prompt_list_revisions`) admit it in their `CHECK`; `user_settings` and
+`room_presets` do not, because a room needs a language to fold guesses under.
 
 `match_key` is that fold for the row's own language, with the language's
 transliterations applied first (German **Mädchen** stores `maedchen`, not `madchen`).
+A `zxx` row folds with the shared rule alone — **Müller** stores `muller` — because the
+key must not depend on the room that plays it; a German room still accepts `mueller`,
+since acceptance folds the answer's text under the room's language.
 It is deliberately **one** string: it is the identity these unique constraints are
 built on. A language where two spellings are both correct accepts them at match time
 instead (R-GUESS-01) — the alternative would be an identity that is a set, and two
@@ -2065,7 +2075,7 @@ that answers a request.
 Editing a list uses **optimistic concurrency** and creates a new immutable revision
 instead of rewriting the revision a running or finished game pinned. Setting or clearing
 tags is such an edit and earns its own revision (R-LIST-05). The content
-language cannot change after creation. Rooms resolve, and games pin, exact revision IDs.
+language — a room language, or `zxx` — cannot change after creation. Rooms resolve, and games pin, exact revision IDs.
 
 ### `prompt_list_localizations`
 `id` · `prompt_list_id` (CASCADE) · `locale` · `name` · `description`, unique on

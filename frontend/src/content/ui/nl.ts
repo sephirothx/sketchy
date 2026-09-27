@@ -1098,6 +1098,7 @@ export const NL: Catalogue = {
   languagePicker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Alle talen",
+    anyLanguage: "Taalonafhankelijk",
   },
 
   lobbyBrowserPage: {

@@ -1225,6 +1225,7 @@ class PromptListRepository(ABC):
         *,
         limit: int,
         exclude_match_keys: Collection[str] = (),
+        exclude_language: str | None = None,
     ) -> PromptSample:
         """Draw up to `limit` random prompts from pinned revisions.
 
@@ -1232,6 +1233,11 @@ class PromptListRepository(ABC):
         is in `exclude_match_keys` - the room's own quick prompts, which shadow
         curated content of the same name. Returns `limit` prompts whenever that
         many remain after those exclusions, along with how many remained.
+
+        With `exclude_language`, only versions stored in that language are
+        compared: the keys are the room's fold, and a list in no language
+        (#821) stores another one, where "Bär" keys like the different German
+        word "Bar". The caller compares those itself, under the room's fold.
         """
         ...
 

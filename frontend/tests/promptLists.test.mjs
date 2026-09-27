@@ -3,6 +3,7 @@ import test from "node:test";
 import { duplicateName, emailPublishBlocker, promptEntriesFromQuickInput } from "../src/lib/promptListDrafts.ts";
 import {
   availablePromptLanguages,
+  isPlayableIn,
   preferredPromptLanguage,
   reconcileSelectionForLanguage,
   selectionForLanguage,
@@ -121,6 +122,30 @@ test("a selection that is not in the room's language is replaced, not kept", () 
   );
   // And a language with nothing to offer says so, rather than borrowing.
   assert.deepEqual(reconcileSelectionForLanguage(lists, "it", ["english_standard"]), []);
+});
+
+test("a list in no language is played in every room and follows it across a switch", () => {
+  const lists = [
+    { slug: "english_standard", language: "en" },
+    { slug: "german_standard", language: "de" },
+    { slug: "pokemon", language: "zxx" },
+  ];
+  assert.equal(isPlayableIn("zxx", "de"), true);
+  assert.equal(isPlayableIn("en", "de"), false);
+  // Not a language a room can be opened in.
+  assert.deepEqual(availablePromptLanguages(lists, "en"), ["de", "en"]);
+  // Kept beside the room's own lists when they are reconciled...
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "de", ["english_standard", "pokemon"]),
+    ["pokemon"],
+  );
+  // ...and carried when the host switches the room's language, beside the new
+  // language's Standard list rather than instead of it.
+  assert.deepEqual(
+    selectionForLanguage(lists, "de", ["english_standard", "pokemon"]),
+    ["german_standard", "pokemon"],
+  );
+  assert.deepEqual(selectionForLanguage(lists, "de"), ["german_standard"]);
 });
 
 test("a duplicate's name fits the server's 64 characters without splitting one", () => {

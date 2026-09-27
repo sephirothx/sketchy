@@ -1116,6 +1116,9 @@ export const EN = {
   languagePicker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Every language",
+    /** A prompt list in no language (#821): played in a room of any
+    language (GLOSSARY: Any language). */
+    anyLanguage: "Any language",
   },
 
   lobbyBrowserPage: {

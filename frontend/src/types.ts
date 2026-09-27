@@ -44,13 +44,17 @@ export type HintMode = "none" | "checkpoints" | "purchase" | "wheel";
 export type ScoringMode = "none" | "default" | "pressure";
 export type ColorMode = "all" | "palette" | "colorblind_safe" | "black_and_white";
 export type PromptLanguage = "de" | "en" | "es" | "fr" | "it" | "nl" | "pt";
+/** A list may also be in no language at all (`zxx`, #821): Pokémon, brands,
+places. It is played in a room of any language, under that room's matching
+rules. A room itself always declares a `PromptLanguage`. */
+export type PromptListLanguage = PromptLanguage | "zxx";
 
 export interface PromptListSummary {
   id: string;
   slug: string;
   name: string;
   description: string;
-  language: PromptLanguage;
+  language: PromptListLanguage;
   promptCount: number;
   isBundled: boolean;
   version: number;
@@ -116,7 +120,7 @@ export interface CommunityPromptList {
   slug: string;
   name: string;
   description: string;
-  language: PromptLanguage;
+  language: PromptListLanguage;
   promptCount: number;
   ownerDisplayName: string;
   tags: string[];

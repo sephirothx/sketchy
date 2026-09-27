@@ -41,7 +41,7 @@ from app.presenters import (
     system_chat_message,
     turn_payload,
 )
-from app.prompt_content import default_prompt_list_slug
+from app.prompt_content import default_prompt_list_slug, prompt_match_key
 from app.prompts import letter_histogram, parse_custom_prompt_list
 from app.repositories.interfaces import (
     PromptListSelectionError,
@@ -633,6 +633,7 @@ class GameFlowService:
                         list(room.prompt_list_revision_ids),
                         limit=needed,
                         exclude_match_keys=room.custom_prompt_match_keys(),
+                        exclude_language=room.prompt_language,
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )
@@ -645,7 +646,24 @@ class GameFlowService:
                     "Prompt lists could not be loaded. Please try again."
                 ) from error
 
-        total = len(custom) + sample.drawable
+        # The database compares stored keys, and only those stored in the
+        # room's language: a list in no language (#821) stores its keys
+        # without the room's transliteration - "Müller" is `muller` there and
+        # `mueller` to a German room, and "Bär" is `bar`, which is another
+        # German word. So its shadow is asked here, of the text, under the
+        # room's fold - by the canonical key and not the wider spelling set
+        # (R-GUESS-01): which prompt a turn draws does not widen. For a list in the room's language this is the stored
+        # key again and removes nothing more; twins are few, so the sample is
+        # not over-drawn for them.
+        shadowed = room.custom_prompt_match_keys()
+        candidates = [
+            prompt
+            for prompt in sample.prompts
+            if prompt_match_key(prompt.answer, room.prompt_language) not in shadowed
+        ]
+        drawable = max(0, sample.drawable - (len(sample.prompts) - len(candidates)))
+
+        total = len(custom) + drawable
         if not total:
             # Authorization proved these lists held prompts, but moderation can
             # take the last of them away before the draw lands. Falling through
@@ -660,9 +678,7 @@ class GameFlowService:
             )
         indices = random.sample(range(total), min(needed, total))
         from_custom = sum(1 for index in indices if index < len(custom))
-        drawn: list[SampledPrompt] = list(
-            sample.prompts[: len(indices) - from_custom]
-        )
+        drawn: list[SampledPrompt] = candidates[: len(indices) - from_custom]
 
         pool = random.sample(custom, from_custom) + [
             prompt.answer for prompt in drawn
@@ -684,7 +700,7 @@ class GameFlowService:
         # this game can show.
         letter_counts: Counter[str] = Counter()
         letter_total = 0
-        if sample.drawable:
+        if drawable:
             letter_counts.update(room.prompt_letter_counts)
             letter_total += room.prompt_letter_total
         custom_counts, custom_total = letter_histogram(custom)
