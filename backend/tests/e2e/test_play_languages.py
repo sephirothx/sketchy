@@ -59,7 +59,7 @@ async def test_a_player_ranks_the_other_languages_they_play_in():
             await use_guest_name(page, f"Ranker{uuid4().hex[:6]}")
             dialog = await _open_appearance(page)
             await dialog.get_by_role(
-                "button", name="Language you play in: italiano (Italian)"
+                "button", name="Your language: italiano (Italian)"
             ).wait_for()
             assert await _extras(page) == []
             suggestions = dialog.locator(".play-language-suggestions")
@@ -91,7 +91,7 @@ async def test_a_player_ranks_the_other_languages_they_play_in():
 
             # Promoting one of them swaps the old default into its place.
             await dialog.get_by_role(
-                "button", name="Language you play in: italiano (Italian)"
+                "button", name="Your language: italiano (Italian)"
             ).click()
             await dialog.get_by_role("option", name="English").click()
             assert await _extras(page) == ["nl", "it", "de"]
@@ -107,7 +107,7 @@ async def test_a_player_ranks_the_other_languages_they_play_in():
             await page.reload()
             dialog = await _open_appearance(page)
             await dialog.get_by_role(
-                "button", name="Language you play in: English"
+                "button", name="Your language: English"
             ).wait_for()
             assert await _extras(page) == ["nl", "it"]
             assert await dialog.locator(".play-language-suggestions").count() == 0
@@ -141,7 +141,7 @@ async def test_an_accounts_languages_follow_it_to_another_device():
                 lambda response: "/api/users/me/settings" in response.url
                 and response.request.method == "PATCH"
             ):
-                await dialog.get_by_role("button", name="Language you play in: English").click()
+                await dialog.get_by_role("button", name="Your language: English").click()
                 await dialog.get_by_role("option", name="português").click()
             assert await _extras(page) == ["es", "it", "en"]
 
@@ -161,7 +161,7 @@ async def test_an_accounts_languages_follow_it_to_another_device():
                 fresh_dialog = await _open_appearance(fresh_page)
                 assert await _extras(fresh_page) == ["es", "it", "en"]
                 await fresh_dialog.get_by_role(
-                    "button", name="Language you play in: português (Portuguese)"
+                    "button", name="Your language: português (Portuguese)"
                 ).wait_for()
             finally:
                 await fresh.close()
@@ -517,7 +517,7 @@ async def test_a_first_name_is_followed_by_the_one_question_about_languages():
             question = page.locator(PLAY_LANGUAGES_QUESTION)
             await question.wait_for()
             await question.get_by_role(
-                "button", name="Language you play in: italiano (Italian)"
+                "button", name="Your language: italiano (Italian)"
             ).wait_for()
             await question.get_by_text("Settings → Appearance").wait_for()
             await question.get_by_role("button", name="Add français").click()
@@ -532,7 +532,7 @@ async def test_a_first_name_is_followed_by_the_one_question_about_languages():
             assert await page.locator(PLAY_LANGUAGES_QUESTION).count() == 0
             dialog = await _open_appearance(page)
             assert await _extras(page) == ["fr"]
-            await dialog.get_by_role("button", name="Language you play in: italiano (Italian)").wait_for()
+            await dialog.get_by_role("button", name="Your language: italiano (Italian)").wait_for()
         finally:
             await context.close()
             await browser.close()
