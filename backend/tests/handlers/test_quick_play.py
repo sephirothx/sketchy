@@ -1,7 +1,8 @@
 """Quick play, decided by the server (#931, R-UX-14).
 
-One command: the fullest public room that is waiting in the caller's language
-with a seat free, or a new public room on the payload's own defaults. It used
+One command: the fullest public room that is waiting in the caller's default
+language with a seat free - then a mixed one, then one in each of their other
+languages (#1211) - or a new public room on the payload's own defaults. It used
 to be a walk the client ran over the lobby's room list, one `join_room` per
 candidate - a round trip each, a dependency on a list that had to have
 arrived, and a room per presser when several pressed at the same moment.
@@ -289,3 +290,28 @@ async def test_the_other_languages_are_canonical_once_and_never_the_default():
     for junk in (["kl"], ["mul"], "nl", ["nl"] * 7):
         refused = await press(sio, sid="other", promptLanguage="it", extraPromptLanguages=junk)
         assert refused["ok"] is False, junk
+
+
+async def test_a_room_about_to_open_in_the_default_outranks_one_in_another_language(monkeypatch):
+    """Two French presses at once, one of them also playing Dutch, with a Dutch
+    room waiting. The first opens a French room; the second waits for it
+    rather than taking the Dutch seat - a room in the default that is about to
+    exist ranks above a room in another language that exists now (#1211)."""
+    room_manager = RoomManager()
+    dutch = waiting_room(room_manager, language="nl", seats=2)
+    sio, _ = server(room_manager)
+    create = room_handlers._create_new_room
+
+    async def slow_create(*args, **kwargs):
+        await asyncio.sleep(0.05)
+        return await create(*args, **kwargs)
+
+    monkeypatch.setattr(room_handlers, "_create_new_room", slow_create)
+
+    opener, follower = await asyncio.gather(
+        press(sio, sid="fr-a", promptLanguage="fr"),
+        press(sio, sid="fr-b", nickname="Jonas", promptLanguage="fr", extraPromptLanguages=["nl"]),
+    )
+    assert opener["ok"] and follower["ok"]
+    assert follower["roomId"] == opener["roomId"]
+    assert players(dutch) == 2

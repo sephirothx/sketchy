@@ -906,8 +906,9 @@ canonicalised, each once, the default dropped from them, an unknown tag refused 
 default's. The server picks, fullest first within each tier, a **public** room that is
 **waiting with no game running** with a seat free: in the default language; then a
 mixed-language room, which seats the player in the default (#1182); then one in each of
-the others, in the player's order. Failing all of those it opens one on its own defaults,
-public and in the default language. The choice used to be the client's, from the lobby's room list: a `join_room`
+the others, in the player's order. A room another press is opening in the default ranks
+with the default's: the press waits for it before trying a mixed room or another language.
+Failing all of those it opens one on its own defaults, public and in the default language. The choice used to be the client's, from the lobby's room list: a `join_room`
 per candidate until one took the seat, so a press cost up to N+1 round trips, could not
 run until a list had arrived (ten seconds after naming a first-time visitor, whose naming
 reconnects the socket), and gave every presser in one moment a room of their own, because
