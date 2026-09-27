@@ -1989,34 +1989,19 @@
 
   .game-room.guess-focused .chat-input {
     padding-top: 0;
+    /* The verdict floats above the field, outside this box, and the field is
+       a dock (useBottomDock): this is the room it reserves so a friend invite
+       or a toast stands above the verdict rather than on it. The chip plus
+       its gap. Only here, because only here is a verdict shown (chat.css). */
+    --dock-reserve: 44px;
   }
 
-  /* With the keyboard down the feed is on screen, in portrait below the
-     canvas and in landscape down the side, and a verdict hanging above the
-     field hung over its newest line - often somebody else's guess, which
-     arrives under a verdict that stays until you type (#1199). Here the
-     verdict takes a slot of its own at the top of the composer and the feed
-     gives up that much height, staying pinned to its newest line
-     (RoomChatPanel); the field does not move. A line's worth of feed is the
-     cheaper loss than its newest line hidden. With the verdict inside the
-     composer's box, the dock already reaches over it, so the slot the field
-     reserves for it (--dock-reserve, chat.css) is not added on top.
-
-     No raised shadow here - it no longer floats over anything, and the
-     shadow painted a grey band across the composer.
-
-     Keyboard up or down, the verdict has to be bounded: a guess may run to
-     500 characters. In flow a 400-character one grew the chip past the feed
-     until it pushed the field and Send off the bottom of a landscape phone;
-     floating with the keyboard up it grew off the top of the screen (-89px
-     at 844x390). Two lines at most, broken anywhere so a single long word
-     wraps too; the whole line is in the feed. */
-  .game-room.game-room-playing:not(.guess-focused) .guess-focus-flash {
-    position: static;
-    box-shadow: none;
-  }
-
-  .game-room.game-room-playing .guess-focus-flash-body {
+  /* A guess may run to 500 characters, and the verdict echoes it: floating
+     above the field with the keyboard up, a 400-character one grew off the
+     top of the screen (-89px at 844x390, #1199). Two lines at most, broken
+     anywhere so a single long word wraps too; the whole line is in the feed
+     once the keyboard is down. */
+  .game-room.guess-focused .guess-focus-flash-body {
     display: -webkit-box;
     overflow: hidden;
     overflow-wrap: anywhere;
@@ -2024,10 +2009,6 @@
     -webkit-line-clamp: 2;
     padding-inline: var(--ink-overhang);
     margin-inline: calc(-1 * var(--ink-overhang));
-  }
-
-  .game-room.game-room-playing:not(.guess-focused) .chat-input:has(> .guess-focus-flash) {
-    --dock-reserve: 0px;
   }
 
   /* The verdict on the guess being typed is the one thing worth interrupting

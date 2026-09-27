@@ -208,10 +208,11 @@ export function RoomChatPanel({
   }, [messages, isScrolledUp]);
 
   // The feed's box changes size under it, not only its lines: a phone
-  // hides it while the keyboard is up and gives the verdict a slot out
-  // of its height (#1199). Its scroll offset stays where it was, so the newest
-  // line ended up below the fold - the lines that arrived while it was hidden
-  // were scrolled to in a box of no height. A reader who scrolled up stays put.
+  // hides it while the keyboard is up and shows it again when it goes down.
+  // Its scroll offset stayed where it was, so it came back short of its newest
+  // line, which carries the verdict on the last guess once the keyboard is
+  // down (#1199) - the lines that arrived while it was hidden were scrolled to
+  // in a box of no height. A reader who scrolled up stays put.
   const scrolledUpRef = useRef(isScrolledUp);
   useEffect(() => {
     scrolledUpRef.current = isScrolledUp;
