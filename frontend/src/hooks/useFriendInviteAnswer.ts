@@ -35,26 +35,30 @@ export function useFriendInviteAnswer() {
   function join() {
     const current = invite;
     if (!current) return;
-    // Nothing is left and nothing asked while another entry holds the lock:
-    // `enter` would only wait, and the player would be out of their room.
-    if (useRoomEntryStore.getState().pending !== null) return;
+    // Answered from above every page (the card) or from the room bar, so it is
+    // the one way in that the lobby's own controls cannot see: it takes the
+    // same lock they do, and while another entry holds it the notice waits
+    // rather than racing it for the seat. Taken before anything moves
+    // (R-UX-14) - in a room, before the room is left - and the invitation is
+    // spent with it, so the card has nothing to draw over the rewind between
+    // the room and the lobby, when the bar that claimed it is already gone.
+    const begin = () => {
+      const token = useRoomEntryStore.getState().begin("friend-invite");
+      if (token === null) return null;
+      clear();
+      return () => void enter(current, token);
+    };
     // In a room, Join is also that room's Leave, and leaves it the same way:
     // its seat given back and its history taken off before the next room is
     // entered, and the same question first whenever Leave would ask it - in
     // the middle of a game, and of your own turn above all (#1198). A No
-    // leaves the invitation where it was.
+    // takes no lock and leaves the invitation where it was.
     const roomExit = useFriendInviteStore.getState().roomExit;
-    if (roomExit) roomExit(current, () => void enter(current));
-    else void enter(current);
+    if (roomExit) roomExit(current, begin);
+    else begin()?.();
   }
 
-  async function enter(current: FriendInvite) {
-    // Answered from above every page (the card) or from the room bar, so it is
-    // the one way in that the lobby's own controls cannot see: it takes the same lock they do, and while another
-    // entry holds it the notice waits rather than racing it for the seat.
-    const token = useRoomEntryStore.getState().begin("friend-invite");
-    if (token === null) return;
-    clear();
+  async function enter(current: FriendInvite, token: number) {
     try {
       const answer = await emitEntry<AckResponse>("join_friend_room", {
         friendUserId: current.fromUserId,
@@ -62,6 +66,9 @@ export function useFriendInviteAnswer() {
       });
       const session = sessionFrom(answer);
       if (!session) {
+        // From a room this lands in the lobby, the room already left: the
+        // invitation names no room, so nothing can say it will be refused
+        // before the old seat is given up (R-UX-15).
         notify(refusalText(answer, ui.friendInviteNotice.couldNotJoinThatGame), "error");
         return;
       }

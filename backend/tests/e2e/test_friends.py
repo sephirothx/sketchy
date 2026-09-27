@@ -258,6 +258,15 @@ async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
                 2, timeout=SETTLE_MS
             )
             await expect(chip).to_have_count(0)
+            # A waiting room is left at once, as its own Leave leaves it: no
+            # question (#1198), and the guest is in the friend's room.
+            await expect(guest.get_by_role("alertdialog")).to_have_count(0)
+            host_code = await host.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await expect(guest.locator('[data-testid="room-header"]')).to_have_attribute(
+                "data-room-code", host_code
+            )
         finally:
             await host_context.close()
             await guest_context.close()
@@ -336,10 +345,21 @@ async def test_joining_an_invitation_mid_game_asks_what_leave_asks():
                 2, timeout=SETTLE_MS
             )
             await guest.wait_for_selector('[data-testid="waiting-room"]')
-            await expect(guest.locator('[data-testid="room-header"]')).not_to_have_attribute(
-                "data-room-code", code
+            host_code = await host.locator('[data-testid="room-header"]').get_attribute(
+                "data-room-code"
+            )
+            await expect(guest.locator('[data-testid="room-header"]')).to_have_attribute(
+                "data-room-code", host_code
             )
             await expect(chip).to_have_count(0)
+
+            # The game given up is gone from the history too (R-UX-15): Back
+            # from the friend's room is that room's Leave, and lands on the
+            # lobby rather than on the old room's code.
+            await guest.go_back()
+            await guest.wait_for_selector('[data-testid="quick-play"]')
+            assert guest.url.rstrip("/") == BASE_URL, guest.url
+            assert f"/room/{code}" not in guest.url, guest.url
         finally:
             await host_context.close()
             await guest_context.close()

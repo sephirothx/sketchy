@@ -46,7 +46,7 @@ import {
   Wordmark,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
-import { useFriendInviteStore } from "../store/friendInviteStore";
+import { useFriendInviteStore, type RoomExit } from "../store/friendInviteStore";
 import type { FriendInvite } from "../lib/friends";
 import { recordRender } from "../lib/renderDiagnostics";
 import { CrashProbe } from "../lib/crashTestSeam";
@@ -58,7 +58,9 @@ import { useDocumentTitle } from "../hooks/useDocumentTitle";
 
 /** What the Leave question is asked for: the lobby, from the room's own Leave,
 or a friend's game, from an invitation's Join (#1198). */
-type LeaveQuestion = { to: "lobby" } | { to: "invite"; invite: FriendInvite; enter: () => void };
+type LeaveQuestion =
+  | { to: "lobby" }
+  | { to: "invite"; invite: FriendInvite; begin: () => (() => void) | null };
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -212,7 +214,8 @@ export function ActiveGameRoom({ code }: { code: string }) {
     // Named when another room comes next: `leave_room` is momentary, and a
     // bare one that reached the server after the join had seated this socket
     // would give up the new seat instead of the old (#879).
-    emitTransient("leave_room", ...(then && roomId ? [{ roomId }] : []));
+    if (then && roomId) emitTransient("leave_room", { roomId });
+    else emitTransient("leave_room");
     reset();
     // The room's history entries go with it, and the lobby takes the place of
     // the entry the room was entered on: Back from the lobby then goes to
@@ -230,8 +233,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
   }
 
   // Whether Leave asks first. One rule for the Room menu's Leave, Back on the
-  // room, and an invitation's Join, which leaves the room just the same.
-  const leaveAsks = roomState === "playing";
+  // room, and an invitation's Join, which leaves the room just the same: a
+  // game in progress asks. Not once the room has ended - the stage is then the
+  // *This game ended* card, whose own Leave does not ask, while the store
+  // still holds the state the room ended in.
+  const leaveAsks = roomState === "playing" && stage.kind !== "ended";
 
   function handleLeave() {
     if (leaveAsks) {
@@ -244,18 +250,26 @@ export function ActiveGameRoom({ code }: { code: string }) {
   // An invitation's Join, answered here because it is this room that is left
   // (#1198). Registered once and read through a ref, so the answer is the one
   // Leave would give at the moment Join is pressed.
-  const leaveForInviteRef = useRef<(invite: FriendInvite, enter: () => void) => void>(() => {});
+  const leaveForInviteRef = useRef<RoomExit>(() => {});
   useEffect(() => {
-    leaveForInviteRef.current = (invite, enter) => {
-      if (leaveAsks) setLeaveQuestion({ to: "invite", invite, enter });
-      else exitRoom(enter);
+    leaveForInviteRef.current = (invite, begin) => {
+      if (leaveAsks) setLeaveQuestion({ to: "invite", invite, begin });
+      else leaveForInvite(begin);
     };
   });
   const holdRoomExit = useFriendInviteStore((state) => state.holdRoomExit);
   useEffect(
-    () => holdRoomExit((invite, enter) => leaveForInviteRef.current(invite, enter)),
+    () => holdRoomExit((invite, begin) => leaveForInviteRef.current(invite, begin)),
     [holdRoomExit],
   );
+  function leaveForInvite(begin: () => (() => void) | null) {
+    // Already on the way out - a kick or another tab's takeover landed first -
+    // and a second exit would never be finished, holding the entry lock.
+    if (exitingRoomRef.current) return;
+    // The lock first: while another entry holds it the room is not left.
+    const enter = begin();
+    if (enter) exitRoom(enter);
+  }
   // The question names the invitation it was asked for. One that runs out or
   // is replaced while it is open takes the question with it: a Yes would
   // leave the game for an invitation that is no longer there.
@@ -264,16 +278,10 @@ export function ActiveGameRoom({ code }: { code: string }) {
     setLeaveQuestion(null);
   }
 
-  // Back from the room is the Leave the room offers at that moment: the
-  // Room menu's, which asks during a game, or the ended card's, which does not.
-  function handleBackOnRoom() {
-    if (stage.kind === "ended") performLeave();
-    else handleLeave();
-  }
   // Back is the room's own: a sheet on top closes, and Back on the room
   // itself is Leave, which gives up the seat rather than walking away from it
-  // (R-UX-15).
-  const roomHistory = useRoomHistory(normalizedCode, playerId ?? "", handleBackOnRoom);
+  // (R-UX-15) - asking during a game, not on the ended card (`leaveAsks`).
+  const roomHistory = useRoomHistory(normalizedCode, playerId ?? "", handleLeave);
 
   function handleToggleAfk() {
     emitTransient("toggle_afk");
@@ -467,7 +475,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           onCancel={() => setLeaveQuestion(null)}
           onConfirm={() => {
             setLeaveQuestion(null);
-            exitRoom(leaveQuestion.enter);
+            leaveForInvite(leaveQuestion.begin);
           }}
         />
       )}

@@ -20,9 +20,11 @@ import type { FriendInvite } from "../lib/friends";
  * inside the room - the card is drawn above every page.
  */
 
-/** Leave the room for this invitation, then `enter` - or ask first, and call
-`enter` only if the player says yes. */
-export type RoomExit = (invite: FriendInvite, enter: () => void) => void;
+/** Leave the room for this invitation - or ask first, and only on a yes.
+`begin` takes the entry lock and spends the invitation, and hands back what
+enters the friend's room once this one is left; null when another entry holds
+the lock, and then the room stays where it is. */
+export type RoomExit = (invite: FriendInvite, begin: () => (() => void) | null) => void;
 
 interface FriendInviteStore {
   invite: FriendInvite | null;
