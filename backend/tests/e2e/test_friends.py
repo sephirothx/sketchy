@@ -8,7 +8,14 @@ import re
 import uuid
 
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import join_by_code, leave_room, register_account, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    leave_room,
+    open_create_room,
+    open_new_room,
+    register_account,
+    use_guest_name,
+)
 
 BASE_URL = "http://localhost:8000"
 
@@ -107,7 +114,7 @@ async def test_friends_are_made_in_the_lobby_and_open_a_private_room():
 
             # Bob opens a private room. Nothing about it is discoverable: it is
             # not in the public list, and presence says only "In a game".
-            await bob.click('button:has-text("Create room")')
+            await open_create_room(bob)
             await bob.click('button:has-text("Private")')
             await bob.click('button:has-text("Create room")')
             await bob.wait_for_selector('[data-testid="room-header"]')
@@ -148,9 +155,7 @@ async def test_an_invitation_reaches_a_friend_and_seats_them():
             await sign_up(guest, guest_name)
             await make_friends(host, guest, host_name, guest_name)
 
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="room-header"]')
+            await open_new_room(host)
 
             # The invite card lists friends who are in the lobby.
             invite = host.locator(
@@ -208,10 +213,7 @@ async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
         async def guest_opens_a_room() -> None:
             # The invitation outlives the lobby: in a room of the guest's own
             # it moves into the bar rather than floating over the room.
-            await guest.click('button:has-text("Create room")')
-            await guest.wait_for_selector(".create-room-page")
-            await guest.click('button:has-text("Create room")')
-            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(guest)
             await expect(card).to_have_count(0)
             await expect(chip).to_be_visible()
 
@@ -220,9 +222,7 @@ async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
             await sign_up(guest, guest_name)
             await make_friends(host, guest, host_name, guest_name)
 
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             await invite_guest()
             await guest_opens_a_room()
 
@@ -298,9 +298,7 @@ async def test_joining_an_invitation_mid_game_asks_what_leave_asks():
             await sign_up(guest, guest_name)
             await make_friends(host, guest, host_name, guest_name)
 
-            await host.click('button:has-text("Create room")')
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             invite = host.locator(
                 f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
             ).get_by_role("button", name="Invite")
@@ -311,10 +309,7 @@ async def test_joining_an_invitation_mid_game_asks_what_leave_asks():
             )
 
             # The invitee goes into a game of their own before answering.
-            await guest.click('button:has-text("Create room")')
-            await guest.wait_for_selector(".create-room-page")
-            await guest.click('button:has-text("Create room")')
-            await guest.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(guest)
             code = await guest.locator('[data-testid="room-header"]').get_attribute(
                 "data-room-code"
             )
@@ -467,9 +462,7 @@ async def test_the_friends_surface_draws_over_a_live_room():
 
         try:
             await sign_up(page, name)
-            await page.click('button:has-text("Create room")')
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
             room_url = page.url
 
             await open_friends(page)
@@ -668,9 +661,7 @@ async def test_a_request_arriving_is_said_and_counted_from_inside_a_game():
 
             # The target goes into a room, where the lobby cannot be seen
             # at all - which is the whole point of the chip and the badge.
-            await target.click('button:has-text("Create room")')
-            await target.click('button:has-text("Create room")')
-            await target.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(target)
 
             await ask_from_profile(asker, target_name)
 
@@ -765,9 +756,7 @@ async def test_a_request_notice_goes_once_it_is_answered_anywhere():
         )
 
         async def create_room() -> None:
-            await target.click('button:has-text("Create room")')
-            await target.click('button:has-text("Create room")')
-            await target.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(target)
 
         async def withdraw() -> None:
             await open_friends(asker)
@@ -913,10 +902,7 @@ async def test_an_acceptance_mid_game_waits_for_the_lobby():
             await ask_from_profile(asker, target_name)
 
             # The asker goes into a game before the answer comes.
-            await asker.click('button:has-text("Create room")')
-            await asker.wait_for_selector(".create-room-page")
-            await asker.click('button:has-text("Create room")')
-            await asker.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(asker)
             code = await asker.locator('[data-testid="room-header"]').get_attribute(
                 "data-room-code"
             )
@@ -1010,7 +996,7 @@ async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
             await make_friends(ada, bob, ada_name, bob_name)
 
             # Cat hosts, so nobody's friendship decides who may be here.
-            await cat.click('button:has-text("Create room")')
+            await open_create_room(cat)
             await cat.click('button:has-text("Public")')
             await cat.click('button:has-text("Create room")')
             await cat.wait_for_selector('[data-testid="room-header"]')
@@ -1116,7 +1102,7 @@ async def test_the_friend_mark_survives_the_narrow_layout():
             await sign_up(bob, bob_name)
             await make_friends(ada, bob, ada_name, bob_name)
 
-            await bob.click('button:has-text("Create room")')
+            await open_create_room(bob)
             await bob.click('button:has-text("Public")')
             await bob.click('button:has-text("Create room")')
             await bob.wait_for_selector('[data-testid="room-header"]')

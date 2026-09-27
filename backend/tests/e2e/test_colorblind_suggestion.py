@@ -4,6 +4,7 @@ from __future__ import annotations
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
+    open_create_room,
     open_player_settings,
     open_room_settings,
     open_settings_section,
@@ -18,7 +19,7 @@ BASE_URL = "http://localhost:8000"
 async def _create_room(host, name: str) -> str:
     await host.goto(BASE_URL)
     await use_guest_name(host, f"{name.replace(' ', '')[:10]}Host")
-    await host.get_by_role("button", name="Create room").click()
+    await open_create_room(host)
     await host.get_by_placeholder("Leave blank for a random name!").fill(name)
     await host.get_by_role("button", name="Private").click()
     await host.get_by_role("button", name="Create room").click()
@@ -154,7 +155,7 @@ async def test_a_colorblind_host_starts_a_room_on_colorblind_safe_colors():
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "SafeCreator")
-            await page.get_by_role("button", name="Create room").click()
+            await open_create_room(page)
 
             await page.click('summary:has-text("Drawing")')
             colors = page.get_by_role("group", name="Colors")

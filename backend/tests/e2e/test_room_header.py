@@ -3,7 +3,13 @@
 import random
 
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, room_menu_action, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    open_new_room,
+    room_code,
+    room_menu_action,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -39,10 +45,7 @@ async def test_the_wordmark_and_a_round_avatar_stay_in_the_bar_down_to_a_phone()
                 page = await context.new_page()
                 await page.goto(BASE_URL)
                 await use_guest_name(page, f"Bar{tag}w{width}")
-                await page.click('button:has-text("Create room")')
-                await page.wait_for_selector(".create-room-page")
-                await page.click('button:has-text("Create room")')
-                await page.wait_for_selector('[data-testid="waiting-room"]')
+                await open_new_room(page)
 
                 bar = await page.evaluate(BAR)
                 assert bar["page"] <= width, (width, bar)
@@ -69,10 +72,7 @@ async def test_a_notice_takes_the_wordmark_s_room_on_a_narrow_phone_and_gives_it
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, f"Notice{tag}")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector(".create-room-page")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
 
             await context.set_offline(True)
             await page.wait_for_selector(".room-notice-chip")
@@ -141,10 +141,7 @@ async def test_a_phone_s_round_says_round_when_it_fits_and_never_pushes_the_bar(
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, f"RoundHost{tag}")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".create-room-page")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
 
             await guest.goto(BASE_URL)
@@ -248,10 +245,7 @@ async def test_a_300px_bar_with_a_notice_and_afk_gives_way_in_order_and_never_ov
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, f"NarrowHost{tag}")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".create-room-page")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await room_code(host)
             # A third player, so the phone going AFK does not end the game.
             for page, name in ((third, f"NarrowThird{tag}"), (phone, f"NarrowPhone{tag}")):

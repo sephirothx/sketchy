@@ -13,7 +13,7 @@ import asyncio
 from uuid import uuid4
 
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
 from tests.e2e.test_canvas_commit_fanout import FrameLog
 
 BASE_URL = "http://localhost:8000"
@@ -63,7 +63,7 @@ async def test_a_short_quiet_return_rebinds_nothing_and_a_silent_one_does():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, f"VisHost{tag}")
-            await host.click('button:has-text("Create room")')
+            await open_create_room(host)
             await host.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
             await host.click('button:has-text("Create room")')
             await host.wait_for_selector('[data-testid="waiting-room"]')
