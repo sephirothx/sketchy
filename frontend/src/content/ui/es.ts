@@ -1978,6 +1978,15 @@ export const ES: Catalogue = {
     wearing: "Lo llevas ahora",
     couldNotChoose: "No se pudo cambiar el dibujo.",
   },
+  playLanguagesQuestion: {
+    title: "¿En qué idiomas juegas?",
+    mostly: "Sobre todo",
+    mostlyHint: "El vestíbulo muestra primero sus salas, y en una sala mixta juegas en él.",
+    also: "También",
+    alsoHint: "Las salas en estos idiomas van después de las mixtas, en este orden.",
+    changeLater: "Puedes cambiarlos cuando quieras en Ajustes → Apariencia.",
+    done: "Listo",
+  },
   settingsOverlay: {
     email: "Correo",
     password: "Contraseña",

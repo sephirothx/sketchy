@@ -1979,6 +1979,15 @@ export const DE: Catalogue = {
     wearing: "Trägst du gerade",
     couldNotChoose: "Das Doodle konnte nicht geändert werden.",
   },
+  playLanguagesQuestion: {
+    title: "In welchen Sprachen spielst du?",
+    mostly: "Meistens",
+    mostlyHint: "Die Lobby zeigt ihre Räume zuerst, und in gemischtsprachigen Räumen spielst du in ihr.",
+    also: "Außerdem",
+    alsoHint: "Räume in diesen Sprachen kommen nach den gemischtsprachigen, in dieser Reihenfolge.",
+    changeLater: "Du kannst das jederzeit unter Einstellungen → Darstellung ändern.",
+    done: "Fertig",
+  },
   settingsOverlay: {
     email: "E-Mail",
     password: "Passwort",

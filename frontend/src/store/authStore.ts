@@ -13,6 +13,7 @@ import {
   type AccountSettings,
 } from "../lib/userSettings";
 import { loadCatalogue, ui } from "../content/ui/index.ts";
+import { usePlayLanguagesQuestionStore } from "./playLanguagesQuestionStore";
 
 export interface AuthUser {
   id: string;
@@ -385,6 +386,8 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         body: { displayName },
       });
       installIdentity(set, user);
+      // A first name: time to ask which languages they play in (#1219).
+      if (needsIdentity(had)) usePlayLanguagesQuestionStore.getState().markDue();
       // The socket resolved its account at the handshake and will not look
       // again, so it shakes hands once more whenever the account underneath
       // it changed. Not just when there was none before: a cached guest whose
@@ -415,6 +418,9 @@ export const useAuthStore = create<AuthStore>((set, get) => {
   },
 
   register: async (username, password, email) => {
+    // An account made from nothing - not a named guest claiming theirs, who
+    // was asked when they named themselves - is a first identity (#1219).
+    const first = needsIdentity(get().user);
     const user = await apiRequest<AuthUser>("/api/auth/register", {
       method: "POST",
       body: {
@@ -424,6 +430,9 @@ export const useAuthStore = create<AuthStore>((set, get) => {
         ...(email ? { email } : {}),
       },
     });
+    // Due in the same update that shows the account, so nothing sees the
+    // account made and the question not yet asked.
+    if (first) usePlayLanguagesQuestionStore.getState().markDue();
     installIdentity(set, user);
     reconcileNameColor(user);
     await loadRegisteredSettings(user);

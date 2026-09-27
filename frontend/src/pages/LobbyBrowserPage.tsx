@@ -4,6 +4,8 @@ import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/sock
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { PlayLanguagesQuestion } from "../components/PlayLanguagesQuestion";
+import { usePlayLanguagesQuestionStore } from "../store/playLanguagesQuestionStore";
 import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
@@ -217,6 +219,10 @@ export function LobbyBrowserPage() {
   // so every entry control is disabled while one is pending. The lock is the
   // app's, not this page's (store/roomEntryStore.ts).
   const pendingJoin = useRoomEntryStore((state) => state.pending);
+  // A first-time player is asked which languages they play in once, here,
+  // and never while a press is taking them into a room (#1219).
+  const questionDue = usePlayLanguagesQuestionStore((state) => state.due);
+  const markQuestionAsked = usePlayLanguagesQuestionStore((state) => state.markAsked);
   const beginEntry = useRoomEntryStore((state) => state.begin);
   const endEntry = useRoomEntryStore((state) => state.end);
   const quickPlayBusy = pendingJoin?.key === "quick-play";
@@ -470,6 +476,9 @@ export function LobbyBrowserPage() {
 
 
       <FirstRunIdentity />
+      {questionDue && pendingJoin === null && (
+        <PlayLanguagesQuestion onDone={markQuestionAsked} />
+      )}
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 

@@ -1979,6 +1979,15 @@ export const NL: Catalogue = {
     wearing: "Draag je nu",
     couldNotChoose: "De tekening kon niet gewijzigd worden.",
   },
+  playLanguagesQuestion: {
+    title: "In welke talen speel je?",
+    mostly: "Meestal",
+    mostlyHint: "De lobby toont eerst de kamers in deze taal, en in een meertalige kamer speel je erin.",
+    also: "Ook",
+    alsoHint: "Kamers in deze talen komen na de meertalige kamers, in deze volgorde.",
+    changeLater: "Je kunt dit altijd wijzigen via Instellingen → Weergave.",
+    done: "Klaar",
+  },
   settingsOverlay: {
     email: "E-mail",
     password: "Wachtwoord",

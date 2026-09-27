@@ -1994,6 +1994,15 @@ export const EN = {
     wearing: "Wearing now",
     couldNotChoose: "Could not change the doodle.",
   },
+  playLanguagesQuestion: {
+    title: "Which languages do you play in?",
+    mostly: "Mostly",
+    mostlyHint: "The lobby leads with its rooms, and a mixed room plays you in it.",
+    also: "Also",
+    alsoHint: "Rooms in these come after mixed rooms, in this order.",
+    changeLater: "You can change these any time in Settings → Appearance.",
+    done: "Done",
+  },
   settingsOverlay: {
     email: "Email",
     password: "Password",
