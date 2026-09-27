@@ -1824,6 +1824,8 @@ export const EN = {
     disconnected: "Disconnected",
     rejoinFailed: "Rejoin failed",
     invitation: "Invitation",
+    friendRequest: (p: { count: number }) =>
+      plural(p.count, { one: "Friend request", other: "Friend requests" }),
     serverUpdateStarted: "Server update in progress. This game will end soon.",
   },
 

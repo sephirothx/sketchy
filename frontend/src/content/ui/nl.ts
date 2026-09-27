@@ -1813,6 +1813,8 @@ export const NL: Catalogue = {
     disconnected: "Verbroken",
     rejoinFailed: "Terugkeren mislukt",
     invitation: "Uitnodiging",
+    friendRequest: (p: { count: number }) =>
+      plural(p.count, { one: "Vriendschapsverzoek", other: "Vriendschapsverzoeken" }),
     serverUpdateStarted: "Serverupdate bezig. Dit spel eindigt binnenkort.",
   },
 

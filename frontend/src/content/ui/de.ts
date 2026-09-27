@@ -1813,6 +1813,8 @@ export const DE: Catalogue = {
     disconnected: "Getrennt",
     rejoinFailed: "Rückkehr fehlgeschlagen",
     invitation: "Einladung",
+    friendRequest: (p: { count: number }) =>
+      plural(p.count, { one: "Freundschaftsanfrage", other: "Freundschaftsanfragen" }),
     serverUpdateStarted: "Server-Update läuft. Diese Runde endet bald.",
   },
 
