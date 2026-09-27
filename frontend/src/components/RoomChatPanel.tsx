@@ -207,8 +207,8 @@ export function RoomChatPanel({
     }
   }, [messages, isScrolledUp]);
 
-  // The feed's box changes size under it, not only its lines: a landscape
-  // phone hides it while the keyboard is up and gives the verdict a slot out
+  // The feed's box changes size under it, not only its lines: a phone
+  // hides it while the keyboard is up and gives the verdict a slot out
   // of its height (#1199). Its scroll offset stays where it was, so the newest
   // line ended up below the fold - the lines that arrived while it was hidden
   // were scrolled to in a box of no height. A reader who scrolled up stays put.
@@ -408,13 +408,17 @@ export function RoomChatPanel({
               aria-live="polite"
               data-testid="guess-focus-flash"
             >
-              {guessFlash.kind === "close" ? guessFlash.text : guessFlash.kind === "miss" ? (
-                <>
-                  <span className="guess-focus-flash-label">{ui.roomChatPanel.sent}</span> {guessFlash.text}
-                </>
-              ) : (
-                guessFlash.text
-              )}
+              {/* The chip's padding stays outside the text, so a phone can
+                  clamp the text to two lines without a third peeking into it. */}
+              <span className="guess-focus-flash-body">
+                {guessFlash.kind === "close" ? guessFlash.text : guessFlash.kind === "miss" ? (
+                  <>
+                    <span className="guess-focus-flash-label">{ui.roomChatPanel.sent}</span> {guessFlash.text}
+                  </>
+                ) : (
+                  guessFlash.text
+                )}
+              </span>
             </p>
           )}
           <div className="guess-hint">
