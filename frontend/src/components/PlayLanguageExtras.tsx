@@ -1,45 +1,66 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import type { PointerEvent as ReactPointerEvent } from "react";
 
 import { LanguageFace, LanguagePicker } from "./LanguagePicker";
-import { ChevronLeftIcon, ChevronRightIcon, XIcon } from "./icons";
+import { ChevronDownIcon, ChevronUpIcon, GripIcon, PlusIcon, XIcon } from "./icons";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { moveExtraPromptLanguage } from "../lib/playLanguages";
 import { promptLanguageEndonym, SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
 import type { PromptLanguage } from "../types";
 import { ui } from "../content/ui/index.ts";
 
-/** How far a pointer travels before a press on a chip becomes a drag, so a
-tap on a phone never reorders anything. */
-const DRAG_THRESHOLD_PX = 6;
+/** How far a handle travels before a press becomes a drag, so a tap on it
+never lifts anything. */
+const DRAG_THRESHOLD_PX = 4;
+/** How long neighbours take to make room and a chip to settle: long enough
+to read as movement, short enough never to wait on it. */
+// Not copy: a CSS transition - the theme's travelling speed, eased out.
+const SETTLE = "translate var(--dur) cubic-bezier(0.25, 1, 0.5, 1)";
+
+function prefersReducedMotion(): boolean {
+  try {
+    return window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  } catch {
+    return false;
+  }
+}
 
 interface Drag {
+  language: PromptLanguage;
   pointerId: number;
   from: number;
-  startX: number;
-  startY: number;
-  moving: boolean;
   to: number;
-  /** Where each place in the row was when the drag began, from the row's own
-  corner: the target is the nearest of these, so it does not hang on the
-  preview having rendered, and a pane scrolled mid-drag moves them with it. */
-  slots: { x: number; y: number }[];
+  moving: boolean;
+  /** The pointer's y when the drag began, in the list's own coordinates, so
+  a pane scrolled mid-drag moves the list and the pointer alike. */
+  startY: number;
+  /** Each chip's top and height when the drag began, in the same terms. */
+  slots: { top: number; height: number }[];
 }
 
 /**
- * The other languages a player plays in (#1210), as chips in the order they
+ * The other languages a player plays in (#1210), stacked in the order they
  * ranked them - the order the lobby ranks those rooms in (#1211) and the
  * profile shows their flags in (#1212).
  *
- * Two ways to reorder, because either alone leaves somebody out: a chip can be
- * dragged with a mouse, a pen or a finger, and each has earlier/later buttons
- * for a keyboard and a screen reader, which also say where it went. A drag
- * shows the order it would make while it is held and commits on release;
- * Escape, a cancelled pointer or a lost capture puts it back.
+ * Two ways to reorder, because either alone leaves somebody out. A chip's
+ * grip can be dragged with a mouse, a pen or a finger; and each chip has
+ * up/down buttons, which a keyboard and a screen reader use and which say
+ * where the chip went (WCAG 2.5.7's single-pointer alternative, and for a
+ * list this short a better one than a keyboard grab mode).
  *
- * The preview moves chips with CSS `order`, never in the DOM: a browser
- * releases a pointer's capture from a node that is moved, and a drag whose
- * chip was moved forward stopped hearing its own release.
+ * The drag follows the published patterns (Atlassian's Pragmatic drag and
+ * drop, dnd-kit's sortable): only the grip lifts the chip, since the chip
+ * holds buttons of its own; the lifted chip follows the pointer on the list's
+ * one axis, a little raised; its neighbours slide aside to show where it
+ * would land; and on release every chip settles into its new place from
+ * where it was drawn (FLIP), which the arrow buttons use too. Escape, a
+ * cancelled pointer or a lost capture slides everything back. Reduced
+ * motion keeps the chip under the pointer and drops the rest of the motion.
+ *
+ * Positions are written straight to the elements while a drag is held -
+ * nothing re-renders per pointer move - and the new order is committed once,
+ * on release.
  */
 export function PlayLanguageExtras({
   defaultLanguage,
@@ -53,41 +74,76 @@ export function PlayLanguageExtras({
   const [drag, setDrag] = useState<Drag | null>(null);
   const [announcement, setAnnouncement] = useState("");
   const chipRefs = useRef(new Map<PromptLanguage, HTMLLIElement>());
-  const rowRef = useRef<HTMLDivElement | null>(null);
-
-  function rowOrigin(): { x: number; y: number } {
-    const box = rowRef.current?.getBoundingClientRect();
-    return { x: box?.left ?? 0, y: box?.top ?? 0 };
-  }
-
-  // The order the chips show in: the committed one, or the one a drag would
-  // make. Chips stay in `extras` order in the DOM; this only sets their place.
-  const shown = drag?.moving ? moveExtraPromptLanguage(extras, drag.from, drag.to) : extras;
+  const listRef = useRef<HTMLOListElement | null>(null);
+  const dragRef = useRef<Drag | null>(null);
+  // Where each chip was drawn just before an order was committed, for the
+  // settle animation to start from once the new order has been laid out.
+  const flipFrom = useRef<Map<PromptLanguage, number> | null>(null);
 
   const addable = SUPPORTED_PROMPT_LANGUAGES.filter(
     (language) => language !== defaultLanguage && !extras.includes(language),
   );
 
-  function announceAt(language: PromptLanguage, position: number, total: number) {
+  function updateDrag(next: Drag | null) {
+    dragRef.current = next;
+    setDrag(next);
+  }
+
+  // Settle: every chip starts where it was drawn and slides to where it now
+  // is. Runs after the new order is laid out and before it is painted.
+  useLayoutEffect(() => {
+    const from = flipFrom.current;
+    flipFrom.current = null;
+    if (!from || prefersReducedMotion()) return;
+    for (const [language, top] of from) {
+      const chip = chipRefs.current.get(language);
+      if (!chip) continue;
+      const delta = top - chip.getBoundingClientRect().top;
+      if (Math.abs(delta) < 0.5) continue;
+      chip.style.transition = "none";
+      chip.style.translate = `0 ${delta}px`;
+      // Read back, so the start position is laid out before the transition.
+      void chip.offsetHeight;
+      chip.style.transition = SETTLE;
+      chip.style.translate = "";
+    }
+  }, [extras]);
+
+  function listTop(): number {
+    return listRef.current?.getBoundingClientRect().top ?? 0;
+  }
+
+  function clearStyles() {
+    for (const chip of chipRefs.current.values()) {
+      chip.style.transition = "";
+      chip.style.translate = "";
+    }
+  }
+
+  function commit(next: PromptLanguage[], moved: PromptLanguage, position: number) {
+    flipFrom.current = new Map(
+      [...chipRefs.current].map(([language, chip]) => [language, chip.getBoundingClientRect().top]),
+    );
+    clearStyles();
+    onChange(next);
     setAnnouncement(
       ui.settingsOverlay.playLanguageMoved({
-        name: promptLanguageEndonym(language),
+        name: promptLanguageEndonym(moved),
         position,
-        total,
+        total: next.length,
       }),
     );
   }
 
   function move(from: number, to: number) {
     if (to < 0 || to >= extras.length || to === from) return;
-    onChange(moveExtraPromptLanguage(extras, from, to));
-    announceAt(extras[from], to + 1, extras.length);
+    commit(moveExtraPromptLanguage(extras, from, to), extras[from], to + 1);
   }
 
   function moveAndKeepFocus(from: number, to: number, which: "earlier" | "later") {
     const language = extras[from];
     move(from, to);
-    // The button pressed may be disabled at the end of the row; the chip's
+    // The button pressed may be disabled at the end of the list; the chip's
     // other one keeps the keyboard where it was.
     requestAnimationFrame(() => {
       const chip = chipRefs.current.get(language);
@@ -102,7 +158,7 @@ export function PlayLanguageExtras({
     const last = addable.length === 1;
     onChange([...extras, language]);
     // Adding the last language takes the add button away with it: the new
-    // chip keeps the keyboard inside the row rather than on the page.
+    // chip keeps the keyboard inside the list rather than on the page.
     if (last) {
       requestAnimationFrame(() => {
         chipRefs.current.get(language)?.querySelector<HTMLButtonElement>("button:not(:disabled)")?.focus();
@@ -110,91 +166,138 @@ export function PlayLanguageExtras({
     }
   }
 
-  /** The place a pointer at (x, y) is over: the nearest of the places the
-  chips stood in when the drag began - nearest by centre, since chips wrap
-  onto several lines and neither axis alone orders them. */
-  function slotAt(slots: Drag["slots"], x: number, y: number): number {
-    const origin = rowOrigin();
-    let best = 0;
+  /** Where the dragged chip would land: the place whose centre its own
+  centre is nearest, among the places the chips stood in when it began. */
+  function slotFor(current: Drag, offset: number): number {
+    const own = current.slots[current.from];
+    const centre = own.top + own.height / 2 + offset;
+    let best = current.from;
     let bestDistance = Number.POSITIVE_INFINITY;
-    slots.forEach((slot, position) => {
-      const distance = Math.hypot(slot.x - (x - origin.x), slot.y - (y - origin.y));
+    current.slots.forEach((slot, index) => {
+      const distance = Math.abs(slot.top + slot.height / 2 - centre);
       if (distance < bestDistance) {
-        best = position;
+        best = index;
         bestDistance = distance;
       }
     });
     return best;
   }
 
-  // The drag as the handlers read it. Pointer moves are not flushed one by
-  // one, so a release can arrive before the last move has rendered; the
-  // handlers read and write this, and the state only draws it.
-  const dragRef = useRef<Drag | null>(null);
-
-  function updateDrag(next: Drag | null) {
-    dragRef.current = next;
-    setDrag(next);
+  /** Neighbours between where the chip was and where it would land slide one
+  place towards the gap it left, so the gap is where it would land. */
+  function makeRoom(current: Drag) {
+    const { from, to, slots } = current;
+    const reduced = prefersReducedMotion();
+    extras.forEach((language, index) => {
+      if (index === from) return;
+      const chip = chipRefs.current.get(language);
+      if (!chip) return;
+      let shift = 0;
+      const step = slots[from].height + gapBetween(slots);
+      if (from < to && index > from && index <= to) shift = -step;
+      if (from > to && index < from && index >= to) shift = step;
+      chip.style.transition = reduced ? "none" : SETTLE;
+      chip.style.translate = shift ? `0 ${shift}px` : "";
+    });
   }
 
-  // A drag answers Escape before the dialog it is in does.
-  useEscapeLayer(Boolean(drag?.moving), () => updateDrag(null));
-
-  function handlePointerDown(event: ReactPointerEvent<HTMLLIElement>, index: number) {
-    if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;
+  function handlePointerDown(event: ReactPointerEvent<HTMLSpanElement>, index: number) {
+    if (!event.isPrimary || event.button !== 0 || dragRef.current) return;
+    event.preventDefault();
     event.currentTarget.setPointerCapture(event.pointerId);
-    const origin = rowOrigin();
+    const top = listTop();
     const slots = extras.map((language) => {
       const box = chipRefs.current.get(language)?.getBoundingClientRect();
-      return box
-        ? { x: box.left + box.width / 2 - origin.x, y: box.top + box.height / 2 - origin.y }
-        : { x: Number.POSITIVE_INFINITY, y: Number.POSITIVE_INFINITY };
+      return { top: (box?.top ?? 0) - top, height: box?.height ?? 0 };
     });
     updateDrag({
+      language: extras[index],
       pointerId: event.pointerId,
       from: index,
       to: index,
-      startX: event.clientX,
-      startY: event.clientY,
       moving: false,
+      startY: event.clientY - top,
       slots,
     });
   }
 
-  function handlePointerMove(event: ReactPointerEvent<HTMLLIElement>) {
+  function handlePointerMove(event: ReactPointerEvent<HTMLSpanElement>) {
     const current = dragRef.current;
     if (!current || event.pointerId !== current.pointerId) return;
-    const moving =
-      current.moving
-      || Math.hypot(event.clientX - current.startX, event.clientY - current.startY)
-        >= DRAG_THRESHOLD_PX;
-    if (!moving) return;
-    event.preventDefault();
-    const to = slotAt(current.slots, event.clientX, event.clientY);
-    if (moving !== current.moving || to !== current.to) updateDrag({ ...current, moving, to });
-  }
-
-  function handlePointerUp(event: ReactPointerEvent<HTMLLIElement>) {
-    const current = dragRef.current;
-    if (!current || event.pointerId !== current.pointerId) return;
-    updateDrag(null);
-    if (current.moving) {
-      move(current.from, slotAt(current.slots, event.clientX, event.clientY));
+    const first = current.slots[0];
+    const last = current.slots[current.slots.length - 1];
+    const own = current.slots[current.from];
+    // Along the list only, and never past its ends.
+    const offset = Math.max(
+      first.top - own.top,
+      Math.min(last.top + last.height - own.top - own.height, event.clientY - listTop() - current.startY),
+    );
+    if (!current.moving && Math.abs(offset) < DRAG_THRESHOLD_PX) return;
+    const chip = chipRefs.current.get(current.language);
+    if (chip) {
+      chip.style.transition = "none";
+      chip.style.translate = `0 ${offset}px`;
+    }
+    const to = slotFor(current, offset);
+    if (!current.moving || to !== current.to) {
+      const next = { ...current, moving: true, to };
+      updateDrag(next);
+      makeRoom(next);
     }
   }
 
-  function cancelDrag(event: ReactPointerEvent<HTMLLIElement>) {
-    if (dragRef.current?.pointerId === event.pointerId) updateDrag(null);
+  function handlePointerUp(event: ReactPointerEvent<HTMLSpanElement>) {
+    const current = dragRef.current;
+    if (!current || event.pointerId !== current.pointerId) return;
+    updateDrag(null);
+    if (!current.moving) return;
+    if (current.to === current.from) {
+      settleBack();
+      return;
+    }
+    commit(
+      moveExtraPromptLanguage(extras, current.from, current.to),
+      current.language,
+      current.to + 1,
+    );
   }
 
+  /** Everything slides back to where it was; nothing is committed. */
+  function settleBack() {
+    const reduced = prefersReducedMotion();
+    for (const chip of chipRefs.current.values()) {
+      chip.style.transition = reduced ? "none" : SETTLE;
+      chip.style.translate = "";
+    }
+  }
+
+  function cancel() {
+    if (!dragRef.current) return;
+    updateDrag(null);
+    settleBack();
+  }
+
+  function cancelDrag(event: ReactPointerEvent<HTMLSpanElement>) {
+    if (dragRef.current?.pointerId === event.pointerId) cancel();
+  }
+
+  // A drag answers Escape before the dialog it is in does.
+  useEscapeLayer(Boolean(drag?.moving), cancel);
+
+  const lifted = drag?.moving ? drag.language : null;
+  // The places the chips would have if it were let go now, for their numbers.
+  const preview = drag?.moving ? moveExtraPromptLanguage(extras, drag.from, drag.to) : extras;
+
   return (
-    <div className="play-language-extras" ref={rowRef}>
+    <div className="play-language-extras">
       {extras.length > 0 && (
-        <ol className="play-language-extras-list" aria-label={ui.settingsOverlay.alsoPlayIn}>
-          {extras.map((language, domIndex) => {
+        <ol
+          ref={listRef}
+          className={`play-language-extras-list${lifted ? " is-dragging" : ""}`}
+          aria-label={ui.settingsOverlay.alsoPlayIn}
+        >
+          {extras.map((language, index) => {
             const name = promptLanguageEndonym(language);
-            const index = shown.indexOf(language);
-            const dragging = drag?.moving && drag.from === domIndex;
             return (
               <li
                 key={language}
@@ -202,19 +305,26 @@ export function PlayLanguageExtras({
                   if (element) chipRefs.current.set(language, element);
                   else chipRefs.current.delete(language);
                 }}
-                className={`play-language-chip${dragging ? " is-dragging" : ""}`}
+                className={`play-language-chip${lifted === language ? " is-lifted" : ""}`}
                 data-language={language}
-                style={{ order: index }}
-                onPointerDown={(event) => handlePointerDown(event, domIndex)}
-                onPointerMove={handlePointerMove}
-                onPointerUp={handlePointerUp}
-                onPointerCancel={cancelDrag}
-                onLostPointerCapture={cancelDrag}
               >
-                <span className="play-language-chip-position" aria-hidden="true">
-                  {index + 1}
+                {/* The pointer's way to move it; the buttons are everyone
+                    else's, so the grip is not a stop of its own. */}
+                <span
+                  className="play-language-chip-handle"
+                  aria-hidden="true"
+                  onPointerDown={(event) => handlePointerDown(event, index)}
+                  onPointerMove={handlePointerMove}
+                  onPointerUp={handlePointerUp}
+                  onPointerCancel={cancelDrag}
+                  onLostPointerCapture={cancelDrag}
+                >
+                  <GripIcon size={16} />
                 </span>
-                <LanguageFace value={language} flagWidth={16} />
+                <span className="play-language-chip-position" aria-hidden="true">
+                  {preview.indexOf(language) + 1}
+                </span>
+                <LanguageFace value={language} flagWidth={18} />
                 <span className="play-language-chip-actions">
                   <button
                     type="button"
@@ -222,19 +332,19 @@ export function PlayLanguageExtras({
                     data-move="earlier"
                     aria-label={ui.settingsOverlay.movePlayLanguageEarlier({ name })}
                     disabled={index === 0}
-                    onClick={() => moveAndKeepFocus(domIndex, domIndex - 1, "earlier")}
+                    onClick={() => moveAndKeepFocus(index, index - 1, "earlier")}
                   >
-                    <ChevronLeftIcon size={14} />
+                    <ChevronUpIcon size={14} />
                   </button>
                   <button
                     type="button"
                     className="play-language-chip-button"
                     data-move="later"
                     aria-label={ui.settingsOverlay.movePlayLanguageLater({ name })}
-                    disabled={index === shown.length - 1}
-                    onClick={() => moveAndKeepFocus(domIndex, domIndex + 1, "later")}
+                    disabled={index === extras.length - 1}
+                    onClick={() => moveAndKeepFocus(index, index + 1, "later")}
                   >
-                    <ChevronRightIcon size={14} />
+                    <ChevronDownIcon size={14} />
                   </button>
                   <button
                     type="button"
@@ -262,5 +372,50 @@ export function PlayLanguageExtras({
         {announcement}
       </span>
     </div>
+  );
+}
+
+/** The space between two stacked chips, read off where they stood. */
+function gapBetween(slots: Drag["slots"]): number {
+  if (slots.length < 2) return 0;
+  return Math.max(0, slots[1].top - slots[0].top - slots[0].height);
+}
+
+/** The browser's other languages, offered as others - never added for the
+player, since a browser lists English as a fallback for plenty of people who
+could not play a round in it. "Not now" puts them away for this browser. */
+export function PlayLanguageSuggestions({
+  suggestions,
+  onAdd,
+  onDismiss,
+}: {
+  suggestions: readonly PromptLanguage[];
+  onAdd: (language: PromptLanguage) => void;
+  onDismiss: () => void;
+}) {
+  if (suggestions.length === 0) return null;
+  return (
+    <span className="play-language-suggestions">
+      <span className="play-language-suggestions-label">
+        {ui.settingsOverlay.yourBrowserAlsoReads}
+      </span>
+      {suggestions.map((language) => (
+        <button
+          key={language}
+          type="button"
+          className="toggle-chip play-language-suggestion"
+          aria-label={ui.settingsOverlay.addSuggestedPlayLanguage({
+            name: promptLanguageEndonym(language),
+          })}
+          onClick={() => onAdd(language)}
+        >
+          <PlusIcon size={13} />
+          <LanguageFace value={language} flagWidth={16} />
+        </button>
+      ))}
+      <button type="button" className="btn btn-ghost btn-compact" onClick={onDismiss}>
+        {ui.settingsOverlay.notNow}
+      </button>
+    </span>
   );
 }

@@ -72,14 +72,13 @@ async def test_a_player_ranks_the_other_languages_they_play_in():
             await dialog.get_by_text("Deutsch is now 2 of 3").wait_for()
             assert await dialog.get_by_role("button", name="Move English earlier").is_disabled()
 
-            # By dragging: Nederlands, held and dropped on English, goes first.
+            # By dragging its grip: Nederlands, held and dropped on English,
+            # goes first.
             chips = dialog.locator(".play-language-chip")
-            source = await chips.nth(2).locator(".play-language-chip-position").bounding_box()
-            target = await chips.nth(0).locator(".play-language-chip-position").bounding_box()
-            await page.mouse.move(source["x"] + 4, source["y"] + 4)
-            await page.mouse.down()
-            await page.mouse.move(source["x"] - 20, source["y"] + 4, steps=4)
-            await page.mouse.move(target["x"] + 4, target["y"] + 4, steps=8)
+            target = await chips.nth(0).locator(".play-language-chip-handle").bounding_box()
+            x, y = await _press_on(page, chips.nth(2))
+            await page.mouse.move(x, y - 10, steps=3)
+            await page.mouse.move(x, target["y"] + target["height"] / 2, steps=8)
             await page.mouse.up()
             assert await _extras(page) == ["nl", "en", "de"]
 
@@ -165,7 +164,8 @@ async def test_an_accounts_languages_follow_it_to_another_device():
 
 
 async def _press_on(page: Page, chip) -> tuple[float, float]:
-    box = await chip.locator(".play-language-chip-position").bounding_box()
+    """Hold a chip by its grip - the only part that lifts it."""
+    box = await chip.locator(".play-language-chip-handle").bounding_box()
     x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     await page.mouse.move(x, y)
     await page.mouse.down()
@@ -191,23 +191,21 @@ async def test_a_drag_forward_and_off_the_end_lands_and_escape_puts_one_back():
             chips = dialog.locator(".play-language-chip")
             await chips.nth(2).wait_for()
 
-            # Nederlands, first, carried to español's place - the last, which
-            # the chips wrap to - and let go just below the row, on no chip.
+            # Nederlands, first, carried past español - the last - and let go
+            # below the list, on no chip: it stops at the list's end.
             x, y = await _press_on(page, chips.nth(0))
             last = await chips.nth(2).bounding_box()
-            await page.mouse.move(x + 20, y, steps=3)
-            await page.mouse.move(
-                last["x"] + last["width"] / 2, last["y"] + last["height"] + 14, steps=10
-            )
+            await page.mouse.move(x, y + 10, steps=3)
+            await page.mouse.move(x - 120, last["y"] + last["height"] + 60, steps=10)
             await page.mouse.up()
             assert await _extras(page) == ["fr", "es", "nl"]
-            assert await dialog.locator(".play-language-chip.is-dragging").count() == 0
+            assert await dialog.locator(".play-language-chip.is-lifted").count() == 0
             stored = await page.evaluate("localStorage.getItem('sketchy_extrapromptlanguages')")
             assert stored == '["fr","es","nl"]'
 
             # Escape mid-drag puts the chip back and leaves Settings open.
             x, y = await _press_on(page, chips.nth(0))
-            await page.mouse.move(x + 200, y, steps=10)
+            await page.mouse.move(x, y + 70, steps=10)
             await page.keyboard.press("Escape")
             await page.mouse.up()
             assert await dialog.is_visible()
@@ -249,13 +247,13 @@ async def test_a_pane_scrolled_mid_drag_still_drops_where_the_pointer_is():
             before = await pane.evaluate("row => row.getBoundingClientRect().top")
 
             x, y = await _press_on(page, chips.nth(0))
-            await page.mouse.move(x + 20, y, steps=3)
+            await page.mouse.move(x, y + 10, steps=3)
             await page.mouse.wheel(0, 80)
             await page.wait_for_function(
                 f"() => Math.abs(document.querySelector('.play-language-extras').getBoundingClientRect().top - {before}) > 20"
             )
-            target = await chips.nth(2).locator(".play-language-chip-position").bounding_box()
-            await page.mouse.move(target["x"] + 4, target["y"] + 4, steps=8)
+            target = await chips.nth(2).locator(".play-language-chip-handle").bounding_box()
+            await page.mouse.move(x, target["y"] + target["height"] / 2, steps=8)
             await page.mouse.up()
             assert await _extras(page) == ["fr", "es", "nl"]
         finally:
