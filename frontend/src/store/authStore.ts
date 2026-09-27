@@ -272,6 +272,8 @@ export const useAuthStore = create<AuthStore>((set, get) => {
    * this browser no longer had.
    */
   const adopt = async (user: AuthUser): Promise<AuthUser> => {
+    // An account that already exists answered this long ago (#1219).
+    usePlayLanguagesQuestionStore.getState().cancelDue();
     installIdentity(set, user);
     reconcileNameColor(user);
     await loadRegisteredSettings(user);

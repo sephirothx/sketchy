@@ -207,6 +207,13 @@ async def test_a_drag_forward_and_off_the_end_lands_and_escape_puts_one_back():
             await page.mouse.up()
             assert await _extras(page) == ["fr", "es", "nl"]
             assert await dialog.locator(".play-language-chip.is-lifted").count() == 0
+            # Settled, and nothing left behind that would override the
+            # stylesheet's own transitions on the next drag.
+            await page.wait_for_timeout(400)
+            leftovers = await chips.evaluate_all(
+                "cs => cs.map(c => c.style.transition + '|' + c.style.translate)"
+            )
+            assert leftovers == ["|"] * 3, leftovers
             stored = await page.evaluate("localStorage.getItem('sketchy_extrapromptlanguages')")
             assert stored == '["fr","es","nl"]'
 
@@ -510,7 +517,7 @@ async def test_a_first_name_is_followed_by_the_one_question_about_languages():
             question = page.locator(PLAY_LANGUAGES_QUESTION)
             await question.wait_for()
             await question.get_by_role(
-                "button", name="Mostly: italiano (Italian)"
+                "button", name="Language you play in: italiano (Italian)"
             ).wait_for()
             await question.get_by_text("Settings → Appearance").wait_for()
             await question.get_by_role("button", name="Add français").click()
@@ -601,4 +608,64 @@ async def test_a_player_named_on_the_way_into_a_room_is_asked_back_in_the_lobby(
         finally:
             await host_context.close()
             await visitor_context.close()
+            await browser.close()
+
+
+# Counts every time the question is drawn, however briefly.
+WATCH_QUESTION = """
+(() => {
+  window.__questionSeen = 0;
+  new MutationObserver(() => {
+    if (document.querySelector('[data-testid="play-languages-question"]')) window.__questionSeen += 1;
+  }).observe(document, { childList: true, subtree: true });
+})();
+"""
+
+
+async def test_a_name_given_on_the_way_to_create_asks_back_in_the_lobby_and_a_sign_in_cancels():
+    """Create room with a typed name names the player and leaves: the question
+    is never drawn on the way out (it once flashed, or stayed up while the
+    next page loaded), and waits for the lobby. Signing in to an account that
+    already exists answers it - that account chose long ago."""
+    username = f"Known{uuid4().hex[:6]}"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        existing = await browser.new_context()
+        owner = await existing.new_page()
+        await owner.goto(BASE_URL)
+        await use_guest_name(owner, username)
+        await register_account(owner, username)
+        await existing.close()
+
+        context = await browser.new_context()
+        await context.add_init_script(WATCH_QUESTION)
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.fill(".first-run-guest-row input", f"Leaver{uuid4().hex[:6]}")
+            await page.locator(
+                ".lobby-rooms-actions .btn-primary:visible, .lobby-dock-row .btn-primary:visible"
+            ).click()
+            await page.wait_for_selector(".create-room-submit")
+            assert await page.evaluate("window.__questionSeen") == 0
+
+            # Back in the lobby it is asked; set aside, and asked again on
+            # another visit it would not be - but first, sign in instead.
+            await page.goto(BASE_URL)
+            await page.locator(PLAY_LANGUAGES_QUESTION).wait_for()
+            await page.goto(f"{BASE_URL}/create")
+            await page.wait_for_selector(".create-room-submit")
+            await page.click(".identity-chip")
+            await page.get_by_role("menuitem", name="Sign in").click()
+            login = page.get_by_role("dialog", name="Sign in")
+            await login.get_by_label("Username").fill(username)
+            await login.get_by_label("Password").fill("a-good-password")
+            await login.get_by_role("button", name="Sign in", exact=True).click()
+            await login.wait_for(state="hidden")
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".identity-chip")
+            await page.wait_for_timeout(500)
+            assert await page.locator(PLAY_LANGUAGES_QUESTION).count() == 0
+        finally:
+            await context.close()
             await browser.close()

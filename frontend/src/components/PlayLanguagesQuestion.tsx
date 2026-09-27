@@ -9,7 +9,8 @@ import { ui } from "../content/ui/index.ts";
 /**
  * Which languages a first-time player plays in, asked once (#1219): the
  * default, the others ranked, and the browser's other languages offered -
- * the same controls Settings has, pre-filled from the browser.
+ * Settings' own rows, words and all, pre-filled from the browser, so the
+ * place the note sends them to looks like what they answered.
  *
  * Nothing is required and nothing is lost by setting it aside: every change
  * is saved as it is made, as in Settings, so Done and Escape both keep what
@@ -33,11 +34,11 @@ export function PlayLanguagesQuestion({ onDone }: { onDone: () => void }) {
       <div className="play-languages-question-body">
         <div className="play-languages-question-row">
           <span className="play-languages-question-label">
-            <b>{ui.playLanguagesQuestion.mostly}</b>
-            <small>{ui.playLanguagesQuestion.mostlyHint}</small>
+            <b>{ui.settingsOverlay.languageYouPlay}</b>
+            <small>{ui.settingsOverlay.roomsThisLanguageComeFirstLobby}</small>
           </span>
           <LanguagePicker
-            label={ui.playLanguagesQuestion.mostly}
+            label={ui.settingsOverlay.languageYouPlay}
             value={playLanguages.promptLanguage}
             options={SUPPORTED_PROMPT_LANGUAGES}
             onChange={(next) => playLanguages.chooseDefault(next as PromptLanguage)}
@@ -45,8 +46,8 @@ export function PlayLanguagesQuestion({ onDone }: { onDone: () => void }) {
         </div>
         <div className="play-languages-question-row">
           <span className="play-languages-question-label">
-            <b>{ui.playLanguagesQuestion.also}</b>
-            <small>{ui.playLanguagesQuestion.alsoHint}</small>
+            <b>{ui.settingsOverlay.alsoPlayIn}</b>
+            <small>{ui.settingsOverlay.alsoPlayInHint}</small>
           </span>
           <div className="play-language-editor">
             <PlayLanguageExtras

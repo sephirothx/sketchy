@@ -1983,10 +1983,6 @@ export const FR: Catalogue = {
   },
   playLanguagesQuestion: {
     title: "Dans quelles langues joues-tu ?",
-    mostly: "Surtout",
-    mostlyHint: "Le hall montre d’abord ses salons, et dans un salon mixte tu joues dans cette langue.",
-    also: "Aussi",
-    alsoHint: "Les salons dans ces langues viennent après les salons mixtes, dans cet ordre.",
     changeLater: "Tu peux les changer à tout moment dans Paramètres → Apparence.",
     done: "Terminé",
   },

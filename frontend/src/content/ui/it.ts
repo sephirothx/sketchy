@@ -1982,10 +1982,6 @@ export const IT: Catalogue = {
   },
   playLanguagesQuestion: {
     title: "In quali lingue giochi?",
-    mostly: "Soprattutto",
-    mostlyHint: "La lobby mostra prima le sue stanze, e in una stanza mista giochi in questa lingua.",
-    also: "Anche",
-    alsoHint: "Le stanze in queste lingue vengono dopo quelle miste, in quest’ordine.",
     changeLater: "Puoi cambiarle quando vuoi in Impostazioni → Aspetto.",
     done: "Fatto",
   },

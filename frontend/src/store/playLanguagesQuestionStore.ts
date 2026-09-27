@@ -32,6 +32,9 @@ interface PlayLanguagesQuestionStore {
   markDue: () => void;
   /** Answered or set aside: never again on this browser. */
   markAsked: () => void;
+  /** Signed in to an account that already exists: its languages are its
+      own, so a question a guest was due goes with the guest. */
+  cancelDue: () => void;
 }
 
 export const usePlayLanguagesQuestionStore = create<PlayLanguagesQuestionStore>((set) => ({
@@ -43,6 +46,10 @@ export const usePlayLanguagesQuestionStore = create<PlayLanguagesQuestionStore>(
   },
   markAsked: () => {
     write(ASKED_KEY, true);
+    write(DUE_KEY, false);
+    set({ due: false });
+  },
+  cancelDue: () => {
     write(DUE_KEY, false);
     set({ due: false });
   },

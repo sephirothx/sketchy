@@ -14,8 +14,6 @@ never lifts anything. */
 const DRAG_THRESHOLD_PX = 4;
 /** How long neighbours take to make room and a chip to settle: long enough
 to read as movement, short enough never to wait on it. */
-// Not copy: a CSS transition - the theme's travelling speed, eased out.
-const SETTLE = "translate var(--dur) cubic-bezier(0.25, 1, 0.5, 1)";
 
 function prefersReducedMotion(): boolean {
   try {
@@ -100,11 +98,12 @@ export function PlayLanguageExtras({
       if (!chip) continue;
       const delta = top - chip.getBoundingClientRect().top;
       if (Math.abs(delta) < 0.5) continue;
+      // From where it was drawn, with no transition for this one frame, then
+      // back to the stylesheet's, which carries it home.
       chip.style.transition = "none";
       chip.style.translate = `0 ${delta}px`;
-      // Read back, so the start position is laid out before the transition.
       void chip.offsetHeight;
-      chip.style.transition = SETTLE;
+      chip.style.transition = "";
       chip.style.translate = "";
     }
   }, [extras]);
@@ -114,10 +113,7 @@ export function PlayLanguageExtras({
   }
 
   function clearStyles() {
-    for (const chip of chipRefs.current.values()) {
-      chip.style.transition = "";
-      chip.style.translate = "";
-    }
+    for (const chip of chipRefs.current.values()) chip.style.translate = "";
   }
 
   function commit(next: PromptLanguage[], moved: PromptLanguage, position: number) {
@@ -187,7 +183,6 @@ export function PlayLanguageExtras({
   place towards the gap it left, so the gap is where it would land. */
   function makeRoom(current: Drag) {
     const { from, to, slots } = current;
-    const reduced = prefersReducedMotion();
     extras.forEach((language, index) => {
       if (index === from) return;
       const chip = chipRefs.current.get(language);
@@ -196,7 +191,6 @@ export function PlayLanguageExtras({
       const step = slots[from].height + gapBetween(slots);
       if (from < to && index > from && index <= to) shift = -step;
       if (from > to && index < from && index >= to) shift = step;
-      chip.style.transition = reduced ? "none" : SETTLE;
       chip.style.translate = shift ? `0 ${shift}px` : "";
     });
   }
@@ -233,11 +227,10 @@ export function PlayLanguageExtras({
       Math.min(last.top + last.height - own.top - own.height, event.clientY - listTop() - current.startY),
     );
     if (!current.moving && Math.abs(offset) < DRAG_THRESHOLD_PX) return;
+    // The lifted chip's stylesheet has no transition on `translate`, so it
+    // stays under the pointer rather than chasing it.
     const chip = chipRefs.current.get(current.language);
-    if (chip) {
-      chip.style.transition = "none";
-      chip.style.translate = `0 ${offset}px`;
-    }
+    if (chip) chip.style.translate = `0 ${offset}px`;
     const to = slotFor(current, offset);
     if (!current.moving || to !== current.to) {
       const next = { ...current, moving: true, to };
@@ -264,11 +257,7 @@ export function PlayLanguageExtras({
 
   /** Everything slides back to where it was; nothing is committed. */
   function settleBack() {
-    const reduced = prefersReducedMotion();
-    for (const chip of chipRefs.current.values()) {
-      chip.style.transition = reduced ? "none" : SETTLE;
-      chip.style.translate = "";
-    }
+    for (const chip of chipRefs.current.values()) chip.style.translate = "";
   }
 
   function cancel() {
