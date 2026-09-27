@@ -1983,6 +1983,8 @@ export const FR: Catalogue = {
   },
   playLanguagesQuestion: {
     title: "Dans quelles langues joues-tu ?",
+    languageYouPlayHint: "Les salons dans cette langue passent en premier.",
+    alsoPlayInHint: "Puis les salons dans celles-ci, dans cet ordre.",
     changeLater: "Tu peux les changer à tout moment dans Paramètres → Apparence.",
     done: "Terminé",
   },

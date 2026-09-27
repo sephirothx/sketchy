@@ -1,36 +1,36 @@
 import { create } from "zustand";
 
-/** Set when a first identity is made and the question has not been asked
-here; cleared, for good, once it has (#1219). Per browser: the answer lives
-in the settings, which follow an account anyway (#1209). */
+/** Set when a new identity is made - a guest's first name, or an account made
+from nothing - and cleared once the question has been answered or set aside
+(#1219). Per identity, not per browser: a second guest or a second account on
+the same browser is somebody new to ask. Kept in storage only so a question
+due when a room took the player straight in survives to the lobby. */
 const DUE_KEY = "sketchy_playlanguages_question_due";
-const ASKED_KEY = "sketchy_playlanguages_question_asked";
 
-function read(key: string): boolean {
+function readDue(): boolean {
   try {
-    return localStorage.getItem(key) === "1";
+    return localStorage.getItem(DUE_KEY) === "1";
   } catch {
     return false;
   }
 }
 
-function write(key: string, on: boolean): void {
+function writeDue(on: boolean): void {
   try {
-    if (on) localStorage.setItem(key, "1");
-    else localStorage.removeItem(key);
+    if (on) localStorage.setItem(DUE_KEY, "1");
+    else localStorage.removeItem(DUE_KEY);
   } catch {
-    // No storage: the question is asked this once, in memory.
+    // No storage: the question is asked from memory, this page only.
   }
 }
 
 interface PlayLanguagesQuestionStore {
-  /** Whether a first-time player is still to be asked which languages they
+  /** Whether the player now here is still to be asked which languages they
       play in: the lobby asks it when nothing else is under way. */
   due: boolean;
-  /** A first name stuck on, or an account made from nothing: ask, unless
-      this browser already has. */
+  /** A new identity: a first name stuck on, or an account made from nothing. */
   markDue: () => void;
-  /** Answered or set aside: never again on this browser. */
+  /** Answered or set aside: this identity is not asked again. */
   markAsked: () => void;
   /** Signed in to an account that already exists: its languages are its
       own, so a question a guest was due goes with the guest. */
@@ -38,19 +38,17 @@ interface PlayLanguagesQuestionStore {
 }
 
 export const usePlayLanguagesQuestionStore = create<PlayLanguagesQuestionStore>((set) => ({
-  due: read(DUE_KEY) && !read(ASKED_KEY),
+  due: readDue(),
   markDue: () => {
-    if (read(ASKED_KEY)) return;
-    write(DUE_KEY, true);
+    writeDue(true);
     set({ due: true });
   },
   markAsked: () => {
-    write(ASKED_KEY, true);
-    write(DUE_KEY, false);
+    writeDue(false);
     set({ due: false });
   },
   cancelDue: () => {
-    write(DUE_KEY, false);
+    writeDue(false);
     set({ due: false });
   },
 }));

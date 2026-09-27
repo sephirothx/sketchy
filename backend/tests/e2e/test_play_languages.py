@@ -669,3 +669,33 @@ async def test_a_name_given_on_the_way_to_create_asks_back_in_the_lobby_and_a_si
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_every_new_identity_on_one_browser_is_asked():
+    """Per identity, not per browser: an account made here is asked, and so
+    is the next guest named here after signing out of it."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.click(".first-run-signup")
+            account = page.locator(".modal-card").filter(has_text="Password")
+            await account.locator("input").nth(0).fill(f"First{uuid4().hex[:6]}")
+            await account.locator("input").nth(1).fill("a-good-password")
+            await account.locator('button[type="submit"]').click()
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.wait_for()
+            await question.get_by_role("button", name="Done").click()
+            await question.wait_for(state="detached")
+
+            await page.click(".identity-chip")
+            await page.get_by_role("menuitem", name="Sign out").click()
+            await page.wait_for_selector(".first-run-guest-row input")
+            await page.fill(".first-run-guest-row input", f"Second{uuid4().hex[:6]}")
+            await page.click(".first-run-guest-submit")
+            await question.wait_for()
+        finally:
+            await context.close()
+            await browser.close()
