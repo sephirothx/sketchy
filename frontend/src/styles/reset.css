@@ -4,8 +4,21 @@
 
 html {
   /* Reserve the scrollbar's lane so centered layouts do not shift sideways
-     when a view crosses the one-screen threshold (waiting room vs. game). */
+     when a view crosses the one-screen threshold (waiting room vs. game), or
+     between a page that scrolls and one that fits - the pinned lobby and
+     Rules (#1178). The lane stays empty on a page that fits, in the page's
+     own colour: `body`'s background is the canvas's, since `html` sets none.
+     Overlay scrollbars - phones, macOS by default - take no lane at all. */
   scrollbar-gutter: stable;
+}
+
+/* A browser without `scrollbar-gutter` (Safari before 18.2) gets the older
+   way to the same end: a classic scrollbar on every page, greyed out where
+   there is nothing to scroll, so the lane never comes and goes. */
+@supports not (scrollbar-gutter: stable) {
+  html {
+    overflow-y: scroll;
+  }
 }
 
 body {
