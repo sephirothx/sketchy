@@ -3,7 +3,7 @@
 import random
 
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, room_code, room_menu_action, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -197,4 +197,107 @@ async def test_a_phone_s_round_says_round_when_it_fits_and_never_pushes_the_bar(
         finally:
             await host_context.close()
             await guest_context.close()
+            await browser.close()
+
+
+GIVE_WAY = """() => {
+  const bar = document.querySelector('[data-testid="room-header"]');
+  const shown = (el) => {
+    const rect = el.getBoundingClientRect();
+    return rect.width > 0 && getComputedStyle(el).visibility !== 'hidden';
+  };
+  const parts = [
+    ...bar.querySelectorAll('.game-header-home, .game-header-round, .timer, .room-notice-chip, '
+      + '.game-header-away, [data-testid="open-room-menu"], .identity-chip'),
+  ].filter(shown).map((el) => {
+    const rect = el.getBoundingClientRect();
+    return { name: el.className, left: rect.left, right: rect.right, text: el.innerText.trim(),
+      label: el.getAttribute('aria-label') };
+  });
+  const overlaps = [];
+  parts.forEach((a, i) => parts.slice(i + 1).forEach((b) => {
+    if (Math.min(a.right, b.right) - Math.max(a.left, b.left) > 0.5) overlaps.push([a.name, b.name]);
+  }));
+  return {
+    inner: window.innerWidth,
+    page: document.documentElement.scrollWidth,
+    steps: bar.dataset.gaveWay ?? null,
+    parts,
+    overlaps,
+  };
+}"""
+
+
+async def test_a_300px_bar_with_a_notice_and_afk_gives_way_in_order_and_never_overflows():
+    """#1177: at 300px a notice chip and the AFK chip pushed the Room menu and
+    the avatar off the bar, or lay under them. The bar gives way in order -
+    the round's word, the wordmark, then the chips' words, keeping their icons
+    and their names, and handing back whatever the later steps made room for -
+    and nothing on it leaves the screen or overlaps."""
+    tag = random.randint(1000, 9999)
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context(viewport={"width": 1280, "height": 800})
+        third_context = await browser.new_context(viewport={"width": 1280, "height": 800})
+        phone_context = await browser.new_context(
+            viewport={"width": 300, "height": 640}, is_mobile=True, has_touch=True
+        )
+        host = await host_context.new_page()
+        third = await third_context.new_page()
+        phone = await phone_context.new_page()
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"NarrowHost{tag}")
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector(".create-room-page")
+            await host.click('button:has-text("Create room")')
+            await host.wait_for_selector('[data-testid="waiting-room"]')
+            code = await room_code(host)
+            # A third player, so the phone going AFK does not end the game.
+            for page, name in ((third, f"NarrowThird{tag}"), (phone, f"NarrowPhone{tag}")):
+                await page.goto(BASE_URL)
+                await use_guest_name(page, name)
+                await join_by_code(page, code)
+                await page.wait_for_selector('[data-testid="waiting-room"]')
+
+            await host.click('button:has-text("Start game")')
+            await phone.wait_for_selector(".game-header-round")
+            await room_menu_action(phone, "Go AFK")
+            await phone.wait_for_selector(".game-header-away")
+            await phone_context.set_offline(True)
+            await phone.wait_for_selector('.room-notice-chip[data-notice="connection"]')
+            await phone.wait_for_function(
+                """() => (document.querySelector('[data-testid="room-header"]')
+                  .dataset.gaveWay ?? '').split(' ').includes('labels')"""
+            )
+
+            bar = await phone.evaluate(GIVE_WAY)
+            # The chips' words go only after the wordmark has gone.
+            assert {"mark", "labels"} <= set(bar["steps"].split()), bar
+            assert bar["page"] <= bar["inner"], bar
+            assert not bar["overlaps"], bar
+            for part in bar["parts"]:
+                assert part["left"] >= 0 and part["right"] <= bar["inner"], (part, bar)
+            chips = [part for part in bar["parts"] if "room-notice-chip" in part["name"]
+                     or "game-header-away" in part["name"]]
+            assert len(chips) == 2, bar
+            for chip in chips:
+                # The icon alone on screen; the chip still has its name.
+                assert chip["text"] == "" and chip["label"], (chip, bar)
+            # Whichever label the round shows, it is the one the bar chose.
+            assert await phone.evaluate(SHORT_ROUND_SHOWN) == ("round" in bar["steps"].split()), bar
+
+            # Wider, the words come back: nothing is given up for good.
+            await phone_context.set_offline(False)
+            await phone.wait_for_selector(".room-notice-chip", state="detached", timeout=10000)
+            await phone.set_viewport_size({"width": 412, "height": 800})
+            await phone.wait_for_function(
+                """() => !(document.querySelector('[data-testid="room-header"]')
+                  .dataset.gaveWay ?? '').split(' ').includes('labels')"""
+            )
+            assert (await phone.locator(".game-header-away").inner_text()).strip() == "AFK"
+        finally:
+            await host_context.close()
+            await third_context.close()
+            await phone_context.close()
             await browser.close()
