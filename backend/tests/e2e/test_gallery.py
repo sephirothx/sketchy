@@ -5,7 +5,10 @@ gallery at all. A report filed from the Gallery reaches the moderation
 queue with its drawing, and a moderator hides the drawing from there."""
 from __future__ import annotations
 
-from playwright.async_api import async_playwright, expect
+import re
+
+from playwright.async_api import Locator, Page, async_playwright, expect
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import (
@@ -22,6 +25,56 @@ from tests.e2e.lobby_helpers import (
 from tests.e2e.staff_helpers import set_role
 from tests.e2e.test_pinned_drawings import scribble
 from tests.e2e.test_profile_page import choose_prompt
+
+CARDS = '[data-testid="gallery-card"]'
+
+
+async def load_next_page(page: Page) -> bool:
+    """Scroll the feed's end into view, as a reader does, and wait for the
+    next page to add cards. False once the feed has ended, or when a page
+    brings nothing new in time."""
+    more = page.locator(".gallery-more")
+    if await more.count() == 0:
+        return False
+    shown = await page.locator(CARDS).count()
+    # A failed page stops the automatic loading behind a button.
+    retry = page.get_by_test_id("gallery-show-more")
+    if await retry.count():
+        await retry.click()
+    else:
+        await more.scroll_into_view_if_needed()
+    try:
+        await page.wait_for_function(
+            """shown => document.querySelectorAll('[data-testid="gallery-card"]').length > shown
+                || !document.querySelector('.gallery-more')""",
+            arg=shown,
+            timeout=10_000,
+        )
+    except PlaywrightTimeoutError:
+        return False
+    return await page.locator(CARDS).count() > shown
+
+
+async def find_in_gallery(page: Page, prompts: list[str]) -> list[Locator]:
+    """The cards for `prompts` in the order the page is showing, paged to.
+
+    Other tests' public games share this server, and in a full parallel run
+    more than a page of them (24, `MAX_GALLERY_PAGE`) can land ahead of these
+    drawings, so the feed is scrolled until every prompt is on screen or the
+    feed ends. The history write lands a moment after the game ends, so a
+    feed that ends without them is read again."""
+    ours = [page.locator(CARDS).filter(has_text=prompt) for prompt in prompts]
+    for attempt in range(20):
+        if attempt:
+            await page.wait_for_timeout(2_000)
+            await page.reload()
+        await page.locator('[data-testid="gallery-feed"], [data-testid="gallery-empty"]').first.wait_for()
+        while True:
+            if all([await card.count() == 1 for card in ours]):
+                return ours
+            if not await load_next_page(page):
+                break
+    raise AssertionError(f"the gallery never listed {prompts}")
 
 
 async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
@@ -72,19 +125,9 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await use_guest_name(stranger, "GalStranger")
             await register_account(stranger, "galstranger")
             await stranger.goto(f"{BASE_URL}/gallery")
-            # Other tests' public games share this server, so the page is
-            # read for *these* drawings rather than counted; the history
-            # write lands a moment after the game ends, hence the retries.
-            cards = stranger.locator('[data-testid="gallery-card"]')
-            ours = [cards.filter(has_text=prompt) for prompt in prompts]
-            for _ in range(20):
-                if all([await card.count() == 1 for card in ours]):
-                    break
-                await stranger.wait_for_timeout(2_000)
-                await stranger.reload()
-            await stranger.locator('[data-testid="gallery-feed"]').wait_for()
-            for card in ours:
-                await expect(card).to_have_count(1)
+            # Other tests' public games share this server, so the feed is
+            # read for *these* drawings rather than counted.
+            ours = await find_in_gallery(stranger, prompts)
             # No game id anywhere on the page: nothing to follow into the game.
             assert "/room/" not in await stranger.content()
 
@@ -93,6 +136,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await ours[0].get_by_role("button").first.click()
             await stranger.locator('[data-testid="gallery-drawing-page"]').wait_for()
             assert "/gallery/" in stranger.url
+            drawing_url = stranger.url
             await stranger.locator('[data-testid="gallery-drawing-canvas"] canvas').wait_for()
             await stranger.locator('[data-testid="reaction-toggle"]').click()
             await stranger.locator('[data-testid="reaction-option-fire"]').click()
@@ -114,14 +158,15 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
 
             # Back to the feed, which shows the reaction on the card.
             await stranger.go_back()
-            await stranger.locator('[data-testid="gallery-feed"]').wait_for()
-            await expect(ours[0].locator(".reaction-count")).to_have_text("1")
+            [reacted] = await find_in_gallery(stranger, prompts[:1])
+            await expect(reacted.locator(".reaction-count")).to_have_text("1")
 
             # Top over the week still lists it, with its reaction counted.
             await stranger.locator('[data-testid="gallery-sort"]').get_by_role("button", name="Top").click()
             await stranger.locator('[data-testid="gallery-window"]').get_by_role("button", name="This week").click()
-            await expect(ours[0]).to_have_count(1)
-            await expect(ours[0].locator(".reaction-count")).to_have_text("1")
+            await expect(stranger).to_have_url(re.compile(r"sort=top.*window=week"))
+            [reacted] = await find_in_gallery(stranger, prompts[:1])
+            await expect(reacted.locator(".reaction-count")).to_have_text("1")
             await stranger_context.close()
 
             # The drawer sees the stranger's reaction in their own history,
@@ -156,9 +201,15 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             checker = await checker_context.new_page()
             await checker.goto(BASE_URL)
             await use_guest_name(checker, "GalChecker")
+            await checker.goto(drawing_url)
+            await checker.get_by_test_id("gallery-drawing-missing").wait_for()
+            # New puts one game's drawings side by side, so wherever the
+            # other one is found, the hidden one would sit next to it: on
+            # that page or the one after.
             await checker.goto(f"{BASE_URL}/gallery?sort=new")
-            await checker.locator('[data-testid="gallery-feed"], [data-testid="gallery-signed-out"], [data-testid="gallery-empty"]').first.wait_for()
-            await expect(checker.locator('[data-testid="gallery-card"]').filter(has_text=prompts[0])).to_have_count(0)
+            await find_in_gallery(checker, prompts[1:])
+            await load_next_page(checker)
+            await expect(checker.locator(CARDS).filter(has_text=prompts[0])).to_have_count(0)
             await checker_context.close()
 
             # No session: no gallery (R-GAL-02).
