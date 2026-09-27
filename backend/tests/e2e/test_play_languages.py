@@ -6,6 +6,7 @@ a guest keeps them in this browser, an account on every device it signs in on.
 """
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
 import pytest
@@ -298,6 +299,85 @@ async def test_the_ranked_languages_are_accessible(viewport):
                 "rows => rows.map(row => row.getBoundingClientRect().height)"
             )
             assert heights and min(heights) >= 24, heights
+        finally:
+            await context.close()
+            await browser.close()
+
+
+# Keeps a Quick play press off the wire and on the page, so its payload can be
+# read without the press taking a seat in a room another test left waiting.
+HOLD_QUICK_PLAY = """
+(() => {
+  window.__quickPlay = [];
+  const held = (data) => typeof data === "string" && data.includes('"quick_play"');
+  const send = WebSocket.prototype.send;
+  WebSocket.prototype.send = function (data) {
+    if (held(data)) return void window.__quickPlay.push(data);
+    return send.call(this, data);
+  };
+  // The polling fallback carries the same frames in a request body.
+  const post = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function (body) {
+    if (held(body)) return void window.__quickPlay.push(body);
+    return post.call(this, body);
+  };
+})();
+"""
+
+
+async def test_discovery_asks_for_the_ranked_languages():
+    """#1211, from the client's side: Quick play sends the others in order
+    (the server ranks rooms by them - `tests/handlers/test_quick_play.py`),
+    and the create form lists Mixed, the default, then the others in order.
+
+    The press is read off the page and never sent: every public room another
+    test leaves waiting is a candidate, and a seat taken in one would be that
+    test's failure (e2e global server state)."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        await context.add_init_script(
+            "localStorage.setItem('sketchy_promptlanguage', 'fr');"
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['nl', 'it']));"
+            + HOLD_QUICK_PLAY
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Ranked{uuid4().hex[:6]}")
+
+            await page.click(".lobby-rooms-actions .btn-primary:visible, .lobby-dock-row .btn-primary:visible")
+            await page.wait_for_selector(".create-room-submit")
+            await page.click(".create-room-language-field .language-picker-trigger")
+            options = await page.locator(".language-picker-option").evaluate_all(
+                "rows => rows.map(row => row.dataset.language)"
+            )
+            assert options[:4] == ["mul", "fr", "nl", "it"], options
+            assert len(options) == 8
+            await page.keyboard.press("Escape")
+            await page.goto(BASE_URL)
+
+            async def filter_order(label: str) -> list[str]:
+                await page.get_by_role("button", name=re.compile(f"^{label}: ")).click()
+                rows = await page.locator(".language-picker-option").evaluate_all(
+                    "rows => rows.map(row => row.dataset.language)"
+                )
+                await page.keyboard.press("Escape")
+                return rows
+
+            # The catalogue's filter: every language, then yours. (The lobby's
+            # draws only when there are rooms to filter, and a public room
+            # made for it would be in every other test's Quick play.)
+            await page.goto(f"{BASE_URL}/community-lists")
+            catalogue = await filter_order("Language")
+            assert catalogue[:4] == ["all", "fr", "nl", "it"], catalogue
+            await page.goto(BASE_URL)
+
+            await page.locator('[data-testid="quick-play"]').click()
+            await page.wait_for_function("() => window.__quickPlay.length > 0")
+            pressed = (await page.evaluate("window.__quickPlay"))[-1]
+            assert '"extraPromptLanguages":["nl","it"]' in pressed, pressed
+            assert '"promptLanguage":"fr"' in pressed, pressed
         finally:
             await context.close()
             await browser.close()

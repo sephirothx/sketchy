@@ -36,6 +36,7 @@ import {
 import {
   MIXED_PROMPT_LANGUAGE,
   availablePromptLanguages,
+  rankedPromptLanguages,
   selectionForLanguage,
 } from "../lib/promptLanguages";
 import { useSettingsStore } from "../store/settingsStore";
@@ -132,10 +133,21 @@ export function RoomSetupForm({
   } = values;
 
   const selectedLists = loadedLists.filter((list) => promptListSlugs.includes(list.slug));
-  const languageOptions = availablePromptLanguages(loadedLists, promptLanguage);
   // The language this player plays in: a mixed room shows Standard in it.
   const preferredLanguage = useSettingsStore((state) => state.promptLanguage);
+  const extraLanguages = useSettingsStore((state) => state.extraPromptLanguages);
   const playLanguage = seatLanguage ?? preferredLanguage;
+  // Mixed first, where the form starts, then this player's languages in their
+  // order, then the rest (#1211): the likely choices at the top of seven.
+  const available = availablePromptLanguages(loadedLists, promptLanguage);
+  const languageOptions: RoomLanguage[] = [
+    ...available.filter((language) => language === MIXED_PROMPT_LANGUAGE),
+    ...rankedPromptLanguages(
+      preferredLanguage,
+      extraLanguages,
+      available.filter((language): language is PromptLanguage => language !== MIXED_PROMPT_LANGUAGE),
+    ),
+  ];
 
   // No language in it: the official lists are named for theirs ("English —
   // Standard"), and the field that sets it is labelled in Basics above.

@@ -866,8 +866,8 @@ A room's own quick custom prompts are matched under the declared language too, w
 is what a room drawing on nothing but custom prompts gets out of the field.
 
 **A mixed-language room (`mul`, R-PROMPT-13, #1182)** plays each seat in the language it
-joined with (`seatLanguage` on `create_room` and `join_room`, the pressed language on
-`quick_play`; English for a client that sends none), fixed on the seat. It may draw only
+joined with (`seatLanguage` on `create_room` and `join_room`, the default play language -
+`promptLanguage` - on `quick_play`; English for a client that sends none), fixed on the seat. It may draw only
 on lists every language can play, and says why it refuses the rest by code rather than
 by the generic `invalid_prompt_lists`: `mixed_room_list_unsupported` (field
 `promptListSlugs`) for a list in one language whose concepts not every room language
@@ -898,12 +898,17 @@ here?"* without seating a visitor who is still deciding whether to play or spect
 join admits a game in progress; Quick play, below, does not.
 
 **`quick_play`** (R-UX-14, #931) is one command and one answer: `{nickname, nameColor,
-colorblindSafeColors, promptLanguage}` in, a seat out — the ordinary join acknowledgement
-plus `created`, which says whether the room was opened for it. The server picks the
-fullest **public** room that is **waiting with no game running**, plays in that language
-and has a seat free - then, only if none does, a mixed-language room, which seats the
-player in the language they pressed with (#1182); failing that it opens one on its own defaults, public and in that
-language. The choice used to be the client's, from the lobby's room list: a `join_room`
+colorblindSafeColors, promptLanguage, extraPromptLanguages}` in, a seat out — the ordinary
+join acknowledgement plus `created`, which says whether the room was opened for it.
+`promptLanguage` is the player's default play language; `extraPromptLanguages` (#1211,
+protocol 47) the others they play in, in their order — at most six of the seven,
+canonicalised, each once, the default dropped from them, an unknown tag refused like the
+default's. The server picks, fullest first within each tier, a **public** room that is
+**waiting with no game running** with a seat free: in the default language; then a
+mixed-language room, which seats the player in the default (#1182); then one in each of
+the others, in the player's order. A room another press is opening in the default ranks
+with the default's: the press waits for it before trying a mixed room or another language.
+Failing all of those it opens one on its own defaults, public and in the default language. The choice used to be the client's, from the lobby's room list: a `join_room`
 per candidate until one took the seat, so a press cost up to N+1 round trips, could not
 run until a list had arrived (ten seconds after naming a first-time visitor, whose naming
 reconnects the socket), and gave every presser in one moment a room of their own, because
@@ -2465,7 +2470,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (46) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (47) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

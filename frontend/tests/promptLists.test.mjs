@@ -11,6 +11,7 @@ import {
   preferredPromptLanguage,
   reconcileSelectionForLanguage,
   selectionForLanguage,
+  rankedPromptLanguages,
   sortRoomsByLanguage,
 } from "../src/lib/promptLanguages.ts";
 
@@ -245,4 +246,33 @@ test("the Publish panel names what the email state is keeping it from", () => {
     emailPublishBlocker(state({ pendingAddress: "a@b.test", deliveryConfigured: false }), false),
     "undeliverable",
   );
+});
+
+test("then the other languages you play in, in your order, then the rest (#1211)", () => {
+  const rooms = [
+    { id: "fr", promptLanguage: "fr" },
+    { id: "es", promptLanguage: "es" },
+    { id: "nl", promptLanguage: "nl" },
+    { id: "mul", promptLanguage: "mul" },
+    { id: "it", promptLanguage: "it" },
+    { id: "es2", promptLanguage: "es" },
+  ];
+  assert.deepEqual(
+    sortRoomsByLanguage(rooms, "it", ["nl", "es"]).map((room) => room.id),
+    ["it", "mul", "nl", "es", "es2", "fr"],
+  );
+  // Nothing ranked twice, nothing hidden: the default listed again stays first.
+  assert.deepEqual(
+    sortRoomsByLanguage(rooms, "it", ["it", "es"]).map((room) => room.id),
+    ["it", "mul", "es", "es2", "fr", "nl"],
+  );
+});
+
+test("a picker lists your languages first, in your order, and all seven", () => {
+  const ranked = rankedPromptLanguages("it", ["nl", "es"]);
+  assert.deepEqual(ranked.slice(0, 3), ["it", "nl", "es"]);
+  assert.equal(ranked.length, 7);
+  assert.equal(new Set(ranked).size, 7);
+  // Within what a form can offer: a language it cannot is left out, not added.
+  assert.deepEqual(rankedPromptLanguages("it", ["nl"], ["en", "nl"]), ["nl", "en"]);
 });
