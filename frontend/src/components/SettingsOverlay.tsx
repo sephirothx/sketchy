@@ -39,36 +39,12 @@ import { PictureCropDialog } from "./PictureCropDialog";
 import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
 import { BRUSH_SIZES, isBrushSize } from "../lib/brushSizes";
-import { SUPPORTED_PROMPT_LANGUAGES, promptLanguageEndonym } from "../lib/promptLanguages";
-import {
-  chooseDefaultPlayLanguage,
-  suggestedExtraPromptLanguages,
-  type PlayLanguages,
-} from "../lib/playLanguages";
-import { LanguageFace, LanguagePicker } from "./LanguagePicker";
-import { PlayLanguageExtras } from "./PlayLanguageExtras";
+import { SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
+import { usePlayLanguages } from "../hooks/usePlayLanguages";
+import { LanguagePicker } from "./LanguagePicker";
+import { PlayLanguageExtras, PlayLanguageSuggestions } from "./PlayLanguageExtras";
 import type { PromptLanguage } from "../types";
 
-/** Browser languages this browser's player waved away as suggestions: kept
-here, per browser, since the suggestion comes from this browser too. */
-const DISMISSED_SUGGESTIONS_KEY = "sketchy_playlanguagesuggestions_dismissed";
-
-function loadDismissedSuggestions(): string[] {
-  try {
-    const raw = JSON.parse(localStorage.getItem(DISMISSED_SUGGESTIONS_KEY) ?? "[]");
-    return Array.isArray(raw) ? raw.filter((item) => typeof item === "string") : [];
-  } catch {
-    return [];
-  }
-}
-
-function saveDismissedSuggestions(languages: readonly string[]): void {
-  try {
-    localStorage.setItem(DISMISSED_SUGGESTIONS_KEY, JSON.stringify(languages));
-  } catch {
-    // No storage: the suggestion comes back next time, which is harmless.
-  }
-}
 import { Avatar } from "./ui/Avatar";
 import {
   ACTION_LABELS,
@@ -956,45 +932,9 @@ function AppearancePane() {
   const setPenPressure = useSettingsStore((state) => state.setPenPressure);
   const timeFormat = useSettingsStore((state) => state.timeFormat);
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
-  const promptLanguage = useSettingsStore((state) => state.promptLanguage);
-  const extraPromptLanguages = useSettingsStore((state) => state.extraPromptLanguages);
-  const setPlayLanguages = useSettingsStore((state) => state.setPlayLanguages);
-  const [dismissedSuggestions, setDismissedSuggestions] = useState(loadDismissedSuggestions);
+  const playLanguages = usePlayLanguages();
   const [locale, chooseLocale] = useInterfaceLocale();
   const activePlayerId = useGameStore((state) => state.playerId);
-
-  // The default and the others go out together: sent alone, a default the
-  // server finds among the others would be swapped there, and this copy
-  // would not know it (#1209).
-  function savePlayLanguages(next: PlayLanguages) {
-    setPlayLanguages(next);
-    queueSettingsSync({
-      promptLanguage: next.promptLanguage,
-      extraPromptLanguages: next.extraPromptLanguages,
-    });
-  }
-
-  function choosePromptLanguage(next: PromptLanguage) {
-    savePlayLanguages(
-      chooseDefaultPlayLanguage({ promptLanguage, extraPromptLanguages }, next),
-    );
-  }
-
-  function chooseExtraPromptLanguages(next: PromptLanguage[]) {
-    savePlayLanguages({ promptLanguage, extraPromptLanguages: next });
-  }
-
-  const suggestions = suggestedExtraPromptLanguages(
-    typeof navigator === "undefined" ? [] : navigator.languages,
-    { promptLanguage, extraPromptLanguages },
-    dismissedSuggestions,
-  );
-
-  function dismissSuggestions() {
-    const next = [...dismissedSuggestions, ...suggestions];
-    setDismissedSuggestions(next);
-    saveDismissedSuggestions(next);
-  }
 
   function chooseTimeFormat(next: TimeFormat) {
     setTimeFormat(next);
@@ -1072,9 +1012,9 @@ function AppearancePane() {
         >
           <LanguagePicker
             label={ui.settingsOverlay.languageYouPlay}
-            value={promptLanguage}
+            value={playLanguages.promptLanguage}
             options={SUPPORTED_PROMPT_LANGUAGES}
-            onChange={(next) => choosePromptLanguage(next as PromptLanguage)}
+            onChange={(next) => playLanguages.chooseDefault(next as PromptLanguage)}
           />
         </Row>
         {/* The others, ranked (#1210): after mixed rooms in the lobby, in
@@ -1084,41 +1024,20 @@ function AppearancePane() {
         <Row
           label={ui.settingsOverlay.alsoPlayIn}
           hint={ui.settingsOverlay.alsoPlayInHint}
-          stacked
         >
-          <PlayLanguageExtras
-            defaultLanguage={promptLanguage}
-            extras={extraPromptLanguages}
-            onChange={chooseExtraPromptLanguages}
-          />
-          {suggestions.length > 0 && (
-            <span className="play-language-suggestions">
-              <span className="play-language-suggestions-label">
-                {ui.settingsOverlay.yourBrowserAlsoReads}
-              </span>
-              {suggestions.map((language) => (
-                <button
-                  key={language}
-                  type="button"
-                  className="toggle-chip play-language-suggestion"
-                  aria-label={ui.settingsOverlay.addSuggestedPlayLanguage({
-                    name: promptLanguageEndonym(language),
-                  })}
-                  onClick={() => chooseExtraPromptLanguages([...extraPromptLanguages, language])}
-                >
-                  <PlusIcon size={13} />
-                  <LanguageFace value={language} flagWidth={16} />
-                </button>
-              ))}
-              <button
-                type="button"
-                className="btn btn-ghost btn-compact"
-                onClick={dismissSuggestions}
-              >
-                {ui.settingsOverlay.notNow}
-              </button>
-            </span>
-          )}
+          <div className="play-language-editor">
+            <PlayLanguageExtras
+              defaultLanguage={playLanguages.promptLanguage}
+              extras={playLanguages.extraPromptLanguages}
+              onChange={playLanguages.chooseExtras}
+            />
+            <PlayLanguageSuggestions
+              suggestions={playLanguages.suggestions}
+              onAdd={(language) =>
+                playLanguages.chooseExtras([...playLanguages.extraPromptLanguages, language])}
+              onDismiss={playLanguages.dismissSuggestions}
+            />
+          </div>
         </Row>
         <Row
           label={ui.settingsOverlay.timeFormat}
