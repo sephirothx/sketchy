@@ -183,6 +183,8 @@ export function ChevronDownIcon(p: IconProps) { return <IconBase {...p}><path d=
 export function PlayIcon(p: IconProps) { return <IconBase {...p}><path d="m7 4 13 8-13 8Z" /></IconBase>; }
 export function PauseIcon(p: IconProps) { return <IconBase {...p}><path d="M7 4v16" /><path d="M17 4v16" /></IconBase>; }
 export function ChevronUpIcon(p: IconProps) { return <IconBase {...p}><path d="m6 15 6-6 6 6" /></IconBase>; }
+/** Six dots: "hold here to move this". Filled, so it reads at 16px. */
+export function GripIcon(p: IconProps) { return <IconBase {...p}>{[6, 12, 18].map((y) => [9, 15].map((x) => <circle key={`${x}-${y}`} cx={x} cy={y} r="1.6" fill="currentColor" stroke="none" />))}</IconBase>; }
 export function ChevronRightIcon(p: IconProps) { return <IconBase {...p}><path d="m9 6 6 6-6 6" /></IconBase>; }
 export function PinIcon(p: IconProps) { return <IconBase {...p}><path d="M12 17v5" /><path d="M9 3h6l-1 6 3 3H7l3-3-1-6Z" /></IconBase>; }
 export function ChevronLeftIcon(p: IconProps) { return <IconBase {...p}><path d="m15 6-6 6 6 6" /></IconBase>; }
@@ -343,11 +345,14 @@ export function Flag({
   return (
     <svg
       width={width}
-      /* Exact, not rounded: a box a fraction taller than 18:13 makes the
-         artwork letterbox itself inside its own ring, which reads as a gap
-         down each side. */
-      height={(width * 13) / 18}
+      /* A whole number of pixels, and the artwork stretched the fraction to
+         fill it. At 18:13 only a multiple of 18 is whole: 16 wide was 11.56
+         tall, 24 was 17.33, and the ring's bottom edge then straddled two
+         pixel rows and read as a dark line under the flag. Stretching rather
+         than letterboxing, which showed as a gap down each side. */
+      height={Math.round((width * 13) / 18)}
       viewBox="0 0 18 13"
+      preserveAspectRatio="none"
       aria-hidden="true"
       style={{
         flex: "none",

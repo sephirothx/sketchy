@@ -40,8 +40,11 @@ import { DeleteAccountDialog } from "./DeleteAccountDialog";
 import { SegmentedControl } from "./RoomSetupControls";
 import { BRUSH_SIZES, isBrushSize } from "../lib/brushSizes";
 import { SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
+import { usePlayLanguages } from "../hooks/usePlayLanguages";
 import { LanguagePicker } from "./LanguagePicker";
+import { PlayLanguageExtras, PlayLanguageSuggestions } from "./PlayLanguageExtras";
 import type { PromptLanguage } from "../types";
+
 import { Avatar } from "./ui/Avatar";
 import {
   ACTION_LABELS,
@@ -929,15 +932,9 @@ function AppearancePane() {
   const setPenPressure = useSettingsStore((state) => state.setPenPressure);
   const timeFormat = useSettingsStore((state) => state.timeFormat);
   const setTimeFormat = useSettingsStore((state) => state.setTimeFormat);
-  const promptLanguage = useSettingsStore((state) => state.promptLanguage);
-  const setPromptLanguage = useSettingsStore((state) => state.setPromptLanguage);
+  const playLanguages = usePlayLanguages();
   const [locale, chooseLocale] = useInterfaceLocale();
   const activePlayerId = useGameStore((state) => state.playerId);
-
-  function choosePromptLanguage(next: PromptLanguage) {
-    setPromptLanguage(next);
-    queueSettingsSync({ promptLanguage: next });
-  }
 
   function chooseTimeFormat(next: TimeFormat) {
     setTimeFormat(next);
@@ -1015,10 +1012,32 @@ function AppearancePane() {
         >
           <LanguagePicker
             label={ui.settingsOverlay.languageYouPlay}
-            value={promptLanguage}
+            value={playLanguages.promptLanguage}
             options={SUPPORTED_PROMPT_LANGUAGES}
-            onChange={(next) => choosePromptLanguage(next as PromptLanguage)}
+            onChange={(next) => playLanguages.chooseDefault(next as PromptLanguage)}
           />
+        </Row>
+        {/* The others, ranked (#1210): after mixed rooms in the lobby, in
+            this order. Offered from the browser's languages rather than
+            added from them - a browser lists English as a fallback for
+            plenty of people who could not play a round in it. */}
+        <Row
+          label={ui.settingsOverlay.alsoPlayIn}
+          hint={ui.settingsOverlay.alsoPlayInHint}
+        >
+          <div className="play-language-editor">
+            <PlayLanguageExtras
+              defaultLanguage={playLanguages.promptLanguage}
+              extras={playLanguages.extraPromptLanguages}
+              onChange={playLanguages.chooseExtras}
+            />
+            <PlayLanguageSuggestions
+              suggestions={playLanguages.suggestions}
+              onAdd={(language) =>
+                playLanguages.chooseExtras([...playLanguages.extraPromptLanguages, language])}
+              onDismiss={playLanguages.dismissSuggestions}
+            />
+          </div>
         </Row>
         <Row
           label={ui.settingsOverlay.timeFormat}
