@@ -1322,6 +1322,13 @@
     column-gap: 20px;
     grid-template-columns: minmax(0, 1fr) auto;
   }
+
+  /* One line each, level with the middle of the first control beside it
+     (a picker and a chip are both 44px tall). */
+  .play-languages-question-label {
+    padding-top: 11px;
+    white-space: nowrap;
+  }
 }
 
 .play-languages-question-label {

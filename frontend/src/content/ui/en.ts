@@ -1996,8 +1996,6 @@ export const EN = {
   },
   playLanguagesQuestion: {
     title: "Which languages do you play in?",
-    languageYouPlayHint: "Rooms in this language come first.",
-    alsoPlayInHint: "Then rooms in these, in this order.",
     changeLater: "You can change these any time in Settings → Appearance.",
     done: "Done",
   },

@@ -10,8 +10,8 @@ import { ui } from "../content/ui/index.ts";
  * Which languages a first-time player plays in, asked once (#1219): the
  * default, the others ranked, and the browser's other languages offered -
  * Settings' own rows and labels, pre-filled from the browser, so the place
- * the note sends them to looks like what they answered - with a line under
- * each short enough to read before Done rather than Settings' fuller hints.
+ * the note sends them to looks like what they answered. No hint under
+ * either: the title asks the question and the labels answer it.
  *
  * Nothing is required and nothing is lost by setting it aside: every change
  * is saved as it is made, as in Settings, so Done and Escape both keep what
@@ -36,7 +36,6 @@ export function PlayLanguagesQuestion({ onDone }: { onDone: () => void }) {
         <div className="play-languages-question-row">
           <span className="play-languages-question-label">
             <b>{ui.settingsOverlay.languageYouPlay}</b>
-            <small>{ui.playLanguagesQuestion.languageYouPlayHint}</small>
           </span>
           <LanguagePicker
             label={ui.settingsOverlay.languageYouPlay}
@@ -48,7 +47,6 @@ export function PlayLanguagesQuestion({ onDone }: { onDone: () => void }) {
         <div className="play-languages-question-row">
           <span className="play-languages-question-label">
             <b>{ui.settingsOverlay.alsoPlayIn}</b>
-            <small>{ui.playLanguagesQuestion.alsoPlayInHint}</small>
           </span>
           <div className="play-language-editor">
             <PlayLanguageExtras

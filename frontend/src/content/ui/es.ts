@@ -1980,8 +1980,6 @@ export const ES: Catalogue = {
   },
   playLanguagesQuestion: {
     title: "¿En qué idiomas juegas?",
-    languageYouPlayHint: "Las salas en este idioma salen primero.",
-    alsoPlayInHint: "Después, las salas en estos, en este orden.",
     changeLater: "Puedes cambiarlos cuando quieras en Ajustes → Apariencia.",
     done: "Listo",
   },

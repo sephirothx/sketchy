@@ -1981,8 +1981,6 @@ export const NL: Catalogue = {
   },
   playLanguagesQuestion: {
     title: "In welke talen speel je?",
-    languageYouPlayHint: "Kamers in deze taal komen eerst.",
-    alsoPlayInHint: "Daarna kamers in deze talen, in deze volgorde.",
     changeLater: "Je kunt dit altijd wijzigen via Instellingen → Weergave.",
     done: "Klaar",
   },

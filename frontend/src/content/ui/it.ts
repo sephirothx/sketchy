@@ -1982,8 +1982,6 @@ export const IT: Catalogue = {
   },
   playLanguagesQuestion: {
     title: "In quali lingue giochi?",
-    languageYouPlayHint: "Le stanze in questa lingua vengono prima.",
-    alsoPlayInHint: "Poi le stanze in queste, in quest’ordine.",
     changeLater: "Puoi cambiarle quando vuoi in Impostazioni → Aspetto.",
     done: "Fatto",
   },
