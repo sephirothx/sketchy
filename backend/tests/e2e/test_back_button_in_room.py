@@ -17,10 +17,10 @@ import random
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     open_player_settings,
     room_code,
     use_guest_name,
-    open_new_room,
 )
 
 

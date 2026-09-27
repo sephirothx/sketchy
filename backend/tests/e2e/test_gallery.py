@@ -11,13 +11,13 @@ from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import (
     BASE_URL,
     join_by_code,
+    open_new_room,
     open_room_settings,
     open_settings_section,
     register_account,
     room_code,
     save_room_settings,
     use_guest_name,
-    open_new_room,
 )
 from tests.e2e.staff_helpers import set_role
 from tests.e2e.test_pinned_drawings import scribble
@@ -37,7 +37,6 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await use_guest_name(host, "GalHost")
             await register_account(host, "galhost")
             await open_new_room(host)
-            await host.locator('[data-testid="waiting-room"]').wait_for()
             code = await room_code(host)
 
             await other.goto(BASE_URL)

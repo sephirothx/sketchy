@@ -4,7 +4,7 @@ from playwright.async_api import async_playwright
 
 from app.prompts import MAX_CUSTOM_PROMPTS, MAX_RAW_INPUT_LENGTH
 from tests.e2e.custom_prompts_fixture import maximum_custom_prompts, set_textarea_value
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, open_create_room
+from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"

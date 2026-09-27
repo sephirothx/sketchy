@@ -11,10 +11,10 @@ from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
     leave_room,
-    register_account,
-    use_guest_name,
     open_create_room,
     open_new_room,
+    register_account,
+    use_guest_name,
 )
 
 BASE_URL = "http://localhost:8000"
@@ -156,7 +156,6 @@ async def test_an_invitation_reaches_a_friend_and_seats_them():
             await make_friends(host, guest, host_name, guest_name)
 
             await open_new_room(host)
-            await host.wait_for_selector('[data-testid="room-header"]')
 
             # The invite card lists friends who are in the lobby.
             invite = host.locator(

@@ -4,12 +4,12 @@ import asyncio
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     open_room_settings,
     open_settings_section,
     room_code,
     save_room_settings,
     use_guest_name,
-    open_new_room,
 )
 
 BASE_URL = "http://localhost:8000"
@@ -42,7 +42,6 @@ async def test_highlights_open_from_game_over_and_close_when_a_rematch_starts():
             await host.goto(BASE_URL)
             await use_guest_name(host, "HighHost")
             await open_new_room(host)
-            await host.locator('[data-testid="waiting-room"]').wait_for()
 
             code = await room_code(host)
 

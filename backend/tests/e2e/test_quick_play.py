@@ -12,10 +12,10 @@ import random
 
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
+    open_new_room,
     room_code,
     room_name as current_room_name,
     use_guest_name,
-    open_new_room,
 )
 from tests.e2e.test_friends import SETTLE_MS, make_friends, sign_up, unique
 

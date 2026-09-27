@@ -1,7 +1,7 @@
 """The scratch pad (#829, #591): something to draw on while the connection is down, and while a room waits for players."""
 
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import use_guest_name, open_new_room
+from tests.e2e.lobby_helpers import open_new_room, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"

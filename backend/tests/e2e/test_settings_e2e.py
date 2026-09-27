@@ -68,12 +68,12 @@ async def test_settings_apply_as_they_change_without_a_save():
             )
             assert migrated_cursor == "circle", "the legacy value should survive the read"
             await use_guest_name(page, "SettingsTester")
+            # open_new_room returns only once the waiting room is up, which is
+            # what the account claim below needs: the create-room page carries
+            # an identity chip of its own, so registering while the room is
+            # still in flight opens the menu on that page and the navigation
+            # unmounts it mid-click.
             await open_new_room(page)
-            # Wait for the room before claiming the account. The create-room
-            # page carries an identity chip of its own, so registering while
-            # the room is still in flight opens the menu on that page and the
-            # navigation unmounts it mid-click.
-            await page.wait_for_selector('[data-testid="waiting-room"]')
 
             # Name colours belong to registered players: a guest is pinned to
             # the grey that marks their name as unclaimed, so claim the account

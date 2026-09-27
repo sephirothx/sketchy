@@ -2,12 +2,12 @@
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_create_room,
     open_room_settings,
     open_settings_section,
     room_code,
     save_room_settings,
     use_guest_name,
-    open_create_room,
 )
 
 

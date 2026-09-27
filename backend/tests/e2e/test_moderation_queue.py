@@ -12,10 +12,10 @@ from playwright.async_api import async_playwright, expect
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     register_account,
     room_code,
     use_guest_name,
-    open_new_room,
 )
 
 # Grants the role *and* the second factor R-AUTH-20 now requires of one.

@@ -13,7 +13,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import BugReport
 from tests.e2e.a11y import assert_no_axe_violations
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, open_new_room
+from tests.e2e.lobby_helpers import join_by_code, open_new_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 HEADING = "A bug crawled onto the page"

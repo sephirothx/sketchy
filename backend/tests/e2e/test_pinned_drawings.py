@@ -6,13 +6,13 @@ from __future__ import annotations
 from playwright.async_api import Page, async_playwright, expect
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     open_room_settings,
     open_settings_section,
     register_account,
     room_code,
     save_room_settings,
     use_guest_name,
-    open_new_room,
 )
 from tests.e2e.test_profile_page import choose_prompt
 
@@ -46,7 +46,6 @@ async def test_a_drawing_pinned_from_the_recap_reaches_the_profile_shelf():
             await use_guest_name(host, "PinHost")
             await register_account(host, "pinhost")
             await open_new_room(host)
-            await host.locator('[data-testid="waiting-room"]').wait_for()
             code = await room_code(host)
 
             await other.goto(BASE_URL)

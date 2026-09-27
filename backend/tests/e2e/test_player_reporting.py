@@ -9,10 +9,10 @@ import asyncio
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     register_account,
     room_code,
     use_guest_name,
-    open_new_room,
 )
 
 

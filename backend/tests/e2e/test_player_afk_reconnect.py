@@ -35,7 +35,6 @@ async def test_player_afk_and_disconnect_scenario():
             await use_guest_name(page1, "HostPlayer")
             await open_new_room(page1)
 
-            await page1.wait_for_selector('[data-testid="room-header"]')
             code = await room_code(page1)
 
             # Step 2: Player joins room via Join by code

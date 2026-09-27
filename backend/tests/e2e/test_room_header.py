@@ -5,10 +5,10 @@ import random
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     room_code,
     room_menu_action,
     use_guest_name,
-    open_new_room,
 )
 
 

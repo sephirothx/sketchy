@@ -10,7 +10,7 @@ not the other - and it is what this checks, with a wavy stroke of many
 samples so that the thinner has something to drop.
 """
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, open_create_room
+from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 

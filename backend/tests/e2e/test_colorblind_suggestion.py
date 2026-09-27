@@ -4,12 +4,12 @@ from __future__ import annotations
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
+    open_create_room,
     open_player_settings,
     open_room_settings,
     open_settings_section,
     room_code,
     use_guest_name,
-    open_create_room,
 )
 
 

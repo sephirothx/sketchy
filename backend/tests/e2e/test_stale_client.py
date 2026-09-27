@@ -10,7 +10,7 @@ proxy ignoring `no-cache`, a service worker serving the old shell.
 """
 from playwright.async_api import async_playwright, expect
 
-from tests.e2e.lobby_helpers import room_code, use_guest_name, open_new_room
+from tests.e2e.lobby_helpers import open_new_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 

@@ -16,10 +16,10 @@ from app.db.models import BugReport
 from app.domain_values import UserRole
 from tests.e2e.lobby_helpers import (
     join_by_code,
+    open_new_room,
     register_account,
     room_code,
     use_guest_name,
-    open_new_room,
 )
 from tests.e2e.staff_helpers import set_role
 

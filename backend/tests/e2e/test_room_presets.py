@@ -3,10 +3,10 @@
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
+    open_create_room,
     open_room_settings,
     register_account,
     use_guest_name,
-    open_create_room,
 )
 
 

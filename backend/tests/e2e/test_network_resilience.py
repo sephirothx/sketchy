@@ -4,10 +4,10 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
-    room_code,
-    use_guest_name,
     open_create_room,
     open_new_room,
+    room_code,
+    use_guest_name,
 )
 
 
@@ -123,7 +123,6 @@ async def test_mid_session_socket_reconnects_to_room():
             await host.goto(BASE_URL)
             await use_guest_name(host, "HostReconnect")
             await open_new_room(host)
-            await host.wait_for_selector('[data-testid="room-header"]')
             code = await room_code(host)
 
             await guest.goto(BASE_URL)
