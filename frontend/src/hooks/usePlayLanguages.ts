@@ -32,7 +32,7 @@ function saveDismissedSuggestions(languages: readonly string[]): void {
 
 /**
  * The languages a player plays in, as every place that edits them edits them
- * (#1210): Settings, and the question a first-time player is asked (#1217).
+ * (#1210): Settings, and the question a first-time player is asked (#1219).
  *
  * The default and the others are saved together: sent alone, a default the
  * server finds among the others would be swapped there (#1209), and this
