@@ -1,5 +1,12 @@
 from playwright.async_api import async_playwright, expect
-from tests.e2e.lobby_helpers import close_room_settings, join_by_code, open_room_settings, room_menu_action, open_room_menu
+from tests.e2e.lobby_helpers import (
+    close_room_settings,
+    join_by_code,
+    open_room_settings,
+    room_menu_action,
+    open_room_menu,
+    open_new_room,
+)
 from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 
@@ -22,9 +29,7 @@ async def test_players_approve_restart_without_losing_room_context():
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "RestartHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
 
             room_code = await get_room_code(host_page)
             await player_page.goto(BASE_URL)
@@ -131,9 +136,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "RejectHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
             room_code = await get_room_code(host_page)
 
             await player_page.goto(BASE_URL)

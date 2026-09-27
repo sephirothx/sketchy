@@ -1,5 +1,5 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, open_new_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -92,11 +92,8 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # Step 1: Host creates a room
             await page1.goto(BASE_URL)
             await use_guest_name(page1, "HostAlice")
-            await page1.click('button:has-text("Create room")')
-            await page1.click('button:has-text("Create room")')
+            await open_new_room(page1)
 
-            # Wait for navigation to room waiting panel
-            await page1.wait_for_selector('[data-testid="room-header"]')
             code = await room_code(page1)
             assert len(code) > 0
 

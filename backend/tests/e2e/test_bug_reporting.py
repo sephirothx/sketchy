@@ -14,7 +14,13 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.db.models import BugReport
 from app.domain_values import UserRole
-from tests.e2e.lobby_helpers import join_by_code, register_account, room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    open_new_room,
+    register_account,
+    room_code,
+    use_guest_name,
+)
 from tests.e2e.staff_helpers import set_role
 
 
@@ -147,9 +153,7 @@ async def test_a_guest_in_a_live_game_can_still_reach_the_report_dialog():
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "CompactHost")
-            await host_page.click('button:has-text("Create room")')
-            await host_page.click('button:has-text("Create room")')
-            await host_page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host_page)
             code = await room_code(host_page)
 
             await guest_page.goto(BASE_URL)

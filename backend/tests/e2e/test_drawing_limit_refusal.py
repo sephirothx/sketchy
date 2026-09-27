@@ -19,7 +19,7 @@ import re
 from uuid import uuid4
 
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 CLIENT_LIMIT = 60
@@ -63,7 +63,7 @@ async def _lower_the_clients_limit(context, patched: list[int]) -> None:
 async def _start_turn(host_page, player_page):
     await host_page.goto(BASE_URL)
     await use_guest_name(host_page, f"LimitHost{uuid4().hex[:6]}")
-    await host_page.click('button:has-text("Create room")')
+    await open_create_room(host_page)
     await host_page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
     await host_page.click('button:has-text("Create room")')
     await host_page.wait_for_selector('[data-testid="waiting-room"]')

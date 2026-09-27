@@ -1,5 +1,10 @@
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
+from tests.e2e.lobby_helpers import (
+    open_create_room,
+    open_new_room,
+    room_code as get_room_code,
+    use_guest_name,
+)
 
 
 BASE_URL = "http://localhost:8000"
@@ -21,7 +26,7 @@ async def test_invite_preview_join_spectate_full_room_and_reconnect():
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, "InviteHost")
-            await host_page.click('button:has-text("Create room")')
+            await open_create_room(host_page)
             await host_page.fill('input[placeholder="Leave blank for a random name!"]', "Invite Test Room")
             await host_page.get_by_role("button", name="Private").click()
             await host_page.fill('label:has-text("Max players") input', "3")
@@ -128,10 +133,7 @@ async def test_a_typed_name_is_enough_to_join_from_an_invite():
         try:
             await host.goto(BASE_URL)
             await use_guest_name(host, "InviteDraftHost")
-            await host.click('button:has-text("Create room")')
-            await host.wait_for_selector(".create-room-page")
-            await host.click(".create-room-submit")
-            await host.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(host)
             code = await get_room_code(host)
 
             await visitor.goto(f"{BASE_URL}/room/{code}")
