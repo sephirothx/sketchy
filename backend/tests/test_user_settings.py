@@ -16,6 +16,7 @@ from app.api.user_settings import (
     create_user_settings_router,
     seed_user_settings,
 )
+from app.api.errors import install_refusal_handler
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import UserSettings
@@ -33,6 +34,7 @@ async def env(monkeypatch):
     factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     app = FastAPI()
+    install_refusal_handler(app)
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
     app.include_router(create_auth_router(users, factory))
     app.include_router(create_user_settings_router(factory))
@@ -174,6 +176,16 @@ async def test_registration_seed_never_overwrites_existing_settings(env):
         {"locale": "kl"},
         {"locale": "en-GB"},
         {"keyBindings": {"brush": ["b"]}},
+        {"extraPromptLanguages": ["de", "de"]},
+        {"extraPromptLanguages": ["kl"]},
+        {"extraPromptLanguages": ["mul"]},
+        {"extraPromptLanguages": ["zxx"]},
+        {"extraPromptLanguages": "de"},
+        {"extraPromptLanguages": ["de", "es", "fr", "it", "nl", "pt", "en"]},
+        # The default is English; naming it among the others as well is two
+        # answers to one question.
+        {"extraPromptLanguages": ["de", "en"]},
+        {"promptLanguage": "de", "extraPromptLanguages": ["de"]},
     ],
 )
 async def test_patch_rejects_invalid_or_unbounded_values(env, body):
@@ -299,3 +311,113 @@ async def test_me_still_answers_when_the_settings_read_fails(env, monkeypatch):
     assert me.status_code == 200
     assert me.json()["username"] == "MeResilient"
     assert "settings" not in me.json()
+
+
+async def _register(http, username: str, settings: dict | None = None) -> None:
+    body = {"username": username, "password": PASSWORD}
+    if settings is not None:
+        body["settings"] = settings
+    assert (await http.post("/api/auth/register", json=body)).status_code == 200
+
+
+async def test_an_account_plays_a_default_and_other_languages_in_order(env):
+    """#1209: the default, then the others in the order the player ranked
+    them - kept exactly, since the lobby ranks their rooms by it."""
+    http, factory = env
+    await _register(
+        http,
+        "Polyglot",
+        {"promptLanguage": "it", "extraPromptLanguages": ["nl", "en"]},
+    )
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert (loaded["promptLanguage"], loaded["extraPromptLanguages"]) == ("it", ["nl", "en"])
+
+    reordered = await http.patch(
+        "/api/users/me/settings", json={"extraPromptLanguages": ["en", "nl", "pt"]}
+    )
+    assert reordered.status_code == 200
+    assert reordered.json()["extraPromptLanguages"] == ["en", "nl", "pt"]
+
+    cleared = await http.patch("/api/users/me/settings", json={"extraPromptLanguages": []})
+    assert cleared.json()["extraPromptLanguages"] == []
+    async with factory() as session:
+        row = await session.scalar(select(UserSettings))
+        assert (row.prompt_language, row.extra_prompt_languages) == ("it", [])
+
+
+async def test_an_account_that_never_chose_plays_one_language(env):
+    http, _ = env
+    await _register(http, "OneLanguage")
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert loaded["extraPromptLanguages"] == []
+
+
+async def test_promoting_another_language_swaps_the_default_into_its_place(env):
+    """Choosing one of the others as the default loses nothing: the old
+    default takes its place in the order. A default from outside the list
+    replaces the old one, as a single language always did."""
+    http, _ = env
+    await _register(
+        http,
+        "Promoter",
+        {"promptLanguage": "it", "extraPromptLanguages": ["nl", "en", "es"]},
+    )
+    promoted = (await http.patch("/api/users/me/settings", json={"promptLanguage": "en"})).json()
+    assert (promoted["promptLanguage"], promoted["extraPromptLanguages"]) == ("en", ["nl", "it", "es"])
+
+    replaced = (await http.patch("/api/users/me/settings", json={"promptLanguage": "fr"})).json()
+    assert (replaced["promptLanguage"], replaced["extraPromptLanguages"]) == ("fr", ["nl", "it", "es"])
+
+    # Sent together, the pair is taken as sent.
+    both = (
+        await http.patch(
+            "/api/users/me/settings",
+            json={"promptLanguage": "nl", "extraPromptLanguages": ["fr"]},
+        )
+    ).json()
+    assert (both["promptLanguage"], both["extraPromptLanguages"]) == ("nl", ["fr"])
+
+
+async def test_naming_the_default_among_the_others_is_refused_against_that_field(env):
+    http, _ = env
+    await _register(http, "Twice", {"promptLanguage": "de"})
+    refused = await http.patch(
+        "/api/users/me/settings", json={"extraPromptLanguages": ["en", "de"]}
+    )
+    assert refused.status_code == 422
+    assert refused.json()["field"] == "extraPromptLanguages"
+    assert (await http.get("/api/users/me/settings")).json()["extraPromptLanguages"] == []
+
+
+async def test_a_browser_copy_naming_its_default_twice_still_registers(env):
+    """The seed is the browser's copy becoming the account's (R-SET-03); a
+    registration is not refused over it, and the default is what it meant."""
+    http, _ = env
+    await _register(
+        http,
+        "SeedTwice",
+        {"promptLanguage": "pt", "extraPromptLanguages": ["pt", "es"]},
+    )
+    loaded = (await http.get("/api/users/me/settings")).json()
+    assert (loaded["promptLanguage"], loaded["extraPromptLanguages"]) == ("pt", ["es"])
+
+
+async def test_two_devices_promoting_at_once_never_list_the_default_twice(env):
+    """Each PATCH reads the row it writes under a lock, so a second device's
+    promotion swaps against what the first one left, not what it read."""
+    import asyncio
+
+    http, factory = env
+    await _register(
+        http,
+        "TwoDevices",
+        {"promptLanguage": "it", "extraPromptLanguages": ["en", "nl"]},
+    )
+    await asyncio.gather(
+        http.patch("/api/users/me/settings", json={"promptLanguage": "en"}),
+        http.patch("/api/users/me/settings", json={"promptLanguage": "nl"}),
+    )
+    async with factory() as session:
+        row = await session.scalar(select(UserSettings))
+        languages = [row.prompt_language, *row.extra_prompt_languages]
+        assert sorted(languages) == ["en", "it", "nl"], languages

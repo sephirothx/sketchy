@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`d7e8f9a0b1c3_mixed_language_room_presets.py` (#1182). Both this line and the table
+`e8f9a0b1c2d4_extra_prompt_languages.py` (#1209). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -582,6 +582,8 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 `brush_cursor` (`crosshair \| circle`) · `default_brush_size` (one of the slider's stops, `2 \| 4 \| 6 \| 8 \| 12 \| 16 \| 24 \| 32`, 6 by default, R-DRAW-18) · `pen_pressure` (on by default; the client acts on it only for a pressure-sensitive pen, R-DRAW-17) · `time_format` (`system \| 12h \| 24h`) ·
 `key_bindings` (JSON) ·
 `colorblind_safe_colors` · `prompt_language` (the supported set, `en` by default) ·
+`extra_prompt_languages` (JSON list, `[]` by default: the other languages the player
+plays in, in their order — never the default, never twice, at most six; #1209) ·
 `locale` (the interface locales, `en` by default) ·
 `email_reminder_last_shown_at` · timestamps.
 
@@ -598,8 +600,15 @@ stamp is never re-seeded — which is how a registration that finds a defaults r
 made by another tab still carries the browser's settings over (R-SET-03).
 
 **Two languages, and they are not the same one.** `prompt_language` is the language
-this player *plays* in (R-PROMPT-11) — what the lobby leads with and what a new room
-starts in. `locale` is the language they *read* in (R-I18N-06): the interface, the
+this player *plays* in by default (R-PROMPT-11) — what the lobby leads with, the seat
+a mixed room gives them, and where Quick play opens a room.
+`extra_prompt_languages` are the others they play in, ranked: a list on the row
+rather than a table of its own, so `/api/auth/me` still reads settings in one
+statement (R-PLAT-17). Its bounds are held by the settings routes, the only writers,
+which check the pair in one write under the row's lock: no repeats, only the seven,
+and the default never among them — promoting one of them to the default swaps the old
+default into its place (#1209). An account that never chose any has `[]`, which is
+exactly the one-language behaviour it had before. `locale` is the language they *read* in (R-I18N-06): the interface, the
 refusals, the room's own announcements. A Dutch speaker playing an English room is
 ordinary, and one column could not describe them; it is the same line `prompt_lists`
 draws between its content language and its localized catalogue copy.
@@ -751,7 +760,7 @@ guesses, prompt-list revision history, the lists it starred, unexpired authored 
 messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v11_fields.json`](../fixtures/account_data_export_v11_fields.json).
+pinned by [`fixtures/account_data_export_v12_fields.json`](../fixtures/account_data_export_v12_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·

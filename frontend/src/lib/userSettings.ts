@@ -23,6 +23,9 @@ export interface AccountSettings {
   colorblindSafeColors: boolean;
   timeFormat: TimeFormat;
   promptLanguage: PromptLanguage;
+  /** The other languages the player plays in, in their order, never the
+      default (#1209). Read by the settings store once it keeps them (#1210). */
+  extraPromptLanguages?: PromptLanguage[];
   /** The language the interface is read in - not the one the room plays in
       (R-I18N-06). */
   locale: Locale;

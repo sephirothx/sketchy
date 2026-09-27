@@ -596,14 +596,27 @@ class UserSettings(Base):
         server_default=TimeFormat.SYSTEM.value,
         nullable=False,
     )
-    # Which language this player plays in: the lobby leads with it and a new
-    # room starts in it (R-PROMPT-11). Stored per account rather than read from
-    # the browser every time, so it follows a player to their other devices;
-    # registration seeds it from the browser, and it is a setting afterwards.
+    # The language this player plays in by default (R-PROMPT-11): the lobby
+    # leads with it, a mixed room seats them in it, and Quick play opens a room
+    # in it. Stored per account rather than read from the browser every time,
+    # so it follows a player to their other devices; registration seeds it
+    # from the browser, and it is a setting afterwards.
     prompt_language: Mapped[str] = mapped_column(
         String(8),
         default=PromptLanguage.ENGLISH.value,
         server_default=PromptLanguage.ENGLISH.value,
+        nullable=False,
+    )
+    # The other languages they play in, in the order they ranked them (#1209):
+    # the lobby lists those rooms after mixed ones, in this order. Never the
+    # default, never twice - the settings routes are the only writers, and they
+    # hold both columns to that in one write. A list on the row rather than a
+    # table of its own, so `/api/auth/me` still reads settings in one
+    # statement (R-PLAT-17).
+    extra_prompt_languages: Mapped[list[str]] = mapped_column(
+        PortableJSON,
+        default=list,
+        server_default=text("'[]'"),
         nullable=False,
     )
     # Which language this player reads the interface in (R-I18N-06). Distinct

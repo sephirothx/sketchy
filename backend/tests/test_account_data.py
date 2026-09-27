@@ -527,8 +527,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 11
-    assert artifact["schemaVersion"] == 11
+    assert status["schemaVersion"] == 12
+    assert artifact["schemaVersion"] == 12
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -613,7 +613,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "$argon2" not in encoded
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v11_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v12_fields.json").read_text(
             encoding="utf-8"
         )
     )
