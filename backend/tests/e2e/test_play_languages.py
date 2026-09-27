@@ -383,3 +383,42 @@ async def test_discovery_asks_for_the_ranked_languages():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_a_profile_shows_the_languages_its_player_plays_in():
+    """#1212: every flag, the default's first and larger, the others after it
+    in the player's order - one picture, named once, for a screen reader -
+    and the same to another viewer."""
+    username = f"Flags{uuid4().hex[:6]}"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        owner_context = await browser.new_context()
+        await owner_context.add_init_script(
+            "localStorage.setItem('sketchy_promptlanguage', 'it');"
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['en', 'es']));"
+        )
+        viewer_context = await browser.new_context()
+        owner = await owner_context.new_page()
+        viewer = await viewer_context.new_page()
+        try:
+            await owner.goto(BASE_URL)
+            await use_guest_name(owner, username)
+            await register_account(owner, username)
+            owner_id = await owner.evaluate(
+                "async () => (await (await fetch('/api/auth/me')).json()).id"
+            )
+
+            for page in (owner, viewer):
+                await page.goto(f"{BASE_URL}/profile/{owner_id}")
+                flags = page.get_by_role("img", name="Plays in Italian; also English and Spanish")
+                await flags.wait_for()
+                order = await flags.locator(".play-language-flag").evaluate_all(
+                    "flags => flags.map(flag => [flag.dataset.language, flag.getBoundingClientRect().width])"
+                )
+                assert [language for language, _ in order] == ["it", "en", "es"]
+                assert order[0][1] > order[1][1] == order[2][1]
+                await assert_no_axe_violations(page, "profile play languages")
+        finally:
+            await owner_context.close()
+            await viewer_context.close()
+            await browser.close()
