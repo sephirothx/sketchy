@@ -115,6 +115,134 @@ async def test_a_quick_prompt_shadows_the_curated_answer_of_the_same_name():
     assert game.prompt_source_kind("apple") == "custom"
 
 
+@pytest.mark.parametrize(
+    ("language", "quick", "listed"),
+    [("de", "Mueller", "Müller"), ("fr", "coeur", "Cœur"), ("nl", "ijs", "ĳs")],
+)
+async def test_a_quick_prompt_shadows_its_twin_in_a_list_in_no_language(
+    language, quick, listed
+):
+    """A list in no language (#821) stores its keys without the room's
+    transliteration, so the stored-key exclusion misses a quick prompt typed
+    the expanded way. The room accepts both as one answer, so the draw may
+    offer only one of them."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = language
+    room.custom_prompts = [quick]
+    repo = StubPromptListRepo([listed, "Pikachu", "Evoli"], language="zxx")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert quick in room.game.prompt_pool
+    assert listed not in room.game.prompt_pool
+
+
+async def test_the_shadow_stays_on_the_canonical_key():
+    """R-GUESS-01: the wider spelling set never widens which prompt a turn
+    draws. "Bar" and "Bär" are different German words; a quick "Bar" leaves
+    the list's "Bär" in the pool."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = "de"
+    room.custom_prompts = ["Bar"]
+    repo = StubPromptListRepo(["Bär", "Hund", "Katze"], language="de")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert {"Bar", "Bär"} <= set(room.game.prompt_pool)
+
+
+async def test_a_quick_prompt_leaves_an_agnostic_word_its_room_folds_apart():
+    """An agnostic "Bär" stores `bar`, the German room's key for a quick
+    "Bar" - a different German word, so it stays in the pool."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = "de"
+    room.custom_prompts = ["Bar"]
+    repo = StubPromptListRepo(["Bär", "Hund", "Katze"], language="zxx")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert {"Bar", "Bär"} <= set(room.game.prompt_pool)
+
+
+async def test_a_list_whose_every_prompt_is_a_twin_prices_only_the_quick_ones():
+    """Nothing the list offers survives the shadow, so nothing of it is
+    drawable, weighted or priced."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.prompt_language = "de"
+    room.custom_prompts = ["Mueller"]
+    repo = StubPromptListRepo(["Müller"], language="zxx")
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert room.game.prompt_pool == ["Mueller"]
+    counts, total = letter_histogram(["Mueller"])
+    assert room.game.letter_counts == counts
+    assert room.game.letter_total == total
+
+
+async def test_a_game_tracks_list_prompts_by_concept_and_quick_ones_by_text():
+    """#1181: a list prompt's key is its concept, spelled by the room's
+    answer; a quick prompt has no concept and is its own key."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    room.custom_prompts = ["lighthouse"]
+    repo = StubPromptListRepo(
+        ["anchor"],
+        concept_ids={"anchor": "concept-anchor"},
+        prompt_version_ids={"anchor": "version-anchor"},
+        aliases={"anchor": ("ship anchor",)},
+    )
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+    game = room.game
+
+    assert set(game.prompt_pool) == {"concept-anchor", "lighthouse"}
+    assert game.prompt_answers == {"concept-anchor": "anchor"}
+    assert game.prompt_version_ids == {"concept-anchor": "version-anchor"}
+    assert game.prompt_aliases == {"concept-anchor": ("ship anchor",)}
+    assert game.prompt_source_revision_ids_by_key == {"concept-anchor": ("revision-1",)}
+    assert game.prompt_source_kind("concept-anchor") == "curated"
+    assert game.prompt_source_kind("lighthouse") == "custom"
+
+
+async def test_the_drawer_is_offered_answers_never_keys():
+    """The pool holds concepts; what the drawer reads is how the room spells
+    them, with the turn the offers are for (#1181)."""
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    repo = StubPromptListRepo(
+        ["anchor", "balloon", "castle"],
+        concept_ids={"anchor": "c-anchor", "balloon": "c-balloon", "castle": "c-castle"},
+    )
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+    ctx.sio.emit = AsyncMock()
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    [offer] = [
+        call.args[1]
+        for call in ctx.sio.emit.await_args_list
+        if call.args[0] == "your_prompt_choices"
+    ]
+    assert sorted(offer["choices"]) == ["anchor", "balloon", "castle"]
+    assert offer["turnId"] == room.game.current_turn_id
+
+
 async def test_a_custom_only_room_never_asks_the_prompt_store():
     room_manager, room, _ = build_room(rounds=1)
     room.max_players = 2

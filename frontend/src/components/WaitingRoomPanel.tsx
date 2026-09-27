@@ -13,15 +13,7 @@ import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
-import type {
-  PromptLanguage,
-  ColorMode,
-  DrawingToolGroup,
-  HintMode,
-  PlayerInfo,
-  ScoreEntry,
-  ScoringMode,
-} from "../types";
+import type { ColorMode, DrawingToolGroup, HintMode, PlayerInfo, RoomLanguage, ScoreEntry, ScoringMode } from "../types";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import "../styles/lazy/toolbar.css";
@@ -42,7 +34,7 @@ interface WaitingRoomPanelProps {
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
   promptListSlugs?: string[];
-  promptLanguage: PromptLanguage;
+  promptLanguage: RoomLanguage;
   players: PlayerInfo[];
   myPlayerId: string | null;
   isHost: boolean;

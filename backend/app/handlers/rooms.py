@@ -6,6 +6,7 @@ import logging
 import time
 from contextlib import contextmanager
 from contextvars import ContextVar
+from collections.abc import Sequence
 from functools import partial
 
 from app.announcements import Announcement
@@ -35,7 +36,7 @@ from app.handlers.identity import (
 )
 from app.presenters import editable_room_settings_payload, session_payload
 from app.services.guest_names import online_guest_holding
-from app.domain_values import RuntimeEventType
+from app.domain_values import MIXED_PROMPT_LANGUAGE, RuntimeEventType
 from app.services.game_flow import RoomPromptResolutionError
 from app.services.room_quotas import RoomQuotaExceeded
 from app.rooms import (
@@ -395,7 +396,7 @@ async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: 
             "resolving the room's prompt lists",
         )
     except RoomPromptResolutionError as error:
-        return {"ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS, "error": str(error), "field": "promptListSlugs"}
+        return error.acknowledgement()
     except EntryTimedOut:
         return BUSY_ACKNOWLEDGEMENT
     try:
@@ -496,6 +497,7 @@ async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: 
         is_anonymous=identity.is_anonymous,
         colorblind_safe_colors=identity.colorblind_safe_colors,
         avatar_key=identity.avatar_key,
+        prompt_language=payload.seat_language,
     )
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     if ctx.is_ending(sid):
@@ -513,6 +515,11 @@ class _EnteringAs:
         self.name_color = payload.name_color
         self.colorblind_safe_colors = payload.colorblind_safe_colors
         self.as_spectator = False
+        # The seat's language (#1182): a creation says it as `seatLanguage`,
+        # Quick play as the language it was asked to find a room in.
+        self.seat_language = getattr(payload, "seat_language", None) or (
+            payload.prompt_language if isinstance(payload, QuickPlayPayload) else None
+        )
 
 
 def _remember_creation(ctx: HandlerContext, user_id: str, request_id: str | None, room_id: str) -> None:
@@ -619,7 +626,7 @@ async def update_room_settings(ctx: HandlerContext, sid, data):
                 requesting_user_id=player.user_id,
             )
         except RoomPromptResolutionError as error:
-            return {"ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS, "error": str(error), "field": "promptListSlugs"}
+            return error.acknowledgement()
         active_count = len(room.seated_players())
         if settings["max_players"] < active_count:
             # The count is a value, not a sentence: the client says how many
@@ -1016,6 +1023,7 @@ async def _seat_in_room(
             is_anonymous=identity.is_anonymous,
             colorblind_safe_colors=identity.colorblind_safe_colors,
             avatar_key=identity.avatar_key,
+            prompt_language=getattr(payload, "seat_language", None),
         )
     except RoomFullError:
         # Flagged rather than left for the client to recognise by its prose:
@@ -1398,8 +1406,9 @@ async def quick_play(ctx: HandlerContext, sid, data):
     the same moment, which is what a shared link produces - a room each,
     because every one of them read the same empty list. The server holds the
     rooms, so it picks: the fullest public room that is waiting in the
-    caller's language with a seat free, or a new public room on the defaults
-    the create form mirrors.
+    caller's default language with a seat free - then a mixed one, then one in
+    each of their other languages (#1211) - or a new public room in the default
+    on the defaults the create form mirrors.
 
     Choosing and seating are separated by awaits, so a room can fill or start
     in between; that refusal is not the caller's answer, it is the next room's
@@ -1434,34 +1443,62 @@ async def _quick_play(ctx: HandlerContext, sid, data, seated: list):
         return BUSY_ACKNOWLEDGEMENT
 
     entering = _EnteringAs(payload)
-    while not entry_expired():
-        for room in _quick_play_candidates(ctx, payload.prompt_language):
+
+    async def seat_in_first(rooms: list) -> dict | None:
+        for room in rooms:
             answer = await _seat_in_room(
                 ctx, sid, room, entering, seated, quick_play=True, identity=identity
             )
             if answer is QUICK_PLAY_CLOSED or answer.get("errorCode") in QUICK_PLAY_SKIPS:
                 continue
             return {**answer, "created": False} if answer.get("ok") else answer
+        return None
+
+    while not entry_expired():
+        candidates = _quick_play_candidates(
+            ctx, payload.prompt_language, payload.extra_prompt_languages
+        )
+        answer = await seat_in_first(
+            [room for room in candidates if room.prompt_language == payload.prompt_language]
+        )
+        if answer is not None:
+            return answer
         opening = ctx.quick_play_openings.get(payload.prompt_language)
         if opening is not None:
-            # Somebody is already opening a room for this language: take a
-            # seat in theirs rather than opening a second one beside it.
+            # Somebody is already opening a room in this default: take a seat
+            # in theirs rather than opening a second one beside it - or taking
+            # a mixed room or one in another of this player's languages, which
+            # rank below a room in the default that is about to exist.
             try:
                 await _bounded(asyncio.shield(opening), "waiting for a room to open")
             except EntryTimedOut:
                 return BUSY_ACKNOWLEDGEMENT
             continue
+        answer = await seat_in_first(
+            [room for room in candidates if room.prompt_language != payload.prompt_language]
+        )
+        if answer is not None:
+            return answer
         return await _open_a_quick_play_room(ctx, sid, payload, identity, seated)
     return BUSY_ACKNOWLEDGEMENT
 
 
-def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
-    """The rooms worth trying, fullest first (R-UX-14).
+def _quick_play_candidates(
+    ctx: HandlerContext, language: str, extras: Sequence[str] = ()
+) -> list:
+    """The rooms worth trying: the default language's first, then mixed ones,
+    then each of the others in the player's order - fullest first within each
+    (R-UX-14, #1211).
 
-    Only this language - a room in another would hand the player words they
-    can neither draw nor guess - and never a game already under way. Fullest
-    first, because the room one seat short of a game is the one worth filling.
+    Never a room in a language the player does not play - it would hand them
+    words they can neither draw nor guess - but a mixed-language room (#1182)
+    plays everyone in their own, so it comes before the languages the player
+    ranked below their default. Never a game already under way. Fullest first,
+    because the room one seat short of a game is the one worth filling.
     """
+    tier = {language: 0, MIXED_PROMPT_LANGUAGE: 1}
+    for position, extra in enumerate(extras):
+        tier.setdefault(extra, 2 + position)
     # Seated rather than active: a seat held by somebody disconnected inside
     # their grace, or marked AFK, is still taken - `add_player` counts those,
     # and ranking by anything else offers a room that would refuse the seat.
@@ -1469,10 +1506,17 @@ def _quick_play_candidates(ctx: HandlerContext, language: str) -> list:
         room
         for room in ctx.room_manager.rooms.values()
         if _open_for_quick_play(room)
-        and room.prompt_language == language
+        and room.prompt_language in tier
         and len(room.seated_players()) < room.max_players
     ]
-    return sorted(open_rooms, key=lambda room: (-len(room.seated_players()), room.id))
+    return sorted(
+        open_rooms,
+        key=lambda room: (
+            tier[room.prompt_language],
+            -len(room.seated_players()),
+            room.id,
+        ),
+    )
 
 
 async def _open_a_quick_play_room(

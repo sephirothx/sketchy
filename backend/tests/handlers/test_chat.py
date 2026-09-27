@@ -938,7 +938,7 @@ async def _room_with_a_turn_in_progress():
 
     drawer = room.players[room.game.current_drawer]
     selected = await sio.handlers["/"]["select_prompt"](
-        drawer.sid, {"prompt": "volleyball"}
+        drawer.sid, {"index": room.game.prompt_choices.index("volleyball")}
     )
     assert selected == {"ok": True}
     # The freeze this issue is about: everyone seated now is a guesser, and

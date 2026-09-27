@@ -20,7 +20,12 @@ from app.drawing_rules import (
 )
 from app.game import Game
 from app.identifiers import generate_uuid7
-from app.domain_values import GamePromptSourceMode, RuntimeEventType
+from app.domain_values import (
+    MIXED_PROMPT_LANGUAGE,
+    GamePromptSourceMode,
+    PromptLanguage,
+    RuntimeEventType,
+)
 from app.services.runtime_metrics import metrics
 from app.prompt_content import prompt_match_key
 
@@ -260,6 +265,11 @@ class Player:
     is_host: bool = False
     is_spectator: bool = False
     is_afk: bool = False
+    # The language this seat plays in, as it joined (#1182). Fixed with the
+    # seat, so a guess is never refolded mid-game; read only in a
+    # mixed-language room, whose seats each play their own. None when the
+    # client did not say, which `Room.seat_language` resolves.
+    prompt_language: Optional[str] = None
     # Private accessibility input used only to compute an unattributed,
     # host-only room suggestion. Deliberately absent from every presenter.
     colorblind_safe_colors: bool = False
@@ -389,6 +399,9 @@ class DrawingRecapEntry:
     # turns than were played would be a worse answer than one admitting a
     # drawing is gone.
     canvas_history: bytes | None
+    # The prompt in every language, in a mixed-language room (#1182), so each
+    # client's recap reads its own seat's; `prompt` is the drawer's.
+    prompts: tuple[tuple[str, str], ...] = ()
 
     @property
     def is_available(self) -> bool:
@@ -404,6 +417,8 @@ class DrawingRecapEntry:
             "drawerNickname": self.drawer_nickname,
             "drawerNameColor": self.drawer_name_color,
             "prompt": self.prompt,
+            # Only where there is more than one spelling to choose from.
+            **({"prompts": dict(self.prompts)} if self.prompts else {}),
             "actionCount": self.action_count,
             "available": self.is_available,
         }
@@ -459,6 +474,12 @@ class Room:
     prompt_pool_size: int = 0
     prompt_letter_counts: dict[str, int] = field(default_factory=dict, repr=False)
     prompt_letter_total: int = 0
+    # A mixed-language room prices each seat language's wheel from its own
+    # lists and the lists in no language (#1182).
+    prompt_letter_counts_by_language: dict[str, dict[str, int]] = field(
+        default_factory=dict, repr=False
+    )
+    prompt_letter_total_by_language: dict[str, int] = field(default_factory=dict)
     players: dict[str, Player] = field(default_factory=dict)
     # Accounts a majority voted out of this room, barred from taking a seat
     # in it again for as long as it lives (#1010). The seat itself is gone
@@ -617,6 +638,21 @@ class Room:
         """Return the next room-lifetime canvas protocol identity."""
         self.canvas_generation += 1
         return self.canvas_generation
+
+    def is_mixed_language(self) -> bool:
+        """Whether each seat plays in its own language (#1182)."""
+        return self.prompt_language == MIXED_PROMPT_LANGUAGE
+
+    def seat_language(self, player: Player) -> str:
+        """The language `player` plays in here.
+
+        The room's, unless the room is mixed - then the one the seat joined
+        with, and English for a client that did not say, so every seat has
+        exactly one set of answer rules (R-GUESS-01).
+        """
+        if not self.is_mixed_language():
+            return self.prompt_language
+        return player.prompt_language or PromptLanguage.ENGLISH.value
 
     def custom_prompt_match_keys(self) -> frozenset[str]:
         """Match keys of this room's quick prompts.
@@ -791,6 +827,8 @@ class RoomManager:
         prompt_pool_size: int = 0,
         prompt_letter_counts: dict[str, int] | None = None,
         prompt_letter_total: int = 0,
+        prompt_letter_counts_by_language: dict[str, dict[str, int]] | None = None,
+        prompt_letter_total_by_language: dict[str, int] | None = None,
         code: str | None = None,
         created_by_user_id: str | None = None,
     ) -> Room:
@@ -822,6 +860,8 @@ class RoomManager:
             prompt_pool_size=prompt_pool_size,
             prompt_letter_counts=dict(prompt_letter_counts or {}),
             prompt_letter_total=prompt_letter_total,
+            prompt_letter_counts_by_language=dict(prompt_letter_counts_by_language or {}),
+            prompt_letter_total_by_language=dict(prompt_letter_total_by_language or {}),
             created_by_user_id=created_by_user_id,
         )
         self.set_custom_prompts(room, room.custom_prompts)
@@ -887,6 +927,7 @@ class RoomManager:
         is_anonymous: bool = True,
         colorblind_safe_colors: bool = False,
         avatar_key: str | None = None,
+        prompt_language: str | None = None,
     ) -> Player:
         active_players = room.seated_players()
         if not is_spectator and len(active_players) >= room.max_players:
@@ -907,8 +948,11 @@ class RoomManager:
             is_host=not is_spectator and len(active_players) == 0,
             is_spectator=is_spectator,
             colorblind_safe_colors=colorblind_safe_colors,
+            prompt_language=prompt_language,
         )
         room.players[player_id] = player
+        if room.game is not None:
+            room.game.seat_languages[player_id] = room.seat_language(player)
         metrics.record(
             RuntimeEventType.PLAYER_JOINED,
             room_id=room.id,

@@ -134,6 +134,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_letter: "That letter is not valid.",
   invalid_prompt_lists: "Those prompt lists cannot be used together.",
   invalid_custom_prompts: "Those custom prompts could not be read.",
+  mixed_room_list_unsupported: "Mixed-language rooms can only use lists in every language, or in Any language.",
+  mixed_room_custom_prompts: "Mixed-language rooms can't use custom prompts: every player needs the prompt in their own language.",
   max_players_below_seated: (params) =>
   `Max players cannot be below the ${count(params.seated, 2)} players already in the room.`,
   empty_message: "Type something first.",
@@ -1116,6 +1118,12 @@ export const EN = {
   languagePicker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Every language",
+    /** A prompt list in no language (#821): played in a room of any
+    language (GLOSSARY: Any language). */
+    anyLanguage: "Any language",
+    /** A mixed-language room (#1182): each seat plays in its own language
+    (GLOSSARY: Mixed-language room). */
+    mixed: "Mixed",
   },
 
   lobbyBrowserPage: {
@@ -1454,6 +1462,8 @@ export const EN = {
   },
 
   profilePage: {
+    playsIn: (p: { language: string }) => `Plays in ${p.language}`,
+    playsInAlso: (p: { language: string; others: string }) => `Plays in ${p.language}; also ${p.others}`,
     gamesPlayed: "Games played",
     gamesWon: "Games won",
     winRate: "Win rate",
@@ -1867,6 +1877,7 @@ export const EN = {
 
   roomSetupForm: {
     promptLanguage: "Prompt language",
+    customPromptsOffInMixedRooms: "Custom prompts are off in a mixed room: every player needs the prompt in their own language.",
     visibility: "Visibility",
     maxPlayers: "Max players",
     rounds: "Rounds",
@@ -1983,6 +1994,11 @@ export const EN = {
     wearing: "Wearing now",
     couldNotChoose: "Could not change the doodle.",
   },
+  playLanguagesQuestion: {
+    title: "Which languages do you play in?",
+    changeLater: "You can change these any time in Settings → Appearance.",
+    done: "Done",
+  },
   settingsOverlay: {
     email: "Email",
     password: "Password",
@@ -1991,8 +2007,19 @@ export const EN = {
     downloadEverything: "Download everything",
     colorScheme: "Color scheme",
     appliesMomentYouPick: "Applies the moment you pick it.",
-    languageYouPlay: "Language you play in",
-    roomsThisLanguageComeFirstLobby: "Rooms in this language come first in the lobby, and a room you create starts in it. It is separate from the language you read Sketchy in.",
+    languageYouPlay: "Your language",
+    roomsThisLanguageComeFirstLobby: "Rooms in this language come first in the lobby, and in a mixed room it is the language you play the prompts in. It is separate from the language you read Sketchy in.",
+    alsoPlayIn: "Also comfortable in",
+    alsoPlayInHint: "Rooms in these languages come after mixed rooms in the lobby, in this order. Drag a language, or use its arrows, to move it.",
+    addPlayLanguage: "Add a language you play in",
+    addPlayLanguageButton: "Add",
+    movePlayLanguageEarlier: (p: { name: string }) => `Move ${p.name} earlier`,
+    movePlayLanguageLater: (p: { name: string }) => `Move ${p.name} later`,
+    removePlayLanguage: (p: { name: string }) => `Remove ${p.name}`,
+    playLanguageMoved: (p: { name: string; position: number; total: number }) => `${p.name} is now ${p.position} of ${p.total}`,
+    yourBrowserAlsoReads: "Your browser is also set to:",
+    addSuggestedPlayLanguage: (p: { name: string }) => `Add ${p.name}`,
+    notNow: "Not now",
     interfaceLanguage: "Language you read in",
     interfaceLanguageHint: "Every word of Sketchy itself. Separate from the language you play in: reading in one and playing in another is perfectly ordinary.",
     timeFormat: "Time format",

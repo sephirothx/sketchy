@@ -5,6 +5,7 @@ from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
+    PLAY_LANGUAGES_QUESTION,
     join_by_code,
     register_account,
     room_code,
@@ -133,11 +134,19 @@ async def test_first_run_offers_an_account_first_and_guest_play_second():
             await page.click(".first-run-guest-submit")
             await page.wait_for_selector('.identity-name:has-text("Marta")')
 
-            # Asked once: the block never comes back.
+            # A first name is followed by the one question about languages
+            # (#1219), answered here with what the browser suggested.
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.wait_for()
+            await question.get_by_role("button", name="Done").click()
+            await question.wait_for(state="detached")
+
+            # Asked once: neither comes back.
             assert await page.locator(".first-run").count() == 0
             await page.reload()
             await page.wait_for_selector('.identity-name:has-text("Marta")')
             assert await page.locator(".first-run").count() == 0
+            assert await page.locator(PLAY_LANGUAGES_QUESTION).count() == 0
 
             # And it is the name they play under.
             await open_new_room(page)

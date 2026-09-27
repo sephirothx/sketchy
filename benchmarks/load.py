@@ -450,7 +450,7 @@ class Seat:
         return {"ok": True} if answer is not None else None
 
     async def choose_and_draw(self, choices: list[str]) -> None:
-        answer = await self.call("select_prompt", {"prompt": choices[0]})
+        answer = await self.call("select_prompt", {"index": 0})
         if not answer or not answer.get("ok"):
             return
         self.room.prompt = choices[0]

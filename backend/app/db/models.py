@@ -69,6 +69,8 @@ from app.domain_values import (
     PROMPT_EDITORIAL_DIFFICULTIES,
     INTERFACE_LOCALES,
     PROMPT_LANGUAGES,
+    PROMPT_LIST_LANGUAGES,
+    ROOM_LANGUAGES,
     PROMPT_LIST_VISIBILITIES,
     PROMPT_OFFER_SOURCE_KINDS,
     PROMPT_SOURCE_KINDS,
@@ -220,6 +222,9 @@ class RoomPreset(Base):
         ),
         _values_check("hint_mode", HINT_MODES, "ck_room_presets_hint_mode"),
         _values_check(
+            "prompt_language", ROOM_LANGUAGES, "ck_room_presets_prompt_language"
+        ),
+        _values_check(
             "color_mode",
             ("all", "palette", "colorblind_safe", "black_and_white"),
             "ck_room_presets_color_mode",
@@ -257,6 +262,16 @@ class RoomPreset(Base):
     hide_masked_prompt: Mapped[bool] = mapped_column(Boolean, nullable=False)
     allowed_tools: Mapped[list[str]] = mapped_column(PortableJSON, nullable=False)
     color_mode: Mapped[str] = mapped_column(String(24), nullable=False)
+    # The language the room will declare. Stored since #821: a preset whose
+    # lists are all language-agnostic has no language to derive, and the two
+    # still cannot disagree, because save and apply both check the lists
+    # against it the way a room does (R-PROMPT-02).
+    prompt_language: Mapped[str] = mapped_column(
+        String(8),
+        nullable=False,
+        default=PromptLanguage.ENGLISH.value,
+        server_default=PromptLanguage.ENGLISH.value,
+    )
     prompt_list_ids: Mapped[list[str]] = mapped_column(PortableJSON, nullable=False)
     version: Mapped[int] = mapped_column(
         Integer, default=1, server_default=text("1"), nullable=False
@@ -492,6 +507,12 @@ class UserStatsDaily(Base):
     )
 
 
+# Six two-letter languages as JSONB writes them, `["de", "en", ...]`: 36
+# characters. Room for the brackets and separators of either engine's text
+# form, and not for anything a settings route would never write.
+EXTRA_PROMPT_LANGUAGES_TEXT_MAX = 48
+
+
 class UserSettings(Base):
     """Cross-device preferences for a registered account."""
 
@@ -513,6 +534,20 @@ class UserSettings(Base):
         CheckConstraint(
             "sound_effects_volume >= 0.0 AND sound_effects_volume <= 1.0",
             name="ck_user_settings_volume",
+        ),
+        # The other play languages (#1209), bounded where a JSON column can be
+        # on both engines: read as its text, it is a list no longer than every
+        # other language needs, and it never names the default. The routes
+        # hold the rest (each of the seven, once); these two hold even against
+        # two PATCHes that each passed the routes' check against the same row.
+        CheckConstraint(
+            "CAST(extra_prompt_languages AS TEXT) LIKE '[%' "
+            f"AND length(CAST(extra_prompt_languages AS TEXT)) <= {EXTRA_PROMPT_LANGUAGES_TEXT_MAX}",
+            name="ck_user_settings_extra_prompt_languages_list",
+        ),
+        CheckConstraint(
+            "CAST(extra_prompt_languages AS TEXT) NOT LIKE ('%\"' || prompt_language || '\"%')",
+            name="ck_user_settings_default_not_extra",
         ),
     )
 
@@ -581,14 +616,27 @@ class UserSettings(Base):
         server_default=TimeFormat.SYSTEM.value,
         nullable=False,
     )
-    # Which language this player plays in: the lobby leads with it and a new
-    # room starts in it (R-PROMPT-11). Stored per account rather than read from
-    # the browser every time, so it follows a player to their other devices;
-    # registration seeds it from the browser, and it is a setting afterwards.
+    # The language this player plays in by default (R-PROMPT-11): the lobby
+    # leads with it, a mixed room seats them in it, and Quick play opens a room
+    # in it. Stored per account rather than read from the browser every time,
+    # so it follows a player to their other devices; registration seeds it
+    # from the browser, and it is a setting afterwards.
     prompt_language: Mapped[str] = mapped_column(
         String(8),
         default=PromptLanguage.ENGLISH.value,
         server_default=PromptLanguage.ENGLISH.value,
+        nullable=False,
+    )
+    # The other languages they play in, in the order they ranked them (#1209),
+    # for discovery to rank their rooms by (#1211). Never the default, never
+    # twice - the settings routes hold both columns to that in one write, and
+    # the CHECKs above hold what a JSON column can. A list on the row rather
+    # than a table of its own, so `/api/auth/me` still reads settings in one
+    # statement (R-PLAT-17).
+    extra_prompt_languages: Mapped[list[str]] = mapped_column(
+        PortableJSON,
+        default=list,
+        server_default=text("'[]'"),
         nullable=False,
     )
     # Which language this player reads the interface in (R-I18N-06). Distinct
@@ -3599,7 +3647,7 @@ class PromptVersion(Base):
             name="uq_prompt_version_concept_language_version",
         ),
         _values_check(
-            "language", PROMPT_LANGUAGES, "ck_prompt_versions_language"
+            "language", PROMPT_LIST_LANGUAGES, "ck_prompt_versions_language"
         ),
         _values_check(
             "editorial_difficulty",
@@ -3685,7 +3733,7 @@ class PromptAlias(Base):
             "match_key",
             name="uq_prompt_alias_concept_language_match_key",
         ),
-        _values_check("language", PROMPT_LANGUAGES, "ck_prompt_aliases_language"),
+        _values_check("language", PROMPT_LIST_LANGUAGES, "ck_prompt_aliases_language"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -3786,7 +3834,7 @@ class PromptList(Base):
     __tablename__ = "prompt_lists"
     __table_args__ = (
         _actor_index("ix_prompt_lists_moderated_by", "moderated_by_user_id"),
-        _values_check("language", PROMPT_LANGUAGES, "ck_prompt_lists_language"),
+        _values_check("language", PROMPT_LIST_LANGUAGES, "ck_prompt_lists_language"),
         _values_check(
             "visibility", PROMPT_LIST_VISIBILITIES, "ck_prompt_lists_visibility"
         ),
@@ -3928,7 +3976,7 @@ class PromptListRevision(Base):
             "version >= 1", name="ck_prompt_list_revisions_version_positive"
         ),
         _values_check(
-            "language", PROMPT_LANGUAGES, "ck_prompt_list_revisions_language"
+            "language", PROMPT_LIST_LANGUAGES, "ck_prompt_list_revisions_language"
         ),
     )
 

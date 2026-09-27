@@ -28,7 +28,7 @@ from app.prompt_content import (
     UnknownListTag,
     clean_list_tags,
     best_supported_prompt_locale,
-    validate_prompt_language,
+    validate_prompt_list_language,
 )
 from app.prompts import MAX_PROMPT_LENGTH
 from app.repositories.interfaces import (
@@ -206,7 +206,7 @@ def create_prompt_list_router(
         """List catalogue entries, localized for the caller when copy exists."""
         if language is not None:
             try:
-                language = validate_prompt_language(language)
+                language = validate_prompt_list_language(language)
             except ValueError as error:
                 raise Refusal(422, ErrorCode.PROMPT_LIST_INVALID, str(error)) from error
         locale = best_supported_prompt_locale(request.headers.get("accept-language"))
@@ -259,7 +259,7 @@ def create_prompt_list_router(
             )
         if language is not None:
             try:
-                language = validate_prompt_language(language)
+                language = validate_prompt_list_language(language)
             except ValueError as error:
                 raise Refusal(422, ErrorCode.PROMPT_LIST_INVALID, str(error)) from error
         if sort not in COMMUNITY_SORTS:

@@ -3,7 +3,7 @@ import type {
   CommunityPromptList,
   CommunityPromptListDetail,
   OwnedPromptList,
-  PromptLanguage,
+  PromptListLanguage,
   PromptTag,
 } from "../types";
 
@@ -16,7 +16,7 @@ export interface PromptListDraftEntry {
 export interface PromptListDraft {
   name: string;
   description: string;
-  language: PromptLanguage;
+  language: PromptListLanguage;
   prompts: PromptListDraftEntry[];
   /** Slugs from the vocabulary `listPromptTags` returns; a save refuses others. */
   tags: string[];
@@ -41,7 +41,7 @@ export interface CommunityPromptListPage {
 }
 
 export interface CommunityPromptListQuery {
-  language?: PromptLanguage;
+  language?: PromptListLanguage;
   tags?: string[];
   sort?: "stars" | "newest";
   /** Only the lists this account starred — its shortlist. Needs an account. */

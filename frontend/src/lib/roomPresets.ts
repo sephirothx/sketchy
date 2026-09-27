@@ -1,5 +1,5 @@
 import { apiRequest } from "./api";
-import type { ColorMode, DrawingToolGroup, HintMode, PromptLanguage, ScoringMode } from "../types";
+import type { ColorMode, DrawingToolGroup, HintMode, RoomLanguage, ScoringMode } from "../types";
 
 export interface RoomPresetSettings {
   name: string;
@@ -15,7 +15,7 @@ export interface RoomPresetSettings {
   hideMaskedPrompt: boolean;
   allowedTools: DrawingToolGroup[];
   colorMode: ColorMode;
-  promptLanguage: PromptLanguage;
+  promptLanguage: RoomLanguage;
   promptListSlugs: string[];
 }
 

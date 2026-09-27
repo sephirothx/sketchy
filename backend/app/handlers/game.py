@@ -44,11 +44,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
                 room, requesting_user_id=player.user_id
             )
         except RoomPromptResolutionError as error:
-            return {
-                "ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS,
-                "error": str(error),
-                "field": "promptListSlugs",
-            }
+            return error.acknowledgement()
 
         if ctx.shutdown is not None and ctx.shutdown.refuses_new_work:
             return ctx.shutdown.rejection_acknowledgement()
@@ -65,11 +61,7 @@ async def start_game(ctx: HandlerContext, sid, data=None):
             # the re-authorization above just made, and fails for the same
             # reasons. It is answered the same way rather than escaping the
             # handler, which would leave the host with no acknowledgement.
-            return {
-                "ok": False, "errorCode": ErrorCode.INVALID_PROMPT_LISTS,
-                "error": str(error),
-                "field": "promptListSlugs",
-            }
+            return error.acknowledgement()
     return {"ok": True}
 
 
@@ -82,7 +74,9 @@ async def select_prompt(ctx: HandlerContext, sid, data):
     if not current or not current[0].game:
         return {"ok": False, "errorCode": ErrorCode.PROMPT_NOT_READY, "error": "Game is not ready for prompt selection"}
     room, player = current
-    if not room.game.choose_prompt(player.id, payload.prompt):
+    if payload.turn_id is not None and payload.turn_id != room.game.current_turn_id:
+        return {"ok": False, "errorCode": ErrorCode.PROMPT_UNAVAILABLE, "error": "That prompt is no longer available"}
+    if not room.game.choose_prompt_option(player.id, payload.index):
         return {"ok": False, "errorCode": ErrorCode.PROMPT_UNAVAILABLE, "error": "That prompt is no longer available"}
     ctx.timers.cancel_phase_timer(room.id)
     await ctx.game_flow._begin_drawing(room)

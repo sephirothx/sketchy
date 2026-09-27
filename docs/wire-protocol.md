@@ -409,7 +409,10 @@ it is sent every few seconds by every seat and carries no refusal a player could
 
 Command-specific **success** additions, all optional: `roomId`, `code` (the invite
 code — which is why the refusal discriminator is `errorCode`, not `code`), `playerId`,
-`isAnonymous`, `needsRebind`.
+`isAnonymous`, `needsRebind`, and on every seat - `create_room`, `join_room`,
+`join_friend_room`, `quick_play` - `seatLanguage`: the language this seat plays in, the
+room's own except in a mixed-language room (#1182), where it is what the client reads a
+room-wide `prompts` map by.
 
 **Refusals are one shape** (#565): `{"ok": false, "errorCode": …, "error": …}` plus
 `field` or `retryAfterMs` where they apply. Before #565 a refusal carried its reason as
@@ -433,7 +436,7 @@ moderation - are the rest of the same enum, and are listed at
 
 | Family | Codes |
 | --- | --- |
-| Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `max_players_below_seated`, `empty_message` |
+| Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `mixed_room_list_unsupported`, `mixed_room_custom_prompts`, `max_players_below_seated`, `empty_message` |
 | Rate and capacity | `too_fast`, `seat_changing_too_fast`, `joining_too_fast`, `room_quota`, `room_full`, `spectators_full`, `player_slots_full` |
 | Server and account state | `server_draining`, `server_paused`, `server_busy`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
 | Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `kicked_from_room`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
@@ -779,7 +782,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `accept_colorblind_suggestion` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `dismiss_colorblind_suggestion` | `EmptyPayload` | ✓ | [`rooms.py`](../backend/app/handlers/rooms.py) |
 | `start_game` | `EmptyPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
-| `select_prompt` | `SelectPromptPayload` | ✓ | [`game.py`](../backend/app/handlers/game.py) |
+| `select_prompt` | `SelectPromptPayload` — `{index, turnId?}`: the offer's position in `your_prompt_choices` (0–2). By position rather than by text (#1181): the text is one language's spelling of the offer, and a room whose seats read different languages (#1182) offers one prompt spelled several ways. An index past the offers answers `prompt_unavailable`, and so does a `turnId` other than the one `your_prompt_choices` named: a position is valid in every turn's offers, so the id is what refuses a pick that lands after the turn moved on (a restart while the drawer is choosing) | ✓ | [`game.py`](../backend/app/handlers/game.py) |
 | `draw` | binary frame + optional `[generation, sequence, nonce]` | — | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `undo_stroke` | `[generation, sequence, revision, historyHash]` | ✓ | [`drawing.py`](../backend/app/handlers/drawing.py) |
 | `request_sync_strokes` | `[requestId]`, or `[requestId, generation, actionCount, historyHash]` | `{ok: true}` once the reply is on its way; `not_in_game` with `retryAfterMs` when there is no canvas; `too_fast` from the resync budget | [`drawing.py`](../backend/app/handlers/drawing.py) |
@@ -800,7 +803,7 @@ empty: the client reads only its arrival, as proof the guess was delivered (§2)
 | `friends_in_room` | `EmptyPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 | `friends_online` | `EmptyPayload` | ✓ — from anywhere, seated or not | [`friends.py`](../backend/app/handlers/friends.py) |
 | `invite_friend` | `FriendUserPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
-| `join_friend_room` | `JoinFriendRoomPayload` | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
+| `join_friend_room` | `JoinFriendRoomPayload` — carries `seatLanguage` like `join_room`, since a friend's room may be mixed-language (#1182) | ✓ | [`friends.py`](../backend/app/handlers/friends.py) |
 
 ### `react_to_drawing`
 
@@ -847,11 +850,12 @@ mirrors it with every field optional (absent means *unchanged*).
 | `hideMaskedPrompt` | boolean | `false` | forces hints off |
 | `allowedTools` | string[] | `["brush","fill","shapes"]` | at least one of `brush`/`shapes` must remain |
 | `colorMode` | string | `"all"` | `all \| palette \| colorblind_safe \| black_and_white` |
-| `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`. **Create only** — see below |
-| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` |
+| `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, or `mul` for a mixed-language room (#1182). **Create only** — see below |
+| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard - and empty ⇒ Standard in every language (R-PROMPT-13) |
 
 `create_room` adds `nickname`, `nameColor`
-(`#rrggbb`), and `colorblindSafeColors`.
+(`#rrggbb`), `colorblindSafeColors`, and `seatLanguage` - the language the creator plays
+in, one of the seven, read only when `promptLanguage` is `mul`.
 
 **`promptLanguage` is declared, not derived, and only at creation** (R-PROMPT-02).
 The room says what language it is in and its lists answer to that; selecting a list
@@ -860,6 +864,17 @@ unknown fields are rejected (§ payload policy), sending one is refused with
 `field: "promptLanguage"` rather than compared against what the room already holds.
 A room's own quick custom prompts are matched under the declared language too, which
 is what a room drawing on nothing but custom prompts gets out of the field.
+
+**A mixed-language room (`mul`, R-PROMPT-13, #1182)** plays each seat in the language it
+joined with (`seatLanguage` on `create_room` and `join_room`, the default play language -
+`promptLanguage` - on `quick_play`; English for a client that sends none), fixed on the seat. It may draw only
+on lists every language can play, and says why it refuses the rest by code rather than
+by the generic `invalid_prompt_lists`: `mixed_room_list_unsupported` (field
+`promptListSlugs`) for a list in one language whose concepts not every room language
+spells, and `mixed_room_custom_prompts` (field `customPrompts`) for quick prompts, which
+have one language. Each seat's own `your_prompt_choices`, `turn_started`, `sync_game`,
+`hint_revealed` and hint acknowledgements are in its own language already, being
+per-socket; what reaches the whole room carries `prompts` beside `prompt` (below).
 
 ### `get_room_preview`
 
@@ -876,17 +891,24 @@ and no connection or AFK state: none of that helps somebody decide whether to
 join, and each one would say more about a stranger than the question needs.
 
 `join_room` takes `roomId` **or** `code` (at least one required; `code` is upper-cased),
-plus `nickname`, `nameColor`, `colorblindSafeColors`, `asSpectator`, `soft`,
-`reconnectOnly` — used by the invite screen to ask *"do I already hold a seat
+plus `nickname`, `nameColor`, `colorblindSafeColors`, `seatLanguage` (the language this
+player plays in, fixed on the seat when it is made, read only by a mixed-language room),
+`asSpectator`, `soft`, `reconnectOnly` — used by the invite screen to ask *"do I already hold a seat
 here?"* without seating a visitor who is still deciding whether to play or spectate. A
 join admits a game in progress; Quick play, below, does not.
 
 **`quick_play`** (R-UX-14, #931) is one command and one answer: `{nickname, nameColor,
-colorblindSafeColors, promptLanguage}` in, a seat out — the ordinary join acknowledgement
-plus `created`, which says whether the room was opened for it. The server picks the
-fullest **public** room that is **waiting with no game running**, plays in that language
-and has a seat free; failing that it opens one on its own defaults, public and in that
-language. The choice used to be the client's, from the lobby's room list: a `join_room`
+colorblindSafeColors, promptLanguage, extraPromptLanguages}` in, a seat out — the ordinary
+join acknowledgement plus `created`, which says whether the room was opened for it.
+`promptLanguage` is the player's default play language; `extraPromptLanguages` (#1211,
+protocol 47) the others they play in, in their order — at most six of the seven,
+canonicalised, each once, the default dropped from them, an unknown tag refused like the
+default's. The server picks, fullest first within each tier, a **public** room that is
+**waiting with no game running** with a seat free: in the default language; then a
+mixed-language room, which seats the player in the default (#1182); then one in each of
+the others, in the player's order. A room another press is opening in the default ranks
+with the default's: the press waits for it before trying a mixed room or another language.
+Failing all of those it opens one on its own defaults, public and in the default language. The choice used to be the client's, from the lobby's room list: a `join_room`
 per candidate until one took the seat, so a press cost up to N+1 round trips, could not
 run until a list had arrived (ten seconds after naming a first-time visitor, whose naming
 reconnects the socket), and gave every presser in one moment a room of their own, because
@@ -977,7 +999,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | --- | --- | --- |
 | `room_state` | `RoomStatePayload` — the whole state on every change, deliberately: a delta form was measured on a real viewer's stream under the full population and saves 1.5–2.6% on the wire (§1, *Measured, combined*; N-14). **At most one per room per action** (#880): a command, a connect or disconnect, or a timer firing marks the room and one snapshot goes out when the action is done, after the action's other events, as the room ended up. Two exceptions go at once, because the events after them depend on it: a socket taking a seat gets the room before its own `sync_game` / `last_game` (a client's first snapshot of a room resets what belonged to the one before), and a room turning to play is sent before its first `turn_starting` (that snapshot mounts the canvas the turn resets). **`causes`**, present when something needs saying, is why, in order: `{presence: "joined" \| "reconnected" \| "disconnected" \| "left", playerId, nickname}` for a seat that came or went — what `player_joined`, `player_reconnected`, `player_disconnected` and `player_left` used to be — and room-authored announcements (below) said to the whole room inside the action, which used to be `chat_message`s beside the snapshot. The client applies the snapshot first and then each cause, as a sound and a line (#880) | room |
 | `turn_starting` | `{drawerId, drawerNickname, drawerNameColor, roundNumber, totalRounds, seconds, canvas: [revision, generation, sequence, historyHash], gameStarted?: true}` — the turn's new canvas identity, and on a game's first turn the fact that it started: one message where `canvas_reset` and `game_started` used to precede it (#880). A restart says so in its own announcement | room |
-| `your_prompt_choices` | `{choices: string[], seconds}` | drawer only |
+| `your_prompt_choices` | `{choices: string[], seconds, turnId}` — the offers as the drawer reads them, and the turn they are for; `select_prompt` answers with a position in this list | drawer only |
 | `you_are_drawing` | `{prompt}` | drawer only |
 | `turn_started` | `{turnId, drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, drawerTransport}` — the last being `"polling"`, `"websocket"` or `null` for a seat between reconnects, which this socket resolves against the cadences in force to pace its playback of the drawer's batches (§1, R-DRAW-01) | **per socket** |
 | `sync_game` | same shape as `turn_payload`, plus `turnId`, the turn's `reactions[]`, `drawerTransport` (§1), `correctGuessers: [[playerId, seconds]]` in guessing order — each `seconds` the one `correct_guess` carried — and `guessed` — this seat's correct-guess receipt (what a correct `guess` is answered with, §2), or `null` (R-CONN-13) | one socket |
@@ -1166,7 +1188,7 @@ when retention withheld it, and absent means the line cannot be cited. Room chat
 lines are retained under the same rule but never carry the id (#869).
 
 
-**`room_state`** ([`backend/app/rooms.py:706`](../backend/app/rooms.py) →
+**`room_state`** ([`backend/app/rooms.py:768`](../backend/app/rooms.py) →
 `RoomStatePayload` in [`frontend/src/types.ts`](../frontend/src/types.ts)) carries the
 room identity (`id`, `code`, `name`, `isPublic`), every setting listed
 in §4, `state` (`waiting | playing`), `customPromptCount` (a count, never the prompts),
@@ -1268,11 +1290,17 @@ names anybody. The client reduces the list to a tally itself
 ([`lib/reactions.ts`](../frontend/src/lib/reactions.ts)). `emoji` is a stable code, never a
 glyph; the glyph table is the client's, so a code the server adds later still arrives.
 
-**`turn_ended`** carries `prompt`, `turnId`, `reactions[]`, `drawerId`, `drawerBonus`, `seconds`, the ordered
+**`turn_ended`** carries `prompt` - the drawer's spelling, which is what history keeps -
+and, in a mixed-language room, `prompts` (`{language: answer}` for every room language),
+so that one payload serves every seat and each client shows its own (R-I18N-03); absent
+wherever `prompt` is everyone's. The same `prompts` rides each recap entry of
+`game_ended.drawings` / `last_game.drawings` and each highlight that names a prompt.
+The correct `guess` receipt's `correct.prompt` and `sync_game.guessed.prompt` are the
+guesser's own language's word. `turn_ended` also carries `turnId`, `reactions[]`, `drawerId`, `drawerBonus`, `seconds`, the ordered
 `guesses[]` (each with the guesser's `seconds`, the one `correct_guess` carried), and `scores[]` — each entry carrying
 `score`, `delta`, `previousRank`, and `newRank` so the client can animate the standings
 without recomputing ranks. Ranks use standard competition ranking (1, 2, 2, 4) via
-`competition_ranks()` ([`backend/app/game.py:53`](../backend/app/game.py)), shared with
+`competition_ranks()` ([`backend/app/game.py:52`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 
 **`server_shutdown`**:
@@ -2178,7 +2206,7 @@ reloaded rather than served an older contract.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET` | `/api/users/{user_id}/stats` | Served from the daily projection, never four history scans. The `user` beside the numbers is the **public profile** (#469): `id`, `displayName`, `nameColor`, `avatarUrl`, `isAnonymous`, `createdAt`, plus `isOnline` (the presence registry's answer now) and `lastSeenAt` (when the account's last socket closed; `null` for one that never connected). Never `role`, `lastLoginAt` or `username`; those are the caller's own account on `/api/auth/me` |
+| `GET` | `/api/users/{user_id}/stats` | Served from the daily projection, never four history scans. The `user` beside the numbers is the **public profile** (#469): `id`, `displayName`, `nameColor`, `avatarUrl`, `isAnonymous`, `createdAt`, plus `isOnline` (the presence registry's answer now) and `lastSeenAt` (when the account's last socket closed; `null` for one that never connected). Never `role`, `lastLoginAt` or `username`; those are the caller's own account on `/api/auth/me`. Beside `user` and `stats`, `playLanguages` (#1212): the account's play languages, the default first and then the others in the player's order; `[]` for a guest, whose languages live in its browser, and for an account with no stored settings |
 | `GET` | `/api/users/{user_id}/games` | `?includeAbandoned=true` to include games that stopped. Which games are on the page depends on who asks (R-HIST-25): a game from a public room is listed for anyone, a game from a private room only for a caller who sat in it. Each summary carries `visibility` (`public \| private`), frozen from the room when the game was saved; `hasMore` is answered from the games the caller may see |
 | `GET` | `/api/games/{game_id}` | Participant-only detail: exact rule snapshot, offers, outcomes, ledger |
 | `GET` | `/api/games/{game_id}/turns/{turn_id}/drawing` | Participants only. **Every refusal is a 404**, so it never reveals whether a game exists. The bytes in the current wire format (`application/octet-stream`), `Cache-Control: private, no-cache` and a weak `ETag` of the form `W/"<stored sha256>-w<CANVAS_HISTORY_VERSION>"` — the stored checksum *and* the wire version the decoders answer in, because a new wire version changes the bytes served without changing the bytes stored (R-HIST-18), and weak because the same bytes go out gzipped or not. A matching `If-None-Match` (weak comparison; a list, the strong form, or `*`) is answered **304** with no body, from the metadata alone — the blob is neither read nor decoded — and only after the same participant and availability query as the drawing itself: a remembered tag from a stranger, or for an erased drawing, is a 404 like any other refusal (#604). `no-cache` rather than a lifetime so an erased drawing stops being shown at the next open, not when an hour runs out |
@@ -2219,11 +2247,11 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | Method | Path | Notes |
 | --- | --- | --- |
 | `GET` | `/api/prompt-lists` | Official catalogue; localized copy selected from `Accept-Language` |
-| `GET` | `/api/prompt-lists/community` | `{lists, nextCursor}` — published lists (R-LIST-14). Filters: `language`, `starred` (this account's shortlist; **403** `account_required` with `params.action` = `stars` when nobody is signed in), repeated `tag` (a list must carry **every** tag given, not any of them), `sort` = `stars` \| `newest`, `limit` ≤ 48, opaque `cursor`. Each row carries `starCount` and `copyCount` (R-LIST-20), both derived from rows. Paging **stops 480 rows deep** (an empty page, no cursor): nobody reaches that far by reading, so a deeper page is a scrape and a filter is the better answer. `starred` is **exempt** and is read whole — every row in it is a list the caller chose, so reading it to the end collects nothing they did not pick, and the room picker's shortlist does read it to the end. Open to a signed-out caller, whose rows carry `starredByMe: null` and `isMine: null` — a different answer from `false`. `isMine` says whether the caller owns the list, so the catalogue offers no copy of it (R-LIST-17); each caller learns it only about themselves. A row names its owner's **display name and no account id**: a stable third-party identifier in a public listing is a join key for anybody who collects the pages |
+| `GET` | `/api/prompt-lists/community` | `{lists, nextCursor}` — published lists (R-LIST-14). Filters: `language` (a room language also returns the lists in no language, which are played in every room; `zxx` returns those alone — R-PROMPT-12), `starred` (this account's shortlist; **403** `account_required` with `params.action` = `stars` when nobody is signed in), repeated `tag` (a list must carry **every** tag given, not any of them), `sort` = `stars` \| `newest`, `limit` ≤ 48, opaque `cursor`. Each row carries `starCount` and `copyCount` (R-LIST-20), both derived from rows. Paging **stops 480 rows deep** (an empty page, no cursor): nobody reaches that far by reading, so a deeper page is a scrape and a filter is the better answer. `starred` is **exempt** and is read whole — every row in it is a list the caller chose, so reading it to the end collects nothing they did not pick, and the room picker's shortlist does read it to the end. Open to a signed-out caller, whose rows carry `starredByMe: null` and `isMine: null` — a different answer from `false`. `isMine` says whether the caller owns the list, so the catalogue offers no copy of it (R-LIST-17); each caller learns it only about themselves. A row names its owner's **display name and no account id**: a stable third-party identifier in a public listing is a join key for anybody who collects the pages |
 | `GET` | `/api/prompt-lists/community/{prompt_list_id}` | One published list with its `prompts` (R-LIST-19) and its `copiedFrom`, which is the list a copy was taken from (R-LIST-21), or `null` for an original: `{status, listId, name, ownerDisplayName}` with `status` `published` (named, `listId` set), `withdrawn` (unpublished or hidden — named, `listId` null) or `deleted` (all three null). Prompts are each `{promptVersionId, prompt}`: the version id is what lets a reader report one exact prompt rather than the whole list. Aliases and concept ids stay out. Hidden prompt versions are left out. **404** unless the list is published, active and present — the same predicate the listing uses, so a takedown closes both doors at once. Open signed out, rate-limited apart from the listing since it returns a list whole |
 | `GET` | `/api/prompt-tags` | `{tags: [{slug, name}], maxPerList}` — the curated vocabulary a list owner chooses from (R-LIST-18). Unauthenticated and served rather than duplicated in the client, because a client guessing at the set would offer a tag a save then refuses |
 | `GET` | `/api/prompt-lists/mine` | The caller's own lists, each with the `tags` its current revision carries, the `starCount` it has been given and the `copyCount` of copies of it that still exist (R-LIST-20) — **numbers only**: who starred or copied a list is disclosed to nobody, its owner included. Each list also carries `copiedFrom` is the list a copy was taken from (R-LIST-21), or `null` for an original: `{status, listId, name, ownerDisplayName}` with `status` `published` (named, `listId` set), `withdrawn` (unpublished or hidden — named, `listId` null) or `deleted` (all three null). |
-| `GET`/`PUT` | `/api/prompt-lists/mine/{prompt_list_id}` | Owner only; `PUT` uses optimistic concurrency and creates a new immutable revision. `tags` are part of the saved content: setting them earns a revision the way a name change does (R-LIST-05), and an unknown tag is **refused by name** rather than dropped — `unknown_prompt_tag`, with the slug in `params.tag` so the client can say which, in the reader's language. Neither this nor `POST /api/prompt-lists/mine` takes a `visibility`, and one sent is a **422** like any unknown field: a list is created private and only `publish`/`unpublish` change that (R-LIST-02), so a save can neither take a list out of the catalogue nor put one in |
+| `GET`/`PUT` | `/api/prompt-lists/mine/{prompt_list_id}` | Owner only; `PUT` uses optimistic concurrency and creates a new immutable revision. `tags` are part of the saved content: setting them earns a revision the way a name change does (R-LIST-05), and an unknown tag is **refused by name** rather than dropped — `unknown_prompt_tag`, with the slug in `params.tag` so the client can say which, in the reader's language. The `language` a list is created with by `POST /api/prompt-lists/mine` — a room language, or `zxx` for a list in no language (R-PROMPT-12) — is not accepted here: it cannot change (R-LIST-05). Neither this nor `POST /api/prompt-lists/mine` takes a `visibility`, and one sent is a **422** like any unknown field: a list is created private and only `publish`/`unpublish` change that (R-LIST-02), so a save can neither take a list out of the catalogue nor put one in |
 | `POST` | `/api/prompt-lists/mine/{prompt_list_id}/publish` | Put an owned list in the community catalogue (R-LIST-11). Its own route rather than a `visibility` on the save, because the trust gate, the rate limit and the audit event all belong to the act. **403** `email_verification_required` or `warning_unread`, each with `params.action` = `publish` (R-LIST-12); **422** `prompt_list_hidden` for a list a moderator hid; **429** `too_many_attempts` past the limit |
 | `POST` | `/api/prompt-lists/mine/{prompt_list_id}/unpublish` | Take it back out. Stars survive as rows (R-LIST-16). A `hidden` finding survives too — leaving the catalogue is not a moderator's ruling, and clearing one would launder a takedown — but a review-switch hold (`under_review`) is released to `active`: it only ever meant "waiting to be published", and a withdrawn list is no longer waiting |
 | `POST` | `/api/prompt-lists/{prompt_list_id}/fork` | **201** with the new list. Copies a published list's current revision into a new **private** list of the caller's, recording `forked_from_revision_id` — a revision rather than a list, because both go on being edited and a pointer at the list would stop meaning anything after the first edit. Counts against R-LIST-04's 25 and **refuses visibly at the cap, having written nothing**. Hidden prompt versions are left out: a moderator took them out of play, and a copy must not put them back under a new owner. **422** `cannot_copy_own_prompt_list` for the caller's own list — the owner duplicates it instead |
@@ -2235,7 +2263,7 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 
 | Method | Path | Notes |
 | --- | --- | --- |
-| `GET`/`PATCH` | `/api/users/me/settings` | Cross-device Player settings; bounded at API and database layers. Carries **two** languages, and they are not the same one: `promptLanguage`, the language the player *plays* in (R-PROMPT-11), and `locale`, the language they *read* in (R-I18N-06). Both are seeded at registration from what the new account's browser resolved, and are settings afterwards; both are stored because a browser describes a device rather than a person |
+| `GET`/`PATCH` | `/api/users/me/settings` | Cross-device Player settings; bounded at API and database layers. Carries **two kinds** of language, and they are not the same one: `promptLanguage`, the language the player *plays* in by default (R-PROMPT-11), and `locale`, the language they *read* in (R-I18N-06). Beside the default, `extraPromptLanguages` lists the other languages they play in, in their order (#1209): each of the seven at most once, never the default — a `PATCH` naming it there - or losing a race to another device's that made it the default - is a `422 setting_refused` against that field; repeats, unknown languages and more than six are FastAPI's plain `422`, like every other malformed setting; while a `PATCH` of `promptLanguage` alone that names one of them swaps the old default into its place. A registration seed that repeats its default among them, or one of them twice, is read as meaning each once and the default as the default; a seed list longer than fourteen is refused by the bound without being read. Both are seeded at registration from what the new account's browser resolved, and are settings afterwards; both are stored because a browser describes a device rather than a person |
 | `GET`/`POST` | `/api/users/me/blocks` | Directional; self-blocks rejected |
 | `GET` | `/api/users/me/friends` | `{friends, incoming, outgoing, announce}`. Refusals are in none of them. A guest is refused **403 with `X-Sketchy-Account-Required`** — the header names the reason, because a status cannot: the middleware answers 403 for a suspended account before this route runs, and a client that reads any 403 as *this caller is a guest* shows an empty friends list for a real account. Same pattern as `X-Sketchy-Step-Up`. The client does not ask for a guest at all — a guest provably has no list (R-FRIEND-03), so asking only logs a refusal on every anonymous load; the refusal still answers a session that lapses mid-read. Also `announce`: the requests this account **sent** that were accepted and that nobody has told them about yet — a fact on the row rather than a difference between two reads, so a client that was reloading when the answer came still learns it (R-FRIEND-14) |
 | `POST` | `/api/users/me/friends/announced` | `{ userIds }` → `{ ok, announced }`. Records that the asker was told, for exactly the friendships the message named, re-checking on the write that each is their own request, accepted, and still unannounced. Sent **after** the message is shown: recording first loses the news whenever the render does not happen |
@@ -2244,8 +2272,8 @@ The private export's `scoreEvents` (schema version 5) use the same identity.
 | `DELETE` | `/api/users/me/friends/{user_id}` | Decline, cancel, or unfriend — the server decides which the row is asking for |
 | `GET` | `/api/users/me/recent-players` | `{players}` — registered accounts the caller **finished a game with** in the last 30 days, most recent first, capped at 20. Not a search and not a directory (N-06): it answers only about games the caller sat in, so it can never name a stranger. Deliberately **unfiltered by friendship or block** — an absence from it would be readable, and "absent because they declined you" is the fact R-FRIEND-04 refuses to disclose, so the client drops the rows it can already see for itself and leaves a refusal in place |
 | `DELETE` | `/api/users/me/blocks/{user_id}` | Idempotent |
-| `GET`/`POST` | `/api/room-presets` | ≤ 20 per account. `settings` is `RoomSettingsFields`, so it carries `promptLanguage`; a preset whose lists are not in it is refused **422** |
-| `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check. The `promptLanguage` read back is **derived from the saved lists**, so a preset and its lists can never disagree; applying a preset sets the new room's language and its lists together |
+| `GET`/`POST` | `/api/room-presets` | ≤ 20 per account. `settings` is `RoomSettingsFields`, so it carries `promptLanguage`; a preset whose lists are not in it (or in no language, `zxx`; for a `mul` preset, lists a mixed room could play) is refused **422** |
+| `GET`/`PUT`/`DELETE` | `/api/room-presets/{preset_id}` | `PUT` uses an optimistic version check. The `promptLanguage` read back is **stored** (since #821: a preset of lists in no language has none to derive) and checked against the saved lists on save and on read, so a preset and its lists can never disagree; applying a preset sets the new room's language and its lists together |
 
 ### Reports and moderation — [`backend/app/api/moderation.py`](../backend/app/api/moderation.py)
 
@@ -2442,7 +2470,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (43) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (47) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
@@ -2452,7 +2480,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` (1) | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` (1) | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (5) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (11) | The export document, pinned by [`fixtures/account_data_export_v11_fields.json`](../fixtures/account_data_export_v11_fields.json) | The export's field surface changes |
+| Data export `schema_version` (12) | The export document, pinned by [`fixtures/account_data_export_v12_fields.json`](../fixtures/account_data_export_v12_fields.json) | The export's field surface changes |
 
 ### The contract as a document
 

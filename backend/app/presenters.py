@@ -66,6 +66,9 @@ def session_payload(room: Room, player: Player) -> dict:
         "code": room.code,
         "playerId": player.id,
         "isAnonymous": player.is_anonymous,
+        # The language this seat plays in (#1182): what the client picks from
+        # a mixed-language room's `prompts`. The room's own everywhere else.
+        "seatLanguage": room.seat_language(player),
     }
 
 
@@ -169,10 +172,34 @@ def guessed_receipt(game: Game, player_id: str | None) -> dict | None:
     points = game.guess_points[player_id]
     hint_spend = game.hint_spend.get(player_id, 0)
     return {
-        "prompt": game.prompt,
+        # In the guesser's own language (#1182): the word they were playing.
+        "prompt": game.prompt_for(player_id),
         "points": points,
         "basePoints": points + hint_spend,
         "hintSpend": hint_spend,
+    }
+
+
+def spelled_for_seat(entry: dict, language: str | None) -> dict:
+    """An entry naming a prompt, with `prompt` in `language` where the entry
+    carries that spelling (#1182).
+
+    For what goes to one socket before its seat is acknowledged - a join
+    mid-reveal, a reload after a game - whose client cannot yet know which of
+    `prompts` is its own. Room-wide sends stay as they are: each client picks.
+    """
+    own = (entry.get("prompts") or {}).get(language or "")
+    return {**entry, "prompt": own} if own else entry
+
+
+def last_game_for_seat(payload: dict, language: str | None) -> dict:
+    """`last_game`, every recap entry and highlight spelled for one seat."""
+    return {
+        **payload,
+        "drawings": [spelled_for_seat(entry, language) for entry in payload["drawings"]],
+        "highlights": [
+            spelled_for_seat(highlight, language) for highlight in payload["highlights"]
+        ],
     }
 
 
@@ -208,8 +235,14 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
             strict=True,
         )
     }
+    spellings = game.prompt_spellings()
     return {
         "prompt": game.prompt,
+        # One payload for the whole room (R-I18N-03), so a mixed-language room
+        # (#1182) sends the prompt in every language and each client shows its
+        # own seat's; `prompt` stays the drawer's, which is what was drawn and
+        # what history keeps. Absent wherever `prompt` is everyone's.
+        **({"prompts": spellings} if spellings else {}),
         # end_turn has appended this turn, and current_turn_id is never
         # cleared, so it still names the turn whose results these are.
         "turnId": game.current_turn_id,

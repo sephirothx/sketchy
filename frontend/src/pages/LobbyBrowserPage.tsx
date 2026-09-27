@@ -4,6 +4,8 @@ import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/sock
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
+import { PlayLanguagesQuestion } from "../components/PlayLanguagesQuestion";
+import { usePlayLanguagesQuestionStore } from "../store/playLanguagesQuestionStore";
 import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
 import { IdentityRequiredError, needsIdentity, useAuthStore } from "../store/authStore";
@@ -21,7 +23,8 @@ import { useLobbyChannel } from "../hooks/useLobbyChannel";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { AlertCircleIcon, BoltIcon, PlusIcon, SearchIcon } from "../components/icons";
 import {
-  SUPPORTED_PROMPT_LANGUAGES,
+  rankedPromptLanguages,
+  MIXED_PROMPT_LANGUAGE,
   sortRoomsByLanguage,
 } from "../lib/promptLanguages";
 import {
@@ -170,6 +173,7 @@ export function LobbyBrowserPage() {
   const nameColor = useSettingsStore((s) => s.nameColor);
   const colorblindSafeColors = useSettingsStore((s) => s.colorblindSafeColors);
   const playerLanguage = useSettingsStore((s) => s.promptLanguage);
+  const extraLanguages = useSettingsStore((s) => s.extraPromptLanguages);
   const setSession = useGameStore((s) => s.setSession);
   const setExitingRoom = useGameStore((s) => s.setExitingRoom);
   // Pushed over the lobby channel rather than polled (#462). The store is
@@ -215,6 +219,22 @@ export function LobbyBrowserPage() {
   // so every entry control is disabled while one is pending. The lock is the
   // app's, not this page's (store/roomEntryStore.ts).
   const pendingJoin = useRoomEntryStore((state) => state.pending);
+  // A first-time player is asked which languages they play in once, here,
+  // and never while a press is taking them into a room (#1219).
+  const questionDue = usePlayLanguagesQuestionStore((state) => state.due);
+  const markQuestionAsked = usePlayLanguagesQuestionStore((state) => state.markAsked);
+  // Set once a press has decided to leave the lobby: navigating waits for the
+  // next page's code, and the question must not open over the way out.
+  const [leaving, setLeaving] = useState(false);
+
+  function answerQuestion() {
+    markQuestionAsked();
+    // The first-run block that had focus is gone by now; the lobby's first
+    // way into a game is where the keyboard picks up.
+    requestAnimationFrame(() => {
+      document.querySelector<HTMLElement>('[data-testid="quick-play"]')?.focus();
+    });
+  }
   const beginEntry = useRoomEntryStore((state) => state.begin);
   const endEntry = useRoomEntryStore((state) => state.end);
   const quickPlayBusy = pendingJoin?.key === "quick-play";
@@ -272,19 +292,30 @@ export function LobbyBrowserPage() {
   // The languages the game has content in, not the ones that happen to have a
   // room open: a control that appears and disappears with the population reads
   // as a bug, and "no rooms in Dutch" is an answer worth being able to get.
-  const roomLanguages = SUPPORTED_PROMPT_LANGUAGES;
+  // Yours first, in your order (#1211).
+  const roomLanguages = useMemo(
+    () => rankedPromptLanguages(playerLanguage, extraLanguages),
+    [playerLanguage, extraLanguages],
+  );
 
-  // Your language first, nobody hidden (R-PROMPT-11).
+  // Your languages first - the default, mixed rooms, then the others in your
+  // order (#1211) - and nobody hidden (R-PROMPT-11).
   // Memoised (#991): the room list's deltas arrive once a second, and the
   // search box and the chat beside it re-render the page on every keystroke.
-  const filteredRooms = useMemo(() => sortRoomsByLanguage(rooms, playerLanguage).filter((room) => {
+  const filteredRooms = useMemo(() => sortRoomsByLanguage(rooms, playerLanguage, extraLanguages).filter((room) => {
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
       const nameMatch = room.name.toLowerCase().includes(q);
       const codeMatch = room.code?.toLowerCase().includes(q);
       if (!nameMatch && !codeMatch) return false;
     }
-    if (languageFilter !== ANY_LANGUAGE && room.promptLanguage !== languageFilter) {
+    // A mixed room plays everyone in their own language, so it answers to
+    // every language filter (#1182).
+    if (
+      languageFilter !== ANY_LANGUAGE
+      && room.promptLanguage !== languageFilter
+      && room.promptLanguage !== MIXED_PROMPT_LANGUAGE
+    ) {
       return false;
     }
     if (hideFullRooms && room.playerCount >= room.maxPlayers) {
@@ -294,7 +325,7 @@ export function LobbyBrowserPage() {
       return false;
     }
     return true;
-  }), [rooms, playerLanguage, searchQuery, languageFilter, hideFullRooms, hideInProgressRooms]);
+  }), [rooms, playerLanguage, extraLanguages, searchQuery, languageFilter, hideFullRooms, hideInProgressRooms]);
 
   // No gate: every visitor already has a name, generated on their first load.
   async function handleOpenCreateRoom() {
@@ -303,10 +334,14 @@ export function LobbyBrowserPage() {
     // A visitor who typed a name and pressed this plainly means to play under
     // it, so provision from the draft rather than sending them back to a form
     // they have already filled in.
+    // Leaving from here on: naming the player marks the question due, and it
+    // must not open over the way out while the next page loads.
+    setLeaving(true);
     if (awaitingName) {
       try {
         await ensureIdentity();
       } catch (identityError) {
+        setLeaving(false);
         setError(identityMessage(identityError));
         return;
       }
@@ -336,6 +371,8 @@ export function LobbyBrowserPage() {
         nameColor,
         colorblindSafeColors,
         promptLanguage: playerLanguage,
+        // Ranked on the server by the same tiers as the list (#1211).
+        extraPromptLanguages: extraLanguages,
       });
       const session = sessionFrom(answer);
       if (!mountedRef.current) {
@@ -344,6 +381,7 @@ export function LobbyBrowserPage() {
       }
       if (session) {
         setSession(session);
+        setLeaving(true);
         navigate(`/room/${session.code}`);
         return;
       }
@@ -391,6 +429,8 @@ export function LobbyBrowserPage() {
         nickname: playerName,
         nameColor,
         colorblindSafeColors,
+        // Fixed on the seat: a mixed-language room plays it in this (#1182).
+        seatLanguage: playerLanguage,
         asSpectator,
         ...target,
       });
@@ -401,6 +441,7 @@ export function LobbyBrowserPage() {
       }
       if (session) {
         setSession(session);
+        setLeaving(true);
         navigate(`/room/${session.code}`);
       } else {
         setError(refusalText(res, ui.lobbyBrowserPage.couldNotJoinRoom));
@@ -453,6 +494,9 @@ export function LobbyBrowserPage() {
 
 
       <FirstRunIdentity />
+      {questionDue && pendingJoin === null && !leaving && !criticalError && (
+        <PlayLanguagesQuestion onDone={answerQuestion} />
+      )}
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}
 

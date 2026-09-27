@@ -122,6 +122,8 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_letter: "Esa letra no es válida.",
   invalid_prompt_lists: "Esas listas de palabras no se pueden usar juntas.",
   invalid_custom_prompts: "No se pudieron leer esas palabras propias.",
+  mixed_room_list_unsupported: "Las salas mixtas solo pueden usar listas en todos los idiomas o de «Cualquier idioma».",
+  mixed_room_custom_prompts: "Las salas mixtas no pueden usar palabras propias: cada jugador necesita la palabra en su idioma.",
   max_players_below_seated: (params) =>
   `El máximo de jugadores no puede ser menor que los ${count(params.seated, 2)} que ya están en la sala.`,
   empty_message: "Escribe algo primero.",
@@ -1098,6 +1100,8 @@ export const ES: Catalogue = {
   languagePicker: {
     currentChoice: (p: { label: string; value: string }) => `${p.label}: ${p.value}`,
     everyLanguage: "Todos los idiomas",
+    anyLanguage: "Cualquier idioma",
+    mixed: "Mixto",
   },
 
   lobbyBrowserPage: {
@@ -1439,6 +1443,8 @@ export const ES: Catalogue = {
   },
 
   profilePage: {
+    playsIn: (p: { language: string }) => `Juega en ${p.language}`,
+    playsInAlso: (p: { language: string; others: string }) => `Juega en ${p.language}; también en ${p.others}`,
     gamesPlayed: "Partidas jugadas",
     gamesWon: "Partidas ganadas",
     winRate: "Porcentaje de victorias",
@@ -1855,6 +1861,7 @@ export const ES: Catalogue = {
 
   roomSetupForm: {
     promptLanguage: "Idioma de las palabras",
+    customPromptsOffInMixedRooms: "Las palabras propias no se usan en salas mixtas: cada jugador necesita la palabra en su idioma.",
     visibility: "Visibilidad",
     maxPlayers: "Máximo de jugadores",
     rounds: "Rondas",
@@ -1971,6 +1978,11 @@ export const ES: Catalogue = {
     wearing: "Lo llevas ahora",
     couldNotChoose: "No se pudo cambiar el dibujo.",
   },
+  playLanguagesQuestion: {
+    title: "¿En qué idiomas juegas?",
+    changeLater: "Puedes cambiarlos cuando quieras en Ajustes → Apariencia.",
+    done: "Listo",
+  },
   settingsOverlay: {
     email: "Correo",
     password: "Contraseña",
@@ -1979,8 +1991,19 @@ export const ES: Catalogue = {
     downloadEverything: "Descargar todo",
     colorScheme: "Esquema de color",
     appliesMomentYouPick: "Se aplica en cuanto lo eliges.",
-    languageYouPlay: "Idioma en el que juegas",
-    roomsThisLanguageComeFirstLobby: "Las salas en este idioma salen primero en el vestíbulo, y una sala que crees empieza en él. Es distinto del idioma en el que lees Sketchy.",
+    languageYouPlay: "Tu idioma",
+    roomsThisLanguageComeFirstLobby: "Las salas en este idioma salen primero en el vestíbulo, y en una sala mixta es el idioma en el que juegas las palabras. Es distinto del idioma en el que lees Sketchy.",
+    alsoPlayIn: "También te manejas en",
+    alsoPlayInHint: "Las salas en estos idiomas van después de las salas mixtas en el vestíbulo, en este orden. Arrastra un idioma, o usa sus flechas, para moverlo.",
+    addPlayLanguage: "Añadir un idioma en el que juegas",
+    addPlayLanguageButton: "Añadir",
+    movePlayLanguageEarlier: (p: { name: string }) => `Mover ${p.name} antes`,
+    movePlayLanguageLater: (p: { name: string }) => `Mover ${p.name} después`,
+    removePlayLanguage: (p: { name: string }) => `Quitar ${p.name}`,
+    playLanguageMoved: (p: { name: string; position: number; total: number }) => `${p.name} está ahora en la posición ${p.position} de ${p.total}`,
+    yourBrowserAlsoReads: "Tu navegador también está en:",
+    addSuggestedPlayLanguage: (p: { name: string }) => `Añadir ${p.name}`,
+    notNow: "Ahora no",
     interfaceLanguage: "Idioma en el que lees",
     interfaceLanguageHint: "Cada palabra del propio Sketchy. Distinto del idioma en el que juegas: leer en uno y jugar en otro es de lo más normal.",
     timeFormat: "Formato de hora",

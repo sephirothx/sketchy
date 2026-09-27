@@ -216,11 +216,10 @@ async def test_rejects_guests_quick_prompts_shared_lists_and_duplicate_names(env
         assert (await other_client.get(f"/api/room-presets/{first.json()['id']}")).status_code == 404
 
 
-async def test_a_preset_carries_the_language_of_the_lists_it_saved(env):
+async def test_a_preset_declares_a_language_its_lists_must_be_in(env):
     """A preset is applied to a new room, and the room declares its language
     before it picks lists (R-PROMPT-02). The preset therefore has to say which
-    language it is for - derived from the lists it saved, so the two can never
-    disagree - and refuse to save a language its lists are not in."""
+    language it is for, and refuse to save a language its lists are not in."""
     client, _, prompt_lists, _, _ = env
     owner = await register(client)
     german = await prompt_lists.create_owned(
@@ -250,6 +249,77 @@ async def test_a_preset_carries_the_language_of_the_lists_it_saved(env):
     )
     assert mismatched.status_code == 422
     assert "language" in mismatched.json()["detail"]
+
+
+async def test_a_preset_of_agnostic_lists_keeps_the_language_it_was_saved_for(env):
+    """Nothing in an agnostic list says which room it is for (#821), so the
+    preset stores the language rather than deriving it from its lists."""
+    client, _, prompt_lists, _, _ = env
+    owner = await register(client)
+    pokemon = await prompt_lists.create_owned(
+        owner["id"],
+        name="Pokémon",
+        description="",
+        language="zxx",
+        prompts=(PromptListEntryInput(answer="Pikachu"),),
+    )
+
+    created = await client.post(
+        "/api/room-presets",
+        json={"name": "Pokéabend", "settings": settings(pokemon.slug, promptLanguage="de")},
+    )
+    assert created.status_code == 201, created.text
+    assert created.json()["settings"]["promptLanguage"] == "de"
+
+    fetched = await client.get(f"/api/room-presets/{created.json()['id']}")
+    assert fetched.status_code == 200
+    assert fetched.json()["settings"]["promptLanguage"] == "de"
+    assert fetched.json()["settings"]["promptListSlugs"] == [pokemon.slug]
+
+
+async def test_a_preset_may_declare_a_mixed_language_room(env):
+    """#1182: a preset carries `mul` like any other room language, and only
+    lists every language can play - here, one in no language."""
+    client, _, prompt_lists, _, _ = env
+    owner = await register(client)
+    names = await prompt_lists.create_owned(
+        owner["id"], name="Names", description="", language="zxx",
+        prompts=(PromptListEntryInput(answer="Pikachu"),),
+    )
+    english = await prompt_lists.create_owned(
+        owner["id"], name="Words", description="", language="en",
+        prompts=(PromptListEntryInput(answer="otter"),),
+    )
+
+    created = await client.post(
+        "/api/room-presets",
+        json={"name": "Everyone", "settings": settings(names.slug, promptLanguage="mul")},
+    )
+    assert created.status_code == 201, created.text
+    fetched = await client.get(f"/api/room-presets/{created.json()['id']}")
+    assert fetched.json()["settings"]["promptLanguage"] == "mul"
+
+    refused = await client.post(
+        "/api/room-presets",
+        json={"name": "English only", "settings": settings(english.slug, promptLanguage="mul")},
+    )
+    assert refused.status_code == 422
+
+    # A list in a language is admitted when its content plays in every one:
+    # asked of the lists, as a room asks it, not of their language tag.
+    from app.db.seed import seed_prompt_lists
+
+    await seed_prompt_lists(prompt_lists)
+    standard = await client.post(
+        "/api/room-presets",
+        json={"name": "Standard for all", "settings": settings("german_standard", promptLanguage="mul")},
+    )
+    assert standard.status_code == 201, standard.text
+    extended = await client.post(
+        "/api/room-presets",
+        json={"name": "German extras", "settings": settings("german_extended", promptLanguage="mul")},
+    )
+    assert extended.status_code == 422
 
 
 async def test_deleted_prompt_list_makes_preset_visibly_unavailable(env):
