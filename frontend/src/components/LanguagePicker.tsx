@@ -113,7 +113,9 @@ export function LanguagePicker({
       const below = viewportHeight - trigger.bottom - gap - margin;
       const above = trigger.top - gap - margin;
       const upward = natural > below && above > below;
-      let left = trigger.left;
+      // An add button stands at the end of its row, so its list hangs from
+      // its right edge; a choice's list from its left, unless that runs out.
+      let left = addLabel !== undefined ? trigger.right - width : trigger.left;
       if (left + width > viewportWidth - margin) left = trigger.right - width;
       left = Math.max(margin, Math.min(left, viewportWidth - margin - width));
       Object.assign(list.style, {
@@ -133,7 +135,7 @@ export function LanguagePicker({
       window.removeEventListener("resize", place);
       window.removeEventListener("scroll", place, true);
     };
-  }, [open]);
+  }, [open, addLabel]);
 
   // The chosen row takes focus on open, so the list starts where the reader
   // already is rather than at the top of seven.
