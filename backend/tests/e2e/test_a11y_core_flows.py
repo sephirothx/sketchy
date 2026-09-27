@@ -9,7 +9,13 @@ from app.db.models import User
 from app.domain_values import UserRole
 
 from tests.e2e.a11y import assert_no_axe_violations
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name, leave_room
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    room_code,
+    use_guest_name,
+    leave_room,
+    open_create_room,
+)
 
 BASE_URL = "http://localhost:8000"
 
@@ -54,7 +60,7 @@ async def _close(playwright, browser, context):
 async def _create_waiting_room(page: Page, nickname="A11yHost", *, rounds=None):
     await page.goto(BASE_URL)
     await use_guest_name(page, nickname)
-    await page.click('button:has-text("Create room")')
+    await open_create_room(page)
     if rounds is not None:
         current = int(await page.get_by_label("Rounds", exact=True).input_value())
         while current > rounds:
@@ -129,7 +135,7 @@ async def test_create_room_and_invite_axe():
     try:
         await page.goto(BASE_URL)
         await use_guest_name(page, "A11yCreator")
-        await page.click('button:has-text("Create room")')
+        await open_create_room(page)
         await page.wait_for_selector("text=Create a room")
         await assert_no_axe_violations(page, "create room")
 

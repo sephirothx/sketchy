@@ -207,6 +207,26 @@ export function RoomChatPanel({
     }
   }, [messages, isScrolledUp]);
 
+  // The feed's box changes size under it, not only its lines: a phone
+  // hides it while the keyboard is up and shows it again when it goes down.
+  // Its scroll offset stayed where it was, so it came back short of its newest
+  // line, which carries the verdict on the last guess once the keyboard is
+  // down (#1199) - the lines that arrived while it was hidden were scrolled to
+  // in a box of no height. A reader who scrolled up stays put.
+  const scrolledUpRef = useRef(isScrolledUp);
+  useEffect(() => {
+    scrolledUpRef.current = isScrolledUp;
+  }, [isScrolledUp]);
+  useEffect(() => {
+    const list = listRef.current;
+    if (!list || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      if (!scrolledUpRef.current) list.scrollTop = list.scrollHeight;
+    });
+    observer.observe(list);
+    return () => observer.disconnect();
+  }, []);
+
   function handleScroll() {
     const element = listRef.current;
     if (!element) return;
@@ -389,13 +409,17 @@ export function RoomChatPanel({
               aria-live="polite"
               data-testid="guess-focus-flash"
             >
-              {guessFlash.kind === "close" ? guessFlash.text : guessFlash.kind === "miss" ? (
-                <>
-                  <span className="guess-focus-flash-label">{ui.roomChatPanel.sent}</span> {guessFlash.text}
-                </>
-              ) : (
-                guessFlash.text
-              )}
+              {/* The chip's padding stays outside the text, so a phone can
+                  clamp the text to two lines without a third peeking into it. */}
+              <span className="guess-focus-flash-body">
+                {guessFlash.kind === "close" ? guessFlash.text : guessFlash.kind === "miss" ? (
+                  <>
+                    <span className="guess-focus-flash-label">{ui.roomChatPanel.sent}</span> {guessFlash.text}
+                  </>
+                ) : (
+                  guessFlash.text
+                )}
+              </span>
             </p>
           )}
           <div className="guess-hint">

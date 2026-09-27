@@ -8,7 +8,7 @@ panel is as wide as the screen, so the slider lies along it.
 from uuid import uuid4
 
 from playwright.async_api import async_playwright
-from tests.e2e.lobby_helpers import join_by_code, room_code, use_guest_name
+from tests.e2e.lobby_helpers import join_by_code, open_create_room, room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
@@ -51,7 +51,7 @@ async def test_a_turn_starts_at_the_players_default_size_and_the_slider_goes_bac
         try:
             await host_page.goto(BASE_URL)
             await use_guest_name(host_page, f"SizeHost{uuid4().hex[:6]}")
-            await host_page.click('button:has-text("Create room")')
+            await open_create_room(host_page)
             await host_page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
             await host_page.click('button:has-text("Create room")')
             await host_page.wait_for_selector('[data-testid="waiting-room"]')

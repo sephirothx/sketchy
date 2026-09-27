@@ -29,6 +29,7 @@ import {
 import { useAfkCheck } from "../hooks/useAfkCheck";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
+import { useRoomBarGiveWay } from "../hooks/useRoomBarGiveWay";
 import {
   exitRoomHistory,
   RoomHistoryProvider,
@@ -45,6 +46,8 @@ import {
   Wordmark,
 } from "../components/icons";
 import { selectAmDrawer, selectMe, useGameStore } from "../store/gameStore";
+import { useFriendInviteStore, type RoomExit } from "../store/friendInviteStore";
+import type { FriendInvite } from "../lib/friends";
 import { recordRender } from "../lib/renderDiagnostics";
 import { CrashProbe } from "../lib/crashTestSeam";
 import type { AckResponse } from "../types";
@@ -52,6 +55,12 @@ import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { isKick, kickedText, supersededText } from "../lib/roomNotices.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
+
+/** What the Leave question is asked for: the lobby, from the room's own Leave,
+or a friend's game, from an invitation's Join (#1198). */
+type LeaveQuestion =
+  | { to: "lobby" }
+  | { to: "invite"; invite: FriendInvite; begin: () => (() => void) | null };
 
 export function ActiveGameRoom({ code }: { code: string }) {
   recordRender("activeGameRoom");
@@ -95,7 +104,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
 
   const normalizedCode = code.trim().toUpperCase();
   const [isInputFocused, setIsInputFocused] = useState(false);
-  const [leaveConfirmationOpen, setLeaveConfirmationOpen] = useState(false);
+  const [leaveQuestion, setLeaveQuestion] = useState<LeaveQuestion | null>(null);
   const [startBusy, setStartBusy] = useState(false);
   const [startError, setStartError] = useState<string | null>(null);
   const [recapOpen, setRecapOpen] = useState(false);
@@ -118,6 +127,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useRoomFriendSeats();
 
   useVisualViewportCssVars();
+
+  // A phone's bar gives way in a fixed order when it runs short, measured
+  // (R-UX-11); a desktop's has the width for all of it.
+  const headerRef = useRef<HTMLElement | null>(null);
+  useRoomBarGiveWay(headerRef, isMobile);
 
   // Stable, so the memoised regions below are not re-rendered by a new
   // function on every room render (#987).
@@ -143,7 +157,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
     function onKicked(data: { code?: string }) {
       const who = heldSeat();
       exitingRoomRef.current = true;
-      setExitingRoom(true);
+      setExitingRoom(normalizedCode);
       clearSession();
       reset();
       exitRoomHistory(who, (replace) => {
@@ -167,7 +181,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
       if (data?.code === "signed_out" && isSigningOut()) return;
       const who = heldSeat();
       exitingRoomRef.current = true;
-      setExitingRoom(true);
+      setExitingRoom(normalizedCode);
       clearSession();
       reset();
       exitRoomHistory(who, (replace) => {
@@ -189,37 +203,85 @@ export function ActiveGameRoom({ code }: { code: string }) {
     };
   }, [clearSession, navigate, normalizedCode, notify, reset, setExitingRoom]);
 
-  function performLeave() {
+  /** Leave for the lobby, then `then` - a friend's game, when an invitation
+  is what took the player out. */
+  function exitRoom(then?: () => void) {
     const who = { code: normalizedCode, seat: playerId ?? "" };
+    const roomId = useGameStore.getState().roomId;
     exitingRoomRef.current = true;
-    setExitingRoom(true);
+    setExitingRoom(normalizedCode);
     clearSession();
-    emitTransient("leave_room");
+    // Named when another room comes next: `leave_room` is momentary, and a
+    // bare one that reached the server after the join had seated this socket
+    // would give up the new seat instead of the old (#879).
+    if (then && roomId) emitTransient("leave_room", { roomId });
+    else emitTransient("leave_room");
     reset();
     // The room's history entries go with it, and the lobby takes the place of
     // the entry the room was entered on: Back from the lobby then goes to
-    // wherever that was, not to a room this player has left.
-    exitRoomHistory(who, (replace) => navigate("/", { replace }));
+    // wherever that was, not to a room this player has left. A friend's game
+    // is then entered from the lobby, as its Join there would: Back from it
+    // is the lobby, never the game that was given up for it.
+    exitRoomHistory(who, (replace) => {
+      navigate("/", { replace });
+      then?.();
+    });
   }
 
+  function performLeave() {
+    exitRoom();
+  }
+
+  // Whether Leave asks first. One rule for the Room menu's Leave, Back on the
+  // room, and an invitation's Join, which leaves the room just the same: a
+  // game in progress asks. Not once the room has ended - the stage is then the
+  // *This game ended* card, whose own Leave does not ask, while the store
+  // still holds the state the room ended in.
+  const leaveAsks = roomState === "playing" && stage.kind !== "ended";
+
   function handleLeave() {
-    if (roomState === "playing") {
-      setLeaveConfirmationOpen(true);
+    if (leaveAsks) {
+      setLeaveQuestion({ to: "lobby" });
       return;
     }
     performLeave();
   }
 
-  // Back from the room is the Leave the room offers at that moment: the
-  // Room menu's, which asks during a game, or the ended card's, which does not.
-  function handleBackOnRoom() {
-    if (stage.kind === "ended") performLeave();
-    else handleLeave();
+  // An invitation's Join, answered here because it is this room that is left
+  // (#1198). Registered once and read through a ref, so the answer is the one
+  // Leave would give at the moment Join is pressed.
+  const leaveForInviteRef = useRef<RoomExit>(() => {});
+  useEffect(() => {
+    leaveForInviteRef.current = (invite, begin) => {
+      if (leaveAsks) setLeaveQuestion({ to: "invite", invite, begin });
+      else leaveForInvite(begin);
+    };
+  });
+  const holdRoomExit = useFriendInviteStore((state) => state.holdRoomExit);
+  useEffect(
+    () => holdRoomExit((invite, begin) => leaveForInviteRef.current(invite, begin)),
+    [holdRoomExit],
+  );
+  function leaveForInvite(begin: () => (() => void) | null) {
+    // Already on the way out - a kick or another tab's takeover landed first -
+    // and a second exit would never be finished, holding the entry lock.
+    if (exitingRoomRef.current) return;
+    // The lock first: while another entry holds it the room is not left.
+    const enter = begin();
+    if (enter) exitRoom(enter);
   }
+  // The question names the invitation it was asked for. One that runs out or
+  // is replaced while it is open takes the question with it: a Yes would
+  // leave the game for an invitation that is no longer there.
+  const waitingInvite = useFriendInviteStore((state) => state.invite);
+  if (leaveQuestion?.to === "invite" && leaveQuestion.invite !== waitingInvite) {
+    setLeaveQuestion(null);
+  }
+
   // Back is the room's own: a sheet on top closes, and Back on the room
   // itself is Leave, which gives up the seat rather than walking away from it
-  // (R-UX-15).
-  const roomHistory = useRoomHistory(normalizedCode, playerId ?? "", handleBackOnRoom);
+  // (R-UX-15) - asking during a game, not on the ended card (`leaveAsks`).
+  const roomHistory = useRoomHistory(normalizedCode, playerId ?? "", handleLeave);
 
   function handleToggleAfk() {
     emitTransient("toggle_afk");
@@ -388,17 +450,32 @@ export function ActiveGameRoom({ code }: { code: string }) {
           onAnswer={afkCheck.answer}
         />
       )}
-      {leaveConfirmationOpen && (
+      {leaveQuestion?.to === "lobby" && (
         <ConfirmationDialog
           title={amDrawer ? ui.activeGameRoom.leaveDuringYourTurn : ui.activeGameRoom.leaveActiveGame}
           description={amDrawer
             ? ui.activeGameRoom.youReTheCurrentDrawer
             : ui.activeGameRoom.theGameIsStillIn}
           confirmLabel={ui.activeGameRoom.leaveGame}
-          onCancel={() => setLeaveConfirmationOpen(false)}
+          onCancel={() => setLeaveQuestion(null)}
           onConfirm={() => {
-            setLeaveConfirmationOpen(false);
+            setLeaveQuestion(null);
             performLeave();
+          }}
+        />
+      )}
+      {/* The same question, saying where the player is going instead. */}
+      {leaveQuestion?.to === "invite" && (
+        <ConfirmationDialog
+          title={amDrawer ? ui.activeGameRoom.leaveDuringYourTurn : ui.activeGameRoom.leaveActiveGame}
+          description={amDrawer
+            ? ui.friendInviteNotice.leaveYourTurnForTheirGame({ name: leaveQuestion.invite.displayName })
+            : ui.friendInviteNotice.leaveThisGameForTheirs({ name: leaveQuestion.invite.displayName })}
+          confirmLabel={ui.friendInviteNotice.leaveAndJoin}
+          onCancel={() => setLeaveQuestion(null)}
+          onConfirm={() => {
+            setLeaveQuestion(null);
+            leaveForInvite(leaveQuestion.begin);
           }}
         />
       )}
@@ -406,9 +483,11 @@ export function ActiveGameRoom({ code }: { code: string }) {
           The same component on both layouts, so a phone and a desktop can
           only differ in what they leave out: the room name and the wordmark
           are accessory and give way first, the clock, the round, the notice
-          chips and the Room menu never do. The room code and every action
-          that used to be an icon here are rows of the Room menu. */}
+          chips and the Room menu never do (a phone's chips may lose their
+          words, never their icons: useRoomBarGiveWay). The room code and
+          every action that used to be an icon here are rows of the Room menu. */}
       <header
+        ref={headerRef}
         className={`game-header${isMobile ? " game-header-mobile" : ""}`}
         data-testid="room-header"
         data-room-code={code}
@@ -438,7 +517,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
         </div>
         <div className="game-header-center">
           <GameHeaderStatus />
-          <RoomNoticeChips compact={isMobile} />
+          <RoomNoticeChips />
           {/* Going AFK is a menu row; being away is worth seeing, because it
               skips your turns without asking. One click here comes back. */}
           {isAfk && (
@@ -450,7 +529,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
               title={ui.activeGameRoom.backFromAfk}
             >
               <MoonIcon size={13} />
-              <span>{ui.roomMenuSheet.afk}</span>
+              <span className="game-header-away-label">{ui.roomMenuSheet.afk}</span>
             </button>
           )}
         </div>

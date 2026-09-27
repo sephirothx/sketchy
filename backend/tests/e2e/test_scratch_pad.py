@@ -1,7 +1,7 @@
 """The scratch pad (#829, #591): something to draw on while the connection is down, and while a room waits for players."""
 
 from playwright.async_api import Page, async_playwright
-from tests.e2e.lobby_helpers import use_guest_name
+from tests.e2e.lobby_helpers import open_new_room, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -79,10 +79,7 @@ async def test_a_paused_room_carries_the_pad_and_the_tab_keeps_the_drawing():
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "PadRoom")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector(".create-room-page")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
 
             await context.set_offline(True)
             pad = '[data-testid="room-stage-paused"] [data-testid="scratch-pad"]'
@@ -121,10 +118,7 @@ async def test_a_host_alone_in_a_new_room_has_the_pad_and_an_outage_carries_it_o
         try:
             await page.goto(BASE_URL)
             await use_guest_name(page, "PadHost")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector(".create-room-page")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
 
             await page.click('[data-testid="open-waiting-pad"]')
             room_pad = '.waiting-room.is-drawing [data-testid="scratch-pad"]'
@@ -210,10 +204,7 @@ async def test_the_pad_fits_the_narrowest_phone():
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
 
             # And in place of the waiting room's column, strip and all.
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector(".create-room-page")
-            await page.click('button:has-text("Create room")')
-            await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_new_room(page)
             await page.click('[data-testid="open-waiting-pad"]')
             await page.wait_for_selector('.waiting-room.is-drawing [data-testid="scratch-pad"]')
             room = await page.evaluate(

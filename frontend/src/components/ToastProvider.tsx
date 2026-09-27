@@ -21,11 +21,15 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   const nextIdRef = useRef(1);
   const timersRef = useRef(new Map<number, ReturnType<typeof setTimeout>>());
 
+  // A toast is on screen exactly while its timer is registered: the timer is
+  // dropped when it fires, when the toast is closed and when it is pushed off
+  // the stack. So that map answers whether there was anything to take down.
   const dismiss = useCallback((id: number) => {
     const timer = timersRef.current.get(id);
     if (timer) clearTimeout(timer);
-    timersRef.current.delete(id);
+    const shown = timersRef.current.delete(id);
     setToasts((current) => current.filter((toast) => toast.id !== id));
+    return shown;
   }, []);
 
   const notify = useCallback((
@@ -50,6 +54,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       return kept;
     });
     timersRef.current.set(id, setTimeout(() => dismiss(id), durationMs));
+    return id;
   }, [dismiss]);
 
   useEffect(() => () => {
@@ -60,7 +65,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   // One object for the provider's lifetime: a fresh `{ notify }` on every
   // render re-rendered all of its consumers - the live room among them - each
   // time a toast came or went (#987).
-  const contextValue = useMemo(() => ({ notify }), [notify]);
+  const contextValue = useMemo(() => ({ notify, dismiss }), [notify, dismiss]);
 
   return (
     <ToastContext.Provider value={contextValue}>
