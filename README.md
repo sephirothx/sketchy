@@ -2420,8 +2420,8 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 ## Game flow
 
 1. **Lobby**: pick a nickname, then press **Quick play** — into the fullest public room
-   waiting for players in your prompt language, or a new public one on the standard rules
-   when none is. The server decides it in one step, so the button works the moment you
+   waiting for players in your default play language, or a new public one in it on the
+   standard rules when none is (see below for mixed rooms and your other languages). The server decides it in one step, so the button works the moment you
    arrive, before any room list has, and two people pressing at the same time land in the
    same room rather than one each — or create a room (public or private, with a max player count and number
    of rounds), pick a scoring mode, or join one by code. Quick play never joins a game

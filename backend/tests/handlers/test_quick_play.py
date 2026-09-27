@@ -270,6 +270,12 @@ async def test_the_default_then_mixed_then_the_others_in_the_players_order():
         order.append(answer["roomId"])
         room.state = "playing"
     assert order == [italian.id, mixed.id, dutch.id, spanish.id]
+
+    # Every room they play in is under way now; the French one still waits,
+    # a seat free, and is never theirs - a new Italian room is.
+    fifth = await press(sio, sid="sid-5", nickname="Marta5", **ranked)
+    assert fifth["ok"] is True and fifth["created"] is True
+    assert room_manager.get_room(fifth["roomId"]).prompt_language == "it"
     assert players(french) == 7, "a language the player does not play"
 
     # A mixed room seats them in their default, never in one of the others.

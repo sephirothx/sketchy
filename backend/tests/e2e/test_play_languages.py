@@ -6,6 +6,7 @@ a guest keeps them in this browser, an account on every device it signs in on.
 """
 from __future__ import annotations
 
+import re
 from uuid import uuid4
 
 import pytest
@@ -310,13 +311,17 @@ async def test_the_ranked_languages_are_accessible(viewport):
 HOLD_QUICK_PLAY = """
 (() => {
   window.__quickPlay = [];
+  const held = (data) => typeof data === "string" && data.includes('"quick_play"');
   const send = WebSocket.prototype.send;
   WebSocket.prototype.send = function (data) {
-    if (typeof data === "string" && data.includes('"quick_play"')) {
-      window.__quickPlay.push(data);
-      return;
-    }
+    if (held(data)) return void window.__quickPlay.push(data);
     return send.call(this, data);
+  };
+  // The polling fallback carries the same frames in a request body.
+  const post = XMLHttpRequest.prototype.send;
+  XMLHttpRequest.prototype.send = function (body) {
+    if (held(body)) return void window.__quickPlay.push(body);
+    return post.call(this, body);
   };
 })();
 """
@@ -352,6 +357,22 @@ async def test_discovery_asks_for_the_ranked_languages():
             assert options[:4] == ["mul", "fr", "nl", "it"], options
             assert len(options) == 8
             await page.keyboard.press("Escape")
+            await page.goto(BASE_URL)
+
+            async def filter_order(label: str) -> list[str]:
+                await page.get_by_role("button", name=re.compile(f"^{label}: ")).click()
+                rows = await page.locator(".language-picker-option").evaluate_all(
+                    "rows => rows.map(row => row.dataset.language)"
+                )
+                await page.keyboard.press("Escape")
+                return rows
+
+            # The catalogue's filter: every language, then yours. (The lobby's
+            # draws only when there are rooms to filter, and a public room
+            # made for it would be in every other test's Quick play.)
+            await page.goto(f"{BASE_URL}/community-lists")
+            catalogue = await filter_order("Language")
+            assert catalogue[:4] == ["all", "fr", "nl", "it"], catalogue
             await page.goto(BASE_URL)
 
             await page.locator('[data-testid="quick-play"]').click()
