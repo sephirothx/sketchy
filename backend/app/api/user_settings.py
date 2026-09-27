@@ -62,6 +62,7 @@ PlayLanguage = Literal["en", "de", "es", "fr", "it", "nl", "pt"]
 # Every language but the default: the list can hold the rest of them, no more.
 MAX_EXTRA_PROMPT_LANGUAGES = len(PROMPT_LANGUAGES) - 1
 EXTRA_PROMPT_LANGUAGES_FIELD = "extraPromptLanguages"
+DEFAULT_NOT_EXTRA_CHECK = "ck_user_settings_default_not_extra"
 
 
 def _validated_extra_prompt_languages(value: list[str] | None):
@@ -142,7 +143,10 @@ class UserSettingsSeed(ControlFreeModel):
             None,
         )
         extras = data.get(key) if key else None
-        if not isinstance(extras, list):
+        # Longer than any honest copy - every language, each twice - is left
+        # for the field's bound to refuse, before it is walked: this runs
+        # ahead of registration's throttle, on a body anyone can send.
+        if not isinstance(extras, list) or len(extras) > 2 * len(PROMPT_LANGUAGES):
             return data
         default = data.get("promptLanguage", data.get("prompt_language", "en"))
         kept: list = []
@@ -372,7 +376,10 @@ async def patch_user_settings(
             except IntegrityError as error:
                 # Only where the lock above is not one (SQLite): another
                 # device's PATCH landed between the read and this write, and
-                # the CHECK caught the pair naming the default twice.
+                # the CHECK caught the pair naming the default twice. Any
+                # other violation is not a refusal of the languages.
+                if DEFAULT_NOT_EXTRA_CHECK not in str(error.orig):
+                    raise
                 raise PlayLanguagesRefused(
                     "the play languages changed on another device"
                 ) from error

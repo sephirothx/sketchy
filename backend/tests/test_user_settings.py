@@ -490,3 +490,36 @@ async def test_a_seed_carries_the_other_languages_over_a_row_another_tab_made(en
         values=UserSettingsSeed(promptLanguage="de", extraPromptLanguages=["fr", "it"]),
     )
     assert (seeded["promptLanguage"], seeded["extraPromptLanguages"]) == ("de", ["fr", "it"])
+
+
+async def test_a_huge_seed_list_is_refused_by_its_bound_before_it_is_walked(env):
+    """The seed's clean-up runs ahead of registration's throttle; a list far
+    past any honest copy is left for the field's bound to refuse at once."""
+    import time
+
+    body = {
+        "promptLanguage": "en",
+        "extraPromptLanguages": list(range(60_000)),
+    }
+    started = time.perf_counter()
+    with pytest.raises(ValueError):
+        UserSettingsSeed.model_validate(body)
+    assert time.perf_counter() - started < 0.5
+
+
+def test_the_migration_and_the_model_bound_the_list_alike():
+    """The CHECK's text is written twice - the model and its migration - and
+    nothing in Alembic compares CHECKs, so the bound is compared here."""
+    import importlib.util
+    from pathlib import Path
+
+    from app.db.models import EXTRA_PROMPT_LANGUAGES_TEXT_MAX
+
+    path = (
+        Path(__file__).resolve().parents[1]
+        / "alembic/versions/e8f9a0b1c2d4_extra_prompt_languages.py"
+    )
+    spec = importlib.util.spec_from_file_location("extra_languages_migration", path)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    assert module.TEXT_MAX == EXTRA_PROMPT_LANGUAGES_TEXT_MAX
