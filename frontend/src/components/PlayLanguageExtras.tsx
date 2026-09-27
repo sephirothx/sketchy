@@ -64,8 +64,6 @@ export function PlayLanguageExtras({
   // make. Chips stay in `extras` order in the DOM; this only sets their place.
   const shown = drag?.moving ? moveExtraPromptLanguage(extras, drag.from, drag.to) : extras;
 
-  // A drag answers Escape before the dialog it is in does.
-  useEscapeLayer(Boolean(drag?.moving), () => updateDrag(null));
   const addable = SUPPORTED_PROMPT_LANGUAGES.filter(
     (language) => language !== defaultLanguage && !extras.includes(language),
   );
@@ -138,6 +136,9 @@ export function PlayLanguageExtras({
     dragRef.current = next;
     setDrag(next);
   }
+
+  // A drag answers Escape before the dialog it is in does.
+  useEscapeLayer(Boolean(drag?.moving), () => updateDrag(null));
 
   function handlePointerDown(event: ReactPointerEvent<HTMLLIElement>, index: number) {
     if (event.button !== 0 || (event.target as HTMLElement).closest("button")) return;

@@ -1406,8 +1406,9 @@ async def quick_play(ctx: HandlerContext, sid, data):
     the same moment, which is what a shared link produces - a room each,
     because every one of them read the same empty list. The server holds the
     rooms, so it picks: the fullest public room that is waiting in the
-    caller's language with a seat free, or a new public room on the defaults
-    the create form mirrors.
+    caller's default language with a seat free - then a mixed one, then one in
+    each of their other languages (#1211) - or a new public room in the default
+    on the defaults the create form mirrors.
 
     Choosing and seating are separated by awaits, so a room can fill or start
     in between; that refusal is not the caller's answer, it is the next room's
@@ -1442,25 +1443,42 @@ async def _quick_play(ctx: HandlerContext, sid, data, seated: list):
         return BUSY_ACKNOWLEDGEMENT
 
     entering = _EnteringAs(payload)
-    while not entry_expired():
-        for room in _quick_play_candidates(
-            ctx, payload.prompt_language, payload.extra_prompt_languages
-        ):
+
+    async def seat_in_first(rooms: list) -> dict | None:
+        for room in rooms:
             answer = await _seat_in_room(
                 ctx, sid, room, entering, seated, quick_play=True, identity=identity
             )
             if answer is QUICK_PLAY_CLOSED or answer.get("errorCode") in QUICK_PLAY_SKIPS:
                 continue
             return {**answer, "created": False} if answer.get("ok") else answer
+        return None
+
+    while not entry_expired():
+        candidates = _quick_play_candidates(
+            ctx, payload.prompt_language, payload.extra_prompt_languages
+        )
+        answer = await seat_in_first(
+            [room for room in candidates if room.prompt_language == payload.prompt_language]
+        )
+        if answer is not None:
+            return answer
         opening = ctx.quick_play_openings.get(payload.prompt_language)
         if opening is not None:
-            # Somebody is already opening a room for this language: take a
-            # seat in theirs rather than opening a second one beside it.
+            # Somebody is already opening a room in this default: take a seat
+            # in theirs rather than opening a second one beside it - or taking
+            # a mixed room or one in another of this player's languages, which
+            # rank below a room in the default that is about to exist.
             try:
                 await _bounded(asyncio.shield(opening), "waiting for a room to open")
             except EntryTimedOut:
                 return BUSY_ACKNOWLEDGEMENT
             continue
+        answer = await seat_in_first(
+            [room for room in candidates if room.prompt_language != payload.prompt_language]
+        )
+        if answer is not None:
+            return answer
         return await _open_a_quick_play_room(ctx, sid, payload, identity, seated)
     return BUSY_ACKNOWLEDGEMENT
 
