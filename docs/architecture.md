@@ -2138,7 +2138,12 @@ way the banner stack publishes `--banner-height`, and the invite adds its own re
 rather than across the bottom — the landscape phone room's feed, with its guess field
 and the verdict above it — is beside that spot, so it adds no clearance; instead the
 room publishes the column's width as `--dock-inline-inset` and what stands there is
-kept narrow enough to fit between (#1175). Before the layers there were
+kept narrow enough to fit between (#1175). That width is not fixed: sideways the 4:3
+canvas is bound by the height, so the column takes what the canvas leaves, 180 to
+320px, measured by [`useLandscapeFeedWidth`](../frontend/src/hooks/useLandscapeFeedWidth.ts)
+with the canvas height read at the narrowest column and the prompt's row kept on one
+line; and a Wheel of Fortune room's 26 keys wait there behind *Buy a letter* rather than
+standing above the canvas, which left a guesser 18% of it (#1267). Before the layers there were
 nineteen literals and the report, suspension and AFK dialogs had each been lifted past
 the drawers by hand. The shell is the one place the scale does not reach: `position:
 fixed` makes `.game-room-playing` a stacking context whatever its `z-index`, so its

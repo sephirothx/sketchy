@@ -1,4 +1,6 @@
-import { useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_LANDSCAPE_QUERY } from "../lib/roomLayout";
 import { promptPickPayload } from "../lib/promptPick";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { useToast } from "../lib/toast";
@@ -115,6 +117,28 @@ export function PromptDisplay({
 }: PromptDisplayProps) {
   const { notify } = useToast();
   const [pendingAction, setPendingAction] = useState<string | null>(null);
+  // Sideways, the wheel's 26 keys above the canvas left a guesser 18% of the
+  // drawing (170 x 126 at 844 x 390): there they wait behind "Buy a letter",
+  // over the canvas, and go once a letter is bought (#1267).
+  const shortLandscape = useMediaQuery(PHONE_LANDSCAPE_QUERY);
+  const [wheelOpen, setWheelOpen] = useState(false);
+  const wheelId = useId();
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    if (!wheelOpen) return;
+    const onPointerDown = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setWheelOpen(false);
+    };
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setWheelOpen(false);
+    };
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [wheelOpen]);
 
   async function runAction(key: string, event: string, data: unknown, action: string) {
     if (pendingAction) return;
@@ -161,9 +185,35 @@ export function PromptDisplay({
   // Hints are bought on credit against this turn's guess, so the maximum spend
   // is independent of the running score.
   const remaining = maxHintSpend - hintSpend;
+  const wheelBehindToggle = canBuyWheel && shortLandscape;
+
+  function letterGrid(afterBuy?: () => void) {
+    return (
+      <div className="wheel-letter-grid">
+        {Object.entries(letterPrices ?? {})
+          .sort(([a], [b]) => a.localeCompare(b))
+          .map(([letter, price]) => (
+            <button
+              key={letter}
+              type="button"
+              className="wheel-letter-btn"
+              disabled={price > remaining || pendingAction !== null}
+              title={ui.promptDisplay.buyLetter({ letter: letter.toUpperCase(), price })}
+              onClick={() =>
+                void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, ui.promptDisplay.buyTheLetterHint)
+                  .then(afterBuy)
+              }
+            >
+              {letter.toUpperCase()}
+              <sub>{price}</sub>
+            </button>
+          ))}
+      </div>
+    );
+  }
 
   return (
-    <div className="prompt-display">
+    <div className={`prompt-display${wheelBehindToggle ? " has-wheel-toggle" : ""}`} ref={rootRef}>
       {(canBuy || canBuyWheel) && (
         <p className="hint-meta">
           {canBuy && (
@@ -200,26 +250,28 @@ export function PromptDisplay({
           )}
         </span>
       )}
-      {canBuyWheel && (
+      {wheelBehindToggle ? (
+        <>
+          <button
+            type="button"
+            className="btn btn-secondary btn-compact wheel-hint-toggle"
+            aria-expanded={wheelOpen}
+            aria-controls={wheelOpen ? wheelId : undefined}
+            onClick={() => setWheelOpen((open) => !open)}
+          >
+            {ui.promptDisplay.buyALetter}
+          </button>
+          {wheelOpen && (
+            <div id={wheelId} className="wheel-hint-popover" data-testid="wheel-hint-popover">
+              <p className="hint-wheel-label">{ui.promptDisplay.buyLetterRevealsEveryMatch}</p>
+              {letterGrid(() => setWheelOpen(false))}
+            </div>
+          )}
+        </>
+      ) : canBuyWheel && (
         <div className="wheel-hint-panel">
           <p className="hint-wheel-label">{ui.promptDisplay.buyLetterRevealsEveryMatch}</p>
-          <div className="wheel-letter-grid">
-            {Object.entries(letterPrices)
-              .sort(([a], [b]) => a.localeCompare(b))
-              .map(([letter, price]) => (
-                <button
-                  key={letter}
-                  type="button"
-                  className="wheel-letter-btn"
-                  disabled={price > remaining || pendingAction !== null}
-                  title={ui.promptDisplay.buyLetter({ letter: letter.toUpperCase(), price })}
-                  onClick={() => void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, ui.promptDisplay.buyTheLetterHint)}
-                >
-                  {letter.toUpperCase()}
-                  <sub>{price}</sub>
-                </button>
-              ))}
-          </div>
+          {letterGrid()}
         </div>
       )}
     </div>

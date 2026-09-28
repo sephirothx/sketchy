@@ -1557,6 +1557,7 @@ export const FR: Catalogue = {
     autoPicksWhenTimeRunsOut: "Choix automatique à la fin du temps.",
     hintSpendLimitReached: "Limite de dépense en indices atteinte",
     hintSpendComesOutOfTurnPoints: "Retiré des points de ce tour si tu trouves le mot.",
+    buyALetter: "Acheter une lettre",
     buyLetterRevealsEveryMatch: "Achète une lettre — révèle toutes ses occurrences",
     selectThePrompt: "choisir le mot",
     choosing: "Choix…",

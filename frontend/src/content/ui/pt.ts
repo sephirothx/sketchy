@@ -1556,6 +1556,7 @@ export const PT: Catalogue = {
     autoPicksWhenTimeRunsOut: "Escolhe sozinho quando o tempo acabar.",
     hintSpendLimitReached: "Limite de gasto em pistas atingido",
     hintSpendComesOutOfTurnPoints: "É descontado dos pontos desta vez se adivinhares a palavra.",
+    buyALetter: "Comprar uma letra",
     buyLetterRevealsEveryMatch: "Compra uma letra — revela todas as ocorrências",
     selectThePrompt: "escolher a palavra",
     choosing: "A escolher…",

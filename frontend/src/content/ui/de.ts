@@ -1557,6 +1557,7 @@ export const DE: Catalogue = {
     autoPicksWhenTimeRunsOut: "Wählt automatisch, wenn die Zeit abläuft.",
     hintSpendLimitReached: "Hinweis-Limit erreicht",
     hintSpendComesOutOfTurnPoints: "Wird von den Punkten dieses Zugs abgezogen, wenn du den Begriff errätst.",
+    buyALetter: "Buchstaben kaufen",
     buyLetterRevealsEveryMatch: "Buchstaben kaufen – zeigt jedes Vorkommen",
     selectThePrompt: "den Begriff auswählen",
     choosing: "Wird gewählt …",

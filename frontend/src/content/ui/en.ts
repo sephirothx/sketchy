@@ -1576,6 +1576,7 @@ export const EN = {
     autoPicksWhenTimeRunsOut: "Auto-picks when time runs out.",
     hintSpendLimitReached: "Hint spend limit reached",
     hintSpendComesOutOfTurnPoints: "Taken out of this turn's points if you guess the prompt.",
+    buyALetter: "Buy a letter",
     buyLetterRevealsEveryMatch: "Buy a letter — reveals every match",
     selectThePrompt: "select the prompt",
     choosing: "Choosing…",
