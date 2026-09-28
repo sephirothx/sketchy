@@ -793,10 +793,13 @@ would mean a preference changed in between re-languages a message that was
 already composed, including the one about the security event that prompted the
 change. `en` for an account with no settings row of its own. `last_error` holds the relay's answer **redacted before it is truncated** to the column's 256 characters: `SMTPRecipientsRefused` stringifies with the refused address in it, and a cut taken first can land inside one and leave the local part standing (R-AUTH-12).
 
-**Claimed reset first.** A sweep takes due `reset_password` rows before anything else,
-then oldest first (#1240): a reset link lives an hour and is somebody locked out, a
-verification link lives a day, and oldest-first alone let a queue flooded with
-verification mail age every reset behind it past its expiry at 50 messages a sweep.
+**Claimed reset first, but not only resets.** A sweep takes due `reset_password` rows
+before anything else, oldest first (#1240): a reset link lives an hour and is somebody
+locked out, a verification link lives a day, and oldest-first alone let a queue flooded
+with verification mail age every reset behind it past its expiry at 50 messages a
+sweep. A fifth of every batch (10 of 50) is kept for everything else, oldest first,
+and filled with resets only when nothing else is due: without it a sustained flood of
+resets held every verification until its link had expired (#1302 review).
 
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 

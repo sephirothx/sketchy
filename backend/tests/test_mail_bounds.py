@@ -148,3 +148,27 @@ async def test_a_reset_is_claimed_before_older_verification_mail(monkeypatch):
 
 def token_in_message(message) -> str:
     return message.body.split("token=")[1].split()[0].strip()
+
+
+async def test_a_flood_of_resets_still_leaves_verification_mail_a_share(monkeypatch):
+    """#1302 review: every due reset went before any verification, so a queue
+    that never ran dry of resets held verification mail until its link had
+    expired. A share of each batch is kept for everything else."""
+    async with build_site(monkeypatch, IP_HASH_SECRET="mail-bounds") as from_address:
+        factory = from_address.factory
+        earlier = datetime.now(timezone.utc) - timedelta(minutes=5)
+        async with factory() as session, session.begin():
+            queue_email(
+                session, to_address="waiting@example.test", template=EmailTemplate.VERIFY_EMAIL,
+                payload={"token": "t", "displayName": "x"}, now=earlier,
+            )
+            for index in range(20):
+                queue_email(
+                    session, to_address=f"reset{index}@example.test", template=EmailTemplate.RESET_PASSWORD,
+                    payload={"token": "t", "displayName": "x"},
+                )
+        transport = MemoryTransport()
+        await deliver_pending(factory, transport=transport, base_url="http://test", batch_size=5)
+        sent = [message.to_address for message in transport.sent]
+        assert "waiting@example.test" in sent
+        assert len(sent) == 5 and sum(address.startswith("reset") for address in sent) == 4

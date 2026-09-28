@@ -41,7 +41,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import case, delete, literal, select, update
+from sqlalchemy import delete, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.deployment import is_production, public_base_url
@@ -463,6 +463,11 @@ def message_id_for(entry_id: UUID, sender: str | None = None) -> str:
     return f"<{entry_id}@{(domain.strip() if at else '') or 'localhost'}>"
 
 
+# One batch in this many is kept for mail other than reset links, whatever
+# is waiting (#1302 review).
+RESERVED_SHARE = 5
+
+
 async def _claim_due(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -486,28 +491,36 @@ async def _claim_due(
     claims: list[_Claim] = []
     async with session_factory() as session:
         async with session.begin():
-            due = (
-                await session.scalars(
-                    select(EmailOutboxEntry)
-                    .where(
-                        EmailOutboxEntry.state == EmailOutboxState.PENDING.value,
-                        EmailOutboxEntry.next_attempt_at <= checked_at,
-                    )
-                    # A reset link first (#1240): it lives an hour and is
-                    # somebody locked out, where a verification link lives a
-                    # day and is somebody who can still play. A queue flooded
-                    # with verification mail must not age every reset in it
-                    # past its expiry, which oldest-first alone would do.
-                    .order_by(
-                        case(
-                            (EmailOutboxEntry.template == EmailTemplate.RESET_PASSWORD.value, 0),
-                            else_=1,
-                        ),
-                        EmailOutboxEntry.created_at,
-                    )
-                    .limit(batch_size)
+            ready = (
+                EmailOutboxEntry.state == EmailOutboxState.PENDING.value,
+                EmailOutboxEntry.next_attempt_at <= checked_at,
+            )
+            is_reset = EmailOutboxEntry.template == EmailTemplate.RESET_PASSWORD.value
+
+            async def oldest(*where):
+                return list(
+                    (
+                        await session.scalars(
+                            select(EmailOutboxEntry)
+                            .where(*ready, *where)
+                            .order_by(EmailOutboxEntry.created_at)
+                            .limit(batch_size)
+                        )
+                    ).all()
                 )
-            ).all()
+
+            # Reset links first (#1240): one lives an hour and is somebody
+            # locked out, where a verification link lives a day and is
+            # somebody who can still play, so a queue flooded with
+            # verification mail must not age every reset in it past its
+            # expiry. But not only resets: a share of every batch is kept for
+            # everything else, oldest first, or a sustained flood of resets
+            # held every verification until its link had expired (#1302
+            # review).
+            resets, others = await oldest(is_reset), await oldest(~is_reset)
+            reserved = max(1, batch_size // RESERVED_SHARE)
+            others = others[: max(reserved, batch_size - len(resets))]
+            due = resets[: batch_size - len(others)] + others
             for entry in due:
                 won = await session.execute(
                     update(EmailOutboxEntry)
