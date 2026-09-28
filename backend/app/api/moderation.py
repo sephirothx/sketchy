@@ -21,7 +21,7 @@ from app.api.errors import Refusal
 from app.message_limits import MAX_REPORT_DETAILS
 from app.refusals import ErrorCode
 from app.auth.avatars import avatar_url, uploaded_avatar_key
-from app.services.avatars import remove_avatar
+from app.services.avatars import AvatarAlreadyRemoved, remove_avatar
 from app.auth.rate_limit import (
     PersistentRateLimiter,
     client_key,
@@ -1753,23 +1753,57 @@ def create_moderation_router(
             # on its own permission to suspend somebody.
             require_step_up(request)
             report = await session.get(PlayerReport, report_id)
-        if report is None or report.reported_user_id is None:
+            target = (
+                await session.get(User, report.reported_user_id)
+                if report is not None and report.reported_user_id is not None
+                else None
+            )
+        if report is None or report.reported_user_id is None or target is None:
             raise HTTPException(status_code=404, detail="No such report.")
         if _is_about_themselves(actor, report.reported_user_id):
             raise HTTPException(
                 status_code=403,
                 detail="A report about you is for another moderator to decide.",
             )
+        # The role boundaries a warning keeps (#1239), since a removal issues
+        # one and climbs a ladder of upload blocks: through a self-filed
+        # report, a moderator took an administrator to a 90-day block in four
+        # calls, and a peer the same way through a report about spam.
+        if target.role == UserRole.ADMIN.value:
+            raise HTTPException(
+                status_code=403, detail="An administrator's picture cannot be removed."
+            )
+        if actor.role == UserRole.MODERATOR.value and target.role != UserRole.USER.value:
+            raise HTTPException(
+                status_code=403,
+                detail="Moderators cannot remove another moderator's picture.",
+            )
+        # Only through a pending report about a picture: a removal is the
+        # answer to that complaint, not a button on any case.
+        if report.reason != ReportReason.INAPPROPRIATE_AVATAR.value:
+            raise HTTPException(
+                status_code=409, detail="This report is not about a picture."
+            )
+        if report.status != ReportStatus.PENDING.value:
+            raise HTTPException(
+                status_code=409, detail="This report has already been decided."
+            )
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        outcome = await remove_avatar(
-            session_factory,
-            user_id=report.reported_user_id,
-            actor_id=actor.id,
-            by_moderator=True,
-            report_id=report.id,
-            request_id=request_id,
-            ip_hash=ip_hash,
-        )
+        try:
+            outcome = await remove_avatar(
+                session_factory,
+                user_id=report.reported_user_id,
+                actor_id=actor.id,
+                by_moderator=True,
+                report_id=report.id,
+                request_id=request_id,
+                ip_hash=ip_hash,
+            )
+        except AvatarAlreadyRemoved as error:
+            raise HTTPException(
+                status_code=409,
+                detail="A picture was already removed through this report.",
+            ) from error
         if on_avatar_changed is not None:
             # What is left, not a blanket None: a doodle the removal left in
             # place must stay on the player's live seats (R-AVA-09).
@@ -2877,6 +2911,28 @@ def create_moderation_router(
                     raise HTTPException(
                         status_code=409, detail="This suspension was already revoked."
                     )
+                if reviewer.role == UserRole.MODERATOR.value:
+                    # The boundaries a suspension keeps (R-BAN-01), for its
+                    # undoing too (#1239): a moderator lifted a suspension an
+                    # administrator had placed. An administrator's decision is
+                    # an administrator's to reverse, and so is one about a
+                    # member of staff, which only an administrator can make.
+                    issuer = (
+                        await session.get(User, ban.banned_by_user_id)
+                        if ban.banned_by_user_id is not None
+                        else None
+                    )
+                    subject = await session.get(User, ban.user_id) if ban.user_id else None
+                    if issuer is not None and issuer.role == UserRole.ADMIN.value:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Only an administrator can lift an administrator's suspension.",
+                        )
+                    if subject is not None and subject.role != UserRole.USER.value:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Moderators cannot lift a suspension of another member of staff.",
+                        )
                 ban.revoked_at = now
                 ban.revoked_by_user_id = reviewer.id
                 ban.revoke_reason = body.reason
