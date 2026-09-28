@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
 
-from sqlalchemy import delete, or_, select, update
+from sqlalchemy import and_, delete, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
@@ -83,6 +83,8 @@ from app.domain_values import (
     EmailOutboxState,
     AuditTargetType,
     DataExportStatus,
+    FriendshipState,
+    ReportStatus,
     TurnDrawingStatus,
     UserRole,
 )
@@ -97,8 +99,30 @@ from app.domain_values import (
 # should be able to tell which shape it has. To 5 when the account gained
 # `lastSeenAt` (#469). To 9 when a prompt list stopped having a share code
 # and `shareCode` left each list (R-LIST-03). To 12 when settings gained
-# `extraPromptLanguages`, the other languages a player plays in (#1209).
-EXPORT_SCHEMA_VERSION = 12
+# `extraPromptLanguages`, the other languages a player plays in (#1209). To 13
+# when what other people did to the requester left it (#1238): a report of
+# theirs carries `decided` instead of its status and review times, and the
+# declines and the blocks and reports against them are gone.
+EXPORT_SCHEMA_VERSION = 13
+
+# Events that name the requester only as their **target** and are exported:
+# the ones they are already told about when they happen (#1238). Anything
+# else aimed at them - a block, a report, a staff member looking them up - is
+# what somebody else did, and the product conceals it everywhere else: an
+# export listing it to the second was the way to find out who blocked or
+# reported you, and when.
+TOLD_TARGET_EVENTS = frozenset({
+    "warning.issued",
+    "ban.created",
+    "ban.revoked",
+    "avatar.removed",
+    "admin.role_changed",
+    "admin.role_offered",
+    "admin.role_offer_withdrawn",
+    "admin.role_offer_lapsed",
+    "admin.role_taken_up",
+})
+TOLD_TARGET_EVENT_PREFIXES = ("session.", "account.", "identity.")
 EXPORT_TTL = timedelta(days=7)
 # How long an account waits between exports (R-PRIV-12). Building one walks
 # every game the account ever played, so an account with thousands of them is
@@ -788,10 +812,12 @@ def _player_report_document(report: PlayerReport) -> dict:
             if report.drawing_evidence is not None
             else None
         ),
-        "status": report.status,
+        # Whether it was reviewed, and nothing about what was decided or
+        # when (R-MOD-20): the outcome belongs to the reported player, and a
+        # status with a review time to the millisecond was theirs handed to
+        # whoever asked about them (#1238).
+        "decided": report.status != ReportStatus.PENDING.value,
         "createdAt": _timestamp(report.created_at),
-        "updatedAt": _timestamp(report.updated_at),
-        "reviewedAt": _timestamp(report.reviewed_at),
     }
 
 
@@ -809,11 +835,9 @@ def _prompt_content_report_document(report: PromptContentReport) -> dict:
         "prompt": report.prompt_snapshot,
         "reason": report.reason,
         "details": report.details,
-        "status": report.status,
-        "moderationState": report.resolution_moderation_state,
+        # As for a player report: reviewed or not, never the finding.
+        "decided": report.status != ReportStatus.PENDING.value,
         "createdAt": _timestamp(report.created_at),
-        "updatedAt": _timestamp(report.updated_at),
-        "reviewedAt": _timestamp(report.reviewed_at),
     }
 
 
@@ -1145,7 +1169,15 @@ async def _write_export_artifact(
             or_(
                 Friendship.user_low_id.in_(identity_ids),
                 Friendship.user_high_id.in_(identity_ids),
-            )
+            ),
+            # A decline is the decliner's fact, not the sender's
+            # (R-FRIEND-05): no listing may name one or who made it, and a
+            # sent request that was declined named both, with the time.
+            # The decliner's own export keeps it.
+            ~and_(
+                Friendship.status == FriendshipState.DECLINED.value,
+                Friendship.requested_by_id.in_(identity_ids),
+            ),
         )
         .order_by(Friendship.created_at, Friendship.user_low_id),
         lambda friendship: {
@@ -1178,7 +1210,16 @@ async def _write_export_artifact(
         .where(
             or_(
                 AuditEvent.actor_user_id.in_(identity_ids),
-                AuditEvent.target_user_id.in_(identity_ids),
+                and_(
+                    AuditEvent.target_user_id.in_(identity_ids),
+                    or_(
+                        AuditEvent.event_type.in_(TOLD_TARGET_EVENTS),
+                        *(
+                            AuditEvent.event_type.startswith(prefix, autoescape=True)
+                            for prefix in TOLD_TARGET_EVENT_PREFIXES
+                        ),
+                    ),
+                ),
             )
         )
         .order_by(AuditEvent.created_at, AuditEvent.id),

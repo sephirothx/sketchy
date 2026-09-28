@@ -530,8 +530,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 12
-    assert artifact["schemaVersion"] == 12
+    assert status["schemaVersion"] == 13
+    assert artifact["schemaVersion"] == 13
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -619,7 +619,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["settings"]["extraPromptLanguages"] == ["nl", "fr"]
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v12_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v13_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -1565,3 +1565,98 @@ async def test_deletion_takes_the_stars_that_account_gave(env):
         ) == 0
         survivor = await session.get(PromptList, UUID(published.id))
         assert survivor is not None and survivor.visibility == "public"
+
+
+# --- what other people did to the requester (#1238) -----------------------------
+
+
+async def test_a_declined_request_is_the_decliners_fact_not_the_senders(env):
+    """R-FRIEND-05: no listing may name a decline or who made it. The sender's
+    export named both, with the time; the decliner's keeps its own answer."""
+    from app.db.models import Friendship
+
+    http, users, history, factory = env
+    sender = await register(http, "Sender")
+    decliner = await users.create_anonymous("Decliner")
+    low, high = sorted([UUID(sender["id"]), UUID(decliner.id)])
+    async with factory() as session, session.begin():
+        session.add(Friendship(
+            user_low_id=low, user_high_id=high, status="declined",
+            requested_by_id=UUID(sender["id"]),
+            responded_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        ))
+    _, artifact = await request_ready_export(http)
+    assert artifact["friends"] == []
+
+
+async def test_the_decliner_still_sees_their_own_answer(env):
+    from app.db.models import Friendship
+
+    http, users, history, factory = env
+    sender = await users.create_anonymous("Asker")
+    decliner = await register(http, "Answerer")
+    low, high = sorted([UUID(sender.id), UUID(decliner["id"])])
+    async with factory() as session, session.begin():
+        session.add(Friendship(
+            user_low_id=low, user_high_id=high, status="declined",
+            requested_by_id=UUID(sender.id),
+            responded_at=datetime(2026, 9, 1, tzinfo=timezone.utc),
+        ))
+    _, artifact = await request_ready_export(http)
+    assert [(row["status"], row["requestedByMe"]) for row in artifact["friends"]] == [("declined", False)]
+
+
+async def test_blocks_and_reports_against_the_requester_are_not_in_their_events(env):
+    from app.db.models import AuditEvent
+
+    http, users, history, factory = env
+    me = await register(http, "Target")
+    them = await users.create_anonymous("Somebody")
+    async with factory() as session, session.begin():
+        for event_type in (
+            "block.created", "report.submitted", "prompt_content_report.submitted",
+            "admin.player_activity_viewed", "report.resolved",
+            # What they are told about: kept.
+            "warning.issued", "ban.created", "avatar.removed", "admin.role_changed",
+        ):
+            session.add(AuditEvent(
+                id=generate_uuid(), event_type=event_type,
+                actor_user_id=UUID(them.id), target_user_id=UUID(me["id"]),
+                target_type="user", target_id=me["id"],
+            ))
+        # And whatever they did themselves stays, whoever it was aimed at.
+        session.add(AuditEvent(
+            id=generate_uuid(), event_type="block.created",
+            actor_user_id=UUID(me["id"]), target_user_id=UUID(them.id),
+            target_type="user", target_id=them.id,
+        ))
+    _, artifact = await request_ready_export(http)
+    aimed_at_me = sorted(
+        event["eventType"] for event in artifact["accountEvents"]
+        if event["requesterWasTarget"] and not event["requesterWasActor"]
+    )
+    assert aimed_at_me == ["admin.role_changed", "avatar.removed", "ban.created", "warning.issued"]
+    assert any(
+        event["eventType"] == "block.created" and event["requesterWasActor"]
+        for event in artifact["accountEvents"]
+    )
+
+
+async def test_a_reporter_is_told_a_report_was_decided_and_nothing_else(env):
+    """R-MOD-20: a count, not the outcome and not when. A status beside a
+    review time to the millisecond was the reported player's outcome handed
+    to whoever asked about them."""
+    http, users, history, factory = env
+    me = await register(http, "Reporter")
+    them = await users.create_anonymous("Reported")
+    async with factory() as session, session.begin():
+        session.add(PlayerReport(
+            id=generate_uuid(), reporter_user_id=UUID(me["id"]), reported_user_id=UUID(them.id),
+            reason="harassment", details="", context_snapshot={"schemaVersion": 1, "submitted": {}},
+            status="resolved", reviewed_at=datetime(2026, 9, 2, 12, 0, 0, 123000, tzinfo=timezone.utc),
+            decision_group_id=generate_uuid(),
+        ))
+    _, artifact = await request_ready_export(http)
+    (report,) = artifact["reportsSubmitted"]
+    assert report["decided"] is True
+    assert not {"status", "reviewedAt", "updatedAt"} & set(report)
