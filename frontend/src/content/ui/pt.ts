@@ -1542,8 +1542,10 @@ export const PT: Catalogue = {
 
   promptDisplay: {
     couldNotDoAction: (p: { action: string }) => `Não foi possível ${p.action}.`,
-    nextHintCost: (p: { cost: number }) => `Pista seguinte: ${p.cost}`,
-    hintSpendTotal: (p: { spent: number }) => `Total: ${p.spent}`,
+    nextHintCost: (p: { cost: number }) =>
+      `Escolhe uma casa para a revelar · ${counted(p.cost, { one: "ponto", other: "pontos" })}`,
+    hintSpendTotal: (p: { spent: number }) =>
+      `Total: ${counted(p.spent, { one: "ponto", other: "pontos" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `Comprar «${p.letter}» por ${counted(p.price, { one: "ponto", other: "pontos" })}`,
     maskedPrompt: (p: { shape: string }) => `Palavra escondida, ${p.shape} letras`,

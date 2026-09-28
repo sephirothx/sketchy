@@ -77,7 +77,7 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             await guesser.locator(".hint-blank").first.click()
             spend_line = guesser.locator(".hint-spend-total")
             await spend_line.wait_for()
-            assert (await spend_line.inner_text()).strip() == "Total: 12"
+            assert (await spend_line.inner_text()).strip() == "Total: 12 points"
             # On credit (R-SCORE-06): the spend comes out of this turn's
             # points, never out of the running score.
             assert await spend_line.get_attribute("title") == (
@@ -150,6 +150,63 @@ async def test_a_spectator_is_offered_no_hints(mode, offer):
             await spectator.locator(".masked-tile").first.wait_for()
             assert await spectator.locator(offer).count() == 0
             assert await spectator.locator(".hint-meta, .wheel-hint-panel").count() == 0
+        finally:
+            for context in contexts:
+                await context.close()
+            await browser.close()
+
+
+TILE_BOXES = """
+() => [...document.querySelectorAll('.masked-tile')].map((tile) => {
+  const box = tile.getBoundingClientRect();
+  return [Math.round(box.left), Math.round(box.top), Math.round(box.width)];
+})
+"""
+
+
+async def test_bought_tiles_hold_their_place_and_say_what_they_cost():
+    """#1277: a bought tile fell back to the plain tile's 19px and moved the
+    row 13px under the finger; a 10-letter word wrapped 7 + 3 on a 390px phone
+    and read as two words; and "Next hint: 12" had no unit, with the only
+    instruction in a tooltip touch screens never show."""
+    from uuid import uuid4
+
+    phone = {"viewport": {"width": 390, "height": 844}, "is_mobile": True, "has_touch": True}
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(**phone) for _ in range(2)]
+        host, guest = [await context.new_page() for context in contexts]
+        try:
+            tag = uuid4().hex[:5]
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"TileHost{tag}")
+            await open_new_room(host)
+            code = await room_code(host)
+            await guest.goto(BASE_URL)
+            await use_guest_name(guest, f"TileGuest{tag}")
+            await join_by_code(guest, code)
+            await guest.locator('[data-testid="waiting-room"]').wait_for()
+            await open_room_settings(host)
+            await open_settings_section(host, "Scoring and hints")
+            await host.locator('[aria-label="Hints"] button:has-text("Buy letters")').click()
+            await open_settings_section(host, "Prompts")
+            await host.locator("#custom-prompts").fill("sandcastle\nlighthouse")
+            await host.get_by_label("Only use custom prompts").check()
+            await save_room_settings(host)
+            await host.get_by_role("button", name="Start game").click()
+
+            _, guesser, _ = await choose_prompt([host, guest])
+            await guesser.locator(".hint-blank").first.wait_for()
+            meta = guesser.locator(".hint-meta")
+            assert "Pick a blank to reveal it" in await meta.inner_text()
+            assert "points" in await meta.inner_text()
+
+            before = await guesser.evaluate(TILE_BOXES)
+            assert len(before) == 10 and len({top for _, top, _ in before}) == 1, before
+            await guesser.locator(".hint-blank").nth(2).click()
+            await guesser.locator(".masked-tile.is-revealed").first.wait_for()
+            after = await guesser.evaluate(TILE_BOXES)
+            assert after == before, (before, after)
         finally:
             for context in contexts:
                 await context.close()

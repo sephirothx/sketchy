@@ -1543,8 +1543,10 @@ export const DE: Catalogue = {
   promptDisplay: {
     couldNotDoAction: (p: { action: string }) =>
       `Das hat nicht geklappt: ${p.action}.`,
-    nextHintCost: (p: { cost: number }) => `Nächster Hinweis: ${p.cost}`,
-    hintSpendTotal: (p: { spent: number }) => `Gesamt: ${p.spent}`,
+    nextHintCost: (p: { cost: number }) =>
+      `Wähle ein leeres Feld zum Aufdecken · ${counted(p.cost, { one: "Punkt", other: "Punkte" })}`,
+    hintSpendTotal: (p: { spent: number }) =>
+      `Gesamt: ${counted(p.spent, { one: "Punkt", other: "Punkte" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `„${p.letter}“ für ${counted(p.price, { one: "Punkt", other: "Punkte" })} kaufen`,
     maskedPrompt: (p: { shape: string }) => `Verdeckter Begriff, ${p.shape} Buchstaben`,

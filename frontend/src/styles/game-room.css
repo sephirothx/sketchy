@@ -2336,6 +2336,45 @@
   opacity: 1;
 }
 
+/* A word is one row of tiles (#1277). They wrapped mid-word - an 8-letter
+   word on a 390px phone broke 7 + 1 and read as two words - so they shrink to
+   fit instead, which takes every level between the prompt and the tile being
+   allowed to give up width. Words still wrap between each other. */
+.masked-words {
+  max-width: 100%;
+}
+
+.masked-word,
+.masked-run,
+.masked-tiles {
+  max-width: 100%;
+  min-width: 0;
+}
+
+.masked-tiles {
+  flex-wrap: nowrap;
+}
+
+.masked-tile {
+  flex: 0 1 auto;
+  min-width: 0;
+}
+
+/* While letters can be bought every tile is the buyable size, revealed ones
+   too: a bought letter fell back to the plain tile's 19px and moved the row
+   13px under the finger that bought it. */
+.masked-words.is-buyable .masked-tile {
+  /* One box model for the buttons and the revealed letters, or they shrink
+     by different amounts and a bought tile still moves its neighbours. */
+  box-sizing: border-box;
+  flex: 0 1 44px;
+  height: 44px;
+  min-height: 0;
+  min-width: 22px;
+  padding-inline: 0;
+  width: 44px;
+}
+
 .wheel-hint-panel {
   width: 100%;
 }

@@ -46,7 +46,10 @@ function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean;
   let slot = -1;
 
   return (
-    <span className="masked-words" aria-label={ui.promptDisplay.maskedPrompt({ shape: counts.join(" and ") })}>
+    <span
+      className={`masked-words${buyableProps ? " is-buyable" : ""}`}
+      aria-label={ui.promptDisplay.maskedPrompt({ shape: counts.join(" and ") })}
+    >
       {words.map((segments, wordIndex) => (
         <span key={wordIndex} className="masked-word">
           {segments.map((segment, segmentIndex) => {
