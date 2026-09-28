@@ -419,15 +419,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "The game was restarted by player vote.",
   game_ended_too_few_players: () => "The game ended: fewer than two players remain.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - found ${counted(count(p.count, 1), {
-    one: "time",
-    other: "times",
-  })}!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `Bought "${text(p.letter)}" for ${counted(count(p.cost), { one: "point", other: "points" })}: ${
+      found === 1 ? "found once" : `found ${found} times`
+    }.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - not in the prompt.`,
+    `Bought "${text(p.letter)}" for ${counted(count(p.cost), { one: "point", other: "points" })}: not in the prompt.`,
   guess_very_close: (p) => `"${text(p.text)}" is very close!`,
-  guess_some_words_correct: () => "Some words are correct",};
+  guess_some_words_correct: () => "Some words are correct.",
+};
 
 export const EN = {
   refusals: REFUSALS,
@@ -1478,7 +1480,7 @@ export const EN = {
     couldNotLoadProfile: "Could not load this profile. Please try again.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "round", other: "rounds" })} · ${counted(p.players, { one: "player", other: "players" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} pts`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "point", other: "points" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Rules: ${p.scoring} · ${p.hints} · ${p.seconds} seconds · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Report ${p.name}`,

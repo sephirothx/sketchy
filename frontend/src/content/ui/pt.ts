@@ -407,15 +407,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "A partida foi reiniciada por votação dos jogadores.",
   game_ended_too_few_players: () => "O jogo terminou: restam menos de dois jogadores.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - encontrada ${counted(count(p.count, 1), {
-    one: "vez",
-    other: "vezes",
-  })}!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `«${text(p.letter)}» comprada por ${counted(count(p.cost), { one: "ponto", other: "pontos" })}: ${
+      found === 1 ? "aparece uma vez" : `aparece ${found} vezes`
+    }.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - não está na palavra.`,
+    `«${text(p.letter)}» comprada por ${counted(count(p.cost), { one: "ponto", other: "pontos" })}: não está na palavra.`,
   guess_very_close: (p) => `«${text(p.text)}» está muito perto!`,
-  guess_some_words_correct: () => "Algumas palavras estão certas",};
+  guess_some_words_correct: () => "Algumas palavras estão certas.",
+};
 
 export const PT: Catalogue = {
   refusals: REFUSALS,
@@ -1459,7 +1461,7 @@ export const PT: Catalogue = {
     couldNotLoadProfile: "Não foi possível carregar este perfil. Tenta de novo.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronda", other: "rondas" })} · ${counted(p.players, { one: "jogador", other: "jogadores" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} pts`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "ponto", other: "pontos" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Regras: ${p.scoring} · ${p.hints} · ${p.seconds} segundos · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Denunciar ${p.name}`,

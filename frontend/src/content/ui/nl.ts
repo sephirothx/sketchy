@@ -407,15 +407,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "Het spel is opnieuw gestart door een stemming van de spelers.",
   game_ended_too_few_players: () => "Het spel is afgelopen: er zijn minder dan twee spelers over.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} ptn - ${counted(count(p.count, 1), {
-    one: "keer",
-    other: "keer",
-  })} gevonden!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `„${text(p.letter)}” gekocht voor ${counted(count(p.cost), { one: "punt", other: "punten" })}: ${
+      found === 1 ? "één keer" : `${found} keer`
+    } gevonden.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} ptn - zit niet in het woord.`,
+    `„${text(p.letter)}” gekocht voor ${counted(count(p.cost), { one: "punt", other: "punten" })}: zit niet in het woord.`,
   guess_very_close: (p) => `„${text(p.text)}” zit er heel dichtbij!`,
-  guess_some_words_correct: () => "Sommige woorden kloppen",};
+  guess_some_words_correct: () => "Sommige woorden kloppen.",
+};
 
 export const NL: Catalogue = {
   refusals: REFUSALS,
@@ -1459,7 +1461,7 @@ export const NL: Catalogue = {
     couldNotLoadProfile: "Dit profiel kon niet geladen worden. Probeer het nog eens.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronde", other: "rondes" })} · ${counted(p.players, { one: "speler", other: "spelers" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} ptn`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "punt", other: "punten" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Regels: ${p.scoring} · ${p.hints} · ${p.seconds} seconden · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
