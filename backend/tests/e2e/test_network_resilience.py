@@ -9,6 +9,7 @@ from tests.e2e.lobby_helpers import (
     room_code,
     use_guest_name,
 )
+from tests.e2e.test_friends import unique
 
 
 BASE_URL = "http://localhost:8000"
@@ -242,8 +243,8 @@ async def test_a_banner_makes_room_for_itself_on_the_pinned_lobby():
 
             await context.set_offline(True)
             await page.wait_for_selector(".connection-status-banner.offline")
-            # Polled rather than read once: the stack's height is published by a
-            # ResizeObserver, which reports after the frame the banner arrived in.
+            # Polled rather than read once: a height the stack's DOM did not
+            # change - a wrap, a web font - is published a frame after layout.
             await page.wait_for_function(
                 """() => {
                   const box = document.querySelector('.lobby-page').getBoundingClientRect();
@@ -253,6 +254,67 @@ async def test_a_banner_makes_room_for_itself_on_the_pinned_lobby():
             )
             await context.set_offline(False)
             await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def next_frames(page) -> None:
+    """Two frames on: a ResizeObserver reports, and would raise its loop
+    error, in the frame after the change that set it off."""
+    await page.evaluate(
+        "() => new Promise((done) => requestAnimationFrame(() => requestAnimationFrame(done)))"
+    )
+
+
+async def test_a_banner_coming_and_going_raises_no_resize_observer_loop():
+    """The stack's height resizes the pinned lobby, and so the document. It
+    was written from the stack's ResizeObserver, after the frame had been laid
+    out once with the banner in and the lobby not yet shorter - so the
+    document grew, and `html`'s own observer (scrollbarWidth.ts) was told,
+    and then it shrank again inside the same frame. The browser reports that
+    as "ResizeObserver loop completed with undelivered notifications" on
+    `window`, and the client error log kept one in every bug report filed
+    after a banner.
+
+    Classic scrollbars, because the page overflowing for that one layout also
+    brought the window's scrollbar in and out: the same loop by another route,
+    for anything watching the window's width."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True, args=["--mute-audio"], ignore_default_args=["--hide-scrollbars"]
+        )
+        context = await browser.new_context(viewport={"width": 1200, "height": 800})
+        await context.add_init_script(
+            """
+            window.__windowErrors = [];
+            window.addEventListener('error', (event) => {
+              window.__windowErrors.push(String(event.message));
+            });
+            """
+        )
+        page = await context.new_page()
+        try:
+            await use_guest_name(page, unique("NoLoop"))
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".lobby-rooms-panel")
+            await next_frames(page)
+
+            await context.set_offline(True)
+            await page.wait_for_selector(".connection-status-banner.offline")
+            await next_frames(page)
+            # With it up, a window too short to pin the lobby, and back.
+            await page.set_viewport_size({"width": 1200, "height": 560})
+            await next_frames(page)
+            await page.set_viewport_size({"width": 1200, "height": 800})
+            await next_frames(page)
+
+            await context.set_offline(False)
+            await page.wait_for_selector(".connection-status-banner", state="hidden", timeout=10000)
+            await next_frames(page)
+
+            errors = await page.evaluate("window.__windowErrors")
+            assert not [error for error in errors if "ResizeObserver loop" in error], errors
         finally:
             await context.close()
             await browser.close()
