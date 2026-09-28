@@ -171,6 +171,8 @@
   box-sizing: border-box;
   color: var(--ink);
   font: inherit;
+  /* Not inherited: a form's 14px would make iOS zoom on focus (R-UX-21). */
+  font-size: 16px;
   font-weight: 400;
   padding: 9px 10px;
   width: 100%;

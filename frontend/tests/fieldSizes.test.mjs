@@ -18,13 +18,17 @@ test("every stylesheet rule that sizes a text field sets 16px or more", () => {
     const css = readFileSync(join(STYLES, String(file)), "utf8").replace(/\/\*[\s\S]*?\*\//g, "");
     for (const [, selectors, body] of css.matchAll(/([^{}]+)\{([^{}]*)\}/g)) {
       const size = body.match(/font-size:\s*([\d.]+)px/);
-      if (!size || Number(size[1]) >= 16) continue;
+      // An inherited size is whatever the parent says - 13.5px, for the
+      // moderation category select under its label - so a field that takes
+      // `font: inherit` says its own size too.
+      const inherits = /font(-size)?:\s*inherit/.test(body) && !size;
+      if (!inherits && (!size || Number(size[1]) >= 16)) continue;
       for (const selector of selectors.split(",").map((part) => part.trim())) {
         const last = selector.split(/[\s>+~]+/).at(-1) ?? "";
         if (/::?(placeholder|-webkit)/.test(last)) continue;
         if (/\[type="?(checkbox|radio|range|color|file)/.test(selector)) continue;
         if (/^(input|select|textarea)\b|-(input|select|textarea)\b/.test(last)) {
-          small.push(`${file}: ${selector} ${size[1]}px`);
+          small.push(`${file}: ${selector} ${inherits ? "inherited" : `${size[1]}px`}`);
         }
       }
     }

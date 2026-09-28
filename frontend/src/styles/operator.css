@@ -1447,6 +1447,7 @@
   background: var(--card);
   color: var(--ink);
   font: inherit;
+  font-size: 16px; /* Not inherited: under 16px iOS zooms on focus (R-UX-21). */
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   text-align: right;
@@ -1682,6 +1683,8 @@
   border-radius: var(--radius-sm);
   color: var(--ink);
   font: inherit;
+  /* Not the note label's 13.5px: under 16px iOS zooms on focus (R-UX-21). */
+  font-size: 16px;
   padding: 7px 9px;
   width: 100%;
 }
