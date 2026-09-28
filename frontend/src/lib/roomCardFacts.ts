@@ -114,7 +114,7 @@ export function roomFacts(room: RoomFactsInput, { capacity = false }: { capacity
   ].filter(Boolean).join(" · ");
   return [
     capacity
-      ? { key: "players", label: ui.roomSetupForm.maxPlayers, value: String(room.maxPlayers), changed: false }
+      ? { key: "players", label: ui.roomFacts.seats, value: String(room.maxPlayers), changed: false }
       : {
           key: "players",
           label: ui.roomPlayersPanel.players,

@@ -2845,7 +2845,8 @@ A seated client checks with the server every five seconds that it still holds th
   drawing time, scoring, hints, prompts - with the ones the host changed tinted, and the host's
   Edit and an orange Start in the same card - on one line where the words fit, otherwise with
   every row filled: Edit and the pad's button over a full-width Start. An invite link shows the room the same six
-  cells, so the rules read the same before joining as after. Beside Edit, "Draw while you wait"
+  cells, so the rules read the same before joining as after - its players cell saying who is in
+  ("3 of 8"), where the waiting room's says how many it seats, the roster beside it saying who. Beside Edit, "Draw while you wait"
   ("Doodle" up to 1100px, where it shares a row with "Edit rules", or with "Waiting for Hosty to
   start" for everybody but the host) swaps
   the column for a scratch pad at a turn's size - only yours, like the one an outage shows,

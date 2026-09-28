@@ -134,7 +134,7 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             # What the room seats, not who is in it: the roster says that,
             # beside its heading (#1279).
             players = facts.locator('[data-fact="players"]')
-            assert await players.locator(".room-fact-label").text_content() == "Max players"
+            assert await players.locator(".room-fact-label").text_content() == "Seats"
             assert " of " not in await players.locator(".room-fact-text").inner_text()
             assert not await player_page.is_visible('.room-settings-editor')
             # A guest gets the facts, not a way in.

@@ -17,10 +17,16 @@
 .drawing-recap-navigation button:last-child { justify-self: end; }
 .drawing-recap-navigation strong { color: var(--ink); font-size: 14px; }
 
+/* The close in the title's row at every width, where the highlights keep
+   theirs; the recap's other actions take the row under it on a phone. */
+.drawing-recap-header-actions { margin-left: auto; }
+
 @media (max-width: 640px) {
   .drawing-recap-card { border-radius: var(--radius); padding: 14px; }
-  .drawing-recap-header { align-items: stretch; flex-direction: column; }
-  .drawing-recap-header-actions { align-self: stretch; flex-wrap: wrap; }
+  .drawing-recap-header { display: grid; grid-template-columns: minmax(0, 1fr) auto; }
+  .drawing-recap-header > :first-child { grid-column: 1; grid-row: 1; }
+  .drawing-recap-close { align-self: start; grid-column: 2; grid-row: 1; }
+  .drawing-recap-header-actions { flex-wrap: wrap; grid-column: 1 / -1; grid-row: 2; margin-left: 0; }
 }
 
 /* Dot pager beside the count: on a phone the count alone makes you do

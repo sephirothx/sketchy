@@ -1800,6 +1800,7 @@ export const FR: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Places",
     customShort: (p: { count: number }) =>
       `${number(p.count)} perso`,
     customOnlyShort: (p: { count: number }) =>

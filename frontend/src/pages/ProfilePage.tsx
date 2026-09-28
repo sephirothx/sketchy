@@ -400,6 +400,7 @@ function GameRow({
                 drawerId: turn.drawerSeatId ?? "",
                 drawerNickname: turn.drawerDisplayName,
                 drawerNameColor: turn.drawerNameColor ?? undefined,
+                drawerIsAnonymous: turn.drawerIsAnonymous,
                 prompt: turn.prompt,
                 actionCount: turn.strokeCount,
                 available: turn.drawingStatus === "ready",

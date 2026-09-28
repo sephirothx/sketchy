@@ -202,12 +202,14 @@ test("every score on screen is written in the locale's numbers (#1279)", async (
   assert.equal(EN.format.number({ value: 1182 }), "1,182");
   assert.equal(DE.format.number({ value: 1182 }), "1.182");
   // A catalogue key (`ui.profilePage.totalScore`) is a label, not a score.
-  const raw = /\{\s*(?!ui\.)[A-Za-z_.]*\.(score|finalScore|totalScore)\s*\}|String\([^)]*[sS]core\b/;
+  const raw = /\{\s*(?!ui\.)[A-Za-z_.]*\.(score|finalScore|totalScore|total|delta)\s*\}|String\([^)]*[sS]core\b/;
   const offenders = [];
   for (const dir of ["components", "pages"]) {
     const root = join(import.meta.dirname, "../src", dir);
     for (const file of readdirSync(root, { recursive: true })) {
       if (!String(file).endsWith(".tsx")) continue;
+      // Staff pages count other things than scores, in English.
+      if (/^(ops\/|AdminOperationsPage|ModerationPage|BugReportsPage)/.test(String(file))) continue;
       readFileSync(join(root, String(file)), "utf8").split("\n").forEach((line, index) => {
         if (raw.test(line)) offenders.push(`${dir}/${file}:${index + 1} ${line.trim()}`);
       });

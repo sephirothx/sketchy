@@ -1813,6 +1813,7 @@ export const EN = {
   },
 
   roomFacts: {
+    seats: "Seats",
     customShort: (p: { count: number }) =>
       `${number(p.count)} custom`,
     customOnlyShort: (p: { count: number }) =>

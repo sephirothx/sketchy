@@ -94,7 +94,7 @@ test("a room's six facts come in one order, and only the choices are marked chan
   // Inside the room the roster says who is here; the tile, what it seats (#1279).
   const inRoom = roomFacts({ ...standard, playerCount: 2 }, { capacity: true });
   assert.deepEqual(inRoom.map((fact) => fact.key), ["players", "rounds", "drawing-time", "scoring", "hints", "prompts"]);
-  assert.deepEqual([inRoom[0].label, inRoom[0].value], ["Max players", "8"]);
+  assert.deepEqual([inRoom[0].label, inRoom[0].value], ["Seats", "8"]);
   assert.deepEqual(otherRoomRules(standard), []);
   assert.deepEqual(
     otherRoomRules({ ...standard, allowedTools: ["brush"], spectatorsSeePrompt: true }),

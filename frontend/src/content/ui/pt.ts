@@ -1797,6 +1797,7 @@ export const PT: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Lugares",
     customShort: (p: { count: number }) =>
       `${number(p.count)} próprias`,
     customOnlyShort: (p: { count: number }) =>

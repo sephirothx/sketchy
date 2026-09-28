@@ -731,17 +731,7 @@
   padding: 0;
 }
 
-/* The sheet's own title says "Players"; the panel's heading said it again
-   under it (#1279). Kept for a screen reader, which the panel's section is
-   labelled by; the count beside it stays. */
-.players-sheet .room-players-title-row .panel-title {
-  clip-path: inset(50%);
-  height: 1px;
-  overflow: hidden;
-  position: absolute;
-  white-space: nowrap;
-  width: 1px;
-}
+
 
 @media (max-width: 900px), (max-height: 520px) {
   /* The turn recap as a sheet rather than a box floating on the canvas.

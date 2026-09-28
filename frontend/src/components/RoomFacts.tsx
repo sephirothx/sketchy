@@ -36,8 +36,11 @@ function cellPadding(dl: HTMLElement): number {
 /**
  * A room's six facts as a strip of cells, and what else the host changed
  * (#580). One component for the waiting room and the invite page, so the room
- * somebody follows a link to reads exactly as the room they arrive in: the
- * same six, in the same order, with the same mark on what is unusual.
+ * somebody follows a link to reads as the room they arrive in: the same six,
+ * in the same order, with the same mark on what is unusual. One cell differs
+ * by design: the invite page's players cell says who is in ("3 of 8"), the
+ * waiting room's how many it seats (`capacity`), since there the roster
+ * beside it already says who is in (#1279).
  *
  * Label before value in the markup, as a definition list wants it; the cell
  * puts the value above the label on screen.

@@ -176,15 +176,15 @@ export function DrawingRecapGallery({
               <DownloadIcon size={15} />
               {ui.drawingRecapGallery.saveImage}
             </button>
-            <button
-              type="button"
-              className="btn btn-icon drawing-recap-close"
-              onClick={onClose}
-              aria-label={ui.drawingRecapGallery.closeDrawings}
-            >
-              <XIcon size={17} />
-            </button>
           </div>
+          <button
+            type="button"
+            className="btn btn-icon drawing-recap-close"
+            onClick={onClose}
+            aria-label={ui.drawingRecapGallery.closeDrawings}
+          >
+            <XIcon size={17} />
+          </button>
         </header>
 
         <div

@@ -233,7 +233,8 @@ async def test_multi_browser_gameplay_scenario(assert_input_contract):
             # it again (#1279) - which a screen reader still has.
             heading = page1.locator('[data-testid="players-drawer"] .room-players-title-row .panel-title')
             assert (await heading.bounding_box())["width"] <= 1
-            assert await page1.get_by_role("heading", name="Players", exact=True).count() >= 1
+            panel = page1.locator('[data-testid="players-drawer"] .room-players-panel')
+            assert await panel.get_by_role("heading", name="Players", exact=True).count() == 1
             await page1.click('.bottom-sheet-close')
             await page1.wait_for_selector('[data-testid="players-drawer"]', state="detached")
             await page1.set_viewport_size({"width": 1280, "height": 720})

@@ -1798,6 +1798,7 @@ export const DE: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Plätze",
     customShort: (p: { count: number }) =>
       `${number(p.count)} eigene`,
     customOnlyShort: (p: { count: number }) =>
