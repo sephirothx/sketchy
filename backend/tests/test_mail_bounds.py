@@ -199,3 +199,28 @@ async def test_a_one_message_batch_still_reaches_a_waiting_reset(monkeypatch):
             sent += [message.to_address for message in transport.sent]
         assert sent[0] == "locked-out@example.test"
         assert sent[1:] == ["verify0@example.test", "verify1@example.test"]
+
+
+async def test_a_small_batch_still_keeps_a_slot_for_other_mail(monkeypatch):
+    """#1302 review: batches of two to four kept no slot for other mail, so a
+    backlog of older resets held verification mail until it expired."""
+    async with build_site(monkeypatch, IP_HASH_SECRET="mail-bounds") as from_address:
+        factory = from_address.factory
+        start = datetime.now(timezone.utc) - timedelta(minutes=10)
+        async with factory() as session, session.begin():
+            for index in range(6):
+                queue_email(
+                    session, to_address=f"reset{index}@example.test", template=EmailTemplate.RESET_PASSWORD,
+                    payload={"token": "t", "displayName": "x"}, now=start + timedelta(seconds=index),
+                )
+            queue_email(
+                session, to_address="waiting@example.test", template=EmailTemplate.VERIFY_EMAIL,
+                payload={"token": "t", "displayName": "x"}, now=start + timedelta(minutes=5),
+            )
+        transport = MemoryTransport()
+        await deliver_pending(factory, transport=transport, base_url="http://test", batch_size=2)
+        sent = [message.to_address for message in transport.sent]
+        # Which reset is not the point - queued in one transaction, they share
+        # a created_at on PostgreSQL - only that one of the two slots is not.
+        assert "waiting@example.test" in sent
+        assert len(sent) == 2 and sum(address.startswith("reset") for address in sent) == 1

@@ -799,9 +799,9 @@ locked out, a verification link lives a day, and oldest-first alone let a queue 
 with verification mail age every reset behind it past its expiry at 50 messages a
 sweep. A fifth of every batch (10 of 50) is kept for everything else, oldest first,
 and filled with resets only when nothing else is due: without it a sustained flood of
-resets held every verification until its link had expired (#1302 review). A batch
-too small to share (under five) goes to whichever kind has waited longer, so a
-one-message drain starves neither.
+resets held every verification until its link had expired (#1302 review). Any batch of two
+or more keeps at least one slot for it; a batch of one goes to whichever kind has
+waited longer, so a one-message drain starves neither.
 
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 
