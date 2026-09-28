@@ -19,6 +19,7 @@ from tests.e2e.lobby_helpers import (
     open_player_settings,
     open_public_rooms,
     open_room_settings,
+    open_settings_section,
     register_account,
     room_code,
     save_room_settings,
@@ -59,10 +60,16 @@ FIELD_COUNT = """
 
 
 async def _open_every_section(page) -> None:
-    """Expand every collapsed section, so the fields inside are measured too."""
-    await page.evaluate(
-        "() => document.querySelectorAll('details:not([open])').forEach((d) => { d.open = true; })"
-    )
+    """Expand every collapsed section, so the fields inside are measured too.
+
+    By its summary, as a player would: the sections' open state is React's,
+    and one opened by setting `open` in the DOM was closed again by the next
+    render - now and then, which made a later fill inside it flaky."""
+    closed = page.locator("details:not([open]) > summary:visible")
+    for _ in range(12):
+        if not await closed.count():
+            break
+        await closed.first.click()
 
 
 async def test_every_text_field_on_a_phone_is_at_least_16px():
@@ -135,7 +142,12 @@ async def test_every_text_field_on_a_phone_is_at_least_16px():
             await _open_every_section(page)
             await measure("rules editor")
             # Custom prompts, so the guest below gets the room's list to search.
-            await page.locator("#custom-prompts").fill("lantern\nkettle\nharbour")
+            # The editor can remount its sections closed while it loads, so the
+            # Prompts section is opened again if it has to be.
+            custom = page.locator("#custom-prompts")
+            if not await custom.is_visible():
+                await open_settings_section(page, "Prompts")
+            await custom.fill("lantern\nkettle\nharbour")
             await page.get_by_label("Only use custom prompts").check()
             await save_room_settings(page)
 
