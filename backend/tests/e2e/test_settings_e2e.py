@@ -750,3 +750,30 @@ async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_create_account_from_the_no_name_card_keeps_the_name_typed_there():
+    """Review of #1311: a name typed in the no-name card, then "Create
+    account", opened the dialog with a blank username - there was no user to
+    suggest one from - so the name had to be typed again."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".first-run")
+            await page.locator(".header-settings-button").click()
+            card = page.locator(".settings-modal-card").get_by_test_id("settings-nameless")
+            await card.wait_for(state="visible")
+            name = f"Typed{uuid4().hex[:6]}"
+            await card.get_by_label("Display name").fill(name)
+            await card.get_by_role("button", name="Create account").click()
+            dialog = page.get_by_role("dialog", name="Create your account")
+            await dialog.wait_for()
+            assert await dialog.get_by_label("Username").input_value() == name
+        finally:
+            await context.close()
+            await browser.close()

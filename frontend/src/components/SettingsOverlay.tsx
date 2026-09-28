@@ -511,6 +511,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const setAccountNameColor = useAuthStore((state) => state.setNameColor);
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
+  const nameDraft = useAuthStore((state) => state.nameDraft);
   // No account at all is not a registered one: until there is a name every
   // account control below is for somebody else (#1265).
   const isGuest = !user || user.isAnonymous;
@@ -685,7 +686,10 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const authDialog = authMode && (
     <AuthDialog
       mode={authMode}
-      suggestedUsername={user?.isAnonymous ? (user.displayName ?? "") : ""}
+      // A guest's name, or - with no name yet - what the nameless card holds,
+      // so a name typed there and then "Create account" is not typed twice
+      // (review of #1311).
+      suggestedUsername={user && !user.isAnonymous ? "" : (user?.displayName || nameDraft.trim())}
       onClose={() => setAuthMode(null)}
       onSwitchMode={setAuthMode}
       onSubmit={authSubmitter(authMode, login, register)}
