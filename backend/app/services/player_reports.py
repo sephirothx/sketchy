@@ -65,6 +65,7 @@ class ReportBudget:
     """
 
     def __init__(self, session_factory) -> None:
+        self._session_factory = session_factory
         self._addresses = PersistentRateLimiter(
             session_factory, scope="report-submit",
             limit=REPORTS_PER_ADDRESS, window_seconds=REPORT_WINDOW_SECONDS,
@@ -78,12 +79,17 @@ class ReportBudget:
         """Spend one report from both buckets, or neither.
 
         The account first: a reporter out of their own allowance does not
-        spend the allowance of everybody else behind their address.
+        spend the allowance of everybody else behind their address. The
+        account is the canonical one: a room seat still carries the guest id
+        it sat down with after that guest signed in to an account, and every
+        such seat was a bucket of its own (#1301 review).
         """
-        if not await self._accounts.check(account_id):
+        async with self._session_factory() as session:
+            account = str(await canonical_user_id(session, UUID(str(account_id))))
+        if not await self._accounts.check(account):
             return False
         if not await self._addresses.check(address):
-            await self._accounts.refund(account_id)
+            await self._accounts.refund(account)
             return False
         return True
 

@@ -256,3 +256,33 @@ async def test_a_line_somebody_else_received_is_kept():
     sio, ctx, seats = _chat_room(2)
     assert (await sio.handlers["/"]["send_chat"](seats[0].sid, {"text": "heard"}))["ok"] is True
     ctx.message_retention.record.assert_awaited_once()
+
+
+async def test_a_seat_still_carrying_its_guest_id_spends_the_account_it_became(monkeypatch):
+    """#1301 review: a room seat keeps the guest id it sat down with after that
+    guest signs in to an account, and the socket door charged the bucket under
+    it - one more account bucket per such seat, none shared with the REST and
+    Gallery doors, which charge the account."""
+    from app.db.models import IdentityAlias
+
+    monkeypatch.setenv("IP_HASH_SECRET", "report-budget-secret")
+    monkeypatch.setattr(player_reports, "REPORTS_PER_ACCOUNT", 2)
+    factory, engine = await create_test_db()
+    try:
+        guest_id, account_id = uuid4(), uuid4()
+        async with factory() as session, session.begin():
+            session.add_all([
+                User(id=guest_id, display_name="Guest"),
+                User(id=account_id, username="Became", password_hash="hash", display_name="Became", state="registered"),
+            ])
+            await session.flush()
+            session.add(IdentityAlias(source_user_id=guest_id, target_user_id=account_id))
+        budget = ReportBudget(factory)
+        spent = [
+            await budget.charge(address=f"198.51.100.{index}", account_id=str(guest_id))
+            for index in range(2)
+        ]
+        assert spent == [True, True]
+        assert not await budget.charge(address="198.51.100.9", account_id=str(account_id))
+    finally:
+        await engine.dispose()
