@@ -3841,3 +3841,41 @@ async def test_a_moderator_lifts_a_moderators_suspension_of_a_player(env):
     )).json()
     lifted = await moderator_http.post(f"/api/moderation/bans/{ban['id']}/revoke", json={"reason": "Appeal"})
     assert lifted.status_code == 200
+
+
+async def test_a_report_about_a_moderators_claimed_guest_is_still_about_them(env):
+    """#1248: reported while playing as a guest, a moderator who then claimed
+    that guest into their account could see and decide their own case - a
+    merge does not re-point a report, and the check compared raw ids."""
+    from app.repositories.sqlalchemy import SqlAlchemyUserRepository
+
+    new_client, factory, _ = env
+    reporter_http, moderator_http, other_http = new_client(), new_client(), new_client()
+    await register(reporter_http, "GuestReporter")
+    moderator = await register(moderator_http, "ClaimingMod")
+    other = await register(other_http, "OtherModerator")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, other["id"], UserRole.MODERATOR)
+    users = SqlAlchemyUserRepository(factory)
+    guest = await users.create_anonymous("RoadGuest")
+
+    submitted = await reporter_http.post(
+        "/api/reports",
+        json={"reportedUserId": guest.id, "reason": "harassment", "details": "Rude."},
+    )
+    assert submitted.status_code == 201, submitted.text
+    report_id = submitted.json()["id"]
+    await users.merge_guest_into_account(guest.id, moderator["id"])
+
+    own_queue = await moderator_http.get("/api/moderation/reports", params={"status": "pending"})
+    assert own_queue.json()["incidents"] == [], "not theirs to see"
+    refused = await moderator_http.patch(
+        f"/api/moderation/reports/{report_id}", json={"status": "dismissed", "note": "Old news."}
+    )
+    assert refused.status_code == 403
+    assert (
+        await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+    ).status_code == 403
+
+    others_queue = await other_http.get("/api/moderation/reports", params={"status": "pending"})
+    assert [r["id"] for i in others_queue.json()["incidents"] for r in i["reports"]] == [report_id]
