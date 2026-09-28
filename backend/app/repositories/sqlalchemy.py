@@ -3635,6 +3635,85 @@ class _CatalogueRanking:
         self._entries.clear()
 
 
+#: Rows read per turn of the loop when a selection's content is read cold:
+#: about 8 ms of row handling each, measured.
+VERDICT_READ_CHUNK = 1000
+
+
+async def _rows_in_chunks(session: AsyncSession, statement) -> list:
+    """Every row of `statement`, handed over a chunk at a time.
+
+    A selection at its ceiling is ~210,000 rows of answers and aliases, and
+    materialising them in one go held the loop for ~0.4 s before any folding
+    began (#1237); a chunk at a time gives the loop back between them.
+    """
+    rows: list = []
+    result = await session.stream(statement)
+    async for partition in result.partitions(VERDICT_READ_CHUNK):
+        rows.extend(partition)
+        await asyncio.sleep(0)
+    return rows
+
+
+#: Selections whose verdict is remembered (#1237). A verdict is a few
+#: integers; the bound is on how many distinct selections are kept, oldest out.
+MAX_REMEMBERED_VERDICTS = 512
+AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
+EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectionVerdict:
+    """What checking a selection's content concluded: how many prompts it
+    offers, and whether any answer reaches two of them."""
+
+    prompt_count: int
+    ambiguous: bool
+
+
+def _single_language_verdict(rows: Sequence[Row], language: str) -> _SelectionVerdict:
+    """Fold every active answer and alias under `language`; off the loop.
+
+    Keyed from the *text* under the fold in force now, not the stored keys
+    (review of #1070): a fold that widened since the rows were written makes
+    two stored keys one answer, and the game matches under the new fold.
+    """
+    reached_by: dict[str, UUID] = {}
+    for version_id, answer in rows:
+        if reached_by.setdefault(prompt_match_key(answer, language), version_id) != version_id:
+            return _SelectionVerdict(prompt_count=0, ambiguous=True)
+    return _SelectionVerdict(prompt_count=len({version_id for version_id, _ in rows}), ambiguous=False)
+
+
+def _mixed_verdict(
+    rows: Sequence[Row], alias_rows: Sequence[Row], language_of: dict[UUID, str]
+) -> _SelectionVerdict:
+    """A mixed room's check, every room language at once; off the loop.
+
+    Each room language sees its own lists and the lists in no language. Each
+    text is folded once per distinct transliteration rather than once per
+    room language (`prompt_match_keys`): seven languages, at most four keys.
+    The rows arrive as the database returned them, so none of this - not even
+    grouping the aliases - runs on the loop.
+    """
+    aliases: dict[UUID, list[str]] = defaultdict(list)
+    for version_id, answer in alias_rows:
+        aliases[version_id].append(answer)
+    reached_by: dict[str, dict[str, UUID]] = {language: {} for language in PROMPT_LANGUAGES}
+    for revision_id, version_id, _concept, answer in rows:
+        list_language = language_of[revision_id]
+        languages = (
+            PROMPT_LANGUAGES if list_language == AGNOSTIC_PROMPT_LANGUAGE else (list_language,)
+        )
+        for text in (answer, *aliases.get(version_id, ())):
+            for language, key in prompt_match_keys(text, languages).items():
+                if reached_by[language].setdefault(key, version_id) != version_id:
+                    return _SelectionVerdict(prompt_count=0, ambiguous=True)
+    return _SelectionVerdict(
+        prompt_count=len({concept for _, _, concept, _ in rows}), ambiguous=False
+    )
+
+
 class SqlAlchemyPromptListRepository(PromptListRepository):
     """SQLAlchemy-backed implementation of PromptListRepository."""
 
@@ -3649,6 +3728,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # `CATALOGUE_RANKING_TTL_SECONDS`); a test that writes and reads back
         # at once gets the uncached order it expects.
         self._ranking = _CatalogueRanking(catalogue_ranking_ttl_seconds)
+        # What authorizing a selection concluded (#1237), by the revisions it
+        # pinned and the fold they were checked under, with the moderation
+        # fingerprint it was concluded at. See `authorize_selection`.
+        self._verdicts: OrderedDict[tuple, tuple[tuple, _SelectionVerdict]] = OrderedDict()
 
     @staticmethod
     def _star_count():
@@ -5494,30 +5577,52 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             or AGNOSTIC_PROMPT_LANGUAGE
         )
         rows_by_slug = {row.slug: row for row in authorized_rows}
+        # Every list's current revision in one statement rather than one per
+        # list (#1237): pinning runs at room creation, at every change of the
+        # selection and before every game, and twenty lists were twenty
+        # round trips before anything was checked.
+        current = await self._current_revisions(
+            session, [row.id for row in rows_by_slug.values()], load_items=load_items
+        )
         revisions: list[PromptListRevision] = []
         for slug in slugs:
-            row = rows_by_slug[slug]
-            stmt = select(PromptListRevision).where(
-                PromptListRevision.prompt_list_id == row.id,
-                PromptListRevision.version
-                == select(PromptList.version)
-                .where(PromptList.id == row.id)
-                .scalar_subquery(),
-            )
-            if load_items:
-                stmt = stmt.options(
-                    selectinload(PromptListRevision.items)
-                    .selectinload(PromptListRevisionItem.prompt_version)
-                    .selectinload(PromptVersion.version_aliases)
-                    .selectinload(PromptVersionAlias.alias)
-                )
-            revision = await session.scalar(stmt)
+            revision = current.get(rows_by_slug[slug].id)
             if revision is None:
                 raise PromptListSelectionError(
                     f"Prompt list has no seeded revision: {slug}"
                 )
             revisions.append(revision)
         return revisions, language
+
+    @staticmethod
+    async def _current_revisions(
+        session: AsyncSession, list_ids: Sequence[UUID], *, load_items: bool = False
+    ) -> dict[UUID, PromptListRevision]:
+        """Each list's current revision, by list, in one statement."""
+        if not list_ids:
+            return {}
+        stmt = (
+            select(PromptListRevision)
+            .join(
+                PromptList,
+                and_(
+                    PromptList.id == PromptListRevision.prompt_list_id,
+                    PromptList.version == PromptListRevision.version,
+                ),
+            )
+            .where(PromptList.id.in_(list(list_ids)))
+        )
+        if load_items:
+            stmt = stmt.options(
+                selectinload(PromptListRevision.items)
+                .selectinload(PromptListRevisionItem.prompt_version)
+                .selectinload(PromptVersion.version_aliases)
+                .selectinload(PromptVersionAlias.alias)
+            )
+        return {
+            revision.prompt_list_id: revision
+            for revision in (await session.scalars(stmt)).all()
+        }
 
     async def _pinned_mixed_revisions(
         self,
@@ -5573,19 +5678,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 concepts[revision_id].add(concept_id)
         by_list = {revision.prompt_list_id: revision for revision in bundled_current}
 
+        agnostic = await self._current_revisions(
+            session,
+            [row.id for row in rows_by_slug.values() if row.language == AGNOSTIC_PROMPT_LANGUAGE],
+        )
         pinned: list[PromptListRevision] = []
         for slug in slugs:
             row = rows_by_slug[slug]
             if row.language == AGNOSTIC_PROMPT_LANGUAGE:
-                revision = await session.scalar(
-                    select(PromptListRevision).where(
-                        PromptListRevision.prompt_list_id == row.id,
-                        PromptListRevision.version
-                        == select(PromptList.version)
-                        .where(PromptList.id == row.id)
-                        .scalar_subquery(),
-                    )
-                )
+                revision = agnostic.get(row.id)
                 if revision is None:
                     raise PromptListSelectionError(
                         f"Prompt list has no seeded revision: {slug}"
@@ -5715,73 +5816,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             if language == MIXED_PROMPT_LANGUAGE:
                 return await self._authorize_mixed(session, slugs, revisions)
             revision_ids = [revision.id for revision in revisions]
-
-            active_versions = (
-                select(PromptListRevisionItem.prompt_version_id)
-                .join(
-                    PromptVersion,
-                    PromptVersion.id == PromptListRevisionItem.prompt_version_id,
-                )
-                .where(
-                    PromptListRevisionItem.revision_id.in_(revision_ids),
-                    PromptVersion.moderation_state
-                    == PromptContentModerationState.ACTIVE.value,
-                )
+            verdict = await self._remembered_verdict(
+                session,
+                ("single", language),
+                revision_ids,
+                lambda: self._single_language_rows(session, revision_ids),
+                lambda rows: _single_language_verdict(rows, language),
             )
-            prompt_count = await session.scalar(
-                select(func.count()).select_from(
-                    active_versions.distinct().subquery()
-                )
-            )
-            if not prompt_count:
-                raise PromptListSelectionError(
-                    "Selected prompt lists do not contain any prompts"
-                )
-
-            # `resolve_selection` catches colliding answers by walking every
-            # prompt it loads. Pinning loads none, so the same question is
-            # asked of the database instead: does any answer - a prompt's
-            # own or one of its aliases - reach two different prompt
-            # versions? Asked of the *text*, keyed here under the fold in
-            # force now, rather than of the stored keys (review of #1070): a
-            # fold that widened since the rows were written makes two stored
-            # keys one answer, and the game matches under the new fold.
-            own_answers = select(
-                PromptListRevisionItem.prompt_version_id.label("version_id"),
-                PromptVersion.canonical_answer.label("answer"),
-            ).join(
-                PromptVersion,
-                PromptVersion.id == PromptListRevisionItem.prompt_version_id,
-            ).where(
-                PromptListRevisionItem.revision_id.in_(revision_ids),
-                PromptVersion.moderation_state
-                == PromptContentModerationState.ACTIVE.value,
-            )
-            alias_answers = select(
-                PromptListRevisionItem.prompt_version_id.label("version_id"),
-                PromptAlias.answer.label("answer"),
-            ).join(
-                PromptVersion,
-                PromptVersion.id == PromptListRevisionItem.prompt_version_id,
-            ).join(
-                PromptVersionAlias,
-                PromptVersionAlias.prompt_version_id == PromptVersion.id,
-            ).join(
-                PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id
-            ).where(
-                PromptListRevisionItem.revision_id.in_(revision_ids),
-                PromptVersion.moderation_state
-                == PromptContentModerationState.ACTIVE.value,
-            )
-            reached_by: dict[str, UUID] = {}
-            for version_id, answer in (
-                await session.execute(own_answers.union(alias_answers))
-            ).all():
-                key = prompt_match_key(answer, language)
-                if reached_by.setdefault(key, version_id) != version_id:
-                    raise PromptListSelectionError(
-                        "Selected prompt lists contain ambiguous answers or aliases"
-                    )
+            if verdict.ambiguous:
+                raise PromptListSelectionError(AMBIGUOUS_SELECTION)
+            if not verdict.prompt_count:
+                raise PromptListSelectionError(EMPTY_SELECTION)
+            prompt_count = verdict.prompt_count
 
             letter_counts: Counter[str] = Counter()
             letter_total = 0
@@ -5797,6 +5843,111 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 letter_counts=dict(letter_counts),
                 letter_total=letter_total,
             )
+
+    async def _remembered_verdict(
+        self,
+        session: AsyncSession,
+        fold: tuple,
+        revision_ids: Sequence[UUID],
+        read_rows,
+        judge,
+    ) -> _SelectionVerdict:
+        """The verdict on these revisions under `fold`, remembered (#1237).
+
+        A revision never changes, so what its content concludes changes only
+        when a moderator hides or restores a version in it - which is what the
+        fingerprint reads, in one aggregate statement: how many members, how
+        many active, and the latest decision. Toggling a room between two
+        selections, or starting game after game on one, used to fold every
+        answer of every list each time on the only event loop (3.3 s for
+        twenty agnostic lists in a mixed room). A miss folds off the loop.
+
+        The fingerprint is read before the rows, so a decision landing between
+        the two leaves a verdict filed under the older fingerprint - which the
+        next authorization then refuses to reuse. Never the other way round.
+        """
+        key = (fold, tuple(sorted(str(revision_id) for revision_id in revision_ids)))
+        fingerprint = await self._moderation_fingerprint(session, revision_ids)
+        remembered = self._verdicts.get(key)
+        if remembered is not None and remembered[0] == fingerprint:
+            self._verdicts.move_to_end(key)
+            return remembered[1]
+        rows = await read_rows()
+        verdict = await _off_loop(judge, rows)
+        self._verdicts[key] = (fingerprint, verdict)
+        self._verdicts.move_to_end(key)
+        while len(self._verdicts) > MAX_REMEMBERED_VERDICTS:
+            self._verdicts.popitem(last=False)
+        return verdict
+
+    @staticmethod
+    async def _moderation_fingerprint(
+        session: AsyncSession, revision_ids: Sequence[UUID]
+    ) -> tuple:
+        """What moderation has made of these revisions' members, as one row.
+
+        The only way a version's state changes is a moderator's decision,
+        which stamps `moderated_at`; the counts catch a decision that left
+        the latest stamp where it was.
+        """
+        row = (
+            await session.execute(
+                select(
+                    func.count(),
+                    func.sum(
+                        case(
+                            (
+                                PromptVersion.moderation_state
+                                == PromptContentModerationState.ACTIVE.value,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    func.max(PromptVersion.moderated_at),
+                )
+                .select_from(PromptListRevisionItem)
+                .join(PromptVersion, PromptVersion.id == PromptListRevisionItem.prompt_version_id)
+                .where(PromptListRevisionItem.revision_id.in_(list(revision_ids)))
+            )
+        ).one()
+        return (int(row[0] or 0), int(row[1] or 0), row[2])
+
+    @staticmethod
+    async def _single_language_rows(
+        session: AsyncSession, revision_ids: Sequence[UUID]
+    ) -> list[Row]:
+        """Every active prompt version's own answer and its aliases, as text.
+
+        `resolve_selection` catches colliding answers by walking every prompt
+        it loads. Pinning loads none, so the same question is asked of these
+        rows instead: does any answer - a prompt's own or one of its aliases -
+        reach two different prompt versions?
+        """
+        active = [
+            PromptListRevisionItem.revision_id.in_(list(revision_ids)),
+            PromptVersion.moderation_state == PromptContentModerationState.ACTIVE.value,
+        ]
+        own_answers = select(
+            PromptListRevisionItem.prompt_version_id.label("version_id"),
+            PromptVersion.canonical_answer.label("answer"),
+        ).join(
+            PromptVersion,
+            PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+        ).where(*active)
+        alias_answers = select(
+            PromptListRevisionItem.prompt_version_id.label("version_id"),
+            PromptAlias.answer.label("answer"),
+        ).join(
+            PromptVersion,
+            PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+        ).join(
+            PromptVersionAlias,
+            PromptVersionAlias.prompt_version_id == PromptVersion.id,
+        ).join(
+            PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id
+        ).where(*active)
+        return await _rows_in_chunks(session, own_answers.union(alias_answers))
 
     async def sample_mixed_prompts(
         self, revision_ids: Sequence[str], *, limit: int
@@ -5940,8 +6091,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         prompt, however many languages spell it.
         """
         language_of = {revision.id: revision.language for revision in revisions}
-        rows = (
-            await session.execute(
+
+        active = [
+            PromptListRevisionItem.revision_id.in_(list(language_of)),
+            PromptVersion.moderation_state == PromptContentModerationState.ACTIVE.value,
+        ]
+
+        async def read_rows():
+            rows = await _rows_in_chunks(
+                session,
                 select(
                     PromptListRevisionItem.revision_id,
                     PromptVersion.id,
@@ -5952,45 +6110,40 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     PromptVersion,
                     PromptVersion.id == PromptListRevisionItem.prompt_version_id,
                 )
-                .where(
-                    PromptListRevisionItem.revision_id.in_(list(language_of)),
-                    PromptVersion.moderation_state
-                    == PromptContentModerationState.ACTIVE.value,
-                )
+                .where(*active),
             )
-        ).all()
-        if not rows:
-            raise PromptListSelectionError(
-                "Selected prompt lists do not contain any prompts"
-            )
-        aliases: dict[UUID, list[str]] = defaultdict(list)
-        for version_id, answer in (
-            await session.execute(
-                select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
-                .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
-                .where(
-                    PromptVersionAlias.prompt_version_id.in_(
-                        {version_id for _, version_id, _, _ in rows}
+            alias_rows = []
+            if rows:
+                # Joined to the items rather than listed by id: a selection at
+                # its ceiling is 10,000 versions, too many to bind one by one.
+                alias_rows = await _rows_in_chunks(
+                    session,
+                    select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
+                    .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+                    .join(
+                        PromptListRevisionItem,
+                        PromptListRevisionItem.prompt_version_id
+                        == PromptVersionAlias.prompt_version_id,
                     )
+                    .join(
+                        PromptVersion,
+                        PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+                    )
+                    .where(*active),
                 )
-            )
-        ).all():
-            aliases[version_id].append(answer)
+            return rows, alias_rows
 
-        for room_language in PROMPT_LANGUAGES:
-            reached_by: dict[str, UUID] = {}
-            for revision_id, version_id, _concept, answer in rows:
-                if language_of[revision_id] not in (
-                    room_language,
-                    AGNOSTIC_PROMPT_LANGUAGE,
-                ):
-                    continue
-                for text in (answer, *aliases[version_id]):
-                    key = prompt_match_key(text, room_language)
-                    if reached_by.setdefault(key, version_id) != version_id:
-                        raise PromptListSelectionError(
-                            "Selected prompt lists contain ambiguous answers or aliases"
-                        )
+        verdict = await self._remembered_verdict(
+            session,
+            ("mixed",),
+            list(language_of),
+            read_rows,
+            lambda read: _mixed_verdict(*read, language_of),
+        )
+        if verdict.ambiguous:
+            raise PromptListSelectionError(AMBIGUOUS_SELECTION)
+        if not verdict.prompt_count:
+            raise PromptListSelectionError(EMPTY_SELECTION)
 
         counts: dict[str, Counter[str]] = {}
         totals: dict[str, int] = {}
@@ -6008,7 +6161,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             slugs=tuple(slugs),
             language=MIXED_PROMPT_LANGUAGE,
             revision_ids=tuple(_public_id(revision.id) for revision in revisions),
-            prompt_count=len({concept for _, _, concept, _ in rows}),
+            prompt_count=verdict.prompt_count,
             letter_counts_by_language={
                 language: dict(tally) for language, tally in counts.items()
             },

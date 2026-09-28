@@ -24,6 +24,7 @@ BENCHMARKS = Path(__file__).resolve().parents[2] / "benchmarks"
 # the database gets a line here; `test_every_database_benchmark_is_smoked`
 # fails until it does.
 SMOKE_ARGS: dict[str, tuple[str, ...]] = {
+    "authorize_selection": ("--lists", "2", "--prompts", "5", "--aliases", "2"),
     "catalogue_star_page": ("--lists", "50", "--owners", "5", "--stars", "200", "--samples", "3"),
     "drawing_store_footprint": ("--games", "2"),
     "finish_game_stall": ("--games", "1"),

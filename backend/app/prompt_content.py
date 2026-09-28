@@ -113,6 +113,9 @@ def validate_prompt_language(language: str) -> str:
     return canonical
 
 
+_CANONICAL_LIST_LANGUAGES = frozenset((*PROMPT_LANGUAGES, AGNOSTIC_PROMPT_LANGUAGE))
+
+
 def validate_prompt_list_language(language: str) -> str:
     """Return the canonical tag a prompt list may declare, or reject it.
 
@@ -120,7 +123,13 @@ def validate_prompt_list_language(language: str) -> str:
     difference from `validate_prompt_language` is deliberate and one-way: a
     room still has to declare a language its guesses can be folded under, so
     `zxx` is refused there.
+
+    A tag already in its canonical form is answered by one set lookup: this
+    runs once per text on every fold, 210,000 times for a selection at its
+    ceiling (#1237), and the regular expression was a fifth of that fold.
     """
+    if language in _CANONICAL_LIST_LANGUAGES:
+        return language
     normalized = language.strip()
     if normalized.lower() == AGNOSTIC_PROMPT_LANGUAGE:
         return AGNOSTIC_PROMPT_LANGUAGE

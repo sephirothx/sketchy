@@ -2115,6 +2115,9 @@ backend/.venv/bin/python benchmarks/socket_abuse.py --scenario garbage --sockets
 
 # Reading and saving one of a player's own prompt lists at the ceiling, 500 x 20 aliases (#1236)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/owned_list_io.py
+
+# Authorizing a room's lists, cold and again unchanged: 20 agnostic lists in a mixed room (#1237)
+TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/authorize_selection.py --language zxx --room mixed
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
 ./benchmarks/run_load.sh --no-deflate   # clients that offer no permessage-deflate, as the gate did before #875
 ./benchmarks/run_load.sh --record docs/requirements.md   # rewrite the recorded result under the scale target
