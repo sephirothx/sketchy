@@ -199,6 +199,65 @@ async def test_an_invitation_reaches_a_friend_and_seats_them():
             await browser.close()
 
 
+async def test_a_phone_lobbys_invitation_card_uses_the_width_and_clears_the_dock():
+    """#1276: centred with left 50% and a translate, and no width, the card
+    shrank to fit half the viewport whatever its max-width said - 230px on
+    every phone, its sentence four lines, standing 98px tall over the room
+    list's Join and Spectate. It still stands above the dock (R-UX-07)."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        guest_context = await browser.new_context(
+            viewport={"width": 390, "height": 844}, is_mobile=True, has_touch=True
+        )
+        host, guest = await host_context.new_page(), await guest_context.new_page()
+        host_name, guest_name = unique("Host"), unique("Pal")
+
+        try:
+            await sign_up(host, host_name)
+            await sign_up(guest, guest_name)
+            await make_friends(host, guest, host_name, guest_name)
+
+            await open_new_room(host)
+            invite = host.locator(
+                f'[data-testid="invite-friends"] li:has-text("{guest_name}")'
+            ).get_by_role("button", name="Invite")
+            await expect(invite).to_be_visible(timeout=SETTLE_MS)
+            await invite.click()
+
+            notice = guest.locator('[data-testid="friend-invite"]')
+            await expect(notice).to_be_visible(timeout=SETTLE_MS)
+            await guest.wait_for_timeout(300)
+            geometry = await guest.evaluate(
+                """() => {
+                    const card = document.querySelector('[data-testid="friend-invite"]');
+                    const text = card.querySelector('.friend-invite-text');
+                    const dock = document.querySelector('.lobby-dock');
+                    // Lines, as the distinct rows the sentence's boxes sit on:
+                    // its line-height is "normal", so a height alone says little.
+                    const range = document.createRange();
+                    range.selectNodeContents(text);
+                    const tops = [];
+                    for (const rect of range.getClientRects()) {
+                        if (!tops.some((top) => Math.abs(top - rect.top) < 4)) tops.push(rect.top);
+                    }
+                    return {
+                        width: card.getBoundingClientRect().width,
+                        lines: tops.length,
+                        cardBottom: card.getBoundingClientRect().bottom,
+                        dockTop: dock ? dock.getBoundingClientRect().top : null,
+                    };
+                }"""
+            )
+            assert geometry["width"] >= 0.8 * 390 or geometry["lines"] <= 2, geometry
+            assert geometry["dockTop"] is not None, geometry
+            assert geometry["cardBottom"] <= geometry["dockTop"], geometry
+        finally:
+            await host_context.close()
+            await guest_context.close()
+            await browser.close()
+
+
 async def test_in_a_phone_room_an_invitation_is_a_chip_in_the_room_bar():
     """#1176: the card sat on the phone room's chat feed and hid its latest
     lines. In a room the invitation is a chip in the bar instead, whose
