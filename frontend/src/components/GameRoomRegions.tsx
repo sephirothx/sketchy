@@ -15,6 +15,7 @@ import { WaitingRoomPanel } from "./WaitingRoomPanel";
 import { PromptDisplay } from "./PromptDisplay";
 import { useToolbarState } from "../hooks/useToolbarState";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { rankGuesses } from "../lib/guessOrder";
 import { splitMaskedPrompt } from "../lib/maskedPrompt";
 import { reactionEligibility } from "../lib/reactions";
@@ -297,7 +298,7 @@ export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPl
   useLocaleRerender();
   const clockPaused = useRoomStage().kind !== "live";
   recordRender("gameplay");
-  const isMobile = useMediaQuery("(max-width: 900px)");
+  const isMobile = useMediaQuery(PHONE_ROOM_QUERY);
   const playerId = useGameStore((state) => state.playerId);
   const phase = useGameStore((state) => state.phase);
   const drawerId = useGameStore((state) => state.drawerId);

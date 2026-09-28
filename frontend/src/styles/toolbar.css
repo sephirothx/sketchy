@@ -687,7 +687,7 @@
 
 /* Width floor for the same reason as the shell's landscape block: a portrait
    phone with the keyboard up also reports landscape. */
-@media (orientation: landscape) and (min-width: 481px) and (max-width: 900px) {
+@media (orientation: landscape) and (min-width: 481px) and (max-width: 900px), (min-width: 901px) and (max-height: 520px) {
   .toolbar-mobile-popover {
     max-height: min(40vh, 200px);
   }

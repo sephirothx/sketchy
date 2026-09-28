@@ -497,7 +497,7 @@
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-height: 520px) {
   /* The end of the game takes the screen. It used to be a section inside the
      stacked room page — the players panel above it, the chat below — so at
      390x844 the document was 1671px tall and the result was something you
@@ -728,7 +728,7 @@
   padding: 0;
 }
 
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-height: 520px) {
   /* The turn recap as a sheet rather than a box floating on the canvas.
      It used to be `position: absolute; inset: 0` inside the canvas area with
      a panel capped at 90% of a 278px canvas — the word, your score, the guess

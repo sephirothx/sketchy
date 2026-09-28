@@ -247,7 +247,7 @@
 /* Shown on phones only while the keyboard is up. With it down the feed is on
    screen and its newest line carries the result, as the desktop feed does; a
    verdict there either covered that line or repeated it (#1199). */
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-height: 520px) {
   .game-room.guess-focused .guess-focus-flash {
     display: block;
   }
@@ -302,7 +302,7 @@
    were in game-room.css, which loads before this sheet, so the ones this sheet
    also sets (the feed's flex, the field's margin) never applied; they are gone
    rather than moved, and the input already comes after the feed in the DOM. */
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-height: 520px) {
   .room-chat-panel.guess-chat {
     height: auto;
   }

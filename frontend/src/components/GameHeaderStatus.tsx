@@ -1,4 +1,5 @@
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { Chip } from "./ui/Chip";
 import { Timer } from "./Timer";
 import { useGameStore } from "../store/gameStore";
@@ -23,7 +24,7 @@ import { ui } from "../content/ui/index.ts";
  * moment the keyboard hides this band.
  */
 export function GameHeaderStatus() {
-  const isMobile = useMediaQuery("(max-width: 900px)");
+  const isMobile = useMediaQuery(PHONE_ROOM_QUERY);
   const roomState = useGameStore((s) => s.roomState);
   const phase = useGameStore((s) => s.phase);
   const roundNumber = useGameStore((s) => s.roundNumber);

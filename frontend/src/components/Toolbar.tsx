@@ -1,6 +1,7 @@
 import { memo, useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { useToolbarLayout } from "../hooks/useToolbarLayout";
 import { requestCanvasClear, requestCanvasUndo } from "../lib/canvasCommands";
@@ -136,7 +137,7 @@ export const Toolbar = memo(function Toolbar({
 }: ToolbarProps) {
   useLocaleRerender();
   recordRender("toolbar");
-  const isMobile = useMediaQuery("(max-width: 900px)");
+  const isMobile = useMediaQuery(PHONE_ROOM_QUERY);
   const fillAvailable = useCanvasBudgetStore((state) => scratchPad || state.fillAvailable);
   const strokeAvailable = useCanvasBudgetStore((state) => scratchPad || state.strokeAvailable);
   // The room's drawing rules. The server refuses a tool or color the host took
