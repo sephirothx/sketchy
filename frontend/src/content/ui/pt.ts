@@ -2297,6 +2297,7 @@ export const PT: Catalogue = {
   },
 
   waitingRoomPanel: {
+    finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
     editRoomRules: "Editar regras da sala",
     editRules: "Editar regras",
     doodle: "Rabiscar",
