@@ -20,6 +20,9 @@ HANDLES = """() => [...document.querySelectorAll('.scroll-handle.is-visible')].m
   return { x: box.x, y: box.y, right: box.right, bottom: box.bottom, height: box.height };
 })"""
 
+# The page's own: at the window's right edge, where no panel's handle is.
+PAGE_HANDLES = f"() => ({HANDLES})().filter((handle) => handle.right >= innerWidth - 4)"
+
 
 async def classic_scrollbars(p):
     return await p.chromium.launch(
@@ -128,21 +131,26 @@ async def test_the_handle_shows_while_the_page_scrolls_fades_and_drags():
             await require_handles(page)
             assert await page.evaluate(HANDLES) == []
 
-            # Under the wheel, at the window's right edge.
-            await page.mouse.move(600, 300)
+            # Under the wheel, at the window's right edge. Wheeled over the
+            # header, which is the page's own: over the middle it can land on
+            # the room list, which scrolls inside its panel once a busy
+            # server has enough rooms (R-UX-19), and scroll that instead.
+            header = await page.locator(".lobby-header").bounding_box()
+            assert header is not None
+            await page.mouse.move(header["x"] + header["width"] / 2, header["y"] + header["height"] / 2)
             await page.mouse.wheel(0, 400)
-            await page.wait_for_function(f"() => ({HANDLES})().length === 1", timeout=2000)
-            [handle] = await page.evaluate(HANDLES)
-            assert 1195 <= handle["right"] <= 1200, handle
+            await page.wait_for_function(f"() => ({PAGE_HANDLES})().length === 1", timeout=2000)
+            [handle] = await page.evaluate(PAGE_HANDLES)
+            assert handle["right"] <= 1200, handle
 
             # Gone about a second after the scrolling stops.
-            await page.wait_for_function(f"() => ({HANDLES})().length === 0", timeout=3000)
+            await page.wait_for_function(f"() => ({PAGE_HANDLES})().length === 0", timeout=3000)
 
             # Back with the pointer at the edge, and dragged: up by 40px of
             # track scrolls the page back up.
             await page.mouse.move(1194, 300)
-            await page.wait_for_function(f"() => ({HANDLES})().length === 1", timeout=2000)
-            [handle] = await page.evaluate(HANDLES)
+            await page.wait_for_function(f"() => ({PAGE_HANDLES})().length === 1", timeout=2000)
+            [handle] = await page.evaluate(PAGE_HANDLES)
             before = await page.evaluate("() => scrollY")
             assert before > 0
             grab_y = handle["y"] + handle["height"] / 2
