@@ -667,6 +667,31 @@
   }
 }
 
+/* A room drawn as a phone above 900px - a large phone held sideways, a short
+   window (PHONE_ROOM_QUERY, lib/roomLayout.ts, #1261) - opens its Players and
+   Room sheets as a phone's too: centred, the Players sheet's 55% of a 430px
+   window was a 460px card 214px tall. Only the room's: the lobby's sheet is
+   the lobby's, which stays a desktop page there. */
+@media (min-width: 901px) and (max-height: 520px) {
+  .game-room .bottom-sheet-scrim {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .game-room .bottom-sheet {
+    border: 0;
+    border-top: 1.5px solid var(--line);
+    border-radius: 24px 24px 0 0;
+    max-height: 88%;
+    max-width: none;
+    padding: 8px 16px calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .game-room .bottom-sheet-grab {
+    display: block;
+  }
+}
+
 /* ── The room's secondary actions ─────────────────────────────────────── */
 .sheet-menu {
   display: flex;

@@ -735,8 +735,8 @@
 
    Phones only — the component itself decides, because hiding it here would
    still leave every nickname on the page twice for anything reading the DOM.
-   Above 900px the players panel has a column of its own and says more than a
-   grid of faces can: roles, AFK, the moderation controls. */
+   In a desktop room (above 900px and taller than 520px) the players panel
+   has a column of its own and says more than a grid of faces can: roles, AFK, the moderation controls. */
 
 .waiting-roster-head {
   align-items: baseline;
@@ -1537,8 +1537,8 @@
   /* ── Waiting room ─────────────────────────────────────────────────────
      The panel says the same thing the roster grid does, a screen further
      down. The grid is the one with the faces on it, so the column goes; it
-     comes back above 900px, where it has a column of its own to live in and
-     is not costing the page anything. */
+     comes back in a desktop room, where it has a column of its own to live
+     in and is not costing the page anything. */
   .room-shell-waiting .room-shell-players { display: none; }
   .room-shell-waiting .room-shell-chat { order: 3; }
 

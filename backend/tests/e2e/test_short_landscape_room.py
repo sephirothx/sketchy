@@ -62,42 +62,44 @@ async def test_a_large_phone_sideways_draws_and_watches_on_a_real_canvas():
         host_page, player_page = [await context.new_page() for context in contexts]
         try:
             drawing, viewing = await _start_turn(host_page, player_page)
-            # The phone's landscape layout: the tools as a rail beside the canvas.
-            await drawing.wait_for_selector('[data-testid="toolbar-mobile"]')
-            for page in (drawing, viewing):
-                box = await page.evaluate(CANVAS_BOX)
-                assert box["width"] >= 400 and box["height"] >= 300, box
-                # Nothing past the right edge: the page does not scroll sideways.
-                assert await page.evaluate(
-                    "() => document.documentElement.scrollWidth <= window.innerWidth"
-                )
-
-            canvas = await drawing.query_selector('canvas.drawing-canvas')
-            box = await canvas.bounding_box()
-            await drawing.mouse.move(box["x"] + box["width"] * 0.2, box["y"] + box["height"] * 0.3)
-            await drawing.mouse.down()
-            for step in range(1, 11):
-                await drawing.mouse.move(
-                    box["x"] + box["width"] * (0.2 + step * 0.05),
-                    box["y"] + box["height"] * (0.3 + step * 0.03),
-                    steps=2,
-                )
-            await drawing.mouse.up()
-            await viewing.wait_for_function(f"({INK})() > 0")
-
-            # The other sideways phones and a short desktop window: the same
-            # layout, a canvas either side of the turn.
-            for size in (
+            ink = 0
+            for row, size in enumerate((
+                {"width": 932, "height": 430},
                 {"width": 915, "height": 412},
                 {"width": 956, "height": 440},
                 {"width": 1180, "height": 520},
-            ):
+            )):
                 for page in (drawing, viewing):
                     await page.set_viewport_size(size)
-                await drawing.wait_for_selector('[data-testid="toolbar-mobile"]')
                 for page in (drawing, viewing):
+                    # The phone's room: its bar, and the tools docked as a rail.
+                    await page.locator(".game-header-mobile").wait_for(state="visible")
                     box = await page.evaluate(CANVAS_BOX)
                     assert box["width"] >= 400 and box["height"] >= 300, (size, box)
+                    # Nothing past the right edge: the page does not scroll sideways.
+                    assert await page.evaluate(
+                        "() => document.documentElement.scrollWidth <= window.innerWidth"
+                    ), size
+                await drawing.locator("#room-shell-dock .toolbar-mobile").wait_for(state="visible")
+
+                # And the drawer can draw there: the guesser receives the
+                # stroke. A row of its own each time, so it is new ink.
+                canvas = await drawing.query_selector("canvas.drawing-canvas")
+                box = await canvas.bounding_box()
+                y = box["y"] + box["height"] * (0.2 + row * 0.2)
+                await drawing.mouse.move(box["x"] + box["width"] * 0.2, y)
+                await drawing.mouse.down()
+                for step in range(1, 11):
+                    await drawing.mouse.move(box["x"] + box["width"] * (0.2 + step * 0.05), y, steps=2)
+                await drawing.mouse.up()
+                await viewing.wait_for_function(f"(before) => ({INK})() > before", arg=ink)
+                ink = await viewing.evaluate(INK)
+
+            # The room's sheets rise from the bottom as a phone's do.
+            await viewing.get_by_test_id("open-room-menu").click()
+            sheet = viewing.get_by_test_id("room-menu-sheet")
+            await sheet.wait_for()
+            await viewing.locator(".game-room .bottom-sheet-grab").wait_for(state="visible")
         finally:
             for context in contexts:
                 await context.close()

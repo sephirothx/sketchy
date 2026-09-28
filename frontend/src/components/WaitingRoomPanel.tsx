@@ -56,7 +56,8 @@ interface WaitingRoomPanelProps {
  * than fixed: the dock is one row or two (the host's Start under Edit and the
  * pad, an error line, a wait that wraps), and the fixed 84px it replaced was
  * shorter than the host's two rows, which left the chat's last lines under it.
- * Above 900px the footer is in the card and the reserve is not applied.
+ * On a desktop room (above 900px, taller than 520px) the footer is in the
+ * card and the reserve is not applied.
  */
 function reserveDock(dock: HTMLDivElement | null) {
   const shell = dock?.closest<HTMLElement>(".room-shell");
