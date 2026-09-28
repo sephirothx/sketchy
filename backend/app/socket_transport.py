@@ -331,6 +331,21 @@ class GuardedEngineSocket(AsyncSocket):
                 await self.server.refuse(self.sid, "malformed")
 
 
+def _byte_size(data: Any) -> int:
+    """What `data` weighed in bytes as it arrived.
+
+    A polling body and a WebSocket text frame reach here decoded, and a
+    character is up to four bytes of UTF-8: counted by `len`, four-byte text
+    passed the 2 MiB window at 8 MiB a second (#1289 review). ASCII - nearly
+    all of it - is its own length, and `isascii` answers without a walk.
+    """
+    if isinstance(data, str):
+        return len(data) if data.isascii() else len(data.encode("utf-8", "surrogatepass"))
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        return len(data)
+    return 0
+
+
 class _ByteWindow:
     """Bytes each socket has sent inside a sliding window."""
 
@@ -388,8 +403,7 @@ class BoundedEngineServer(engineio.AsyncServer):
         without being looked at, and still counts against the window - a
         client sending faster than it may is sending, refused or not.
         """
-        size = len(data) if isinstance(data, (str, bytes, bytearray, memoryview)) else 0
-        if self.inbound_bytes.add(sid, size) > INBOUND_BYTES_PER_WINDOW:
+        if self.inbound_bytes.add(sid, _byte_size(data)) > INBOUND_BYTES_PER_WINDOW:
             return "bytes"
         return engine_packet_problem(data, transport)
 

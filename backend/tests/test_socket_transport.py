@@ -497,6 +497,20 @@ async def test_a_stream_of_megabyte_packets_is_refused_as_bytes_and_ended(monkey
     assert sio.eio.sockets == {}
 
 
+def test_text_is_charged_by_its_utf8_bytes_not_its_characters(monkeypatch):
+    """#1289 review: a polling body and a text frame arrive decoded, and a
+    four-byte character counted as one let four times the window through."""
+    from app.socket_transport import INBOUND_BYTES_PER_WINDOW
+
+    sio, store = build_server(monkeypatch)
+    # A quarter of the window in bytes each, plus its envelope - a sixteenth
+    # of it in characters - so the fourth crosses it.
+    wide = "\U0001f600" * (INBOUND_BYTES_PER_WINDOW // 4 // 4)
+    packets = ['42["x","' + wide + '"]' for _ in range(5)]
+    problems = [sio.eio.inbound_problem("sid-wide", packet, "polling") for packet in packets]
+    assert problems == [None] * 3 + ["bytes"] * 2
+
+
 async def test_ordinary_traffic_is_far_inside_the_byte_window(monkeypatch):
     sio, store = build_server(monkeypatch)
     peer = Peer()
