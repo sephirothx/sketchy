@@ -164,9 +164,15 @@ def _webp_dimensions(payload: bytes) -> tuple[int, int] | None:
 # SOF kinds - extended, lossless, hierarchical, arithmetic-coded - are ones a
 # canvas never writes and not every browser decodes.
 _JPEG_FRAMES = {0xC0, 0xC2}
-# Markers that stand alone, with no length after them: TEM and RST0-7. (SOI
-# and EOI too, but SOI is only ever first and EOI only ever last.)
-_JPEG_STANDALONE = {0x01, *range(0xD0, 0xD8)}
+# The only segments that may come before the frame header: application data
+# (JFIF, Exif, ...), quantisation and Huffman tables, the restart interval,
+# arithmetic-coding conditioning and comments. Everything else is refused,
+# because it is where the walk and a decoder could part ways: a decoder reads
+# `FF 00` as a stuffed byte to skip and scans on for the next marker, so a
+# walk that took it for a segment with a length could be steered onto a fake
+# 256x256 frame header inside an APP1 that the decoder skips whole - reading
+# the real one after it, 4400 x 4400 (review of #1263).
+_JPEG_BEFORE_FRAME = {*range(0xE0, 0xF0), 0xDB, 0xC4, 0xDD, 0xCC, 0xFE}
 
 
 def _jpeg_dimensions(payload: bytes) -> tuple[int, int] | None:
@@ -175,11 +181,12 @@ def _jpeg_dimensions(payload: bytes) -> tuple[int, int] | None:
 
     So the header is walked rather than read at an offset: each segment is a
     marker and a big-endian length that counts itself, and the walk stops at
-    the first frame header - 8-bit, one or three components, `_JPEG_FRAMES`
-    only - and refuses anything that runs past the end or reaches the scan
-    without one. Still no decoder: the bytes after the frame header are never
-    read, only the end-of-image marker that closes every file a canvas writes,
-    which is what refuses a truncated upload.
+    the first frame header - 8-bit, one or three components, exactly as long
+    as that many components make it, `_JPEG_FRAMES` only. It refuses a marker
+    outside `_JPEG_BEFORE_FRAME`, a byte where a marker should be, and anything
+    that runs past the end. Still no decoder: the bytes after the frame header
+    are never read, only the end-of-image marker that closes every file a
+    canvas writes, which is what refuses a truncated upload.
     """
     if not payload.startswith(_JPEG_SIGNATURE) or not payload.endswith(b"\xff\xd9"):
         return None
@@ -192,22 +199,18 @@ def _jpeg_dimensions(payload: bytes) -> tuple[int, int] | None:
             # A fill byte before the marker proper.
             index += 1
             continue
-        if marker in _JPEG_STANDALONE:
-            index += 2
-            continue
-        if marker in (0xD8, 0xD9, 0xDA):
-            # A second start, the end, or the scan, before any frame header.
+        if marker not in _JPEG_BEFORE_FRAME and marker not in _JPEG_FRAMES:
             return None
         length = int.from_bytes(payload[index + 2 : index + 4], "big")
         if length < 2 or index + 2 + length > len(payload):
             return None
-        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
-            if marker not in _JPEG_FRAMES or length < 8:
+        if marker in _JPEG_FRAMES:
+            if length < 8:
                 return None
             precision = payload[index + 4]
             height, width = struct.unpack(">HH", payload[index + 5 : index + 9])
             components = payload[index + 9]
-            if precision != 8 or components not in (1, 3):
+            if precision != 8 or components not in (1, 3) or length != 8 + 3 * components:
                 return None
             return width, height
         index += 2 + length

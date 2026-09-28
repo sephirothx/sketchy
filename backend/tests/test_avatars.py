@@ -284,6 +284,22 @@ _SOF = 2 + 18 + 69
         (jpeg_bytes(precision=12), "not a WebP, PNG or JPEG"),
         # A segment length running past the end of the file.
         (b"\xff\xd8\xff\xe0\xff\xf0" + b"\x00" * 20 + b"\xff\xd9", "not a WebP, PNG or JPEG"),
+        # A stuffed `FF 00` a decoder skips, steering a walk that read it as
+        # a segment onto a fake 256-square frame header hidden in an APP1:
+        # the decoder reads the 2000-square one after it (review of #1263).
+        (
+            b"\xff\xd8\xff\x00\x00\x06\xff\xe1\x00\x15"
+            + jpeg_bytes()[_SOF : _SOF + 19]
+            + jpeg_bytes(2000, 2000)[2:],
+            "not a WebP, PNG or JPEG",
+        ),
+        # A restart marker before any frame, and a frame header too short
+        # for the three components it declares.
+        (_JPEG[:_SOF] + b"\xff\xd0" + _JPEG[_SOF:], "not a WebP, PNG or JPEG"),
+        (
+            _JPEG[:_SOF] + b"\xff\xc0\x00\x08\x08\x01\x00\x01\x00\x03" + _JPEG[_SOF + 19 :],
+            "not a WebP, PNG or JPEG",
+        ),
         # A byte where a marker should be.
         (b"\xff\xd8\xff\xe0\x00\x04\x00\x00\x12\x34" + b"\x00" * 20 + b"\xff\xd9", "not a WebP, PNG or JPEG"),
 
