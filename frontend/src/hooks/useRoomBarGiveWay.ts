@@ -8,9 +8,10 @@ acts on:
 - `round` - the round's word: *Round 2/3* becomes *2/3*;
 - `mark` - the wordmark, which is also the way out, and the Room menu's Leave
   is the other one;
-- `labels` - the words on the notice chips (a server notice, an **Invitation**,
-  a **Friend request**) and the *AFK* chip, which keep their icons and their
-  accessible names, and the drain's chip its countdown;
+- `labels` - the words on the notice chips (a server notice, a **Restart
+  vote**, an **Invitation**, a **Friend request**) and the *AFK* chip, which
+  keep their icons and their accessible names, and the drain's and the vote's
+  chips their countdowns;
 - `tight` - the room between things: the gaps, the chips' own padding and the
   bar's edges shrink;
 - `wrap` - the round, the clock and the chips take a row of their own under the
@@ -29,8 +30,8 @@ the guarantee, for those and for anything narrower or a larger text size, that
 the bar is never wider than the screen and nothing on it lies over anything
 else. It costs the canvas a row, so it comes last.
 
-The clock, the round's numbers, the drain's seconds, the Room menu and the
-avatar never give way. */
+The clock, the round's numbers, the drain's and the vote's seconds, the Room
+menu and the avatar never give way. */
 export const ROOM_BAR_STEPS = ["round", "mark", "labels", "tight", "wrap"] as const;
 
 export type RoomBarStep = (typeof ROOM_BAR_STEPS)[number];

@@ -50,11 +50,15 @@ interface RoomNoticeChipsProps {
   /** This seat, for whether and how it may vote. */
   voter?: RestartVoter;
   voteBusy?: boolean;
+  /** Hold the popover back for now: the drawer mid-stroke, or a phone with
+      the guess keyboard up, when the bar itself is hidden. It opens by itself
+      once this clears, if the seat can still vote. */
+  voteQuiet?: boolean;
   onVote?: (vote: boolean) => void;
 }
 
-/** A planned-deploy drain, a dropped connection, a friend's invitation and a
-friend request, as chips in the room header.
+/** A planned-deploy drain, a dropped connection, a restart vote, a friend's
+invitation and a friend request, as chips in the room header.
 
 A room lays itself out to the viewport (R-UX-01), so a banner there is height
 taken off the canvas - and, on a phone, it used to sit on top of this very
@@ -78,9 +82,10 @@ lasts while the request waits, so an answer given anywhere else takes it down.
 Every chip always renders its word. On a phone the bar decides whether it
 shows: the band is a phone's width and already holds the round, the ring, the
 menu and the avatar, so once the round's word and the wordmark have gone the
-chips keep their icons alone - the drain its countdown too, which goes only if
-the bar takes a second row (`useRoomBarGiveWay`, R-UX-11). Their accessible
-names are their `aria-label`s, so hiding the word takes nothing from them.
+chips keep their icons alone - the drain's and the vote's countdowns too, which go
+only if the bar takes a second row (`useRoomBarGiveWay`, R-UX-11). Their accessible
+names are their `aria-label`s - the vote's, a visually hidden sentence led by its
+word - so hiding the word takes nothing from them.
 
 A **Restart vote** is a chip here as well, after the server's two: it was a
 banner in the page flow, and proposing one moved the stage - the drawer's
@@ -88,7 +93,13 @@ canvas mid-stroke, and a phone guesser's field off the bottom of a screen that
 does not scroll, for the vote's twenty seconds (#1266). Its popover opens by
 itself once for a seat that can still vote, and closes when that seat has; the
 chip carries the countdown, and the outcome is announced once. */
-export function RoomNoticeChips({ restartVote = null, voter, voteBusy = false, onVote }: RoomNoticeChipsProps = {}) {
+export function RoomNoticeChips({
+  restartVote = null,
+  voter,
+  voteBusy = false,
+  voteQuiet = false,
+  onVote,
+}: RoomNoticeChipsProps = {}) {
   const shutdownNotice = useServerNoticesStore((state) => state.shutdownNotice);
   const updateRequired = useServerNoticesStore((state) => state.updateRequired);
   const connection = useServerNoticesStore((state) => state.connection);
@@ -141,7 +152,7 @@ export function RoomNoticeChips({ restartVote = null, voter, voteBusy = false, o
   const [voteOpenedFor, setVoteOpenedFor] = useState<string | null>(null);
   const [voteAnsweredFor, setVoteAnsweredFor] = useState<string | null>(null);
   if (
-    voteKey !== null && voteKey !== voteOpenedFor && myVote === null
+    voteKey !== null && voteKey !== voteOpenedFor && myVote === null && !voteQuiet
     && restartVote !== null && canCastRestartVote(restartVote, voter)
   ) {
     setVoteOpenedFor(voteKey);
@@ -309,10 +320,12 @@ export function RoomNoticeChips({ restartVote = null, voter, voteBusy = false, o
       )}
       {openNotice === "restart-vote" && restartVote && (
         <RestartVotePopover
+          key={voteKey}
           id={popoverId}
           vote={restartVote}
           player={voter}
           busy={voteBusy}
+          arming={myVote === null && voteOpenedFor === voteKey}
           onVote={(vote) => onVote?.(vote)}
         />
       )}
@@ -333,16 +346,7 @@ export function RoomNoticeChips({ restartVote = null, voter, voteBusy = false, o
       <span className="visually-hidden" role="status" aria-live="polite">
         {chips.includes("drain") ? ui.roomNoticeChips.serverUpdateStarted : ""}
       </span>
-      {/* A vote is announced as it opens and again if it passes, once each:
-          the chip's own sentence carries the countdown. */}
-      <span className="visually-hidden" role="status" aria-live="polite">
-        {restartVote?.status === "voting"
-          ? ui.restartVoteBanner.proposerProposedRestarting({ proposerNickname: restartVote.proposerNickname })
-          : ""}
-      </span>
-      <span className="visually-hidden" role="alert">
-        {restartVote?.status === "approved" ? ui.restartVoteBanner.restartApproved : ""}
-      </span>
+
     </div>
   );
 }

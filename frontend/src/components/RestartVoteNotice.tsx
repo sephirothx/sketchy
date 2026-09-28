@@ -10,6 +10,9 @@ import type { RestartVoter } from "../lib/restartVote";
 import type { RestartVoteState } from "../types";
 import { ui } from "../content/ui/index.ts";
 
+/** How long a popover that opened by itself holds its answers back. */
+const ARMING_MS = 600;
+
 /** Seconds left on the vote - or, once it passed, until the restart. */
 function useRestartVoteSeconds(vote: RestartVoteState): number {
   const [now, setNow] = useState(() => Date.now());
@@ -23,17 +26,35 @@ function useRestartVoteSeconds(vote: RestartVoteState): number {
 /** The chip's countdown, ticking on its own so the rest of the bar does not. */
 export function RestartVoteChipBody({ vote }: { vote: RestartVoteState }) {
   const seconds = useRestartVoteSeconds(vote);
+  const word = vote.status === "approved" ? ui.roomNoticeChips.restarting : ui.roomNoticeChips.restartVote;
   return (
     <>
       {/* The word and the seconds are what the bar shows; a screen reader
-          gets the sentence instead, which says both. */}
-      <span className="room-notice-chip-label" aria-hidden="true">
-        {vote.status === "approved" ? ui.roomNoticeChips.restarting : ui.roomNoticeChips.restartVote}
-      </span>
+          gets the word and then the sentence, which says the seconds too -
+          leading with the visible word, so saying it reaches the chip. */}
+      <span className="room-notice-chip-label" aria-hidden="true">{word}</span>
       <span className="room-notice-chip-seconds" aria-hidden="true">
-        {ui.roomNoticeChips.serverUpdateSeconds({ seconds })}
+        {ui.roomNoticeChips.serverUpdateSeconds({ seconds: Math.max(1, seconds) })}
       </span>
-      <span className="visually-hidden">{restartVoteSentence(vote, seconds)}</span>
+      <span className="visually-hidden">{`${word} ${restartVoteSentence(vote, seconds)}`}</span>
+    </>
+  );
+}
+
+/** The vote's announcements, outside the room bar: a phone hides the bar
+    while the guess keyboard is up, and a region inside it said nothing then.
+    Announced once each, as the vote opens and if it passes. */
+export function RestartVoteAnnouncer({ vote }: { vote: RestartVoteState | null }) {
+  return (
+    <>
+      <span className="visually-hidden" role="status" aria-live="polite">
+        {vote?.status === "voting"
+          ? ui.restartVoteBanner.proposerProposedRestarting({ proposerNickname: vote.proposerNickname })
+          : ""}
+      </span>
+      <span className="visually-hidden" role="alert">
+        {vote?.status === "approved" ? ui.restartVoteBanner.restartApproved : ""}
+      </span>
     </>
   );
 }
@@ -54,15 +75,25 @@ export function RestartVotePopover({
   vote,
   player,
   busy,
+  arming,
   onVote,
 }: {
   id: string;
   vote: RestartVoteState;
   player: RestartVoter | undefined;
   busy: boolean;
+  /** Opened by itself: its answers wait a moment, since it can open under a
+      finger already on its way to a letter tile or the canvas. */
+  arming: boolean;
   onVote: (vote: boolean) => void;
 }) {
   const seconds = useRestartVoteSeconds(vote);
+  const [armed, setArmed] = useState(!arming);
+  useEffect(() => {
+    if (armed) return;
+    const timer = window.setTimeout(() => setArmed(true), ARMING_MS);
+    return () => window.clearTimeout(timer);
+  }, [armed]);
   const counts = restartVoteCounts(vote);
   const eligible = canCastRestartVote(vote, player);
   const mine = myRestartVote(vote, player);
@@ -80,7 +111,7 @@ export function RestartVotePopover({
       </p>
       <p className="restart-vote-tally">
         {vote.status === "approved"
-          ? `${ui.restartVoteBanner.theCurrentGameIsRestarting} ${restartVoteSentence(vote, seconds)}.`
+          ? restartVoteSentence(vote, seconds)
           : ui.restartVoteBanner.yesYesNoNoPending({
               yes: counts.yes,
               no: counts.no,
@@ -94,7 +125,7 @@ export function RestartVotePopover({
             type="button"
             className={`btn btn-compact ${mine === true ? "btn-primary" : "btn-secondary"}`}
             aria-pressed={mine === true}
-            disabled={busy}
+            disabled={busy || !armed}
             onClick={() => onVote(true)}
           >
             {ui.restartVoteBanner.restart}
@@ -103,7 +134,7 @@ export function RestartVotePopover({
             type="button"
             className={`btn btn-compact ${mine === false ? "btn-primary" : "btn-secondary"}`}
             aria-pressed={mine === false}
-            disabled={busy}
+            disabled={busy || !armed}
             onClick={() => onVote(false)}
           >
             {ui.restartVoteBanner.keepPlaying}

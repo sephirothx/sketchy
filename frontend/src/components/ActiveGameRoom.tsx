@@ -14,6 +14,7 @@ import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { ConnectedPinControl } from "../components/ConnectedPinControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
+import { RestartVoteAnnouncer } from "../components/RestartVoteNotice";
 import { RoomVisibilityIcon } from "../components/RoomVisibilityIcon";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
@@ -84,6 +85,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useDocumentTitle(roomName || code);
   const roomIsPublic = useGameStore((s) => s.isPublic);
   const phase = useGameStore((s) => s.phase);
+  const drawerId = useGameStore((s) => s.drawerId);
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
   const drawingRecap = useGameStore((s) => s.drawingRecap);
@@ -521,6 +523,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
             restartVote={roomView === "playing" ? restartVote : null}
             voter={me}
             voteBusy={restartBusy}
+            voteQuiet={isGuessFocused || (phase === "drawing" && drawerId === playerId)}
             onVote={(vote) => void handleRestartVote(vote)}
           />
           {/* Going AFK is a menu row; being away is worth seeing, because it
@@ -557,6 +560,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           <AccountMenu inRoom compact={identityCompact} />
         </div>
       </header>
+      <RestartVoteAnnouncer vote={roomView === "playing" ? restartVote : null} />
 
       {isHost && colorblindSafeSuggestion && (
         <ColorblindSafeSuggestionBanner

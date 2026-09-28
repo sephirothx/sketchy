@@ -247,11 +247,12 @@
   display: none;
 }
 
-/* 3. The chips' words: a notice, an invitation, a friend request and AFK keep
-   their icons, and a drain its countdown (#806: the seconds are the point of
-   that chip, so they never go - the bar takes a second row first). Each is
-   named by its aria-label, so nothing is taken from a screen reader, and a
-   notice's sentence is still a tap away. */
+/* 3. The chips' words: a notice, a restart vote, an invitation, a friend
+   request and AFK keep their icons, and a drain and a vote their countdowns
+   (#806: the seconds are the point of those chips, so they never go - the bar
+   takes a second row first). Each is named by its aria-label or its hidden
+   sentence, so nothing is taken from a screen reader, and a notice's sentence
+   is still a tap away. */
 .game-header-mobile[data-gave-way~="labels"] :is(.room-notice-chip-label, .game-header-away-label) {
   display: none;
 }
@@ -312,8 +313,8 @@
   min-width: 44px;
 }
 
-/* A drain, a dropped connection, a friend's invitation or a friend request,
-   said where the round and the clock are (RoomNoticeChips). The chip recipe,
+/* A drain, a dropped connection, a restart vote, a friend's invitation or a
+   friend request, said where the round and the clock are (RoomNoticeChips). The chip recipe,
    as a button: the full sentence is a tap away in the popover below it. */
 .room-notice-chips {
   align-items: center;
@@ -384,7 +385,7 @@
 }
 
 .restart-vote-popover.is-approved strong {
-  color: var(--danger);
+  color: var(--success-ink);
 }
 
 /* On the phone the popover spans the band rather than hanging off a chip that

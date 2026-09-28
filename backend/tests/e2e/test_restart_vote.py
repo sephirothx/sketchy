@@ -1,3 +1,4 @@
+import pytest
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
     close_room_settings,
@@ -196,19 +197,32 @@ GEOMETRY = """
 """
 
 
-async def test_a_restart_vote_moves_nothing_on_the_stage():
+@pytest.mark.parametrize(
+    "viewport",
+    [
+        {"width": 390, "height": 844, "phone": True},
+        {"width": 844, "height": 390, "phone": True},
+        {"width": 1280, "height": 800, "phone": False},
+    ],
+    ids=["phone", "phone-sideways", "desktop"],
+)
+async def test_a_restart_vote_moves_nothing_on_the_stage(viewport):
     """#1266: the vote was a banner in the page flow, so proposing one moved
     the drawer's canvas mid-stroke and, on a phone in a Wheel of Fortune room,
     pushed a guesser's field below a fold that does not scroll for the whole
-    twenty seconds. As a room-bar chip it moves nothing, for any role."""
+    twenty seconds. As a room-bar chip it moves nothing, for any role, and it
+    does not open over the drawer's canvas by itself."""
     from uuid import uuid4
 
     from tests.e2e.lobby_helpers import open_settings_section, save_room_settings
 
-    phone = {"viewport": {"width": 390, "height": 844}, "is_mobile": True, "has_touch": True}
+    size = {"width": viewport["width"], "height": viewport["height"]}
+    options = {"viewport": size}
+    if viewport["phone"]:
+        options.update(is_mobile=True, has_touch=True)
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
-        contexts = [await browser.new_context(**phone) for _ in range(3)]
+        contexts = [await browser.new_context(**options) for _ in range(3)]
         pages = [await context.new_page() for context in contexts]
         host = pages[0]
         try:
@@ -242,20 +256,27 @@ async def test_a_restart_vote_moves_nothing_on_the_stage():
             await drawer.locator(".prompt-choices button").first.click()
             guessers = [page for page in pages if page is not drawer]
             for page in guessers:
-                await page.locator(".wheel-letter-btn").first.wait_for()
+                await page.locator(".prompt-masked").first.wait_for()
             await drawer.locator("canvas.drawing-canvas.drawable").wait_for()
+            await host.wait_for_timeout(300)
 
             before = [await page.evaluate(GEOMETRY) for page in pages]
             await room_menu_action(guessers[0], "Start the game over")
+            # The room's own line, on either side of this change: the vote is
+            # open for everybody once they have it.
             for page in pages:
-                await page.locator(VOTE_CHIP).wait_for()
-            await guessers[1].locator(VOTE).wait_for()
-            await host.wait_for_timeout(300)
+                await page.locator(".chat-message", has_text="started a vote to restart").first.wait_for()
+            await host.wait_for_timeout(400)
             after = [await page.evaluate(GEOMETRY) for page in pages]
             assert after == before, (before, after)
             for page in guessers:
                 field = (await page.evaluate(GEOMETRY))["field"]
-                assert field["bottom"] <= 844, field
+                assert field["bottom"] <= size["height"], field
+            # Opened by itself for the guesser who can still vote, never over
+            # the drawer's canvas mid-stroke.
+            await guessers[1].locator(VOTE).wait_for()
+            assert not await drawer.locator(VOTE).is_visible()
+            await drawer.locator(VOTE_CHIP).wait_for()
         finally:
             for context in contexts:
                 await context.close()
