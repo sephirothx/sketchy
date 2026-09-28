@@ -939,7 +939,10 @@ pending report receives one resolution and cannot later be silently rewritten.
 
 ### `room_messages`
 Accepted player-authored chat, wrong guesses, and correct-guess text, kept **30 days**
-in an audience-aware store — and, since #533, the lobby's chat too.
+in an audience-aware store — and, since #533, the lobby's chat too. A room line that
+reached **nobody but its author** — said alone in a room, or with every other seat
+blocking them — is not written (#1243): a report cites only a line its reporter
+received, so such a row could never be evidence, and it was storage anybody could fill.
 
 **Written in batches, never on the delivery path.** A queued writer inserts what
 arrived within `WRITE_LINGER_SECONDS` (0.25 s) of a batch's first line, up to 100,

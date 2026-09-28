@@ -12,7 +12,8 @@ problem.
 The socket path is given none of that. It resolves the target from the live
 room, takes the game and turn from the room's own state, and selects the
 evidence itself - so the questions the router has to ask are answered by
-construction. What is left in common is the writing, which is what lives here.
+construction. What is left in common is the writing, which is what lives here
+- and the budget both answer to, so neither door is the cheaper one (#1243).
 """
 from __future__ import annotations
 
@@ -24,6 +25,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import undefer
 
+from app.auth.rate_limit import PersistentRateLimiter
 from app.canvas_storage import prepare_stored_drawing
 from app.db.models import (
     AuditEvent,
@@ -43,6 +45,49 @@ from app.rooms import Room
 # A report is a complaint about something that just happened, so the evidence
 # is the tail of the conversation rather than all of it. Bounded because the
 # snapshot is stored for as long as the report is.
+# Player reports per hour, per address and per account, whichever door they
+# came through: the socket, `POST /api/reports` or the Gallery (#1243). The
+# socket door charged nothing, so eight accounts on one address filed 56
+# reports in 0.2 s, and the open queue - read oldest first and cut at 5,000 -
+# would have buried every genuine report behind them. The address bucket is
+# the one REST always charged; the account bucket is what an address that
+# changes cannot reset.
+REPORTS_PER_ADDRESS = 10
+REPORTS_PER_ACCOUNT = 10
+REPORT_WINDOW_SECONDS = 3600
+
+
+class ReportBudget:
+    """The two buckets every player report is charged to, shared by its doors.
+
+    Persistent, so the buckets are the same rows whichever door - or whichever
+    instance of this class - charges them.
+    """
+
+    def __init__(self, session_factory) -> None:
+        self._addresses = PersistentRateLimiter(
+            session_factory, scope="report-submit",
+            limit=REPORTS_PER_ADDRESS, window_seconds=REPORT_WINDOW_SECONDS,
+        )
+        self._accounts = PersistentRateLimiter(
+            session_factory, scope="report-account",
+            limit=REPORTS_PER_ACCOUNT, window_seconds=REPORT_WINDOW_SECONDS,
+        )
+
+    async def charge(self, *, address: str, account_id: str) -> bool:
+        """Spend one report from both buckets, or neither.
+
+        The account first: a reporter out of their own allowance does not
+        spend the allowance of everybody else behind their address.
+        """
+        if not await self._accounts.check(account_id):
+            return False
+        if not await self._addresses.check(address):
+            await self._accounts.refund(account_id)
+            return False
+        return True
+
+
 MAX_AUTOMATIC_EVIDENCE = 20
 
 # What was said around the cited lines. Ten before and five after is enough
