@@ -10,6 +10,7 @@
 @import "./styles/theme.css" layer(theme);
 @import "./styles/primitives.css" layer(components);
 @import "./styles/global-feedback.css" layer(components);
+@import "./styles/scroll-handles.css" layer(components);
 @import "./styles/layout-primitives.css" layer(components);
 @import "./styles/create-room-page.css" layer(components);
 @import "./styles/lobby-page.css" layer(components);

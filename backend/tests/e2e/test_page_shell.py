@@ -54,14 +54,15 @@ async def test_the_lobby_header_is_whole_and_where_every_page_has_it():
 async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
     """With a classic scrollbar, the header stands 16px from the window's
     edge on the pinned lobby, which does not scroll, and on Rules, which does
-    (#1178). Below the shell's width the bar reaches to that gutter, measured
-    from `100vw`: Chromium leaves the root's stable gutter out of `100vw`, and
-    taking a scrollbar's width off it as well, on a page that scrolls only,
-    put the bar 23.5px in on Rules and 16px on the lobby.
+    (#1178). The root used to keep the scrollbar's lane, and measuring it
+    right took it off twice in Chromium on a page that scrolls: the bar stood
+    23.5px in on Rules and 16px on the lobby. There is no lane now - the
+    scrollbar is an overlay handle (#1222) - and the bar has to stay put.
 
     Headless Chromium hides its scrollbars unless told not to; on Linux, as
-    on CI, they are then classic 15px ones. macOS draws overlay scrollbars,
-    which take no lane, and there is nothing to measure."""
+    on CI, they are then classic 15px ones, which the handles replace. macOS
+    draws overlay scrollbars unless set to always show them, and there is
+    nothing to replace."""
     async with async_playwright() as p:
         browser = await p.chromium.launch(
             headless=True, args=["--mute-audio"], ignore_default_args=["--hide-scrollbars"]
@@ -75,10 +76,12 @@ async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
 
             await page.goto(f"{BASE_URL}/rules")
             await page.get_by_role("heading", name="Rules", exact=True).wait_for()
-            lane = await page.evaluate("innerWidth - document.documentElement.clientWidth")
-            if lane == 0:
-                assert sys.platform != "linux", "Chromium on Linux drew no classic scrollbar"
+            if not await page.evaluate("() => document.documentElement.classList.contains('scroll-handles')"):
+                assert sys.platform != "linux", "Chromium on Linux drew classic scrollbars, and no handles replaced them"
                 pytest.skip("this platform's scrollbars take no lane")
+            assert await page.evaluate("() => innerWidth === document.documentElement.clientWidth"), (
+                "Rules scrolls beside a scrollbar's lane"
+            )
             rules_header = await header.bounding_box()
             rules_chip = await chip.bounding_box()
 

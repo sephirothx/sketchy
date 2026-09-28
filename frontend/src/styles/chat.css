@@ -21,8 +21,8 @@
   gap: 6px;
   font-size: 14px;
   /* A line starts at the list's edge, where the scroll container clips, so
-     the ink allowance goes there; the end keeps its lane for the
-     scrollbar, which a wrapped line never reaches past. */
+     the ink allowance goes there; the end keeps a little room at the edge
+     the scroll handle is drawn over (R-UX-20). */
   padding-inline: var(--ink-overhang) 4px;
   margin-inline-start: calc(-1 * var(--ink-overhang));
 }

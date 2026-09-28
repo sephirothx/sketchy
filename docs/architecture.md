@@ -1972,7 +1972,7 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendInviteStore.ts`, `friendRequestNoticeStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `playLanguagesQuestionStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useFriendInviteAnswer.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `usePlayLanguages.ts`, `useRoomBarGiveWay.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playLanguages.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptPick.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollbarWidth.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playLanguages.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptPick.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollHandles.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
 | `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayLanguageExtras.tsx`, `PlayLanguageFlags.tsx`, `PlayLanguagesQuestion.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
 | `frontend/src/components/ui/` | The shared recipes as components: `Avatar.tsx`, `AvatarPicture.tsx`, `BottomSheet.tsx`, `Button.tsx`, `Card.tsx` (with `SectionLabel`), `Chip.tsx`, `EmptyState.tsx`, `ModalShell.tsx` |
 
@@ -2187,19 +2187,14 @@ Each page declares its content column as `--page-width` beside its max-width,
 and `.lobby-header` (in
 [`styles/settings-shared.css`](../frontend/src/styles/settings-shared.css))
 reaches out of that column with negative margins — out to `--shell-width`, or
-the window's 16px gutter when that is nearer. `html` reserves a classic
-scrollbar's lane on every page, scrolling or not (`scrollbar-gutter: stable`
-in [`styles/reset.css`](../frontend/src/styles/reset.css); a browser without
-it gets `overflow-y: scroll` instead), so no centred column moves between a
-page that scrolls and the pinned lobby, which does not. The window is `100vw`
-less `--scrollbar-width`, which
-[`lib/scrollbarWidth.ts`](../frontend/src/lib/scrollbarWidth.ts) keeps on
-`:root` as how far `100vw` (measured on a hidden probe) overstates the width
-`html` is laid out in. That is the lane in a browser whose `100vw` counts the
-gutter and 0 in Chromium, which leaves it out: writing the scrollbar's own
-width (`innerWidth - clientWidth`) took the lane off twice there, but only on
-a page that scrolls, and moved the bar 7.5px between Rules and the lobby
-below the shell's width (#1178). A container that clips has to leave
+the window's 16px gutter when that is nearer. The window is `100vw`, because
+no page is laid out beside a scrollbar's lane ([Scroll handles](#scroll-handles)), so
+no centred column moves between a page that scrolls and the pinned lobby,
+which does not. Before that the root kept a classic scrollbar's lane on every
+page (`scrollbar-gutter: stable`) and a script measured how much of it `100vw`
+counted, which differs by browser; taking the scrollbar's own width off once
+took it off twice in Chromium, on a page that scrolls only, and moved the bar
+7.5px between Rules and the lobby (#1178). A container that clips has to leave
 the header's sideways reach alone — the pinned lobby clips top to bottom only
 (`overflow-y: clip`), since `overflow: hidden` cut the wordmark and the chip
 off at laptop widths. The space under the bar is one value, `--header-space`
@@ -2253,3 +2248,37 @@ The not-found page's drawing comes down the same pipe: `scripts/brand/sketchy-40
 The crash page's ladybird is the third drawing on that pipe: `scripts/brand/sketchy-bug-source.svg` is the artwork of record and the generator writes `frontend/src/components/crashArt.ts` and `docs/ui-mockups/tools/crashArt.mjs`, with the same palette rule and the same counting of paths per fill. Like the wordmark it is an Inkscape original; the generator also reads Inkscape's `<circle>` elements (the spots and eyes) as two-arc paths and skips a dot under a tenth of a millimetre, which is a stray click rather than a mark.
 
 The square app mark is a separate drawing, `scripts/brand/sketchy-icon-source.svg`. The same generator rewrites it into `frontend/public/favicon.svg`, lifting its paint into a `<style>` block with a `prefers-color-scheme` branch — a file-based icon renders in an isolated document where `var()` and `currentColor` do not resolve, so it carries literal colours rather than tokens. The dark values preserve each element's authored contrast ratio rather than being picked by eye; without them the mark sits at 1.03:1 against the dark theme's ground. `scripts/brand/render-rasters.sh` then produces the PNGs that cannot be SVG at all — `apple-touch-icon.png` (iOS ignores alpha and composites onto black), the manifest icons, and `og-image.png`. Those are committed rather than built, since they change about as often as the product name.
+
+### Scroll handles
+
+No scroll area is laid out beside a scrollbar's lane (#1222). A classic
+scrollbar — Windows, Linux, macOS with a mouse or set to always show them —
+takes one out of whatever it scrolls: on the page it was a strip down the
+window's edge that the banner stack could not reach, since an empty root
+gutter shows the root's background colour and nothing else, and inside a panel
+it took the same width off the chat, the lists and a dialog's body. Phones and
+trackpads draw overlay scrollbars that take nothing, and a page cannot ask for
+those. So [`lib/scrollHandles.ts`](../frontend/src/lib/scrollHandles.ts), run
+from `main.tsx` before the first paint, measures a box that always has a
+scrollbar; where that takes a lane it sets `html.scroll-handles`, which hides
+every native scrollbar
+([`styles/scroll-handles.css`](../frontend/src/styles/scroll-handles.css)),
+and draws a handle over the edge of whatever is scrolling instead. Where the
+lane is 0 it does nothing, and the platform's own overlay scrollbars stay.
+
+The handles live in one fixed layer of their own (`--z-scrollbar`, above the
+toasts, since the area being scrolled can be a dialog's body), placed each
+frame from the area's box, so no scroll area's DOM or CSS changes and the
+wheel, the keys and touch still scroll natively. A handle shows while its area
+scrolls under the player's own input — a wheel, a scroll key, a finger, a
+selection dragged past the edge, within 700ms — and while a mouse with no
+button down is within 16px of the area's edge, the innermost area first; it
+lingers a second and fades, widens under the pointer, and can be dragged.
+Scrolls the program makes (the chat following a new line, a page put back at
+its top, a dialog scrolling a field into view) show nothing, even straight
+after a click. The hover test reads at most once a frame and never while a
+button is held, so a stroke on the canvas does not pay for it. A scroll area
+that hides its scrollbar on purpose sets `--scroll-handle: none` (the
+Settings tab strip on a phone). The platform is read once: a mouse plugged in
+mid-session on macOS switches its scrollbars without the page being told, and
+*Always show scroll bars* cannot be told from a mouse, so both get the handles.

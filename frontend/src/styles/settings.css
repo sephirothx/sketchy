@@ -726,7 +726,10 @@
     flex-wrap: nowrap;
     gap: 6px;
     overflow-x: auto;
+    /* A strip of chips that swipes: no scrollbar, and no overlay handle
+       (lib/scrollHandles.ts) either. */
     scrollbar-width: none;
+    --scroll-handle: none;
     padding-bottom: 4px;
     margin-inline: -4px;
     padding-inline: 4px;

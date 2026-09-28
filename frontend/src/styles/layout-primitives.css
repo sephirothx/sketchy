@@ -47,6 +47,10 @@
              on what a dialog just did - a report sent, a request refused - and
              under a scrim it was announced to a screen reader and seen by
              nobody. It is small, passes, and never takes focus.
+   scrollbar The overlay scroll handles (lib/scrollHandles.ts), in one layer
+             over the page. A handle belongs to whatever the player is
+             scrolling, which can be a dialog's body, and it is only there
+             while they scroll or reach for it.
 
    One trap: `position: fixed` and `sticky` make a stacking context whatever
    the z-index, so inside the phone's playing shell (`.game-room-playing`)
@@ -65,6 +69,7 @@
   --z-modal: 90;
   --z-blocking: 100;
   --z-toast: 110;
+  --z-scrollbar: 120;
 }
 
 /* Breakpoints. Custom properties cannot be used in a media query, so the
@@ -93,9 +98,6 @@
    the room's sheets and the invite dock are fixed. Phones are untouched -
    everything here is at or above 1240px of content. */
 :root {
-  /* The part of a classic scrollbar's lane that `100vw` counts, written by
-     lib/scrollbarWidth.ts: nothing measured from the window should count it. */
-  --scrollbar-width: 0px;
   --shell-width: 1240px;
   --canvas-cap: 760px;
   --room-players-width: 250px;
