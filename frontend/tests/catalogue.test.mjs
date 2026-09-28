@@ -204,6 +204,8 @@ const NOT_COPY_NAMES = new Set([
   "transition", "fontFamily", "background", "gridTemplateColumns", "style", "data-testid", "src",
   "target", "rel", "autoComplete", "inputMode", "pattern", "accept", "form", "htmlFor",
   "download", "stroke", "fill", "d", "viewBox", "width", "height", "track", "name",
+  // Intl.DateTimeFormat's options: "2-digit" is a setting, not a word.
+  "hour", "minute", "second", "day", "month", "year", "weekday",
 ]);
 const NOT_COPY_CALLS = new Set([
   "log", "warn", "error", "info", "debug", "recordClientError", "redactDiagnostic",
@@ -241,6 +243,9 @@ function looksLikeASentence(node) {
     }
   }
   if (/^(https?:|\/|#|--|var\(|\.|\[)/.test(text) || /[{};]\s*$/.test(text)) return false;
+  // A number and a word, hyphened - "12-hour" - is copy, though it has the
+  // shape of a slug below: German Settings offered "12-hour" (#1280).
+  if (/^\d+-[A-Za-z]{2,}$/.test(text.trim())) return true;
   if (/^[a-z-]+\s*:/.test(text) || /^[a-z0-9_.\/:-]*$/.test(text.trim())) return false;
   // A class list - "chip is-active" - rather than lowercase words like "cut short".
   const tokens = text.trim().split(/\s+/);
@@ -399,6 +404,8 @@ test("the table scan would notice a sentence put back", () => {
     // One lowercase word, rendered: what the profile's game history showed.
     'const el = <span>{outcome === "abandoned" ? "abandoned" : ui.x.cutShort}</span>;',
     'const el = <td>{rows.length > 0 ? rows : "unknown"}</td>;',
+    // A digit-led hyphened word, which has a slug's shape (#1280).
+    'const OPTIONS = [{ value: "12h", label: "12-hour" }];',
   ]) {
     assert.ok(probe(snippet), `the table scan cannot see: ${snippet}`);
   }
@@ -415,6 +422,7 @@ test("the table scan would notice a sentence put back", () => {
     '// Not copy: a filename.\nconst f = "Sketchy recovery codes.txt";',
     'const el = <div className={open ? "open" : "closed"} />;',
     'const el = <span>{kind === "abandoned" ? ui.x.a : ui.x.b}</span>;',
+    'const o = format === "24h" ? { hour: "2-digit", minute: "2-digit" } : { hour: "numeric" };',
   ]) {
     assert.ok(!probe(plumbing), `the table scan takes plumbing for words: ${plumbing}`);
   }

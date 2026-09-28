@@ -2034,7 +2034,9 @@ export const PT: Catalogue = {
     theseAreTheirSettings: (p: { name: string }) => `Estas são agora as definições de ${p.name}.`,
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} só existe neste navegador. Uma conta guarda o nome, os teus pontos e o teu histórico em todos os dispositivos, e deixa-te escolher uma cor.`,
-    systemThemeNow: (p: { theme: "dark" | "light" }) => `Agora: ${p.theme}`,
+    systemThemeNow: (p: { theme: string }) => `Agora: ${p.theme}`,
+    twelveHour: "12 horas",
+    twentyFourHour: "24 horas",
     choosePicture: "Escolher uma imagem",
     editPicture: "Editar a imagem",
     picture: "Imagem",

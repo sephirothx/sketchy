@@ -2050,7 +2050,9 @@ export const EN = {
     theseAreTheirSettings: (p: { name: string }) => `These are ${p.name}'s settings now.`,
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} lives in this browser only. An account keeps the name, your points and your history on every device, and lets you pick a color.`,
-    systemThemeNow: (p: { theme: "dark" | "light" }) => `Now: ${p.theme}`,
+    systemThemeNow: (p: { theme: string }) => `Now: ${p.theme}`,
+    twelveHour: "12-hour",
+    twentyFourHour: "24-hour",
     choosePicture: "Choose a picture",
     editPicture: "Edit picture",
     picture: "Picture",

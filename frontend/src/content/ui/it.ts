@@ -2036,7 +2036,9 @@ export const IT: Catalogue = {
     theseAreTheirSettings: (p: { name: string }) => `Ora queste sono le impostazioni di ${p.name}.`,
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} vive solo in questo browser. Un account conserva il nome, i tuoi punti e la tua cronologia su ogni dispositivo, e ti lascia scegliere un colore.`,
-    systemThemeNow: (p: { theme: "dark" | "light" }) => `Adesso: ${p.theme}`,
+    systemThemeNow: (p: { theme: string }) => `Adesso: ${p.theme}`,
+    twelveHour: "12 ore",
+    twentyFourHour: "24 ore",
     choosePicture: "Scegli un’immagine",
     editPicture: "Modifica l’immagine",
     picture: "Immagine",

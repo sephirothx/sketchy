@@ -2035,7 +2035,9 @@ export const NL: Catalogue = {
     theseAreTheirSettings: (p: { name: string }) => `Dit zijn nu de instellingen van ${p.name}.`,
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} bestaat alleen in deze browser. Een account houdt de naam, je punten en je geschiedenis op elk apparaat, en laat je een kleur kiezen.`,
-    systemThemeNow: (p: { theme: "dark" | "light" }) => `Nu: ${p.theme}`,
+    systemThemeNow: (p: { theme: string }) => `Nu: ${p.theme}`,
+    twelveHour: "12-uurs",
+    twentyFourHour: "24-uurs",
     choosePicture: "Een afbeelding kiezen",
     editPicture: "Afbeelding bewerken",
     picture: "Afbeelding",
