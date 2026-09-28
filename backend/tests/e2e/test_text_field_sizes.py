@@ -16,6 +16,7 @@ from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
     open_create_room,
+    open_player_settings,
     open_public_rooms,
     open_room_settings,
     register_account,
@@ -101,6 +102,17 @@ async def test_every_text_field_on_a_phone_is_at_least_16px():
             await page.wait_for_selector(".prompt-list-manager-layout")
             await measure("my prompt lists")
 
+            # A guest renaming themselves in Settings.
+            await guest.goto(BASE_URL)
+            await use_guest_name(guest, f"SizeGuest{uuid4().hex[:6]}")
+            await open_player_settings(guest)
+            await guest.locator(".settings-you").get_by_role("button", name="Change").click()
+            await guest.wait_for_selector(".settings-you-name-line input")
+            found = await guest.evaluate(SMALL_FIELDS)
+            if found:
+                small["guest settings"] = found
+            await guest.keyboard.press("Escape")
+
             await page.goto(BASE_URL)
             await open_create_room(page)
             await _open_every_section(page)
@@ -117,7 +129,6 @@ async def test_every_text_field_on_a_phone_is_at_least_16px():
             await page.locator(".room-settings-editor").wait_for(state="detached")
 
             await guest.goto(BASE_URL)
-            await use_guest_name(guest, f"SizeGuest{uuid4().hex[:6]}")
             await join_by_code(guest, code)
             await guest.wait_for_selector('[data-testid="waiting-room"]')
             await page.click(".waiting-start-button")
