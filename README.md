@@ -2102,6 +2102,10 @@ backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewe
 
 # A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
 METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
+
+# What one hostile client costs the socket door: garbage, no-argument commands, a deflate bomb,
+# a 1 MB-per-packet stream, sockets that never CONNECT (#1229). Starts its own server.
+backend/.venv/bin/python benchmarks/socket_abuse.py --scenario garbage --sockets 6 --seconds 10
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
 ./benchmarks/run_load.sh --no-deflate   # clients that offer no permessage-deflate, as the gate did before #875
 ./benchmarks/run_load.sh --record docs/requirements.md   # rewrite the recorded result under the scale target
@@ -2311,6 +2315,15 @@ sync every window, the server's backlog high-water and age read every two second
 the socket is closed for its age, then the viewer's return and a check that the sync it
 takes back hashes to what the server said. It also measures the slack *under* the
 budget - about 1.2 MB on a loopback before the server's queue grows at all.
+
+`socket_abuse.py` measures the socket door against one hostile client (#1229). It
+starts its own throwaway server so it can read that process's CPU time, resident
+memory and log volume around each scenario: `garbage` (sockets sending undecodable
+packets and ignoring the CLOSE they are sent), `noargs` (commands with no argument
+and an ack id), `bomb` (text messages that permessage-deflate shrinks a
+thousandfold), `stream` (a connected socket sending valid ~1 MB packets as fast as
+it can) and `eio-only` (Engine.IO sockets that never send a Socket.IO CONNECT).
+The numbers are the machine's; compare a run before a change with one after it.
 
 `run_load.sh` is the **release load gate** (#461): it starts a server with the
 limits a swarm from one address would trip raised, then drives the documented scale

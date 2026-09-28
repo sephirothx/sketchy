@@ -30,11 +30,17 @@ from app.socket_server import (
 class FakeEngineSocket:
     closed = False
 
-    def __init__(self) -> None:
+    def __init__(self, sid: str = "") -> None:
+        self.sid = sid
         self.packets: list = []
+        self.closes: list[dict] = []
 
     async def send(self, pkt) -> None:
         self.packets.append(pkt.encode())
+
+    async def close(self, wait=True, abort=False, reason=None) -> None:
+        self.closes.append({"wait": wait, "abort": abort})
+        self.closed = True
 
 
 class Clock:
@@ -58,7 +64,7 @@ async def server(monkeypatch, seats: int = 1):
     sockets = {}
     for index in range(seats):
         eio_sid = f"eio{index}"
-        sockets[eio_sid] = sio.eio.sockets[eio_sid] = FakeEngineSocket()
+        sockets[eio_sid] = sio.eio.sockets[eio_sid] = FakeEngineSocket(eio_sid)
         await sio.manager.connect(eio_sid, "/")
     received: list = []
 
@@ -191,18 +197,22 @@ async def test_a_burst_at_the_drawing_budget_s_maximum_is_not_a_flood(monkeypatc
 
 
 async def test_a_socket_that_keeps_sending_garbage_is_closed(monkeypatch):
+    """Terminated, not asked (#1235): a CLOSE packet is a request a peer
+    sending garbage ignores, and every packet it sent meanwhile was parsed."""
     sio, store, sockets, received, clock = await server(monkeypatch)
-    closed = []
-
-    async def disconnect(eio_sid):
-        closed.append(eio_sid)
-
-    monkeypatch.setattr(sio.eio, "disconnect", disconnect)
     for _ in range(MAX_REJECTIONS):
         await sio._handle_eio_message("eio0", b"\x00")
-    assert closed == []
+    assert sockets["eio0"].closes == []
     await sio._handle_eio_message("eio0", b"\x00")
-    assert closed == ["eio0"]
+    assert sockets["eio0"].closes == [{"wait": False, "abort": True}], "aborted: no CLOSE, no wait"
+    assert sockets["eio0"].terminated
+    assert "eio0" not in sio.eio.sockets
+
+    # Whatever it still has in flight is neither read nor counted again.
+    await sio._handle_eio_message("eio0", '2["send_chat",{"text":"still here"}]')
+    await sio._handle_eio_message("eio0", b"\x00")
+    assert received == []
+    assert rejected(store) == {"unexpected_binary": MAX_REJECTIONS + 1}
 
 
 async def test_disconnect_clears_every_per_socket_record(monkeypatch):
@@ -410,6 +420,7 @@ class DrainingEngineSocket(StalledEngineSocket):
 
 
 async def _seat(sio, eio_sid, socket):
+    socket.sid = eio_sid
     sio.eio.sockets[eio_sid] = socket
     await sio.manager.connect(eio_sid, "/")
     return sio.manager.sid_from_eio_sid(eio_sid, "/")
