@@ -211,10 +211,12 @@ class ForgotPasswordBody(ControlFreeModel):
 
 
 class ResetPasswordBody(ControlFreeModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     token: str = Field(max_length=256)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    # The acting tab's own socket, the one socket a reset spares (#1246).
+    socket_id: str | None = Field(default=None, alias="socketId", max_length=64)
 
 
 class DisplayNameBody(ControlFreeModel):
@@ -236,6 +238,8 @@ class ChangePasswordBody(ControlFreeModel):
         max_length=MAX_PASSWORD_LENGTH, alias="currentPassword"
     )
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    # The acting tab's own socket, the one socket a change spares (#1246).
+    socket_id: str | None = Field(default=None, alias="socketId", max_length=64)
 
 
 class SecondFactorConfirmBody(ControlFreeModel):
@@ -314,7 +318,7 @@ def create_auth_router(
     # for every session it holds - so the sockets those sessions opened are
     # closed rather than left playing under the account (#1007).
     on_sessions_revoked: (
-        Callable[[str, list[str] | None, str | None], Awaitable[None]] | None
+        Callable[..., Awaitable[None]] | None
     ) = None,
     # Called with every account that lost a friendship or a pending request
     # to a deletion, so their lists stop showing somebody who is gone. Wired to
@@ -475,11 +479,18 @@ def create_auth_router(
         return issued.session.id
 
     async def _sockets_signed_out(
-        user_id: str, session_ids: list[str] | None, *, keep: str | None = None
+        user_id: str,
+        session_ids: list[str] | None,
+        *,
+        keep: str | None = None,
+        keep_socket: str | None = None,
     ) -> None:
         """Best effort, after the commit: the revocation stands either way.
 
-        `keep` is the acting browser's session, whose sockets are left alone.
+        `keep` is the acting browser's session and `keep_socket` the one
+        socket of it that acted, which alone is left alone: any other socket
+        opened with that session - another tab, or a copy of the cookie - is
+        closed once the new cookie has had time to land (#1246).
 
         Named sessions reach the sockets opened before they were rotated in,
         which carry a predecessor's id (#1083). `keep` is deliberately not
@@ -496,7 +507,7 @@ def create_auth_router(
                 # The named ones still go; only the older sockets are missed.
                 logger.exception("Could not read the rotation chain for %s", user_id)
         try:
-            await on_sessions_revoked(str(user_id), session_ids, keep)
+            await on_sessions_revoked(str(user_id), session_ids, keep, keep_socket)
         except Exception:
             logger.exception("Could not close the sockets of revoked sessions for %s", user_id)
 
@@ -1533,7 +1544,9 @@ def create_auth_router(
         # in as the account, stays and re-handshakes once the new cookie is
         # in hand: closed now, it would re-read itself before the cookie
         # landed and take the reset for a sign-out.
-        await _sockets_signed_out(str(outcome.user_id), None, keep=acting_session)
+        await _sockets_signed_out(
+            str(outcome.user_id), None, keep=acting_session, keep_socket=body.socket_id
+        )
         return {"ok": True, "signedIn": True}
 
     @router.post("/password/change")
@@ -1597,7 +1610,9 @@ def create_auth_router(
         # this account's still - and re-handshakes once the response has
         # delivered the new cookie; closed now, the notice would land first
         # and the tab would take its own change for a sign-out.
-        await _sockets_signed_out(user.id, None, keep=acting_session)
+        await _sockets_signed_out(
+            user.id, None, keep=acting_session, keep_socket=body.socket_id
+        )
         return {"ok": True}
 
     @router.get("/second-factor")

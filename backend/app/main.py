@@ -483,8 +483,20 @@ async def untraceable_sessions(
     return {session_id for key, session_id in parsed.items() if key not in set(live)}
 
 
+#: How long the acting browser's other sockets are left after a password
+#: change or reset (#1246): long enough for the response to land and the new
+#: cookie with it, so a second tab of that browser comes straight back. A
+#: slower response is caught by the client: the acting tab tells the others
+#: once it lands, and they handshake again (#1295 review).
+SAME_BROWSER_GRACE_SECONDS = 3.0
+_regrant_closes: set[asyncio.Task] = set()
+
+
 async def close_sockets_of_revoked_sessions(
-    user_id: str, session_ids: list[str] | None, keep: str | None = None
+    user_id: str,
+    session_ids: list[str] | None,
+    keep: str | None = None,
+    keep_socket: str | None = None,
 ) -> None:
     """Close the sockets a revocation just signed out (#1007).
 
@@ -502,9 +514,20 @@ async def close_sockets_of_revoked_sessions(
     the new cookie, so the tab would re-read itself as signed out and
     leave its room over a change it made on purpose. The client
     re-handshakes once the response is in hand.
+
+    `keep_socket` narrows that to the one socket that acted (#1246): every
+    socket opened with the acting session used to be spared, and a thief
+    holding a copy of the current cookie kept theirs - still reading the
+    account's friends and chatting as it 13 s after the change meant to
+    evict them. The acting session's other sockets are now closed too, a
+    moment later and without the sign-out notice: a second tab of the same
+    browser comes back with the new cookie it shares, and a copy comes back
+    with a cookie that no longer works. Without a `keep_socket` - a client
+    that did not say which socket was its own - none of them is spared.
     """
     wanted = None if session_ids is None else set(session_ids)
     closing: list[str] = []
+    regranted: list[str] = []
     # Sockets the named sessions do not reach, by the session they opened
     # with: kept unless that session can no longer be traced (below).
     spared: dict[str, str] = {}
@@ -517,6 +540,8 @@ async def close_sockets_of_revoked_sessions(
                 continue
             opened_with = (session or {}).get("session_id")
             if keep is not None and opened_with == keep:
+                if sid != keep_socket:
+                    regranted.append(sid)
                 continue
             if wanted is not None and opened_with not in wanted:
                 if opened_with:
@@ -545,6 +570,24 @@ async def close_sockets_of_revoked_sessions(
             to=sid,
         )
         await sio.disconnect(sid)
+    if regranted:
+        task = asyncio.create_task(_close_after_regrant(regranted))
+        _regrant_closes.add(task)
+        task.add_done_callback(_regrant_closes.discard)
+
+
+async def _close_after_regrant(sids: list[str]) -> None:
+    """Close the acting session's other sockets once the new cookie is out.
+
+    No notice: to a tab of the acting browser this is an ordinary server
+    close, and it comes back signed in with the cookie it now shares.
+    """
+    await asyncio.sleep(SAME_BROWSER_GRACE_SECONDS)
+    for sid in sids:
+        try:
+            await sio.disconnect(sid)
+        except Exception:  # pragma: no cover - the socket may already be gone
+            logging.getLogger("sketchy.main").debug("could not close %s", sid, exc_info=True)
 
 
 def forget_presence_identity(user_id: str) -> None:
