@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`e8f9a0b1c2d4_extra_prompt_languages.py` (#1209). Both this line and the table
+`c1d2e3f4a5b7_ban_lift_requires_admin.py` (#1294 review). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1172,7 +1172,13 @@ counting the pictures that went.
 ### `user_bans`
 `id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
 `source_report_id` (FK → `player_reports`, `SET NULL`) · `category` · `expires_at` · `is_active` ·
-`created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason`.
+`created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason` · `lift_requires_admin`.
+
+`lift_requires_admin` records, when the suspension is placed, whether only an
+administrator may lift it — an administrator placed it, or its subject was staff
+(R-BAN-01). Revocation checks it beside the roles held today, so a demotion since —
+of the administrator who placed it, or of the staff member under it — cannot bring
+it within a moderator's reach (#1294 review).
 
 **Active is one predicate everywhere** (#553): `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)`, from `auth/bans.py` `active_ban_filter`. The `is_active` flag it replaced recorded only the first half, so an expired-but-unrevoked ban was active in one reader and not in another; such a ban now stays as history and counts as nothing. `ck_user_bans_revocation_identity` ties the revoking actor and reason to a revocation (the actor may still become NULL when that moderator's account is deleted). `ix_user_bans_user_expires` serves the account lookup and the foreign-key walk on deletion; `ix_user_bans_unrevoked_newest`, a partial `(created_at) WHERE revoked_at IS NULL`, serves the moderation queue's newest active bans (#554).
 

@@ -3798,6 +3798,36 @@ async def test_a_moderator_cannot_lift_an_administrators_suspension(env):
     assert lifted.status_code == 200
 
 
+@pytest.mark.parametrize("demoted", ["issuer", "subject"])
+async def test_a_demotion_since_does_not_bring_a_suspension_within_a_moderators_reach(env, demoted):
+    """#1294 review: the boundary was read from the roles held today, so
+    demoting the administrator who placed a suspension - or the member of
+    staff under it - let a moderator lift it. It is kept with the suspension."""
+    new_client, factory, _ = env
+    moderator_http, admin_http, target_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, f"Dem{demoted[0]}Mod")
+    admin = await register(admin_http, f"Dem{demoted[0]}Admin")
+    target = await register(target_http, f"Dem{demoted[0]}Target")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+    if demoted == "subject":
+        await set_role(factory, target["id"], UserRole.MODERATOR)
+    placed = await admin_http.post(
+        "/api/moderation/bans", json={"userId": target["id"], "reason": "Admin's call"}
+    )
+    assert placed.status_code == 201, placed.text
+    if demoted == "issuer":
+        await set_role(factory, admin["id"], UserRole.MODERATOR)
+    else:
+        await set_role(factory, target["id"], UserRole.USER)
+
+    refused = await moderator_http.post(
+        f"/api/moderation/bans/{placed.json()['id']}/revoke", json={"reason": "No"}
+    )
+
+    assert refused.status_code == 403, refused.text
+
+
 async def test_a_moderator_lifts_a_moderators_suspension_of_a_player(env):
     new_client, factory, _ = env
     moderator_http, other_http, target_http = new_client(), new_client(), new_client()

@@ -2791,6 +2791,12 @@ def create_moderation_router(
                     expires_at=body.expires_at,
                     created_at=now,
                     source_report_id=source_report.id if source_report else None,
+                    # The boundary as it stands now, kept with the suspension
+                    # so a later demotion cannot move it (#1294 review).
+                    lift_requires_admin=(
+                        reviewer.role == UserRole.ADMIN.value
+                        or target.role != UserRole.USER.value
+                    ),
                 )
                 session.add(ban)
                 # Written here, in the transaction that creates the ban, so a
@@ -2927,6 +2933,9 @@ def create_moderation_router(
                         else None
                     )
                     subject = await session.get(User, ban.user_id) if ban.user_id else None
+                    # As the roles stand now, and as they stood when it was
+                    # placed: a demotion since cannot bring it within a
+                    # moderator's reach (#1294 review).
                     if issuer is not None and issuer.role == UserRole.ADMIN.value:
                         raise HTTPException(
                             status_code=403,
@@ -2936,6 +2945,11 @@ def create_moderation_router(
                         raise HTTPException(
                             status_code=403,
                             detail="Moderators cannot lift a suspension of another member of staff.",
+                        )
+                    if ban.lift_requires_admin:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Only an administrator can lift this suspension.",
                         )
                 ban.revoked_at = now
                 ban.revoked_by_user_id = reviewer.id
