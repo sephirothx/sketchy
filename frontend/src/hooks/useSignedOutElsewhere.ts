@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 
+import { onSessionRenewed } from "../lib/sessionRenewal";
 import { socket } from "../lib/socket";
 import { isSigningOut, useAuthStore } from "../store/authStore";
 
@@ -25,8 +26,16 @@ export function useSignedOutElsewhere(): void {
       }
     };
     socket.on("session_superseded", onSuperseded);
+    // Another tab of this browser changed or reset the password: the cookie
+    // this tab shares was renewed under it, and a socket that reconnected
+    // before it landed did so as nobody. Read the account again and hand
+    // the socket the new cookie (#1295 review).
+    const stopRenewals = onSessionRenewed(() => {
+      if (useAuthStore.getState().user) void adoptFromServer({ rebindSocket: true });
+    });
     return () => {
       socket.off("session_superseded", onSuperseded);
+      stopRenewals();
     };
   }, [adoptFromServer]);
 }

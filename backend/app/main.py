@@ -485,7 +485,9 @@ async def untraceable_sessions(
 
 #: How long the acting browser's other sockets are left after a password
 #: change or reset (#1246): long enough for the response to land and the new
-#: cookie with it, so a second tab of that browser comes straight back.
+#: cookie with it, so a second tab of that browser comes straight back. A
+#: slower response is caught by the client: the acting tab tells the others
+#: once it lands, and they handshake again (#1295 review).
 SAME_BROWSER_GRACE_SECONDS = 3.0
 _regrant_closes: set[asyncio.Task] = set()
 

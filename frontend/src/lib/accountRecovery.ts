@@ -1,4 +1,5 @@
 import { apiRequest } from "./api.ts";
+import { announceSessionRenewed } from "./sessionRenewal.ts";
 import { socket } from "./socket.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -149,9 +150,14 @@ export function completePasswordReset(
   token: string,
   password: string,
 ): Promise<{ ok: boolean; signedIn: boolean; reason?: "second_factor" | "suspended" }> {
-  return apiRequest("/api/auth/password/reset", {
-    method: "POST",
-    body: { token, password, socketId: socket.id },
+  return apiRequest<{ ok: boolean; signedIn: boolean; reason?: "second_factor" | "suspended" }>(
+    "/api/auth/password/reset",
+    { method: "POST", body: { token, password, socketId: socket.id } },
+  ).then((result) => {
+    // Every session is revoked either way, and a signed-in reset set a new
+    // cookie: the browser's other tabs look again (#1295 review).
+    announceSessionRenewed();
+    return result;
   });
 }
 
@@ -168,8 +174,11 @@ export function changePassword(
   currentPassword: string,
   password: string,
 ): Promise<{ ok: boolean }> {
-  return apiRequest("/api/auth/password/change", {
+  return apiRequest<{ ok: boolean }>("/api/auth/password/change", {
     method: "POST",
     body: { currentPassword, password, socketId: socket.id },
+  }).then((result) => {
+    announceSessionRenewed();
+    return result;
   });
 }
