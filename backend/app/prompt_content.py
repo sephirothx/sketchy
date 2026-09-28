@@ -212,6 +212,75 @@ _APOSTROPHES = str.maketrans(
 )
 
 
+# Code points that draw nothing (#1245): every format character (Unicode
+# category Cf - the zero-width space and joiners, the word joiner, the soft
+# hyphen, the byte-order mark, the bidirectional overrides) and the rest of
+# Unicode's Default_Ignorable_Code_Point set - variation selectors, fillers,
+# tags. Two texts that differ only by them look the same and keyed
+# differently, so a moderator's takedown of "badword" came back as
+# "bad<ZWSP>word", a list could hold "cat" three times over, and a U+202E in
+# a name turned the rest of the line around.
+#
+# Written out rather than derived from `unicodedata` at import, which would
+# walk all 1.1 million code points in every process; one class, because
+# testing a character against a list of ranges in Python made keying a
+# non-ASCII answer six times slower. `test_invisible_prompt_text` checks it
+# still covers every Cf character the running Python knows.
+_INVISIBLE = (
+    "\u00ad\u034f\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2"
+    "\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e"
+    "\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff9-\ufffb"
+    "\U000110bd\U000110cd\U00013430-\U0001343f\U0001bca0-\U0001bca3"
+    "\U0001d173-\U0001d17a\U000e0000-\U000e0fff"
+)
+INVISIBLE_CHARACTER = re.compile(f"[{_INVISIBLE}]")
+# The joiner that builds one emoji out of several ("cook" is person, ZWJ,
+# frying pan) is left out of this one: a name or description may carry it,
+# since emoji are how plenty of people title a list; an answer may not, being
+# a word to guess.
+_INVISIBLE_BUT_THE_JOINER = re.compile(f"(?!\u200d)[{_INVISIBLE}]")
+
+# The most marks one letter may carry, counted decomposed so a precomposed
+# letter counts its own: Vietnamese stacks two ("ệ"), and nothing a language
+# writes needs more than four. A pile of them is text that paints over the
+# lines around it.
+MAX_COMBINING_MARKS = 4
+
+_LONG_NON_ASCII_RUN = re.compile(f"[^\\x00-\\x7f]{{{MAX_COMBINING_MARKS + 1},}}")
+
+INVISIBLE_CHARACTER_MESSAGE = "must not contain invisible or formatting characters"
+STACKED_MARKS_MESSAGE = f"must not stack more than {MAX_COMBINING_MARKS} marks on one letter"
+
+
+def visible_text_problem(text: str, *, emoji_joiner: bool = False) -> str | None:
+    """Why `text` may not be stored as prompt-list content, or None.
+
+    `emoji_joiner` admits the zero-width joiner, for a name or description.
+    ASCII has neither problem, and most of a list is ASCII.
+    """
+    if text.isascii():
+        return None
+    pattern = _INVISIBLE_BUT_THE_JOINER if emoji_joiner else INVISIBLE_CHARACTER
+    if pattern.search(text) is not None:
+        return INVISIBLE_CHARACTER_MESSAGE
+    decomposed = unicodedata.normalize("NFD", text)
+    # A mark is never ASCII, so a stack too high is at least that many
+    # non-ASCII characters in a row - which a decomposed Latin word never has
+    # ("Mu" + diaeresis + "ller"), and so is not walked character by character.
+    if _LONG_NON_ASCII_RUN.search(decomposed) is None:
+        return None
+    run = 0
+    for character in decomposed:
+        run = run + 1 if unicodedata.category(character)[0] == "M" else 0
+        if run > MAX_COMBINING_MARKS:
+            return STACKED_MARKS_MESSAGE
+    return None
+
+
+def _without_invisible(text: str) -> str:
+    return text if text.isascii() else INVISIBLE_CHARACTER.sub("", text)
+
+
 def _collapsed(answer: str) -> str:
     """Whitespace collapsed, case folded, *composed*, apostrophes made plain.
 
@@ -222,8 +291,14 @@ def _collapsed(answer: str) -> str:
     equivalent, so they have to fold to one key. The apostrophe fold runs on
     both the stored key and the guess, so a list written with typographic
     quotes matches a plain-keyboard guess as well as the other way round.
+
+    Invisible characters are dropped first (#1245): stored content refuses
+    them, but a key is also what a guess and a moderator's hidden word are
+    compared by, and "bad<ZWSP>word" is the same word as "badword".
     """
-    composed = unicodedata.normalize("NFC", " ".join(answer.split()).casefold())
+    composed = unicodedata.normalize(
+        "NFC", " ".join(_without_invisible(answer).split()).casefold()
+    )
     return composed.translate(_APOSTROPHES)
 
 
@@ -340,6 +415,9 @@ def normalize_prompt_answer(answer: str, language: str = "en") -> str:
     collapsed = " ".join(answer.split())
     if not collapsed or len(collapsed) > MAX_PROMPT_LENGTH:
         raise ValueError(f"answer must be 1-{MAX_PROMPT_LENGTH} characters")
+    problem = visible_text_problem(collapsed)
+    if problem is not None:
+        raise ValueError(f"answer {problem}")
     key = prompt_match_key(collapsed, language)
     # Bounded after folding, not only before: case-folding expands some
     # characters (`ﬃ` to "ffi", `ß` to "ss"), so 32 characters in could be 96
