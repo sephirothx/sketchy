@@ -148,3 +148,30 @@ async def test_finished_game_shows_up_on_the_profile_page():
             await host_context.close()
             await guest_context.close()
             await browser.close()
+
+
+async def test_a_new_profile_says_empty_one_way_and_offers_no_filter_over_nothing():
+    """#1280: a guest's first look at their own profile had Pinned and
+    Statistics as plain notes, the history as a dashed card, and "Include
+    abandoned games" over an empty list."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Fresh{uuid4().hex[:6]}")
+            await page.goto(f"{BASE_URL}/profile")
+            await page.locator(".profile-history").wait_for()
+            await page.wait_for_timeout(300)
+            empties = page.locator(".profile-page .empty-state")
+            assert await empties.count() >= 2, await page.locator(".profile-page").inner_text()
+            assert await empties.evaluate_all("els => els.every(el => el.classList.contains('is-compact'))")
+            # No bare note standing in for an empty state.
+            assert await page.locator(".profile-page .panel > p.profile-note").count() == 0
+            assert await page.get_by_text("Include abandoned games").count() == 0
+        finally:
+            await context.close()
+            await browser.close()

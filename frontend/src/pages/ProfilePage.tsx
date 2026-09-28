@@ -99,7 +99,7 @@ function StatisticsPanel({ stats }: { stats: ProfileStats }) {
           <StatTile label={ui.profilePage.averageScore} value={ui.format.number({ value: Math.round(stats.averageScore) })} />
         </div>
       ) : (
-        <p className="profile-note">{ui.profilePage.winsAndScoresAppearAfterFirstGame}</p>
+        <EmptyState compact title={ui.profilePage.winsAndScoresAppearAfterFirstGame} />
       )}
       {(statsLayout.gameStats || statsLayout.turnStats.length > 0) && (
         <div className="profile-stats profile-stats-small">
@@ -840,14 +840,19 @@ function ProfileView({ userId }: { userId: string }) {
           <section className="surface-card panel profile-history">
             <div className="profile-history-head">
               <h2>{ui.profilePage.gameHistory}</h2>
-              <label className="profile-history-filter">
-                <input
-                  type="checkbox"
-                  checked={includeAbandoned}
-                  onChange={(change) => setIncludeAbandoned(change.target.checked)}
-                />
-                {ui.profilePage.includeAbandonedGames}
-              </label>
+              {/* A filter over nothing filters nothing (#1280). Once shown it
+                  stays while it is on, so it can be turned off again over an
+                  empty result. */}
+              {(games.length > 0 || includeAbandoned) && (
+                <label className="profile-history-filter">
+                  <input
+                    type="checkbox"
+                    checked={includeAbandoned}
+                    onChange={(change) => setIncludeAbandoned(change.target.checked)}
+                  />
+                  {ui.profilePage.includeAbandonedGames}
+                </label>
+              )}
             </div>
             {games.length === 0 ? (
               <EmptyState
