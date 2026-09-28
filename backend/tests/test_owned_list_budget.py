@@ -171,3 +171,44 @@ async def test_a_save_that_lost_the_race_is_refused_before_its_content_is_folded
     else:  # pragma: no cover - the assertion below says what went wrong
         raise AssertionError("a stale version was saved")
     assert folded == []
+
+
+async def test_a_list_is_read_as_one_revision_even_when_a_save_lands_mid_read(site, monkeypatch):
+    """#1291 review: the entries were read at the version the list's row gave,
+    the tags at whichever revision was current by the next statement, so a
+    save committed between the two handed the editor one revision's prompts
+    beside the next one's tags."""
+    from sqlalchemy import update
+
+    from app.db.models import PromptList
+
+    http, users, factory, prompts, engine = site
+    owner = await signed_in(http, users, factory, "Reader")
+    created = await prompts.create_owned(
+        owner, name="Tagged", description="", language="en", prompts=_entries(2, 0), tags=["animals"],
+    )
+    await prompts.update_owned(
+        owner, created.id, expected_version=created.version, name="Tagged",
+        description="", prompts=_entries(2, 0), tags=["food-and-drink"],
+    )
+    # Back to revision one as the list's row says it, and the second save
+    # "lands" between reading that row and reading the tags.
+    async with factory() as session, session.begin():
+        await session.execute(update(PromptList).values(version=created.version))
+    original = SqlAlchemyPromptListRepository._revision_entries
+
+    async def a_save_lands(session, prompt_list_id, version):
+        entries = await original(session, prompt_list_id, version)
+        # Another transaction's commit: the row changes, this session's copy
+        # of it does not.
+        await session.execute(
+            update(PromptList).values(version=created.version + 1)
+            .execution_options(synchronize_session=False)
+        )
+        return entries
+
+    monkeypatch.setattr(SqlAlchemyPromptListRepository, "_revision_entries", staticmethod(a_save_lands))
+
+    read = await prompts.get_owned(owner, created.id)
+
+    assert (read.version, read.tags) == (created.version, ("animals",))

@@ -4203,6 +4203,29 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             for list_id, slugs in held.items()
         }
 
+    @staticmethod
+    async def _revision_tags(
+        session: AsyncSession, prompt_list_id: UUID, version: int
+    ) -> tuple[str, ...]:
+        """Tag slugs of one revision of a list, in vocabulary order (R-LIST-18)."""
+        slugs = set(
+            (
+                await session.scalars(
+                    select(PromptTag.slug)
+                    .join(PromptListRevisionTag, PromptListRevisionTag.tag_id == PromptTag.id)
+                    .join(
+                        PromptListRevision,
+                        PromptListRevision.id == PromptListRevisionTag.revision_id,
+                    )
+                    .where(
+                        PromptListRevision.prompt_list_id == prompt_list_id,
+                        PromptListRevision.version == version,
+                    )
+                )
+            ).all()
+        )
+        return tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in slugs)
+
     async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:
         owner_id = _optional_entity_id(owner_user_id)
         if owner_id is None:
@@ -4291,11 +4314,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             return None
         prompt_list, stars, copies, origin = row
         entries = await self._revision_entries(session, prompt_list.id, prompt_list.version)
-        # Vocabulary order rather than insertion order, so two lists carrying
-        # the same tags present them the same way (R-LIST-18).
-        tags = (await self._current_revision_tags(session, [prompt_list.id])).get(
-            prompt_list.id, ()
-        )
+        # The revision the entries were read at, not whichever is current by
+        # now: a save committed between the two reads gave the editor one
+        # revision's prompts beside the next one's tags (#1291 review).
+        tags = await self._revision_tags(session, prompt_list.id, prompt_list.version)
         credits = await self._copied_from(session, [prompt_list.id])
         return _to_owned_prompt_list(
             prompt_list,
