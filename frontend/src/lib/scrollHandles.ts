@@ -123,6 +123,14 @@ export function installScrollHandles(): void {
   if (!scrollbarsTakeALane()) return;
   const root = document.documentElement;
   root.classList.add("scroll-handles");
+  // WebKit styles the page's own scrollbar once, when it makes it, and the
+  // page has been laid out by now: a class added this late never reached it,
+  // so the prefixed rule Safari before 18.2 relies on left the page's lane in
+  // place. Taking the root's overflow away and giving it back makes WebKit
+  // build that scrollbar again, with the class in force.
+  root.style.overflow = "hidden";
+  root.getBoundingClientRect();
+  root.style.removeProperty("overflow");
   const layer = document.createElement("div");
   layer.className = "scroll-handle-layer";
   layer.setAttribute("aria-hidden", "true");

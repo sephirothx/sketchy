@@ -11,7 +11,11 @@
   scrollbar-width: none;
 }
 
-/* Safari before 18.2 knows only the prefixed way. */
+/* Safari before 18.2 knows only the prefixed way. The page's own scrollbar
+   takes its style from `body` or, failing that, the root, so both are named.
+   WebKit reads it only when it builds that scrollbar, which is why the script
+   has it build it again once the class is set. */
+:root.scroll-handles::-webkit-scrollbar,
 :root.scroll-handles ::-webkit-scrollbar {
   display: none;
 }
