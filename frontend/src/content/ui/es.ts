@@ -685,6 +685,7 @@ export const ES: Catalogue = {
       })} en esta visita`,
     couldNotTakeScreenshot: "No se pudo hacer la captura.",
     thanksYourReportWithPeopleWho: "Gracias: tu informe está con quienes llevan Sketchy.",
+    thanksSentWithoutScreenshot: "Gracias: tu informe está con quienes llevan Sketchy. Esta vez no se pudo guardar la captura.",
     couldNotSendReport: "No se pudo enviar el informe.",
     reportBug: "Informar de un fallo",
     somethingBrokenNotSomethingSomeoneSaid: "Algo roto, no algo que alguien dijo. Esto llega a quienes llevan Sketchy, nunca a otros jugadores.",

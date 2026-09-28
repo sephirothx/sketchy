@@ -1544,6 +1544,8 @@ your players share one address:
 | `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
 | `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
 | `PROMPT_LIST_UNPUBLISH_LIMIT` | 30 per hour | Withdrawals of one's own lists from the catalogue, per account (#1241) |
+| `BUG_REPORT_SCREENSHOT_LIMIT` | 3 per day | Bug-report screenshots one account may have kept; past it the report lands without its picture (#1244) |
+| `BUG_REPORT_SCREENSHOT_BYTES_LIMIT` | 1 GiB | Undecided bug-report screenshots kept across the deployment; past it a report lands without its picture |
 | `FRIEND_REQUEST_LIMIT` | 20 per hour | Friend requests, keyed by account. Every attempt spends one whatever became of it, so the limit cannot say whether a request landed (#1062) |
 
 In-room commands answer to their own per-caller budgets, which are **not** environment

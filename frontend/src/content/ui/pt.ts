@@ -685,6 +685,7 @@ export const PT: Catalogue = {
       })} nesta visita`,
     couldNotTakeScreenshot: "Não foi possível tirar a captura.",
     thanksYourReportWithPeopleWho: "Obrigado — o teu relatório está com quem gere o Sketchy.",
+    thanksSentWithoutScreenshot: "Obrigado — o teu relatório está com quem gere o Sketchy. Desta vez não foi possível guardar a captura de ecrã.",
     couldNotSendReport: "Não foi possível enviar o relatório.",
     reportBug: "Comunicar um erro",
     somethingBrokenNotSomethingSomeoneSaid: "Algo avariado, não algo que alguém disse. Isto chega a quem gere o Sketchy — nunca a outros jogadores.",

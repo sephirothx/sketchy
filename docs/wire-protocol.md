@@ -2333,7 +2333,7 @@ same `404` as anybody else.
 
 | Method | Path | Role | Notes |
 | --- | --- | --- | --- |
-| `POST` | `/api/bug-reports` | any identity, guests included | One of ten `area` values and three `severity` values, ≤ 200-char `summary`, ≤ 4000-char `details`, ≤ 32 768 bytes `clientContext`, optional base64 `screenshot`. 5 per hour per client. Room, game and turn are resolved from the reporter's **live seat**, never from the `roomCode` sent |
+| `POST` | `/api/bug-reports` | any identity, guests included | One of ten `area` values and three `severity` values, ≤ 200-char `summary`, ≤ 4000-char `details`, ≤ 32 768 bytes `clientContext`, optional base64 `screenshot`. 5 per hour per client. Answers `{id, status, createdAt, screenshotKept}`: a screenshot past the account's 3 a day or the deployment's 1 GiB of undecided ones is dropped and the report kept (R-BUG-07, #1244). Room, game and turn are resolved from the reporter's **live seat**, never from the `roomCode` sent |
 | `GET` | `/api/admin/bug-reports` | administrator | The queue, newest first, optionally filtered by `status`. Screenshot **metadata** only |
 | `GET` | `/api/admin/bug-reports/{report_id}/screenshot` | administrator | The raw bytes, `Cache-Control: private, no-store`; `404` once erased |
 | `PATCH` | `/api/admin/bug-reports/{report_id}` | administrator | Review is one-way (`409` if already decided) and requires a note. Erases the screenshot in the same transaction |

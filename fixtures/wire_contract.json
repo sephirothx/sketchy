@@ -1558,11 +1558,13 @@
   ],
   "api.bug_reports:create_bug_report_router": [
    "createdAt",
-   "limitBytes"
+   "limitBytes",
+   "screenshotKept"
   ],
   "api.bug_reports:submit_bug_report": [
    "createdAt",
-   "limitBytes"
+   "limitBytes",
+   "screenshotKept"
   ],
   "api.errors:body": [
    "errorCode"
