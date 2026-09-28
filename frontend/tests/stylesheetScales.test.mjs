@@ -139,6 +139,8 @@ test("the invite stands on the bottom dock, and the toasts on both (R-UX-07)", (
     block("global-feedback.css", ".toast-viewport"),
     /bottom: calc\(20px \+ var\(--dock-clearance\) \+ var\(--friend-invite-clearance\)\);/,
   );
+  // The gallery's Back to top, under a phone-wide invitation, was its dismiss (#1276).
+  assert.match(block("gallery.css", ".gallery-back-to-top"), /bottom: calc\(24px \+ var\(--friend-invite-clearance\)\);/);
   // And between a column docked down either side, rather than into it (#1175).
   for (const [file, selector] of [
     ["global-feedback.css", ".toast-viewport"],
