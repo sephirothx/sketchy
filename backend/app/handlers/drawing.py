@@ -303,11 +303,20 @@ async def undo_stroke(ctx: HandlerContext, sid, data=None):
         # its budgeted transaction; a dump here on top was the amplification.
         return {"ok": False, "errorCode": ErrorCode.CANVAS_STALE_GENERATION, "error": "Canvas generation is out of date"}
     if sequence <= room.game.canvas.sequence:
+        # A retry of an undo already committed is answered as it was, in any
+        # phase: it changes nothing, and refusing it would have the client
+        # resync over an undo the server did make.
         commit = room.game.canvas.get_commit(sequence)
         if commit and commit[2] == "undo":
             await ctx.game_flow._emit_canvas_commit(room, sequence, to=sid)
             return {"ok": True}
         return {"ok": False, "errorCode": ErrorCode.CANVAS_SEQUENCE_COMMITTED, "error": "Sequence already committed"}
+    # Only while drawing, as for `draw` (#1283). The drawer is still the
+    # drawer through the results and the end of the game, and the turn's
+    # recap is captured when drawing ends: a late undo accepted after that
+    # changed the live canvas and left the saved drawing as it was.
+    if room.game.phase != Phase.DRAWING:
+        return {"ok": False, "errorCode": ErrorCode.DRAWER_ONLY, "error": "The drawing has ended"}
     expected_sequence = room.game.canvas.sequence + 1
     if sequence != expected_sequence:
         await ctx.game_flow._request_canvas_actions(
