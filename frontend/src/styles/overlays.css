@@ -590,6 +590,15 @@
   justify-content: space-between;
 }
 
+/* A sheet's own action - Join by code's Paste - and the ✕, together at the
+   head's end. */
+.bottom-sheet-head-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 8px;
+}
+
 .bottom-sheet-close {
   align-items: center;
   background: var(--well);

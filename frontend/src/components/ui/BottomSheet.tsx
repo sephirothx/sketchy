@@ -22,7 +22,9 @@ interface BottomSheetProps {
   /** Accessible name for the close control, from the caller's catalogue
       group - required, so no sheet falls back to an English "Close". */
   closeLabel: string;
-  /** Replaces the ✕ in the header — the grab handle still dismisses. */
+  /** Beside the ✕ in the header, never instead of it (#1280): above 900px
+      the grab handle is hidden, and Join by code's Paste left a desktop
+      sheet with no way out but Escape and the scrim. */
   headerAction?: ReactNode;
   children: ReactNode;
 }
@@ -70,7 +72,7 @@ export function BottomSheet({
   // grab handle when the header slot is spent on something else.
   useFocusTrap(sheetRef, {
     onEscape: onDismiss,
-    initialFocusRef: initialFocusRef ?? (headerAction ? grabRef : closeRef),
+    initialFocusRef: initialFocusRef ?? closeRef,
   });
   // In a room, Back closes the sheet as Escape does - on a phone it is the
   // gesture people reach for first (R-UX-15).
@@ -123,16 +125,15 @@ export function BottomSheet({
         tabIndex={-1}
         data-testid={testId}
       >
-        {/* The handle always takes a tap and a drag. It only carries the
-            accessible name when the ✕ is not there to carry it, so the two
-            never announce themselves as the same control twice. */}
+        {/* The handle takes a tap and a drag; the ✕ is the control a
+            keyboard and a screen reader reach, so the two never announce
+            themselves as the same control twice. */}
         <button
           ref={grabRef}
           type="button"
           className="bottom-sheet-grab"
-          aria-label={headerAction ? closeLabel : undefined}
-          aria-hidden={headerAction ? undefined : true}
-          tabIndex={headerAction ? undefined : -1}
+          aria-hidden
+          tabIndex={-1}
           onClick={onDismiss}
           onTouchStart={onGrabTouchStart}
           onTouchMove={onGrabTouchMove}
@@ -143,7 +144,8 @@ export function BottomSheet({
         </button>
         <div className="bottom-sheet-head">
           {header ?? (title ? <h2 className="bottom-sheet-title">{title}</h2> : <span />)}
-          {headerAction ?? (
+          <span className="bottom-sheet-head-actions">
+            {headerAction}
             <button
               ref={closeRef}
               type="button"
@@ -153,7 +155,7 @@ export function BottomSheet({
             >
               <XIcon size={16} />
             </button>
-          )}
+          </span>
         </div>
         <div className="bottom-sheet-body">{children}</div>
         {footer && <div className="bottom-sheet-foot">{footer}</div>}
