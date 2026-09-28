@@ -1339,7 +1339,12 @@ without recomputing ranks. Spectators are in neither list, nor in `game_ended.sc
 never score (R-SPEC-02), and ranked with the players they read "You finished 4th with 0
 points" while the history record, which never held them, disagreed (#1262). The exception
 is `game_ended.scores` keeping an account that played, left and came back to watch: its
-earlier seat's points are carried to it there, as in the record (R-HIST-12). Ranks use standard competition ranking (1, 2, 2, 4) via
+earlier seat's points are carried to it there, as in the record (R-HIST-12). An account
+that left and rejoined as a player is carried the same way everywhere its standing shows -
+`turn_ended.scores[].score` (and the `previousRank`/`newRank` read off it) and
+`room_state.players[].score` as well as `game_ended.scores` - one sum
+(`Room.carried_points`, [`backend/app/rooms.py`](../backend/app/rooms.py)), so no results card
+ranks it by its newest seat and then jumps at game over (#1318). Ranks use standard competition ranking (1, 2, 2, 4) via
 `competition_ranks()` ([`backend/app/game.py:52`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 
