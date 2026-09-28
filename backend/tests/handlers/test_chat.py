@@ -2,6 +2,7 @@ import asyncio
 from contextlib import suppress
 from unittest.mock import AsyncMock, patch
 
+import pytest
 import socketio
 
 from app.handlers import register_all_handlers as register_handlers
@@ -1183,3 +1184,61 @@ async def test_a_guessing_seat_cannot_broadcast_the_prompt_as_chat():
     # as plain chat to the room.
     assert all(call.kwargs.get("room") is None for call in _chat_emits(sio))
     await _cancel_timers(timers, room)
+
+
+@pytest.mark.parametrize("spectators_see_prompt", [False, True])
+async def test_a_guess_echo_reaches_spectators_only_where_they_see_the_prompt(
+    spectators_see_prompt,
+):
+    """#1281: a correct guess is the answer and a close one nearly. With the
+    room keeping the prompt from spectators (R-SPEC-03, the default) they read
+    "Gerda: helmet" beside tiles still masked; now they get only who got it,
+    and the echo reaches them where the room shows them the prompt anyway."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(
+        name="Room", is_public=True, spectators_see_prompt=spectators_see_prompt
+    )
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    spectator = room_manager.add_player(room, "Spectator", is_spectator=True)
+    drawer.sid, guesser.sid, spectator.sid = "drawer-sid", "guesser-sid", "spec-sid"
+
+    room.game = Game(turn_order=[drawer.id, guesser.id], prompt_pool=["helmet"])
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, "helmet")
+    room.game.set_phase_deadline(DRAWING_SECONDS)
+
+    sio = socketio.AsyncServer(async_mode="asgi")
+    timers = register_handlers(sio, room_manager).timers
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+    guess = sio.handlers["/"]["guess"]
+
+    def echoes(kind: str) -> list[list[str]]:
+        return [
+            call.kwargs["to"]
+            for call in sio.emit.await_args_list
+            if call.args[0] == "chat_message" and call.args[1].get(kind)
+        ]
+
+    await guess("guesser-sid", {"text": "helmer"})
+    close = [
+        call.kwargs["to"] for call in sio.emit.await_args_list if call.args[0] == "chat_message"
+    ]
+    await guess("guesser-sid", {"text": "helmet"})
+    correct = echoes("correct")
+
+    expected = ["drawer-sid", "spec-sid"] if spectators_see_prompt else ["drawer-sid"]
+    assert close == [expected]
+    assert correct == [expected]
+    # Who got it still reaches the whole room, spectators included.
+    assert any(
+        call.args[0] == "correct_guess" and call.kwargs.get("room") == room.id
+        for call in sio.emit.await_args_list
+    )
+
+    timer = timers.phase_timers.pop(room.id, None)
+    if timer:
+        timer.cancel()
+        with suppress(asyncio.CancelledError):
+            await timer

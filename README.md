@@ -2569,6 +2569,7 @@ includes the saved configuration and archive state.
 - Players can join any room (including full rooms) as a spectator. Spectators do not draw or earn scores.
 - By default, spectators see the masked prompt like active guessers, but room creators can enable **Allow spectators to see the prompt**.
 - Spectator chat messages are restricted to the drawer, spectators, and players who have already guessed, keeping active guessers spoiler-free.
+- Unless spectators may see the prompt, they are told who guessed it but not the guess itself, correct or close — it is the answer, or nearly.
 
 ### Runtime analytics
 

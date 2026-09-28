@@ -617,7 +617,9 @@ these paths that means a second room, or a game started twice. Instead:
   (the drawer, a spectator, a correct guesser, a seat the turn froze out) reaches the
   prompt-aware audience only (R-SPEC-04), and a seat that may still guess has its line
   scored and delivered as a guess whichever event carried it, so chat is never a way
-  to put the prompt in front of the other guessers.
+  to put the prompt in front of the other guessers. A guess's own echo - correct, or
+  close - reaches spectators only in a room that shows them the prompt (R-SPEC-03,
+  #1281); `correct_guess` still tells the whole room who got it.
 
   The retry is sent only inside the **scope** the first attempt captured — the same
   connection (`socket.id`), the same room and the same turn — and abandoned otherwise
