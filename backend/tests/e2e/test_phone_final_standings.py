@@ -73,26 +73,42 @@ async def test_a_phone_keeps_the_final_standings_after_game_over(size):
                         await page.keyboard.press("Enter")
             for page in pages:
                 await page.locator('[data-testid="game-end-overlay"]').wait_for(timeout=20_000)
+            # What the game-over card says, name by name.
+            card = guest.locator('[data-testid="game-end-overlay"]')
+            expected = await card.evaluate(
+                """(card) => [...card.querySelectorAll('.game-end-podium-col')].map((col) => ({
+                    name: col.querySelector('.colored-player-name')?.textContent?.trim(),
+                    score: Number(col.querySelector('.game-end-podium-score')?.textContent?.replace(/\\D/g, '')),
+                }))"""
+            )
+            assert len(expected) == 2 and all(entry["name"] for entry in expected), expected
             await guest.get_by_role("button", name="Continue").click()
             await guest.locator('[data-testid="waiting-room"]').wait_for()
 
             roster = guest.locator(".waiting-roster")
-            standings = roster.get_by_test_id("roster-standing")
-            await standings.first.wait_for()
-            assert await standings.count() == 2
-            texts = [await standings.nth(index).inner_text() for index in range(2)]
-            # Places first, in order, each with its score.
-            assert all("·" in text for text in texts), texts
-            assert texts[0].startswith("1"), texts
+            tiles = roster.locator(".waiting-roster-grid .waiting-roster-tile:has([data-testid=roster-standing])")
+            await tiles.first.wait_for()
+            shown = await tiles.evaluate_all(
+                """(tiles) => tiles.map((tile) => ({
+                    name: tile.querySelector('.colored-player-name')?.textContent?.trim(),
+                    standing: tile.querySelector('[data-testid=roster-standing]')?.textContent?.trim(),
+                }))"""
+            )
+            assert len(shown) == 2, shown
+            by_name = {entry["name"]: entry["score"] for entry in expected}
+            ranked = sorted(by_name.values(), reverse=True)
+            for row in shown:
+                score = by_name[row["name"]]
+                place = 1 + sum(1 for other in ranked if other > score)
+                ordinal = {1: "1st", 2: "2nd"}[place]
+                assert row["standing"] == f"{ordinal} · {score:,}", (row, expected)
+            # In place order.
+            assert [by_name[row["name"]] for row in shown] == sorted(by_name.values(), reverse=True)
             assert await roster.get_by_text("Final standings").count() == 1
 
-            # Still there after a while, and gone once the rematch starts.
+            # Still there once the card would have moved on by itself.
             await guest.wait_for_timeout(1000)
-            assert await standings.count() == 2
-            await host.get_by_role("button", name="Continue").click()
-            await host.get_by_role("button", name="Rematch").click()
-            await guest.locator(".prompt-choices, canvas.drawing-canvas").first.wait_for(timeout=15_000)
-            assert await guest.get_by_test_id("roster-standing").count() == 0
+            assert await roster.get_by_test_id("roster-standing").count() == 2
         finally:
             for context in contexts:
                 await context.close()

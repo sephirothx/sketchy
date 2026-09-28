@@ -1513,3 +1513,19 @@ async def test_an_account_back_as_a_spectator_keeps_its_points_on_the_final_scre
         key=lambda row: -row[1],
     )
     assert recorded[0] == (guesser.nickname, 400)
+
+
+async def test_the_recap_keeps_the_scoring_mode_its_game_was_played_as():
+    """#1270: the standings a finished game shows follow the mode it was
+    played as. Read from the room's current rules instead, a No-scoring game
+    followed by a scored rematch's rules showed "1st · 0" on every tile, and
+    the reverse hid a scored game's standings before the next game began."""
+    room_manager, room, players = build_room(rounds=1)
+    room.scoring_mode = "none"
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+
+    await play_to_completion(ctx, room, players)
+
+    assert room.last_game_payload()["scoringMode"] == "none"
+    room.scoring_mode = "default"
+    assert room.last_game_payload()["scoringMode"] == "none"

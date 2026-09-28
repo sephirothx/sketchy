@@ -101,8 +101,12 @@ export const ConnectedRoomPlayersPanel = memo(function ConnectedRoomPlayersPanel
   const drawerId = useGameStore((state) => state.drawerId);
   const myPlayerId = useGameStore((state) => state.playerId);
   const maxPlayers = useGameStore((state) => state.maxPlayers);
-  const showScores = useGameStore((state) => state.scoringMode !== "none");
+  const scoringMode = useGameStore((state) => state.scoringMode);
+  const finalScoringMode = useGameStore((state) => state.finalScoringMode);
   const finalScores = useGameStore((state) => state.finalScores);
+  // After a game its standings follow the mode it was played as, not the rules
+  // the host has since changed for the next one (#1270).
+  const showScores = (mode !== "playing" && finalScores && finalScoringMode ? finalScoringMode : scoringMode) !== "none";
   const moderation = useGameStore((state) => state.moderation);
   const turnCorrectGuesses = useGameStore((state) => state.turnCorrectGuesses);
 
@@ -198,6 +202,7 @@ export function ConnectedWaitingRoomPanel({
   const customPromptsOnly = useGameStore((state) => state.customPromptsOnly);
   const hintMode = useGameStore((state) => state.hintMode);
   const scoringMode = useGameStore((state) => state.scoringMode);
+  const finalScoringMode = useGameStore((state) => state.finalScoringMode);
   const spectatorsSeePrompt = useGameStore((state) => state.spectatorsSeePrompt);
   const hideMaskedPrompt = useGameStore((state) => state.hideMaskedPrompt);
   const allowedTools = useGameStore((state) => state.allowedTools);
@@ -220,6 +225,7 @@ export function ConnectedWaitingRoomPanel({
       customPromptsOnly={customPromptsOnly}
       hintMode={hintMode}
       scoringMode={scoringMode}
+      finalScoringMode={finalScoringMode}
       spectatorsSeePrompt={spectatorsSeePrompt}
       hideMaskedPrompt={hideMaskedPrompt}
       allowedTools={allowedTools}

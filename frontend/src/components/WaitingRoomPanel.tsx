@@ -42,6 +42,8 @@ interface WaitingRoomPanelProps {
   myPlayerId: string | null;
   isHost: boolean;
   finalScores: ScoreEntry[] | null;
+  /** What the finished game was played as; its standings follow it. */
+  finalScoringMode?: ScoringMode | null;
   startBusy: boolean;
   startError: string | null;
   onStart: () => void;
@@ -125,10 +127,10 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // looked away had lost the result. Places and scores stay on the tiles until
   // the next game starts and clears them.
   const standings = useMemo(() => {
-    if (!finalScores || props.scoringMode === "none") return null;
+    if (!finalScores || (props.finalScoringMode ?? props.scoringMode) === "none") return null;
     const places = competitionRanks(finalScores.map((entry) => entry.score));
     return new Map(finalScores.map((entry, index) => [entry.playerId, { place: places[index], score: entry.score }]));
-  }, [finalScores, props.scoringMode]);
+  }, [finalScores, props.finalScoringMode, props.scoringMode]);
   const rosterPlayers = standings
     ? [...activePlayers].sort(
         (a, b) =>
@@ -170,9 +172,12 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           )}
         </span>
         {standing && (
-          <span className="waiting-roster-standing" data-testid="roster-standing">
-            {ui.waitingRoomPanel.finalStanding(standing)}
-          </span>
+          <>
+            <span className="waiting-roster-standing" data-testid="roster-standing" aria-hidden="true">
+              {ui.waitingRoomPanel.finalStanding(standing)}
+            </span>
+            <span className="visually-hidden">{ui.waitingRoomPanel.finalStandingSpoken(standing)}</span>
+          </>
         )}
       </li>
     );
@@ -376,8 +381,15 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       {/* Who is here, as faces rather than a list in another column. The one
           thing you watch while waiting used to be the last thing on the page,
           below the chat card. */}
-      {isNarrow && <section className="surface-card waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
-        {standings && <p className="section-label waiting-roster-kicker">{ui.roomPlayersPanel.finalStandings}</p>}
+      {isNarrow && <section
+        className="surface-card waiting-card waiting-roster"
+        aria-labelledby={standings ? "waiting-roster-kicker waiting-roster-title" : "waiting-roster-title"}
+      >
+        {standings && (
+          <p id="waiting-roster-kicker" className="section-label waiting-roster-kicker">
+            {ui.roomPlayersPanel.finalStandings}
+          </p>
+        )}
         <div className="waiting-roster-head">
           <h2 id="waiting-roster-title" className="panel-title" tabIndex={-1}>{ui.waitingRoomPanel.inTheRoom}</h2>
           <span

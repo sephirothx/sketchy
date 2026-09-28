@@ -2301,6 +2301,8 @@ export const FR: Catalogue = {
 
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
+    finalStandingSpoken: (p: { place: number; score: number }) =>
+      `${ordinal(p.place)} place, ${counted(p.score, { one: "point", other: "points" })}`,
     editRoomRules: "Modifier les règles du salon",
     editRules: "Modifier les règles",
     doodle: "Gribouiller",

@@ -2320,6 +2320,8 @@ export const EN = {
 
   waitingRoomPanel: {
     finalStanding: (p: { place: number; score: number }) => `${ordinal(p.place)} · ${number(p.score)}`,
+    finalStandingSpoken: (p: { place: number; score: number }) =>
+      `finished ${ordinal(p.place)}, ${counted(p.score, { one: "point", other: "points" })}`,
     editRoomRules: "Edit room rules",
     editRules: "Edit rules",
     doodle: "Doodle",
