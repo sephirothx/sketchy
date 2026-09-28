@@ -181,3 +181,37 @@ async def test_every_text_field_on_a_phone_is_at_least_16px():
             for context in contexts + hosts:
                 await context.close()
             await browser.close()
+
+
+async def test_staff_fields_are_16px_too():
+    """R-UX-21 is every field, and a moderator on a phone is on iOS as often as
+    a player: the operations page's filters and selects were 13-13.5px (review
+    of #1310). Walked as an administrator, every tab; the moderation notes,
+    which render only over a case, are held by the stylesheet test."""
+    from tests.e2e.staff_helpers import set_role
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(**PHONE)
+        page = await context.new_page()
+        try:
+            name = f"Ops{uuid4().hex[:8]}"
+            await page.goto(BASE_URL)
+            await register_account(page, name)
+            await set_role(name, "admin")
+            small, seen = [], 0
+            await page.goto(f"{BASE_URL}/admin/operations")
+            for tab in ("Overview", "Tuning", "Controls", "Activity", "Audit ledger"):
+                await page.get_by_role("tab", name=tab).click()
+                await page.wait_for_timeout(400)
+                seen += await page.evaluate(FIELD_COUNT)
+                small += [dict(entry, screen=tab) for entry in await page.evaluate(SMALL_FIELDS)]
+            await page.goto(f"{BASE_URL}/moderation")
+            await page.locator("main.ops-page").wait_for()
+            await page.wait_for_timeout(600)
+            small += [dict(entry, screen="moderation") for entry in await page.evaluate(SMALL_FIELDS)]
+            assert seen > 0, "the staff walk found no fields to measure"
+            assert small == [], small
+        finally:
+            await context.close()
+            await browser.close()
