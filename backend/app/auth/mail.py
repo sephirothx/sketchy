@@ -41,7 +41,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import delete, literal, select, update
+from sqlalchemy import case, delete, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.deployment import is_production, public_base_url
@@ -493,7 +493,18 @@ async def _claim_due(
                         EmailOutboxEntry.state == EmailOutboxState.PENDING.value,
                         EmailOutboxEntry.next_attempt_at <= checked_at,
                     )
-                    .order_by(EmailOutboxEntry.created_at)
+                    # A reset link first (#1240): it lives an hour and is
+                    # somebody locked out, where a verification link lives a
+                    # day and is somebody who can still play. A queue flooded
+                    # with verification mail must not age every reset in it
+                    # past its expiry, which oldest-first alone would do.
+                    .order_by(
+                        case(
+                            (EmailOutboxEntry.template == EmailTemplate.RESET_PASSWORD.value, 0),
+                            else_=1,
+                        ),
+                        EmailOutboxEntry.created_at,
+                    )
                     .limit(batch_size)
                 )
             ).all()
