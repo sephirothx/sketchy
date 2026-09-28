@@ -9,6 +9,12 @@ A 640px window makes the bound (`max(280px, 60dvh)`, 384px here) cheap to
 overflow: four cards are taller than it at both widths. The suite's workers
 share one server, so other tests' rooms may be in the list too, which only
 makes it longer.
+
+From 1500px the people's column sits beside the rooms, and on a window too
+short to pin it has to take the row's height rather than set it: a long list
+of who is online stretched the row, and the rooms beside it, instead of
+scrolling. Four hosts and the visitor are taller than that list's share of a
+600px window.
 """
 from playwright.async_api import async_playwright, expect
 from tests.e2e.lobby_helpers import (
@@ -29,10 +35,27 @@ LIST_SIZE = """() => {
 }"""
 
 
+# The same for who is online, and whether the column holding it spills.
+PEOPLE_SIZE = """() => {
+  const column = document.querySelector('.lobby-social');
+  const list = document.querySelector('.online-players-list');
+  return {
+    column: column.clientHeight, columnContent: column.scrollHeight,
+    shown: list.clientHeight, content: list.scrollHeight,
+  };
+}"""
+
+
 async def assert_list_scrolls(page) -> None:
     size = await page.evaluate(LIST_SIZE)
     assert size["content"] > size["shown"], f"the list grew to its rooms: {size}"
     assert size["shown"] <= WINDOW_HEIGHT * 0.6 + 1, f"the list is taller than its bound: {size}"
+
+
+async def assert_people_scroll(page) -> None:
+    size = await page.evaluate(PEOPLE_SIZE)
+    assert size["content"] > size["shown"], f"who is online grew to its people: {size}"
+    assert size["columnContent"] <= size["column"] + 1, f"the people's column spills: {size}"
 
 
 async def test_the_room_list_scrolls_rather_than_growing_the_page():
@@ -63,6 +86,11 @@ async def test_the_room_list_scrolls_rather_than_growing_the_page():
             await expect(last_room).to_be_attached()
             assert await visitor.locator(".first-run").count() == 0
             await assert_list_scrolls(visitor)
+
+            # Named, wide, and too short to pin: the rooms beside the people.
+            await visitor.set_viewport_size({"width": 1600, "height": 600})
+            await expect(visitor.locator(".online-player-row").nth(ROOMS)).to_be_attached()
+            await assert_people_scroll(visitor)
         finally:
             for context in hosts:
                 await context.close()

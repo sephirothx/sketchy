@@ -1409,18 +1409,38 @@ a.online-player-name:focus-visible {
     grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
     align-items: stretch;
     min-height: 0;
+    /* Sized by the row - the rooms, or the window, whichever is taller - and
+       never by what is in it. Where the page scrolls (the name tag's page,
+       or a window under 640px tall) the row is as tall as its contents, and
+       a long list of who is online, or a chat of fifty lines, grew the row
+       and the rooms beside it (#1221). Pinned, the row is the window's and
+       this changes nothing. */
+    contain: size;
   }
 
-  /* On the name tag's page the row is as tall as its contents, and the
-     people's column set it: a long list of who is online, or a chat of fifty
-     lines, grew the row and the rooms beside it. Sized by the row instead -
-     the rooms, or the window, whichever is taller - and scrolling inside it,
-     as it does pinned (#1221). With a floor, because the window can be the
-     shorter of the two by then: under the name tag in a 640px window, with
-     no rooms, the chat was a 22px strip. The floor is the side-by-side row's
-     260px for the chat, as its three fifths of the column. */
+  /* So the panels scroll inside the height the row gives them on a page that
+     is not pinned as well; the pinned lobby's own rules do it from 640px. */
+  .lobby-social > .panel {
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .lobby-online-panel .online-players-list,
+  .lobby-chat-panel .chat-messages {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-y: auto;
+    padding-inline: var(--ink-overhang) 4px;
+    margin-inline-start: calc(-1 * var(--ink-overhang));
+  }
+
+  /* A floor where the page scrolls, because the window can be the shorter
+     of the two there: under the name tag in a 640px window, with no rooms,
+     the chat was a 22px strip. It is the side-by-side row's 260px for the
+     chat, as its three fifths of the column. Pinned it is left off - the
+     row is the window's, and a floor would push the column past it. */
   .lobby-page:has(> .first-run) > .lobby-social {
-    contain: size;
     min-height: calc(260px * 5 / 3 + 16px);
   }
 
@@ -1430,6 +1450,13 @@ a.online-player-name:focus-visible {
 
   .lobby-social > .lobby-chat-panel {
     grid-row: 2;
+  }
+}
+
+/* The same floor for a wide window too short to pin (see above). */
+@media (min-width: 1500px) and (max-height: 639px) {
+  .lobby-page > .lobby-social {
+    min-height: calc(260px * 5 / 3 + 16px);
   }
 }
 
