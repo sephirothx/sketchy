@@ -1078,10 +1078,21 @@ with a refusal on its way to the client and one of them runs in a `finally`, whe
 raising would replace the reason the entry was refused. A reservation stranded that
 way is reclaimed by the same startup sweep that reclaims one stranded by a crash.
 
-Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
-introduces, every socket presents the proxy's address, and the forwarded header is
-attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
-reason. The key arrives when an address worth keying on does.
+Per-**address** ceilings exist now that there is an address worth keying on (#1232):
+uvicorn rewrites the ASGI client from the forwarded header only for the proxy
+`FORWARDED_ALLOW_IPS` names, and `auth/rate_limit.address_key` groups an IPv6 caller by
+its /64 (#1233). Sockets are admitted a layer lower than rooms. The
+`TransportLedger` ([`services/room_quotas.py`](../backend/app/services/room_quotas.py))
+is consulted by the Engine.IO server at the handshake, before it allocates a socket
+([`socket_transport.py`](../backend/app/socket_transport.py)): a ticket is taken there,
+bound to the socket at Engine.IO's connect event through a context variable (the two
+run in one task), and given back by the disconnect event — or at once, when the
+handshake never produced a socket that will have one. Counting at the Socket.IO CONNECT,
+as the ceiling used to, saw none of the transports that never sent one. The account
+ceiling stays at the CONNECT, the first moment the account is known, and the per-address
+room ceiling beside the per-account one in `RoomQuotaService`. A waiting room that never
+starts a game is closed after 30 minutes by its own supervised loop
+([`services/idle_rooms.py`](../backend/app/services/idle_rooms.py), R-ROOM-15).
 
 ### Mail delivery
 
@@ -1947,6 +1958,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |
 | [`app/services/guest_names.py`](../backend/app/services/guest_names.py) | One guest name per person online (R-ACCT-09). |
 | [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |
+| [`app/services/idle_rooms.py`](../backend/app/services/idle_rooms.py) | Waiting rooms that never start a game are closed after a while (#1232). |
 | [`app/services/lobby_chat.py`](../backend/app/services/lobby_chat.py) | The last few lines said in the lobby, and the number each one was given. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/request_timing.py`](../backend/app/request_timing.py) | Count and time every HTTP request by the route template it matched. |

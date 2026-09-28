@@ -125,6 +125,7 @@ from app.repositories.sqlalchemy import (
 )
 from app.client_config import client_config
 from app.services.afk import start_afk_loop, stop_afk_loop
+from app.services.idle_rooms import start_idle_room_loop, stop_idle_room_loop
 from app.handlers.budgets import DRAWING
 from app.client_routes import is_client_route
 from app.flow_timing import timing as flow_timing
@@ -369,6 +370,9 @@ finished_game_worker.bind_outcome(handler_context.game_flow.note_history_outcome
 # The socket ledger already knows exactly how many are open; the gauge reads
 # it rather than keeping a second count that could drift from it.
 telemetry.sources.sockets_connected = lambda: handler_context.room_capacity.open_sockets
+# Every handshake is admitted against the transport ledger, whose ceilings are
+# the tunable ones the handlers read (#1232).
+sio.eio.admission = handler_context.room_capacity.transports
 telemetry.sources.socket_transports = lambda: socket_transports(sio)
 telemetry.sources.drawing_cache_bytes = lambda: drawing_cache.bytes
 telemetry.sources.lobby_watchers = lambda: len(sio.manager.rooms.get("/", {}).get(LOBBY_CHANNEL, {}))
@@ -748,6 +752,7 @@ async def lifespan(_app: FastAPI):
     integrity_audit = None
     presence_broadcast = None
     afk_sweep = None
+    idle_room_sweep = None
     lag_sampler = None
     history_replay = None
     mail_health = LoopHealth("mail_delivery")
@@ -758,6 +763,7 @@ async def lifespan(_app: FastAPI):
     integrity_health = LoopHealth("integrity_audit")
     presence_health = LoopHealth("presence_broadcast")
     afk_health = LoopHealth("afk_sweep")
+    idle_room_health = LoopHealth("idle_room_sweep")
     lag_health = LoopHealth("loop_lag")
     try:
         # Before anything that might have something to say.
@@ -819,6 +825,11 @@ async def lifespan(_app: FastAPI):
         # that quietly went back to waiting on players who left, which nobody
         # would report and nothing else would notice.
         afk_sweep = start_afk_loop(handler_context.afk_watch, health=afk_health)
+        # And for rooms (#1232): a reaper that has stopped is a ceiling that
+        # idle sockets fill again, which nothing else would notice either.
+        idle_room_sweep = start_idle_room_loop(
+            handler_context.idle_rooms, health=idle_room_health
+        )
         # Supervised like the sweeps: a sampler that has stopped leaves the
         # operations page showing a lag figure that is no longer true, which
         # is the one condition readiness exists to surface.
@@ -833,6 +844,7 @@ async def lifespan(_app: FastAPI):
             "presence_broadcast", presence_broadcast, presence_health
         )
         readiness_probe.supervise("afk_sweep", afk_sweep, afk_health)
+        readiness_probe.supervise("idle_room_sweep", idle_room_sweep, idle_room_health)
         readiness_probe.supervise("loop_lag", lag_sampler, lag_health)
         shutdown_coordinator.mark_ready()
         yield
@@ -846,6 +858,8 @@ async def lifespan(_app: FastAPI):
         # somebody absent in a room that is about to end would cost them a
         # turn outcome for a restart they did not cause.
         await stop_afk_loop(afk_sweep)
+        # Likewise: closing a room during a restart would be closing it twice.
+        await stop_idle_room_loop(idle_room_sweep)
         # First, and with nothing to flush: it holds no state of its own, and
         # a tick that broadcast into a drain would be describing a lobby that
         # is about to stop existing.

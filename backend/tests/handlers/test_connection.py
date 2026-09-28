@@ -574,7 +574,7 @@ async def test_capacity_and_suspension_outcomes_stay_their_own_for_a_stale_clien
     capacity hears `server_full`, and a suspended account is refused, with no
     upgrade notice and no quarantine in either case."""
     ctx, sio, _ = _stack()
-    monkeypatch.setattr(ctx.room_capacity, "has_socket_capacity", lambda: False)
+    monkeypatch.setattr(ctx.room_capacity, "has_socket_capacity", lambda eio_sid=None: False)
     await sio.handlers["/"]["connect"]("sid-full", {}, {"protocol": 1})
     events = [call.args[0] for call in sio.emit.await_args_list]
     assert "server_full" in events and "upgrade_required" not in events

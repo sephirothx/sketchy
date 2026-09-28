@@ -35,8 +35,11 @@ from app.services.room_quotas import (
     DEFAULT_GLOBAL_ROOMS,
     DEFAULT_JOINS_PER_SOCKET,
     DEFAULT_PER_ACCOUNT_ROOMS,
+    DEFAULT_PER_ADDRESS_ROOMS,
     DEFAULT_PROMPT_CHARACTERS,
     DEFAULT_SOCKETS,
+    DEFAULT_SOCKETS_PER_ACCOUNT,
+    DEFAULT_SOCKETS_PER_ADDRESS,
     DEFAULT_SPECTATORS_PER_ROOM,
     DEFAULT_TAKEOVERS_PER_SEAT,
     RoomCapacityService,
@@ -159,6 +162,17 @@ def ceiling_tunables(
             ),
         ),
         _number(
+            quotas, "per_address_rooms",
+            name="rooms.per_address_limit", default=DEFAULT_PER_ADDRESS_ROOMS,
+            minimum=1, maximum=1_000, unit="rooms",
+            env_var="ROOM_PER_ADDRESS_LIMIT",
+            description=(
+                "Rooms one address (an IPv4 address or an IPv6 /64) may have "
+                "open. A guest costs nothing to make, so the per-account "
+                "ceiling alone does not bound one client."
+            ),
+        ),
+        _number(
             quotas, "creations_per_hour",
             name="rooms.creations_per_hour", default=DEFAULT_CREATIONS_PER_HOUR,
             minimum=1, maximum=1_000, unit="rooms per hour",
@@ -197,8 +211,30 @@ def ceiling_tunables(
             minimum=10, maximum=20_000, unit="sockets",
             env_var="SOCKET_LIMIT",
             description=(
-                "Connections this process admits. An arrival beyond it is told "
-                "and then closed, never refused at the handshake."
+                "Connections this process admits, counted from the Engine.IO "
+                "handshake. An arrival beyond it is told and then closed; past "
+                "a further 32 it is refused at the handshake."
+            ),
+        ),
+        _number(
+            capacity, "sockets_per_address",
+            name="rooms.sockets_per_address", default=DEFAULT_SOCKETS_PER_ADDRESS,
+            minimum=4, maximum=20_000, unit="sockets",
+            env_var="SOCKET_PER_ADDRESS_LIMIT",
+            description=(
+                "Connections one address (an IPv4 address or an IPv6 /64) may "
+                "hold, refused at the handshake past it. Enough for a full "
+                "room behind one school or office network."
+            ),
+        ),
+        _number(
+            capacity, "sockets_per_account",
+            name="rooms.sockets_per_account", default=DEFAULT_SOCKETS_PER_ACCOUNT,
+            minimum=1, maximum=1_000, unit="sockets",
+            env_var="SOCKET_PER_ACCOUNT_LIMIT",
+            description=(
+                "Connections one account may hold at once: a player's tabs. "
+                "One past it is told so and closed."
             ),
         ),
         _number(

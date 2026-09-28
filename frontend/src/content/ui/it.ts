@@ -2542,6 +2542,7 @@ export const IT: Catalogue = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy è pieno in questo momento. Riprova tra qualche minuto.",
+    tooManyTabsOpen: "Sketchy è aperto in troppe schede. Chiudine una per continuare.",
     connectionLostWhileTryingTo: (p: { action: string }) =>
       `Connessione persa mentre si tentava di ${p.action}. Riprova.`,
     theRequestToActionTimed: (p: { action: string }) =>
@@ -2607,6 +2608,7 @@ export const IT: Catalogue = {
   roomNotices: {
     kickedByVote: "Sei stato espulso dalla stanza con una votazione.",
     roomClosed: "Un amministratore ha chiuso questa stanza.",
+    roomExpired: "Questa stanza è stata chiusa dopo 30 minuti senza una partita.",
     kickedByAdmin: "Un amministratore ti ha espulso dalla stanza.",
     accountDeleted: "Il tuo account è stato eliminato.",
     accountSuspended: "Il tuo account è stato sospeso.",

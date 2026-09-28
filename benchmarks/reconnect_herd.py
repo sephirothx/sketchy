@@ -22,6 +22,7 @@ on), a metrics token, and provisioning limits raised for the setup:
     createdb ... sketchy_bench_herd && DATABASE_URL=... backend/.venv/bin/python -m app.db.migrate
     DATABASE_URL=postgresql+asyncpg://sketchy:sketchy@127.0.0.1:5433/sketchy_bench_herd \\
       METRICS_TOKEN=x GUEST_PROVISION_LIMIT=100000 GUEST_PROVISION_DAILY_LIMIT=100000 \\
+      SOCKET_PER_ADDRESS_LIMIT=100000 \\
       AUTH_REGISTER_LIMIT=100000 AUTH_LOOKUP_LIMIT=100000 \\
       ./benchmarks/with_server.sh benchmarks/reconnect_herd.py --clients 400 --metrics-token x
 """

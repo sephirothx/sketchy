@@ -248,6 +248,7 @@ class BoundedSocketServer(socketio.AsyncServer):
         # per-socket limit as the ones made here.
         self.eio.on_refusal(self._reject)
         self.eio.inbound_bytes.clock = clock
+        self.eio._clock = clock
         self._clock = clock
         self._deadline_tasks: set[asyncio.Task] = set()
         self._assembly_started: dict[str, float] = {}

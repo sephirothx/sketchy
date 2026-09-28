@@ -193,7 +193,7 @@ UNROUTED_ROUTE = "unrouted"
 
 HTTP_OUTCOME_ABORTED = "aborted"
 SOCKET_OUTCOMES = ("ok", "refused", "error", "throttled")
-CONNECTION_OUTCOMES = ("accepted", "refused", "full")
+CONNECTION_OUTCOMES = ("accepted", "refused", "full", "account_full")
 
 DEFAULT_SAMPLE_INTERVAL_SECONDS = 1.0
 # A single sample this late is a loop that was *blocked*, not one that was busy:
@@ -868,6 +868,11 @@ class Telemetry:
             "Inbound packets dropped before dispatch, by reason.",
             ("reason",),
         )
+        self.socket_admissions_refused = LabelledCounter(
+            "sketchy_socket_admissions_refused_total",
+            "Engine.IO handshakes refused before a transport was allocated, by the ceiling that refused them (address or server).",
+            ("reason",),
+        )
         self.socket_backlog_closures = LabelledCounter(
             "sketchy_socket_backlog_closures_total",
             "Sockets closed for an outbound backlog past the budget, by which bound (age or bytes).",
@@ -1255,6 +1260,9 @@ class Telemetry:
     def note_socket_packet_rejected(self, reason: str) -> None:
         self.socket_packets_rejected.inc((reason,))
 
+    def note_socket_admission_refused(self, reason: str) -> None:
+        self.socket_admissions_refused.inc((reason,))
+
     def note_socket_transport(self, compression: str) -> None:
         self.socket_transports.inc((compression,))
 
@@ -1545,6 +1553,7 @@ class Telemetry:
         lines += self.socket_connections.lines()
         lines += self.socket_transports.lines()
         lines += self.socket_packets_rejected.lines()
+        lines += self.socket_admissions_refused.lines()
         lines += self.socket_backlog_closures.lines()
         lines += self.socket_backlog_bytes.lines()
         lines += self.socket_backlog_age.lines()
