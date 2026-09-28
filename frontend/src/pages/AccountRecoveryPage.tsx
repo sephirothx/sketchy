@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ApiError } from "../lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Squiggle, Wordmark } from "../components/icons";
@@ -34,6 +35,9 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(mode === "verify" && token !== "");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Whether a failed confirmation was the link's fault (spent, expired, the
+  // address taken meanwhile) or the network's: only the first is a dead link.
+  const [linkDead, setLinkDead] = useState(false);
   // null while the answer is still coming. A reset link is checked when the
   // page opens rather than when the form is sent, so nobody chooses a password
   // only to be told the link was already spent.
@@ -59,6 +63,8 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       })
       .catch((confirmError) => {
         if (cancelled) return;
+        const code = confirmError instanceof ApiError ? confirmError.errorCode : undefined;
+        setLinkDead(code === "verification_link_invalid" || code === "email_in_use");
         setError(
           refusalText(confirmError, ui.accountRecoveryPage.thatConfirmationLinkCouldNotBe),
         );
@@ -157,7 +163,11 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           ? ui.accountRecoveryPage.emailConfirmed
           : busy
             ? ui.accountRecoveryPage.confirmingYourEmail
-            : ui.accountRecoveryPage.thatLinkNoLongerWorks;
+            : !token || linkDead
+              ? ui.accountRecoveryPage.thatLinkNoLongerWorks
+              // A network error or a server fault says nothing about the
+              // link, which may well work on a second try (review of #1329).
+              : ui.accountRecoveryPage.couldNotConfirmYourEmail;
   useDocumentTitle(heading);
 
   return (

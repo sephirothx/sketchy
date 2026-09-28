@@ -68,8 +68,8 @@ export function BottomSheet({
   const [dragOffset, setDragOffset] = useState(0);
 
   // Escape and the scrim both dismiss, but neither is discoverable by touch or
-  // announced, so the sheet always carries one real control: the ✕, or the
-  // grab handle when the header slot is spent on something else.
+  // announced, so the sheet always carries one real control: the ✕, beside
+  // any header action the sheet has (#1280).
   useFocusTrap(sheetRef, {
     onEscape: onDismiss,
     initialFocusRef: initialFocusRef ?? closeRef,

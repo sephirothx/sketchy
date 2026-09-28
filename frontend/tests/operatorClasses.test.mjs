@@ -16,9 +16,12 @@ test("every ops- class in the staff pages has a rule in operator.css", () => {
   for (const file of readdirSync(SRC, { recursive: true })) {
     if (!/\.tsx?$/.test(String(file))) continue;
     const source = readFileSync(join(SRC, String(file)), "utf8");
-    for (const [, list] of source.matchAll(/className=(?:"([^"]*)"|\{`([^`]*)`\})/g).map((m) => [m, m[1] ?? m[2]])) {
-      for (const name of list.split(/\s+/)) {
-        if (/^ops-[a-z0-9-]+$/.test(name) && !defined.has(name)) missing.push(`${file}: ${name}`);
+    // The whole attribute - a string, or an expression with its templates and
+    // branches - read for every ops- token in it; one ending in "-" is a
+    // prefix completed at run time (`ops-${kind}`), which no scan can check.
+    for (const [attribute] of source.matchAll(/className=(?:"[^"]*"|\{(?:[^{}]|\{(?:[^{}]|\{[^{}]*\})*\})*\})/g)) {
+      for (const [name] of attribute.matchAll(/ops-[a-z0-9-]+/g)) {
+        if (!name.endsWith("-") && !defined.has(name)) missing.push(`${file}: ${name}`);
       }
     }
   }

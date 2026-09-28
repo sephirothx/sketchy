@@ -840,10 +840,12 @@ function ProfileView({ userId }: { userId: string }) {
           <section className="surface-card panel profile-history">
             <div className="profile-history-head">
               <h2>{ui.profilePage.gameHistory}</h2>
-              {/* A filter over nothing filters nothing (#1280). Once shown it
-                  stays while it is on, so it can be turned off again over an
-                  empty result. */}
-              {(games.length > 0 || includeAbandoned) && (
+              {/* A filter over nothing filters nothing (#1280). The list holds
+                  finished games only, so turns played say whether there is
+                  anything to include - a new player whose only games were
+                  abandoned has nothing finished and still needs the way to
+                  them. Once shown it stays while it is on. */}
+              {(games.length > 0 || includeAbandoned || stats.turnsPlayed > 0) && (
                 <label className="profile-history-filter">
                   <input
                     type="checkbox"

@@ -594,6 +594,7 @@ export const ES: Catalogue = {
     chooseANewPassword: "Elige una contraseña nueva",
     confirmingYourEmail: "Confirmando tu correo",
     emailConfirmed: "Correo confirmado",
+    couldNotConfirmYourEmail: "No se pudo confirmar tu correo",
     pleaseWait: "Espera, por favor…",
     sendAResetLink: "Enviar un enlace de restablecimiento",
     setPassword: "Establecer contraseña",

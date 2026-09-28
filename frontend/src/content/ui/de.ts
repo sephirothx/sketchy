@@ -594,6 +594,7 @@ export const DE: Catalogue = {
     chooseANewPassword: "Wähle ein neues Passwort",
     confirmingYourEmail: "Deine E-Mail wird bestätigt",
     emailConfirmed: "E-Mail bestätigt",
+    couldNotConfirmYourEmail: "E-Mail konnte nicht bestätigt werden",
     pleaseWait: "Bitte warten …",
     sendAResetLink: "Link zum Zurücksetzen senden",
     setPassword: "Passwort setzen",
@@ -2038,8 +2039,8 @@ export const DE: Catalogue = {
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} lebt nur in diesem Browser. Ein Konto behält den Namen, deine Punkte und deinen Verlauf auf jedem Gerät und lässt dich eine Farbe wählen.`,
     systemThemeNow: (p: { theme: string }) => `Jetzt: ${p.theme}`,
-    twelveHour: "12-Stunden",
-    twentyFourHour: "24-Stunden",
+    twelveHour: "12-Stunden-Format",
+    twentyFourHour: "24-Stunden-Format",
     choosePicture: "Bild wählen",
     editPicture: "Bild bearbeiten",
     picture: "Bild",

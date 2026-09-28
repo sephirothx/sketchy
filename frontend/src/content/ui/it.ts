@@ -594,6 +594,7 @@ export const IT: Catalogue = {
     chooseANewPassword: "Scegli una nuova password",
     confirmingYourEmail: "Conferma della tua email",
     emailConfirmed: "Email confermata",
+    couldNotConfirmYourEmail: "Impossibile confermare la tua email",
     pleaseWait: "Attendi…",
     sendAResetLink: "Invia un link di reimpostazione",
     setPassword: "Imposta la password",

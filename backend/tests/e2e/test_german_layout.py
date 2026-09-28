@@ -163,7 +163,7 @@ async def test_german_appearance_settings_hold_no_english():
             assert "Jetzt: Hell" in text, text
             for english in ("light", "12-hour", "24-hour"):
                 assert english not in text, (english, text)
-            assert "12-Stunden" in text and "24-Stunden" in text, text
+            assert "12-Stunden-Format" in text and "24-Stunden-Format" in text, text
         finally:
             await context.close()
             await browser.close()

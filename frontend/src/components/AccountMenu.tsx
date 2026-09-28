@@ -479,10 +479,13 @@ export function AuthDialog({
   // A recovery code has letters in it, so it gets a field a phone can type
   // letters into; the authenticator's six digits get the number pad (A7).
   const [useRecovery, setUseRecovery] = useState(false);
-  // Offered from the start on a browser that can do it, because a passkey
-  // sign-in needs neither of the fields below (R-AUTH-23) - and forced when
-  // the server says the account has no code to type.
+  // Offered under the form on a browser that can do it, as staff's way in -
+  // a passkey sign-in needs neither field (R-AUTH-23) - and forced, as the
+  // one way on, when the server says the account has no code to type.
   const [passkeyOnly, setPasskeyOnly] = useState(false);
+  // The passkey's own wait, so the staff link does not say "Waiting for your
+  // device…" while a player's password is what is being checked.
+  const [passkeyBusy, setPasskeyBusy] = useState(false);
   const canUsePasskeys = passkeysAvailable();
 
   const isClaim = mode === "claim";
@@ -536,6 +539,7 @@ export function AuthDialog({
   async function signInWithPasskey() {
     if (busy) return;
     setBusy(true);
+    setPasskeyBusy(true);
     setError(null);
     try {
       // Through the store, which does what a password sign-in does after its
@@ -551,6 +555,7 @@ export function AuthDialog({
           : refusalText(passkeyError, ui.accountMenu.thatPasskeyWasNotAccepted),
       );
       setBusy(false);
+      setPasskeyBusy(false);
     }
   }
 
@@ -601,7 +606,7 @@ export function AuthDialog({
             onClick={() => void signInWithPasskey()}
             disabled={busy}
           >
-            {busy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.signInWithAPasskey}
+            {passkeyBusy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.signInWithAPasskey}
           </button>
           <p className="modal-hint">
             {ui.accountMenu.thisAccountSignsWithPasskey}
@@ -759,7 +764,7 @@ export function AuthDialog({
             onClick={() => void signInWithPasskey()}
             disabled={busy}
           >
-            {busy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.staffSignInWithPasskey}
+            {passkeyBusy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.staffSignInWithPasskey}
           </button>
         </p>
       )}

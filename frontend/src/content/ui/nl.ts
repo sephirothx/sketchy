@@ -594,6 +594,7 @@ export const NL: Catalogue = {
     chooseANewPassword: "Kies een nieuw wachtwoord",
     confirmingYourEmail: "Je e-mail wordt bevestigd",
     emailConfirmed: "E-mail bevestigd",
+    couldNotConfirmYourEmail: "Je e-mail kon niet worden bevestigd",
     pleaseWait: "Even geduld…",
     sendAResetLink: "Herstellink sturen",
     setPassword: "Wachtwoord instellen",
@@ -2038,8 +2039,8 @@ export const NL: Catalogue = {
     guestLivesInThisBrowser: (p: { name: string }) =>
       `${p.name} bestaat alleen in deze browser. Een account houdt de naam, je punten en je geschiedenis op elk apparaat, en laat je een kleur kiezen.`,
     systemThemeNow: (p: { theme: string }) => `Nu: ${p.theme}`,
-    twelveHour: "12-uurs",
-    twentyFourHour: "24-uurs",
+    twelveHour: "12-uursnotatie",
+    twentyFourHour: "24-uursnotatie",
     choosePicture: "Een afbeelding kiezen",
     editPicture: "Afbeelding bewerken",
     picture: "Afbeelding",

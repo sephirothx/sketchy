@@ -602,6 +602,7 @@ export const EN = {
     chooseANewPassword: "Choose a new password",
     confirmingYourEmail: "Confirming your email",
     emailConfirmed: "Email confirmed",
+    couldNotConfirmYourEmail: "Could not confirm your email",
     pleaseWait: "Please wait…",
     sendAResetLink: "Send a reset link",
     setPassword: "Set password",

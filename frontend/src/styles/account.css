@@ -167,6 +167,12 @@
   cursor: pointer;
 }
 
+/* The staff passkey link, while a sign-in is already under way. */
+.auth-link:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
 
 /* The identity chip: avatar, name, and a dot when the name is unclaimed. */
 .identity-chip {
