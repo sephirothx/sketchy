@@ -8,11 +8,12 @@ the header's other page actions are hidden.
 from __future__ import annotations
 
 import re
+from uuid import uuid4
 
 import pytest
 from playwright.async_api import async_playwright
 
-from tests.e2e.lobby_helpers import open_new_room
+from tests.e2e.lobby_helpers import open_new_room, room_code, use_guest_name
 
 
 BASE_URL = "http://localhost:8000"
@@ -80,4 +81,38 @@ async def test_a_language_switch_reaches_the_memoised_lobby_panels():
         finally:
             await host_context.close()
             await reader_context.close()
+            await browser.close()
+
+
+@pytest.mark.parametrize("width", [320, 1280])
+async def test_every_page_outside_a_room_carries_the_flag(width):
+    """#1280: only the lobby, the catalogue and the gallery had it, but a
+    newcomer from an invite link lands on the invite page - and the reason the
+    lobby has the flag (R-I18N-06) is theirs there too. It fits a 320px header
+    beside the back arrow and the chip, and staff pages keep it off."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        host_context = await browser.new_context()
+        context = await browser.new_context(viewport={"width": width, "height": 700})
+        host, page = await host_context.new_page(), await context.new_page()
+        try:
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"Flagger{uuid4().hex[:5]}")
+            await open_new_room(host)
+            code = await room_code(host)
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Reader{uuid4().hex[:5]}")
+            for path in ("/rules", "/prompt-lists", "/my-prompt-lists", "/profile", "/create", f"/room/{code}", "/no-such-page"):
+                await page.goto(f"{BASE_URL}{path}")
+                flag = page.locator(".lobby-header .language-picker-trigger")
+                await flag.wait_for(timeout=10_000)
+                overflow = await page.evaluate(
+                    "Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth)"
+                )
+                assert overflow == 0, (path, overflow)
+                box = await flag.bounding_box()
+                assert box and box["x"] >= 0 and box["x"] + box["width"] <= width, (path, box)
+        finally:
+            await host_context.close()
+            await context.close()
             await browser.close()

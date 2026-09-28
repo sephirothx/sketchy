@@ -65,13 +65,16 @@ import { useLocaleRerender } from "../hooks/useLocaleRerender";
  *
  * `languageSwitch` shows the language you read in, as a flag, at every width:
  * it is the one control a visitor who cannot read the page needs before any
- * other, and a phone is where Settings is furthest away.
+ * other, and a phone is where Settings is furthest away. On by default, on
+ * every page outside a room (#1280): a newcomer from an invite link lands on
+ * the invite page, not the lobby, and had no flag there. Staff pages turn it
+ * off - they are written in English.
  */
 export function AppHeader({
   parent,
   backLabel,
   backTo = "/",
-  languageSwitch = false,
+  languageSwitch = true,
 }: {
   /** The page this one sits under, as a crumb linking back to it on a wide
       screen. Only for nested pages: a page's own name is its heading. */

@@ -514,7 +514,7 @@ export function LobbyBrowserPage() {
 
   return (
     <div className="lobby-page">
-      <AppHeader languageSwitch />
+      <AppHeader />
       {/* The page's one heading. The wordmark above is a link, not a heading,
           and the lobby shows its name nowhere else: every panel below has its
           own. Out of the layout, so the grid and flex rows are untouched. */}

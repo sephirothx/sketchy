@@ -873,7 +873,7 @@ export function ModerationPage() {
 
   return (
     <main className="ops-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader backLabel="Back to lobby" languageSwitch={false} />
       {stepUpDialog}
 
       {error && (
