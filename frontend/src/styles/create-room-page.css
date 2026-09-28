@@ -192,6 +192,7 @@ details.form-section > .form-section-body {
   border-radius: var(--radius-sm);
   color: var(--ink);
   font: inherit;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
   font-weight: 400;
   min-height: 42px;
   padding: 9px 12px;

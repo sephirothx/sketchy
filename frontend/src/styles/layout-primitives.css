@@ -160,7 +160,7 @@
   text-indent: var(--ink-overhang);
   border: 1.5px solid var(--line-strong);
   border-radius: var(--radius-sm);
-  font-size: 15px;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
 }
 
 /* A disabled field's colours are in utilities.css, where they beat every
