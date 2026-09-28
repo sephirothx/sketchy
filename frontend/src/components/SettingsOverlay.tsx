@@ -586,7 +586,22 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   // reminder banner - reaches this row too.
   const email = useEmailStateStore((state) => state.state);
   const refreshEmail = useEmailStateStore((state) => state.refresh);
-  const [noticeOpen, setNoticeOpen] = useState(signedInHere);
+  // The no-name card had the focus, on its Save, and is gone once the name is
+  // taken: the guest card it becomes takes it, rather than the page behind
+  // the sheet (review of #1265).
+  const guestCardRef = useRef<HTMLDivElement | null>(null);
+  const wasNameless = useRef(!user);
+  useEffect(() => {
+    if (!user) return;
+    if (wasNameless.current && user.isAnonymous) {
+      guestCardRef.current?.querySelector<HTMLElement>("button")?.focus();
+    }
+    wasNameless.current = false;
+  }, [user]);
+  // Signing in happens with the pane open - from its own guest or no-name
+  // card - so the notice follows the prop rather than reading it once.
+  const [noticeDismissed, setNoticeDismissed] = useState(false);
+  const noticeOpen = signedInHere && !noticeDismissed;
 
   useEffect(() => {
     if (isGuest) return;
@@ -677,18 +692,14 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
     />
   );
 
-  if (!user) {
-    // Nothing until `GET /api/auth/me` settles: a null user is also "not known
-    // yet", and a returning guest would see the no-name card flash first.
-    return hasResolved ? (
-      <>
-        <NamelessCard onAuth={setAuthMode} />
-        {authDialog}
-      </>
-    ) : null;
-  }
-
-  return (
+  // With no user, nothing until `GET /api/auth/me` settles: a null user is
+  // also "not known yet", and a returning guest would see the no-name card
+  // flash first. The dialog is the second child of both trees, so a sign-in
+  // made from the card is not remounted, blank, as the account arrives
+  // mid-submit (review of #1265).
+  const content = !user ? (
+    hasResolved ? <NamelessCard onAuth={setAuthMode} /> : null
+  ) : (
     <>
       {noticeOpen && (
         <div className="settings-notice" role="status">
@@ -696,14 +707,14 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
           <p>
             <b>{ui.settingsOverlay.theseAreTheirSettings({ name: user?.username ?? "" })}</b> {ui.settingsOverlay.themeSoundShortcutsCameFromAccount}
           </p>
-          <button type="button" aria-label={ui.settingsOverlay.dismiss} onClick={() => setNoticeOpen(false)}>
+          <button type="button" aria-label={ui.settingsOverlay.dismiss} onClick={() => setNoticeDismissed(true)}>
             <XIcon size={14} />
           </button>
         </div>
       )}
 
       {isGuest && (
-        <div className="settings-guest-card">
+        <div className="settings-guest-card" ref={guestCardRef}>
           <b>{ui.settingsOverlay.playingAsGuest}</b>
           <p>
             {ui.settingsOverlay.guestLivesInThisBrowser({
@@ -969,7 +980,6 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         </Row>
       </Group>
 
-      {authDialog}
       {emailOpen && (
         <AddEmailDialog onClose={() => setEmailOpen(false)} onSaved={() => setEmailOpen(false)} />
       )}
@@ -1003,6 +1013,13 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
       {deleteOpen && (
         <DeleteAccountDialog isGuest={isGuest} onClose={() => setDeleteOpen(false)} />
       )}
+    </>
+  );
+
+  return (
+    <>
+      {content}
+      {authDialog}
     </>
   );
 }
@@ -1382,15 +1399,21 @@ export function SettingsOverlay() {
   const closeButtonRef = useRef<HTMLButtonElement | null>(null);
   const titleId = useId();
 
-  const isGuest = useAuthStore((state) => Boolean(state.user?.isAnonymous));
+  // A visitor with no name is a guest here too (#1265); until `/api/auth/me`
+  // settles nobody is either, or a registered account arriving on the URL
+  // itself would read as a guest who had just signed in.
+  const isGuest = useAuthStore((state) =>
+    state.hasResolved ? !state.user || state.user.isAnonymous : null,
+  );
 
   // R-SET-03: logging in makes the account's copy authoritative, so a guest
   // who signs in from here watches their theme change. Said once, rather than
   // left to look like a glitch.
-  const arrivedAsGuest = useRef(isGuest);
+  const arrivedAsGuest = useRef<boolean | null>(isGuest);
   const [signedInHere, setSignedInHere] = useState(false);
   useEffect(() => {
-    if (arrivedAsGuest.current && !isGuest) setSignedInHere(true);
+    if (arrivedAsGuest.current === null) arrivedAsGuest.current = isGuest;
+    else if (arrivedAsGuest.current && isGuest === false) setSignedInHere(true);
   }, [isGuest]);
 
   // A refused save is reported app-wide (SettingsSyncNotices), since the

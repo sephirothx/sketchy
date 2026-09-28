@@ -38,6 +38,7 @@ import { showsRoomCount, showsRoomFilters } from "../lib/lobbyControls.ts";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
+import { useOverlayOpen } from "../hooks/useOverlayRoute";
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -222,6 +223,9 @@ export function LobbyBrowserPage() {
   // A first-time player is asked which languages they play in once, here,
   // and never while a press is taking them into a room (#1219).
   const questionDue = usePlayLanguagesQuestionStore((state) => state.due);
+  // Not over Settings or Friends: a name chosen in Settings makes the question
+  // due, and it waits for the sheet to close (review of #1265).
+  const overlayOpen = useOverlayOpen();
   const markQuestionAsked = usePlayLanguagesQuestionStore((state) => state.markAsked);
   // Set once a press has decided to leave the lobby: navigating waits for the
   // next page's code, and the question must not open over the way out.
@@ -494,7 +498,7 @@ export function LobbyBrowserPage() {
 
 
       <FirstRunIdentity />
-      {questionDue && pendingJoin === null && !leaving && !criticalError && (
+      {questionDue && pendingJoin === null && !leaving && !criticalError && !overlayOpen && (
         <PlayLanguagesQuestion onDone={answerQuestion} />
       )}
 
