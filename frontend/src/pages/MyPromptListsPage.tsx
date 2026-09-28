@@ -30,6 +30,7 @@ import {
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
 import { useSettingsStore } from "../store/settingsStore";
+import { PROMPT_LANGUAGE_LABELS } from "../lib/promptLanguages";
 import { maskEmail } from "../lib/accountRecovery";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { useToast } from "../lib/toast";
@@ -102,8 +103,13 @@ export function MyPromptListsPage() {
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
   const [authMode, setAuthMode] = useState<AuthMode | null>(null);
-  const arrival = location.state as { quickPrompts?: string; openListId?: string } | null;
+  const arrival = location.state as { quickPrompts?: string; openListId?: string; language?: string } | null;
   const initialQuickPrompts = arrival?.quickPrompts;
+  // Custom prompts saved from Create room are in that room's language, which
+  // is the list's too - not necessarily the one the player plays in.
+  const arrivalLanguage = arrival?.language && arrival.language in PROMPT_LANGUAGE_LABELS
+    ? (arrival.language as PromptListLanguage)
+    : null;
   const { notify } = useToast();
   const emailState = useEmailStateStore((state) => state.state);
   const [addingEmail, setAddingEmail] = useState(false);
@@ -125,8 +131,19 @@ export function MyPromptListsPage() {
   const [promptModeration, setPromptModeration] = useState<Record<string, OwnedPromptList["moderationState"]>>({});
   const [draft, setDraft] = useState<PromptListDraft>(() => ({
     ...emptyDraft(),
+    ...(arrivalLanguage ? { language: arrivalLanguage } : {}),
     prompts: promptEntriesFromQuickInput(initialQuickPrompts),
   }));
+  // A new, unsaved list follows the play language until the player picks one
+  // themselves: the settings can arrive after this page - signing in from its
+  // own dialog, or a slow account read - and a draft built from the browser's
+  // default stayed on it (review of #1272).
+  const playLanguage = useSettingsStore((state) => state.promptLanguage);
+  const [languageChosen, setLanguageChosen] = useState(arrivalLanguage !== null);
+  const followedLanguage = newListLanguage(playLanguage);
+  if (selectedId === null && !languageChosen && draft.language !== followedLanguage) {
+    setDraft({ ...draft, language: followedLanguage });
+  }
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   // Messages sit where the thing they are about happened: a
@@ -212,6 +229,7 @@ export function MyPromptListsPage() {
     setModerationState("active");
     setPromptModeration({});
     setDraft(emptyDraft());
+    setLanguageChosen(false);
     setBulkInput("");
     setMergeSummary(null);
     clearMessages();
@@ -449,7 +467,10 @@ export function MyPromptListsPage() {
                     label={ui.myPromptListsPage.language}
                     value={draft.language}
                     options={LANGUAGES}
-                    onChange={(next) => setDraft({ ...draft, language: next as PromptListLanguage })}
+                    onChange={(next) => {
+                      setLanguageChosen(true);
+                      setDraft({ ...draft, language: next as PromptListLanguage });
+                    }}
                   />}
               </div>
             </div>

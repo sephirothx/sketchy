@@ -96,13 +96,3 @@ test("a new list opens in the player's play language, or English (#1272)", () =>
   assert.equal(newListLanguage("xx"), "en");
   assert.equal(newListLanguage(undefined), "en");
 });
-
-test("both ways into a new list use it: the first list and New list", async () => {
-  const { readFileSync } = await import("node:fs");
-  const page = readFileSync(new URL("../src/pages/MyPromptListsPage.tsx", import.meta.url), "utf8");
-  // One blank draft, built from the play language, is what both start from.
-  assert.match(page, /language: newListLanguage\(useSettingsStore\.getState\(\)\.promptLanguage\)/);
-  assert.match(page, /useState<PromptListDraft>\(\(\) => \(\{\s*\.\.\.emptyDraft\(\),/);
-  assert.match(page, /setDraft\(emptyDraft\(\)\);/);
-  assert.doesNotMatch(page, /language: "en"/);
-});

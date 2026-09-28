@@ -164,3 +164,45 @@ async def test_a_new_list_opens_in_the_players_play_language():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_signing_in_on_the_page_moves_a_new_list_to_the_accounts_language():
+    """Review of #1272: the draft was built once, from this browser's default,
+    so a German account signing in from the page's own dialog on a fresh
+    English browser still got a first list on English."""
+    from uuid import uuid4
+
+    name = f"Konto{uuid4().hex[:6]}"
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        owner_context = await browser.new_context()
+        await owner_context.add_init_script("localStorage.setItem('sketchy_promptlanguage', 'de')")
+        visitor_context = await browser.new_context()
+        try:
+            owner = await owner_context.new_page()
+            await owner.goto(BASE_URL)
+            await register_account(owner, name)
+            await owner_context.close()
+
+            page = await visitor_context.new_page()
+            await page.goto(f"{BASE_URL}/my-prompt-lists")
+            await page.get_by_role("button", name="Create account").click()
+            dialog = page.get_by_role("dialog", name="Create your account")
+            await dialog.wait_for()
+            await dialog.get_by_role("button", name="Sign in").click()
+            sign_in = page.get_by_role("dialog", name="Sign in")
+            await sign_in.wait_for()
+            inputs = sign_in.locator("input")
+            await inputs.nth(0).fill(name)
+            await inputs.nth(1).fill("a-good-password")
+            await sign_in.locator('button[type="submit"]').click()
+            await sign_in.wait_for(state="hidden")
+            picker = page.locator(".prompt-list-language .language-picker-trigger")
+            await picker.wait_for()
+            await page.wait_for_function(
+                "() => document.querySelector('.prompt-list-language .language-picker-trigger')"
+                "?.textContent?.includes('Deutsch')"
+            )
+        finally:
+            await visitor_context.close()
+            await browser.close()

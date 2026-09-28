@@ -1,6 +1,7 @@
 import type { EmailState } from "./accountRecovery";
 import type { PromptListDraftEntry } from "./promptLists";
 import type { PromptListLanguage } from "../types";
+import { PROMPT_LANGUAGE_LABELS } from "./promptLanguages.ts";
 import { withoutInvisibleCharacters } from "./visibleText.ts";
 import { ui } from "../content/ui/index.ts";
 
@@ -134,13 +135,14 @@ export function emailPublishBlocker(
 }
 
 /** The language a new list opens on: the player's default play language
-    (#1213), or English where that is not a language a list can be in.
+    (#1213), or English where that is not a language a list can be in - which
+    a room's Mixed is, and prompts saved from a Create room form arrive with
+    the room's language instead (MyPromptListsPage).
 
     A list's language cannot change after its first save (R-LIST-05), and every
     new list opened on English: a German player's first list, created without a
     look at the picker, was offered in English rooms and the English catalogue
     for good, and the only way back was to delete it (#1272). */
 export function newListLanguage(playLanguage: string | null | undefined): PromptListLanguage {
-  const lists: readonly string[] = ["de", "en", "es", "fr", "it", "nl", "pt"];
-  return playLanguage && lists.includes(playLanguage) ? (playLanguage as PromptListLanguage) : "en";
+  return playLanguage && playLanguage in PROMPT_LANGUAGE_LABELS ? (playLanguage as PromptListLanguage) : "en";
 }
