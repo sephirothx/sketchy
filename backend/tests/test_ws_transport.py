@@ -421,3 +421,53 @@ async def test_uvicorn_closes_a_bomb_with_1009_on_the_wire(monkeypatch):
     finally:
         server.should_exit = True
         await task
+
+
+def _raw_frame(payload: bytes, *, opcode: int, fin: bool, rsv1: bool) -> bytes:
+    """One masked client frame, built by hand: wsproto's own client never
+    sends a final deflate block, which is the point of these tests."""
+    import os
+    import struct
+
+    head = (0x80 if fin else 0) | (0x40 if rsv1 else 0) | opcode
+    length = len(payload)
+    if length < 126:
+        header = bytes([head, 0x80 | length])
+    elif length < 65536:
+        header = bytes([head, 0x80 | 126]) + struct.pack("!H", length)
+    else:
+        header = bytes([head, 0x80 | 127]) + struct.pack("!Q", length)
+    mask = os.urandom(4)
+    return header + mask + bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+
+
+def _final_block(text: bytes) -> bytes:
+    import zlib
+
+    compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+    return compressor.compress(text) + compressor.flush(zlib.Z_FINISH)
+
+
+def test_input_after_a_final_deflate_block_is_refused_not_kept(monkeypatch):
+    """#1234 review: after BFINAL, zlib keeps every further byte as unused
+    data and inflates none of it, so a budget that counts output never saw
+    fifty 1 MiB continuations pile up."""
+    client, server = _open_pair(monkeypatch)
+    first = _raw_frame(_final_block(b"42[\"x\"]"), opcode=1, fin=False, rsv1=True)
+    junk = _raw_frame(b"\x00" * (256 * 1024), opcode=0, fin=False, rsv1=False)
+    events, peak = _feed(server, first + junk)
+    assert [event.code for event in events if isinstance(event, CloseConnection)] == [1007]
+    assert peak < 2 * 1024 * 1024
+
+
+def test_a_message_that_ends_its_stream_is_read_and_the_next_one_too(monkeypatch):
+    """A final block is allowed at the end of a message (RFC 7692 §7.2.3.4);
+    the next message then starts a stream of its own."""
+    client, server = _open_pair(monkeypatch)
+    first = _raw_frame(_final_block(b"hello"), opcode=1, fin=True, rsv1=True)
+    events, _ = _feed(server, first)
+    assert _text(events) == "hello"
+    second = _raw_frame(_final_block(b"again"), opcode=1, fin=True, rsv1=True)
+    events, _ = _feed(server, second)
+    assert _text(events) == "again"
+    assert not [event for event in events if isinstance(event, CloseConnection)]

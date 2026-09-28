@@ -80,6 +80,9 @@ CLIENT_MAX_WINDOW_BITS = 15
 # which it checks only once the whole message has been handed up - by which
 # time a compressed message has already been inflated in full (#1234).
 INBOUND_MESSAGE_LIMIT = MAX_PACKET_BYTES
+# What permessage-deflate strips from the end of every compressed message, and
+# the receiver appends back before the final inflate (RFC 7692 §7.2.2).
+SYNC_FLUSH_TAIL = b"\x00\x00\xff\xff"
 
 
 class SizedPerMessageDeflate(PerMessageDeflate):
@@ -123,6 +126,12 @@ class SizedPerMessageDeflate(PerMessageDeflate):
             inflated = self._decompressor.decompress(bytes(data), room + 1)
         except zlib.error:
             return CloseReason.INVALID_FRAME_PAYLOAD_DATA
+        if self._decompressor.unused_data:
+            # Input after the stream's final block (BFINAL): nothing inflates
+            # it, zlib keeps every byte of it, and the budget - which counts
+            # output - never sees it. Fifty 1 MiB continuations after a final
+            # block were 50 MiB held with the count at 7 (#1234 review).
+            return CloseReason.INVALID_FRAME_PAYLOAD_DATA
         # Output short of the cap means every input byte was consumed; output
         # at the cap is over the budget, and what is left unconsumed is never
         # inflated.
@@ -137,12 +146,19 @@ class SizedPerMessageDeflate(PerMessageDeflate):
         assert self._decompressor is not None
         room = INBOUND_MESSAGE_LIMIT - self._inbound_inflated
         try:
-            tail = self._decompressor.decompress(b"\x00\x00\xff\xff", room + 1)
+            tail = self._decompressor.decompress(SYNC_FLUSH_TAIL, room + 1)
             if len(tail) <= room and not self._decompressor.unconsumed_tail:
                 # Everything was consumed below the cap, so nothing is left
                 # pending for the flush to produce beyond it.
                 tail += self._decompressor.flush()
         except zlib.error:
+            return CloseReason.INVALID_FRAME_PAYLOAD_DATA
+        # A message that ended its stream with a final block (RFC 7692
+        # §7.2.3.4 allows it) leaves only the tail appended above unused; the
+        # next message then needs a stream of its own, which wsproto never
+        # started - it went on feeding a finished one.
+        ended = self._decompressor.eof
+        if ended and self._decompressor.unused_data not in (b"", SYNC_FLUSH_TAIL):
             return CloseReason.INVALID_FRAME_PAYLOAD_DATA
         self._inbound_inflated += len(tail)
         if self._inbound_inflated > INBOUND_MESSAGE_LIMIT:
@@ -150,7 +166,7 @@ class SizedPerMessageDeflate(PerMessageDeflate):
         no_context_takeover = (
             self.server_no_context_takeover if proto.client else self.client_no_context_takeover
         )
-        if no_context_takeover:
+        if no_context_takeover or ended:
             self._decompressor = None
         self._inbound_compressed = None
         self._inbound_inflated = 0
