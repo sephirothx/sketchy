@@ -81,3 +81,35 @@ async def test_the_languages_question_is_never_drawn_without_its_layout(engine):
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_a_question_whose_stylesheet_cannot_load_is_not_asked_and_breaks_nothing():
+    """Review of #1274: Vite's preload helper fetches a lazy chunk's stylesheet
+    before the chunk, and when the stylesheet fails it throws past a `.then`
+    failure handler - which took the lobby to the crash page. The question
+    is just not asked this time; it stays due for the next load."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        await context.add_init_script(DUE)
+
+        async def refuse(route):
+            await route.abort()
+
+        # Every stylesheet fetched after the entry one: the question's among them.
+        await context.route(re.compile(r".*/assets/(?!index-)[^/]*\.css$"), refuse)
+        page = await context.new_page()
+        try:
+            await use_guest_name(page, f"Unasked{uuid4().hex[:6]}")
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".identity-chip")
+            await page.wait_for_timeout(1500)
+            assert await page.locator(".crash-card").count() == 0
+            assert await page.get_by_test_id("play-languages-question").count() == 0
+            await page.locator(".lobby-rooms-panel").wait_for(state="visible")
+            assert await page.evaluate(
+                "() => localStorage.getItem('sketchy_playlanguages_question_due')"
+            ) == "1"
+        finally:
+            await context.close()
+            await browser.close()

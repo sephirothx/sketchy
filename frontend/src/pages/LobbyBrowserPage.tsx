@@ -44,13 +44,20 @@ import { useOverlayOpen } from "../hooks/useOverlayRoute";
    with its stylesheet: drawn from the entry bundle, it used to wait for
    Settings' sheet to be prefetched - a 1 s timer on Safari - and a player who
    came back with the question due saw it unstyled for that second (#1274).
-   If the chunk cannot be fetched the question is simply not asked this time;
-   it stays due for the next load. */
-const PlayLanguagesQuestion = lazy(() =>
-  import("../components/PlayLanguagesQuestion").then(
-    (module) => ({ default: module.PlayLanguagesQuestion }),
-    (): { default: ComponentType<{ onDone: () => void }> } => ({ default: () => null }),
-  ),
+   If the chunk or its stylesheet cannot be fetched the question is simply not
+   asked this time; it stays due for the next load. The catch wraps the whole
+   import, because Vite's preload helper waits for the stylesheet first and,
+   when that is what fails, throws past a `.then` failure handler - to the
+   app's crash page (review of #1274). */
+const loadQuestion = () => import("../components/PlayLanguagesQuestion");
+const PlayLanguagesQuestion = lazy(
+  async (): Promise<{ default: ComponentType<{ onDone: () => void }> }> => {
+    try {
+      return { default: (await loadQuestion()).PlayLanguagesQuestion };
+    } catch {
+      return { default: () => null };
+    }
+  },
 );
 
 const ROOM_CODE_LENGTH = 6;
@@ -239,6 +246,13 @@ export function LobbyBrowserPage() {
   // Not over Settings or Friends: a name chosen in Settings makes the question
   // due, and it waits for the sheet to close (review of #1265).
   const overlayOpen = useOverlayOpen();
+  // Fetched as soon as somebody here is about to be asked - a visitor with no
+  // name yet, or a question already due - so it is ready the moment the lobby
+  // may show it rather than a round trip later.
+  const aboutToBeAsked = useAuthStore((state) => state.hasResolved && needsIdentity(state.user));
+  useEffect(() => {
+    if (questionDue || aboutToBeAsked) void loadQuestion().catch(() => {});
+  }, [questionDue, aboutToBeAsked]);
   const markQuestionAsked = usePlayLanguagesQuestionStore((state) => state.markAsked);
   // Set once a press has decided to leave the lobby: navigating waits for the
   // next page's code, and the question must not open over the way out.
