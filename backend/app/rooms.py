@@ -499,6 +499,13 @@ class Room:
     # room - let them straight back in with a fresh seat and a clean score,
     # and the vote had bought the room a few seconds.
     kicked_user_ids: set[str] = field(default_factory=set, repr=False)
+    # Accounts that spectated the drawing now underway: the spectators when it
+    # began and any who arrived during it (#1317). A spectator may have seen
+    # the prompt (spectators_see_prompt) and has read the drawer's and correct
+    # guessers' chat (R-SPEC-04), so leaving and coming back as a player must
+    # not make them a guesser of the turn they watched. Replaced as each
+    # drawing begins; one turn's watchers are free to guess the next.
+    turn_watchers: set[str] = field(default_factory=set, repr=False)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
     canvas_generation: int = 0

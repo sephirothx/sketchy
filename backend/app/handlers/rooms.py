@@ -1043,7 +1043,13 @@ async def _seat_in_room(
     # than blocking the join entirely, and into the turn already being drawn,
     # which they can see and may guess at.
     if room.game and not player.is_spectator:
-        room.game.add_player_to_rotation(player.id)
+        room.game.add_player_to_rotation(
+            player.id,
+            watched_turn=bool(player.user_id) and player.user_id in room.turn_watchers,
+        )
+    elif room.game and room.game.phase == Phase.DRAWING and player.user_id:
+        # A spectator arriving mid-drawing watches it too (#1317).
+        room.turn_watchers.add(player.user_id)
 
     await ctx.game_flow._join_socket_room(sid, room, player, is_reconnect=False)
     if ctx.is_ending(sid):

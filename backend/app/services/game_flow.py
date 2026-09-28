@@ -1454,6 +1454,13 @@ class GameFlowService:
                 if player.id != game.current_drawer
             }
         )
+        # Who is watching this drawing, so a spectator who leaves and comes
+        # back as a player sits it out (#1317); last turn's watchers are free.
+        room.turn_watchers = {
+            player.user_id
+            for player in room.players.values()
+            if player.is_spectator and player.user_id
+        }
         # The drawing deadline first: a turn ended below reads its duration
         # off it, and the choose-prompt deadline still standing here would
         # record a turn that lasted nothing as most of a drawing phase.
