@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
-import { PlayLanguagesQuestion } from "../components/PlayLanguagesQuestion";
 import { usePlayLanguagesQuestionStore } from "../store/playLanguagesQuestionStore";
 import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
@@ -39,6 +38,20 @@ import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useOverlayOpen } from "../hooks/useOverlayRoute";
+
+/* The first-time languages question (#1219) is asked once per identity, so it
+   waits for its own chunk rather than sitting in the entry one, and arrives
+   with its stylesheet: drawn from the entry bundle, it used to wait for
+   Settings' sheet to be prefetched - a 1 s timer on Safari - and a player who
+   came back with the question due saw it unstyled for that second (#1274).
+   If the chunk cannot be fetched the question is simply not asked this time;
+   it stays due for the next load. */
+const PlayLanguagesQuestion = lazy(() =>
+  import("../components/PlayLanguagesQuestion").then(
+    (module) => ({ default: module.PlayLanguagesQuestion }),
+    (): { default: ComponentType<{ onDone: () => void }> } => ({ default: () => null }),
+  ),
+);
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -499,7 +512,9 @@ export function LobbyBrowserPage() {
 
       <FirstRunIdentity />
       {questionDue && pendingJoin === null && !leaving && !criticalError && !overlayOpen && (
-        <PlayLanguagesQuestion onDone={answerQuestion} />
+        <Suspense fallback={null}>
+          <PlayLanguagesQuestion onDone={answerQuestion} />
+        </Suspense>
       )}
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}

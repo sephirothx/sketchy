@@ -252,7 +252,12 @@ for has gone. React, the router and socket.io are a separate `vendor` chunk whos
 changes only when a dependency does, so a deploy of the app leaves them cached. A
 surface's stylesheet travels with the components that draw it, through `styles/lazy/`,
 which keeps it in the `components` layer: a stylesheet imported from a module is
-otherwise unlayered, and unlayered rules beat every layer. A tab open across a deploy
+otherwise unlayered, and unlayered rules beat every layer. A component that
+appears outside the page whose chunk carries its sheet has to bring the sheet itself:
+the first-time languages question was in the lobby's entry chunk while its rules were
+in Settings' sheet, prefetched on a 1 s timer in Safari, so it showed unstyled for that
+second; it is now its own lazy chunk importing `styles/lazy/play-languages.css`, which
+a lazy chunk waits for before it renders (#1274). A tab open across a deploy
 asks for chunk names the server no longer has.
 [`lib/chunkReload.ts`](../frontend/src/lib/chunkReload.ts) reloads it onto the new build
 once per build, and only when the failed chunk itself answers 404: a reload with the server

@@ -8,6 +8,7 @@ import { moveExtraPromptLanguage } from "../lib/playLanguages";
 import { promptLanguageEndonym, SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
 import type { PromptLanguage } from "../types";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/play-languages.css";
 
 /** How far a handle travels before a press becomes a drag, so a tap on it
 never lifts anything. */
