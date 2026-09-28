@@ -11,7 +11,7 @@ import uuid
 from uuid import UUID
 from collections import deque
 from dataclasses import dataclass, field, replace
-from typing import Literal, Optional
+from typing import Literal, Mapping, Optional
 
 from app.auth.avatars import avatar_url
 from app.drawing_rules import (
@@ -763,7 +763,28 @@ class Room:
             "state": self.state,
         }
 
-    def _player_entry(self, player: Player) -> dict:
+    def carried_points(self) -> dict[str, int]:
+        """What each account's earlier seats in this game scored, by account.
+
+        An account that left and rejoined holds the points of both seats, as
+        the history record does (R-HIST-12, #992). One sum for every place a
+        standing is shown - the players list, each turn's results and the final
+        standings - so none of them ranks an account by its newest seat alone
+        and then jumps at game over (#1318). A seat that only watched never
+        scored, so it carries nothing.
+        """
+        carried: dict[str, int] = {}
+        for seat in self.departed_seats.values():
+            if seat.user_id and not seat.is_spectator:
+                carried[seat.user_id] = carried.get(seat.user_id, 0) + seat.score
+        return carried
+
+    @staticmethod
+    def standing_score(player: Player, carried: Mapping[str, int]) -> int:
+        """A seat's points plus its account's earlier seats' (`carried_points`)."""
+        return player.score + (carried.get(player.user_id, 0) if player.user_id else 0)
+
+    def _player_entry(self, player: Player, carried: Mapping[str, int]) -> dict:
         """One player as the room broadcasts them.
 
         The vote lists are carried only where somebody has actually voted.
@@ -778,7 +799,7 @@ class Room:
             "nameColor": player.name_color,
             "avatarUrl": avatar_url(player.avatar_key),
             "isAnonymous": player.is_anonymous,
-            "score": player.score,
+            "score": self.standing_score(player, carried),
             "connected": player.connected,
             "isHost": player.is_host,
             "isSpectator": player.is_spectator,
@@ -791,6 +812,7 @@ class Room:
         return entry
 
     def to_state_payload(self) -> dict:
+        carried = self.carried_points()
         return {
             "id": self.id,
             "code": self.code,
@@ -823,7 +845,7 @@ class Room:
             "restartVoteCooldownUntil": round(
                 self.restart_vote_cooldown_until * 1000
             ),
-            "players": [self._player_entry(p) for p in self.player_list()],
+            "players": [self._player_entry(p, carried) for p in self.player_list()],
         }
 
 

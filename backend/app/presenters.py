@@ -254,8 +254,13 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
         + (drawer_bonus if player.id == game.current_drawer else 0)
         for player in players
     }
+    # An account that left and rejoined is ranked by all its seats' points,
+    # as the final standings and the record rank it: by its newest seat alone
+    # it jumped at game over (#1318).
+    carried = room.carried_points()
+    totals = {player.id: Room.standing_score(player, carried) for player in players}
     previous_scores = {
-        player.id: player.score - deltas[player.id] for player in players
+        player.id: totals[player.id] - deltas[player.id] for player in players
     }
     previously_ranked = sorted(players, key=lambda item: -previous_scores[item.id])
     previous_ranks = {
@@ -266,12 +271,12 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
             strict=True,
         )
     }
-    ranked = sorted(players, key=lambda player: -player.score)
+    ranked = sorted(players, key=lambda player: -totals[player.id])
     new_ranks = {
         player.id: rank
         for player, rank in zip(
             ranked,
-            competition_ranks([player.score for player in ranked]),
+            competition_ranks([totals[player.id] for player in ranked]),
             strict=True,
         )
     }
@@ -316,7 +321,7 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
                 "nameColor": player.name_color,
                 "avatarUrl": avatar_url(player.avatar_key),
                 "isAnonymous": player.is_anonymous,
-                "score": player.score,
+                "score": totals[player.id],
                 "delta": deltas[player.id],
                 "previousRank": previous_ranks[player.id],
                 "newRank": new_ranks[player.id],

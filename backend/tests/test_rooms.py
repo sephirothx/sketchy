@@ -510,3 +510,49 @@ def test_a_seat_remembers_only_a_bounded_window_of_guess_ids():
 
     assert player.accept_guess_id("sid-1", GUESS_DEDUP_WINDOW) is True
     assert player.accept_guess_id("sid-1", 0) is True, "the window grew without bound"
+
+
+def test_turn_results_and_the_players_list_carry_a_rejoined_accounts_earlier_points():
+    """#1318: the final standings add an account's departed seats (R-HIST-12),
+    but each turn's results ranked it by its newest seat alone and then it
+    jumped at game over. One sum for every place a standing is shown."""
+    from app.game import Game
+    from app.presenters import turn_ended_payload
+    from app.rooms import DepartedSeat
+
+    rm = RoomManager()
+    room = rm.create_room(name="Room")
+    ada = rm.add_player(room, "Ada", user_id="u-ada")
+    bo = rm.add_player(room, "Bo", user_id="u-bo")
+    # Ada's first seat scored 250 before she left and came back.
+    room.departed_seats["old-ada"] = DepartedSeat(
+        player_id="old-ada", nickname="Ada", user_id="u-ada", is_spectator=False, score=250
+    )
+    # A seat that only watched carries nothing.
+    room.departed_seats["old-bo"] = DepartedSeat(
+        player_id="old-bo", nickname="Bo", user_id="u-bo", is_spectator=True, score=0
+    )
+    room.state = "playing"
+    room.game = game = Game(turn_order=[ada.id, bo.id], prompt_pool=["panda", "otter"])
+    game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    game.force_prompt_choice()
+    game.snapshot_turn_participants({bo.id: "eligible"} if game.current_drawer == ada.id else {ada.id: "eligible"})
+    game.set_phase_deadline(game.drawing_seconds)
+    drawer = room.players[game.current_drawer]
+    guesser = bo if drawer is ada else ada
+    correct, points = game.submit_guess(guesser.id, game.prompt)
+    assert correct
+    guesser.score += points
+    drawer.score += points
+
+    payload = turn_ended_payload(room)
+    scores = {entry["nickname"]: entry for entry in payload["scores"]}
+    assert scores["Ada"]["score"] == ada.score + 250
+    assert scores["Ada"]["delta"] == points
+    assert scores["Bo"]["score"] == bo.score
+    # Ranked by what each account holds: Ada came in on 250, Bo on nothing.
+    assert (scores["Ada"]["previousRank"], scores["Bo"]["previousRank"]) == (1, 2)
+    assert (scores["Ada"]["newRank"], scores["Bo"]["newRank"]) == (1, 2)
+    # And the players list beside the card says the same.
+    listed = {entry["nickname"]: entry["score"] for entry in room.to_state_payload()["players"]}
+    assert listed == {"Ada": ada.score + 250, "Bo": bo.score}
