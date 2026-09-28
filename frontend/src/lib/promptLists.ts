@@ -1,4 +1,5 @@
 import { apiRequest } from "./api";
+import { withoutInvisibleCharacters } from "./visibleText";
 import type {
   CommunityPromptList,
   CommunityPromptListDetail,
@@ -20,6 +21,15 @@ export interface PromptListDraft {
   prompts: PromptListDraftEntry[];
   /** Slugs from the vocabulary `listPromptTags` returns; a save refuses others. */
   tags: string[];
+}
+
+/** The entries as a save sends them: every prompt and alias made visible. */
+function visibleEntries(entries: PromptListDraftEntry[]): PromptListDraftEntry[] {
+  return entries.map((entry) => ({
+    ...entry,
+    prompt: withoutInvisibleCharacters(entry.prompt),
+    aliases: entry.aliases.map(withoutInvisibleCharacters),
+  }));
 }
 
 export interface PromptTagVocabulary {
@@ -123,7 +133,10 @@ export function getOwnedPromptList(id: string): Promise<OwnedPromptList> {
 }
 
 export function createOwnedPromptList(draft: PromptListDraft): Promise<OwnedPromptList> {
-  return apiRequest("/api/prompt-lists/mine", { method: "POST", body: draft });
+  return apiRequest("/api/prompt-lists/mine", {
+    method: "POST",
+    body: { ...draft, prompts: visibleEntries(draft.prompts) },
+  });
 }
 
 export function updateOwnedPromptList(
@@ -133,7 +146,7 @@ export function updateOwnedPromptList(
 ): Promise<OwnedPromptList> {
   return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}`, {
     method: "PUT",
-    body: { ...draft, expectedVersion },
+    body: { ...draft, prompts: visibleEntries(draft.prompts), expectedVersion },
   });
 }
 

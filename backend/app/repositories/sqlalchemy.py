@@ -183,6 +183,7 @@ from app.prompt_content import (
     clean_list_tags,
     clean_prompt_aliases_keyed,
     normalize_prompt_answer,
+    visible_text_problem,
     languages_sharing_words,
     prompt_match_key,
     prompt_match_keys,
@@ -3974,6 +3975,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListMutationError("Name must be 1-64 characters.")
         if len(description) > 255:
             raise PromptListMutationError("Description must be at most 255 characters.")
+        # The same refusal as an answer's (#1245), less the emoji joiner a
+        # title may use: an override that turns the line around, or a name
+        # that looks like another and is not, is spoofing in the catalogue.
+        for label, text in (("Name", name), ("Description", description)):
+            problem = visible_text_problem(text, emoji_joiner=True)
+            if problem is not None:
+                raise PromptListMutationError(f"{label} {problem}.")
         try:
             language = validate_prompt_list_language(language)
         except ValueError as error:
