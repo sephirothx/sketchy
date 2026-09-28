@@ -95,17 +95,6 @@ REFUSAL_LOG_SECONDS = 10.0
 #: How often a refusal may trigger a sweep of the ledger against the sockets
 #: that actually exist, which is a walk of all of them.
 RECONCILE_SECONDS = 1.0
-#: How long a ping may go unanswered before a transport of the *same
-#: account* counts as gone, when that account is at its ceiling. A live
-#: client answers within a round trip; one whose network dropped never does,
-#: and Engine.IO takes up to 45 s to notice - while the tab it was holds a
-#: place the player's new one is refused for (#1232 review). The account's
-#: own new connection is the evidence: one person does not open a ninth tab
-#: while the eighth's answer is merely slow. An address is everybody behind
-#: it, so there a transport is gone only past Engine.IO's own ping timeout:
-#: sooner, a pong that was only late was somebody else's live game (#1290
-#: review).
-GHOST_PING_SECONDS = 5.0
 #: What a refused handshake is told. The client cannot read a body here, but
 #: an operator reading a proxy log can.
 REFUSAL_STATUS = {
@@ -539,9 +528,7 @@ class BoundedEngineServer(engineio.AsyncServer):
             return await super()._handle_connect(environ, transport, jsonp_index)
         address = handshake_address(environ)
         ticket, refusal = ledger.admit(address)
-        if ticket is None and refusal == "address" and await self.reap_ghosts(
-            ledger.sids_from(address), patience=self.ping_timeout
-        ):
+        if ticket is None and refusal == "address" and await self.reap_ghosts(ledger.sids_from(address)):
             ticket, refusal = ledger.admit(address)
         if ticket is None and self._reconcile(ledger):
             ticket, refusal = ledger.admit(address)
@@ -556,7 +543,7 @@ class BoundedEngineServer(engineio.AsyncServer):
                 ledger.release(ticket)
 
     @staticmethod
-    def is_ghost(socket: Any, patience: float = GHOST_PING_SECONDS) -> bool:
+    def is_ghost(socket: Any, patience: float) -> bool:
         """Whether a transport has left its ping unanswered for longer than
         `patience`: gone, in all but Engine.IO's having noticed."""
         last_ping = getattr(socket, "last_ping", None)
@@ -566,17 +553,25 @@ class BoundedEngineServer(engineio.AsyncServer):
             and time.time() - last_ping > patience
         )
 
-    async def reap_ghosts(self, sids, *, patience: float = GHOST_PING_SECONDS) -> int:
+    async def reap_ghosts(self, sids) -> int:
         """End whichever of these transports are ghosts; how many were.
 
+        A ghost is a transport whose ping has gone unanswered past Engine.IO's
+        own ping timeout: gone, but held until the ping loop next wakes -
+        while the place it holds is one a live connection is refused for
+        (#1232 review). Not sooner, for an address or an account alike: a pong
+        that is only late is somebody's live game - somebody else's behind a
+        shared address, and the player's own other tab when an account is at
+        its ceiling (#1290 review).
+
         Asked only when a ceiling would otherwise refuse somebody, so a place
-        a dead connection holds goes to the live one asking for it rather
-        than waiting out Engine.IO's ping timeout.
+        a timed-out connection holds goes to the live one asking for it now,
+        not whenever Engine.IO's ping loop next wakes to close it.
         """
         reaped = 0
         for sid in list(sids):
             socket = self.sockets.get(sid)
-            if socket is not None and self.is_ghost(socket, patience):
+            if socket is not None and self.is_ghost(socket, self.ping_timeout):
                 await self.terminate_socket(socket)
                 reaped += 1
         if reaped:

@@ -363,7 +363,15 @@ async def test_an_address_never_ends_somebody_elses_socket_whose_pong_is_only_la
     assert slow in sio.eio.sockets
 
 
-async def test_an_account_at_its_ceiling_gets_the_place_a_dead_tab_held(monkeypatch):
+@pytest.mark.parametrize(
+    ("unanswered", "ended"),
+    [(21, True), (10, False)],
+    ids=["past-the-ping-timeout", "only-late"],
+)
+async def test_an_account_at_its_ceiling_gets_the_place_a_dead_tab_held(monkeypatch, unanswered, ended):
+    """A tab dead past Engine.IO's ping timeout gives its place to the new
+    one; a tab whose pong is only late keeps it, since that is the player's
+    own live game (#1290 review), and the new tab is told there are too many."""
     import time
 
     import app.handlers.connection as connection_module
@@ -386,7 +394,7 @@ async def test_an_account_at_its_ceiling_gets_the_place_a_dead_tab_held(monkeypa
 
     class DeadEngineSocket:
         closed = False
-        last_ping = time.time() - 10
+        last_ping = time.time() - unanswered
 
         def __init__(self, sid):
             self.sid = sid
@@ -406,9 +414,13 @@ async def test_an_account_at_its_ceiling_gets_the_place_a_dead_tab_held(monkeypa
 
     await sio.handlers["/"]["connect"]("new-tab", {}, {"protocol": PROTOCOL_VERSION})
 
-    assert old.closes == [True], "the dead tab was ended"
-    assert not ctx.is_turned_away("new-tab")
-    assert ctx.room_capacity.account_sids("user-2") == ["new-tab"]
+    if ended:
+        assert old.closes == [True], "the dead tab was ended"
+        assert not ctx.is_turned_away("new-tab")
+        assert ctx.room_capacity.account_sids("user-2") == ["new-tab"]
+    else:
+        assert old.closes == [], "a late pong is a live tab"
+        assert ctx.is_turned_away("new-tab")
 
 
 async def test_a_game_started_at_the_deadline_is_not_closed_under_it():
