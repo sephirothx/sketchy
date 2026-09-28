@@ -22,7 +22,7 @@ that in place.
 """
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from app.game import Game
 from app.presenters import guess_time_on_wire
@@ -212,10 +212,17 @@ def _most_reacted_drawing(room: Room, names: dict[str, _Name]) -> dict | None:
         return None
     count, index = best
     entry = room.last_game_drawings[index]
-    name = names.get(entry.drawer_id) or _Name(
-        nickname=entry.drawer_nickname,
-        name_color=entry.drawer_name_color,
-        is_anonymous=entry.drawer_is_anonymous,
+    resolved = names.get(entry.drawer_id)
+    # Guest or not as they drew it, as the recap credits them: a drawer who
+    # registered after their turn is found in `names` as the account (#1279).
+    name = (
+        replace(resolved, is_anonymous=entry.drawer_is_anonymous)
+        if resolved
+        else _Name(
+            nickname=entry.drawer_nickname,
+            name_color=entry.drawer_name_color,
+            is_anonymous=entry.drawer_is_anonymous,
+        )
     )
     return _named(
         {

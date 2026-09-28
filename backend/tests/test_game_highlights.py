@@ -256,8 +256,14 @@ def reacted_turn(drawer_id: str, **kwargs) -> CompletedTurnStats:
     return replace(turn(drawer_id, **kwargs), id=str(generate_uuid7()))
 
 
-def recap(room, completed, *, drawer_id: str | None = None) -> None:
+def recap(room, completed, *, drawer_id: str | None = None, drawer_is_anonymous: bool | None = None) -> None:
     from app.rooms import DrawingRecapEntry
+
+    token = drawer_id or completed.drawer_token
+    if drawer_is_anonymous is None:
+        # As the drawing was made: by the seat as it is now, unless a test says.
+        seat = room.players.get(token)
+        drawer_is_anonymous = seat.is_anonymous if seat else True
 
     room.last_game_drawings.append(
         DrawingRecapEntry(
@@ -270,8 +276,27 @@ def recap(room, completed, *, drawer_id: str | None = None) -> None:
             prompt=completed.chosen_prompt,
             action_count=3,
             canvas_history=b"SKCH",
+            drawer_is_anonymous=drawer_is_anonymous,
         )
     )
+
+
+def test_the_most_reacted_card_credits_the_drawer_as_they_drew_it():
+    """A guest who registered after their turn is found among the room's
+    names as the account; the card, like the recap, keeps the guest style
+    the drawing was made in (review of #1328)."""
+    _, room, players, game = build(("Ana", False), ("Bo", False))
+    first = reacted_turn(players["Ana"].id, number=1, correct=1, total=1)
+    game.completed_turns = [first]
+    recap(room, first, drawer_is_anonymous=True)
+    # Registered since: the room's names now say account.
+    players["Ana"].is_anonymous = False
+    room.drawing_reactions = {first.id: {players["Bo"].id: "heart"}}
+
+    most = only(build_game_highlights(room, game), "most_reacted_drawing")
+
+    assert most["nickname"] == "Ana"
+    assert most["isAnonymous"] is True
 
 
 def test_no_reactions_means_no_most_reacted_drawing():
