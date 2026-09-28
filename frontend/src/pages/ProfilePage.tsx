@@ -381,8 +381,9 @@ function GameRow({
                 return ui.profilePage.wrongCount({ count: outcome.wrongGuessCount });
               }
               if (outcome.outcome === "no_attempt") return ui.profilePage.noAttempt;
-              // Only games finished before a mid-turn arrival became an
-              // ordinary guesser carry this reason.
+              // An arrival mid-turn whose account already knew the prompt
+              // (#1317), and games finished before a mid-turn arrival became
+              // an ordinary guesser, carry this reason.
               if (outcome.eligibilityReason === "joined_late") return ui.profilePage.joinedLate;
               if (outcome.eligibilityReason === "afk") return ui.profilePage.notEligibleAfk;
               if (outcome.eligibilityReason === "disconnected") return ui.profilePage.notEligibleDisconnected;

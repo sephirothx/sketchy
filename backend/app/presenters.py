@@ -6,7 +6,7 @@ from typing import Mapping
 from app.announcements import Announcement
 from app.auth.avatars import avatar_url
 from app.flow_timing import timing
-from app.game import Game, MAX_HINT_SPEND, competition_ranks
+from app.game import Game, MAX_HINT_SPEND, Phase, competition_ranks
 from app.rooms import Player, Room
 
 
@@ -90,6 +90,23 @@ def hint_prices(
     )
 
 
+def sits_out_turn(game: Game, player: Player | None) -> bool:
+    """Whether this seat is a guesser the drawing underway froze out.
+
+    AFK or disconnected when drawing began, or an account that already knew
+    the prompt when it joined (#1317). Told to the seat, so its client offers
+    chat and says why rather than a guess field whose guesses go nowhere
+    (review of #1330).
+    """
+    return (
+        player is not None
+        and game.phase == Phase.DRAWING
+        and not player.is_spectator
+        and player.id != game.current_drawer
+        and not game.is_turn_eligible(player.id)
+    )
+
+
 def turn_payload(
     game: Game,
     player: Player | None = None,
@@ -143,6 +160,8 @@ def turn_payload(
         # its guess input stays closed and the breakdown adds up. Private:
         # sync_game is only ever a per-socket emit.
         "guessed": guessed_receipt(game, player_id),
+        # Only where it is so: every other guesser's payload stays as it was.
+        **({"sitsOutTurn": True} if sits_out_turn(game, player) else {}),
     }
 
 

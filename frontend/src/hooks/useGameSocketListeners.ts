@@ -125,6 +125,7 @@ export function useGameSocketListeners() {
       hintSpend?: number;
       maxHintSpend?: number;
       drawerTransport?: string | null;
+      sitsOutTurn?: boolean;
     }) => {
       playRoundStartSound();
       store.getState().startDrawing(payload);
@@ -256,6 +257,7 @@ export function useGameSocketListeners() {
       correctGuessers?: [string, number][];
       guessed?: (GuessBreakdown & { prompt: string }) | null;
       drawerTransport?: string | null;
+      sitsOutTurn?: boolean;
     }) => {
       if (payload.phase === "choosing_prompt") {
         store.getState().startChoosing({
@@ -282,6 +284,7 @@ export function useGameSocketListeners() {
           correctGuessers: payload.correctGuessers,
           guessed: payload.guessed,
           drawerTransport: payload.drawerTransport,
+          sitsOutTurn: payload.sitsOutTurn,
         });
       }
     };

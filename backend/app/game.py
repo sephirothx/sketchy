@@ -474,7 +474,8 @@ class Game:
     near_misses: dict[str, int] = field(default_factory=dict)
     # Snapshotted when drawing begins. None exists only in direct domain tests
     # and pre-snapshot compatibility paths; an empty dict means nobody may
-    # guess. Later joiners are added explicitly as joined_late.
+    # guess. Later joiners are added as eligible - or as joined_late, when
+    # their account already knows this drawing's prompt (#1317).
     turn_eligibility_reasons: dict[str, str] | None = None
     prompt_auto_picked: bool = False
     completed_turns: list[CompletedTurnStats] = field(default_factory=list)
@@ -729,7 +730,7 @@ class Game:
         """Add a mid-game player without moving the current turn cursor.
 
         `watched_turn` is a seat whose account spectated the drawing underway
-        (`Room.turn_watchers`): it sits that turn out and guesses from the next.
+        (`Room.turn_prompt_aware`): it sits that turn out and guesses from the next.
         """
         if token in self.turn_order:
             return

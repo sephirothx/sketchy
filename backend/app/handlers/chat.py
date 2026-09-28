@@ -258,8 +258,9 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
     # players who've also already guessed correctly, flagged so the
     # client can render a clear "restricted visibility" indicator.
     # Spectators, seats the turn froze out (AFK or disconnected when drawing
-    # began), and players who already guessed can chat, but only the
-    # prompt-aware audience may see those messages.
+    # began, or an account that already knows this drawing's prompt, #1317),
+    # and players who already guessed can chat, but only the prompt-aware
+    # audience may see those messages.
     if _prompt_aware(game, player):
         recipients = ctx.game_flow._privileged_sids(room, game)
         if player.sid not in recipients:
@@ -286,6 +287,10 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         return
 
     correct, points = game.submit_guess(player.id, text)
+    if correct and player.user_id:
+        # Knows the prompt now: a leave and a rejoin as a player must not make
+        # the account a guesser of this turn again (review of #1330).
+        room.turn_prompt_aware.add(player.user_id)
     if not correct:
         hint = game.guess_hint(player.id, text)
         if hint:

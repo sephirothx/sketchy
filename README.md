@@ -353,9 +353,11 @@ replaces identifying snapshots with the neutral **Deleted player** tombstone.
 If guest identities later merge into one account, their factual seats stay
 separate rather than collapsing an already-played game.
 When drawing begins, the server freezes the eligible guesser seats. Players who
-were AFK or disconnected then, and players who join after that instant, remain
-ineligible until the next turn; their text is treated as restricted chat rather
-than a guess that could reveal the prompt. Every completed turn stores one
+were AFK or disconnected then remain ineligible until the next turn; their text is
+treated as restricted chat rather than a guess that could reveal the prompt. A player
+who joins after that instant is added as a guesser, unless their account already knows
+the prompt - they spectated that drawing, or guessed it with an earlier seat - when they
+sit it out the same way and are told so. Every completed turn stores one
 participant outcome per current or late-arriving non-drawer seat: eligibility
 and its reason, correct/incorrect/no-attempt/ineligible result, terminal
 active/AFK/disconnected/left state, correct time when applicable, and per-seat
@@ -2481,7 +2483,9 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    everyone's guessed correctly. Somebody who joins while the drawing is underway guesses in that turn too -
    the canvas and the masked prompt are already on their screen - and the turn waits for
    them like any other guesser. Players who were AFK or disconnected when the drawing began
-   sit that turn out and rejoin the guessers on the next one.
+   sit that turn out and rejoin the guessers on the next one, and so does somebody who
+   watched that drawing as a spectator, or already guessed it, and came back as a player:
+   their field says they guess from the next turn.
 5. **Turn results** (5s by default): the prompt is revealed and scores update - each row
    shows the place and total its player came in with, then slides to the new order - reactions
    stay open on the drawing, then the next player's turn begins. A guesser who bought hints
@@ -2574,6 +2578,7 @@ includes the saved configuration and archive state.
 - In the waiting room a spectator is told they are spectating and can take an open player seat — under the players on a desktop, in the roster on a phone, which also lists who is watching.
 - By default, spectators see the masked prompt like active guessers, but room creators can enable **Allow spectators to see the prompt**.
 - Spectator chat messages are restricted to the drawer, spectators, and players who have already guessed, keeping active guessers spoiler-free.
+- A spectator who leaves and comes back as a player mid-drawing sits that drawing out and guesses from the next: they may have seen the prompt, and have read the chat that gives it away.
 - Unless spectators may see the prompt, they are told who guessed it but not the guess itself, correct or close — it is the answer, or nearly. What the drawer and players who guessed it type still reaches them.
 
 ### Runtime analytics

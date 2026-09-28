@@ -146,8 +146,9 @@ export const ConnectedRoomChatPanel = memo(function ConnectedRoomChatPanel({
   const turnCorrectGuesses = useGameStore((state) => state.turnCorrectGuesses);
   const me = players.find((player) => player.playerId === myPlayerId);
   const isDrawer = useGameStore(selectAmDrawer);
+  const sitsOutTurn = useGameStore((state) => state.sitsOutTurn);
   const canGuess =
-    phase === "drawing" && !isDrawer && !me?.isSpectator && !guessedPrompt;
+    phase === "drawing" && !isDrawer && !me?.isSpectator && !guessedPrompt && !sitsOutTurn;
 
   // Memoised so the chat's props stay equal between renders that did not
   // change the prompt: a fresh array here re-rendered every chat row (#987).
@@ -159,6 +160,7 @@ export const ConnectedRoomChatPanel = memo(function ConnectedRoomChatPanel({
       mode={mode}
       isDrawer={isDrawer}
       canGuess={canGuess}
+      sitsOutTurn={phase === "drawing" && sitsOutTurn}
       myPlayerId={myPlayerId}
       targetPromptLengths={targetPromptLengths}
       hideMaskedPrompt={hideMaskedPrompt}

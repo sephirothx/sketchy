@@ -1697,7 +1697,7 @@ One row per current or late-arriving non-drawer seat, per turn.
 
 `turn_id` · `participant_id` (**primary key**, and same-game composite FKs with
 `game_id`, CASCADE) · `eligible` ·
-`eligibility_reason` (`eligible \| afk \| disconnected \| joined_late`, the last written for one arrival only - an account that spectated the drawing it then joins as a player (#1317) - and by games finished before a mid-turn arrival became an ordinary guesser) ·
+`eligibility_reason` (`eligible \| afk \| disconnected \| joined_late`, the last written for one arrival only - an account that already knew the drawing's prompt when it joined as a player, having spectated it or guessed it with an earlier seat (#1317) - and by games finished before a mid-turn arrival became an ordinary guesser) ·
 `outcome` (`correct \| incorrect \| no_attempt \| ineligible`) ·
 `terminal_state` (`active \| afk \| disconnected \| left`) ·
 `correct_guess_time_seconds` · `wrong_guess_count` · `near_miss_count` ·
@@ -1724,9 +1724,8 @@ were AFK or disconnected at that instant remain ineligible until the next turn; 
 is treated as restricted chat rather than a guess that could reveal the prompt. A player who
 joins while the drawing is underway is *added* to the frozen population instead
 ([`backend/app/game.py`](../backend/app/game.py)) and is recorded as the eligible guesser
-they were — unless its account spectated that very drawing, when it is recorded
-`joined_late` and ineligible, since it already knows the prompt or the chat that gives it
-away (#1317). Ordinary history retains these
+they were — unless its account already knew that drawing's prompt, having spectated it or
+guessed it with an earlier seat, when it is recorded `joined_late` and ineligible (#1317). Ordinary history retains these
 numeric facts but **not guess text** — text retention and evidence are governed separately
 (§5).
 No-scoring games record the same factual outcomes with zero awarded points and never

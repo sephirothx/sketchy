@@ -1784,6 +1784,7 @@ export const DE: Catalogue = {
     sayHelloBeforeTheGame: "Sag Hallo, bevor das Spiel beginnt.",
     noMessagesYet: "Noch keine Nachrichten.",
     typeYourGuess: "Gib deinen Tipp ein …",
+    youGuessFromTheNextTurn: "Du rätst ab dem nächsten Zug – bis dahin chatten",
     typeAMessage: "Schreib eine Nachricht …",
   },
 
