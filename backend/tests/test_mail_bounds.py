@@ -172,3 +172,30 @@ async def test_a_flood_of_resets_still_leaves_verification_mail_a_share(monkeypa
         sent = [message.to_address for message in transport.sent]
         assert "waiting@example.test" in sent
         assert len(sent) == 5 and sum(address.startswith("reset") for address in sent) == 4
+
+
+async def test_a_one_message_batch_still_reaches_a_waiting_reset(monkeypatch):
+    """#1302 review: the share for other mail had a floor of one, so a
+    one-message batch always went to other mail while any was due, and a
+    reset behind a steady trickle of it was never sent."""
+    async with build_site(monkeypatch, IP_HASH_SECRET="mail-bounds") as from_address:
+        factory = from_address.factory
+        start = datetime.now(timezone.utc) - timedelta(minutes=10)
+        async with factory() as session, session.begin():
+            queue_email(
+                session, to_address="locked-out@example.test", template=EmailTemplate.RESET_PASSWORD,
+                payload={"token": "t", "displayName": "x"}, now=start,
+            )
+        sent = []
+        for index in range(3):
+            # Other mail keeps arriving, each newer than the reset.
+            async with factory() as session, session.begin():
+                queue_email(
+                    session, to_address=f"verify{index}@example.test", template=EmailTemplate.VERIFY_EMAIL,
+                    payload={"token": "t", "displayName": "x"}, now=start + timedelta(minutes=index + 1),
+                )
+            transport = MemoryTransport()
+            await deliver_pending(factory, transport=transport, base_url="http://test", batch_size=1)
+            sent += [message.to_address for message in transport.sent]
+        assert sent[0] == "locked-out@example.test"
+        assert sent[1:] == ["verify0@example.test", "verify1@example.test"]

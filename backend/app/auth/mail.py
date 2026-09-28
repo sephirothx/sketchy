@@ -518,7 +518,14 @@ async def _claim_due(
             # held every verification until its link had expired (#1302
             # review).
             resets, others = await oldest(is_reset), await oldest(~is_reset)
-            reserved = max(1, batch_size // RESERVED_SHARE)
+            reserved = batch_size // RESERVED_SHARE
+            if not reserved and resets and others and others[0].created_at < resets[0].created_at:
+                # A batch too small to share - an operator draining one
+                # message at a time - goes to whichever has waited longer,
+                # so neither kind can hold the other off for good: a floor of
+                # one slot handed a one-message batch to other mail for as
+                # long as any was due (#1302 review).
+                reserved = 1
             others = others[: max(reserved, batch_size - len(resets))]
             due = resets[: batch_size - len(others)] + others
             for entry in due:
