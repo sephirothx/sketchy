@@ -2148,6 +2148,13 @@ class AuthSession(Base):
     anomaly_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
     )
+    # When the ledger last recorded an anomaly of this session (#1299 review).
+    # Apart from `anomaly_at`, which every switch moves: throttled against
+    # that, a client switching every second never wrote a second row. Claimed
+    # by one conditional UPDATE, so two requests in flight cannot both write.
+    anomaly_audited_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
+    )
     # The last time this device proved a second factor. Destructive staff
     # actions require one inside a short window (R-AUTH-21). Held here rather
     # than in memory so revoking the device revokes its step-up with it.
