@@ -145,7 +145,7 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      await submitBugReport({
+      const sent = await submitBugReport({
         area,
         severity,
         summary: summary.trim(),
@@ -157,7 +157,13 @@ export function BugReportDialog({ onClose }: { onClose: () => void }) {
         roomCode: descriptionOnly ? null : roomCode,
         screenshot: descriptionOnly ? null : shot?.base64 ?? null,
       });
-      notify(ui.bugReportDialog.thanksYourReportWithPeopleWho, "success");
+      const sentAPicture = !descriptionOnly && Boolean(shot?.base64);
+      notify(
+        sentAPicture && sent.screenshotKept === false
+          ? ui.bugReportDialog.thanksSentWithoutScreenshot
+          : ui.bugReportDialog.thanksYourReportWithPeopleWho,
+        "success",
+      );
       onClose();
     } catch (caught) {
       setError(refusalText(caught, ui.bugReportDialog.couldNotSendReport));

@@ -699,6 +699,7 @@ export const EN = {
       })} this visit`,
     couldNotTakeScreenshot: "Could not take the screenshot.",
     thanksYourReportWithPeopleWho: "Thanks — your report is with the people who run Sketchy.",
+    thanksSentWithoutScreenshot: "Thanks — your report is with the people who run Sketchy. The screenshot could not be kept this time.",
     couldNotSendReport: "Could not send the report.",
     reportBug: "Report a bug",
     somethingBrokenNotSomethingSomeoneSaid: "Something broken, not something someone said. This reaches the people who run Sketchy — never other players.",

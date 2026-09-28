@@ -16,6 +16,8 @@ import base64
 import binascii
 import hashlib
 import json
+import logging
+import os
 import time
 from datetime import datetime, timezone
 from typing import Literal
@@ -25,7 +27,7 @@ from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import ConfigDict, Field, field_validator
 from app.request_text import ControlFreeModel
 from sqlalchemy.orm import defer
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.api.errors import Refusal
@@ -47,6 +49,8 @@ from app.domain_values import (
 from app.rooms import RoomManager
 
 
+logger = logging.getLogger("sketchy.bug_reports")
+
 MAX_SUMMARY = 200
 MAX_DETAILS = 4_000
 MAX_RESOLUTION_NOTE = 2_000
@@ -64,6 +68,23 @@ MAX_CLIENT_ERRORS = 20
 # out below this, and the column is a 32-bit integer.
 MAX_SCREENSHOT_SIDE = 16_384
 MAX_CLIENT_ERROR_CHARS = 500
+# Screenshots one account may attach in a day, and the most undecided
+# screenshots may hold across the deployment (#1244). A screenshot is up to
+# 2 MiB, checked by its magic bytes alone, and kept 90 days while its report
+# waits: at 5 an hour per address that was ~21 GiB per IPv4 address over the
+# window. Past either the report still lands - a bug is worth hearing about
+# without its picture - and says it went without one.
+DEFAULT_SCREENSHOTS_PER_DAY = 3
+DEFAULT_PENDING_SCREENSHOT_BYTES = 1024 * 1024 * 1024
+
+
+def _limit(name: str, default: int) -> int:
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = int(raw) if raw else default
+    except ValueError:
+        return default
+    return value if value > 0 else default
 
 # What a screenshot is allowed to be, keyed by the bytes a real file starts
 # with. The declared content type is a claim; this is the check.
@@ -328,6 +349,34 @@ def create_bug_report_router(
     limiter = PersistentRateLimiter(
         session_factory, scope="bug-report-submit", limit=5, window_seconds=3600
     )
+    screenshot_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="bug-report-screenshot",
+        limit=_limit("BUG_REPORT_SCREENSHOT_LIMIT", DEFAULT_SCREENSHOTS_PER_DAY),
+        window_seconds=86400,
+    )
+    pending_screenshot_bytes = _limit(
+        "BUG_REPORT_SCREENSHOT_BYTES_LIMIT", DEFAULT_PENDING_SCREENSHOT_BYTES
+    )
+
+    async def _room_for_screenshot(session, reporter_id: str, size: int) -> bool:
+        """Whether this account, and the deployment, may keep one more.
+
+        The deployment's total is read rather than kept: undecided screenshots
+        are the ones taking room, and a decision or the 90-day sweep erases
+        them, so the sum of what is ready is the true answer. Soft by the
+        width of a race - two reports at the edge can both land - which is a
+        few MiB against a GiB.
+        """
+        held = await session.scalar(
+            select(func.coalesce(func.sum(BugReport.screenshot_byte_size), 0)).where(
+                BugReport.screenshot_status == BugReportScreenshotStatus.READY.value
+            )
+        )
+        if int(held or 0) + size > pending_screenshot_bytes:
+            logger.warning("bug report screenshot dropped: pending screenshots at their ceiling")
+            return False
+        return await screenshot_limiter.check(reporter_id)
 
     require_admin = admin_gate(session_factory)
     require_admin_action = stepped_up(require_admin)
@@ -442,7 +491,10 @@ def create_bug_report_router(
                     client_context=client_context,
                     server_context=server_context,
                 )
-                if screenshot is not None:
+                kept = screenshot is not None and await _room_for_screenshot(
+                    session, reporter_id, len(screenshot[0])
+                )
+                if kept:
                     payload, content_type, checksum = screenshot
                     report.screenshot_status = BugReportScreenshotStatus.READY.value
                     report.screenshot_payload = payload
@@ -470,7 +522,7 @@ def create_bug_report_router(
                             "report_id": str(report.id),
                             "area": report.area,
                             "severity": report.severity,
-                            "has_screenshot": screenshot is not None,
+                            "has_screenshot": kept,
                             "build_sha": report.build_sha,
                         },
                     )
@@ -480,6 +532,9 @@ def create_bug_report_router(
                     "id": str(report.id),
                     "status": report.status,
                     "createdAt": report.created_at.isoformat(),
+                    # False when a screenshot was sent and not kept (#1244),
+                    # so the player is told it went without one.
+                    "screenshotKept": kept,
                 }
 
     @router.get("/api/admin/bug-reports")

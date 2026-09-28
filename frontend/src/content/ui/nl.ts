@@ -685,6 +685,7 @@ export const NL: Catalogue = {
       })} dit bezoek`,
     couldNotTakeScreenshot: "De schermafbeelding kon niet gemaakt worden.",
     thanksYourReportWithPeopleWho: "Bedankt — je melding ligt bij de mensen die Sketchy draaien.",
+    thanksSentWithoutScreenshot: "Bedankt — je melding ligt bij de mensen die Sketchy draaien. De schermafbeelding kon deze keer niet worden bewaard.",
     couldNotSendReport: "De melding kon niet verstuurd worden.",
     reportBug: "Een bug melden",
     somethingBrokenNotSomethingSomeoneSaid: "Iets dat stuk is, niet iets dat iemand zei. Dit komt bij de mensen die Sketchy draaien — nooit bij andere spelers.",

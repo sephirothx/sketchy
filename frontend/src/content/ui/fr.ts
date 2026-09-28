@@ -685,6 +685,7 @@ export const FR: Catalogue = {
       })} pendant cette visite`,
     couldNotTakeScreenshot: "La capture n’a pas pu être prise.",
     thanksYourReportWithPeopleWho: "Merci — ton rapport est arrivé chez les personnes qui font tourner Sketchy.",
+    thanksSentWithoutScreenshot: "Merci — ton rapport est arrivé chez les personnes qui font tourner Sketchy. La capture d’écran n’a pas pu être gardée cette fois.",
     couldNotSendReport: "Le rapport n’a pas pu être envoyé.",
     reportBug: "Signaler un bug",
     somethingBrokenNotSomethingSomeoneSaid: "Quelque chose de cassé, pas quelque chose que quelqu’un a dit. Cela va aux personnes qui font tourner Sketchy — jamais aux autres joueurs.",

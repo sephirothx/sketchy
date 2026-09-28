@@ -685,6 +685,7 @@ export const IT: Catalogue = {
       })} in questa visita`,
     couldNotTakeScreenshot: "Non è stato possibile fare lo screenshot.",
     thanksYourReportWithPeopleWho: "Grazie — la tua segnalazione è arrivata a chi gestisce Sketchy.",
+    thanksSentWithoutScreenshot: "Grazie — la tua segnalazione è arrivata a chi gestisce Sketchy. Questa volta non è stato possibile conservare lo screenshot.",
     couldNotSendReport: "Non è stato possibile inviare la segnalazione.",
     reportBug: "Segnala un bug",
     somethingBrokenNotSomethingSomeoneSaid: "Qualcosa di rotto, non qualcosa che qualcuno ha detto. Arriva a chi gestisce Sketchy — mai agli altri giocatori.",

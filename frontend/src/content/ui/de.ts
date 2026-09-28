@@ -685,6 +685,7 @@ export const DE: Catalogue = {
       })} in diesem Besuch`,
     couldNotTakeScreenshot: "Der Screenshot konnte nicht aufgenommen werden.",
     thanksYourReportWithPeopleWho: "Danke — dein Bericht liegt bei den Leuten, die Sketchy betreiben.",
+    thanksSentWithoutScreenshot: "Danke — dein Bericht liegt bei den Leuten, die Sketchy betreiben. Der Screenshot konnte diesmal nicht gespeichert werden.",
     couldNotSendReport: "Der Bericht konnte nicht gesendet werden.",
     reportBug: "Fehler melden",
     somethingBrokenNotSomethingSomeoneSaid: "Etwas ist kaputt, nicht etwas, das jemand gesagt hat. Das geht an die Leute, die Sketchy betreiben — nie an andere Spieler.",
