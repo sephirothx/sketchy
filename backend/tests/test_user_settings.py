@@ -7,6 +7,7 @@ import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from pydantic import ValidationError
 from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
@@ -492,19 +493,24 @@ async def test_a_seed_carries_the_other_languages_over_a_row_another_tab_made(en
     assert (seeded["promptLanguage"], seeded["extraPromptLanguages"]) == ("de", ["fr", "it"])
 
 
-async def test_a_huge_seed_list_is_refused_by_its_bound_before_it_is_walked(env):
-    """The seed's clean-up runs ahead of registration's throttle; a list far
-    past any honest copy is left for the field's bound to refuse at once."""
-    import time
+def test_a_huge_seed_list_is_refused_by_its_bound_before_it_is_walked():
+    """The seed's clean-up runs ahead of registration's throttle, and its walk
+    is quadratic; a list far past any honest copy is left for the field's
+    bound to refuse at once. Shown by what the clean-up does rather than by
+    how long it takes, which a loaded CI runner turned into a flake."""
 
-    body = {
-        "promptLanguage": "en",
-        "extraPromptLanguages": list(range(60_000)),
-    }
-    started = time.perf_counter()
-    with pytest.raises(ValueError):
-        UserSettingsSeed.model_validate(body)
-    assert time.perf_counter() - started < 0.5
+    class Unwalkable(list):
+        def __iter__(self):
+            raise AssertionError("the clean-up walked a list past its bound")
+
+    huge = ["fr"] * 60_000
+    body = {"promptLanguage": "en", "extraPromptLanguages": Unwalkable(huge)}
+    assert UserSettingsSeed.default_is_not_an_extra(body) is body
+
+    # Walked, the repeats would collapse to one language and register.
+    with pytest.raises(ValidationError) as refused:
+        UserSettingsSeed.model_validate({"promptLanguage": "en", "extraPromptLanguages": huge})
+    assert [error["type"] for error in refused.value.errors()] == ["too_long"]
 
 
 def test_the_migration_and_the_model_bound_the_list_alike():

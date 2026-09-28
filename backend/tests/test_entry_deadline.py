@@ -222,11 +222,13 @@ async def test_a_copy_takes_its_own_leaders_room_whatever_the_memo_says(monkeypa
 
 
 async def test_a_hung_teardown_of_the_room_left_behind_neither_blocks_nor_refuses_the_entry(
-    scaled, monkeypatch
+    monkeypatch,
 ):
     """Moving to a new room tears the old one down, and its durable half - the
     abandoned game, the code retirement - can wait on the database. It runs on
-    its own now: the entry answers inside its deadline, and the gate is free."""
+    its own now: the entry answers while it still hangs, and the gate is free.
+    Shown by the retirement still running when the answer comes, not by a
+    scaled deadline, which a loaded CI runner spent before the entry began."""
     monkeypatch.setattr("app.handlers.context.ROOM_CODE_RETIRE_TIMEOUT_SECONDS", 0.5)
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
@@ -237,23 +239,21 @@ async def test_a_hung_teardown_of_the_room_left_behind_neither_blocks_nor_refuse
     ctx.room_codes = codes(AsyncMock(return_value="NEWONE"))
     ctx.room_codes.retire_ephemeral = stalls(3600)
 
-    started = asyncio.get_running_loop().time()
     answer = await create("host", {"nickname": "Host", "requestId": "second"})
 
     assert answer["ok"] is True
-    assert asyncio.get_running_loop().time() - started < 0.3
     assert [room.code for room in room_manager.rooms.values()] == ["NEWONE"]
     assert len(ctx.room_cleanups) == 1, "the old room's retirement runs on its own"
+    (retirement,) = ctx.room_cleanups
+    assert not retirement.done(), "the entry did not wait the retirement out"
     # And it is bounded: it gives up, leaving the code claimed for the
-    # startup sweep, rather than living for ever.
-    await ctx.drain_room_cleanups(2)
-    assert ctx.room_cleanups == set()
+    # startup sweep, rather than living until the drain cancels it.
+    await ctx.drain_room_cleanups(10)
+    assert retirement.done() and not retirement.cancelled()
     ctx.room_codes.retire_ephemeral.assert_awaited_once_with(old["code"])
 
 
-async def test_a_hung_history_staging_for_the_game_left_behind_does_not_hold_the_entry(
-    scaled, monkeypatch
-):
+async def test_a_hung_history_staging_for_the_game_left_behind_does_not_hold_the_entry():
     """The old room is not empty - a spectator stays - so it is not torn down,
     but the game the leaver was the last player of is abandoned, and that
     stages history. Entry-driven, the staging runs on its own (#879)."""
@@ -261,7 +261,11 @@ async def test_a_hung_history_staging_for_the_game_left_behind_does_not_hold_the
     from tests.fake_game_history_repo import FakeGameHistoryRepository
 
     room_manager = RoomManager()
-    worker = SimpleNamespace(stage=stalls(3600), bind_outcome=lambda *_: None)
+    worker = SimpleNamespace(
+        encode=AsyncMock(side_effect=lambda envelope: envelope),
+        stage_encoded=stalls(3600),
+        bind_outcome=lambda *_: None,
+    )
     ctx, sio, sessions = build_stack(
         room_manager, game_history_repo=FakeGameHistoryRepository(), finished_games=worker
     )
@@ -277,10 +281,11 @@ async def test_a_hung_history_staging_for_the_game_left_behind_does_not_hold_the
     room.game = Game(turn_order=[old["playerId"]])
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
 
-    started = asyncio.get_running_loop().time()
     answer = await create("host", {"nickname": "Host"})
 
     assert answer["ok"] is True
-    assert asyncio.get_running_loop().time() - started < 0.3
     assert room.game is None and room.players, "the game went, the spectator stayed"
     assert len(ctx.room_cleanups) == 1, "its history is staged on its own"
+    (staging,) = ctx.room_cleanups
+    assert not staging.done(), "the entry did not wait the staging out"
+    await ctx.drain_room_cleanups(0)
