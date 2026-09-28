@@ -242,7 +242,7 @@ export function ControlsPanel() {
         <div className="ops-card-head">
           <div>
             <h2>Community publications</h2>
-            <p className="ops-card-note">
+            <p className="ops-card-sub">
               Community lists are reviewed after a report, not before
               publication. Turning this on holds every list published from now
               on until a moderator releases it, and leaves the ones already
@@ -284,7 +284,7 @@ export function ControlsPanel() {
         <div className="ops-card-head">
           <div>
             <h2>Gallery · This week</h2>
-            <p className="ops-card-note">
+            <p className="ops-card-sub">
               The gallery publishes after the fact. Holding the shelf means the
               six drawings on the lobby&rsquo;s front page are released by a
               moderator first; the gallery page is not held.
