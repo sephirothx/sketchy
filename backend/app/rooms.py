@@ -402,6 +402,9 @@ class DrawingRecapEntry:
     # The prompt in every language, in a mixed-language room (#1182), so each
     # client's recap reads its own seat's; `prompt` is the drawer's.
     prompts: tuple[tuple[str, str], ...] = ()
+    # A guest drawer, so the recap credits them in the guest style every other
+    # name wears rather than upright in a colour a guest never chose (#1279).
+    drawer_is_anonymous: bool = False
 
     @property
     def is_available(self) -> bool:
@@ -416,6 +419,7 @@ class DrawingRecapEntry:
             "drawerId": self.drawer_id,
             "drawerNickname": self.drawer_nickname,
             "drawerNameColor": self.drawer_name_color,
+            "drawerIsAnonymous": self.drawer_is_anonymous,
             "prompt": self.prompt,
             # Only where there is more than one spelling to choose from.
             **({"prompts": dict(self.prompts)} if self.prompts else {}),

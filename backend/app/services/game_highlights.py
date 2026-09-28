@@ -215,7 +215,7 @@ def _most_reacted_drawing(room: Room, names: dict[str, _Name]) -> dict | None:
     name = names.get(entry.drawer_id) or _Name(
         nickname=entry.drawer_nickname,
         name_color=entry.drawer_name_color,
-        is_anonymous=False,
+        is_anonymous=entry.drawer_is_anonymous,
     )
     return _named(
         {

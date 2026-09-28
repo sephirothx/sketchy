@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import type { ReactNode, TouchEvent } from "react";
 import type { CanvasRef } from "./Canvas";
 import { CanvasSnapshot } from "./CanvasSnapshot";
@@ -146,8 +147,8 @@ export function DrawingRecapGallery({
               {fill(ui.drawingRecapGallery.drawnBy, {
                 drawer: (
                   <strong
-                    className="colored-player-name"
-                    style={{ color: entry.drawerNameColor }}
+                    className={playerNameClass(entry.drawerIsAnonymous)}
+                    style={playerNameStyle(entry.drawerNameColor, entry.drawerIsAnonymous)}
                   >
                     {entry.drawerNickname}
                   </strong>

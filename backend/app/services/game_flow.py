@@ -1602,6 +1602,9 @@ class GameFlowService:
                 drawer_name_color=(
                     drawer.name_color if drawer else departed.name_color if departed else None
                 ),
+                drawer_is_anonymous=(
+                    drawer.is_anonymous if drawer else departed.is_anonymous if departed else False
+                ),
                 prompt=game.prompt or "",
                 prompts=tuple(sorted(game.prompt_spellings().items())),
                 action_count=len(game.canvas.history),

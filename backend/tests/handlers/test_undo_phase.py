@@ -127,3 +127,18 @@ async def test_a_stale_generation_is_still_named_as_such():
         assert len(room.game.canvas.history) == 1
     finally:
         await ctx.timers.close()
+
+
+async def test_a_turns_recap_entry_says_whether_its_drawer_was_a_guest():
+    """The recap credits a guest drawer in the guest style, as every other
+    place names a guest (#1279); it printed the bare name, upright, in a
+    colour a guest never chose."""
+    room, sio, ctx = await drawing_room()
+    try:
+        drawer = room.players[room.game.current_drawer]
+        assert drawer.is_anonymous
+        assert await ctx.game_flow.end_turn_now(room)
+        assert room.last_game_drawings[-1].drawer_is_anonymous is True
+        assert room.last_game_drawings[-1].metadata(0)["drawerIsAnonymous"] is True
+    finally:
+        await ctx.timers.close()

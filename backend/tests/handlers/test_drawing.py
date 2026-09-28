@@ -548,6 +548,7 @@ async def test_recap_drawing_can_be_fetched_without_mutating_history():
         "drawerId": player.id,
         "drawerNickname": "Player",
         "drawerNameColor": player.name_color,
+        "drawerIsAnonymous": False,
         "prompt": "tree",
         "actionCount": 1,
         "available": True,
