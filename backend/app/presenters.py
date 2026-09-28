@@ -72,6 +72,24 @@ def session_payload(room: Room, player: Player) -> dict:
     }
 
 
+def hint_prices(
+    game: Game, player_id: str | None, *, is_spectator: bool
+) -> tuple[int | None, dict[str, int] | None]:
+    """What this seat may pay for a hint: the Buy letters cost and the wheel's
+    letter prices, each None where the seat can buy nothing.
+
+    Only a seat that may guess this turn can buy (R-SPEC-02; the buy handlers
+    refuse anyone else as `is_turn_eligible` does). Spectators were sent both
+    anyway, so a Wheel of Fortune room showed them all 26 priced keys and a
+    Buy letters room tappable tiles, every tap an error toast (#1268).
+    """
+    if not player_id or is_spectator or not game.is_turn_eligible(player_id):
+        return None, None
+    return game.hint_cost(player_id), (
+        game.wheel_letter_prices(player_id) if game.hint_mode == "wheel" else None
+    )
+
+
 def turn_payload(
     game: Game,
     player: Player | None = None,
@@ -80,6 +98,9 @@ def turn_payload(
     drawer_transport: str | None = None,
 ) -> dict:
     player_id = player.id if player else None
+    hint_cost, letter_prices = hint_prices(
+        game, player_id, is_spectator=player.is_spectator if player else False
+    )
     return {
         "phase": game.phase.value,
         # Which transport the drawing seat is on, so this socket plays each
@@ -105,12 +126,8 @@ def turn_payload(
         "roundNumber": game.round_number,
         "totalRounds": game.rounds_total,
         "remainingSeconds": round(game.remaining_seconds()),
-        "hintCost": game.hint_cost(player_id) if player_id else None,
-        "letterPrices": (
-            game.wheel_letter_prices(player_id)
-            if player_id and game.hint_mode == "wheel"
-            else None
-        ),
+        "hintCost": hint_cost,
+        "letterPrices": letter_prices,
         # What this player has committed to hints so far this turn, and the
         # ceiling on it. Private: only ever sent on a per-socket emit.
         "hintSpend": game.hint_spend.get(player_id, 0) if player_id else 0,

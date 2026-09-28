@@ -415,3 +415,42 @@ async def test_a_spectator_is_left_out_of_turn_results_and_final_standings():
         assert sorted(entry["newRank"] for entry in payload["scores"]) in ([1, 1], [1, 2])
     assert len(ended) == 1
     assert {entry["playerId"] for entry in ended[0]["scores"]} == seated
+
+
+@pytest.mark.parametrize("hint_mode", ["purchase", "wheel"])
+async def test_a_spectator_is_offered_no_hint_prices(hint_mode):
+    """R-SPEC-02, #1268: a spectator can never buy a hint, so it is sent no
+    price - neither on `turn_started` nor in the resync payload. They were
+    sent both, and a Wheel of Fortune room showed them 26 priced keys."""
+    from app.presenters import turn_payload
+    from tests.fake_game_history_repo import FakeGameHistoryRepository
+    from tests.handlers.helpers import build_context, build_room
+
+    room_manager, room, players = build_room(rounds=1)
+    room.hint_mode = hint_mode
+    spectator = room_manager.add_player(room, "Watchy", is_spectator=True)
+    spectator.sid = "sid-watchy"
+    ctx = build_context(room_manager, FakeGameHistoryRepository())
+    await ctx.game_flow._start_fresh_game(room, room.seated_players())
+    game = room.game
+    assert game.hint_mode == hint_mode
+    game.force_prompt_choice()
+    ctx.sio.emit.reset_mock()
+    await ctx.game_flow._begin_drawing(room)
+
+    started = {
+        call.kwargs["to"]: call.args[1]
+        for call in ctx.sio.emit.await_args_list
+        if call.args[0] == "turn_started"
+    }
+    guesser = next(p for p in players.values() if p.id != game.current_drawer)
+    wheel = hint_mode == "wheel"
+    assert started[spectator.sid]["hintCost"] is None
+    assert started[spectator.sid]["letterPrices"] is None
+    assert started[guesser.sid]["hintCost"] is not None
+    assert (started[guesser.sid]["letterPrices"] is not None) == wheel
+    resync = turn_payload(game, spectator)
+    assert (resync["hintCost"], resync["letterPrices"]) == (None, None)
+    assert turn_payload(game, guesser)["hintCost"] is not None
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()

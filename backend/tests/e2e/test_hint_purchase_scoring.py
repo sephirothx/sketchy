@@ -1,6 +1,8 @@
 """Buying a hint costs nothing up front; the debt is settled by the guess."""
 import asyncio
 
+import pytest
+
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import (
     join_by_code,
@@ -101,4 +103,51 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
                 arg=str(net),
             )
         finally:
+            await browser.close()
+
+
+@pytest.mark.parametrize(
+    "mode, offer",
+    [("Buy letters", ".hint-blank"), ("Wheel of Fortune", ".wheel-letter-btn")],
+)
+async def test_a_spectator_is_offered_no_hints(mode, offer):
+    """R-SPEC-02, #1268: a spectator can never buy a hint, so none is offered -
+    no priced wheel, no tappable tile. Every tap used to end in "That hint is
+    not available.", while the guesser beside them is offered as before."""
+    from uuid import uuid4
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context() for _ in range(3)]
+        host, guest, spectator = [await context.new_page() for context in contexts]
+        try:
+            tag = uuid4().hex[:5]
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"OfferHost{tag}")
+            await open_new_room(host)
+            code = await room_code(host)
+            for page, name, spectate in ((guest, "OfferGuest", False), (spectator, "OfferSpy", True)):
+                await page.goto(BASE_URL)
+                await use_guest_name(page, f"{name}{tag}")
+                await join_by_code(page, code, spectate=spectate)
+                await page.locator('[data-testid="waiting-room"]').wait_for()
+
+            await open_room_settings(host)
+            await open_settings_section(host, "Scoring and hints")
+            await host.locator(f'[aria-label="Hints"] button:has-text("{mode}")').click()
+            await open_settings_section(host, "Prompts")
+            await host.locator("#custom-prompts").fill("elephant\nlighthouse")
+            await host.get_by_label("Only use custom prompts").check()
+            await save_room_settings(host)
+            await host.get_by_role("button", name="Start game").click()
+
+            drawer, guesser, _ = await choose_prompt([host, guest])
+            await guesser.locator(offer).first.wait_for()
+            await spectator.locator("canvas.drawing-canvas").wait_for()
+            await spectator.locator(".prompt-masked, .masked-tile").first.wait_for()
+            assert await spectator.locator(offer).count() == 0
+            assert await spectator.locator(".hint-purchase, .wheel-hint-panel").count() == 0
+        finally:
+            for context in contexts:
+                await context.close()
             await browser.close()
