@@ -150,9 +150,10 @@ async def test_the_toolbar_holds_together_at_every_desktop_width():
             await _problems_at(drawer, 901)
             assert await drawer.locator('.canvas-area [data-testid="toolbar-mobile"]').count() == 1
 
-            # The narrowest column the room ever has: this window with a
-            # classic 17px scrollbar down the page, which headless Chromium
-            # hides. Taken off the room's padding instead, through the CSSOM
+            # Margin under the narrowest column: this window as it was with a
+            # classic 17px scrollbar down the page. Scrollbars take no lane
+            # now (R-UX-20), but a browser that could not hide one would lose
+            # this much. Taken off the room's padding, through the CSSOM
             # because the built app's CSP refuses an injected stylesheet.
             await drawer.evaluate(
                 "document.querySelector('.game-room').style.setProperty('padding-right', '33px', 'important')"

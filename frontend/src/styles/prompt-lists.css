@@ -72,7 +72,7 @@
 }
 
 /* Scrolled by itself; the Save bar is pinned to the bottom of this pane. The
-   inline padding leaves the focus rings and the scrollbar room.
+   inline padding leaves room for the focus rings and the scroll handle.
 
    Positioned, so it is what absolutely placed things inside it (a visually
    hidden label, an open panel) are placed against. Without it they were placed

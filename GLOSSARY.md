@@ -277,6 +277,12 @@ the section is what is drawn with a name wherever a player appears.
 | **Rejoin** | Entering a room again as a new arrival, after the grace period has passed. | reconnect |
 | **Scratch pad** | The game's canvas and drawing toolbar, for the player alone, offered wherever they wait: in place of the waiting room's column, on the card over a paused room, and from *Draw while you wait* on the connection banner outside one. The button that opens it is *Draw while you wait*, except in the waiting room up to 1100px wide (a phone's dock, a desktop's narrow column), where it shares a row with *Edit rules* or the wait for the host and reads *Doodle* — the verb, what you do on the pad, never the pad's name. Nothing drawn on it is sent or stored; it lasts as long as the tab and can be saved as a picture. Not the game's canvas, and not a **Doodle**, which is an avatar: the button's verb and the avatar's noun share a spelling in English only, and each translation keeps them apart. | doodle pad, sketchbook, offline game, practice canvas |
 
+## Interface
+
+| Term | Meaning | Avoid |
+| --- | --- | --- |
+| **Scroll handle** | The bar drawn over the edge of whatever is scrolling, in place of a classic scrollbar, where the platform's scrollbars would take a lane (R-UX-20). It shows while the player scrolls and while the pointer is near that edge, fades a second after, and can be dragged; it takes no width from what it scrolls. Phones and trackpads keep their own overlay scrollbars, which are not scroll handles. | scroll thumb, custom scrollbar |
+
 ## Known drift
 
 Old words that stay on purpose, each in one place a player never reads. They are

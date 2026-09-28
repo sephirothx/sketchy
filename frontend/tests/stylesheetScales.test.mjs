@@ -59,7 +59,7 @@ const LOCAL_MAX = 4;
 test("the layers are declared once, in the order their comment gives, above every local value", () => {
   assert.deepEqual(
     layers.map(({ name }) => name),
-    ["float", "dock", "notice", "popover", "confetti", "banner", "overlay", "sheet", "modal", "blocking", "toast"],
+    ["float", "dock", "notice", "popover", "confetti", "banner", "overlay", "sheet", "modal", "blocking", "toast", "scrollbar"],
   );
   for (let i = 1; i < layers.length; i += 1) {
     assert.ok(layers[i].value > layers[i - 1].value, `--z-${layers[i].name} is not above --z-${layers[i - 1].name}`);
@@ -88,6 +88,7 @@ test("the stacking bugs stay fixed", () => {
     ["global-feedback.css", ".toast-viewport", "toast"],
     ["global-feedback.css", ".lazy-overlay-notice", "toast"],
     ["global-feedback.css", ".app-banners", "banner"],
+    ["scroll-handles.css", ".scroll-handle-layer", "scrollbar"],
     ["dialogs.css", ".modal-overlay", "modal"],
     ["dialogs.css", ".modal-overlay.suspension-overlay", "blocking"],
     ["dialogs.css", ".modal-overlay.afk-check-overlay", "blocking"],

@@ -1321,8 +1321,9 @@ a.online-player-name:focus-visible {
     flex: 1 1 auto;
     min-height: 0;
     overflow-y: auto;
-    /* So a row's text does not run under the scrollbar's lane - and, at the
-       start, so a row's first letter is not cut by the clip (#1170). */
+    /* So a row's text does not run to the edge the scroll handle is drawn
+       over (R-UX-20) - and, at the start, so a row's first letter is not cut
+       by the clip (#1170). */
     padding-inline: var(--ink-overhang) 4px;
     margin-inline-start: calc(-1 * var(--ink-overhang));
     /* Reaching the end of one list must not start scrolling anything else. */

@@ -1,0 +1,92 @@
+/* Overlay scroll handles (#1222, lib/scrollHandles.ts). Where the platform's
+   scrollbars take a lane - Windows, Linux, macOS with a mouse - the native
+   ones are hidden, and a handle is drawn over the edge of whatever scrolls
+   while it scrolls or while the pointer is near that edge. The lane took its
+   width off every panel, and left a strip down the window's edge that the
+   banner stack could not reach. Phones and trackpads keep their own overlay
+   scrollbars: `html.scroll-handles` is only set where the lane exists. */
+
+:root.scroll-handles,
+:root.scroll-handles * {
+  scrollbar-width: none;
+}
+
+/* Safari before 18.2 knows only the prefixed way. */
+:root.scroll-handles ::-webkit-scrollbar {
+  display: none;
+}
+
+/* One layer over everything, toasts included: a handle belongs to whatever
+   the player is scrolling, and that can be a dialog's body. It takes no input
+   but on a handle that is showing. */
+.scroll-handle-layer {
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  position: fixed;
+  z-index: var(--z-scrollbar);
+}
+
+/* The box is the hit area, placed and sized by the script; the bar is drawn
+   inside it against the area's edge, and widens to the whole box under the
+   pointer. */
+.scroll-handle {
+  left: 0;
+  opacity: 0;
+  position: absolute;
+  top: 0;
+  transition: opacity var(--dur) ease;
+}
+
+.scroll-handle.is-vertical {
+  width: 10px;
+}
+
+.scroll-handle.is-horizontal {
+  height: 10px;
+}
+
+.scroll-handle.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.scroll-handle::after {
+  background: var(--faint);
+  border-radius: var(--radius-pill);
+  content: "";
+  position: absolute;
+  transition:
+    width var(--dur-fast) ease,
+    height var(--dur-fast) ease,
+    background-color var(--dur-fast) ease;
+}
+
+.scroll-handle.is-vertical::after {
+  bottom: 0;
+  right: 0;
+  top: 0;
+  width: 6px;
+}
+
+.scroll-handle.is-horizontal::after {
+  bottom: 0;
+  height: 6px;
+  left: 0;
+  right: 0;
+}
+
+.scroll-handle:hover::after,
+.scroll-handle.is-dragging::after {
+  background: var(--muted);
+}
+
+.scroll-handle.is-vertical:hover::after,
+.scroll-handle.is-vertical.is-dragging::after {
+  width: 10px;
+}
+
+.scroll-handle.is-horizontal:hover::after,
+.scroll-handle.is-horizontal.is-dragging::after {
+  height: 10px;
+}
