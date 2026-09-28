@@ -21,6 +21,7 @@ from tests.e2e.lobby_helpers import (
     open_room_settings,
     register_account,
     room_code,
+    save_room_settings,
     use_guest_name,
 )
 
@@ -117,6 +118,14 @@ async def test_every_text_field_on_a_phone_is_at_least_16px():
             await open_create_room(page)
             await _open_every_section(page)
             await measure("create room")
+            # A registered player's preset bar: the name field it focuses,
+            # then the select once there is a preset to start from.
+            await page.get_by_role("button", name="Save as preset").click()
+            await page.locator(".room-preset-name").fill("Sized preset")
+            await measure("create room, naming a preset")
+            await page.locator(".room-preset-bar").get_by_role("button", name="Save").click()
+            await page.locator(".room-preset-bar select").wait_for()
+            await measure("create room, with a preset")
             await page.click('[role="group"][aria-label="Visibility"] button:has-text("Private")')
             await page.click('button:has-text("Create room")')
             await page.wait_for_selector('[data-testid="waiting-room"]')
@@ -125,12 +134,19 @@ async def test_every_text_field_on_a_phone_is_at_least_16px():
             await open_room_settings(page)
             await _open_every_section(page)
             await measure("rules editor")
-            await page.keyboard.press("Escape")
-            await page.locator(".room-settings-editor").wait_for(state="detached")
+            # Custom prompts, so the guest below gets the room's list to search.
+            await page.locator("#custom-prompts").fill("lantern\nkettle\nharbour")
+            await page.get_by_label("Only use custom prompts").check()
+            await save_room_settings(page)
 
             await guest.goto(BASE_URL)
             await join_by_code(guest, code)
             await guest.wait_for_selector('[data-testid="waiting-room"]')
+            await guest.locator("details.waiting-custom-prompts > summary").click()
+            await guest.locator(".waiting-custom-prompts-search input").wait_for()
+            found = await guest.evaluate(SMALL_FIELDS)
+            if found:
+                small["guest's waiting room"] = found
             await page.click(".waiting-start-button")
             await page.wait_for_selector('.prompt-choices, [data-testid="choosing-prompt-status"]')
             if await page.query_selector(".prompt-choices"):
