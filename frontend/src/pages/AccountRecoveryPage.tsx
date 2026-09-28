@@ -151,14 +151,27 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           linkUsable === false
           ? ui.accountRecoveryPage.thatLinkNoLongerWorks
           : ui.accountRecoveryPage.chooseANewPassword
-        : ui.accountRecoveryPage.confirmingYourEmail;
+        : // Verifying says what happened, as a reset does: the heading read
+          // "Confirming your email" over a dead link and over a done one.
+          done
+          ? ui.accountRecoveryPage.emailConfirmed
+          : busy
+            ? ui.accountRecoveryPage.confirmingYourEmail
+            : ui.accountRecoveryPage.thatLinkNoLongerWorks;
   useDocumentTitle(heading);
 
   return (
     <main className="recovery-page">
       <div className="recovery-card">
+        {/* Its own line per step (#1280): "Even the best guessers forget
+            sometimes" stood over confirming an address too, which nobody had
+            forgotten. Not on a phone, where it pushed the form down. */}
         <section className="recovery-aside" aria-hidden="true">
-          <h2>{ui.accountRecoveryPage.evenBestGuessersForgetSometimes}</h2>
+          <h2>
+            {mode === "verify"
+              ? ui.accountRecoveryPage.asideVerifyHeading
+              : ui.accountRecoveryPage.evenBestGuessersForgetSometimes}
+          </h2>
           <Squiggle width={110} color="var(--primary)" />
           <p>
             {mode === "forgot"

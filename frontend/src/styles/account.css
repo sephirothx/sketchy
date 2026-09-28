@@ -1035,8 +1035,10 @@
     grid-template-columns: 1fr;
   }
 
+  /* Above the form it pushed the form ~180px down a phone, for a line of
+     encouragement (#1280). */
   .recovery-aside {
-    padding: 24px 28px;
+    display: none;
   }
 }
 
