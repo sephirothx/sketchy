@@ -331,7 +331,7 @@ last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limit
 — raw addresses are never stored, so these answer "same network?" without knowing which
 network. The address hashed is R-RATE-02's key, so an IPv6 address counts as its /64 and a
 privacy address rotating inside it is not a different network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
-the one it was last seen from, or for staff from a different address. `device_label` is
+the one it was last seen from, or for staff from a different address. Every switch updates the row; the `session.anomaly` ledger entry is written at most once per five minutes per session, with `anomaly_count` in its `details`, so a client flipping between two browsers writes one permanent row an interval rather than one per request (#1242). `device_label` is
 the browser the session was issued to; `last_device_label` the one it was last used from
 (NULL until the session is first seen from another browser), and the comparison is against it, so a label
 that changed for good is one anomaly rather than one per request (#1016); a player's address change is

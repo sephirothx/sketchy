@@ -435,6 +435,7 @@ async def resolve_session_status(
                 # Recorded immediately rather than on the throttled write
                 # below: the whole value of the signal is that it is there
                 # the first time the session is used from somewhere new.
+                previous_anomaly_at = record.anomaly_at
                 record.anomaly_at = checked_at
                 record.anomaly_count = (record.anomaly_count or 0) + 1
                 record.last_ip_hash = ip_hash or record.last_ip_hash
@@ -445,17 +446,31 @@ async def resolve_session_status(
                 # A step-up is an assertion about the browser holding the
                 # session. A session that has moved has to make it again.
                 record.stepped_up_at = None
-                database.add(
-                    AuditEvent(
-                        id=generate_uuid(),
-                        event_type="session.anomaly",
-                        actor_user_id=None,
-                        target_user_id=record.user_id,
-                        target_type=AuditTargetType.USER.value,
-                        target_id=str(record.user_id),
-                        details={"reason": anomaly, "session_id": str(record.id)},
+                # The session row says every switch; the ledger says one per
+                # interval (#1242). A client alternating two browsers was an
+                # anomaly on every request - `/api/health` included - and
+                # each wrote a permanent row: 410-525 a second from one guest
+                # cookie. `anomaly_count` in the row lets the ledger say how
+                # many switches lie between two entries.
+                if (
+                    previous_anomaly_at is None
+                    or checked_at - previous_anomaly_at >= LAST_USED_WRITE_INTERVAL
+                ):
+                    database.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type="session.anomaly",
+                            actor_user_id=None,
+                            target_user_id=record.user_id,
+                            target_type=AuditTargetType.USER.value,
+                            target_id=str(record.user_id),
+                            details={
+                                "reason": anomaly,
+                                "session_id": str(record.id),
+                                "anomaly_count": record.anomaly_count,
+                            },
+                        )
                     )
-                )
             elif checked_at - record.last_used_at >= LAST_USED_WRITE_INTERVAL:
                 record.last_used_at = checked_at
                 record.idle_expires_at = _idle_deadline(record, checked_at)

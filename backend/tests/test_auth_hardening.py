@@ -478,7 +478,60 @@ async def test_a_browser_that_moved_is_one_anomaly_not_one_per_request(env):
                 select(AuditEvent).where(AuditEvent.event_type == "session.anomaly")
             )
         ).all()
-    assert len(events) == 2
+    # Counted on the session, recorded once in the interval (#1242).
+    assert len(events) == 1
+
+
+async def test_a_client_alternating_browsers_writes_one_ledger_row_an_interval(env):
+    """#1242: two User-Agents in turn were an anomaly on every request, and
+    each appended a permanent row - 410-525 a second from one guest cookie.
+    Every switch still counts on the session and still costs the step-up;
+    the ledger hears of it once per interval, with the count so far."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.auth.sessions import LAST_USED_WRITE_INTERVAL
+    from app.db.models import AuthSession
+
+    _, factory, repo = env
+    user = await repo.create_anonymous("Alternating")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
+    start = datetime.now(timezone.utc)
+    labels = ("Firefox on Linux", "Chrome on Windows")
+    for index in range(60):
+        async with factory() as session, session.begin():
+            row = await session.get(AuthSession, UUID(str(issued.session.id)))
+            row.stepped_up_at = start
+        resolved = await resolve_session(
+            factory, issued.token, device_label=labels[index % 2],
+            now=start + timedelta(seconds=index),
+        )
+        assert resolved is not None
+        async with factory() as session:
+            assert (await session.get(AuthSession, UUID(str(issued.session.id)))).stepped_up_at is None
+    assert resolved.anomaly_count == 60
+
+    async def rows():
+        async with factory() as session:
+            return (
+                await session.scalars(
+                    select(AuditEvent)
+                    .where(AuditEvent.event_type == "session.anomaly")
+                    .order_by(AuditEvent.created_at)
+                )
+            ).all()
+
+    assert len(await rows()) == 1
+
+    # A switch once the interval has passed is written again, carrying the
+    # count, so the ledger says how many lay between the two.
+    later = await resolve_session(
+        factory, issued.token, device_label=labels[0],
+        now=start + timedelta(seconds=59) + LAST_USED_WRITE_INTERVAL,
+    )
+    assert later is not None
+    written = await rows()
+    assert len(written) == 2
+    assert [row.details["anomaly_count"] for row in written] == [1, 61]
 
 
 async def test_a_step_up_made_after_the_anomaly_survives(env):
