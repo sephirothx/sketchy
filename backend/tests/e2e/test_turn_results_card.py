@@ -1,6 +1,7 @@
 """The turn-results card: its standings before and after they move, and the
 line about the viewer's own turn (#1278)."""
 import asyncio
+from itertools import pairwise
 from uuid import uuid4
 
 from playwright.async_api import Page, async_playwright
@@ -73,7 +74,7 @@ def _in_place(rows: list[dict]) -> bool:
     says where it stands."""
     ordered = sorted(rows, key=lambda row: row["top"])
     return all(
-        a["rank"] <= b["rank"] and a["total"] >= b["total"] for a, b in zip(ordered, ordered[1:])
+        a["rank"] <= b["rank"] and a["total"] >= b["total"] for a, b in pairwise(ordered)
     )
 
 
