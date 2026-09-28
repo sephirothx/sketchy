@@ -1324,9 +1324,12 @@ wherever `prompt` is everyone's. The same `prompts` rides each recap entry of
 `game_ended.drawings` / `last_game.drawings` and each highlight that names a prompt.
 The correct `guess` receipt's `correct.prompt` and `sync_game.guessed.prompt` are the
 guesser's own language's word. `turn_ended` also carries `turnId`, `reactions[]`, `drawerId`, `drawerBonus`, `seconds`, the ordered
-`guesses[]` (each with the guesser's `seconds`, the one `correct_guess` carried), and `scores[]` — each entry carrying
+`guesses[]` (each with the guesser's `seconds`, the one `correct_guess` carried), and `scores[]` — one entry per
+**seated player**, each carrying
 `score`, `delta`, `previousRank`, and `newRank` so the client can animate the standings
-without recomputing ranks. Ranks use standard competition ranking (1, 2, 2, 4) via
+without recomputing ranks. Spectators are in neither list, nor in `game_ended.scores`: they
+never score (R-SPEC-02), and ranked with the players they read "You finished 4th with 0
+points" while the history record, which never held them, disagreed (#1262). Ranks use standard competition ranking (1, 2, 2, 4) via
 `competition_ranks()` ([`backend/app/game.py:52`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 

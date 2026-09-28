@@ -1874,7 +1874,9 @@ class GameFlowService:
                     "isAnonymous": p.is_anonymous,
                     "score": p.score + (carried.get(p.user_id, 0) if p.user_id else 0),
                 }
-                for p in room.player_list()
+                # Seated players, as the record is written: a spectator
+                # placed last with 0 read "You finished 4th" (#1262).
+                for p in room.seated_players()
             ]
             # Ordered by the score each entry carries, not the seat's alone:
             # the podium is read off this order, and a seat holding 100 of
