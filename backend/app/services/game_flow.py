@@ -1472,7 +1472,8 @@ class GameFlowService:
         drawer_transport = self._drawer_transport(room)
         # One emit per socket, deliberately, even though at turn start every
         # guesser's payload is identical - nothing has been bought yet, so only
-        # the drawer and prompt-seeing spectators actually diverge. Broadcasting
+        # the drawer, the spectators (no prices, #1268; the answer too where
+        # they may see it) and seats the turn froze out actually diverge. Broadcasting
         # the guesser shape and following with a private event for the few that
         # differ saves no bytes at all (a deflate context is per connection, so
         # a broadcast is compressed once per socket regardless) and about 55-271

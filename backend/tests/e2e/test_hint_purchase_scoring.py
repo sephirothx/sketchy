@@ -144,9 +144,12 @@ async def test_a_spectator_is_offered_no_hints(mode, offer):
             drawer, guesser, _ = await choose_prompt([host, guest])
             await guesser.locator(offer).first.wait_for()
             await spectator.locator("canvas.drawing-canvas").wait_for()
-            await spectator.locator(".prompt-masked, .masked-tile").first.wait_for()
+            # The masked tiles render only once the spectator's own
+            # turn_started has arrived: before that the offer could not show
+            # either way, and the assertions below would prove nothing.
+            await spectator.locator(".masked-tile").first.wait_for()
             assert await spectator.locator(offer).count() == 0
-            assert await spectator.locator(".hint-purchase, .wheel-hint-panel").count() == 0
+            assert await spectator.locator(".hint-meta, .wheel-hint-panel").count() == 0
         finally:
             for context in contexts:
                 await context.close()

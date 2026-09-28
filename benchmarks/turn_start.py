@@ -36,6 +36,7 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from app.game import MAX_HINT_SPEND, Game
+from app.presenters import hint_prices
 from app.rooms import RoomManager
 
 DRAWING_SECONDS = 90
@@ -58,6 +59,7 @@ def build_room(players: int, hint_mode: str):
 
 def turn_started_payload(room, game, player) -> dict:
     """Exactly what `_begin_drawing` builds for one socket today."""
+    hint_cost, letter_prices = hint_prices(game, player.id, is_spectator=player.is_spectator)
     return {
         "drawerId": game.current_drawer,
         "maskedPrompt": game.masked_prompt(
@@ -68,10 +70,8 @@ def turn_started_payload(room, game, player) -> dict:
         "roundNumber": game.round_number,
         "totalRounds": game.rounds_total,
         "seconds": game.drawing_seconds,
-        "hintCost": game.hint_cost(player.id),
-        "letterPrices": (
-            game.wheel_letter_prices(player.id) if game.hint_mode == "wheel" else None
-        ),
+        "hintCost": hint_cost,
+        "letterPrices": letter_prices,
         "hintSpend": 0,
         "maxHintSpend": MAX_HINT_SPEND,
     }

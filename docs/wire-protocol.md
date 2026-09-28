@@ -1261,7 +1261,8 @@ spectators were sent both, and a Wheel of Fortune room showed them 26 priced key
 refused every tap (#1268).
 
 At *turn start* those four are in fact identical for every guesser — nothing has been
-bought yet — so only the drawer and any prompt-seeing spectators genuinely diverge, and
+bought yet — so only the drawer, the spectators (no prices, #1268; the answer too where
+they may see the prompt) and seats the turn froze out genuinely diverge, and
 collapsing the loop into one broadcast plus a small private follow-up looks free.
 [`benchmarks/turn_start.py`](../benchmarks/turn_start.py) measures what that would buy:
 **zero bytes** (see §1 — a broadcast is compressed per connection either way) and

@@ -426,7 +426,9 @@ async def test_a_spectator_is_offered_no_hint_prices(hint_mode):
     from tests.fake_game_history_repo import FakeGameHistoryRepository
     from tests.handlers.helpers import build_context, build_room
 
-    room_manager, room, players = build_room(rounds=1)
+    room_manager, room, players = build_room(
+        rounds=1, accounts={"Ann": "user-ann", "Bob": "user-bob", "Cat": "user-cat"}
+    )
     room.hint_mode = hint_mode
     spectator = room_manager.add_player(room, "Watchy", is_spectator=True)
     spectator.sid = "sid-watchy"
@@ -435,6 +437,10 @@ async def test_a_spectator_is_offered_no_hint_prices(hint_mode):
     game = room.game
     assert game.hint_mode == hint_mode
     game.force_prompt_choice()
+    # A seat away when drawing begins is left out of this turn's guessers
+    # (R-GUESS-05), so it can buy nothing either and is offered nothing.
+    guesser, away = [p for p in players.values() if p.id != game.current_drawer]
+    away.is_afk = True
     ctx.sio.emit.reset_mock()
     await ctx.game_flow._begin_drawing(room)
 
@@ -443,8 +449,8 @@ async def test_a_spectator_is_offered_no_hint_prices(hint_mode):
         for call in ctx.sio.emit.await_args_list
         if call.args[0] == "turn_started"
     }
-    guesser = next(p for p in players.values() if p.id != game.current_drawer)
     wheel = hint_mode == "wheel"
+    assert (started[away.sid]["hintCost"], started[away.sid]["letterPrices"]) == (None, None)
     assert started[spectator.sid]["hintCost"] is None
     assert started[spectator.sid]["letterPrices"] is None
     assert started[guesser.sid]["hintCost"] is not None
