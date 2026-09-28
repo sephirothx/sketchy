@@ -463,6 +463,11 @@ def message_id_for(entry_id: UUID, sender: str | None = None) -> str:
     return f"<{entry_id}@{(domain.strip() if at else '') or 'localhost'}>"
 
 
+# One batch in this many is kept for mail other than reset links, whatever
+# is waiting (#1302 review).
+RESERVED_SHARE = 5
+
+
 async def _claim_due(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -486,17 +491,48 @@ async def _claim_due(
     claims: list[_Claim] = []
     async with session_factory() as session:
         async with session.begin():
-            due = (
-                await session.scalars(
-                    select(EmailOutboxEntry)
-                    .where(
-                        EmailOutboxEntry.state == EmailOutboxState.PENDING.value,
-                        EmailOutboxEntry.next_attempt_at <= checked_at,
-                    )
-                    .order_by(EmailOutboxEntry.created_at)
-                    .limit(batch_size)
+            ready = (
+                EmailOutboxEntry.state == EmailOutboxState.PENDING.value,
+                EmailOutboxEntry.next_attempt_at <= checked_at,
+            )
+            is_reset = EmailOutboxEntry.template == EmailTemplate.RESET_PASSWORD.value
+
+            async def oldest(*where):
+                return list(
+                    (
+                        await session.scalars(
+                            select(EmailOutboxEntry)
+                            .where(*ready, *where)
+                            .order_by(EmailOutboxEntry.created_at)
+                            .limit(batch_size)
+                        )
+                    ).all()
                 )
-            ).all()
+
+            # Reset links first (#1240): one lives an hour and is somebody
+            # locked out, where a verification link lives a day and is
+            # somebody who can still play, so a queue flooded with
+            # verification mail must not age every reset in it past its
+            # expiry. But not only resets: a share of every batch is kept for
+            # everything else, oldest first, or a sustained flood of resets
+            # held every verification until its link had expired (#1302
+            # review).
+            resets, others = await oldest(is_reset), await oldest(~is_reset)
+            # Every batch that can be shared keeps at least one slot for
+            # other mail: with none, a batch of two to four went to resets
+            # alone for as long as older ones waited (#1302 review). A batch
+            # of one cannot be shared, so it goes to whichever kind has
+            # waited longer - neither can hold the other off for good, where
+            # a slot kept for other mail held every reset behind a trickle of
+            # it.
+            if batch_size > 1:
+                reserved = max(1, batch_size // RESERVED_SHARE)
+            else:
+                reserved = int(
+                    bool(resets and others and others[0].created_at < resets[0].created_at)
+                )
+            others = others[: max(reserved, batch_size - len(resets))]
+            due = resets[: batch_size - len(others)] + others
             for entry in due:
                 won = await session.execute(
                     update(EmailOutboxEntry)

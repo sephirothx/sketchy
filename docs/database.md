@@ -382,11 +382,14 @@ password with every old device still signed in (R-AUTH-10, R-AUTH-17).
 `scope` + `key_hash` composite **PK** · `attempt_count` · `window_started_at` ·
 `window_expires_at` · `updated_at`.
 
-`key_hash` is an HMAC-SHA-256 digest of the client address under `IP_HASH_SECRET` (or
-an auto-generated `app_config` secret) — **raw IP addresses are never stored.** The
-`room_create` scope is the one exception to "client address": it hashes the **account**
-that opened the room, because a socket behind a reverse proxy presents the proxy and
-the forwarded header is attacker-controlled. Buckets
+`key_hash` is an HMAC-SHA-256 digest under `IP_HASH_SECRET` (or an auto-generated
+`app_config` secret) of whatever the scope counts — **raw IP addresses are never
+stored.** Most scopes count a client address (keyed as R-RATE-02 says). A per-account
+scope hashes the **account** instead — `room_create`, the prompt-list and audited-route
+budgets, `report-account`, `password_reset_account` and `_day`, `email_verify_account`
+— because that is the key a caller cannot change by moving address; and
+`email_verify_recipient` hashes the **normalized address being verified**, so one inbox
+has one bucket whoever asks for it (#1240). Buckets
 are shared, so limits survive restarts and apply once across every replica. Expired
 buckets are cleaned in bounded batches. Rotating the secret starts fresh buckets without
 exposing or re-identifying old keys.
@@ -789,6 +792,16 @@ queue, so a send can happen hours after the queue. Resolving the language late
 would mean a preference changed in between re-languages a message that was
 already composed, including the one about the security event that prompted the
 change. `en` for an account with no settings row of its own. `last_error` holds the relay's answer **redacted before it is truncated** to the column's 256 characters: `SMTPRecipientsRefused` stringifies with the refused address in it, and a cut taken first can land inside one and leave the local part standing (R-AUTH-12).
+
+**Claimed reset first, but not only resets.** A sweep takes due `reset_password` rows
+before anything else, oldest first (#1240): a reset link lives an hour and is somebody
+locked out, a verification link lives a day, and oldest-first alone let a queue flooded
+with verification mail age every reset behind it past its expiry at 50 messages a
+sweep. A fifth of every batch (10 of 50) is kept for everything else, oldest first,
+and filled with resets only when nothing else is due: without it a sustained flood of
+resets held every verification until its link had expired (#1302 review). Any batch of two
+or more keeps at least one slot for it; a batch of one goes to whichever kind has
+waited longer, so a one-message drain starves neither.
 
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 

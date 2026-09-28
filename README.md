@@ -1532,12 +1532,16 @@ your players share one address:
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 per hour | `POST /api/auth/password/forgot` |
+| `AUTH_RESET_ACCOUNT_LIMIT` | 3 per hour | Reset mails to one account, whatever address asks; past it nothing is sent and the answer is unchanged (#1240) |
+| `AUTH_RESET_ACCOUNT_DAILY_LIMIT` | 10 per day | The same, by the day |
 | `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
 | `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
 | `AUTH_RESET_PERFORM_LIMIT` | 10 per hour | `POST /api/auth/password/reset`, per address — its own bucket, so opening the page does not spend what finishing the reset needs (#975) |
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 per hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
+| `AUTH_VERIFY_ACCOUNT_LIMIT` | 5 per day | `PUT /api/auth/email`, per account, charged after the password proof (#1240) |
+| `AUTH_VERIFY_RECIPIENT_LIMIT` | 3 per day | Verification mails to one address, whichever accounts ask; past it nothing is sent and the answer is unchanged |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
 | `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - per address |
 | `PROMPT_LIST_SAVE_LIMIT` | 60 per hour | Saves of one's own prompt lists, per account (#1236) |

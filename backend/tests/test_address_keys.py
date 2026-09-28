@@ -61,6 +61,8 @@ async def build_site(monkeypatch, **limits):
         clients.append(client)
         return client
 
+    # For a test that reads what the routes wrote.
+    from_address.factory = factory
     try:
         yield from_address
     finally:

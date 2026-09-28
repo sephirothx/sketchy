@@ -412,6 +412,51 @@ def create_auth_router(
         limit=_limit("AUTH_VERIFY_LIMIT", 10),
         window_seconds=3600,
     )
+    # Per account and per recipient (#1240): the address buckets above say
+    # how fast one caller may ask, not how much one inbox may receive, and
+    # the caller chooses whose inbox. From one /64, twenty reset mails
+    # reached one player; from one account, twenty-five verification mails
+    # reached an address that had never heard of Sketchy. Delivery sends 50
+    # a sweep, oldest first, so a queue past a few thousand an hour would
+    # delay every real reset past its link's expiry.
+    reset_account_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset_account",
+        limit=_limit("AUTH_RESET_ACCOUNT_LIMIT", 3),
+        window_seconds=3600,
+    )
+    reset_account_daily_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset_account_day",
+        limit=_limit("AUTH_RESET_ACCOUNT_DAILY_LIMIT", 10),
+        window_seconds=86400,
+    )
+    verify_account_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="email_verify_account",
+        limit=_limit("AUTH_VERIFY_ACCOUNT_LIMIT", 5),
+        window_seconds=86400,
+    )
+    verify_recipient_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="email_verify_recipient",
+        limit=_limit("AUTH_VERIFY_RECIPIENT_LIMIT", 3),
+        window_seconds=86400,
+    )
+
+    async def reset_allowed(user_id: UUID) -> bool:
+        """One more reset mail for this account, by the hour and by the day."""
+        key = str(user_id)
+        if not await reset_account_limiter.check(key):
+            return False
+        if not await reset_account_daily_limiter.check(key):
+            await reset_account_limiter.refund(key)
+            return False
+        return True
+
+    async def recipient_allowed(address: str) -> bool:
+        """One more verification mail for this inbox today, whoever asks."""
+        return await verify_recipient_limiter.check(address)
     # Costs a password verification and a hash rather than somebody's inbox,
     # so it sits between the two - loose enough for a mistyped current
     # password, tight enough that a stolen session cannot grind at one.
@@ -1013,6 +1058,7 @@ def create_auth_router(
                     email=body.email,
                     ip_hash=ip_hash,
                     request_id=request_id,
+                    allow_recipient=recipient_allowed,
                 )
             except (EmailAddressError, EmailAlreadyInUse, RecoveryError):
                 logger.info("Registration email not accepted for %s", claimed.id)
@@ -1376,6 +1422,16 @@ def create_auth_router(
         await _prove_password(user, body.password)
         if user.role in STAFF_ROLES:
             require_step_up(request)
+        # After the proof, so a mistyped password does not spend the day's
+        # allowance; the address bucket above is what the proof is ground
+        # against. Said out loud: it is the caller's own account, so the
+        # refusal tells them nothing about anybody else.
+        if not await verify_account_limiter.check(user.id):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many attempts. Please wait and try again.",
+            )
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
             address = await request_email_verification(
@@ -1384,6 +1440,7 @@ def create_auth_router(
                 email=body.email,
                 ip_hash=ip_hash,
                 request_id=request_id,
+                allow_recipient=recipient_allowed,
             )
         except EmailAddressError as error:
             raise Refusal(400, ErrorCode.INVALID_EMAIL, str(error)) from error
@@ -1438,6 +1495,7 @@ def create_auth_router(
             identifier=body.identifier,
             ip_hash=ip_hash,
             request_id=request_id,
+            allow_account=reset_allowed,
         )
         return {
             "ok": True,
