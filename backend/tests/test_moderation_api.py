@@ -3618,7 +3618,226 @@ async def test_an_administrator_sees_and_decides_a_report_about_themselves(env):
     )
     assert decided.status_code == 200, decided.text
     assert decided.json()["reviewedByUserId"] == admin["id"]
-    # The picture removal on a report about them is theirs to take too; with
-    # no picture there is nothing to remove, but it is not refused as theirs.
+    # A picture removal is not: it issues a notice and climbs a ladder of
+    # upload blocks, and no administrator is the target of either (#1239) -
+    # refused for the target's role, not for being their own report.
     removal = await admin_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
-    assert removal.status_code != 403, removal.text
+    assert removal.status_code == 403, removal.text
+    assert removal.json()["detail"] == "An administrator's picture cannot be removed."
+
+
+# --- role boundaries on picture removal and ban revocation (#1239) ---------------
+
+
+async def _report(reporter_http, target_id: str, reason: str = "inappropriate_avatar") -> str:
+    response = await reporter_http.post(
+        "/api/reports",
+        json={"reportedUserId": target_id, "reason": reason, "details": "Please look."},
+    )
+    assert response.status_code == 201, response.text
+    return response.json()["id"]
+
+
+async def _with_picture(factory, user_id: str) -> None:
+    from app.services.avatars import set_avatar
+    from tests.test_avatars import png_bytes
+
+    await set_avatar(factory, user_id=user_id, payload=png_bytes(seed=41))
+
+
+async def test_a_moderator_cannot_remove_an_administrators_or_a_peers_picture(env):
+    """Reproduced: through a self-filed report, a moderator took an
+    administrator to a 90-day upload block in four calls; a peer the same way."""
+    new_client, factory, _ = env
+    moderator_http, admin_http, peer_http, reporter_http = (new_client() for _ in range(4))
+    moderator = await register(moderator_http, "RoleMod")
+    admin = await register(admin_http, "RoleAdmin")
+    peer = await register(peer_http, "RolePeer")
+    await register(reporter_http, "RoleReporter")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+    await set_role(factory, peer["id"], UserRole.MODERATOR)
+    for target in (admin, peer):
+        await _with_picture(factory, target["id"])
+        report_id = await _report(reporter_http, target["id"])
+        refused = await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+        assert refused.status_code == 403, refused.text
+    async with factory() as session:
+        assert (await session.get(User, UUID(admin["id"]))).avatar_key is not None
+        assert (await session.get(User, UUID(peer["id"]))).avatar_key is not None
+
+
+async def test_a_picture_is_removed_only_through_a_pending_report_about_one(env):
+    new_client, factory, _ = env
+    moderator_http, target_http, reporter_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, "PendMod")
+    target = await register(target_http, "PendTarget")
+    await register(reporter_http, "PendReporter")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await _with_picture(factory, target["id"])
+
+    spam = await _report(reporter_http, target["id"], reason="spam")
+    assert (await moderator_http.post(f"/api/moderation/reports/{spam}/remove-avatar")).status_code == 409
+    await moderator_http.patch(
+        f"/api/moderation/reports/{spam}", json={"status": "dismissed", "note": "Not spam."}
+    )
+
+    picture = await _report(reporter_http, target["id"])
+    await moderator_http.patch(
+        f"/api/moderation/reports/{picture}", json={"status": "dismissed", "note": "Fine."}
+    )
+    decided = await moderator_http.post(f"/api/moderation/reports/{picture}/remove-avatar")
+    assert decided.status_code == 409
+
+
+async def test_pressing_remove_again_on_one_report_does_not_climb_the_ladder(env):
+    new_client, factory, _ = env
+    moderator_http, target_http, reporter_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, "LadderMod")
+    target = await register(target_http, "LadderTarget")
+    await register(reporter_http, "LadderReporter")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await _with_picture(factory, target["id"])
+    report_id = await _report(reporter_http, target["id"])
+
+    first = await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+    again = await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+
+    assert first.status_code == 200 and first.json()["removed"] is True
+    assert again.status_code == 409
+    async with factory() as session:
+        removals = (
+            await session.scalars(
+                select(AuditEvent).where(
+                    AuditEvent.event_type == "avatar.removed",
+                    AuditEvent.target_user_id == UUID(target["id"]),
+                )
+            )
+        ).all()
+    assert len(removals) == 1
+
+
+async def test_a_report_decided_while_the_removal_waited_removes_nothing(env, monkeypatch):
+    """#1294 review: the route checked the report was pending, and the removal
+    then locked it without asking again - so a dismissal landing in between
+    let a picture come down, and its notice and upload block go out, through
+    a report another moderator had already closed."""
+    from sqlalchemy import update
+
+    from datetime import datetime, timezone
+
+    from app.api import moderation as moderation_api
+    from app.db.models import PlayerReport, generate_uuid
+
+    new_client, factory, _ = env
+    moderator_http, target_http, reporter_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, "LateMod")
+    target = await register(target_http, "LateTarget")
+    await register(reporter_http, "LateReporter")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await _with_picture(factory, target["id"])
+    report_id = await _report(reporter_http, target["id"])
+    original = moderation_api.remove_avatar
+
+    async def dismissed_meanwhile(*args, **kwargs):
+        async with factory() as session, session.begin():
+            await session.execute(
+                update(PlayerReport)
+                .where(PlayerReport.id == UUID(report_id))
+                .values(
+                    status=ReportStatus.DISMISSED.value,
+                    reviewed_at=datetime.now(timezone.utc),
+                    decision_group_id=generate_uuid(),
+                )
+            )
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(moderation_api, "remove_avatar", dismissed_meanwhile)
+
+    late = await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+
+    assert late.status_code == 409, late.text
+    async with factory() as session:
+        assert (await session.get(User, UUID(target["id"]))).avatar_key is not None
+        assert await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "avatar.removed")
+        ) is None
+
+
+async def test_a_removal_that_took_nothing_down_is_no_rung_on_the_ladder(env):
+    from app.services.avatars import remove_avatar
+
+    new_client, factory, _ = env
+    target_http = new_client()
+    target = await register(target_http, "EmptyTarget")
+    for _ in range(3):  # nothing to take down, three times
+        outcome = await remove_avatar(factory, user_id=target["id"], actor_id=None, by_moderator=True)
+        assert outcome.had_one is False
+    await _with_picture(factory, target["id"])
+    outcome = await remove_avatar(factory, user_id=target["id"], actor_id=None, by_moderator=True)
+    assert outcome.had_one is True
+    assert outcome.blocked_until is None, "the first real removal costs no wait"
+
+
+async def test_a_moderator_cannot_lift_an_administrators_suspension(env):
+    new_client, factory, _ = env
+    moderator_http, admin_http, target_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, "LiftMod")
+    admin = await register(admin_http, "LiftAdmin")
+    target = await register(target_http, "LiftTarget")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+    ban = (await admin_http.post(
+        "/api/moderation/bans", json={"userId": target["id"], "reason": "Admin's call"}
+    )).json()
+
+    refused = await moderator_http.post(f"/api/moderation/bans/{ban['id']}/revoke", json={"reason": "No"})
+    lifted = await admin_http.post(f"/api/moderation/bans/{ban['id']}/revoke", json={"reason": "Yes"})
+
+    assert refused.status_code == 403
+    assert lifted.status_code == 200
+
+
+@pytest.mark.parametrize("demoted", ["issuer", "subject"])
+async def test_a_demotion_since_does_not_bring_a_suspension_within_a_moderators_reach(env, demoted):
+    """#1294 review: the boundary was read from the roles held today, so
+    demoting the administrator who placed a suspension - or the member of
+    staff under it - let a moderator lift it. It is kept with the suspension."""
+    new_client, factory, _ = env
+    moderator_http, admin_http, target_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, f"Dem{demoted[0]}Mod")
+    admin = await register(admin_http, f"Dem{demoted[0]}Admin")
+    target = await register(target_http, f"Dem{demoted[0]}Target")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, admin["id"], UserRole.ADMIN)
+    if demoted == "subject":
+        await set_role(factory, target["id"], UserRole.MODERATOR)
+    placed = await admin_http.post(
+        "/api/moderation/bans", json={"userId": target["id"], "reason": "Admin's call"}
+    )
+    assert placed.status_code == 201, placed.text
+    if demoted == "issuer":
+        await set_role(factory, admin["id"], UserRole.MODERATOR)
+    else:
+        await set_role(factory, target["id"], UserRole.USER)
+
+    refused = await moderator_http.post(
+        f"/api/moderation/bans/{placed.json()['id']}/revoke", json={"reason": "No"}
+    )
+
+    assert refused.status_code == 403, refused.text
+
+
+async def test_a_moderator_lifts_a_moderators_suspension_of_a_player(env):
+    new_client, factory, _ = env
+    moderator_http, other_http, target_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, "LiftModA")
+    other = await register(other_http, "LiftModB")
+    target = await register(target_http, "LiftPlayer")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await set_role(factory, other["id"], UserRole.MODERATOR)
+    ban = (await other_http.post(
+        "/api/moderation/bans", json={"userId": target["id"], "reason": "Spam"}
+    )).json()
+    lifted = await moderator_http.post(f"/api/moderation/bans/{ban['id']}/revoke", json={"reason": "Appeal"})
+    assert lifted.status_code == 200

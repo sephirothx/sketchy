@@ -1731,6 +1731,14 @@ class UserBan(Base):
         nullable=True,
     )
     revoke_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Whether only an administrator may lift it, decided when it was placed:
+    # an administrator placed it, or its subject was staff (R-BAN-01, #1239).
+    # Recorded rather than read from today's roles, which a demotion changes
+    # - demote the administrator who placed it, or the staff member under it,
+    # and a moderator could lift what was out of their reach (#1294 review).
+    lift_requires_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
 
 
 class UserWarning(Base):

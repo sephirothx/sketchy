@@ -349,6 +349,7 @@ async def test_a_blocked_upload_says_when(env):
     new_client, factory = env
     http = new_client()
     account = await register(http, "Waiting")
+    assert await set_avatar(factory, user_id=account["id"], payload=png_bytes(seed=1))
     await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
     assert await set_avatar(factory, user_id=account["id"], payload=png_bytes())
     await remove_avatar(factory, user_id=account["id"], actor_id=None, by_moderator=True)
