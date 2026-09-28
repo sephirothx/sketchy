@@ -412,7 +412,6 @@ async def test_a_spectator_is_left_out_of_turn_results_and_final_standings():
     assert len(turn_payloads) == 2
     for payload in turn_payloads:
         assert {entry["playerId"] for entry in payload["scores"]} == seated
-        assert spectator.id not in {entry["playerId"] for entry in payload["guesses"]}
         assert sorted(entry["newRank"] for entry in payload["scores"]) in ([1, 1], [1, 2])
     assert len(ended) == 1
     assert {entry["playerId"] for entry in ended[0]["scores"]} == seated

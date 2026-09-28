@@ -1474,3 +1474,42 @@ async def test_the_standings_are_ordered_by_the_score_each_entry_carries():
         (drawer.nickname, 300),
         (third.nickname, 0),
     ]
+
+
+async def test_an_account_back_as_a_spectator_keeps_its_points_on_the_final_screen():
+    """Leaving the standings to seated players (#1262) must not drop an
+    account that played, left and came back to watch: the record holds its
+    points (R-HIST-12), so the podium the room is shown holds them too, and
+    the two name the same winner. A spectator who never played stays off."""
+    room_manager, room, players = build_room(
+        rounds=1, accounts={"Ann": "user-ann", "Bob": "user-bob", "Cat": "user-cat"}
+    )
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+    await flow._start_fresh_game(room, room.player_list())
+    game = room.game
+    drawer, guesser = _first_turn(players, game)
+    third = next(p for p in players.values() if p is not drawer and p is not guesser)
+    guesser.score = 400
+    room_manager.remove_player(room, guesser.id)
+    await flow._remove_player_from_game(room, guesser.id)
+    back = room_manager.add_player(
+        room, guesser.nickname, is_spectator=True, user_id=guesser.user_id
+    )
+    back.sid = "sid-back"
+    watcher = room_manager.add_player(room, "Watchy", is_spectator=True, user_id="user-watchy")
+    watcher.sid = "sid-watchy"
+    drawer.score = 300
+
+    await _play_out(ctx, room)
+
+    shown = [(entry["nickname"], entry["score"]) for entry in room.last_game_scores]
+    assert shown == [(guesser.nickname, 400), (drawer.nickname, 300), (third.nickname, 0)]
+    await replay_staged(ctx)
+    [saved] = history.saved
+    recorded = sorted(
+        ((p.display_name, p.final_score) for p in saved.participants),
+        key=lambda row: -row[1],
+    )
+    assert recorded[0] == (guesser.nickname, 400)

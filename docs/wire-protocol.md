@@ -1329,7 +1329,9 @@ guesser's own language's word. `turn_ended` also carries `turnId`, `reactions[]`
 `score`, `delta`, `previousRank`, and `newRank` so the client can animate the standings
 without recomputing ranks. Spectators are in neither list, nor in `game_ended.scores`: they
 never score (R-SPEC-02), and ranked with the players they read "You finished 4th with 0
-points" while the history record, which never held them, disagreed (#1262). Ranks use standard competition ranking (1, 2, 2, 4) via
+points" while the history record, which never held them, disagreed (#1262). The exception
+is `game_ended.scores` keeping an account that played, left and came back to watch: its
+earlier seat's points are carried to it there, as in the record (R-HIST-12). Ranks use standard competition ranking (1, 2, 2, 4) via
 `competition_ranks()` ([`backend/app/game.py:52`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 
