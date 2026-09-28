@@ -29,6 +29,7 @@ transport's POST, which decodes a whole payload of packets at a time.
 from __future__ import annotations
 
 import asyncio
+import binascii
 import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
@@ -46,27 +47,40 @@ logger = logging.getLogger("sketchy.socket_transport")
 #: dropping the TCP connection first.
 ABORT_EXTENSION = "sketchy.transport.abort"
 
-#: Engine.IO control packets a client sends: CLOSE, PING (`2probe` while
-#: upgrading), PONG, UPGRADE and NOOP. OPEN is the server's.
-CONTROL_TYPES = frozenset("12356")
-#: Longest control packet a client sends (`2probe`, `3probe`). Past this a
-#: control packet is data Engine.IO would hand to `json.loads`.
-MAX_CONTROL_PACKET = 8
-#: A polling POST carries this many packets at most; Engine.IO refuses more.
-MAX_PAYLOAD_PACKETS = 16
+#: The Engine.IO control packets a client sends, exactly, by transport: CLOSE
+#: and PONG on either; the upgrade's probe PING and UPGRADE on a WebSocket
+#: only. Anything else is refused by the library - on polling by disconnecting
+#: the socket and waiting for its queue to drain, which a client that never
+#: polls again never lets happen, so the POST hung for good (#1235 review).
+CONTROL_PACKETS = {
+    "websocket": frozenset({"1", "2probe", "3", "5"}),
+    "polling": frozenset({"1", "3"}),
+}
+#: Packets one polling POST may carry. The library allowed 16 and dropped the
+#: whole payload past it, but a client batches by bytes, not count - a polling
+#: drawer's queue behind one slow POST is two packets per frame - so the bound
+#: is wider here; the byte window and the packet rate bound the cost.
+MAX_PAYLOAD_PACKETS = 64
+#: How long a WebSocket upgrade may take to complete its probe. The client
+#: sends `2probe` as soon as the socket opens and `5` as soon as the answer
+#: arrives; the library waited for ever, so an unfinished upgrade held an
+#: accepted WebSocket that no ledger counted (#1235 review).
+UPGRADE_DEADLINE_SECONDS = 10.0
 #: The separator between packets in a polling payload.
 RECORD_SEPARATOR = "\x1e"
 
 Refusal = Callable[[str, str], Awaitable[None]]
 
 
-def engine_packet_problem(data: Any) -> str | None:
+def engine_packet_problem(data: Any, transport: str = "websocket") -> str | None:
     """Why a raw inbound Engine.IO packet must not be decoded, or None.
 
     A binary message is a binary MESSAGE and always decodes. A text one must be
-    a MESSAGE whose payload starts with a Socket.IO packet type (a digit), a
-    base64 binary MESSAGE (``b…``), or a short control packet - anything else
-    is either refused by the library with a traceback or handed to
+    a MESSAGE whose payload starts with a Socket.IO packet type (a digit), one
+    of the control packets its transport carries (`CONTROL_PACKETS`), or - on
+    polling only, where binary travels as text - a base64 binary MESSAGE
+    (``b…``), which the caller decodes and refuses if it does not. Anything
+    else is either refused by the library with a traceback or handed to
     ``json.loads``, and none of it is something a client of this protocol
     sends.
     """
@@ -78,10 +92,10 @@ def engine_packet_problem(data: Any) -> str | None:
     if kind == "4":
         return None if len(data) > 1 and data[1] in "0123456" else "malformed"
     if kind == "b":
-        return None
-    if kind in CONTROL_TYPES:
-        return None if len(data) <= MAX_CONTROL_PACKET else "malformed"
-    return "malformed"
+        # A WebSocket carries binary as binary frames; base64 text there is
+        # nothing a browser sends, and a bad one raised outside any `try`.
+        return None if transport == "polling" else "malformed"
+    return None if data in CONTROL_PACKETS.get(transport, ()) else "malformed"
 
 
 class GuardedWebSocket:
@@ -113,20 +127,42 @@ class GuardedWebSocket:
         self.asgi_send = environ["asgi.send"]
         extensions = environ.get("asgi.scope", {}).get("extensions") or {}
         self._abort = extensions.get(ABORT_EXTENSION)
+        # The socket's one WebSocket: `GuardedEngineSocket._upgrade_websocket`
+        # refuses a second while this one is here.
         self.socket.websocket = self
-        await self.asgi_send({"type": "websocket.accept"})
-        await self.handler(self)
+        try:
+            await self.asgi_send({"type": "websocket.accept"})
+            await self.handler(self)
+        finally:
+            if not self.socket.upgraded and self.socket.websocket is self:
+                # An upgrade that never completed: the socket goes on polling,
+                # and may try again.
+                self.socket.websocket = None
         return ""  # the response went out as the WebSocket itself
 
+    def _ended(self) -> bool:
+        """Terminated, or the socket it carries has closed: nothing more is
+        read. Reading on after a close re-created per-socket state that
+        nothing would forget again (#1235 review)."""
+        return self.terminated or self.socket.closed
+
     async def wait(self):
-        if self.terminated:
+        if self._ended():
             raise OSError("transport terminated")
         task = asyncio.current_task()
         self._receiver = task
         try:
             while True:
                 try:
-                    event = await self.asgi_receive()
+                    if self.socket.upgraded:
+                        event = await self.asgi_receive()
+                    else:
+                        # The probe and the UPGRADE: bounded, where the library
+                        # waited for ever on each.
+                        async with asyncio.timeout(UPGRADE_DEADLINE_SECONDS):
+                            event = await self.asgi_receive()
+                except TimeoutError:
+                    raise OSError("the upgrade was not completed in time") from None
                 except asyncio.CancelledError:
                     self._interruption(task)
                     raise
@@ -137,11 +173,13 @@ class GuardedWebSocket:
                     data = event.get("text")
                 if data is None:
                     raise OSError("empty message")
-                problem = self.server.inbound_problem(self.socket.sid, data)
+                if self._ended():
+                    raise OSError("transport terminated")
+                problem = self.server.inbound_problem(self.socket.sid, data, "websocket")
                 if problem is None:
                     return data
                 await self.server.refuse(self.socket.sid, problem)
-                if self.terminated:
+                if self._ended():
                     raise OSError("transport terminated")
         finally:
             self._receiver = None
@@ -202,17 +240,41 @@ class GuardedWebSocket:
 
 
 class GuardedEngineSocket(AsyncSocket):
-    """An Engine.IO socket that can be ended, and whose POSTs are screened."""
+    """An Engine.IO socket that can be ended, whose POSTs are screened, and
+    which carries at most one WebSocket."""
 
     terminated = False
     websocket: GuardedWebSocket | None = None
+
+    async def _upgrade_websocket(self, environ):
+        """The library's upgrade, one at a time.
+
+        The library checked only that the socket had not already upgraded, so
+        one polling session - one ticket, one socket - could open any number
+        of WebSockets at once, each waiting for a probe for ever, and a
+        teardown could reach only the last (#1235 review).
+        """
+        if (
+            self.terminated
+            or self.closed
+            or self.upgrading
+            or self.upgraded
+            or self.websocket is not None
+        ):
+            return self.server._bad_request("Upgrade already in progress")
+        return await super()._upgrade_websocket(environ)
 
     async def handle_post_request(self, environ):
         """The library's POST, packet by packet, screened and stoppable.
 
         The library decodes a whole payload before handling any of it, so one
         bad packet was a traceback and none of the rest; and it went on
-        handling the rest after the socket had been ended.
+        handling the rest after the socket had been ended. And every refusal
+        it raised here - an unknown packet, a body too long - it answered by
+        disconnecting the socket and waiting for its queue to drain, which
+        hung the request for good when the client never polled again. Nothing
+        is raised from here: a refusal is counted, and one the library would
+        have disconnected for ends the socket outright.
         """
         try:
             length = int(environ.get("CONTENT_LENGTH", "0"))
@@ -220,7 +282,9 @@ class GuardedEngineSocket(AsyncSocket):
             await self.server.refuse(self.sid, "malformed")
             return
         if length > self.server.max_http_buffer_size:
-            raise exceptions.ContentTooLongError()
+            await self.server.refuse(self.sid, "bytes")
+            await self.server.terminate_socket(self)
+            return
         raw = await environ["wsgi.input"].read(length)
         try:
             body = raw.decode("utf-8")
@@ -236,11 +300,20 @@ class GuardedEngineSocket(AsyncSocket):
         for item in encoded:
             if self.terminated or self.closed:
                 return
-            problem = self.server.inbound_problem(self.sid, item)
+            problem = self.server.inbound_problem(self.sid, item, "polling")
             if problem is not None:
                 await self.server.refuse(self.sid, problem)
                 continue
-            await self.receive(eio_packet.Packet(encoded_packet=item))
+            try:
+                # Base64 binary is decoded here, and refused if it does not.
+                packet = eio_packet.Packet(encoded_packet=item)
+            except (ValueError, binascii.Error):
+                await self.server.refuse(self.sid, "malformed")
+                continue
+            try:
+                await self.receive(packet)
+            except exceptions.EngineIOError:
+                await self.server.refuse(self.sid, "malformed")
 
 
 class BoundedEngineServer(engineio.AsyncServer):
@@ -262,9 +335,9 @@ class BoundedEngineServer(engineio.AsyncServer):
         if self._refusal is not None:
             await self._refusal(sid, reason)
 
-    def inbound_problem(self, sid: str, data: Any) -> str | None:
+    def inbound_problem(self, sid: str, data: Any, transport: str = "websocket") -> str | None:
         """Why this raw message must not reach Engine.IO's decoder, or None."""
-        return engine_packet_problem(data)
+        return engine_packet_problem(data, transport)
 
     async def terminate(self, sid: str, *, reason: str | None = None) -> bool:
         """End the socket named `sid`, if it is still here."""

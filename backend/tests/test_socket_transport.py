@@ -27,31 +27,40 @@ TEARDOWN_DEADLINE = 1.0
 
 
 @pytest.mark.parametrize(
-    ("raw", "problem"),
+    ("raw", "transport", "problem"),
     [
-        ("42[\"send_chat\",{}]", None),
-        ("40", None),
-        ("40{\"protocol\":1}", None),
-        ("451-[\"draw\",{\"_placeholder\":true,\"num\":0}]", None),
-        ("2", None),
-        ("3", None),
-        ("2probe", None),
-        ("5", None),
-        ("1", None),
-        ("bAQID", None),
-        (b"\x00\x01", None),
-        ("", "malformed"),
-        ("4", "malformed"),
-        ("4[1,2]", "malformed"),
-        ("4" + "[" * 1000, "malformed"),
-        ("0", "malformed"),
-        ("9", "malformed"),
-        ("x", "malformed"),
-        ("3" + "[" * 100, "malformed"),
+        ("42[\"send_chat\",{}]", "websocket", None),
+        ("42[\"send_chat\",{}]", "polling", None),
+        ("40", "websocket", None),
+        ("40{\"protocol\":1}", "websocket", None),
+        ("451-[\"draw\",{\"_placeholder\":true,\"num\":0}]", "websocket", None),
+        ("3", "websocket", None),
+        ("3", "polling", None),
+        ("1", "polling", None),
+        ("2probe", "websocket", None),
+        ("5", "websocket", None),
+        ("bAQID", "polling", None),
+        (b"\x00\x01", "websocket", None),
+        ("", "websocket", "malformed"),
+        ("4", "websocket", "malformed"),
+        ("4[1,2]", "websocket", "malformed"),
+        ("4" + "[" * 1000, "websocket", "malformed"),
+        ("0", "websocket", "malformed"),
+        ("9", "websocket", "malformed"),
+        ("x", "websocket", "malformed"),
+        ("3" + "[" * 100, "websocket", "malformed"),
+        # What the library refused on polling by disconnecting and waiting
+        # on the queue - a POST that never returned (#1235 review).
+        ("2", "polling", "malformed"),
+        ("6", "polling", "malformed"),
+        ("2probe", "polling", "malformed"),
+        ("5", "polling", "malformed"),
+        # Base64 is polling's way of carrying binary; a WebSocket has frames.
+        ("bAQID", "websocket", "malformed"),
     ],
 )
-def test_an_engine_packet_is_judged_before_the_library_decodes_it(raw, problem):
-    assert engine_packet_problem(raw) == problem
+def test_an_engine_packet_is_judged_before_the_library_decodes_it(raw, transport, problem):
+    assert engine_packet_problem(raw, transport) == problem
 
 
 # --- a peer over ASGI -----------------------------------------------------------
@@ -261,10 +270,12 @@ async def test_a_polling_peer_sending_garbage_is_ended_and_its_poll_released(mon
     waiting = asyncio.create_task(http_request(sio, "GET", f"EIO=4&transport=polling&sid={sid}"))
     await asyncio.sleep(0.05)
 
-    # A full payload of packets the library could not decode, twice over.
-    for _ in range(2):
-        payload = "\x1e".join(["x"] * MAX_PAYLOAD_PACKETS).encode()
-        status, _ = await http_request(sio, "POST", f"EIO=4&transport=polling&sid={sid}", payload)
+    # A full payload of packets the library could not decode: more than the
+    # refusal limit, so the socket is ended partway through it.
+    assert MAX_PAYLOAD_PACKETS > MAX_REJECTIONS + 1
+    payload = "\x1e".join(["x"] * MAX_PAYLOAD_PACKETS).encode()
+    status, _ = await http_request(sio, "POST", f"EIO=4&transport=polling&sid={sid}", payload)
+    assert status == 200
     assert engine_socket.terminated
     assert rejected(store) == {"malformed": MAX_REJECTIONS + 1}, "nothing after the cut-off is read"
     status, _ = await asyncio.wait_for(waiting, TEARDOWN_DEADLINE)
@@ -339,3 +350,103 @@ def test_a_send_waiting_on_a_peer_that_is_gone_is_woken():
         await asyncio.wait_for(waiting, 0.5)
 
     asyncio.run(scenario())
+
+
+# --- review of #1235: upgrades, and POSTs the library refused by hanging ---------
+
+
+async def upgrade(sio, sid: str, peer: Peer) -> asyncio.Task:
+    peer.inbound.put_nowait({"type": "websocket.connect"})
+    scope = websocket_scope()
+    scope["query_string"] = f"EIO=4&transport=websocket&sid={sid}".encode()
+    return asyncio.create_task(sio.handle_request(scope, peer.receive, peer.send))
+
+
+async def test_one_polling_session_opens_one_websocket_at_a_time(monkeypatch):
+    """Each upgrade used to be accepted and to wait for its probe for ever:
+    one ticket, any number of WebSockets, a teardown reaching only one."""
+    sio, store = build_server(monkeypatch)
+    before = asyncio.all_tasks()
+    status, body = await http_request(sio, "GET", "EIO=4&transport=polling")
+    sid = json.loads(body.decode()[1:])["sid"]
+    first, second = Peer(), Peer()
+    first_task = await upgrade(sio, sid, first)
+    await asyncio.sleep(0.05)
+    second_task = await upgrade(sio, sid, second)
+    await finished(second_task)
+
+    assert [m["type"] for m in first.sent] == ["websocket.accept"]
+    assert [m["type"] for m in second.sent] == ["websocket.close"], "refused, never accepted"
+    await sio.eio.terminate(sid)
+    await finished(first_task)
+    assert await settled(sio, before) == set()
+
+
+async def test_an_upgrade_that_never_sends_its_probe_is_given_up(monkeypatch):
+    from app import socket_transport
+
+    monkeypatch.setattr(socket_transport, "UPGRADE_DEADLINE_SECONDS", 0.1)
+    sio, store = build_server(monkeypatch)
+    status, body = await http_request(sio, "GET", "EIO=4&transport=polling")
+    sid = json.loads(body.decode()[1:])["sid"]
+    silent = Peer()
+    task = await upgrade(sio, sid, silent)
+    await finished(task)
+    engine_socket = sio.eio.sockets[sid]
+    assert engine_socket.websocket is None and not engine_socket.upgraded, "still polling, free to try again"
+
+
+@pytest.mark.parametrize("body", [b"2", b"6", b"2\x1e6"])
+async def test_a_packet_the_library_disconnected_for_is_counted_and_the_post_returns(monkeypatch, body):
+    sio, store = build_server(monkeypatch)
+    status, reply = await http_request(sio, "GET", "EIO=4&transport=polling")
+    sid = json.loads(reply.decode()[1:])["sid"]
+    post = asyncio.create_task(http_request(sio, "POST", f"EIO=4&transport=polling&sid={sid}", body))
+    await finished(post)
+    assert post.result()[0] == 200
+    assert rejected(store) == {"malformed": body.count(b"\x1e") + 1}
+    assert sid in sio.eio.sockets, "a refusal, not a disconnect"
+
+
+async def test_a_post_past_the_packet_ceiling_ends_the_socket_and_returns(monkeypatch):
+    sio, store = build_server(monkeypatch)
+    status, reply = await http_request(sio, "GET", "EIO=4&transport=polling")
+    sid = json.loads(reply.decode()[1:])["sid"]
+    oversized = b"4" * (sio.eio.max_http_buffer_size + 1)
+    post = asyncio.create_task(http_request(sio, "POST", f"EIO=4&transport=polling&sid={sid}", oversized))
+    await finished(post)
+    assert rejected(store) == {"bytes": 1}
+    assert sid not in sio.eio.sockets
+
+
+async def test_base64_binary_is_decoded_before_it_is_trusted(monkeypatch, caplog):
+    sio, store = build_server(monkeypatch)
+    status, reply = await http_request(sio, "GET", "EIO=4&transport=polling")
+    sid = json.loads(reply.decode()[1:])["sid"]
+    await http_request(sio, "POST", f"EIO=4&transport=polling&sid={sid}", b"bA")
+    assert rejected(store) == {"malformed": 1}
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+async def test_base64_text_on_a_websocket_is_refused_not_a_crashed_handler(monkeypatch, caplog):
+    sio, store = build_server(monkeypatch)
+    peer = Peer()
+    handler = await open_websocket(sio, peer)
+    peer.say("bA")
+    await asyncio.sleep(0.05)
+    assert rejected(store) == {"malformed": 1}
+    assert not handler.done(), "one refusal; the socket carries on"
+    peer.inbound.put_nowait({"type": "websocket.disconnect", "code": 1000})
+    await finished(handler)
+    assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
+
+
+async def test_nothing_is_read_after_the_peer_says_close(monkeypatch):
+    sio, store = build_server(monkeypatch)
+    peer = Peer()
+    handler = await open_websocket(sio, peer)
+    peer.say("1")
+    for _ in range(5):
+        peer.say("x")
+    await finished(handler)
+    assert rejected(store) == {}, "a socket that closed has nothing more to say"
