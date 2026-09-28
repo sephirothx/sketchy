@@ -405,6 +405,14 @@ async def test_an_upgrade_that_never_sends_its_probe_is_given_up(monkeypatch):
     await finished(task)
     engine_socket = sio.eio.sockets[sid]
     assert engine_socket.websocket is None and not engine_socket.upgraded, "still polling, free to try again"
+    # And not still marked upgrading (#1288 review): the library clears that
+    # flag on every failed upgrade but this one, and while it stood a poll
+    # got nothing but NOOPs and a second upgrade was refused.
+    assert not engine_socket.upgrading
+    retry = await upgrade(sio, sid, Peer())
+    await asyncio.sleep(0.01)
+    assert engine_socket.websocket is not None, "a second attempt is accepted"
+    await finished(retry)
 
 
 @pytest.mark.parametrize("body", [b"2", b"6", b"2\x1e6"])

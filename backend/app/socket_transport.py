@@ -136,8 +136,12 @@ class GuardedWebSocket:
         finally:
             if not self.socket.upgraded and self.socket.websocket is self:
                 # An upgrade that never completed: the socket goes on polling,
-                # and may try again.
+                # and may try again. `upgrading` too: the library clears it on
+                # every failed upgrade but a probe that never arrived, and
+                # while it stood every poll was answered with a NOOP and every
+                # retry refused (#1288 review).
                 self.socket.websocket = None
+                self.socket.upgrading = False
         return ""  # the response went out as the WebSocket itself
 
     def _ended(self) -> bool:
