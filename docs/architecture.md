@@ -131,7 +131,15 @@ here, along with the room's own custom prompts; its **curated prompts do not**.
 A room holds only what its selected lists were pinned to - the revision IDs, how
 many prompts they hold, and a letter histogram for wheel pricing - and the
 prompts themselves stay in the database until a game starts and draws the
-bounded sample it can actually play (see `app/game.py` above). `to_state_payload()`
+bounded sample it can actually play (see `app/game.py` above). Pinning is checked at
+room creation, at every change of the selection and before every game: that no answer
+reaches two prompts under the room's fold, in a mixed room under every room language's.
+A revision never changes, so the verdict is remembered by the repository
+(`SqlAlchemyPromptListRepository._verdicts`, 512 selections, oldest out) under a
+fingerprint of what moderation has made of the revisions' members — one aggregate
+statement — and a miss is read a thousand rows per turn of the loop and folded on the
+drawings' encode threads rather than on the loop (#1237): twenty agnostic lists in a
+mixed room held the loop 3.3 s on every authorization. `to_state_payload()`
 ([`backend/app/rooms.py:768`](../backend/app/rooms.py)) and `to_public_summary()`
 ([`backend/app/rooms.py:714`](../backend/app/rooms.py)) are the two shapes the room is
 published in.
@@ -403,8 +411,9 @@ This is the table to consult before adding a feature: *where does this state liv
 | Phase/hint/restart/disconnect timers | `TimerManager` (memory) | No |
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
 | Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
-| Encoding a finished game | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `repositories/sqlalchemy.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
+| Encoding a finished game, and folding a prompt-list selection's answers cold (#1237) | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `repositories/sqlalchemy.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
+| Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by revision ids and fold, reused while the members' moderation fingerprint is unchanged (#1237) | No: re-derived from the revisions on a miss |
 | A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
