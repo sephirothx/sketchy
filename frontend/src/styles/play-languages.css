@@ -27,11 +27,20 @@
   gap: 8px;
 }
 
+/* One track, as wide as the widest chip where there is room and no wider
+   than the row where there is not. A plain auto track made the chip's whole
+   width the list's minimum, and every box above it fits its content, so at
+   320px - an iPhone SE or mini with Display Zoom - the stack started left of
+   the dialog's box, and no grip was under a finger: a press selected text
+   instead of lifting a chip (#1275). With a zero minimum the list gives way
+   and the chip's name is what shortens. */
 .play-language-extras-list {
   display: inline-grid;
   gap: 6px;
+  grid-template-columns: minmax(0, max-content);
   list-style: none;
   margin: 0;
+  max-width: 100%;
   padding: 0;
 }
 
@@ -81,6 +90,9 @@
   color: var(--muted);
   cursor: grab;
   display: inline-flex;
+  /* Its width whatever the name leaves: a chip squeezed on a narrow phone
+     shortened its grip with its name, and the chips' grips stopped lining up. */
+  flex: none;
   justify-content: center;
   touch-action: none;
   width: 28px;
@@ -150,6 +162,19 @@
 
 .play-language-extras .language-picker-trigger {
   min-width: 0;
+}
+
+/* A narrow phone's chip gives its name the space between the name and the
+   arrows: at 320px that is the difference between "Neder…" and "Ne…". The
+   buttons keep their size, as they are what a finger presses. */
+@media (max-width: 480px) {
+  .play-language-chip {
+    gap: 6px;
+  }
+
+  .play-language-chip-actions {
+    margin-left: 0;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

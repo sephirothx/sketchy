@@ -768,3 +768,109 @@ async def test_the_add_list_hangs_from_its_button_in_the_first_run_question():
         finally:
             await context.close()
             await browser.close()
+
+
+_NARROW_GEOMETRY = """async (card) => {
+    // Settled first: the dialog scales in, and a box read mid-way is scaled
+    // while its padding, read from the style, is not.
+    await Promise.all(
+        card.getAnimations({ subtree: true })
+            .filter((animation) => animation.effect?.getTiming().iterations !== Infinity)
+            .map((animation) => animation.finished.catch(() => {}))
+    );
+    // The box the chips are laid out in: the question's content, or the
+    // Settings group they sit in - each inside its padding.
+    const frame = card.querySelector('.play-language-chip').closest('.settings-group, .modal-content');
+    const style = getComputedStyle(frame);
+    const box = frame.getBoundingClientRect();
+    const inner = {
+        left: box.left + parseFloat(style.borderLeftWidth) + parseFloat(style.paddingLeft),
+        right: box.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight),
+    };
+    const outside = [];
+    const pieces = [...card.querySelectorAll('.play-language-chip, .play-language-suggestions > *')];
+    for (const piece of pieces) {
+        const r = piece.getBoundingClientRect();
+        if (r.left < inner.left - 0.5 || r.right > inner.right + 0.5) {
+            outside.push(`${piece.className} ${Math.round(r.left)}..${Math.round(r.right)}`);
+        }
+    }
+    const unreachable = [];
+    for (const grip of card.querySelectorAll('.play-language-chip-handle')) {
+        // On screen first: Settings' chips start below a 640px window.
+        grip.scrollIntoView({ block: 'center' });
+        const r = grip.getBoundingClientRect();
+        const hit = document.elementFromPoint(r.left + r.width / 2, r.top + r.height / 2);
+        if (hit?.closest('.play-language-chip-handle') !== grip) {
+            unreachable.push(grip.closest('.play-language-chip').dataset.language);
+        }
+    }
+    return {
+        inner: [Math.round(inner.left), Math.round(inner.right)],
+        chips: card.querySelectorAll('.play-language-chip').length,
+        suggestions: card.querySelectorAll('.play-language-suggestion').length,
+        outside,
+        unreachable,
+    };
+}"""
+
+
+async def _touch_drag(page: Page, grip, dy: float) -> None:
+    """A finger on the grip, carried down - pointer events from touch, which
+    a mouse drag in a mobile-emulated context does not stand in for."""
+    box = await grip.bounding_box()
+    x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
+    cdp = await page.context.new_cdp_session(page)
+    await cdp.send("Input.dispatchTouchEvent", {"type": "touchStart", "touchPoints": [{"x": x, "y": y}]})
+    for step in range(1, 13):
+        await cdp.send(
+            "Input.dispatchTouchEvent",
+            {"type": "touchMove", "touchPoints": [{"x": x, "y": y + dy * step / 12}]},
+        )
+        await page.wait_for_timeout(16)
+    await cdp.send("Input.dispatchTouchEvent", {"type": "touchEnd", "touchPoints": []})
+    await cdp.detach()
+
+
+async def test_the_ranked_chips_fit_a_320px_phone_and_drag_by_touch():
+    """#1275: at 320 CSS px - an iPhone SE or mini with Display Zoom - the
+    chips never shrank: a right-aligned inline grid of 288px chips started
+    left of the question's box, no grip was under a finger, so a press
+    selected text instead of lifting, and the browser's suggestions ran out
+    the same way. Settings overflowed into its padding."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(
+            viewport={"width": 320, "height": 640}, is_mobile=True, has_touch=True, locale="de-DE"
+        )
+        await context.add_init_script(
+            "Object.defineProperty(navigator, 'languages', { get: () => ['de-DE', 'it-IT', 'fr-FR', 'en-GB'] });"
+            "localStorage.setItem('sketchy_locale', 'en');"
+            "localStorage.setItem('sketchy_promptlanguage', 'de');"
+            "localStorage.setItem('sketchy_extrapromptlanguages', JSON.stringify(['nl', 'pt', 'es']));"
+        )
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.fill(".first-run-guest-row input", f"Narrow{uuid4().hex[:6]}")
+            await page.click(".first-run-guest-submit")
+            question = page.locator(PLAY_LANGUAGES_QUESTION)
+            await question.locator(".play-language-chip").nth(2).wait_for()
+            geometry = await question.evaluate(_NARROW_GEOMETRY)
+            assert geometry["chips"] == 3 and geometry["suggestions"] >= 1, geometry
+            assert geometry["outside"] == [] and geometry["unreachable"] == [], geometry
+
+            # Nederlands, first, carried by a finger below português.
+            await _touch_drag(page, question.locator(".play-language-chip-handle").nth(0), 60)
+            assert await _extras(page) == ["pt", "nl", "es"]
+            await question.get_by_role("button", name="Done").click()
+            await question.wait_for(state="detached")
+
+            dialog = await _open_appearance(page)
+            await dialog.locator(".play-language-chip").nth(2).wait_for()
+            geometry = await dialog.evaluate(_NARROW_GEOMETRY)
+            assert geometry["chips"] == 3, geometry
+            assert geometry["outside"] == [] and geometry["unreachable"] == [], geometry
+        finally:
+            await context.close()
+            await browser.close()
