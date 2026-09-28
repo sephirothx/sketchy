@@ -66,6 +66,22 @@ TURNED_AWAY_REASONS = {
 }
 
 
+async def _reap_account_ghosts(ctx: HandlerContext, user_id: str | None) -> int:
+    """End this account's sockets whose pings went unanswered, so a player
+    whose network blipped is not told they have too many tabs by the tabs
+    that died (#1232 review)."""
+    engine = ctx.sio.eio
+    reap = getattr(engine, "reap_ghosts", None)
+    if reap is None or not user_id:
+        return 0
+    engine_sids = [
+        eio_sid
+        for sid in ctx.room_capacity.account_sids(user_id)
+        if (eio_sid := _engine_sid(ctx, sid)) is not None
+    ]
+    return await reap(engine_sids)
+
+
 async def _turn_away(ctx: HandlerContext, sid, *, limit: str) -> None:
     """Tell a socket it is past a ceiling, then close it once the notice lands."""
     await ctx.sio.emit(
@@ -147,7 +163,10 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
         # One account's tabs, not one account's thousand sockets (#1232):
         # counted per account because an account can arrive from any number
         # of addresses, which the handshake's per-address ceiling cannot see.
-        if not ctx.room_capacity.admit_account_socket(sid, user_id):
+        if not ctx.room_capacity.admit_account_socket(sid, user_id) and not (
+            await _reap_account_ghosts(ctx, user_id)
+            and ctx.room_capacity.admit_account_socket(sid, user_id)
+        ):
             logger.warning(
                 "refusing socket %s: account already holds %d",
                 sid, ctx.room_capacity.account_sockets(user_id),

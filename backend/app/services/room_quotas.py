@@ -116,6 +116,7 @@ class TransportLedger:
         self._bound: dict[str, TransportTicket] = {}
         self._pending: set[TransportTicket] = set()
         self._by_address: Counter[str] = Counter()
+        self._sids_by_address: dict[str, set[str]] = {}
 
     @property
     def open(self) -> int:
@@ -149,11 +150,17 @@ class TransportLedger:
         self._pending.discard(ticket)
         ticket.sid = sid
         self._bound[sid] = ticket
+        self._sids_by_address.setdefault(ticket.address, set()).add(sid)
 
     def release(self, ticket: TransportTicket) -> None:
         """Give the ticket back. Once: a second call finds nothing to return."""
         if ticket.sid is not None and self._bound.get(ticket.sid) is ticket:
             del self._bound[ticket.sid]
+            sids = self._sids_by_address.get(ticket.address)
+            if sids is not None:
+                sids.discard(ticket.sid)
+                if not sids:
+                    del self._sids_by_address[ticket.address]
         elif ticket in self._pending:
             self._pending.discard(ticket)
         else:
@@ -163,6 +170,10 @@ class TransportLedger:
             self._by_address[ticket.address] = remaining
         else:
             del self._by_address[ticket.address]
+
+    def sids_from(self, address: str) -> list[str]:
+        """The sockets this address holds now."""
+        return list(self._sids_by_address.get(address, ()))
 
     def release_sid(self, sid: str) -> None:
         ticket = self._bound.get(sid)
@@ -448,6 +459,10 @@ class RoomCapacityService:
 
     def account_sockets(self, user_id: str) -> int:
         return len(self._account_sockets.get(user_id, ()))
+
+    def account_sids(self, user_id: str) -> list[str]:
+        """The Socket.IO sockets this account holds now."""
+        return list(self._account_sockets.get(user_id, ()))
 
     def admits_a_spectator(self, room: Room) -> bool:
         watching = sum(1 for player in room.players.values() if player.is_spectator)

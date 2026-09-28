@@ -95,6 +95,13 @@ REFUSAL_LOG_SECONDS = 10.0
 #: How often a refusal may trigger a sweep of the ledger against the sockets
 #: that actually exist, which is a walk of all of them.
 RECONCILE_SECONDS = 1.0
+#: How long a ping may go unanswered before its transport counts as gone.
+#: A live client answers within a round trip; one whose network dropped never
+#: does, and Engine.IO takes up to 45 s to notice. Until then it held a place
+#: under its address's and its account's ceilings, so a school room of 24
+#: behind one address whose network blipped needed 48 places at once
+#: (#1232 review).
+GHOST_PING_SECONDS = 5.0
 #: What a refused handshake is told. The client cannot read a body here, but
 #: an operator reading a proxy log can.
 REFUSAL_STATUS = {
@@ -528,6 +535,8 @@ class BoundedEngineServer(engineio.AsyncServer):
             return await super()._handle_connect(environ, transport, jsonp_index)
         address = handshake_address(environ)
         ticket, refusal = ledger.admit(address)
+        if ticket is None and refusal == "address" and await self.reap_ghosts(ledger.sids_from(address)):
+            ticket, refusal = ledger.admit(address)
         if ticket is None and self._reconcile(ledger):
             ticket, refusal = ledger.admit(address)
         if ticket is None:
@@ -539,6 +548,34 @@ class BoundedEngineServer(engineio.AsyncServer):
             _ADMITTING.reset(token)
             if ticket.sid is None:
                 ledger.release(ticket)
+
+    @staticmethod
+    def is_ghost(socket: Any) -> bool:
+        """Whether a transport has left its ping unanswered for too long:
+        gone, in all but Engine.IO's having noticed."""
+        last_ping = getattr(socket, "last_ping", None)
+        return (
+            bool(last_ping)
+            and not getattr(socket, "closed", False)
+            and time.time() - last_ping > GHOST_PING_SECONDS
+        )
+
+    async def reap_ghosts(self, sids) -> int:
+        """End whichever of these transports are ghosts; how many were.
+
+        Asked only when a ceiling would otherwise refuse somebody, so a place
+        a dead connection holds goes to the live one asking for it rather
+        than waiting out Engine.IO's ping timeout.
+        """
+        reaped = 0
+        for sid in list(sids):
+            socket = self.sockets.get(sid)
+            if socket is not None and self.is_ghost(socket):
+                await self.terminate_socket(socket)
+                reaped += 1
+        if reaped:
+            logger.info("ended %d unanswered transports to make room", reaped)
+        return reaped
 
     def _reconcile(self, ledger) -> bool:
         """Return tickets a missed close stranded, at most once a second.

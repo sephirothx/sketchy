@@ -66,19 +66,28 @@ class IdleRoomReaper:
 
     async def flush(self) -> int:
         """Close every idle room; return how many were closed."""
-        now = self._clock()
         closed = 0
         for room in list(self._rooms.rooms.values()):
-            if not is_idle(room, now, self.idle_seconds):
+            if not is_idle(room, self._clock(), self.idle_seconds):
                 continue
-            # Re-read after every await: a seat evicted above can take the
-            # room with it, and one may have started a game meanwhile.
-            for player in list(room.player_list()):
-                if room.started_a_game or self._rooms.rooms.get(room.id) is not room:
-                    break
-                await self._context.evict_player(room, player.id, notice=EXPIRED_NOTICE)
-            if self._rooms.rooms.get(room.id) is room and not room.started_a_game:
-                await self._context.remove_room_if_empty(room.id)
+            # Under the room's lock, which a game start holds from its checks
+            # until `started_a_game` is set: a start pressed at the deadline
+            # draws its prompts across an await, and closing the room in that
+            # window would end a game somebody had just started (#1232
+            # review). Asked again once the lock is ours.
+            async with room.lock:
+                if self._rooms.rooms.get(room.id) is not room or not is_idle(
+                    room, self._clock(), self.idle_seconds
+                ):
+                    continue
+                # Re-read after every await: a seat evicted above can take
+                # the room with it.
+                for player in list(room.player_list()):
+                    if self._rooms.rooms.get(room.id) is not room:
+                        break
+                    await self._context.evict_player(room, player.id, notice=EXPIRED_NOTICE)
+                if self._rooms.rooms.get(room.id) is room:
+                    await self._context.remove_room_if_empty(room.id)
             closed += 1
             logger.info("closed room %s: no game in %.0f minutes", room.id, self.idle_seconds / 60)
         return closed
