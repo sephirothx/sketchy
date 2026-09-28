@@ -88,7 +88,14 @@ async def _emit_player_chat(
     retention_recipients = list(
         dict.fromkeys([*visible_to, *(additional_audience_sids or [])])
     )
-    if retention_recipients and ctx.message_retention is not None:
+    # Kept only when somebody other than its author received it (#1243): a
+    # report cites a line its reporter received, so a line that reached
+    # nobody else - alone in a room, or everyone else blocking the author -
+    # can never be evidence, and keeping it was storage anybody could fill.
+    if (
+        any(recipient != player.sid for recipient in retention_recipients)
+        and ctx.message_retention is not None
+    ):
         await ctx.message_retention.record(
             room=room,
             player=player,

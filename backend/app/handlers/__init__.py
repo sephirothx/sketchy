@@ -39,6 +39,7 @@ from app.services.presence import (
     PresenceIdentityCache,
     PresenceRegistry,
 )
+from app.services.player_reports import ReportBudget
 from app.services.room_codes import RoomCodeService
 from app.services.idle_rooms import IdleRoomReaper
 from app.services.room_quotas import RoomCapacityService, RoomQuotaService
@@ -84,6 +85,11 @@ def register_all_handlers(
         ),
         room_codes=(
             RoomCodeService(session_factory)
+            if session_factory is not None
+            else None
+        ),
+        report_budget=(
+            ReportBudget(session_factory)
             if session_factory is not None
             else None
         ),

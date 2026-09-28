@@ -24,8 +24,10 @@ from app.handlers.refusals import ErrorCode, refuse
 from app.live_drawing import frame_kind
 from app.protocol import PROTOCOL_VERSION, stale_client_bucket, SERVER_FULL_CLOSE_SECONDS
 from app.handlers.budgets import (
+    SHARED_CLASSES,
     SILENT_COMMANDS,
     UNRECORDED_COMMANDS,
+    Budget,
     CommandBudgetPolicy,
     CommandBudgets,
 )
@@ -45,6 +47,7 @@ if TYPE_CHECKING:
     from app.services.friends import FriendService
     from app.services.lobby_chat import LobbyChatLog
     from app.services.message_retention import MessageRetentionService
+    from app.services.player_reports import ReportBudget
     from app.services.friend_presence import FriendPresence
     from app.services.presence import (
         LobbyBroadcaster,
@@ -124,6 +127,10 @@ class HandlerContext:
     block_service: BlockService | None = None
     message_retention: MessageRetentionService | None = None
     room_codes: RoomCodeService | None = None
+    # The buckets a player report is charged to, the same rows the REST and
+    # Gallery doors charge (#1243). None without a database, where reporting
+    # is unavailable anyway.
+    report_budget: ReportBudget | None = None
     room_quotas: RoomQuotaService = field(init=False)
     room_capacity: RoomCapacityService = field(init=False)
     # Who is connected at all, as opposed to who is holding a seat. Built
@@ -292,7 +299,9 @@ class HandlerContext:
             key = f"{sid}:{self.command_budgets.class_of(command)}"
             # Sized before the budget check: a throttled payload arrived too.
             telemetry.socket_command_payload(command, payload_bytes(*args))
-            if self._command_windows.check(key, budget):
+            if self._command_windows.check(key, budget) and self._within_shared_windows(
+                sid, command, budget
+            ):
                 # Timed and counted here, at the one door every command
                 # uses, so a handler cannot be added without being measured.
                 # A refusal the handler chose (`ok: False`) is a different
@@ -349,6 +358,30 @@ class HandlerContext:
             }
 
         self.sio.on(command, handler=guarded)
+
+    def _within_shared_windows(self, sid: str, command: str, budget: Budget) -> bool:
+        """Whether this command fits the allowance its person shares (#1243).
+
+        Only for the kinds in `SHARED_CLASSES`; every other budget is a
+        socket's alone. The account is the one bound at the handshake, and a
+        socket without one - a visitor, who can neither chat nor sit - still
+        answers to its address.
+        """
+        kind = self.command_budgets.class_of(command)
+        share = SHARED_CLASSES.get(kind)
+        if share is None:
+            return True
+        windows = []
+        account = self.presence.user_for_sid(sid)
+        if account:
+            windows.append((f"account:{account}:{kind}", budget))
+        address = self.client_address(sid)
+        if address:
+            windows.append((
+                f"address:{address}:{kind}",
+                Budget(limit=budget.limit * share, window_seconds=budget.window_seconds),
+            ))
+        return self._command_windows.check_shared(windows)
 
     def close_after_handshake(self, sid: str) -> None:
         """Close a socket turned away for capacity, once its handshake is done.

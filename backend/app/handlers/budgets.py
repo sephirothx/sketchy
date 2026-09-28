@@ -38,9 +38,12 @@ foreclose the second half of that.
 from __future__ import annotations
 
 from collections import defaultdict, deque
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, replace
 import time
+
+# How many shared checks pass between sweeps of the windows no socket owns.
+SHARED_SWEEP_INTERVAL = 256
 
 
 @dataclass(frozen=True)
@@ -178,6 +181,24 @@ COMMAND_CLASSES: Mapping[str, str] = {
 }
 
 
+# The kinds whose allowance belongs to a person rather than to a socket
+# (#1243), and how many people's worth one address may spend. Every other
+# budget protects the worker from one connection, and a second connection
+# is a second thing to protect it from; these two bound what everybody else
+# receives, and one guest on nine sockets had nine times the lobby's
+# allowance - 54 lines in 0.01 s, the whole backlog every arriving player is
+# handed. So each is also held per account, at the same limit a socket has,
+# and per address at a multiple of it: a household or a classroom behind one
+# address is several people talking at once, and the multiple is what they
+# share. Conversation's is the larger because a room is where a whole
+# classroom guesses in the same few seconds, and a room line reaches its
+# room, not every lobby.
+SHARED_CLASSES: Mapping[str, int] = {
+    LOBBY_CHAT.name: 4,
+    CONVERSATION.name: 8,
+}
+
+
 # Fire-and-forget: nobody awaits an answer to a frame at twenty-five a second,
 # and an error surfacing mid-stroke is worse than the frame it describes.
 # Everything else - including `undo_stroke`, which shares drawing's budget but
@@ -270,7 +291,8 @@ class CommandBudgetPolicy:
 
 
 class CommandBudgets:
-    """Sliding windows for one process's callers, keyed by socket and kind.
+    """Sliding windows for one process's callers, keyed by socket and kind -
+    and, for the `SHARED_CLASSES`, by account and address as well.
 
     By kind rather than by command, because the budget describes a kind of
     traffic: keyed per command, `guess` and `send_chat` would each get the
@@ -288,6 +310,9 @@ class CommandBudgets:
         self._clock = clock
         self._hits: dict[str, deque[float]] = defaultdict(deque)
         self._reported: dict[str, float] = {}
+        self._shared: dict[str, deque[float]] = defaultdict(deque)
+        self._shared_checks = 0
+        self._longest_shared = 0.0
 
     def check(self, key: str, budget: Budget) -> bool:
         """Record one command, returning False once its window is full."""
@@ -300,6 +325,38 @@ class CommandBudgets:
             return False
         hits.append(now)
         return True
+
+    def check_shared(self, keys: Sequence[tuple[str, Budget]]) -> bool:
+        """Record one command against every window named, or against none.
+
+        For the windows a person's sockets share (#1243): a line refused by
+        the address window must not also spend the account's, or a
+        neighbour's flood would silence somebody who has said nothing.
+        Keys outlive any one socket, so `forget` never reaches them; they
+        are swept here instead, once the longest window has passed them by.
+        """
+        now = self._clock()
+        self._shared_checks += 1
+        if self._shared_checks % SHARED_SWEEP_INTERVAL == 0:
+            self._sweep_shared(now)
+        windows = []
+        for key, budget in keys:
+            self._longest_shared = max(self._longest_shared, budget.window_seconds)
+            hits = self._shared[key]
+            cutoff = now - budget.window_seconds
+            while hits and hits[0] <= cutoff:
+                hits.popleft()
+            if len(hits) >= budget.limit:
+                return False
+            windows.append(hits)
+        for hits in windows:
+            hits.append(now)
+        return True
+
+    def _sweep_shared(self, now: float) -> None:
+        cutoff = now - self._longest_shared
+        for key in [key for key, hits in self._shared.items() if not hits or hits[-1] <= cutoff]:
+            del self._shared[key]
 
     def should_report(self, key: str, budget: Budget) -> bool:
         """Whether this refusal is the one worth recording.
@@ -332,6 +389,9 @@ class CommandBudgets:
 
     def tracked_keys(self) -> int:
         return len(self._hits)
+
+    def tracked_shared_keys(self) -> int:
+        return len(self._shared)
 
 
 def command_names(commands: Iterable[str]) -> set[str]:

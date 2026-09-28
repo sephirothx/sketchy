@@ -48,6 +48,7 @@ from app.services.player_reports import (
     open_report_id,
     record_player_report,
     CapturedDrawing,
+    ReportBudget,
 )
 from app.auth.sessions import revoke_all_sessions
 from app.auth.step_up import require_step_up
@@ -1229,9 +1230,8 @@ def create_moderation_router(
     flush_retained_messages: Callable[[], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
-    report_limiter = PersistentRateLimiter(
-        session_factory, scope="report-submit", limit=10, window_seconds=3600
-    )
+    # Shared with the socket door (#1243): per address and per account.
+    report_budget = ReportBudget(session_factory)
     content_report_limiter = PersistentRateLimiter(
         session_factory,
         scope="prompt-content-report-submit",
@@ -1395,7 +1395,7 @@ def create_moderation_router(
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-        if not await report_limiter.check(client_key(request)):
+        if not await report_budget.charge(address=client_key(request), account_id=reporter_id):
             raise Refusal(
                 429,
                 ErrorCode.TOO_MANY_REPORTS,
@@ -3294,7 +3294,7 @@ def create_moderation_router(
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-        if not await report_limiter.check(client_key(request)):
+        if not await report_budget.charge(address=client_key(request), account_id=reporter_id):
             raise Refusal(
                 429,
                 ErrorCode.TOO_MANY_REPORTS,
