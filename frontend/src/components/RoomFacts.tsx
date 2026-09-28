@@ -42,9 +42,18 @@ function cellPadding(dl: HTMLElement): number {
  * Label before value in the markup, as a definition list wants it; the cell
  * puts the value above the label on screen.
  */
-export function RoomFacts({ room, testId = "room-facts" }: { room: RoomFactsInput; testId?: string }) {
+export function RoomFacts({
+  room,
+  testId = "room-facts",
+  capacity = false,
+}: {
+  room: RoomFactsInput;
+  testId?: string;
+  /** The seats rather than who is in them: the waiting room's (roomFacts). */
+  capacity?: boolean;
+}) {
   const others = otherRoomRules(room);
-  const facts = roomFacts(room);
+  const facts = roomFacts(room, { capacity });
   const listRef = useRef<HTMLDListElement | null>(null);
   // What the widest word depends on: the words themselves (a language, a
   // changed rule). The width is the observer's.

@@ -89,8 +89,13 @@ export interface RoomFact {
 /** A room's six facts (#580), in the order every place that describes a room
     draws them: the waiting room and the invite page. Scoring, hints and
     prompts are marked when the host moved them off a new room's default, so
-    an unusual room reads as one before anybody joins it. */
-export function roomFacts(room: RoomFactsInput): RoomFact[] {
+    an unusual room reads as one before anybody joins it.
+
+    `capacity` is the waiting room's: inside the room its roster already says
+    who is here, beside its heading, and a tile saying "3 of 8" said it twice
+    (#1279). The tile says how many the room seats instead - the rule the host
+    set - and the six stay six, which is what the strip's columns divide. */
+export function roomFacts(room: RoomFactsInput, { capacity = false }: { capacity?: boolean } = {}): RoomFact[] {
   const slugs = room.promptListSlugs ?? [];
   const lists = slugs.length;
   // A room plays its language's Standard list unless the host chose otherwise:
@@ -108,12 +113,14 @@ export function roomFacts(room: RoomFactsInput): RoomFact[] {
         : null,
   ].filter(Boolean).join(" · ");
   return [
-    {
-      key: "players",
-      label: ui.roomPlayersPanel.players,
-      value: ui.waitingRoomPanel.rosterCount({ here: room.playerCount, capacity: room.maxPlayers }),
-      changed: false,
-    },
+    capacity
+      ? { key: "players", label: ui.roomSetupForm.maxPlayers, value: String(room.maxPlayers), changed: false }
+      : {
+          key: "players",
+          label: ui.roomPlayersPanel.players,
+          value: ui.waitingRoomPanel.rosterCount({ here: room.playerCount, capacity: room.maxPlayers }),
+          changed: false,
+        },
     { key: "rounds", label: ui.roomSetupForm.rounds, value: String(room.rounds), changed: false },
     { key: "drawing-time", label: ui.roomSetupForm.drawingTime, value: `${room.drawingSeconds}s`, changed: false },
     {

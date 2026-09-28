@@ -130,6 +130,11 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
             facts = player_page.get_by_test_id("waiting-facts")
             assert await facts.locator('[data-fact="rounds"] .room-fact-text').inner_text() == "2"
             assert await facts.locator('[data-fact="drawing-time"] .room-fact-text').inner_text() == "90s"
+            # What the room seats, not who is in it: the roster says that,
+            # beside its heading (#1279).
+            players = facts.locator('[data-fact="players"]')
+            assert await players.locator(".room-fact-label").text_content() == "Max players"
+            assert " of " not in await players.locator(".room-fact-text").inner_text()
             assert not await player_page.is_visible('.room-settings-editor')
             # A guest gets the facts, not a way in.
             assert await player_page.locator(".waiting-rules-edit").count() == 0

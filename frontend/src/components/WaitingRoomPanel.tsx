@@ -462,6 +462,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
         <h2 id="waiting-rules-title" className="visually-hidden">{ui.inviteEntryPage.roomRules}</h2>
         <RoomFacts
           testId="waiting-facts"
+          capacity
           room={{
             ...props,
             // Seats, not everybody here: a spectator does not take one.
