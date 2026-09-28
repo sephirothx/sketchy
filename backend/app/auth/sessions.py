@@ -432,6 +432,31 @@ async def resolve_session_status(
                 record, ip_hash=ip_hash, device_label=device_label
             )
             if anomaly is not None:
+                # The session row says every switch; the ledger says one per
+                # interval (#1242). A client alternating two browsers was an
+                # anomaly on every request - `/api/health` included - and
+                # each wrote a permanent row: 410-525 a second from one guest
+                # cookie. `anomaly_count` in the row lets the ledger say how
+                # many switches lie between two entries. The interval runs
+                # from the last row written, not the last switch, and is
+                # claimed in one conditional UPDATE, so ongoing switching
+                # keeps being recorded and two requests in flight cannot
+                # both write (#1299 review). Claimed before the row below is
+                # changed, so the claim is the only statement it waits on.
+                claimed = await database.execute(
+                    update(AuthSession)
+                    .where(
+                        AuthSession.id == record.id,
+                        or_(
+                            AuthSession.anomaly_audited_at.is_(None),
+                            AuthSession.anomaly_audited_at
+                            <= checked_at - LAST_USED_WRITE_INTERVAL,
+                        ),
+                    )
+                    .values(anomaly_audited_at=checked_at)
+                    .execution_options(synchronize_session=False)
+                )
+                audited = claimed.rowcount == 1
                 # Recorded immediately rather than on the throttled write
                 # below: the whole value of the signal is that it is there
                 # the first time the session is used from somewhere new.
@@ -445,17 +470,22 @@ async def resolve_session_status(
                 # A step-up is an assertion about the browser holding the
                 # session. A session that has moved has to make it again.
                 record.stepped_up_at = None
-                database.add(
-                    AuditEvent(
-                        id=generate_uuid(),
-                        event_type="session.anomaly",
-                        actor_user_id=None,
-                        target_user_id=record.user_id,
-                        target_type=AuditTargetType.USER.value,
-                        target_id=str(record.user_id),
-                        details={"reason": anomaly, "session_id": str(record.id)},
+                if audited:
+                    database.add(
+                        AuditEvent(
+                            id=generate_uuid(),
+                            event_type="session.anomaly",
+                            actor_user_id=None,
+                            target_user_id=record.user_id,
+                            target_type=AuditTargetType.USER.value,
+                            target_id=str(record.user_id),
+                            details={
+                                "reason": anomaly,
+                                "session_id": str(record.id),
+                                "anomaly_count": record.anomaly_count,
+                            },
+                        )
                     )
-                )
             elif checked_at - record.last_used_at >= LAST_USED_WRITE_INTERVAL:
                 record.last_used_at = checked_at
                 record.idle_expires_at = _idle_deadline(record, checked_at)
