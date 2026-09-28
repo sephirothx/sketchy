@@ -304,6 +304,23 @@
   position: relative;
 }
 
+/* Where the page scrolls, the list bounds itself (#1221). Only the pinned
+   lobby below sized the panel from the window; everywhere else - a visitor
+   with the name tag above the rooms, a window 721 to 900px wide or under
+   640px tall - the panel was as tall as its rooms, and thirty of them put the
+   chat four thousand pixels down. The chat's list bounds itself the same way.
+   Not on a phone, where the rooms are the page and one scroll is the answer
+   (see the pinned lobby's note). No `overscroll-behavior` here: on a page
+   that scrolls, reaching the end of the list hands the wheel back to it. */
+@media (min-width: 721px) {
+  .lobby-rooms-panel .room-list {
+    max-height: max(280px, 60dvh);
+    overflow-y: auto;
+    padding-inline: var(--ink-overhang) 4px;
+    margin-inline-start: calc(-1 * var(--ink-overhang));
+  }
+}
+
 .lobby-filter-bar {
   display: flex;
   align-items: center;
@@ -1224,7 +1241,8 @@ a.online-player-name:focus-visible {
      short window, and pinning the viewport around them left the rooms panel a
      heading and nothing else. It still *fills* the window, though - the panels
      take the height the block leaves rather than shrinking to their contents
-     and stranding the bottom third of the screen. */
+     and stranding the bottom third of the screen. What it must not do is grow
+     with the rooms: their list keeps its own bound here (#1221). */
   .lobby-page:has(> .first-run) {
     height: auto;
     min-height: calc(100dvh - var(--banner-height));
@@ -1311,8 +1329,19 @@ a.online-player-name:focus-visible {
     overscroll-behavior: contain;
   }
 
-  .lobby-chat-panel .chat-messages {
+  /* Pinned, the panel bounds its list, so the list's own bound comes off.
+     Not on the name tag's page, which scrolls: there the rooms and the chat
+     keep the bound they have on any page that scrolls, and hand the wheel
+     back to it at their end. Lifted there too, they grew with their contents,
+     and the rooms took the page with them (#1221). */
+  .lobby-page:not(:has(> .first-run)) .room-list,
+  .lobby-page:not(:has(> .first-run)) .chat-messages {
     max-height: none;
+  }
+
+  .lobby-page:has(> .first-run) .room-list,
+  .lobby-page:has(> .first-run) .chat-messages {
+    overscroll-behavior: auto;
   }
 
   /* The states that stand in for the list sit where the list would, rather
@@ -1380,6 +1409,19 @@ a.online-player-name:focus-visible {
     grid-template-rows: minmax(0, 2fr) minmax(0, 3fr);
     align-items: stretch;
     min-height: 0;
+  }
+
+  /* On the name tag's page the row is as tall as its contents, and the
+     people's column set it: a long list of who is online, or a chat of fifty
+     lines, grew the row and the rooms beside it. Sized by the row instead -
+     the rooms, or the window, whichever is taller - and scrolling inside it,
+     as it does pinned (#1221). With a floor, because the window can be the
+     shorter of the two by then: under the name tag in a 640px window, with
+     no rooms, the chat was a 22px strip. The floor is the side-by-side row's
+     260px for the chat, as its three fifths of the column. */
+  .lobby-page:has(> .first-run) > .lobby-social {
+    contain: size;
+    min-height: calc(260px * 5 / 3 + 16px);
   }
 
   .lobby-social > .lobby-online-panel {
