@@ -327,7 +327,8 @@ async def test_an_address_at_its_ceiling_gets_the_place_a_dead_connection_held(m
     sio, room_capacity, store = build_server(monkeypatch, SOCKET_PER_ADDRESS_LIMIT=2)
     _, live = await poll_handshake(sio, "192.0.2.70")
     _, dead = await poll_handshake(sio, "192.0.2.70")
-    sio.eio.sockets[dead].last_ping = time.time() - 10  # asked, never answered
+    # Asked, and never answered inside Engine.IO's own ping timeout.
+    sio.eio.sockets[dead].last_ping = time.time() - sio.eio.ping_timeout - 1
 
     status, fresh = await poll_handshake(sio, "192.0.2.70")
 
@@ -345,6 +346,21 @@ async def test_a_live_connection_is_never_taken_for_a_dead_one(monkeypatch):
     status, _ = await poll_handshake(sio, "192.0.2.71")
     assert status == 429
     assert live in sio.eio.sockets
+
+
+async def test_an_address_never_ends_somebody_elses_socket_whose_pong_is_only_late(monkeypatch):
+    """#1290 review: the address is everybody behind it, so a pong 10 s late -
+    a slow network, not a dead one - is somebody else's live game. Only past
+    Engine.IO's own ping timeout is it gone."""
+    import time
+
+    sio, room_capacity, store = build_server(monkeypatch, SOCKET_PER_ADDRESS_LIMIT=1)
+    sio.eio.ping_timeout = 20  # production's, not the fixture's
+    _, slow = await poll_handshake(sio, "192.0.2.72")
+    sio.eio.sockets[slow].last_ping = time.time() - 10
+    status, _ = await poll_handshake(sio, "192.0.2.72")
+    assert status == 429
+    assert slow in sio.eio.sockets
 
 
 async def test_an_account_at_its_ceiling_gets_the_place_a_dead_tab_held(monkeypatch):
