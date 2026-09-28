@@ -2503,7 +2503,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` (1) | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` (1) | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (5) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (12) | The export document, pinned by [`fixtures/account_data_export_v12_fields.json`](../fixtures/account_data_export_v12_fields.json) | The export's field surface changes |
+| Data export `schema_version` (13) | The export document, pinned by [`fixtures/account_data_export_v13_fields.json`](../fixtures/account_data_export_v13_fields.json) | The export's field surface changes |
 
 ### The contract as a document
 

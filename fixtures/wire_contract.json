@@ -2133,21 +2133,16 @@
    "messageEvidence",
    "messageKind",
    "nearMissKind",
-   "reviewedAt",
    "roundNumber",
    "sourceMessageId",
-   "turnId",
-   "updatedAt"
+   "turnId"
   ],
   "auth.account_data:_prompt_content_report_document": [
    "createdAt",
    "listName",
-   "moderationState",
    "promptListId",
    "promptVersionId",
-   "reviewedAt",
-   "targetType",
-   "updatedAt"
+   "targetType"
   ],
   "auth.account_data:_prompt_list_document": [
    "conceptId",

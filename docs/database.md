@@ -767,8 +767,14 @@ fields, linked guest identities, session metadata, game seats, drawn turns, corr
 guesses, prompt-list revision history, the lists it starred, unexpired authored retained
 messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
-message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v12_fields.json`](../fixtures/account_data_export_v12_fields.json).
+message body the requester did not explicitly receive and pin — nor what other people
+did to the requester (schema 13, #1238): a friend request of theirs that was declined
+is left out (the decliner's export keeps it), account events that name them only as
+the **target** are limited to the ones they are told about as they happen (warnings,
+bans and revocations, a moderator removing their picture, role changes, and `session.*`,
+`account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
+not in it, and a report they filed carries `decided` and no status or review time. The field surface is
+pinned by [`fixtures/account_data_export_v13_fields.json`](../fixtures/account_data_export_v13_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
