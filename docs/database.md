@@ -329,7 +329,8 @@ enrol from.
 `ip_hash` is the address the session was **issued** to and `last_ip_hash` the one it was
 last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limiter uses
 — raw addresses are never stored, so these answer "same network?" without knowing which
-network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
+network. The address hashed is R-RATE-02's key, so an IPv6 address counts as its /64 and a
+privacy address rotating inside it is not a different network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
 the one it was last seen from, or for staff from a different address. `device_label` is
 the browser the session was issued to; `last_device_label` the one it was last used from
 (NULL until the session is first seen from another browser), and the comparison is against it, so a label
