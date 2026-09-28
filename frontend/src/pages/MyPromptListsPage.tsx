@@ -25,9 +25,11 @@ import {
   duplicateName,
   emailPublishBlocker,
   mergePromptEntries,
+  newListLanguage,
   promptEntriesFromQuickInput,
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
+import { useSettingsStore } from "../store/settingsStore";
 import { maskEmail } from "../lib/accountRecovery";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { useToast } from "../lib/toast";
@@ -43,13 +45,16 @@ import "../styles/lazy/prompt-lists.css";
 // Every room language, then none at all (#821): a list of names or brands is
 // played in whichever language the room declares.
 const LANGUAGES: PromptListLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt", "zxx"];
-const EMPTY_DRAFT: PromptListDraft = {
-  name: "",
-  description: "",
-  language: "en",
-  prompts: [],
-  tags: [],
-};
+/** A blank draft, in the player's default play language (#1272). */
+function emptyDraft(): PromptListDraft {
+  return {
+    name: "",
+    description: "",
+    language: newListLanguage(useSettingsStore.getState().promptLanguage),
+    prompts: [],
+    tags: [],
+  };
+}
 
 /** A tag's name in the reader's language. The server's `name` is English and
 kept for logs and API readers; the catalogue owns what a player reads
@@ -119,7 +124,7 @@ export function MyPromptListsPage() {
   const [moderationState, setModerationState] = useState<OwnedPromptList["moderationState"]>("active");
   const [promptModeration, setPromptModeration] = useState<Record<string, OwnedPromptList["moderationState"]>>({});
   const [draft, setDraft] = useState<PromptListDraft>(() => ({
-    ...EMPTY_DRAFT,
+    ...emptyDraft(),
     prompts: promptEntriesFromQuickInput(initialQuickPrompts),
   }));
   const [loading, setLoading] = useState(true);
@@ -206,7 +211,7 @@ export function MyPromptListsPage() {
     setCopiedFrom(null);
     setModerationState("active");
     setPromptModeration({});
-    setDraft({ ...EMPTY_DRAFT, prompts: [] });
+    setDraft(emptyDraft());
     setBulkInput("");
     setMergeSummary(null);
     clearMessages();

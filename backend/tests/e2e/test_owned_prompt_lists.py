@@ -129,3 +129,38 @@ async def test_a_list_in_any_language_is_offered_to_a_room_in_another_language()
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_a_new_list_opens_in_the_players_play_language():
+    """#1272: every new list opened on English, and a list's language is fixed
+    at its first save (R-LIST-05) - a German player's first list, saved without
+    a look at the picker, was English for good. Both ways in - the first list
+    and New list - open on the player's default play language."""
+    from uuid import uuid4
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        await context.add_init_script("localStorage.setItem('sketchy_promptlanguage', 'de')")
+        owner = await context.new_page()
+        try:
+            await owner.goto(BASE_URL)
+            await register_account(owner, f"Listy{uuid4().hex[:6]}")
+            await owner.goto(f"{BASE_URL}/my-prompt-lists")
+            picker = owner.locator(".prompt-list-language .language-picker-trigger")
+            await picker.wait_for()
+            assert "Deutsch" in await picker.inner_text()
+
+            await owner.get_by_label("Name").fill("Tiere")
+            await owner.get_by_label("Add prompts", exact=True).fill("Hund, Katze")
+            await owner.get_by_role("button", name="Add to list").click()
+            await owner.get_by_role("button", name="Save list").click()
+            await owner.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
+
+            await owner.get_by_role("button", name="New list").click()
+            await owner.get_by_label("Name").wait_for()
+            assert await owner.get_by_label("Name").input_value() == ""
+            assert "Deutsch" in await picker.inner_text()
+        finally:
+            await context.close()
+            await browser.close()
