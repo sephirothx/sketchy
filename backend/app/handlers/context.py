@@ -230,6 +230,12 @@ class HandlerContext:
             correlation.socket_sid.set(sid)
             correlation.socket_event.set(command)
             correlation.request_id.set(correlation.new_request_id())
+            if not args:
+                # A command with no payload at all is a command with a missing
+                # one: every handler judges `None` and answers
+                # `invalid_payload`, where calling it with nothing raised a
+                # TypeError for most of them and left an ack unanswered (#1235).
+                args = (None,)
             if len(args) > max_args:
                 telemetry.socket_event(command, "refused", None)
                 _note_door_refusal(command, ErrorCode.INVALID_PAYLOAD, "invalid", args)

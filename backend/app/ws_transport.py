@@ -53,6 +53,7 @@ from wsproto.events import AcceptConnection
 from wsproto.extensions import PerMessageDeflate
 
 from app.services.telemetry import telemetry
+from app.socket_transport import ABORT_EXTENSION
 
 logger = logging.getLogger("sketchy.transport")
 
@@ -159,11 +160,39 @@ class NegotiatingConnection(wsproto.WSConnection):
 
 
 class SketchyWebSocketProtocol(WSProtocol):
-    """uvicorn's wsproto protocol, with the connection above in place of its own."""
+    """uvicorn's wsproto protocol, with the connection above in place of its own,
+    and a way for the application to end the connection outright (#1235)."""
 
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.conn = NegotiatingConnection(connection_type=ConnectionType.SERVER)
+
+    def handle_connect(self, event) -> None:
+        super().handle_connect(event)
+        # Offered through the scope, the ASGI way to hand an application an
+        # extra: the task that will read it has been created, not yet run.
+        self.scope["extensions"][ABORT_EXTENSION] = self.abort_connection
+
+    def abort_connection(self) -> None:
+        """Drop the connection now: nothing more is read, nothing more framed.
+
+        A close handshake is a request the peer may ignore, and a peer
+        sending garbage, or one that stopped reading, does. `abort` discards
+        the write buffer and closes the socket without waiting on either, and
+        `close_sent` stops `handle_events` framing anything already read.
+        """
+        self.close_sent = True
+        if self.transport is not None:
+            self.transport.abort()
+        self.writable.set()
+
+    def connection_lost(self, exc) -> None:
+        super().connection_lost(exc)
+        # A send waiting for the peer to read (`writable`) is otherwise never
+        # woken once the peer is gone: stock uvicorn leaves it blocked, and
+        # with it Engine.IO's writer, its handler and everything it had
+        # queued (#1235).
+        self.writable.set()
 
 
 WS_PROTOCOL = f"{__name__}:{SketchyWebSocketProtocol.__name__}"

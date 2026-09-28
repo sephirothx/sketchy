@@ -1437,8 +1437,11 @@ beside the target in `requirements.md`. The signals it reads are the ones below.
 queue's oldest packet is ten seconds old or the queue holds 4 MiB
 ([`socket_server.py`](../backend/app/socket_server.py), #602): accounted at the one
 place every packet is queued, re-read every second by a sweeper task the server starts on
-the first packet it queues, and closed with an abort so a stalled writer is never waited
-on. The client's recovery path — reconnect, rebind inside the grace, full sync — is what
+the first packet it queues, and ended by the one teardown every refused socket gets
+([`socket_transport.py`](../backend/app/socket_transport.py), #1235): the connection is
+aborted, a writer blocked in its send is interrupted, the disconnect handlers run once
+and the queue is released — leaving the server's table alone had left the writer, its
+handler and the queue behind it alive for as long as the peer's TCP connection. The client's recovery path — reconnect, rebind inside the grace, full sync — is what
 makes closing safe: nothing partial is ever delivered. Wire §3 has the bounds and what
 lies below them.
 
@@ -1483,8 +1486,11 @@ once by event name into a payload-size histogram — all before compression, so 
 numbers overstate what the network carries and answer "which command is the chatty one"
 rather than a bandwidth bill. Every inbound packet is judged at
 [`backend/app/socket_server.py`](../backend/app/socket_server.py) before a byte of it
-is kept — the envelope, the attachment size, the assembly's age, the socket's packet
-rate — and a refusal is a counter by reason, never a reply (R-RATE-10). What each WebSocket negotiated is counted once at the
+is kept — whether it decodes, the envelope, the attachment size, the assembly's age, the
+socket's packet rate — and a refusal is a counter by reason, never a reply (R-RATE-10);
+a raw transport message is screened a layer lower, in
+[`backend/app/socket_transport.py`](../backend/app/socket_transport.py), before
+Engine.IO decodes it. What each WebSocket negotiated is counted once at the
 upgrade (`sketchy_socket_transport_total{compression}`,
 [`backend/app/ws_transport.py`](../backend/app/ws_transport.py)), so a deployment whose
 proxy strips permessage-deflate is visible as a label rather than as byte counters that
@@ -1915,6 +1921,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/rooms.py`](../backend/app/rooms.py) | In-memory Player/Room domain model and RoomManager. |
 | [`app/server.py`](../backend/app/server.py) | Production Uvicorn runner that drains before closing live WebSockets. |
 | [`app/socket_server.py`](../backend/app/socket_server.py) | The Socket.IO server with the inbound envelope checked before anything is kept. |
+| [`app/socket_transport.py`](../backend/app/socket_transport.py) | The Engine.IO layer under Socket.IO: what a transport may hand up, and how one is ended. |
 | [`app/services/__init__.py`](../backend/app/services/__init__.py) | Application services shared by Socket.IO handlers. |
 | [`app/services/data_export_worker.py`](../backend/app/services/data_export_worker.py) | Build account data exports one at a time from the durable job table. |
 | [`app/services/drawing_storage.py`](../backend/app/services/drawing_storage.py) | What the drawing store holds: that it is still readable, and how big it is. |

@@ -27,6 +27,11 @@ it, at `_handle_eio_message`, the one door every inbound packet uses:
 * **Is the assembly still live?** Text arriving mid-assembly is a protocol
   violation, and an assembly older than `ASSEMBLY_DEADLINE_SECONDS` is stale;
   both drop the half-built packet.
+* **Does it decode at all?** The packet is decoded here, once, and one that
+  does not - bad JSON, JSON nested past the decoder, a nameless command, a
+  type the server never takes - is refused as `malformed` instead of raising
+  inside the library (#1235). Engine.IO's own decoding is screened a layer
+  lower, in `socket_transport.py`, on the same ledger.
 * **Is the socket sending at a rate a client would?** A cheap per-socket
   packet count, checked before decoding, ahead of the per-command budgets
   that need the decoded event to know which class it is. Sized from the
@@ -36,12 +41,14 @@ A refused packet is dropped, not answered: an answer per malformed packet is
 the amplification a flood wants. It is counted once per reason
 (`sketchy_socket_packets_rejected_total{reason}`) and logged at most once per
 window per socket; a socket that keeps at it past `MAX_REJECTIONS` in a
-window is disconnected - it is not speaking this protocol.
+window is terminated - it is not speaking this protocol, and a CLOSE packet
+is a request it is free to ignore (`socket_transport.py`, #1235).
 
 Handler *arity* is the other half of "validated before a Python handler runs"
 and lives beside the budgets in `HandlerContext.on`: a command with more
 arguments than it takes is refused with `invalid_payload` rather than
-reaching a `TypeError` inside python-socketio.
+reaching a `TypeError` inside python-socketio, and one with none reaches its
+handler as a missing payload.
 
 Normal traffic pays nothing it did not already pay: one dictionary lookup and
 a counter per packet. See docs/wire-protocol.md §3.
@@ -61,6 +68,7 @@ from app.handlers.budgets import DRAWING
 from app.handlers.socket_wire import engineio_packet_size
 from app.live_drawing import MAX_FRAME_BYTES
 from app.services.telemetry import telemetry
+from app.socket_transport import BoundedEngineServer
 
 logger = logging.getLogger("sketchy.socket_server")
 
@@ -130,6 +138,7 @@ BACKLOG_SWEEP_SECONDS = 1.0
 
 REJECTION_REASONS = (
     "flood",
+    "malformed",
     "binary_ack",
     "binary_event",
     "attachment_count",
@@ -226,6 +235,10 @@ class BoundedSocketServer(socketio.AsyncServer):
         kwargs.setdefault("compression_threshold", ENGINEIO_COMPRESSION_THRESHOLD)
         kwargs.setdefault("allow_upgrades", ENGINEIO_ALLOW_UPGRADES)
         super().__init__(*args, **kwargs)
+        # Refusals the transport makes before a packet reaches this door -
+        # a message Engine.IO could not decode - count against the same
+        # per-socket limit as the ones made here.
+        self.eio.on_refusal(self._reject)
         self._clock = clock
         self._assembly_started: dict[str, float] = {}
         self._packets = _Window(PACKET_WINDOW_SECONDS, clock)
@@ -244,9 +257,16 @@ class BoundedSocketServer(socketio.AsyncServer):
 
         self.eio.send_packet = bounded_send_packet
 
+    def _engineio_server_class(self):
+        return BoundedEngineServer
+
     # --- the door ---------------------------------------------------------
 
     async def _handle_eio_message(self, eio_sid: str, data: Any) -> None:
+        engine_socket = self.eio.sockets.get(eio_sid)
+        if engine_socket is None or getattr(engine_socket, "terminated", False):
+            # Cut off, or already gone: nothing it still has in flight is read.
+            return
         assembling = eio_sid in self._binary_packet
         if not assembling and self._packets.hit(eio_sid) > MAX_PACKETS_PER_WINDOW:
             await self._reject(eio_sid, "flood")
@@ -269,22 +289,65 @@ class BoundedSocketServer(socketio.AsyncServer):
         if isinstance(data, (bytes, bytearray, memoryview)):
             await self._reject(eio_sid, "unexpected_binary")
             return
-        reason = self._envelope_problem(eio_sid, data)
+        # Decoded here, once, rather than by the library: a packet that does
+        # not decode - bad JSON, JSON nested past the decoder's depth, a
+        # bare `4`, an unknown type - used to raise inside python-socketio,
+        # costing a logged traceback each and counting as nothing (#1235).
+        try:
+            pkt = self.packet_class(encoded_packet=data)
+        except Exception:
+            binary = isinstance(data, str) and data[:1] in ("5", "6")
+            await self._reject(eio_sid, "envelope" if binary else "malformed")
+            return
+        reason = self._packet_problem(pkt)
         if reason is not None:
             await self._reject(eio_sid, reason)
             return
-        await super()._handle_eio_message(eio_sid, data)
+        await self._dispatch(eio_sid, pkt)
         if eio_sid in self._binary_packet:
             self._assembly_started[eio_sid] = self._clock()
 
-    def _envelope_problem(self, eio_sid: str, data: str) -> str | None:
-        """Why a text packet must not start an assembly, or None."""
-        if not isinstance(data, str) or not data or data[0] not in "56":
-            return None  # not a binary envelope; the library decodes it as usual
-        try:
-            pkt = self.packet_class(encoded_packet=data)
-        except ValueError:
-            return "envelope"
+    def _packet_problem(self, pkt: Any) -> str | None:
+        """Why a decoded text packet must not be dispatched, or None."""
+        kind = pkt.packet_type
+        if kind in (packet.BINARY_EVENT, packet.BINARY_ACK):
+            return self._envelope_problem(pkt)
+        if kind == packet.EVENT:
+            # A command is a name and its arguments. `42[]` has no name, and
+            # the library would index into it.
+            data = pkt.data
+            if not isinstance(data, list) or not data or not isinstance(data[0], str):
+                return "malformed"
+            return None
+        if kind == packet.CONNECT:
+            return None if pkt.data is None or isinstance(pkt.data, dict) else "malformed"
+        if kind == packet.ACK:
+            return None if isinstance(pkt.data, list) else "malformed"
+        if kind == packet.DISCONNECT:
+            return None
+        # CONNECT_ERROR is the server's to send; anything else is not a type.
+        return "malformed"
+
+    async def _dispatch(self, eio_sid: str, pkt: Any) -> None:
+        """The library's dispatch for one decoded packet, without decoding it
+        again (python-socketio 5.16.3, `AsyncServer._handle_eio_message`)."""
+        kind = pkt.packet_type
+        if kind == packet.CONNECT:
+            await self._handle_connect(eio_sid, pkt.namespace, pkt.data)
+        elif kind == packet.DISCONNECT:
+            await self._handle_disconnect(eio_sid, pkt.namespace, self.reason.CLIENT_DISCONNECT)
+        elif kind == packet.EVENT:
+            await self._handle_event(eio_sid, pkt.namespace, pkt.id, pkt.data)
+        elif kind == packet.ACK:
+            await self._handle_ack(eio_sid, pkt.namespace, pkt.id, pkt.data)
+        elif not self.manager.sid_from_eio_sid(eio_sid, pkt.namespace or "/"):
+            # A binary event on a namespace this socket never connected.
+            await self._reject(eio_sid, "envelope")
+        else:
+            self._binary_packet[eio_sid] = pkt
+
+    def _envelope_problem(self, pkt: Any) -> str | None:
+        """Why a decoded binary header must not start an assembly, or None."""
         if pkt.packet_type == packet.BINARY_ACK:
             return "binary_ack"
         if pkt.attachment_count != MAX_ATTACHMENTS:
@@ -319,17 +382,21 @@ class BoundedSocketServer(socketio.AsyncServer):
         self._assembly_started.pop(eio_sid, None)
 
     async def _reject(self, eio_sid: str, reason: str) -> None:
+        engine_socket = self.eio.sockets.get(eio_sid)
+        if engine_socket is not None and getattr(engine_socket, "terminated", False):
+            return  # already cut off; counted and logged once
         telemetry.note_socket_packet_rejected(reason)
         count = self._rejections.hit(eio_sid)
         if count == 1:
             logger.warning("refused inbound packet from %s: %s", eio_sid, reason)
         if count > MAX_REJECTIONS:
-            logger.warning("closing %s: %d malformed packets in %.0fs", eio_sid, count, PACKET_WINDOW_SECONDS)
+            logger.warning("closing %s: %d refused packets in %.0fs", eio_sid, count, PACKET_WINDOW_SECONDS)
             self._drop_assembly(eio_sid)
-            try:
-                await self.eio.disconnect(eio_sid)
-            except Exception:  # pragma: no cover - the socket may already be gone
-                logger.debug("could not close %s", eio_sid, exc_info=True)
+            # Terminated, not asked to close (#1235): `eio.disconnect` queues
+            # a CLOSE and waits for the peer to read it, which a peer sending
+            # garbage does not, and every packet it sent meanwhile was parsed.
+            if engine_socket is not None:
+                await self.eio.terminate_socket(engine_socket)
 
     # --- the outbound budget (#602) ---------------------------------------
 
@@ -393,23 +460,18 @@ class BoundedSocketServer(socketio.AsyncServer):
                 logger.exception("backlog sweep failed")
 
     async def _close_stalled(self, eio_sid: str, socket: Any) -> None:
-        """Close a socket whose writer may be stuck on the transport.
+        """End a socket whose writer may be stuck on the transport.
 
         Not `eio.disconnect`: that waits for the queue to drain, which is
-        exactly what a stalled writer never does. The close aborts - no
-        CLOSE packet, no join - fires the disconnect handlers so the seat
-        starts its grace, and the socket is dropped from the server's
-        table so the room's next fan-out simply finds nobody there. The
-        transport's own slack (64 KiB) lives on until TCP gives up on the
-        peer; the queue behind it does not.
+        exactly what a stalled writer never does. The engine's teardown
+        (#1235) aborts the connection, interrupts the writer blocked in its
+        send, fires the disconnect handlers so the seat starts its grace,
+        drops the queue and the socket, so the room's next fan-out finds
+        nobody there and nothing queued for the peer is kept behind it.
         """
         try:
-            await socket.close(wait=False, abort=True)
-        except Exception:  # pragma: no cover - the socket may already be gone
-            logger.debug("could not close stalled socket %s", eio_sid, exc_info=True)
+            await self.eio.terminate_socket(socket)
         finally:
-            if self.eio.sockets.get(eio_sid) is socket:
-                del self.eio.sockets[eio_sid]
             self._closing_backlogs.discard(eio_sid)
 
     # --- cleanup ----------------------------------------------------------
