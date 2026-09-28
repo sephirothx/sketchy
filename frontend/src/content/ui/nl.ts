@@ -2190,12 +2190,8 @@ export const NL: Catalogue = {
   },
 
   turnResultsOverlay: {
-    yourTurnWithHints: (p: { base: number; hintSpend: number; points: number; rank: number }) =>
-      `Jouw beurt: +${p.base} -${p.hintSpend} hints = ${counted(p.points, { one: "punt", other: "punten" })} · nu #${p.rank}`,
-    yourTurn: (p: { delta: number; rank: number }) =>
-      `Jouw beurt: ${p.delta >= 0 ? "+" : ""}${p.delta} ${
-        Math.abs(p.delta) === 1 ? "punt" : "punten"
-      } · nu #${p.rank}`,
+    thisTurnWithHints: (p: { base: number; hintSpend: number; points: number }) =>
+      `Deze beurt: +${p.base} − ${p.hintSpend} hints = ${counted(p.points, { one: "punt", other: "punten" })}`,
     promptWas: "Het woord was",
     noOneGuessedCorrectly: "Niemand heeft het geraden.",
     you: "(jij)",

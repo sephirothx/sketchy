@@ -2190,12 +2190,8 @@ export const DE: Catalogue = {
   },
 
   turnResultsOverlay: {
-    yourTurnWithHints: (p: { base: number; hintSpend: number; points: number; rank: number }) =>
-      `Dein Zug: +${p.base} -${p.hintSpend} Hinweise = ${counted(p.points, { one: "Punkt", other: "Punkte" })} · jetzt #${p.rank}`,
-    yourTurn: (p: { delta: number; rank: number }) =>
-      `Dein Zug: ${p.delta >= 0 ? "+" : ""}${p.delta} ${
-        Math.abs(p.delta) === 1 ? "Punkt" : "Punkte"
-      } · jetzt #${p.rank}`,
+    thisTurnWithHints: (p: { base: number; hintSpend: number; points: number }) =>
+      `Dieser Zug: +${p.base} − ${p.hintSpend} Hinweise = ${counted(p.points, { one: "Punkt", other: "Punkte" })}`,
     promptWas: "Der Begriff war",
     noOneGuessedCorrectly: "Niemand hat richtig geraten.",
     you: "(du)",

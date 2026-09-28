@@ -6,6 +6,7 @@ import {
   entranceDelays,
   hasPreviousOrder,
   rowStartOffsets,
+  shownStanding,
 } from "../lib/standings";
 import { formatGuessTime } from "../lib/guessTime";
 import { ui } from "../content/ui/index.ts";
@@ -19,7 +20,8 @@ interface TurnResultsOverlayProps {
   guesses?: TurnEndedPayload["guesses"];
   scores: TurnScoreEntry[];
   showScores?: boolean;
-  /** How my own turn score was arrived at, when I bought hints this turn. */
+  /** How my own turn score was arrived at, when I bought hints this turn:
+      the one thing about my turn that my row below does not already say. */
   myBreakdown?: GuessBreakdown | null;
   /** The results phase duration, driving the next-turn progress bar. */
   nextTurnSeconds?: number;
@@ -127,19 +129,18 @@ export function TurnResultsOverlay({
           {ui.turnResultsOverlay.promptWas} <strong>{prompt}</strong>
         </p>
         {reactions && <div className="turn-results-reactions">{reactions}</div>}
-        {showScores && mine && (
+        {/* Only when hints were bought, as how the row's points were
+            reached (#1278). It was said to every guesser as "Your turn: +N
+            points · now #k" - the row directly below, again, under a name
+            that means drawing everywhere else, and "+0 points · now #1" to
+            everyone after a turn nobody got. A spectator has no row. */}
+        {showScores && mine && myBreakdown && myBreakdown.hintSpend > 0 && (
           <p className="turn-results-personal">
-            {myBreakdown && myBreakdown.hintSpend > 0
-              ? ui.turnResultsOverlay.yourTurnWithHints({
-                  base: myBreakdown.basePoints,
-                  hintSpend: myBreakdown.hintSpend,
-                  points: myBreakdown.points,
-                  rank: mine.newRank,
-                })
-              : ui.turnResultsOverlay.yourTurn({
-                  delta: mine.delta,
-                  rank: mine.newRank,
-                })}
+            {ui.turnResultsOverlay.thisTurnWithHints({
+              base: myBreakdown.basePoints,
+              hintSpend: myBreakdown.hintSpend,
+              points: myBreakdown.points,
+            })}
           </p>
         )}
         {guesses.length === 0 && (
@@ -158,6 +159,10 @@ export function TurnResultsOverlay({
               const waiting = reordering
                 ? { transform: `translateY(${startOffset}px)`, opacity: 1 }
                 : { transform: `translateX(${-ENTRANCE_TRAVEL}px)`, opacity: 0 };
+              // Its old place and total while it waits there (#1278). What is
+              // read aloud is the result, once: the visible numbers change
+              // under a live region, and would be read again as they did.
+              const shown = shownStanding(entry, reordering && !settled);
               return (
                 <li
                   key={entry.playerId}
@@ -173,7 +178,8 @@ export function TurnResultsOverlay({
                       settled && !reordering ? `${delays[index]}ms` : "0ms",
                   }}
                 >
-                  <span className="turn-results-score-rank">#{entry.newRank}</span>
+                  <span className="turn-results-score-rank" aria-hidden="true">#{shown.rank}</span>
+                  <span className="visually-hidden">#{entry.newRank}</span>
                   <span className="turn-results-score-name">
                     <span
                       className={playerNameClass(entry.isAnonymous)}
@@ -208,7 +214,8 @@ export function TurnResultsOverlay({
                     )}
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
-                  <span className="turn-results-score-total">{entry.score}</span>
+                  <span className="turn-results-score-total" aria-hidden="true">{shown.total}</span>
+                  <span className="visually-hidden">{entry.score}</span>
                 </li>
               );
             })}

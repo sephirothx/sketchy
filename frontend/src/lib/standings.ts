@@ -90,6 +90,24 @@ export function hasPreviousOrder(
   return entries.some((entry) => entry.previousRank !== entries[0].previousRank);
 }
 
+/**
+ * The place and total a turn-results row shows: the ones it came in with
+ * while it waits at its old place, the new ones once it slides (#1278).
+ *
+ * A row that printed its new place from the start read "#1, #3, #2" for the
+ * two seconds before the rows moved, beside a players panel already in the
+ * new order. Rows being introduced (the first turn) have no old place to
+ * wait at, and show the new ones.
+ */
+export function shownStanding(
+  entry: { previousRank: number; newRank: number; score: number; delta: number },
+  waiting: boolean,
+): { rank: number; total: number } {
+  return waiting
+    ? { rank: entry.previousRank, total: entry.score - entry.delta }
+    : { rank: entry.newRank, total: entry.score };
+}
+
 /** Milliseconds between one row entering and the next. */
 export const ENTRANCE_STAGGER_MS = 110;
 
