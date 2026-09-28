@@ -2028,11 +2028,17 @@ ever missed, `--vv-height` goes stale tall and `dvh` is. The minimum means the
 guess field cannot be pushed off the bottom by either.
 
 `--banner-height` is the height of the one box every top-of-page banner stacks in
-([`AppBanners.tsx`](../frontend/src/components/AppBanners.tsx)), measured with a
-`ResizeObserver`; the shell starts below it and the pinned desktop lobby subtracts
-it too. Before it existed the banners were sticky boxes that nothing made room
-for, and the fixed shell's header went under them (#797). In a room the drain and
-connection notices are not banners at all but chips in that header
+([`AppBanners.tsx`](../frontend/src/components/AppBanners.tsx)); the shell starts
+below it and the pinned desktop lobby subtracts it too. Before it existed the banners
+were sticky boxes that nothing made room for, and the fixed shell's header went under
+them (#797). It is measured when the stack's DOM changes, from a `MutationObserver`,
+so a banner arriving is laid out in the same pass as the room made for it. Measured
+from a `ResizeObserver` instead, after that layout, it grew the pinned lobby's page past
+the window and shrank it back inside one frame, and the browser reported the second
+resize of `html` it could not deliver as a "ResizeObserver loop" error, which the client
+error tail carried into every bug report filed after a banner. The `ResizeObserver`
+stays for heights no DOM change explains — a wrap, a web font — and writes a frame later.
+In a room the drain and connection notices are not banners at all but chips in that header
 ([`RoomNoticeChips.tsx`](../frontend/src/components/RoomNoticeChips.tsx)); which
 notice goes where is one pure rule,
 [`lib/appNotices.ts`](../frontend/src/lib/appNotices.ts), over facts

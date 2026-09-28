@@ -38,15 +38,42 @@ export function AppBanners() {
     const stack = stackRef.current;
     if (!stack) return;
     const root = document.documentElement;
-    const publish = () => root.style.setProperty("--banner-height", `${stack.offsetHeight}px`);
+    let written = -1;
+    const publish = () => {
+      const height = stack.offsetHeight;
+      if (height === written) return;
+      written = height;
+      root.style.setProperty("--banner-height", `${height}px`);
+    };
     publish();
-    // A banner wrapping to a second line on rotation changes the height as
-    // surely as one appearing does, so it is the box that is watched, not the
-    // list of banners.
-    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(publish);
-    observer?.observe(stack);
+    // A banner coming or going is a change to the stack's DOM, and is measured
+    // as it happens - before the browser lays the page out for it. The screens
+    // that subtract this height are the whole page's height, so writing it
+    // only once the frame had been laid out with the banner in - from the
+    // stack's ResizeObserver, as this used to - grew the page past the window
+    // and shrank it back inside one frame, after `html`'s own observer
+    // (lib/scrollbarWidth.ts) had been told of the first change. A second
+    // resize the browser cannot deliver that frame is reported on `window` as
+    // a "ResizeObserver loop" error, and the client error log carried one into
+    // every bug report filed after a banner.
+    const changes = new MutationObserver(publish);
+    changes.observe(stack, { childList: true, subtree: true, characterData: true, attributes: true });
+    // What is not a change to the DOM - a banner wrapping to a second line on
+    // rotation, a web font arriving - shows only once it is laid out, and is
+    // written a frame later, for the same reason.
+    let frame = 0;
+    const resizes =
+      typeof ResizeObserver === "undefined"
+        ? null
+        : new ResizeObserver(() => {
+            cancelAnimationFrame(frame);
+            frame = requestAnimationFrame(publish);
+          });
+    resizes?.observe(stack);
     return () => {
-      observer?.disconnect();
+      changes.disconnect();
+      resizes?.disconnect();
+      cancelAnimationFrame(frame);
       root.style.setProperty("--banner-height", "0px");
     };
   }, []);
