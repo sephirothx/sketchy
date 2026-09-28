@@ -1869,7 +1869,6 @@ export const FR: Catalogue = {
     saveRoomRules: "enregistrer les règles du salon",
     saving: "Enregistrement…",
     saveRules: "Enregistrer les règles du salon",
-    saved: "Enregistré",
   },
 
   roomSetupForm: {

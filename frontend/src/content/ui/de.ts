@@ -1867,7 +1867,6 @@ export const DE: Catalogue = {
     saveRoomRules: "die Raumregeln speichern",
     saving: "Wird gespeichert …",
     saveRules: "Raumregeln speichern",
-    saved: "Gespeichert",
   },
 
   roomSetupForm: {

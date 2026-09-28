@@ -1867,7 +1867,6 @@ export const NL: Catalogue = {
     saveRoomRules: "de kamerregels opslaan",
     saving: "Opslaan…",
     saveRules: "Kamerregels opslaan",
-    saved: "Opgeslagen",
   },
 
   roomSetupForm: {

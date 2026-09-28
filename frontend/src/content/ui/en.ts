@@ -1882,7 +1882,6 @@ export const EN = {
     saveRoomRules: "save room rules",
     saving: "Saving…",
     saveRules: "Save room rules",
-    saved: "Saved",
   },
 
   roomSetupForm: {

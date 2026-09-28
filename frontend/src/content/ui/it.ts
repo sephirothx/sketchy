@@ -1868,7 +1868,6 @@ export const IT: Catalogue = {
     saveRoomRules: "salvare le regole della stanza",
     saving: "Salvataggio…",
     saveRules: "Salva regole della stanza",
-    saved: "Salvato",
   },
 
   roomSetupForm: {

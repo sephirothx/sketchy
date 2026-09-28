@@ -72,10 +72,11 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
                 '.room-settings-editor .form-section h2'
             ).all_inner_texts() == ["Basics", "Prompts", "Drawing", "Scoring and hints"]
 
-            # Nothing is sent until Save, so it starts with nothing to send.
+            # Nothing is sent until Save, so it starts with nothing to send -
+            # and says what it would do, not "Saved", which nothing was (#1279).
             save_button = host_page.locator('.room-settings-save')
             assert await save_button.is_disabled()
-            assert await save_button.inner_text() == "Saved"
+            assert await save_button.inner_text() == "Save room rules"
 
             last_setting = host_page.locator(
                 '.room-settings-editor label:has-text("Only use custom prompts")'
