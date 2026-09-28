@@ -14,6 +14,7 @@ so a question still waiting on it would show unstyled for that long.
 import asyncio
 import os
 import re
+from pathlib import Path
 from uuid import uuid4
 
 import pytest
@@ -83,15 +84,21 @@ async def test_the_languages_question_is_never_drawn_without_its_layout(engine):
             await browser.close()
 
 
+def _sheets_holding_the_question() -> list[str]:
+    """The built stylesheets carrying the question's rules, by file name.
+
+    Read before the browser starts, and synchronously: the build is on disk
+    beside the tests, and an async test may not block on the filesystem."""
+    assets = Path(__file__).resolve().parents[3] / "frontend" / "dist" / "assets"
+    return [path.name for path in assets.glob("*.css") if "play-languages-question-body" in path.read_text()]
+
+
 async def test_the_question_waits_for_a_shared_sheet_another_prefetch_is_still_loading():
     """Review of #1312: the question's sheet is shared with Settings, and when
     Settings' prefetch has already put its link in the page, Vite's preload
     helper sees the link and does not wait for it. The link is put there
     first here, and held back, as that prefetch on a slow network would."""
-    from pathlib import Path
-
-    assets = Path(__file__).resolve().parents[3] / "frontend" / "dist" / "assets"
-    shared = [path.name for path in assets.glob("*.css") if "play-languages-question-body" in path.read_text()]
+    shared = _sheets_holding_the_question()
     assert shared, "no built stylesheet holds the question's rules"
     async with async_playwright() as p:
         browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
