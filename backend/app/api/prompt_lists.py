@@ -93,6 +93,9 @@ star_limiter = RateLimiter(limit=60, window_seconds=60)
 DEFAULT_OWNED_LIST_SAVES_PER_HOUR = 60
 DEFAULT_OWNED_LIST_CREATES_PER_DAY = 20
 DEFAULT_OWNED_LIST_READS_PER_HOUR = 300
+# Withdrawals from the catalogue one account may make in an hour (#1241):
+# each that changes anything writes a permanent audit row.
+DEFAULT_UNPUBLISHES_PER_HOUR = 30
 
 
 def _limit(name: str, default: int) -> int:
@@ -201,6 +204,16 @@ def create_prompt_list_router(
             scope="owned_list_create",
             limit=_limit("PROMPT_LIST_CREATE_LIMIT", DEFAULT_OWNED_LIST_CREATES_PER_DAY),
             window_seconds=86400,
+        )
+        if session_factory is not None
+        else None
+    )
+    unpublish_limiter = (
+        PersistentRateLimiter(
+            session_factory,
+            scope="list_unpublish",
+            limit=_limit("PROMPT_LIST_UNPUBLISH_LIMIT", DEFAULT_UNPUBLISHES_PER_HOUR),
+            window_seconds=3600,
         )
         if session_factory is not None
         else None
@@ -619,6 +632,7 @@ def create_prompt_list_router(
         """Take it back out. The stars stay as rows (R-LIST-16); the list
         simply stops being reachable, and publishing again finds them."""
         user = await require_registered(request)
+        await spend(unpublish_limiter, user)
         try:
             updated = await prompt_list_repo.set_owned_publication(
                 user.id,

@@ -1543,6 +1543,7 @@ your players share one address:
 | `PROMPT_LIST_SAVE_LIMIT` | 60 per hour | Saves of one's own prompt lists, per account (#1236) |
 | `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
 | `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
+| `PROMPT_LIST_UNPUBLISH_LIMIT` | 30 per hour | Withdrawals of one's own lists from the catalogue, per account (#1241) |
 | `FRIEND_REQUEST_LIMIT` | 20 per hour | Friend requests, keyed by account. Every attempt spends one whatever became of it, so the limit cannot say whether a request landed (#1062) |
 
 In-room commands answer to their own per-caller budgets, which are **not** environment

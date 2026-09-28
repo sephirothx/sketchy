@@ -27,6 +27,7 @@ from app.auth.avatars import (
     AvatarError,
     avatar_url,
 )
+from app.auth.avatar_doodles import DOODLES, doodle_key
 from app.auth.rate_limit import PersistentRateLimiter
 from app.repositories.interfaces import UserRepository
 from app.services.avatars import (
@@ -40,6 +41,11 @@ from app.services.avatars import (
 # Base64 of the largest picture accepted, plus a little slack for padding.
 MAX_AVATAR_BASE64 = ((MAX_AVATAR_BYTES + 2) // 3) * 4 + 8
 AVATAR_UPLOAD_LIMIT = 10
+#: Doodle picks and picture removals one account may make in an hour (#1241).
+#: Each writes a permanent audit row and re-broadcasts every room the account
+#: sits in; 334 picks a second wrote 300 rows and 50 in 0.2 s were 50
+#: `room_state` pushes to everybody else at the table.
+AVATAR_CHANGE_LIMIT = 30
 
 
 class AvatarUploadBody(ControlFreeModel):
@@ -71,6 +77,20 @@ def create_avatar_router(
         limit=AVATAR_UPLOAD_LIMIT,
         window_seconds=3600,
     )
+    change_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="avatar_change",
+        limit=AVATAR_CHANGE_LIMIT,
+        window_seconds=3600,
+    )
+
+    async def spend_change(user) -> None:
+        if not await change_limiter.check(str(user.id)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_PICTURES,
+                "Too many picture changes. Please wait and try again.",
+            )
 
     async def require_registered(request: Request):
         user_id = getattr(request.state, "user_id", None)
@@ -133,9 +153,14 @@ def create_avatar_router(
 
     @router.put("/api/users/me/avatar/doodle")
     async def pick_doodle(body: DoodleBody, request: Request):
-        # No rate limit of its own: a doodle is one column on the account row,
-        # nothing is stored, and there is nothing in it to churn (R-AVA-09).
+        # A doodle is one column on the account row, but choosing one is not
+        # free: it appends a permanent audit row and re-broadcasts every room
+        # the account sits in (#1241). The one already worn changes nothing,
+        # so it costs nothing - no row, no broadcast, nothing spent.
         user = await require_registered(request)
+        if body.name in DOODLES and user.avatar_key == doodle_key(body.name):
+            return {"avatarKey": user.avatar_key, "avatarUrl": avatar_url(user.avatar_key)}
+        await spend_change(user)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
             key = await choose_doodle(
@@ -154,6 +179,10 @@ def create_avatar_router(
     @router.delete("/api/users/me/avatar")
     async def delete_avatar(request: Request):
         user = await require_registered(request)
+        if user.avatar_key is None:
+            # Nothing on the account to take down: no row, no broadcast.
+            return {"ok": True}
+        await spend_change(user)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         await remove_avatar(
             session_factory,

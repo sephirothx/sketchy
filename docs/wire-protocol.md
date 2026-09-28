@@ -2477,6 +2477,9 @@ address (#1074).
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change`, `DELETE /api/auth/account` |
 | `AUTH_VERIFY_LIMIT` | 10 / hour | `PUT /api/auth/email` |
 | `PROMPT_LIST_SAVE_LIMIT` | 60 / hour | `PUT /api/prompt-lists/mine/{id}`, keyed on the **account** (R-LIST-04, #1236) — `429 too_many_attempts` |
+| `PROMPT_LIST_UNPUBLISH_LIMIT` | 30 / hour | `POST /api/prompt-lists/mine/{id}/unpublish`, per **account** (#1241); a list that is not out is withdrawn with no ledger row |
+| — | 30 / hour | Block and unblock (`/api/users/me/blocks`), per **account**, persistent (#1241) |
+| — | 30 / hour | Picking a doodle and removing one's own picture, one bucket per **account** (#1241); the doodle already worn and a picture that is not there cost nothing |
 | `PROMPT_LIST_CREATE_LIMIT` | 20 / day | `POST /api/prompt-lists/mine`, `POST …/duplicate` and `DELETE /api/prompt-lists/mine/{id}`, one bucket, keyed on the **account** — create-then-delete is how a slot is churned |
 
 Lower-risk profile and prompt-statistics throttles remain process-local, and so does the read of one owned list (`PROMPT_LIST_READ_LIMIT`, 300 / hour per account, `429 too_many_requests`).
