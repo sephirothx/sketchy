@@ -281,3 +281,59 @@ async def test_a_restart_vote_moves_nothing_on_the_stage(viewport):
             for context in contexts:
                 await context.close()
             await browser.close()
+
+
+async def test_a_phone_guesser_typing_through_a_vote_can_still_answer_it():
+    """Review of #1316: the vote lives in the room bar, and a phone hides the
+    bar while the guess keyboard is up - a guesser typing through the vote's
+    twenty seconds never saw it. The bar stays while a vote awaits them."""
+    from uuid import uuid4
+
+    phone = {"viewport": {"width": 390, "height": 844}, "is_mobile": True, "has_touch": True}
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(**phone) for _ in range(3)]
+        pages = [await context.new_page() for context in contexts]
+        host = pages[0]
+        try:
+            tag = uuid4().hex[:5]
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"TypeHost{tag}")
+            await open_new_room(host)
+            code = await get_room_code(host)
+            for index, page in enumerate(pages[1:]):
+                await page.goto(BASE_URL)
+                await use_guest_name(page, f"Typer{index}{tag}")
+                await join_by_code(page, code)
+                await page.wait_for_selector('[data-testid="waiting-room"]')
+            await host.get_by_role("button", name="Start game").click()
+            drawer = None
+            for _ in range(100):
+                for page in pages:
+                    if await page.locator(".prompt-choices button").count():
+                        drawer = page
+                if drawer:
+                    break
+                await host.wait_for_timeout(100)
+            await drawer.locator(".prompt-choices button").first.click()
+            proposer, typist = [page for page in pages if page is not drawer]
+            field = typist.locator(".chat-input input")
+            await field.wait_for()
+            await field.focus()
+            await typist.locator(".game-room.guess-focused").wait_for()
+            header = typist.locator('[data-testid="room-header"]')
+            assert not await header.is_visible(), "the bar should give way to the keyboard"
+
+            await room_menu_action(proposer, "Start the game over")
+            chip = typist.locator(VOTE_CHIP)
+            await chip.wait_for(state="visible")
+            assert await typist.locator(".game-room.guess-focused").count() == 1
+            await chip.click()
+            await typist.locator(VOTE).get_by_role("button", name="Keep playing").click()
+            # Answered: the bar gives way to the keyboard again.
+            await field.focus()
+            await header.wait_for(state="hidden")
+        finally:
+            for context in contexts:
+                await context.close()
+            await browser.close()

@@ -15,6 +15,7 @@ import { ConnectedPinControl } from "../components/ConnectedPinControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
 import { RestartVoteAnnouncer } from "../components/RestartVoteNotice";
+import { canCastRestartVote, myRestartVote } from "../lib/restartVote";
 import { RoomVisibilityIcon } from "../components/RoomVisibilityIcon";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
@@ -442,9 +443,16 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useBackCloses(recapShown, closeRecap);
   useBackCloses(highlightsOpen && !recapShown, () => setHighlightsOpen(false));
 
+  // A vote this seat can still answer keeps the room bar up while the phone's
+  // keyboard is: the bar is where the vote lives, and a guesser who typed
+  // through its twenty seconds never saw it (review of #1316).
+  const voteAwaitsMe = roomView === "playing"
+    && restartVote !== null
+    && canCastRestartVote(restartVote, me)
+    && myRestartVote(restartVote, me) === null;
   const room = (
     <div
-      className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}`}
+      className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}${voteAwaitsMe ? " vote-awaits-me" : ""}`}
     >
       {afkCheck.secondsLeft !== null && (
         <AfkCheckDialog

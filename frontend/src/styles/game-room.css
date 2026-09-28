@@ -1772,7 +1772,9 @@
   }
 
   /* ── Density mode: the soft keyboard is up ─────────────────────────── */
-  .game-room.guess-focused .game-header,
+  /* The bar stays while a restart vote waits on this seat: the vote lives
+     there, and hiding it for the vote's twenty seconds hid the vote. */
+  .game-room.guess-focused:not(.vote-awaits-me) .game-header,
   .game-room.guess-focused .sidebar-left,
   .game-room.guess-focused .room-chat-heading,
   .game-room.guess-focused .chat-scroll-bottom-button {
