@@ -290,6 +290,9 @@ async def test_a_correct_guess_is_credited_net_of_hints():
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
     room.game.choose_prompt(drawer.id, "apple")
     room.game.set_phase_deadline(room.game.drawing_seconds)
+    # Parked at the top of the turn: on the real clock the guess scores
+    # whatever time the awaits below took, a point every 0.4 s.
+    room.game.remaining_seconds = lambda: room.game.drawing_seconds
 
     sio = socketio.AsyncServer(async_mode="asgi")
     timers = register_handlers(sio, room_manager).timers

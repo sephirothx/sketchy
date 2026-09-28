@@ -282,6 +282,9 @@ async def test_a_real_game_carries_its_analytics_through_to_the_write():
     guesser = next(p for p in room.player_list() if p.id != game.current_drawer)
     game.snapshot_turn_participants({guesser.id: "eligible"})
     game.set_phase_deadline(game.drawing_seconds)
+    # One reading for the expectation and the award: two real ones can
+    # straddle a rounding step.
+    game.remaining_seconds = lambda: game.drawing_seconds - 10
 
     price = game.hint_cost(guesser.id)
     assert game.buy_hint_letter(guesser.id, 0) is True
