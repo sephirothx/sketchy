@@ -1,6 +1,10 @@
+from uuid import uuid4
+
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     close_room_settings,
+    join_by_code,
+    open_new_room,
     open_create_room,
     open_room_settings,
     open_settings_section,
@@ -182,10 +186,6 @@ async def test_a_phone_spectator_sees_they_are_watching_and_takes_an_open_seat()
     seat offer lived only there - a spectator on a phone could not take a free
     seat and was never told they were spectating. The roster says both now,
     and lists the spectators under the seats."""
-    from uuid import uuid4
-
-    from tests.e2e.lobby_helpers import join_by_code, open_new_room
-
     phone = {
         "viewport": {"width": 390, "height": 844},
         "is_mobile": True,
@@ -218,10 +218,17 @@ async def test_a_phone_spectator_sees_they_are_watching_and_takes_an_open_seat()
             await host.locator(".waiting-roster-spectators").get_by_text(name).wait_for()
             assert await host.locator(".waiting-roster").get_by_test_id("spectator-promotion").count() == 0
 
+            # One offer in the page at a phone's width, not a hidden second one.
+            assert await watcher.get_by_test_id("spectator-promotion").count() == 1
             await offer.get_by_role("button", name="Join as player").click()
             await offer.wait_for(state="detached")
             await watching.wait_for(state="detached")
             await roster.locator(".waiting-roster-grid .waiting-roster-tile", has_text=name).wait_for()
+            # The offer is gone with the focus it had; the roster's heading takes it.
+            await watcher.wait_for_function(
+                "() => document.activeElement?.id === 'waiting-roster-title'"
+            )
+
         finally:
             for context in contexts:
                 await context.close()

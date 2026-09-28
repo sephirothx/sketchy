@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import type { AckResponse } from "../types";
 import { refusalText } from "../lib/refusals.ts";
@@ -17,14 +17,19 @@ import { ui } from "../content/ui/index.ts";
 export function SpectatorPromotion({ playerSpaceAvailable }: { playerSpaceAvailable: boolean }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const rootRef = useRef<HTMLDivElement | null>(null);
 
   async function becomePlayer() {
     if (busy || !playerSpaceAvailable) return;
+    // Read now: the offer is gone once the seat is taken, and the focus with
+    // it. It lands on the heading of the list the player has just joined.
+    const heading = rootRef.current?.closest("section")?.querySelector<HTMLElement>("h2");
     setBusy(true);
     setError(null);
     try {
       const response = await emitWithAck<AckResponse>("become_player", {});
       if (!response.ok) setError(refusalText(response, ui.roomPlayersPanel.couldNotJoinAsPlayer));
+      else requestAnimationFrame(() => heading?.focus());
     } catch (requestError) {
       setError(socketRequestErrorMessage(requestError, ui.roomPlayersPanel.joinAsAPlayer));
     } finally {
@@ -33,7 +38,7 @@ export function SpectatorPromotion({ playerSpaceAvailable }: { playerSpaceAvaila
   }
 
   return (
-    <div className="spectator-promotion" data-testid="spectator-promotion">
+    <div className="spectator-promotion" data-testid="spectator-promotion" ref={rootRef}>
       <p>
         <b>{ui.roomPlayersPanel.youAreSpectating}</b>{" "}
         {playerSpaceAvailable ? ui.roomPlayersPanel.aPlayerSeatIsOpen : ui.roomPlayersPanel.noPlayerSeatsOpen}

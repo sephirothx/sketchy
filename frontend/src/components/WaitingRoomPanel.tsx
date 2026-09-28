@@ -354,8 +354,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           below the chat card. */}
       {isNarrow && <section className="surface-card waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
         <div className="waiting-roster-head">
-          <h2 id="waiting-roster-title" className="panel-title">{ui.waitingRoomPanel.inTheRoom}</h2>
-          <span className="waiting-roster-count">
+          <h2 id="waiting-roster-title" className="panel-title" tabIndex={-1}>{ui.waitingRoomPanel.inTheRoom}</h2>
+          <span
+            className="waiting-roster-count"
+            aria-label={ui.roomPlayersPanel.playersOfCapacity({ here: activePlayers.length, capacity: props.maxPlayers })}
+          >
             {ui.waitingRoomPanel.rosterCount({
               here: activePlayers.length,
               capacity: props.maxPlayers,
@@ -381,7 +384,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <p className="section-label">
               {ui.roomPlayersPanel.spectatorsHeading({ count: spectators.length })}
             </p>
-            <ul className="waiting-roster-grid is-spectators">
+            <ul className="waiting-roster-grid">
               {spectators.map((player) => rosterTile(player, 34))}
             </ul>
           </div>
