@@ -9,6 +9,11 @@ member of staff (R-BAN-01, #1239). Read from the roles held today, a demotion
 moved that boundary: demote the administrator who placed it, or the staff
 member under it, and a moderator could lift it. The boundary is recorded
 when the suspension is placed (#1294 review).
+
+A suspension already in force when this runs has no record of the roles it
+was placed under, so it is taken to need an administrator: the conservative
+reading of an unknown, and one an administrator can always lift. Revoked ones
+are history and keep the default.
 """
 from collections.abc import Sequence
 
@@ -26,6 +31,16 @@ def upgrade() -> None:
     op.add_column(
         "user_bans",
         sa.Column("lift_requires_admin", sa.Boolean(), nullable=False, server_default=sa.false()),
+    )
+    user_bans = sa.table(
+        "user_bans",
+        sa.column("lift_requires_admin", sa.Boolean()),
+        sa.column("revoked_at", sa.DateTime(timezone=True)),
+    )
+    op.execute(
+        user_bans.update()
+        .where(user_bans.c.revoked_at.is_(None))
+        .values(lift_requires_admin=sa.true())
     )
 
 

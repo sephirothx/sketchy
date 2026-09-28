@@ -1178,7 +1178,10 @@ counting the pictures that went.
 administrator may lift it — an administrator placed it, or its subject was staff
 (R-BAN-01). Revocation checks it beside the roles held today, so a demotion since —
 of the administrator who placed it, or of the staff member under it — cannot bring
-it within a moderator's reach (#1294 review).
+it within a moderator's reach (#1294 review). A suspension already in force when the
+column arrived was backfilled `true`: nothing recorded the roles it was placed under,
+and needing an administrator is the reading that cannot be wrong in a moderator's
+favour.
 
 **Active is one predicate everywhere** (#553): `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)`, from `auth/bans.py` `active_ban_filter`. The `is_active` flag it replaced recorded only the first half, so an expired-but-unrevoked ban was active in one reader and not in another; such a ban now stays as history and counts as nothing. `ck_user_bans_revocation_identity` ties the revoking actor and reason to a revocation (the actor may still become NULL when that moderator's account is deleted). `ix_user_bans_user_expires` serves the account lookup and the foreign-key walk on deletion; `ix_user_bans_unrevoked_newest`, a partial `(created_at) WHERE revoked_at IS NULL`, serves the moderation queue's newest active bans (#554).
 

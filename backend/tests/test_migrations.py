@@ -569,6 +569,49 @@ async def test_a_migrated_database_keeps_score_events_immutable(tmp_path):
         await engine.dispose()
 
 
+async def test_a_suspension_in_force_before_the_boundary_was_recorded_needs_an_admin(tmp_path):
+    """#1294 review: the column arrived defaulting to "a moderator may lift
+    it", and nothing recorded which roles an existing suspension was placed
+    under. One still in force is taken to need an administrator; a revoked
+    one is history and keeps the default."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'bans-before.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "e8f9a0b1c2d4")
+        account, active, revoked = uuid.uuid4(), uuid.uuid4(), uuid.uuid4()
+        async with engine.begin() as connection:
+            await connection.execute(
+                text(
+                    "INSERT INTO users (id, username, display_name, state,"
+                    " created_at, updated_at) VALUES (:id, 'banned', 'Banned',"
+                    " 'anonymous', datetime('now'), datetime('now'))"
+                ),
+                {"id": account.hex},
+            )
+            for ban, revoked_at in ((active, None), (revoked, "2026-09-01 00:00:00")):
+                await connection.execute(
+                    text(
+                        "INSERT INTO user_bans (id, user_id, reason, created_at, revoked_at)"
+                        " VALUES (:id, :account, 'Before', '2026-08-01 00:00:00', :revoked_at)"
+                    ),
+                    {"id": ban.hex, "account": account.hex, "revoked_at": revoked_at},
+                )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+
+        async with engine.begin() as connection:
+            rows = dict(
+                (
+                    await connection.execute(text("SELECT id, lift_requires_admin FROM user_bans"))
+                ).all()
+            )
+        assert {uuid.UUID(str(key)): bool(value) for key, value in rows.items()} == {
+            active: True,
+            revoked: False,
+        }
+    finally:
+        await engine.dispose()
+
+
 async def test_a_report_decided_before_incidents_keeps_its_decision(tmp_path):
     """A CHECK is validated against every row already in the table, not only
     the ones written after it. So the decision-group rule cannot simply be
