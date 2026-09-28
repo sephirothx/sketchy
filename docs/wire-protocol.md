@@ -1958,7 +1958,9 @@ A fixed four-integer array, not an object:
 ```
 
 `generation` and `sequence` are 1 – 2³¹−1, `revision` is 0 – 2³¹−1, `historyHash` is
-0 – 0xFFFFFFFF. Only the drawer may undo. Undo emits `canvas_undo` with **five**
+0 – 0xFFFFFFFF. Only the drawer may undo, and only while drawing: a new undo in the
+results or after the game is refused `drawer_only` and changes nothing, while a retry of
+an undo already committed is acknowledged `ok` in any phase (#1283). Undo emits `canvas_undo` with **five**
 elements — `[generation, sequence, revisionBefore, revisionAfter, historyHash]` — so a
 client that missed the commit can tell an undo from an ordinary action.
 
