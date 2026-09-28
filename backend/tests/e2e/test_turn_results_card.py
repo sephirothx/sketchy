@@ -104,6 +104,17 @@ async def test_the_card_shows_the_standings_it_came_in_with_and_no_personal_line
             await save_room_settings(host)
             await host.get_by_role("button", name="Start game").click()
 
+            # While a guest chooses, the others see their name in the guest
+            # style every other place gives it (#1279).
+            names = [page.locator('[data-testid="choosing-prompt-status"] .colored-player-name') for page in pages]
+            for _ in range(100):
+                shown = [name for name in names if await name.count()]
+                if shown:
+                    break
+                await asyncio.sleep(0.1)
+            assert shown, "nobody saw the choosing card"
+            assert "is-guest" in (await shown[0].get_attribute("class")).split()
+
             # Turn one: both guess, one after the other, so they part.
             drawer, prompt = await _choose_prompt(pages)
             guessers = [page for page in pages if page is not drawer]

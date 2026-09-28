@@ -8,6 +8,7 @@ import type { DecodedCanvasAction } from "../lib/canvasHistory";
 import { socketRequestErrorMessage } from "../lib/socket";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import type { DrawingRecapMetadata } from "../types";
+import { ChevronLeftIcon, ChevronRightIcon, DownloadIcon, XIcon } from "./icons";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import "../styles/lazy/drawing-recap.css";
@@ -163,16 +164,25 @@ export function DrawingRecapGallery({
           </div>
           <div className="drawing-recap-header-actions">
             {renderActions?.(entry)}
+            {/* The design system's buttons, and one close - the highlights'
+                icon, in the same place - rather than a text Close and a
+                hand-rolled Save of its own (#1279). */}
             <button
               type="button"
-              className="drawing-recap-download"
+              className="btn btn-primary btn-compact drawing-recap-download"
               disabled={actions === null || unavailable || Boolean(error)}
               onClick={() => canvasRef.current?.saveImage()}
             >
+              <DownloadIcon size={15} />
               {ui.drawingRecapGallery.saveImage}
             </button>
-            <button type="button" className="drawing-recap-close" onClick={onClose}>
-              {ui.drawingRecapGallery.close}
+            <button
+              type="button"
+              className="btn btn-icon drawing-recap-close"
+              onClick={onClose}
+              aria-label={ui.drawingRecapGallery.closeDrawings}
+            >
+              <XIcon size={17} />
             </button>
           </div>
         </header>
@@ -193,7 +203,9 @@ export function DrawingRecapGallery({
           ) : error ? (
             <div className="drawing-recap-status" role="alert">
               <p>{error}</p>
-              <button type="button" onClick={() => void loadDrawing()}>{ui.drawingRecapGallery.tryAgain}</button>
+              <button type="button" className="btn btn-secondary btn-compact" onClick={() => void loadDrawing()}>
+                {ui.drawingRecapGallery.tryAgain}
+              </button>
             </div>
           ) : actions === null ? (
             <p className="drawing-recap-status">{ui.drawingRecapGallery.loadingDrawing}</p>
@@ -214,9 +226,11 @@ export function DrawingRecapGallery({
         <nav className="drawing-recap-navigation" aria-label={ui.drawingRecapGallery.drawingRecapNavigation}>
           <button
             type="button"
+            className="btn btn-secondary btn-compact"
             disabled={position === 0}
             onClick={() => changePosition(position - 1)}
           >
+            <ChevronLeftIcon size={15} />
             {ui.drawingRecapGallery.previous}
           </button>
           <span className="drawing-recap-pager">
@@ -229,10 +243,12 @@ export function DrawingRecapGallery({
           </span>
           <button
             type="button"
+            className="btn btn-secondary btn-compact"
             disabled={position === entries.length - 1}
             onClick={() => changePosition(position + 1)}
           >
             {ui.drawingRecapGallery.next}
+            <ChevronRightIcon size={15} />
           </button>
         </nav>
       </section>

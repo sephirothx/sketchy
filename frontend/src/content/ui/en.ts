@@ -962,7 +962,7 @@ export const EN = {
     thisDrawingCouldNotBeDecoded: "This drawing could not be decoded.",
     drawingRecap: "Drawing recap",
     saveImage: "Save image",
-    close: "Close",
+    closeDrawings: "Close drawings",
     thisDrawingWasNotKept: "This drawing was not kept.",
     earlierDrawingsFilledTheSpace: "This game's earlier drawings used up the space the room keeps for them.",
     tryAgain: "Try again",
@@ -1083,7 +1083,6 @@ export const EN = {
     closeHighlights: "Close highlights",
     thatGameWasTooShortSay: "That game was too short to say much about. Play a longer one and the\n            highlights will show up here.",
     seeIt: "See it",
-    back: "Back",
   },
 
   inviteEntryPage: {
@@ -2344,8 +2343,6 @@ export const EN = {
     host: "Host",
     friend: "Friend",
     invite: "Invite",
-    viewHighlights: "View highlights",
-    viewDrawings: "View drawings",
     spectatorsAfkAndDisconnectedPlayers:
       "Spectators, AFK, and disconnected players do not count toward the two active players a game needs.",
     joinMySketchyRoomCode: (p: { code: string }) => `Join my Sketchy room: ${p.code}`,

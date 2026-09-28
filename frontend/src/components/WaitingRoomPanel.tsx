@@ -3,7 +3,7 @@ import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { Avatar } from "./ui/Avatar";
 import { Button } from "./ui/Button";
-import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon } from "./icons";
+import { BackIcon, BrushIcon, CopyIcon, LinkIcon, PencilIcon, PlayIcon, PlusIcon, TrophyIcon } from "./icons";
 import { RoomFacts } from "./RoomFacts";
 import { RoomVisibilityIcon } from "./RoomVisibilityIcon";
 import { ScratchPad } from "./ScratchPad";
@@ -439,14 +439,18 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
 
       {finalScores && (props.highlightCount > 0 || props.drawingCount > 0) && (
         <div className="waiting-room-actions">
+          {/* The game-over card's two, word for word and icon for icon: the
+              same actions read "View highlights" here, bare (#1279). */}
           {props.highlightCount > 0 && (
             <Button variant="secondary" onClick={props.onViewHighlights}>
-              {ui.waitingRoomPanel.viewHighlights}
+              <TrophyIcon size={15} />
+              {ui.gameEndOverlay.highlights}
             </Button>
           )}
           {props.drawingCount > 0 && (
             <Button variant="secondary" onClick={props.onViewDrawings}>
-              {ui.waitingRoomPanel.viewDrawings}
+              <BrushIcon size={15} />
+              {ui.gameEndOverlay.drawings}
             </Button>
           )}
         </div>

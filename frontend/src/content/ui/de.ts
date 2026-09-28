@@ -946,7 +946,7 @@ export const DE: Catalogue = {
     thisDrawingCouldNotBeDecoded: "Diese Zeichnung konnte nicht dekodiert werden.",
     drawingRecap: "Zeichnungsrückblick",
     saveImage: "Bild speichern",
-    close: "Schließen",
+    closeDrawings: "Zeichnungen schließen",
     thisDrawingWasNotKept: "Diese Zeichnung wurde nicht aufbewahrt.",
     earlierDrawingsFilledTheSpace: "Die früheren Zeichnungen dieses Spiels haben den Platz belegt, den der Raum dafür hat.",
     tryAgain: "Noch einmal versuchen",
@@ -1065,7 +1065,6 @@ export const DE: Catalogue = {
     closeHighlights: "Höhepunkte schließen",
     thatGameWasTooShortSay: "Diese Runde war zu kurz, um viel dazu zu sagen. Spiel eine längere, dann\n            erscheinen hier die Höhepunkte.",
     seeIt: "Ansehen",
-    back: "Zurück",
   },
 
   inviteEntryPage: {
@@ -2323,8 +2322,6 @@ export const DE: Catalogue = {
     host: "Gastgeber",
     friend: "Freund",
     invite: "Einladen",
-    viewHighlights: "Höhepunkte ansehen",
-    viewDrawings: "Zeichnungen ansehen",
     spectatorsAfkAndDisconnectedPlayers: "Zuschauer, AFK- und getrennte Spieler zählen nicht zu den zwei aktiven Spielern, die ein Spiel braucht.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Komm in meinen Sketchy-Raum: ${p.code}`,

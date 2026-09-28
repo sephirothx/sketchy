@@ -80,13 +80,16 @@ async def test_highlights_open_from_game_over_and_close_when_a_rematch_starts():
             await panel.wait_for()
             assert await panel.get_by_text("Fastest guess").count() == 1
 
-            # Closing lands in the waiting room, where they are still reachable.
-            await host.get_by_role("button", name="Back").click()
+            # Closing lands in the waiting room, where they are still reachable
+            # under the game-over card's own name (#1279). One close, in the
+            # header: the "Back" at the foot is gone.
+            assert await panel.get_by_role("button", name="Back").count() == 0
+            await host.get_by_role("button", name="Close highlights").click()
             await host.locator('[data-testid="waiting-room"]').wait_for()
-            await host.get_by_role("button", name="View highlights").click()
+            await host.get_by_role("button", name="Highlights", exact=True).click()
             await panel.wait_for()
             assert await panel.get_by_text("Fastest guess").count() == 1
-            await host.get_by_role("button", name="Back").click()
+            await host.get_by_role("button", name="Close highlights").click()
             await host.locator('[data-testid="waiting-room"]').wait_for()
 
             # A player reading the highlights when a rematch begins must be
@@ -94,7 +97,7 @@ async def test_highlights_open_from_game_over_and_close_when_a_rematch_starts():
             # non-host can get here: the Rematch button is on the waiting room,
             # behind the panel.
             guest_panel = guest.locator(".game-highlights")
-            await guest.get_by_role("button", name="View highlights").click()
+            await guest.get_by_role("button", name="Highlights", exact=True).click()
             await guest_panel.wait_for()
 
             await host.get_by_role("button", name="Rematch").click()

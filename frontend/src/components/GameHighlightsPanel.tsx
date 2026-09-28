@@ -1,7 +1,7 @@
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { presentHighlights } from "../lib/gameHighlights";
-import { AlertIcon, BackIcon, BrushIcon, ClockIcon, HeartIcon, XIcon, ZapIcon } from "./icons";
+import { AlertIcon, BrushIcon, ClockIcon, HeartIcon, XIcon, ZapIcon } from "./icons";
 import { SectionLabel } from "./ui/Card";
 import type { GameHighlight } from "../types";
 import type { ReactNode } from "react";
@@ -43,9 +43,11 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
             <SectionLabel className="game-highlights-kicker">{ui.gameHighlightsPanel.lastGame}</SectionLabel>
             <h1 id="game-highlights-title">{ui.gameHighlightsPanel.highlights}</h1>
           </div>
+          {/* One way out, in the header, as the drawings have (#1279): it had
+              this and a "Back" at the foot as well. */}
           <button
             type="button"
-            className="game-highlights-close"
+            className="btn btn-icon game-highlights-close"
             onClick={onClose}
             aria-label={ui.gameHighlightsPanel.closeHighlights}
           >
@@ -103,12 +105,6 @@ export function GameHighlightsPanel({ highlights, onClose, onOpenDrawing }: Game
           </ul>
         )}
 
-        <div className="game-highlights-actions">
-          <button type="button" className="btn btn-secondary" onClick={onClose}>
-            <BackIcon size={15} />
-            {ui.gameHighlightsPanel.back}
-          </button>
-        </div>
       </section>
     </main>
   );

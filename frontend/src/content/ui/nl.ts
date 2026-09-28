@@ -946,7 +946,7 @@ export const NL: Catalogue = {
     thisDrawingCouldNotBeDecoded: "Deze tekening kon niet gedecodeerd worden.",
     drawingRecap: "Tekeningenoverzicht",
     saveImage: "Afbeelding opslaan",
-    close: "Sluiten",
+    closeDrawings: "Tekeningen sluiten",
     thisDrawingWasNotKept: "Deze tekening is niet bewaard.",
     earlierDrawingsFilledTheSpace: "De eerdere tekeningen van dit spel hebben de ruimte gevuld die de kamer ervoor heeft.",
     tryAgain: "Opnieuw proberen",
@@ -1065,7 +1065,6 @@ export const NL: Catalogue = {
     closeHighlights: "Hoogtepunten sluiten",
     thatGameWasTooShortSay: "Dat spel was te kort om er veel over te zeggen. Speel een langere en de\n            hoogtepunten verschijnen hier.",
     seeIt: "Bekijken",
-    back: "Terug",
   },
 
   inviteEntryPage: {
@@ -2323,8 +2322,6 @@ export const NL: Catalogue = {
     host: "Gastheer",
     friend: "Vriend",
     invite: "Uitnodigen",
-    viewHighlights: "Hoogtepunten bekijken",
-    viewDrawings: "Tekeningen bekijken",
     spectatorsAfkAndDisconnectedPlayers: "Toeschouwers, AFK- en losgekoppelde spelers tellen niet mee voor de twee actieve spelers die een spel nodig heeft.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Kom in mijn Sketchy-kamer: ${p.code}`,
