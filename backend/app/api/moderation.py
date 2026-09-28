@@ -21,7 +21,7 @@ from app.api.errors import Refusal
 from app.message_limits import MAX_REPORT_DETAILS
 from app.refusals import ErrorCode
 from app.auth.avatars import avatar_url, uploaded_avatar_key
-from app.services.avatars import AvatarAlreadyRemoved, remove_avatar
+from app.services.avatars import AvatarAlreadyRemoved, AvatarReportDecided, remove_avatar
 from app.auth.rate_limit import (
     PersistentRateLimiter,
     client_key,
@@ -1803,6 +1803,10 @@ def create_moderation_router(
             raise HTTPException(
                 status_code=409,
                 detail="A picture was already removed through this report.",
+            ) from error
+        except AvatarReportDecided as error:
+            raise HTTPException(
+                status_code=409, detail="This report has already been decided."
             ) from error
         if on_avatar_changed is not None:
             # What is left, not a blanket None: a doodle the removal left in

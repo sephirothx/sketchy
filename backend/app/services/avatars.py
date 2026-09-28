@@ -31,11 +31,15 @@ from app.db.models import (
     UserWarning,
     generate_uuid,
 )
-from app.domain_values import AccountState, AuditTargetType
+from app.domain_values import AccountState, AuditTargetType, ReportStatus
 
 
 class AvatarAlreadyRemoved(AvatarError):
     """A moderator already took a picture down through this report (#1239)."""
+
+
+class AvatarReportDecided(AvatarError):
+    """The report a removal was asked through was decided before it ran."""
 
 
 class AvatarBlocked(AvatarError):
@@ -290,11 +294,17 @@ async def remove_avatar(
             if by_moderator and report_id is not None:
                 # One removal per report, decided under the report's row lock
                 # so two presses cannot both climb the ladder (#1239).
-                await session.execute(
-                    select(PlayerReport.id)
+                status = await session.scalar(
+                    select(PlayerReport.status)
                     .where(PlayerReport.id == UUID(str(report_id)))
                     .with_for_update()
                 )
+                # Asked again under the lock: the caller's check ran before
+                # it, and a decision landing in between let a picture come
+                # down through a report another moderator had closed (#1294
+                # review).
+                if status != ReportStatus.PENDING.value:
+                    raise AvatarReportDecided("the report has already been decided")
                 if await _already_removed_for(session, db_user_id, UUID(str(report_id))):
                     raise AvatarAlreadyRemoved("a picture was already removed through this report")
             user = await session.get(User, db_user_id)

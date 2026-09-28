@@ -3717,6 +3717,53 @@ async def test_pressing_remove_again_on_one_report_does_not_climb_the_ladder(env
     assert len(removals) == 1
 
 
+async def test_a_report_decided_while_the_removal_waited_removes_nothing(env, monkeypatch):
+    """#1294 review: the route checked the report was pending, and the removal
+    then locked it without asking again - so a dismissal landing in between
+    let a picture come down, and its notice and upload block go out, through
+    a report another moderator had already closed."""
+    from sqlalchemy import update
+
+    from datetime import datetime, timezone
+
+    from app.api import moderation as moderation_api
+    from app.db.models import PlayerReport, generate_uuid
+
+    new_client, factory, _ = env
+    moderator_http, target_http, reporter_http = new_client(), new_client(), new_client()
+    moderator = await register(moderator_http, "LateMod")
+    target = await register(target_http, "LateTarget")
+    await register(reporter_http, "LateReporter")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    await _with_picture(factory, target["id"])
+    report_id = await _report(reporter_http, target["id"])
+    original = moderation_api.remove_avatar
+
+    async def dismissed_meanwhile(*args, **kwargs):
+        async with factory() as session, session.begin():
+            await session.execute(
+                update(PlayerReport)
+                .where(PlayerReport.id == UUID(report_id))
+                .values(
+                    status=ReportStatus.DISMISSED.value,
+                    reviewed_at=datetime.now(timezone.utc),
+                    decision_group_id=generate_uuid(),
+                )
+            )
+        return await original(*args, **kwargs)
+
+    monkeypatch.setattr(moderation_api, "remove_avatar", dismissed_meanwhile)
+
+    late = await moderator_http.post(f"/api/moderation/reports/{report_id}/remove-avatar")
+
+    assert late.status_code == 409, late.text
+    async with factory() as session:
+        assert (await session.get(User, UUID(target["id"]))).avatar_key is not None
+        assert await session.scalar(
+            select(AuditEvent).where(AuditEvent.event_type == "avatar.removed")
+        ) is None
+
+
 async def test_a_removal_that_took_nothing_down_is_no_rung_on_the_ladder(env):
     from app.services.avatars import remove_avatar
 
