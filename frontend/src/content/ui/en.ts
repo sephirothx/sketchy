@@ -636,7 +636,7 @@ export const EN = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Follow the link sent to ${p.address}. Until you do, the address is not attached to your account and cannot be used to recover it${
+      `If ${p.address} can be used, a confirmation link is on its way. Until you follow it, the address is not attached to your account and cannot be used to recover it${
         p.replacing ? ", and the one you had stays in place." : "."
       }`,
     thatDoesNotLookLikeEmail: "That does not look like an email address.",
@@ -2488,7 +2488,7 @@ export const EN = {
     youCanRecoverThisAccount:
       (p: { address: string }) => `You can recover this account through ${p.address}.`,
     checkPendingAddressForAConfirmation:
-      (p: { pendingAddress: string }) => `Check ${p.pendingAddress} for a confirmation link. Until you follow it, this account has no way back in.`,
+      (p: { pendingAddress: string }) => `If ${p.pendingAddress} can be used, a confirmation link is on its way. Until you follow it, this account has no way back in.`,
     thisServerCannotSendEmail:
       "This server cannot send email, so a lost password has to be reset by whoever runs it.",
     addAnEmailAddressSo: "Add an email address so you can get back in if you forget your password.",

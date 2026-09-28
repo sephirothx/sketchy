@@ -21,7 +21,6 @@ from app.auth.routes import create_auth_router
 from app.api.user_settings import UserSettingsSeed, seed_user_settings
 from app.auth.email import EmailAddressError
 from app.auth.recovery import (
-    EmailAlreadyInUse,
     RecoveryError,
     _aware,
     change_password,
@@ -739,18 +738,50 @@ async def test_a_reset_for_an_unknown_identifier_sends_nothing(env):
     assert await request_password_reset(factory, identifier="no-such-player") is False
 
 
-async def test_verification_is_refused_for_an_address_another_account_holds(env):
-    """Two verified accounts on one address is an account-takeover primitive."""
+async def test_an_address_another_account_holds_is_never_mailed_or_proved(env):
+    """Two verified accounts on one address is an account-takeover primitive;
+    the request is answered like any other (#1247), but nothing is sent, and
+    nothing could be proved with it anyway."""
     new_client, factory = env
     first_client = new_client()
     await register(first_client, "First", "shared@example.test")
     await verify_via_email(first_client, factory)
     second = await register(new_client(), "Second")
 
-    with pytest.raises(EmailAlreadyInUse):
-        await request_email_verification(
-            factory, user_id=UUID(second["id"]), email="shared@example.test"
-        )
+    address = await request_email_verification(
+        factory, user_id=UUID(second["id"]), email="shared@example.test"
+    )
+
+    assert address == "shared@example.test"
+    assert (await drain(factory)).sent == [], "not one message to the holder's address"
+    async with factory() as session:
+        second_row = await session.get(User, UUID(second["id"]))
+        assert second_row.email is None
+
+
+async def test_an_email_change_answers_the_same_whether_the_address_is_taken(env):
+    """#1247: 409 `email_in_use` for a verified address and 200 otherwise was
+    an account-existence oracle open to any registered account."""
+    new_client, factory = env
+    holder = new_client()
+    await register(holder, "Holder", "holder@example.test")
+    await verify_via_email(holder, factory)
+    prober = new_client()
+    await register(prober, "Prober")
+
+    taken = await prober.put("/api/auth/email", json={"email": "holder@example.test", "password": PASSWORD})
+    taken_state = (await prober.get("/api/auth/email")).json()
+    taken_mail = (await drain(factory)).sent
+    free = await prober.put("/api/auth/email", json={"email": "nobody@example.test", "password": PASSWORD})
+    free_state = (await prober.get("/api/auth/email")).json()
+    free_mail = (await drain(factory)).sent
+
+    assert (taken.status_code, free.status_code) == (200, 200)
+    assert taken.json() == {"ok": True, "pendingAddress": "holder@example.test"}
+    assert free.json() == {"ok": True, "pendingAddress": "nobody@example.test"}
+    assert taken_state["pendingAddress"] == "holder@example.test"
+    assert free_state["pendingAddress"] == "nobody@example.test"
+    assert taken_mail == [] and len(free_mail) == 1
 
 
 async def test_a_naive_stored_timestamp_is_read_as_utc():

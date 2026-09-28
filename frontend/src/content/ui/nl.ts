@@ -626,7 +626,7 @@ export const NL: Catalogue = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Volg de link die naar ${p.address} is gestuurd. Tot die tijd hoort het adres niet bij je account en kun je er niets mee herstellen${
+      `Als ${p.address} gebruikt kan worden, is er een bevestigingslink onderweg. Tot je die volgt, hoort het adres niet bij je account en kun je er niets mee herstellen${
         p.replacing ? ", en het adres dat je had blijft staan." : "."
       }`,
     thatDoesNotLookLikeEmail: "Dat lijkt geen e-mailadres.",
@@ -2467,7 +2467,7 @@ export const NL: Catalogue = {
     youCanRecoverThisAccount: (p: { address: string }) =>
       `Je kunt dit account herstellen via ${p.address}.`,
     checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
-      `Zoek in ${p.pendingAddress} naar een bevestigingslink. Tot je die volgt, is er geen weg terug in dit account.`,
+      `Als ${p.pendingAddress} gebruikt kan worden, is er een bevestigingslink onderweg. Tot je die volgt, is er geen weg terug in dit account.`,
     thisServerCannotSendEmail: "Deze server kan geen e-mail versturen, dus een kwijtgeraakt wachtwoord moet worden hersteld door wie de server beheert.",
     addAnEmailAddressSo: "Voeg een e-mailadres toe zodat je weer binnenkomt als je je wachtwoord vergeet.",
   },
