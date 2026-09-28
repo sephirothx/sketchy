@@ -127,6 +127,18 @@ def rejected(store) -> dict[str, int]:
     return {labels[0]: count for labels, count in store.socket_packets_rejected.items()}
 
 
+async def rejected_once_judged(store, expected: dict[str, int]) -> dict[str, int]:
+    """The refusals, once `expected` many have been judged or five seconds
+    passed. Waited for rather than slept on: judging a 400,000-deep packet on
+    a runner measuring coverage took longer than a fixed 0.2 s allowed, and
+    the last packet was still being judged when the count was read."""
+    for _ in range(500):  # five seconds
+        if rejected(store) == expected:
+            break
+        await asyncio.sleep(0.01)
+    return rejected(store)
+
+
 def retained_packets(engine_socket) -> list:
     """What the socket's queue still holds, the wake-up sentinel aside."""
     return [item for item in list(engine_socket.queue._queue) if item is not None]
@@ -176,9 +188,8 @@ async def test_a_socket_io_packet_that_does_not_decode_is_counted_not_a_tracebac
     garbage = ["42[bad", "42[]", "42[1]", "42" + "[" * 400_000, "49", "44{}", "42{\"a\":1}"]
     for raw in garbage:
         peer.say(raw)
-    await asyncio.sleep(0.2)
 
-    assert rejected(store) == {"malformed": len(garbage)}
+    assert await rejected_once_judged(store, {"malformed": len(garbage)}) == {"malformed": len(garbage)}
     assert not [record for record in caplog.records if record.levelno >= logging.ERROR]
     assert sio.eio.sockets, "under the limit the socket stays"
     peer.inbound.put_nowait({"type": "websocket.disconnect", "code": 1000})
