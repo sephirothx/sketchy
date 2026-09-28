@@ -301,6 +301,13 @@ class GuardedEngineSocket(AsyncSocket):
             await self.server.terminate_socket(self)
             return
         raw = await environ["wsgi.input"].read(length)
+        # Charged as it arrived, before anything is decoded: a body that does
+        # not decode is bytes the socket sent too, and refused as malformed
+        # uncharged, twenty 1 MiB bodies a second passed the window (#1289
+        # review). The packets inside are not charged again.
+        if not self.server.charge_bytes(self.sid, len(raw)):
+            await self.server.refuse(self.sid, "bytes")
+            return
         try:
             body = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -315,7 +322,7 @@ class GuardedEngineSocket(AsyncSocket):
         for item in encoded:
             if self.terminated or self.closed:
                 return
-            problem = self.server.inbound_problem(self.sid, item, "polling")
+            problem = self.server.inbound_problem(self.sid, item, "polling", charged=True)
             if problem is not None:
                 await self.server.refuse(self.sid, problem)
                 continue
@@ -396,14 +403,24 @@ class BoundedEngineServer(engineio.AsyncServer):
         if self._refusal is not None:
             await self._refusal(sid, reason)
 
-    def inbound_problem(self, sid: str, data: Any, transport: str = "websocket") -> str | None:
+    def charge_bytes(self, sid: str, size: int) -> bool:
+        """Charge `size` bytes to the socket's window; False once it is past.
+
+        A charge that goes past still counts: a client sending faster than it
+        may is sending, refused or not.
+        """
+        return self.inbound_bytes.add(sid, size) <= INBOUND_BYTES_PER_WINDOW
+
+    def inbound_problem(
+        self, sid: str, data: Any, transport: str = "websocket", *, charged: bool = False
+    ) -> str | None:
         """Why this raw message must not reach Engine.IO's decoder, or None.
 
         Sized first: a message past the socket's byte window is refused
-        without being looked at, and still counts against the window - a
-        client sending faster than it may is sending, refused or not.
+        without being looked at. `charged` is a message whose bytes were
+        already counted - a polling body is, whole, before it is split.
         """
-        if self.inbound_bytes.add(sid, _byte_size(data)) > INBOUND_BYTES_PER_WINDOW:
+        if not charged and not self.charge_bytes(sid, _byte_size(data)):
             return "bytes"
         return engine_packet_problem(data, transport)
 

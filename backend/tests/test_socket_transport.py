@@ -427,6 +427,22 @@ async def test_a_packet_the_library_disconnected_for_is_counted_and_the_post_ret
     assert sid in sio.eio.sockets, "a refusal, not a disconnect"
 
 
+async def test_a_polling_body_that_does_not_decode_is_charged_to_the_window(monkeypatch):
+    """#1289 review: a body refused as malformed before it was split was never
+    charged, so twenty 1 MiB bodies a second of invalid UTF-8 passed the
+    2 MiB window. The body is charged as it arrives."""
+    from app.socket_transport import INBOUND_BYTES_PER_WINDOW
+
+    sio, store = build_server(monkeypatch)
+    status, reply = await http_request(sio, "GET", "EIO=4&transport=polling")
+    sid = json.loads(reply.decode()[1:])["sid"]
+    invalid = b"\xff" * (INBOUND_BYTES_PER_WINDOW // 3 + 1)
+    for _ in range(3):
+        post = asyncio.create_task(http_request(sio, "POST", f"EIO=4&transport=polling&sid={sid}", invalid))
+        await finished(post)
+    assert rejected(store) == {"malformed": 2, "bytes": 1}
+
+
 async def test_a_post_past_the_packet_ceiling_ends_the_socket_and_returns(monkeypatch):
     sio, store = build_server(monkeypatch)
     status, reply = await http_request(sio, "GET", "EIO=4&transport=polling")
