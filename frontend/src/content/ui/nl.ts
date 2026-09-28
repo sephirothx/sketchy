@@ -2041,6 +2041,8 @@ export const NL: Catalogue = {
     themeSoundShortcutsCameFromAccount: "Het thema, geluid en de\n            sneltoetsen komen uit het account. Wat deze browser had blijft ongemoeid en\n            komt terug als je uitlogt.",
     dismiss: "Sluiten",
     playingAsGuest: "Je speelt als gast",
+    noNameYet: "Nog geen naam",
+    namelessExplainer: "Kies een naam om als gast te spelen, of log in. Een account houdt de naam, je punten en je geschiedenis op elk apparaat.",
     createAccount: "Account maken",
     logIn: "Inloggen",
     you: "Jij",

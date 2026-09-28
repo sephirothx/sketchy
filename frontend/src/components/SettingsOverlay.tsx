@@ -10,7 +10,8 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
 import { emitWithAck, socket } from "../lib/socket";
-import { MAX_NICKNAME_LENGTH, nicknameError } from "../lib/roomEntryState";
+import { MAX_NICKNAME_LENGTH, nicknameError, typedNameError } from "../lib/roomEntryState";
+import { useNameField } from "../hooks/useNameField";
 import { flushSettingsSync, queueSettingsSync } from "../lib/accountSettingsSync";
 import { maskEmail } from "../lib/accountRecovery";
 import { useEmailStateStore } from "../store/emailStateStore";
@@ -430,13 +431,89 @@ function PictureEditChip({
   );
 }
 
+/** A visitor with no name yet has no account behind them either - no
+    picture, no colour, no sign-in to manage and no data (#1265). The header's
+    gear is the only control the bar offers them (R-UX-11), and it used to
+    open a registered account's pane: thirteen swatches that recoloured a "?"
+    the server then refused, a Manage that said "Sign in first.", a Delete
+    that asked for a password. So this is what they get instead: the one
+    thing they can do here, choose a name - the same draft the lobby's name
+    tag holds, so typing in either is typing in both - or make an account or
+    sign in. */
+function NamelessCard({ onAuth }: { onAuth: (mode: AuthMode) => void }) {
+  const setDisplayName = useAuthStore((state) => state.setDisplayName);
+  const draft = useAuthStore((state) => state.nameDraft);
+  const setDraft = useAuthStore((state) => state.setNameDraft);
+  const { ref, onChange, refused, refuse } = useNameField(setDraft);
+  const [busy, setBusy] = useState(false);
+
+  async function nameMe(event: React.FormEvent) {
+    event.preventDefault();
+    if (busy) return;
+    const chosen = draft.trim();
+    const invalid = typedNameError(chosen);
+    if (invalid) {
+      refuse(invalid);
+      return;
+    }
+    setBusy(true);
+    try {
+      await setDisplayName(chosen);
+    } catch (error) {
+      refuse(refusalText(error, ui.settingsOverlay.couldNotChangeYourDisplayName2));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="settings-guest-card settings-nameless-card" data-testid="settings-nameless">
+      <b>{ui.settingsOverlay.noNameYet}</b>
+      <p>{ui.settingsOverlay.namelessExplainer}</p>
+      <form className="settings-nameless-form" onSubmit={nameMe}>
+        <input
+          ref={ref}
+          type="search"
+          inputMode="text"
+          value={draft}
+          onChange={onChange}
+          placeholder={ui.settingsOverlay.displayName}
+          aria-label={ui.settingsOverlay.displayName}
+          aria-invalid={refused ? true : undefined}
+          autoComplete="nickname"
+          autoCapitalize="off"
+          autoCorrect="off"
+          spellCheck={false}
+          enterKeyHint="done"
+        />
+        <button type="submit" className="btn btn-primary btn-compact" disabled={busy}>
+          {busy ? ui.settingsOverlay.saving : ui.settingsOverlay.save}
+        </button>
+      </form>
+      <div className="settings-guest-actions">
+        <button type="button" className="btn btn-secondary" onClick={() => onAuth("claim")}>
+          <PlusIcon size={15} />
+          {ui.settingsOverlay.createAccount}
+        </button>
+        <button type="button" className="btn btn-secondary" onClick={() => onAuth("login")}>
+          <KeyIcon size={15} />
+          {ui.settingsOverlay.logIn}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   const user = useAuthStore((state) => state.user);
+  const hasResolved = useAuthStore((state) => state.hasResolved);
   const setDisplayName = useAuthStore((state) => state.setDisplayName);
   const setAccountNameColor = useAuthStore((state) => state.setNameColor);
   const login = useAuthStore((state) => state.login);
   const register = useAuthStore((state) => state.register);
-  const isGuest = Boolean(user?.isAnonymous);
+  // No account at all is not a registered one: until there is a name every
+  // account control below is for somebody else (#1265).
+  const isGuest = !user || user.isAnonymous;
   const pendingRole = user?.pendingRole ?? null;
   // Staff have one to manage; somebody who has been offered a role has one to
   // set up. Everybody else is shown nothing about it at all.
@@ -589,6 +666,27 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
   // waiting on even while a verified one is still in place.
   const shownAddress = email?.pendingAddress ?? email?.address ?? null;
   const shownVerified = Boolean(shownAddress && !email?.pendingAddress && email?.verified);
+
+  const authDialog = authMode && (
+    <AuthDialog
+      mode={authMode}
+      suggestedUsername={user?.isAnonymous ? (user.displayName ?? "") : ""}
+      onClose={() => setAuthMode(null)}
+      onSwitchMode={setAuthMode}
+      onSubmit={authSubmitter(authMode, login, register)}
+    />
+  );
+
+  if (!user) {
+    // Nothing until `GET /api/auth/me` settles: a null user is also "not known
+    // yet", and a returning guest would see the no-name card flash first.
+    return hasResolved ? (
+      <>
+        <NamelessCard onAuth={setAuthMode} />
+        {authDialog}
+      </>
+    ) : null;
+  }
 
   return (
     <>
@@ -871,15 +969,7 @@ function AccountPane({ signedInHere }: { signedInHere: boolean }) {
         </Row>
       </Group>
 
-      {authMode && (
-        <AuthDialog
-          mode={authMode}
-          suggestedUsername={isGuest ? (user?.displayName ?? "") : ""}
-          onClose={() => setAuthMode(null)}
-          onSwitchMode={setAuthMode}
-          onSubmit={authSubmitter(authMode, login, register)}
-        />
-      )}
+      {authDialog}
       {emailOpen && (
         <AddEmailDialog onClose={() => setEmailOpen(false)} onSaved={() => setEmailOpen(false)} />
       )}

@@ -370,6 +370,53 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             await browser.close()
 
 
+async def test_a_visitor_with_no_name_gets_a_choose_a_name_settings():
+    """#1265: before a name there is no account, so the header's gear - the
+    only control the bar offers - opens a card to choose a name, make an
+    account or sign in. It used to open a registered account's pane: swatches
+    the server refused, a Manage that said "Sign in first.", a Delete that
+    asked for a password."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        refused: list[str] = []
+        page.on(
+            "response",
+            lambda response: refused.append(f"{response.request.method} {response.url}")
+            if response.status == 401
+            else None,
+        )
+        try:
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".first-run")
+            await page.locator(".header-settings-button").click()
+            dialog = page.locator(".settings-modal-card")
+            card = dialog.get_by_test_id("settings-nameless")
+            await card.wait_for(state="visible")
+            # None of a registered account's controls, and nothing that 401s.
+            assert await dialog.locator(".settings-you").count() == 0
+            assert await dialog.locator(".settings-swatches").count() == 0
+            assert await dialog.get_by_text("Signing in").count() == 0
+            assert await dialog.get_by_text("Your data").count() == 0
+            assert await dialog.get_by_role("button", name="Delete").count() == 0
+            assert await card.get_by_role("button", name="Create account").count() == 1
+            assert await card.get_by_role("button", name="Sign in").count() == 1
+            # The one thing to do here: choose a name, which makes the guest.
+            name = f"Nameless{uuid4().hex[:6]}"
+            await card.get_by_label("Display name").fill(name)
+            await card.get_by_role("button", name="Save").click()
+            await card.wait_for(state="detached")
+            await dialog.get_by_text("Playing as a guest").wait_for()
+            await dialog.locator(".settings-you-name", has_text=name).wait_for()
+            assert refused == [], refused
+        finally:
+            await context.close()
+            await browser.close()
+
+
 async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tmp_path):
     """#573: the picture chosen in Settings replaces the initial on the chip
     and on the seat, cropped and shrunk by the browser before it is sent."""

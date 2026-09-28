@@ -2056,6 +2056,8 @@ export const EN = {
     themeSoundShortcutsCameFromAccount: "The theme, sound and\n            shortcuts came from the account. What this browser had is untouched, and\n            comes back if you sign out.",
     dismiss: "Dismiss",
     playingAsGuest: "Playing as a guest",
+    noNameYet: "No name yet",
+    namelessExplainer: "Choose a name to play as a guest, or sign in. An account keeps the name, your points and your history on every device.",
     createAccount: "Create account",
     logIn: "Sign in",
     you: "You",

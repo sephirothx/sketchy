@@ -2041,6 +2041,8 @@ export const DE: Catalogue = {
     themeSoundShortcutsCameFromAccount: "Design, Ton und Kürzel kamen aus dem Konto. Was dieser Browser hatte,\n            bleibt unberührt und kommt zurück, wenn du dich abmeldest.",
     dismiss: "Ausblenden",
     playingAsGuest: "Du spielst als Gast",
+    noNameYet: "Noch kein Name",
+    namelessExplainer: "Wähle einen Namen, um als Gast zu spielen, oder melde dich an. Ein Konto behält den Namen, deine Punkte und deinen Verlauf auf jedem Gerät.",
     createAccount: "Konto anlegen",
     logIn: "Anmelden",
     you: "Du",
