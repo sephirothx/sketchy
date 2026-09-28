@@ -1,4 +1,5 @@
 import { apiRequest } from "./api.ts";
+import { socket } from "./socket.ts";
 import { ui } from "../content/ui/index.ts";
 
 /** What an account knows about its own way back in. */
@@ -150,7 +151,7 @@ export function completePasswordReset(
 ): Promise<{ ok: boolean; signedIn: boolean; reason?: "second_factor" | "suspended" }> {
   return apiRequest("/api/auth/password/reset", {
     method: "POST",
-    body: { token, password },
+    body: { token, password, socketId: socket.id },
   });
 }
 
@@ -158,7 +159,10 @@ export function completePasswordReset(
  * Change the password of the account making the request (R-AUTH-17).
  *
  * Ends the way a reset does: every session is revoked and this one is issued
- * afresh, so the caller stays signed in and every other device is out.
+ * afresh, so the caller stays signed in and every other device is out. The
+ * socket id says which socket is this tab's, the one the server leaves open;
+ * any other opened with this browser's cookie - a copy of it included - is
+ * closed once the new cookie is out (#1246).
  */
 export function changePassword(
   currentPassword: string,
@@ -166,6 +170,6 @@ export function changePassword(
 ): Promise<{ ok: boolean }> {
   return apiRequest("/api/auth/password/change", {
     method: "POST",
-    body: { currentPassword, password },
+    body: { currentPassword, password, socketId: socket.id },
   });
 }
