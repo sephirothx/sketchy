@@ -257,9 +257,10 @@ appears outside the page whose chunk carries its sheet has to bring the sheet it
 the first-time languages question was in the lobby's entry chunk while its rules were
 in Settings' sheet, prefetched on a 1 s timer in Safari, so it showed unstyled for that
 second; it is now its own lazy chunk importing `styles/lazy/play-languages.css`, which
-a lazy chunk waits for before it renders (#1274) - unless Settings' prefetch already
-put that sheet's link in the page and it is still loading, which Vite's preload helper
-does not wait for; a narrow window, since both are requested together. The import is
+a lazy chunk waits for before it renders (#1274). Vite's preload helper does not wait
+for a sheet another chunk's prefetch already put in the page, and Settings shares this
+one, so the question also waits, bounded, for any stylesheet link still loading
+([`lib/pendingStylesheets.ts`](../frontend/src/lib/pendingStylesheets.ts)). The import is
 caught whole, because the helper throws past a `.then` failure handler when the sheet
 is what fails. A tab open across a deploy
 asks for chunk names the server no longer has.

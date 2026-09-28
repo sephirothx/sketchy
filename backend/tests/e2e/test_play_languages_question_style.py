@@ -83,6 +83,49 @@ async def test_the_languages_question_is_never_drawn_without_its_layout(engine):
             await browser.close()
 
 
+async def test_the_question_waits_for_a_shared_sheet_another_prefetch_is_still_loading():
+    """Review of #1312: the question's sheet is shared with Settings, and when
+    Settings' prefetch has already put its link in the page, Vite's preload
+    helper sees the link and does not wait for it. The link is put there
+    first here, and held back, as that prefetch on a slow network would."""
+    from pathlib import Path
+
+    assets = Path(__file__).resolve().parents[3] / "frontend" / "dist" / "assets"
+    shared = [path.name for path in assets.glob("*.css") if "play-languages-question-body" in path.read_text()]
+    assert shared, "no built stylesheet holds the question's rules"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        await context.add_init_script(DUE)
+        await context.add_init_script(WATCH_QUESTION)
+        await context.add_init_script(
+            "document.addEventListener('DOMContentLoaded', () => {"
+            + "".join(
+                f"const l{i} = document.createElement('link'); l{i}.rel = 'stylesheet';"
+                f" l{i}.href = '/assets/{name}'; document.head.append(l{i});"
+                for i, name in enumerate(shared)
+            )
+            + "});"
+        )
+
+        async def hold_back(route):
+            await asyncio.sleep(2)
+            await route.continue_()
+
+        await context.route(re.compile(r".*/assets/(" + "|".join(re.escape(n) for n in shared) + r")$"), hold_back)
+        page = await context.new_page()
+        try:
+            await use_guest_name(page, f"Shared{uuid4().hex[:6]}")
+            await page.goto(BASE_URL)
+            question = page.get_by_test_id("play-languages-question")
+            await question.wait_for(state="visible", timeout=15_000)
+            first = await page.evaluate("() => window.__questionFirstDisplay")
+            assert first == "grid", f"the question was first drawn with display: {first}"
+        finally:
+            await context.close()
+            await browser.close()
+
+
 async def test_a_question_whose_stylesheet_cannot_load_is_not_asked_and_breaks_nothing():
     """Review of #1274: Vite's preload helper fetches a lazy chunk's stylesheet
     before the chunk, and when the stylesheet fails it throws past a `.then`

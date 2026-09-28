@@ -38,6 +38,7 @@ import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useOverlayOpen } from "../hooks/useOverlayRoute";
+import { pendingStylesheets } from "../lib/pendingStylesheets";
 
 /* The first-time languages question (#1219) is asked once per identity, so it
    waits for its own chunk rather than sitting in the entry one, and arrives
@@ -48,12 +49,17 @@ import { useOverlayOpen } from "../hooks/useOverlayRoute";
    asked this time; it stays due for the next load. The catch wraps the whole
    import, because Vite's preload helper waits for the stylesheet first and,
    when that is what fails, throws past a `.then` failure handler - to the
-   app's crash page (review of #1274). */
+   app's crash page (review of #1274). The helper does not wait for a sheet
+   another chunk's prefetch already put in the page - Settings shares this
+   one - so the question also waits for links still loading (review of
+   #1312). */
 const loadQuestion = () => import("../components/PlayLanguagesQuestion");
 const PlayLanguagesQuestion = lazy(
   async (): Promise<{ default: ComponentType<{ onDone: () => void }> }> => {
     try {
-      return { default: (await loadQuestion()).PlayLanguagesQuestion };
+      const { PlayLanguagesQuestion: Question } = await loadQuestion();
+      await pendingStylesheets();
+      return { default: Question };
     } catch {
       return { default: () => null };
     }
