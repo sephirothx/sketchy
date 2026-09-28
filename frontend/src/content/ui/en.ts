@@ -1563,7 +1563,7 @@ export const EN = {
   promptDisplay: {
     couldNotDoAction: (p: { action: string }) => `Could not ${p.action}.`,
     nextHintCost: (p: { cost: number }) =>
-      `Pick a blank to reveal it · ${counted(p.cost, { one: "point", other: "points" })}`,
+      `Pick an empty tile to reveal it · ${counted(p.cost, { one: "point", other: "points" })}`,
     hintSpendTotal: (p: { spent: number }) =>
       `Total: ${counted(p.spent, { one: "point", other: "points" })}`,
     buyLetter: (p: { letter: string; price: number }) =>

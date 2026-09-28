@@ -164,7 +164,12 @@ TILE_BOXES = """
 """
 
 
-async def test_bought_tiles_hold_their_place_and_say_what_they_cost():
+@pytest.mark.parametrize(
+    "prompt, rows",
+    [("sandcastle", 1), ("tischtennisschlaeger", 2)],
+    ids=["ten-letters", "twenty-letters"],
+)
+async def test_bought_tiles_hold_their_place_and_say_what_they_cost(prompt, rows):
     """#1277: a bought tile fell back to the plain tile's 19px and moved the
     row 13px under the finger; a 10-letter word wrapped 7 + 3 on a 390px phone
     and read as two words; and "Next hint: 12" had no unit, with the only
@@ -190,7 +195,7 @@ async def test_bought_tiles_hold_their_place_and_say_what_they_cost():
             await open_settings_section(host, "Scoring and hints")
             await host.locator('[aria-label="Hints"] button:has-text("Buy letters")').click()
             await open_settings_section(host, "Prompts")
-            await host.locator("#custom-prompts").fill("sandcastle\nlighthouse")
+            await host.locator("#custom-prompts").fill(prompt)
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
             await host.get_by_role("button", name="Start game").click()
@@ -198,15 +203,22 @@ async def test_bought_tiles_hold_their_place_and_say_what_they_cost():
             _, guesser, _ = await choose_prompt([host, guest])
             await guesser.locator(".hint-blank").first.wait_for()
             meta = guesser.locator(".hint-meta")
-            assert "Pick a blank to reveal it" in await meta.inner_text()
+            assert "Pick an empty tile to reveal it" in await meta.inner_text()
             assert "points" in await meta.inner_text()
 
             before = await guesser.evaluate(TILE_BOXES)
-            assert len(before) == 10 and len({top for _, top, _ in before}) == 1, before
+            assert len(before) == len(prompt), before
+            # One row while the tiles fit at 22px; past that they wrap - and
+            # every one stays on the screen, where it can be tapped.
+            assert len({top for _, top, _ in before}) == rows, before
+            assert all(left >= 0 and left + width <= 390 for left, _, width in before), before
+            meta_height = await meta.evaluate("(meta) => meta.getBoundingClientRect().height")
             await guesser.locator(".hint-blank").nth(2).click()
             await guesser.locator(".masked-tile.is-revealed").first.wait_for()
             after = await guesser.evaluate(TILE_BOXES)
             assert after == before, (before, after)
+            # The total's line was held: its first appearance moves nothing.
+            assert await meta.evaluate("(meta) => meta.getBoundingClientRect().height") == meta_height
         finally:
             for context in contexts:
                 await context.close()

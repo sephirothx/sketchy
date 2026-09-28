@@ -1,4 +1,4 @@
-import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type CSSProperties, type ReactNode } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { PHONE_LANDSCAPE_QUERY } from "../lib/roomLayout";
@@ -63,7 +63,11 @@ function renderMaskedPrompt(masked: string, buyableProps?: { canAfford: boolean;
             run += 1;
             const count = counts[run];
             return (
-              <span key={segmentIndex} className="masked-run">
+              <span
+                key={segmentIndex}
+                className="masked-run"
+                style={{ "--letters": segment.chars.length } as CSSProperties}
+              >
                 <span className="masked-tiles">
                   {segment.chars.map((ch, charIndex) => {
                     slot += 1;
@@ -234,7 +238,7 @@ export function PromptDisplay({
   return (
     <div className={`prompt-display${wheelBehindToggle ? " has-wheel-toggle" : ""}`} ref={rootRef}>
       {(canBuy || canBuyWheel) && (
-        <p className="hint-meta">
+        <p className={`hint-meta${canBuy ? " is-stacked" : ""}`}>
           {canBuy && (
             nextHintCost > remaining ? (
               <span className="hint-price-warning">{ui.promptDisplay.hintSpendLimitReached}</span>
@@ -242,10 +246,15 @@ export function PromptDisplay({
               <span className="hint-price">{ui.promptDisplay.nextHintCost({ cost: nextHintCost })}</span>
             )
           )}
-          {hintSpend > 0 && (
+          {/* In Buy letters the total's line is held from the start, so the
+              first purchase does not push the tiles down: joined to the
+              instruction it wrapped onto a second line in German and Dutch
+              at 390px and moved every tile 17px (#1277). */}
+          {(hintSpend > 0 || canBuy) && (
             <span
-              className="hint-spend-total"
+              className={`hint-spend-total${hintSpend > 0 ? "" : " is-empty"}`}
               title={ui.promptDisplay.hintSpendComesOutOfTurnPoints}
+              aria-hidden={hintSpend > 0 ? undefined : true}
             >
               {ui.promptDisplay.hintSpendTotal({ spent: hintSpend })}
             </span>
