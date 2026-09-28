@@ -182,8 +182,15 @@ async def request_email_verification(
             user = await session.get(User, user_id)
             if user is None or user.state != AccountState.REGISTERED.value:
                 raise RecoveryError("Create an account before adding an email.")
-            if await _address_taken(session, address, except_user_id=user_id):
-                raise EmailAlreadyInUse("That email is already in use.")
+            # Answered the same whether or not another account has proved the
+            # address (#1247): refusing it here told any signed-in account
+            # whether a given person's address has an account, which the
+            # forgot-password route deliberately hides (R-AUTH-09). The
+            # request is recorded as pending either way, so nothing the
+            # account can read differs; only the mail is not sent, and
+            # `confirm_email` refuses the address at the click in any case -
+            # which only the mailbox's holder could make.
+            taken = await _address_taken(session, address, except_user_id=user_id)
             issued = await issue_token(
                 session,
                 user_id=user_id,
@@ -192,15 +199,16 @@ async def request_email_verification(
                 requested_ip_hash=ip_hash,
                 now=now,
             )
-            queue_email(
-                session,
-                to_address=address,
-                template=EmailTemplate.VERIFY_EMAIL,
-                payload={"token": issued.token, "displayName": user.display_name},
-                user_id=user_id,
-                locale=await recipient_locale(session, user_id),
-                now=now,
-            )
+            if not taken:
+                queue_email(
+                    session,
+                    to_address=address,
+                    template=EmailTemplate.VERIFY_EMAIL,
+                    payload={"token": issued.token, "displayName": user.display_name},
+                    user_id=user_id,
+                    locale=await recipient_locale(session, user_id),
+                    now=now,
+                )
             session.add(
                 AuditEvent(
                     id=generate_uuid(),

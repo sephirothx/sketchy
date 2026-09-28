@@ -2199,7 +2199,7 @@ reloaded rather than served an older contract.
 | `POST` | `/api/auth/logout`, `/api/auth/logout-all` | |
 | `GET` | `/api/auth/sessions` | Signed-in device list: `id`, `deviceLabel`, `createdAt`, `lastUsedAt`, `expiresAt`, `idleExpiresAt` (when silence alone ends it — usually far sooner than `expiresAt`), `anomalyAt` (last used from a browser it was not issued to, or `null`), `current` (R-AUTH-03, R-AUTH-22) |
 | `DELETE` | `/api/auth/sessions/{session_id}` | Revoke one device |
-| `GET`/`PUT` | `/api/auth/email` | `PUT` `{email, password}` — the current password is proved (`401 password_incorrect`), and a staff account must be stepped up (`403`, `X-Sketchy-Step-Up: required`), because the address is the way back in when the password is lost (R-AUTH-26, #997). Rate limited (`AUTH_VERIFY_LIMIT`) |
+| `GET`/`PUT` | `/api/auth/email` | `PUT` `{email, password}` — the current password is proved (`401 password_incorrect`), and a staff account must be stepped up (`403`, `X-Sketchy-Step-Up: required`), because the address is the way back in when the password is lost (R-AUTH-26, #997). Rate limited (`AUTH_VERIFY_LIMIT`). Answers `{ok, pendingAddress}` whether or not another account holds the address — no mail is sent to one that is taken (R-AUTH-09, #1247) |
 | `POST` | `/api/auth/email/verify`, `/api/auth/email/reminder-seen` | |
 | `POST` | `/api/auth/password/forgot` | **Answers identically whether or not the account exists** (`AUTH_RESET_LIMIT`) |
 | `POST` | `/api/auth/password/reset/check` | Checks without consuming the token (`AUTH_RESET_CHECK_LIMIT`) |

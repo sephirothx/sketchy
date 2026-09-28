@@ -1387,10 +1387,10 @@ def create_auth_router(
             )
         except EmailAddressError as error:
             raise Refusal(400, ErrorCode.INVALID_EMAIL, str(error)) from error
-        except EmailAlreadyInUse as error:
-            raise Refusal(409, ErrorCode.EMAIL_IN_USE, str(error)) from error
         except RecoveryError as error:
             raise Refusal(403, ErrorCode.EMAIL_CHANGE_REFUSED, str(error)) from error
+        # The same answer for an address another account holds (#1247): no
+        # mail goes to it, and the click that would prove it is refused.
         await announce_email_state(user.id)
         return {"ok": True, "pendingAddress": address}
 
