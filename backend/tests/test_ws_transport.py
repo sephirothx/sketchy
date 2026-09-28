@@ -268,3 +268,283 @@ def test_the_operations_snapshot_and_metrics_carry_the_transport_rows():
     assert store.snapshot()["socket"]["transports"] == {"deflate-15": 2, "none": 1}
     text = "\n".join(store.prometheus_lines()) if hasattr(store, "prometheus_lines") else "\n".join(store.lines())
     assert 'sketchy_socket_transport_total{compression="deflate-15"} 2' in text
+
+
+# --- the inflate budget (#1234) ---------------------------------------------------
+
+
+def _open_pair(monkeypatch):
+    """A negotiated client/server pair in memory, deflate on both sides."""
+    monkeypatch.setattr(ws_transport, "telemetry", Telemetry())
+    server = NegotiatingConnection(connection_type=ConnectionType.SERVER)
+    client = wsproto.WSConnection(ConnectionType.CLIENT)
+    server.receive_data(client.send(Request(host="h", target="/", extensions=[BrowserOffer()])))
+    list(server.events())
+    client.receive_data(server.send(AcceptConnection(extensions=[PerMessageDeflate()])))
+    list(client.events())
+    return client, server
+
+
+def _feed(server, wire: bytes) -> tuple[list, int]:
+    """Hand `wire` to the server in one read; return its events and the peak
+    Python allocation it took to produce them."""
+    import tracemalloc
+
+    tracemalloc.start()
+    try:
+        server.receive_data(wire)
+        events = list(server.events())
+        _, peak = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+    return events, peak
+
+
+def _text(events) -> str:
+    return "".join(e.data for e in events if isinstance(e, TextMessage))
+
+
+def test_a_compressed_bomb_closes_with_1009_before_it_is_inflated(monkeypatch):
+    """32 KB of wire used to become 32 MiB in memory before anything counted
+    it. Now the most one message inflates to is the ceiling plus one byte."""
+    from app.socket_server import MAX_PACKET_BYTES
+
+    client, server = _open_pair(monkeypatch)
+    wire = bytes(client.send(wsproto.events.TextMessage(data="x" * (32 * 1024 * 1024))))
+    assert len(wire) < 64 * 1024, "a thousandfold bomb"
+
+    events, peak = _feed(server, wire)
+
+    closes = [e for e in events if isinstance(e, CloseConnection)]
+    assert closes and closes[0].code == 1009
+    assert peak < 3 * MAX_PACKET_BYTES, f"inflated {peak} bytes on the way to refusing it"
+
+
+def test_a_binary_bomb_is_bounded_the_same_way(monkeypatch):
+    client, server = _open_pair(monkeypatch)
+    wire = bytes(client.send(wsproto.events.BytesMessage(data=b"\0" * (8 * 1024 * 1024))))
+    events, peak = _feed(server, wire)
+    assert [e.code for e in events if isinstance(e, CloseConnection)] == [1009]
+    assert peak < 3 * ws_transport.INBOUND_MESSAGE_LIMIT
+
+
+def test_the_budget_spans_every_frame_of_a_fragmented_message(monkeypatch):
+    """Each fragment under the ceiling, the message over it: the count must
+    not reset at a frame boundary."""
+    client, server = _open_pair(monkeypatch)
+    quarter = "y" * (ws_transport.INBOUND_MESSAGE_LIMIT // 4 + 1)
+    wire = b"".join(
+        bytes(client.send(wsproto.events.TextMessage(data=quarter, message_finished=index == 3)))
+        for index in range(4)
+    )
+    events, _ = _feed(server, wire)
+    assert [e.code for e in events if isinstance(e, CloseConnection)] == [1009]
+
+
+def test_a_message_at_the_ceiling_passes_and_one_byte_more_does_not(monkeypatch):
+    limit = ws_transport.INBOUND_MESSAGE_LIMIT
+    client, server = _open_pair(monkeypatch)
+    events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data="z" * limit))))
+    assert len(_text(events)) == limit
+    assert not [e for e in events if isinstance(e, CloseConnection)]
+
+    client, server = _open_pair(monkeypatch)
+    events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data="z" * (limit + 1)))))
+    assert [e.code for e in events if isinstance(e, CloseConnection)] == [1009]
+
+
+def test_messages_under_the_ceiling_keep_passing_with_context_takeover(monkeypatch):
+    """The count is per message, and the shared compression context keeps
+    working across them - the second copy is a back-reference to the first."""
+    client, server = _open_pair(monkeypatch)
+    big = "w" * (ws_transport.INBOUND_MESSAGE_LIMIT - 10)
+    for _ in range(3):
+        events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data=big))))
+        assert _text(events) == big
+    fragments = [
+        bytes(client.send(wsproto.events.TextMessage(data="ab" * 1000, message_finished=last)))
+        for last in (False, True)
+    ]
+    events, _ = _feed(server, b"".join(fragments))
+    assert _text(events) == "ab" * 2000
+
+
+def test_the_largest_create_room_still_passes_the_inflate_budget(monkeypatch):
+    """Both serialisations of the 80,000-character custom-prompts blob."""
+    import json
+
+    from app.prompts import MAX_RAW_INPUT_LENGTH
+
+    blob = "\U0001F600" * MAX_RAW_INPUT_LENGTH
+    for packet in (
+        "42" + json.dumps(["create_room", {"customPrompts": blob}], ensure_ascii=False),
+        "42" + json.dumps(["create_room", {"customPrompts": blob}]),
+    ):
+        client, server = _open_pair(monkeypatch)
+        events, _ = _feed(server, bytes(client.send(wsproto.events.TextMessage(data=packet))))
+        assert _text(events) == packet
+        assert not [e for e in events if isinstance(e, CloseConnection)]
+
+
+def _bomb_client(port: int) -> int | None:
+    """Send one compressed 15 MiB message over a real socket; return the close
+    code the server answered with, or None if it only dropped the line."""
+    client = wsproto.WSConnection(ConnectionType.CLIENT)
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        sock.sendall(client.send(Request(host=f"127.0.0.1:{port}", target="/ws", extensions=[PerMessageDeflate()])))
+        client.receive_data(sock.recv(65536))
+        list(client.events())
+        sock.sendall(client.send(wsproto.events.TextMessage(data="x" * (15 * 1024 * 1024))))
+        while True:
+            data = sock.recv(65536)
+            if not data:
+                return None
+            client.receive_data(data)
+            for event in client.events():
+                if isinstance(event, CloseConnection):
+                    return event.code
+
+
+async def test_uvicorn_closes_a_bomb_with_1009_on_the_wire(monkeypatch):
+    monkeypatch.setattr(ws_transport, "telemetry", Telemetry())
+    port = _free_port()
+    config = uvicorn.Config(_accepting_app, host="127.0.0.1", port=port, ws=WS_PROTOCOL, log_level="warning", lifespan="off")
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(100):
+            if server.started:
+                break
+            await asyncio.sleep(0.05)
+        code = await asyncio.get_running_loop().run_in_executor(None, _bomb_client, port)
+        assert code == 1009
+    finally:
+        server.should_exit = True
+        await task
+
+
+def _raw_frame(payload: bytes, *, opcode: int, fin: bool, rsv1: bool) -> bytes:
+    """One masked client frame, built by hand: wsproto's own client never
+    sends a final deflate block, which is the point of these tests."""
+    import os
+    import struct
+
+    head = (0x80 if fin else 0) | (0x40 if rsv1 else 0) | opcode
+    length = len(payload)
+    if length < 126:
+        header = bytes([head, 0x80 | length])
+    elif length < 65536:
+        header = bytes([head, 0x80 | 126]) + struct.pack("!H", length)
+    else:
+        header = bytes([head, 0x80 | 127]) + struct.pack("!Q", length)
+    mask = os.urandom(4)
+    return header + mask + bytes(byte ^ mask[index % 4] for index, byte in enumerate(payload))
+
+
+def _final_block(text: bytes) -> bytes:
+    import zlib
+
+    compressor = zlib.compressobj(6, zlib.DEFLATED, -15)
+    return compressor.compress(text) + compressor.flush(zlib.Z_FINISH)
+
+
+def test_input_after_a_final_deflate_block_is_refused_not_kept(monkeypatch):
+    """#1234 review: after BFINAL, zlib keeps every further byte as unused
+    data and inflates none of it, so a budget that counts output never saw
+    fifty 1 MiB continuations pile up."""
+    client, server = _open_pair(monkeypatch)
+    first = _raw_frame(_final_block(b"42[\"x\"]"), opcode=1, fin=False, rsv1=True)
+    junk = _raw_frame(b"\x00" * (256 * 1024), opcode=0, fin=False, rsv1=False)
+    events, peak = _feed(server, first + junk)
+    assert [event.code for event in events if isinstance(event, CloseConnection)] == [1007]
+    assert peak < 2 * 1024 * 1024
+
+
+def test_a_message_that_ends_its_stream_is_read_and_the_next_one_too(monkeypatch):
+    """A final block is allowed at the end of a message (RFC 7692 §7.2.3.4);
+    the next message then starts a stream of its own."""
+    client, server = _open_pair(monkeypatch)
+    first = _raw_frame(_final_block(b"hello"), opcode=1, fin=True, rsv1=True)
+    events, _ = _feed(server, first)
+    assert _text(events) == "hello"
+    second = _raw_frame(_final_block(b"again"), opcode=1, fin=True, rsv1=True)
+    events, _ = _feed(server, second)
+    assert _text(events) == "again"
+    assert not [event for event in events if isinstance(event, CloseConnection)]
+
+
+# --- review of #1289: compressed input that inflates to nothing ------------------------
+
+# A non-final stored block with no data: valid deflate, inflates to no bytes.
+EMPTY_STORED_BLOCK = b"\x00\x00\x00\xff\xff"
+
+
+def test_an_unfinished_message_of_empty_blocks_is_cut_at_its_compressed_size(monkeypatch):
+    """The output cap counts what a message inflates to, and empty blocks
+    inflate to nothing: one message that never finished could stream them for
+    ever, uncounted by the inflate budget and by the byte window alike."""
+    client, server = _open_pair(monkeypatch)
+    chunk = EMPTY_STORED_BLOCK * (64 * 1024 // len(EMPTY_STORED_BLOCK))
+    frames = [_raw_frame(chunk, opcode=1, fin=False, rsv1=True)]
+    frames += [
+        _raw_frame(chunk, opcode=0, fin=False, rsv1=False)
+        for _ in range(ws_transport.INBOUND_COMPRESSED_MESSAGE_LIMIT // len(chunk) + 1)
+    ]
+    events, _ = _feed(server, b"".join(frames))
+    assert [event.code for event in events if isinstance(event, CloseConnection)] == [1009]
+
+
+def test_a_message_just_under_the_compressed_limit_still_passes(monkeypatch):
+    client, server = _open_pair(monkeypatch)
+    blocks = EMPTY_STORED_BLOCK * ((ws_transport.INBOUND_MESSAGE_LIMIT // 2) // len(EMPTY_STORED_BLOCK))
+    events, _ = _feed(server, _raw_frame(blocks + _final_block(b"42[\"x\"]"), opcode=1, fin=True, rsv1=True))
+    assert _text(events) == '42["x"]'
+
+
+def _flood_client(port: int, total: int) -> int | None:
+    """Send `total` bytes of uncompressed text frames as fast as the socket
+    takes them; return the close code the server answered with."""
+    client = wsproto.WSConnection(ConnectionType.CLIENT)
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        sock.sendall(client.send(Request(host=f"127.0.0.1:{port}", target="/ws", extensions=[])))
+        client.receive_data(sock.recv(65536))
+        list(client.events())
+        frame = client.send(wsproto.events.TextMessage(data="x" * (256 * 1024)))
+        try:
+            for _ in range(total // len(frame) + 1):
+                sock.sendall(frame)
+        except OSError:
+            pass
+        while True:
+            try:
+                data = sock.recv(65536)
+            except OSError:
+                return None
+            if not data:
+                return None
+            client.receive_data(data)
+            for event in client.events():
+                if isinstance(event, CloseConnection):
+                    return event.code
+
+
+async def test_a_connection_sending_past_the_wire_window_is_closed(monkeypatch):
+    store = Telemetry()
+    monkeypatch.setattr(ws_transport, "telemetry", store)
+    port = _free_port()
+    config = uvicorn.Config(_accepting_app, host="127.0.0.1", port=port, ws=WS_PROTOCOL, log_level="warning", lifespan="off")
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(100):
+            if server.started:
+                break
+            await asyncio.sleep(0.05)
+        code = await asyncio.get_running_loop().run_in_executor(
+            None, _flood_client, port, 2 * ws_transport.INBOUND_WIRE_BYTES_PER_WINDOW
+        )
+        assert code == 1008
+        assert store.socket_packets_rejected.get(("bytes",)) == 1
+    finally:
+        server.should_exit = True
+        await task

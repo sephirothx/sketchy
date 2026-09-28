@@ -583,3 +583,88 @@ async def test_a_webp_screenshot_is_measured_from_its_header(env):
     async with factory() as session:
         report = await session.get(BugReport, UUID(response.json()["id"]))
         assert (report.screenshot_width, report.screenshot_height) == (800, 600)
+
+
+# --- how much screenshot the deployment keeps (#1244) ------------------------------
+
+
+async def _stored_screenshot(factory, report_id: str) -> str:
+    async with factory() as session:
+        report = await session.get(BugReport, UUID(report_id))
+        return report.screenshot_status
+
+
+async def test_one_account_keeps_so_many_screenshots_a_day_and_the_reports_still_land(env, monkeypatch):
+    """One guest stored 5 x 2 MiB an hour behind a PNG signature, ~21 GiB per
+    address over the 90 days a report waits. The report is worth having
+    without its picture; the picture is what is bounded."""
+    new_client, factory, _ = env
+    http = new_client()
+    await guest(http, "Shutterbug")
+    answers = []
+    for _ in range(4):
+        response = await http.post("/api/bug-reports", json=a_report(screenshot=encoded(PNG)))
+        assert response.status_code == 201
+        answers.append(response.json())
+    assert [answer["screenshotKept"] for answer in answers] == [True, True, True, False]
+    assert await _stored_screenshot(factory, answers[-1]["id"]) == "none"
+    # A report sent with no picture never says one was dropped.
+    another = new_client()
+    await guest(another, "Wordsmith")
+    plain = (await another.post("/api/bug-reports", json=a_report())).json()
+    assert plain["screenshotKept"] is False
+
+
+async def test_the_deployment_keeps_so_many_undecided_screenshot_bytes(env, monkeypatch):
+    from app.api import bug_reports as bug_report_api
+
+    monkeypatch.setenv("BUG_REPORT_SCREENSHOT_BYTES_LIMIT", str(len(PNG) + 1))
+    new_client, factory, room_manager = env
+    # A router built under the ceiling, beside the fixture's.
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+    app.include_router(bug_report_api.create_bug_report_router(factory, room_manager))
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as first, AsyncClient(
+        transport=ASGITransport(app=app), base_url="http://test"
+    ) as second:
+        await guest(first, "FirstShot")
+        await guest(second, "SecondShot")
+        kept = (await first.post("/api/bug-reports", json=a_report(screenshot=encoded(PNG)))).json()
+        dropped = (await second.post("/api/bug-reports", json=a_report(screenshot=encoded(PNG)))).json()
+    assert kept["screenshotKept"] is True
+    assert dropped["screenshotKept"] is False
+    assert await _stored_screenshot(factory, dropped["id"]) == "none"
+
+
+async def test_screenshots_sent_at_once_cannot_pass_the_ceiling_together(env, monkeypatch):
+    """#1300 review: each submission read the total, then stored its own; sent
+    together, every one of them read the same total under the ceiling and all
+    were kept. Admission is one at a time now (one worker)."""
+    import asyncio
+
+    from app.api import bug_reports as bug_report_api
+
+    monkeypatch.setenv("BUG_REPORT_SCREENSHOT_BYTES_LIMIT", str(len(PNG) + 1))
+    new_client, factory, room_manager = env
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+    app.include_router(bug_report_api.create_bug_report_router(factory, room_manager))
+    clients = [
+        AsyncClient(transport=ASGITransport(app=app, client=(f"198.51.100.{index}", 1)), base_url="http://test")
+        for index in range(4)
+    ]
+    try:
+        for index, client in enumerate(clients):
+            await guest(client, f"Burst{index}")
+        answers = await asyncio.gather(*(
+            client.post("/api/bug-reports", json=a_report(screenshot=encoded(PNG)))
+            for client in clients
+        ))
+    finally:
+        for client in clients:
+            await client.aclose()
+    assert [answer.status_code for answer in answers] == [201] * 4, [a.text for a in answers]
+    kept = [answer.json()["screenshotKept"] for answer in answers]
+    assert kept.count(True) == 1, kept

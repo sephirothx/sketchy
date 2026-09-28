@@ -13,6 +13,7 @@ import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import correlation
+from app.auth.rate_limit import address_key
 from app.repositories.interfaces import (
     GameHistoryRepository,
     UserRepository,
@@ -23,8 +24,10 @@ from app.handlers.refusals import ErrorCode, refuse
 from app.live_drawing import frame_kind
 from app.protocol import PROTOCOL_VERSION, stale_client_bucket, SERVER_FULL_CLOSE_SECONDS
 from app.handlers.budgets import (
+    SHARED_CLASSES,
     SILENT_COMMANDS,
     UNRECORDED_COMMANDS,
+    Budget,
     CommandBudgetPolicy,
     CommandBudgets,
 )
@@ -37,12 +40,14 @@ from app.services.timers import TimerManager
 if TYPE_CHECKING:
     from app.auth.blocks import BlockService
     from app.services.afk import AfkWatch
+    from app.services.idle_rooms import IdleRoomReaper
     from app.services.game_flow import GameFlowService
     from app.services.game_handoff import FinishedGameHandoffWorker
     from app.services.friend_invites import FriendInviteBook
     from app.services.friends import FriendService
     from app.services.lobby_chat import LobbyChatLog
     from app.services.message_retention import MessageRetentionService
+    from app.services.player_reports import ReportBudget
     from app.services.friend_presence import FriendPresence
     from app.services.presence import (
         LobbyBroadcaster,
@@ -122,6 +127,10 @@ class HandlerContext:
     block_service: BlockService | None = None
     message_retention: MessageRetentionService | None = None
     room_codes: RoomCodeService | None = None
+    # The buckets a player report is charged to, the same rows the REST and
+    # Gallery doors charge (#1243). None without a database, where reporting
+    # is unavailable anyway.
+    report_budget: ReportBudget | None = None
     room_quotas: RoomQuotaService = field(init=False)
     room_capacity: RoomCapacityService = field(init=False)
     # Who is connected at all, as opposed to who is holding a seat. Built
@@ -208,6 +217,9 @@ class HandlerContext:
         default_factory=ActivityLedger, init=False, repr=False
     )
     afk_watch: AfkWatch = field(init=False, repr=False)
+    # Closes waiting rooms that never start a game (#1232); built beside the
+    # AFK watch, since it needs the eviction this context owns.
+    idle_rooms: IdleRoomReaper = field(init=False, repr=False)
 
     def on(self, command: str, handler) -> None:
         """Register a client command, with the budget it answers to.
@@ -230,6 +242,12 @@ class HandlerContext:
             correlation.socket_sid.set(sid)
             correlation.socket_event.set(command)
             correlation.request_id.set(correlation.new_request_id())
+            if not args:
+                # A command with no payload at all is a command with a missing
+                # one: every handler judges `None` and answers
+                # `invalid_payload`, where calling it with nothing raised a
+                # TypeError for most of them and left an ack unanswered (#1235).
+                args = (None,)
             if len(args) > max_args:
                 telemetry.socket_event(command, "refused", None)
                 _note_door_refusal(command, ErrorCode.INVALID_PAYLOAD, "invalid", args)
@@ -281,7 +299,9 @@ class HandlerContext:
             key = f"{sid}:{self.command_budgets.class_of(command)}"
             # Sized before the budget check: a throttled payload arrived too.
             telemetry.socket_command_payload(command, payload_bytes(*args))
-            if self._command_windows.check(key, budget):
+            if self._command_windows.check(key, budget) and self._within_shared_windows(
+                sid, command, budget
+            ):
                 # Timed and counted here, at the one door every command
                 # uses, so a handler cannot be added without being measured.
                 # A refusal the handler chose (`ok: False`) is a different
@@ -339,6 +359,30 @@ class HandlerContext:
 
         self.sio.on(command, handler=guarded)
 
+    def _within_shared_windows(self, sid: str, command: str, budget: Budget) -> bool:
+        """Whether this command fits the allowance its person shares (#1243).
+
+        Only for the kinds in `SHARED_CLASSES`; every other budget is a
+        socket's alone. The account is the one bound at the handshake, and a
+        socket without one - a visitor, who can neither chat nor sit - still
+        answers to its address.
+        """
+        kind = self.command_budgets.class_of(command)
+        share = SHARED_CLASSES.get(kind)
+        if share is None:
+            return True
+        windows = []
+        account = self.presence.user_for_sid(sid)
+        if account:
+            windows.append((f"account:{account}:{kind}", budget))
+        address = self.client_address(sid)
+        if address:
+            windows.append((
+                f"address:{address}:{kind}",
+                Budget(limit=budget.limit * share, window_seconds=budget.window_seconds),
+            ))
+        return self._command_windows.check_shared(windows)
+
     def close_after_handshake(self, sid: str) -> None:
         """Close a socket turned away for capacity, once its handshake is done.
 
@@ -362,6 +406,25 @@ class HandlerContext:
         task = asyncio.create_task(close_later())
         self._capacity_closes.add(task)
         task.add_done_callback(self._capacity_closes.discard)
+
+    def client_address(self, sid: str) -> str | None:
+        """The address this socket connected from, as every per-address limit
+        keys it (an IPv4 address or an IPv6 /64), or None if it is unknown.
+
+        Read off the ASGI scope the handshake arrived with - behind a trusted
+        proxy uvicorn has already rewritten it from the forwarded header -
+        never from Engine.IO's own `REMOTE_ADDR`, which its ASGI driver fills
+        with a constant.
+        """
+        try:
+            environ = self.sio.get_environ(sid)
+        except Exception:
+            return None
+        scope = environ.get("asgi.scope") if isinstance(environ, dict) else None
+        client = scope.get("client") if isinstance(scope, dict) else None
+        if not client:
+            return None
+        return address_key(client[0])
 
     def is_turned_away(self, sid: str) -> bool:
         """Whether this socket was told the server is full and awaits its close."""

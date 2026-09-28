@@ -25,12 +25,21 @@ from app.auth.avatars import (
 )
 from app.db.models import (
     AuditEvent,
+    PlayerReport,
     UploadedAvatarAsset,
     User,
     UserWarning,
     generate_uuid,
 )
-from app.domain_values import AccountState, AuditTargetType
+from app.domain_values import AccountState, AuditTargetType, ReportStatus
+
+
+class AvatarAlreadyRemoved(AvatarError):
+    """A moderator already took a picture down through this report (#1239)."""
+
+
+class AvatarReportDecided(AvatarError):
+    """The report a removal was asked through was decided before it ran."""
 
 
 class AvatarBlocked(AvatarError):
@@ -163,6 +172,9 @@ async def choose_doodle(
     async with session_factory() as session:
         async with session.begin():
             user = await _registered(session, db_user_id)
+            if user.avatar_key == key:
+                # Already worn: nothing changes, so nothing is written (#1241).
+                return key
             await session.execute(
                 delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
             )
@@ -232,7 +244,28 @@ async def _prior_moderator_removals(session: AsyncSession, user_id: UUID) -> int
             )
         )
     ).all()
-    return sum(1 for details in rows if (details or {}).get("by_moderator"))
+    # Only removals that took a picture down (#1239): the block still lands
+    # when there was none - the report was about an upload the player may
+    # have swapped since - but a call that removed nothing is no rung on the
+    # ladder. Four such calls took an account to a 90-day block.
+    return sum(
+        1
+        for details in rows
+        if (details or {}).get("by_moderator") and (details or {}).get("had_one", True)
+    )
+
+
+async def _already_removed_for(session: AsyncSession, user_id: UUID, report_id: UUID) -> bool:
+    """Whether a moderator has already taken a picture down through this report."""
+    rows = (
+        await session.scalars(
+            select(AuditEvent.details).where(
+                AuditEvent.event_type == "avatar.removed",
+                AuditEvent.target_user_id == user_id,
+            )
+        )
+    ).all()
+    return any((details or {}).get("report_id") == str(report_id) for details in rows)
 
 
 async def remove_avatar(
@@ -261,6 +294,22 @@ async def remove_avatar(
     db_user_id = UUID(str(user_id))
     async with session_factory() as session:
         async with session.begin():
+            if by_moderator and report_id is not None:
+                # One removal per report, decided under the report's row lock
+                # so two presses cannot both climb the ladder (#1239).
+                status = await session.scalar(
+                    select(PlayerReport.status)
+                    .where(PlayerReport.id == UUID(str(report_id)))
+                    .with_for_update()
+                )
+                # Asked again under the lock: the caller's check ran before
+                # it, and a decision landing in between let a picture come
+                # down through a report another moderator had closed (#1294
+                # review).
+                if status != ReportStatus.PENDING.value:
+                    raise AvatarReportDecided("the report has already been decided")
+                if await _already_removed_for(session, db_user_id, UUID(str(report_id))):
+                    raise AvatarAlreadyRemoved("a picture was already removed through this report")
             user = await session.get(User, db_user_id)
             if user is None:
                 raise AvatarError("account not found")
@@ -268,6 +317,11 @@ async def remove_avatar(
                 delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
             )
             had_one = bool(removed.rowcount) or uploaded_avatar_key(user.avatar_key) is not None
+            if not by_moderator and not had_one and user.avatar_key is None:
+                # A player's own removal of nothing: no row, no ledger entry
+                # (#1241). A moderator's is still recorded - it blocks
+                # re-upload whether or not there was a picture.
+                return AvatarRemoval(had_one=False, avatar_key=None)
             warning_id: UUID | None = None
             blocked_until: datetime | None = None
             # A moderator takes down an uploaded picture and nothing else. A
@@ -296,6 +350,7 @@ async def remove_avatar(
                 target_id=db_user_id,
                 details={
                     "by_moderator": by_moderator,
+                    "had_one": had_one,
                     **({"report_id": str(report_id)} if report_id else {}),
                     **(
                         {

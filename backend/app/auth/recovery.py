@@ -20,6 +20,7 @@ the operator command - not by recovery codes, which are one more thing to lose.
 """
 from __future__ import annotations
 
+from collections.abc import Awaitable, Callable
 from typing import NamedTuple
 from dataclasses import dataclass
 from datetime import datetime, timedelta, timezone
@@ -172,18 +173,35 @@ async def request_email_verification(
     ip_hash: str | None = None,
     request_id: str | None = None,
     now: datetime | None = None,
+    allow_recipient: Callable[[str], Awaitable[bool]] | None = None,
 ) -> str:
-    """Send a proof-of-address message, without recording the address yet."""
+    """Send a proof-of-address message, without recording the address yet.
+
+    `allow_recipient` spends the address's own bucket (#1240): an address
+    that has been sent its share today is answered exactly as one that was
+    mailed, and nothing is issued - so the link already in that inbox, the
+    one its owner may be waiting on, is not retired by a request they never
+    made.
+    """
     address = normalize_email(email)
     if address is None:
         raise EmailAddressError("Email is not valid.")
+    if allow_recipient is not None and not await allow_recipient(address):
+        return address
     async with session_factory() as session:
         async with session.begin():
             user = await session.get(User, user_id)
             if user is None or user.state != AccountState.REGISTERED.value:
                 raise RecoveryError("Create an account before adding an email.")
-            if await _address_taken(session, address, except_user_id=user_id):
-                raise EmailAlreadyInUse("That email is already in use.")
+            # Answered the same whether or not another account has proved the
+            # address (#1247): refusing it here told any signed-in account
+            # whether a given person's address has an account, which the
+            # forgot-password route deliberately hides (R-AUTH-09). The
+            # request is recorded as pending either way, so nothing the
+            # account can read differs; only the mail is not sent, and
+            # `confirm_email` refuses the address at the click in any case -
+            # which only the mailbox's holder could make.
+            taken = await _address_taken(session, address, except_user_id=user_id)
             issued = await issue_token(
                 session,
                 user_id=user_id,
@@ -192,15 +210,16 @@ async def request_email_verification(
                 requested_ip_hash=ip_hash,
                 now=now,
             )
-            queue_email(
-                session,
-                to_address=address,
-                template=EmailTemplate.VERIFY_EMAIL,
-                payload={"token": issued.token, "displayName": user.display_name},
-                user_id=user_id,
-                locale=await recipient_locale(session, user_id),
-                now=now,
-            )
+            if not taken:
+                queue_email(
+                    session,
+                    to_address=address,
+                    template=EmailTemplate.VERIFY_EMAIL,
+                    payload={"token": issued.token, "displayName": user.display_name},
+                    user_id=user_id,
+                    locale=await recipient_locale(session, user_id),
+                    now=now,
+                )
             session.add(
                 AuditEvent(
                     id=generate_uuid(),
@@ -267,30 +286,45 @@ async def request_password_reset(
     ip_hash: str | None = None,
     request_id: str | None = None,
     now: datetime | None = None,
+    allow_account: Callable[[UUID], Awaitable[bool]] | None = None,
 ) -> bool:
     """Mail a reset link if the identifier resolves to a recoverable account.
 
     Returns whether anything was sent, for tests and the operator log only.
     Callers must answer the request identically either way.
+
+    `allow_account` spends the account's own bucket (#1240), which the
+    caller's address cannot reset: from one /64 an address bucket let twenty
+    reset mails through to one player, and every one of them retired the
+    link before it. A refused request issues nothing, so the newest link
+    already mailed stays good.
     """
     lookup = identifier.strip().lower()
     if not lookup:
         return False
+    recoverable = (
+        User.state == AccountState.REGISTERED.value,
+        User.email.is_not(None),
+        User.email_verified_at.is_not(None),
+        (func.lower(User.username) == lookup) | (func.lower(User.email) == lookup),
+    )
+    # Found first, in a read that is closed before the bucket is charged: the
+    # bucket is a write of its own, and holding a transaction open across it
+    # is the wait SQLite's single writer turns into a stall.
+    async with session_factory() as session:
+        user_id = await session.scalar(select(User.id).where(*recoverable))
+    # No verified address means no way to prove the request came from
+    # the account's owner. The operator command exists for this.
+    if user_id is None:
+        return False
+    if allow_account is not None and not await allow_account(user_id):
+        return False
     async with session_factory() as session:
         async with session.begin():
             user = await session.scalar(
-                select(User).where(
-                    User.state == AccountState.REGISTERED.value,
-                    (func.lower(User.username) == lookup)
-                    | (
-                        (func.lower(User.email) == lookup)
-                        & User.email_verified_at.is_not(None)
-                    ),
-                )
+                select(User).where(User.id == user_id, *recoverable)
             )
-            # No verified address means no way to prove the request came from
-            # the account's owner. The operator command exists for this.
-            if user is None or user.email is None or user.email_verified_at is None:
+            if user is None:
                 return False
             issued = await issue_token(
                 session,

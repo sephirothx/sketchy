@@ -626,7 +626,7 @@ export const NL: Catalogue = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Volg de link die naar ${p.address} is gestuurd. Tot die tijd hoort het adres niet bij je account en kun je er niets mee herstellen${
+      `Als ${p.address} gebruikt kan worden, is er een bevestigingslink onderweg. Tot je die volgt, hoort het adres niet bij je account en kun je er niets mee herstellen${
         p.replacing ? ", en het adres dat je had blijft staan." : "."
       }`,
     thatDoesNotLookLikeEmail: "Dat lijkt geen e-mailadres.",
@@ -685,6 +685,7 @@ export const NL: Catalogue = {
       })} dit bezoek`,
     couldNotTakeScreenshot: "De schermafbeelding kon niet gemaakt worden.",
     thanksYourReportWithPeopleWho: "Bedankt — je melding ligt bij de mensen die Sketchy draaien.",
+    thanksSentWithoutScreenshot: "Bedankt — je melding ligt bij de mensen die Sketchy draaien. De schermafbeelding kon deze keer niet worden bewaard.",
     couldNotSendReport: "De melding kon niet verstuurd worden.",
     reportBug: "Een bug melden",
     somethingBrokenNotSomethingSomeoneSaid: "Iets dat stuk is, niet iets dat iemand zei. Dit komt bij de mensen die Sketchy draaien — nooit bij andere spelers.",
@@ -2467,7 +2468,7 @@ export const NL: Catalogue = {
     youCanRecoverThisAccount: (p: { address: string }) =>
       `Je kunt dit account herstellen via ${p.address}.`,
     checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
-      `Zoek in ${p.pendingAddress} naar een bevestigingslink. Tot je die volgt, is er geen weg terug in dit account.`,
+      `Als ${p.pendingAddress} gebruikt kan worden, is er een bevestigingslink onderweg. Tot je die volgt, is er geen weg terug in dit account.`,
     thisServerCannotSendEmail: "Deze server kan geen e-mail versturen, dus een kwijtgeraakt wachtwoord moet worden hersteld door wie de server beheert.",
     addAnEmailAddressSo: "Voeg een e-mailadres toe zodat je weer binnenkomt als je je wachtwoord vergeet.",
   },
@@ -2541,6 +2542,7 @@ export const NL: Catalogue = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy zit nu vol. Probeer het over een paar minuten nog eens.",
+    tooManyTabsOpen: "Sketchy is in te veel tabbladen open. Sluit er een om verder te gaan.",
     connectionLostWhileTryingTo: (p: { action: string }) =>
       `Verbinding verbroken bij: ${p.action}. Probeer het nog eens.`,
     theRequestToActionTimed: (p: { action: string }) =>
@@ -2606,6 +2608,7 @@ export const NL: Catalogue = {
   roomNotices: {
     kickedByVote: "Je bent per stemming uit de kamer gezet.",
     roomClosed: "Een beheerder heeft deze kamer gesloten.",
+    roomExpired: "Deze kamer is gesloten na 30 minuten zonder spel.",
     kickedByAdmin: "Een beheerder heeft je uit de kamer gezet.",
     accountDeleted: "Je account is verwijderd.",
     accountSuspended: "Je account is geschorst.",

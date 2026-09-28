@@ -227,7 +227,15 @@ export function submitBugReport(input: {
   clientContext?: Record<string, unknown>;
   roomCode?: string | null;
   screenshot?: string | null;
-}): Promise<{ id: string; status: BugReportStatus; createdAt: string }> {
+}): Promise<{
+  id: string;
+  status: BugReportStatus;
+  createdAt: string;
+  /** False when a screenshot was sent and the server could not keep it:
+   * this account's daily allowance, or the deployment's, was spent (#1244).
+   * The report itself landed either way. */
+  screenshotKept: boolean;
+}> {
   return apiRequest("/api/bug-reports", {
     method: "POST",
     body: input,

@@ -21,7 +21,7 @@ from app.api.errors import Refusal
 from app.message_limits import MAX_REPORT_DETAILS
 from app.refusals import ErrorCode
 from app.auth.avatars import avatar_url, uploaded_avatar_key
-from app.services.avatars import remove_avatar
+from app.services.avatars import AvatarAlreadyRemoved, AvatarReportDecided, remove_avatar
 from app.auth.rate_limit import (
     PersistentRateLimiter,
     client_key,
@@ -48,6 +48,7 @@ from app.services.player_reports import (
     open_report_id,
     record_player_report,
     CapturedDrawing,
+    ReportBudget,
 )
 from app.auth.sessions import revoke_all_sessions
 from app.auth.step_up import require_step_up
@@ -56,6 +57,7 @@ from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
     AuditEvent,
     GameRecord,
+    IdentityAlias,
     TurnDrawing,
     PlayerReport,
     PlayerReportDrawingEvidence,
@@ -1129,6 +1131,31 @@ def _is_about_themselves(reviewer: User, subject_user_id: UUID | None) -> bool:
     )
 
 
+async def _is_about_themselves_through_aliases(
+    session, reviewer: User, subject_user_id: UUID | None
+) -> bool:
+    """`_is_about_themselves`, for a subject named by any identity it had.
+
+    A report keeps the id it was filed against, and a guest merge does not
+    re-point it: a moderator reported while playing as a guest who then
+    claimed that guest into their account could see and decide their own
+    case, and the ledger named them as its reviewer (#1248). The subject is
+    resolved to the account behind it first.
+    """
+    if subject_user_id is None or reviewer.role == UserRole.ADMIN.value:
+        return False
+    if subject_user_id == reviewer.id:
+        return True
+    return await canonical_user_id(session, subject_user_id) == reviewer.id
+
+
+def _merged_into(reviewer: User):
+    """The guest identities merged into the reviewer's account, as a subquery."""
+    return select(IdentityAlias.source_user_id).where(
+        IdentityAlias.target_user_id == reviewer.id
+    )
+
+
 async def _refuse_a_report_that_cannot_be_filed(
     session, *, body, reporter_user_id: UUID
 ) -> None:
@@ -1203,9 +1230,8 @@ def create_moderation_router(
     flush_retained_messages: Callable[[], Awaitable[None]] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
-    report_limiter = PersistentRateLimiter(
-        session_factory, scope="report-submit", limit=10, window_seconds=3600
-    )
+    # Shared with the socket door (#1243): per address and per account.
+    report_budget = ReportBudget(session_factory)
     content_report_limiter = PersistentRateLimiter(
         session_factory,
         scope="prompt-content-report-submit",
@@ -1369,7 +1395,7 @@ def create_moderation_router(
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-        if not await report_limiter.check(client_key(request)):
+        if not await report_budget.charge(address=client_key(request), account_id=reporter_id):
             raise Refusal(
                 429,
                 ErrorCode.TOO_MANY_REPORTS,
@@ -1681,7 +1707,11 @@ def create_moderation_router(
                 plan = plan.where(
                     or_(
                         PlayerReport.reported_user_id.is_(None),
-                        PlayerReport.reported_user_id != reviewer.id,
+                        and_(
+                            PlayerReport.reported_user_id != reviewer.id,
+                            # Nor a guest of theirs since claimed (#1248).
+                            PlayerReport.reported_user_id.not_in(_merged_into(reviewer)),
+                        ),
                         PlayerReport.status != ReportStatus.PENDING.value,
                     )
                 )
@@ -1753,32 +1783,74 @@ def create_moderation_router(
             # on its own permission to suspend somebody.
             require_step_up(request)
             report = await session.get(PlayerReport, report_id)
-        if report is None or report.reported_user_id is None:
+            # The account behind the reported identity, a claimed guest's
+            # included (#1248): the picture, the boundaries and the self-check
+            # are all about the person, not the id the report was filed on.
+            target_id = (
+                await canonical_user_id(session, report.reported_user_id)
+                if report is not None and report.reported_user_id is not None
+                else None
+            )
+            target = await session.get(User, target_id) if target_id is not None else None
+        if report is None or report.reported_user_id is None or target is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if _is_about_themselves(actor, report.reported_user_id):
+        if _is_about_themselves(actor, target.id):
             raise HTTPException(
                 status_code=403,
                 detail="A report about you is for another moderator to decide.",
             )
+        # The role boundaries a warning keeps (#1239), since a removal issues
+        # one and climbs a ladder of upload blocks: through a self-filed
+        # report, a moderator took an administrator to a 90-day block in four
+        # calls, and a peer the same way through a report about spam.
+        if target.role == UserRole.ADMIN.value:
+            raise HTTPException(
+                status_code=403, detail="An administrator's picture cannot be removed."
+            )
+        if actor.role == UserRole.MODERATOR.value and target.role != UserRole.USER.value:
+            raise HTTPException(
+                status_code=403,
+                detail="Moderators cannot remove another moderator's picture.",
+            )
+        # Only through a pending report about a picture: a removal is the
+        # answer to that complaint, not a button on any case.
+        if report.reason != ReportReason.INAPPROPRIATE_AVATAR.value:
+            raise HTTPException(
+                status_code=409, detail="This report is not about a picture."
+            )
+        if report.status != ReportStatus.PENDING.value:
+            raise HTTPException(
+                status_code=409, detail="This report has already been decided."
+            )
         request_id, ip_hash = await audit_coordinates(request, session_factory)
-        outcome = await remove_avatar(
-            session_factory,
-            user_id=report.reported_user_id,
-            actor_id=actor.id,
-            by_moderator=True,
-            report_id=report.id,
-            request_id=request_id,
-            ip_hash=ip_hash,
-        )
+        try:
+            outcome = await remove_avatar(
+                session_factory,
+                user_id=target.id,
+                actor_id=actor.id,
+                by_moderator=True,
+                report_id=report.id,
+                request_id=request_id,
+                ip_hash=ip_hash,
+            )
+        except AvatarAlreadyRemoved as error:
+            raise HTTPException(
+                status_code=409,
+                detail="A picture was already removed through this report.",
+            ) from error
+        except AvatarReportDecided as error:
+            raise HTTPException(
+                status_code=409, detail="This report has already been decided."
+            ) from error
         if on_avatar_changed is not None:
             # What is left, not a blanket None: a doodle the removal left in
             # place must stay on the player's live seats (R-AVA-09).
-            await on_avatar_changed(str(report.reported_user_id), outcome.avatar_key)
+            await on_avatar_changed(str(target.id), outcome.avatar_key)
         # After the commit, so a socket can never announce a notice a
         # rolled-back transaction never wrote - the rule the warning route
         # above follows for the same reason.
         if outcome.warning_id is not None and on_user_warned is not None:
-            await on_user_warned(str(report.reported_user_id))
+            await on_user_warned(str(target.id))
         return {
             "ok": True,
             "removed": outcome.had_one,
@@ -1959,7 +2031,12 @@ def create_moderation_router(
                 plan = plan.where(
                     or_(
                         PromptContentReport.reported_owner_user_id.is_(None),
-                        PromptContentReport.reported_owner_user_id != reviewer.id,
+                        and_(
+                            PromptContentReport.reported_owner_user_id != reviewer.id,
+                            PromptContentReport.reported_owner_user_id.not_in(
+                                _merged_into(reviewer)
+                            ),
+                        ),
                         PromptContentReport.status != ReportStatus.PENDING.value,
                     )
                 )
@@ -2023,7 +2100,9 @@ def create_moderation_router(
         named = await session.get(PromptContentReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if _is_about_themselves(reviewer, named.reported_owner_user_id):
+        if await _is_about_themselves_through_aliases(
+            session, reviewer, named.reported_owner_user_id
+        ):
             # The player queue's rule, on the account that owns the list:
             # before the lock and whatever state the report is in (#1063).
             raise HTTPException(
@@ -2082,7 +2161,9 @@ def create_moderation_router(
         named = await session.get(PlayerReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if _is_about_themselves(reviewer, named.reported_user_id):
+        if await _is_about_themselves_through_aliases(
+            session, reviewer, named.reported_user_id
+        ):
             # Before the lock and before the 409: the target never changes,
             # and "about you" is the answer whatever state the report is in,
             # so a reported moderator cannot learn from a 409 that their case
@@ -2619,7 +2700,9 @@ def create_moderation_router(
                     raise HTTPException(
                         status_code=404, detail="No such prompt list."
                     )
-                if _is_about_themselves(reviewer, prompt_list.owner_user_id):
+                if await _is_about_themselves_through_aliases(
+                    session, reviewer, prompt_list.owner_user_id
+                ):
                     # Releasing one's own held list is the same act as
                     # dismissing a report about it (#1063).
                     raise HTTPException(
@@ -2753,6 +2836,12 @@ def create_moderation_router(
                     expires_at=body.expires_at,
                     created_at=now,
                     source_report_id=source_report.id if source_report else None,
+                    # The boundary as it stands now, kept with the suspension
+                    # so a later demotion cannot move it (#1294 review).
+                    lift_requires_admin=(
+                        reviewer.role == UserRole.ADMIN.value
+                        or target.role != UserRole.USER.value
+                    ),
                 )
                 session.add(ban)
                 # Written here, in the transaction that creates the ban, so a
@@ -2877,6 +2966,36 @@ def create_moderation_router(
                     raise HTTPException(
                         status_code=409, detail="This suspension was already revoked."
                     )
+                if reviewer.role == UserRole.MODERATOR.value:
+                    # The boundaries a suspension keeps (R-BAN-01), for its
+                    # undoing too (#1239): a moderator lifted a suspension an
+                    # administrator had placed. An administrator's decision is
+                    # an administrator's to reverse, and so is one about a
+                    # member of staff, which only an administrator can make.
+                    issuer = (
+                        await session.get(User, ban.banned_by_user_id)
+                        if ban.banned_by_user_id is not None
+                        else None
+                    )
+                    subject = await session.get(User, ban.user_id) if ban.user_id else None
+                    # As the roles stand now, and as they stood when it was
+                    # placed: a demotion since cannot bring it within a
+                    # moderator's reach (#1294 review).
+                    if issuer is not None and issuer.role == UserRole.ADMIN.value:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Only an administrator can lift an administrator's suspension.",
+                        )
+                    if subject is not None and subject.role != UserRole.USER.value:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Moderators cannot lift a suspension of another member of staff.",
+                        )
+                    if ban.lift_requires_admin:
+                        raise HTTPException(
+                            status_code=403,
+                            detail="Only an administrator can lift this suspension.",
+                        )
                 ban.revoked_at = now
                 ban.revoked_by_user_id = reviewer.id
                 ban.revoke_reason = body.reason
@@ -3175,7 +3294,7 @@ def create_moderation_router(
         reporter_id = getattr(request.state, "user_id", None)
         if not reporter_id:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
-        if not await report_limiter.check(client_key(request)):
+        if not await report_budget.charge(address=client_key(request), account_id=reporter_id):
             raise Refusal(
                 429,
                 ErrorCode.TOO_MANY_REPORTS,

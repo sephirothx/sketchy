@@ -181,10 +181,12 @@ from app.prompt_content import (
     LIST_TAG_VOCABULARY,
     UnknownListTag,
     clean_list_tags,
-    clean_prompt_aliases,
+    clean_prompt_aliases_keyed,
     normalize_prompt_answer,
+    visible_text_problem,
     languages_sharing_words,
     prompt_match_key,
+    prompt_match_keys,
     validate_prompt_list_language,
 )
 from app.prompts import letter_histogram
@@ -531,22 +533,83 @@ def _erased_turn_drawing(turn_id: UUID, game_id: UUID) -> TurnDrawing:
     )
 
 
+@dataclass(frozen=True, slots=True)
+class _RevisionVersion:
+    """One member of a revision, as a save reads it (#1236): what the version
+    is, what it answers to, and what a moderator decided about it."""
+
+    id: UUID
+    concept_id: UUID
+    canonical_answer: str
+    version: int
+    match_key: str
+    moderation_state: str
+    moderated_at: datetime | None
+    moderated_by_user_id: UUID | None
+    aliases: tuple[str, ...]
+
+
+async def _revision_versions(
+    session: AsyncSession, prompt_list_id: UUID, version: int
+) -> list[_RevisionVersion]:
+    """A revision's members in order, from one flat select."""
+    rows = (
+        await session.execute(
+            select(
+                PromptListRevisionItem.position,
+                PromptVersion.id,
+                PromptVersion.concept_id,
+                PromptVersion.canonical_answer,
+                PromptVersion.version,
+                PromptVersion.match_key,
+                PromptVersion.moderation_state,
+                PromptVersion.moderated_at,
+                PromptVersion.moderated_by_user_id,
+                PromptAlias.answer,
+            )
+            .select_from(PromptListRevision)
+            .join(
+                PromptListRevisionItem,
+                PromptListRevisionItem.revision_id == PromptListRevision.id,
+            )
+            .join(PromptVersion, PromptVersion.id == PromptListRevisionItem.prompt_version_id)
+            .outerjoin(
+                PromptVersionAlias,
+                PromptVersionAlias.prompt_version_id == PromptVersion.id,
+            )
+            .outerjoin(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+            .where(
+                PromptListRevision.prompt_list_id == prompt_list_id,
+                PromptListRevision.version == version,
+            )
+            .order_by(PromptListRevisionItem.position)
+        )
+    ).all()
+    members: dict[int, tuple[tuple, list[str]]] = {}
+    for position, *fields, alias in rows:
+        held = members.get(position)
+        if held is None:
+            held = members[position] = (tuple(fields), [])
+        if alias is not None:
+            held[1].append(alias)
+    return [
+        _RevisionVersion(*fields, aliases=tuple(sorted(aliases)))
+        for fields, aliases in members.values()
+    ]
+
+
 def _same_membership(
-    previous: PromptListRevision, entries: Sequence[PromptListEntryInput]
+    previous: Sequence[_RevisionVersion], entries: Sequence[PromptListEntryInput]
 ) -> bool:
     """Whether `entries` restate the revision exactly: identity, answer, aliases, order."""
-    items = sorted(previous.items, key=lambda item: item.position)
-    if len(items) != len(entries):
+    if len(previous) != len(entries):
         return False
-    for item, entry in zip(items, entries, strict=True):
-        version = item.prompt_version
+    for version, entry in zip(previous, entries, strict=True):
         if entry.concept_id is None or UUID(entry.concept_id) != version.concept_id:
             return False
         if version.canonical_answer != entry.answer:
             return False
-        if tuple(sorted(link.alias.answer for link in version.version_aliases)) != tuple(
-            sorted(entry.aliases)
-        ):
+        if version.aliases != tuple(sorted(entry.aliases)):
             return False
     return True
 
@@ -3573,6 +3636,85 @@ class _CatalogueRanking:
         self._entries.clear()
 
 
+#: Rows read per turn of the loop when a selection's content is read cold:
+#: about 8 ms of row handling each, measured.
+VERDICT_READ_CHUNK = 1000
+
+
+async def _rows_in_chunks(session: AsyncSession, statement) -> list:
+    """Every row of `statement`, handed over a chunk at a time.
+
+    A selection at its ceiling is ~210,000 rows of answers and aliases, and
+    materialising them in one go held the loop for ~0.4 s before any folding
+    began (#1237); a chunk at a time gives the loop back between them.
+    """
+    rows: list = []
+    result = await session.stream(statement)
+    async for partition in result.partitions(VERDICT_READ_CHUNK):
+        rows.extend(partition)
+        await asyncio.sleep(0)
+    return rows
+
+
+#: Selections whose verdict is remembered (#1237). A verdict is a few
+#: integers; the bound is on how many distinct selections are kept, oldest out.
+MAX_REMEMBERED_VERDICTS = 512
+AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
+EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
+
+
+@dataclass(frozen=True, slots=True)
+class _SelectionVerdict:
+    """What checking a selection's content concluded: how many prompts it
+    offers, and whether any answer reaches two of them."""
+
+    prompt_count: int
+    ambiguous: bool
+
+
+def _single_language_verdict(rows: Sequence[Row], language: str) -> _SelectionVerdict:
+    """Fold every active answer and alias under `language`; off the loop.
+
+    Keyed from the *text* under the fold in force now, not the stored keys
+    (review of #1070): a fold that widened since the rows were written makes
+    two stored keys one answer, and the game matches under the new fold.
+    """
+    reached_by: dict[str, UUID] = {}
+    for version_id, answer in rows:
+        if reached_by.setdefault(prompt_match_key(answer, language), version_id) != version_id:
+            return _SelectionVerdict(prompt_count=0, ambiguous=True)
+    return _SelectionVerdict(prompt_count=len({version_id for version_id, _ in rows}), ambiguous=False)
+
+
+def _mixed_verdict(
+    rows: Sequence[Row], alias_rows: Sequence[Row], language_of: dict[UUID, str]
+) -> _SelectionVerdict:
+    """A mixed room's check, every room language at once; off the loop.
+
+    Each room language sees its own lists and the lists in no language. Each
+    text is folded once per distinct transliteration rather than once per
+    room language (`prompt_match_keys`): seven languages, at most four keys.
+    The rows arrive as the database returned them, so none of this - not even
+    grouping the aliases - runs on the loop.
+    """
+    aliases: dict[UUID, list[str]] = defaultdict(list)
+    for version_id, answer in alias_rows:
+        aliases[version_id].append(answer)
+    reached_by: dict[str, dict[str, UUID]] = {language: {} for language in PROMPT_LANGUAGES}
+    for revision_id, version_id, _concept, answer in rows:
+        list_language = language_of[revision_id]
+        languages = (
+            PROMPT_LANGUAGES if list_language == AGNOSTIC_PROMPT_LANGUAGE else (list_language,)
+        )
+        for text in (answer, *aliases.get(version_id, ())):
+            for language, key in prompt_match_keys(text, languages).items():
+                if reached_by[language].setdefault(key, version_id) != version_id:
+                    return _SelectionVerdict(prompt_count=0, ambiguous=True)
+    return _SelectionVerdict(
+        prompt_count=len({concept for _, _, concept, _ in rows}), ambiguous=False
+    )
+
+
 class SqlAlchemyPromptListRepository(PromptListRepository):
     """SQLAlchemy-backed implementation of PromptListRepository."""
 
@@ -3587,6 +3729,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # `CATALOGUE_RANKING_TTL_SECONDS`); a test that writes and reads back
         # at once gets the uncached order it expects.
         self._ranking = _CatalogueRanking(catalogue_ranking_ttl_seconds)
+        # What authorizing a selection concluded (#1237), by the revisions it
+        # pinned and the fold they were checked under, with the moderation
+        # fingerprint it was concluded at. See `authorize_selection`.
+        self._verdicts: OrderedDict[tuple, tuple[tuple, _SelectionVerdict]] = OrderedDict()
 
     @staticmethod
     def _star_count():
@@ -3772,20 +3918,27 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         for entry in entries:
             answer = " ".join(entry.answer.split())
             try:
-                # Validates the answer (length, folded length); the keys the
-                # ambiguity check compares are built per fold below.
-                normalize_prompt_answer(answer, language)
-                aliases = clean_prompt_aliases(
+                # Validates the answer (length, folded length) and keys it
+                # under the list's own language, which is the fold the
+                # ambiguity check below uses for a list in a language: each
+                # text is folded once, not three times over (#1236).
+                answer_key = normalize_prompt_answer(answer, language)
+                aliases, alias_keys = clean_prompt_aliases_keyed(
                     list(entry.aliases),
-                    canonical_answer=answer,
+                    canonical_key=answer_key,
                     language=language,
                 )
             except ValueError as error:
                 raise PromptListMutationError(str(error)) from error
-            for fold, seen in seen_matches.items():
-                accepted_keys = {
-                    prompt_match_key(text, fold) for text in (answer, *aliases)
+            if language == AGNOSTIC_PROMPT_LANGUAGE:
+                keyed = [prompt_match_keys(text, folds) for text in (answer, *aliases)]
+                accepted_by_fold = {
+                    fold: {keys[fold] for keys in keyed} for fold in folds
                 }
+            else:
+                accepted_by_fold = {language: {answer_key, *alias_keys}}
+            for fold, seen in seen_matches.items():
+                accepted_keys = accepted_by_fold[fold]
                 if seen.intersection(accepted_keys):
                     raise PromptListMutationError(
                         "Prompt answers and aliases must be unambiguous within a list."
@@ -3822,6 +3975,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             raise PromptListMutationError("Name must be 1-64 characters.")
         if len(description) > 255:
             raise PromptListMutationError("Description must be at most 255 characters.")
+        # The same refusal as an answer's (#1245), less the emoji joiner a
+        # title may use: an override that turns the line around, or a name
+        # that looks like another and is not, is spoofing in the catalogue.
+        for label, text in (("Name", name), ("Description", description)):
+            problem = visible_text_problem(text, emoji_joiner=True)
+            if problem is not None:
+                raise PromptListMutationError(f"{label} {problem}.")
         try:
             language = validate_prompt_list_language(language)
         except ValueError as error:
@@ -4134,6 +4294,29 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             for list_id, slugs in held.items()
         }
 
+    @staticmethod
+    async def _revision_tags(
+        session: AsyncSession, prompt_list_id: UUID, version: int
+    ) -> tuple[str, ...]:
+        """Tag slugs of one revision of a list, in vocabulary order (R-LIST-18)."""
+        slugs = set(
+            (
+                await session.scalars(
+                    select(PromptTag.slug)
+                    .join(PromptListRevisionTag, PromptListRevisionTag.tag_id == PromptTag.id)
+                    .join(
+                        PromptListRevision,
+                        PromptListRevision.id == PromptListRevisionTag.revision_id,
+                    )
+                    .where(
+                        PromptListRevision.prompt_list_id == prompt_list_id,
+                        PromptListRevision.version == version,
+                    )
+                )
+            ).all()
+        )
+        return tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in slugs)
+
     async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:
         owner_id = _optional_entity_id(owner_user_id)
         if owner_id is None:
@@ -4179,67 +4362,53 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
     async def _owned_with_entries(
         self, session: AsyncSession, owner_id: UUID, prompt_list_id: UUID
     ) -> OwnedPromptList | None:
-        prompt_list = await session.scalar(
-            select(PromptList).where(
-                PromptList.id == prompt_list_id,
-                PromptList.owner_user_id == owner_id,
-                PromptList.is_bundled.is_(False),
-                PromptList.deleted_at.is_(None),
+        """One owned list and its current content, in four statements whatever
+        it holds (#1236).
+
+        The content used to be read as an ORM graph - items, their versions,
+        each version's alias links, each link's alias - which for a list at the
+        ceiling (500 prompts of 20 aliases) is ~21,000 objects and 30
+        statements, ~200 ms of the only event loop, on every open of the
+        editor and three times over on every save. The counts ride the list's
+        own row as subqueries, the content is one flat select, and the tags
+        and the copy credit are one query each.
+        """
+        origin_revision = aliased(PromptListRevision)
+        row = (
+            await session.execute(
+                select(
+                    PromptList,
+                    self._star_count(),
+                    self._copy_count(),
+                    # Revision one's, not the current revision's.
+                    # `forked_from_revision_id` is a fact about one revision -
+                    # where *it* was derived from - and only the revision a fork
+                    # starts life as was derived from anywhere else. Reading
+                    # the current one answered correctly until the fork's owner
+                    # made their first edit, and null from then on.
+                    select(origin_revision.forked_from_revision_id)
+                    .where(
+                        origin_revision.prompt_list_id == PromptList.id,
+                        origin_revision.version == 1,
+                    )
+                    .correlate(PromptList)
+                    .scalar_subquery(),
+                ).where(
+                    PromptList.id == prompt_list_id,
+                    PromptList.owner_user_id == owner_id,
+                    PromptList.is_bundled.is_(False),
+                    PromptList.deleted_at.is_(None),
+                )
             )
-        )
-        if prompt_list is None:
+        ).first()
+        if row is None:
             return None
-        revision = await session.scalar(
-            select(PromptListRevision)
-            .where(
-                PromptListRevision.prompt_list_id == prompt_list.id,
-                PromptListRevision.version == prompt_list.version,
-            )
-            .options(
-                selectinload(PromptListRevision.items)
-                .selectinload(PromptListRevisionItem.prompt_version)
-                .selectinload(PromptVersion.version_aliases)
-                .selectinload(PromptVersionAlias.alias),
-                selectinload(PromptListRevision.revision_tags).selectinload(
-                    PromptListRevisionTag.tag
-                ),
-            )
-        )
-        entries = tuple(
-            PromptListEntry(
-                concept_id=_public_id(item.prompt_version.concept_id),
-                prompt_version_id=_public_id(item.prompt_version.id),
-                answer=item.prompt_version.canonical_answer,
-                aliases=tuple(
-                    sorted(link.alias.answer for link in item.prompt_version.version_aliases)
-                ),
-                moderation_state=item.prompt_version.moderation_state,
-            )
-            for item in (revision.items if revision else ())
-        )
-        # Vocabulary order rather than insertion order, so two lists carrying
-        # the same tags present them the same way (R-LIST-18).
-        held = {link.tag.slug for link in (revision.revision_tags if revision else ())}
-        tags = tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in held)
-        stars = await session.scalar(
-            select(func.count())
-            .select_from(PromptListStar)
-            .where(PromptListStar.prompt_list_id == prompt_list.id)
-        )
-        # Revision one's, not the current revision's. `forked_from_revision_id`
-        # is a fact about one revision - where *it* was derived from - and only
-        # the revision a fork starts life as was derived from anywhere else.
-        # Reading the current one answered correctly until the fork's owner
-        # made their first edit, and null from then on.
-        origin = await session.scalar(
-            select(PromptListRevision.forked_from_revision_id).where(
-                PromptListRevision.prompt_list_id == prompt_list.id,
-                PromptListRevision.version == 1,
-            )
-        )
-        copies = await session.scalar(
-            select(self._copy_count()).select_from(PromptList).where(PromptList.id == prompt_list.id)
-        )
+        prompt_list, stars, copies, origin = row
+        entries = await self._revision_entries(session, prompt_list.id, prompt_list.version)
+        # The revision the entries were read at, not whichever is current by
+        # now: a save committed between the two reads gave the editor one
+        # revision's prompts beside the next one's tags (#1291 review).
+        tags = await self._revision_tags(session, prompt_list.id, prompt_list.version)
         credits = await self._copied_from(session, [prompt_list.id])
         return _to_owned_prompt_list(
             prompt_list,
@@ -4249,6 +4418,58 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             copy_count=int(copies or 0),
             copied_from=credits.get(prompt_list.id),
             forked_from_revision_id=_public_id(origin) if origin else None,
+        )
+
+    @staticmethod
+    async def _revision_entries(
+        session: AsyncSession, prompt_list_id: UUID, version: int
+    ) -> tuple[PromptListEntry, ...]:
+        """A revision's entries in order, from one flat select of
+        (position, concept, version, answer, state, alias)."""
+        rows = (
+            await session.execute(
+                select(
+                    PromptListRevisionItem.position,
+                    PromptVersion.concept_id,
+                    PromptVersion.id,
+                    PromptVersion.canonical_answer,
+                    PromptVersion.moderation_state,
+                    PromptAlias.answer,
+                )
+                .select_from(PromptListRevision)
+                .join(
+                    PromptListRevisionItem,
+                    PromptListRevisionItem.revision_id == PromptListRevision.id,
+                )
+                .join(PromptVersion, PromptVersion.id == PromptListRevisionItem.prompt_version_id)
+                .outerjoin(
+                    PromptVersionAlias,
+                    PromptVersionAlias.prompt_version_id == PromptVersion.id,
+                )
+                .outerjoin(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+                .where(
+                    PromptListRevision.prompt_list_id == prompt_list_id,
+                    PromptListRevision.version == version,
+                )
+                .order_by(PromptListRevisionItem.position)
+            )
+        ).all()
+        by_position: dict[int, tuple[UUID, UUID, str, str, list[str]]] = {}
+        for position, concept_id, version_id, answer, state, alias in rows:
+            held = by_position.get(position)
+            if held is None:
+                held = by_position[position] = (concept_id, version_id, answer, state, [])
+            if alias is not None:
+                held[4].append(alias)
+        return tuple(
+            PromptListEntry(
+                concept_id=_public_id(concept_id),
+                prompt_version_id=_public_id(version_id),
+                answer=answer,
+                aliases=tuple(sorted(aliases)),
+                moderation_state=state,
+            )
+            for concept_id, version_id, answer, state, aliases in by_position.values()
         )
 
     async def get_owned(
@@ -4353,6 +4574,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if prompt_list is None:
                     raise PromptListNotFoundError("Prompt list not found.")
+                # Before any of the content is looked at: a save that lost the
+                # race is refused for the price of the lock, not of folding
+                # every answer in the list (#1236).
+                if prompt_list.version != expected_version:
+                    raise PromptListConflictError(
+                        "This list changed since you opened it. Reload before saving."
+                    )
                 # A save never changes visibility. Publishing is an act with a
                 # gate, a rate limit and an audit event (R-LIST-11), and a save
                 # that carried it either way would be a route around all three
@@ -4367,19 +4595,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 entries = self._clean_owned_entries(
                     prompts, language=prompt_list.language
                 )
-                if prompt_list.version != expected_version:
-                    raise PromptListConflictError(
-                        "This list changed since you opened it. Reload before saving."
-                    )
-                current = await self._owned_with_entries(session, owner_id, list_id)
-                assert current is not None
+                # Only the tags are compared here, so only the tags are read:
+                # this used to load the whole list to ask about them.
+                current_tags = (
+                    await self._current_revision_tags(session, [list_id])
+                ).get(list_id, ())
                 metadata_changed = (
                     prompt_list.name != name
                     or prompt_list.description != description
                     # Tags belong to the revision, so changing them is a change
                     # of content and earns one, exactly as R-LIST-05 says a
                     # name change does.
-                    or current.tags != tag_slugs
+                    or current_tags != tag_slugs
                 )
                 next_version = prompt_list.version + 1
                 written = await self._write_owned_revision(
@@ -4402,7 +4629,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 prompt_list.version = next_version
                 prompt_list.updated_at = datetime.now(timezone.utc)
                 retagged_in_catalogue = (
-                    current.tags != tag_slugs
+                    current_tags != tag_slugs
                     and prompt_list.visibility == PromptListVisibility.PUBLIC.value
                 )
             if retagged_in_catalogue:
@@ -4731,6 +4958,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if prompt_list is None:
                     raise PromptListNotFoundError("Prompt list not found.")
+                # Withdrawing a list that is not out is nothing to record
+                # (#1241): no ledger row - they are permanent - and no
+                # catalogue re-rank. 200 withdrawals of a private list wrote
+                # 200 rows in 1.7 s.
+                changed = published or (
+                    prompt_list.visibility == PromptListVisibility.PUBLIC.value
+                    or prompt_list.moderation_state
+                    == PromptContentModerationState.UNDER_REVIEW.value
+                )
                 if published:
                     if (
                         prompt_list.moderation_state
@@ -4751,7 +4987,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         prompt_list.moderation_state = (
                             PromptContentModerationState.UNDER_REVIEW.value
                         )
-                else:
+                elif changed:
                     prompt_list.visibility = PromptListVisibility.PRIVATE.value
                     prompt_list.published_at = None
                     # A hold is released by withdrawing, a finding is not.
@@ -4769,13 +5005,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         prompt_list.moderation_state = (
                             PromptContentModerationState.ACTIVE.value
                         )
-                prompt_list.updated_at = datetime.now(timezone.utc)
+                if changed:
+                    prompt_list.updated_at = datetime.now(timezone.utc)
                 # In this transaction, not a later one. Written after the
                 # refusals above, so the ledger records what happened rather
                 # than what was attempted - and with the change, so a failure
                 # between the two cannot leave a list published with nothing
                 # in the ledger to say who published it.
-                if audit is not None:
+                if audit is not None and changed:
                     session.add(
                         AuditEvent(
                             id=generate_uuid(),
@@ -4793,7 +5030,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
             # Committed: a list just published is in the catalogue for its
             # author's next read, not a minute later (#901).
-            self._ranking.invalidate()
+            if changed:
+                self._ranking.invalidate()
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
             return result
@@ -4917,23 +5155,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         (#613). `force` writes the revision anyway, for a metadata edit that
         R-LIST-05 still records as a revision.
         """
-        previous = await session.scalar(
-            select(PromptListRevision)
-            .where(
-                PromptListRevision.prompt_list_id == prompt_list.id,
-                PromptListRevision.version == prompt_list.version,
-            )
-            .options(
-                selectinload(PromptListRevision.items)
-                .selectinload(PromptListRevisionItem.prompt_version)
-                .selectinload(PromptVersion.version_aliases)
-                .selectinload(PromptVersionAlias.alias)
-            )
-        )
-        current_by_concept = {
-            item.prompt_version.concept_id: item.prompt_version
-            for item in (previous.items if previous else ())
-        }
+        # The revision being replaced, as flat rows rather than an ORM graph:
+        # only these fields of each version are read below, and a list at the
+        # ceiling was ~21,000 objects on every save (#1236).
+        previous = await _revision_versions(session, prompt_list.id, prompt_list.version)
+        current_by_concept = {version.concept_id: version for version in previous}
         # Every key a prompt this list has ever held answers to, if a
         # moderator hid it: a word deleted and typed in again - now, or a save
         # later - is a new concept, and one existing entry respelled into it
@@ -5029,7 +5255,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 "A prompt identity does not belong to the current list revision."
             )
 
-        if not force and previous is not None and _same_membership(previous, entries):
+        if not force and previous and _same_membership(previous, entries):
             return False
 
         alias_map: dict[tuple[UUID, str], PromptAlias] = {}
@@ -5051,11 +5277,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         for entry in entries:
             concept_id = UUID(entry.concept_id) if entry.concept_id else generate_uuid()
             existing = current_by_concept.get(concept_id)
-            actual_aliases = (
-                tuple(sorted(link.alias.answer for link in existing.version_aliases))
-                if existing
-                else ()
-            )
+            actual_aliases = existing.aliases if existing else ()
             if (
                 existing is not None
                 and existing.canonical_answer == entry.answer
@@ -5374,30 +5596,52 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             or AGNOSTIC_PROMPT_LANGUAGE
         )
         rows_by_slug = {row.slug: row for row in authorized_rows}
+        # Every list's current revision in one statement rather than one per
+        # list (#1237): pinning runs at room creation, at every change of the
+        # selection and before every game, and twenty lists were twenty
+        # round trips before anything was checked.
+        current = await self._current_revisions(
+            session, [row.id for row in rows_by_slug.values()], load_items=load_items
+        )
         revisions: list[PromptListRevision] = []
         for slug in slugs:
-            row = rows_by_slug[slug]
-            stmt = select(PromptListRevision).where(
-                PromptListRevision.prompt_list_id == row.id,
-                PromptListRevision.version
-                == select(PromptList.version)
-                .where(PromptList.id == row.id)
-                .scalar_subquery(),
-            )
-            if load_items:
-                stmt = stmt.options(
-                    selectinload(PromptListRevision.items)
-                    .selectinload(PromptListRevisionItem.prompt_version)
-                    .selectinload(PromptVersion.version_aliases)
-                    .selectinload(PromptVersionAlias.alias)
-                )
-            revision = await session.scalar(stmt)
+            revision = current.get(rows_by_slug[slug].id)
             if revision is None:
                 raise PromptListSelectionError(
                     f"Prompt list has no seeded revision: {slug}"
                 )
             revisions.append(revision)
         return revisions, language
+
+    @staticmethod
+    async def _current_revisions(
+        session: AsyncSession, list_ids: Sequence[UUID], *, load_items: bool = False
+    ) -> dict[UUID, PromptListRevision]:
+        """Each list's current revision, by list, in one statement."""
+        if not list_ids:
+            return {}
+        stmt = (
+            select(PromptListRevision)
+            .join(
+                PromptList,
+                and_(
+                    PromptList.id == PromptListRevision.prompt_list_id,
+                    PromptList.version == PromptListRevision.version,
+                ),
+            )
+            .where(PromptList.id.in_(list(list_ids)))
+        )
+        if load_items:
+            stmt = stmt.options(
+                selectinload(PromptListRevision.items)
+                .selectinload(PromptListRevisionItem.prompt_version)
+                .selectinload(PromptVersion.version_aliases)
+                .selectinload(PromptVersionAlias.alias)
+            )
+        return {
+            revision.prompt_list_id: revision
+            for revision in (await session.scalars(stmt)).all()
+        }
 
     async def _pinned_mixed_revisions(
         self,
@@ -5453,19 +5697,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 concepts[revision_id].add(concept_id)
         by_list = {revision.prompt_list_id: revision for revision in bundled_current}
 
+        agnostic = await self._current_revisions(
+            session,
+            [row.id for row in rows_by_slug.values() if row.language == AGNOSTIC_PROMPT_LANGUAGE],
+        )
         pinned: list[PromptListRevision] = []
         for slug in slugs:
             row = rows_by_slug[slug]
             if row.language == AGNOSTIC_PROMPT_LANGUAGE:
-                revision = await session.scalar(
-                    select(PromptListRevision).where(
-                        PromptListRevision.prompt_list_id == row.id,
-                        PromptListRevision.version
-                        == select(PromptList.version)
-                        .where(PromptList.id == row.id)
-                        .scalar_subquery(),
-                    )
-                )
+                revision = agnostic.get(row.id)
                 if revision is None:
                     raise PromptListSelectionError(
                         f"Prompt list has no seeded revision: {slug}"
@@ -5595,73 +5835,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             if language == MIXED_PROMPT_LANGUAGE:
                 return await self._authorize_mixed(session, slugs, revisions)
             revision_ids = [revision.id for revision in revisions]
-
-            active_versions = (
-                select(PromptListRevisionItem.prompt_version_id)
-                .join(
-                    PromptVersion,
-                    PromptVersion.id == PromptListRevisionItem.prompt_version_id,
-                )
-                .where(
-                    PromptListRevisionItem.revision_id.in_(revision_ids),
-                    PromptVersion.moderation_state
-                    == PromptContentModerationState.ACTIVE.value,
-                )
+            verdict = await self._remembered_verdict(
+                session,
+                ("single", language),
+                revision_ids,
+                lambda: self._single_language_rows(session, revision_ids),
+                lambda rows: _single_language_verdict(rows, language),
             )
-            prompt_count = await session.scalar(
-                select(func.count()).select_from(
-                    active_versions.distinct().subquery()
-                )
-            )
-            if not prompt_count:
-                raise PromptListSelectionError(
-                    "Selected prompt lists do not contain any prompts"
-                )
-
-            # `resolve_selection` catches colliding answers by walking every
-            # prompt it loads. Pinning loads none, so the same question is
-            # asked of the database instead: does any answer - a prompt's
-            # own or one of its aliases - reach two different prompt
-            # versions? Asked of the *text*, keyed here under the fold in
-            # force now, rather than of the stored keys (review of #1070): a
-            # fold that widened since the rows were written makes two stored
-            # keys one answer, and the game matches under the new fold.
-            own_answers = select(
-                PromptListRevisionItem.prompt_version_id.label("version_id"),
-                PromptVersion.canonical_answer.label("answer"),
-            ).join(
-                PromptVersion,
-                PromptVersion.id == PromptListRevisionItem.prompt_version_id,
-            ).where(
-                PromptListRevisionItem.revision_id.in_(revision_ids),
-                PromptVersion.moderation_state
-                == PromptContentModerationState.ACTIVE.value,
-            )
-            alias_answers = select(
-                PromptListRevisionItem.prompt_version_id.label("version_id"),
-                PromptAlias.answer.label("answer"),
-            ).join(
-                PromptVersion,
-                PromptVersion.id == PromptListRevisionItem.prompt_version_id,
-            ).join(
-                PromptVersionAlias,
-                PromptVersionAlias.prompt_version_id == PromptVersion.id,
-            ).join(
-                PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id
-            ).where(
-                PromptListRevisionItem.revision_id.in_(revision_ids),
-                PromptVersion.moderation_state
-                == PromptContentModerationState.ACTIVE.value,
-            )
-            reached_by: dict[str, UUID] = {}
-            for version_id, answer in (
-                await session.execute(own_answers.union(alias_answers))
-            ).all():
-                key = prompt_match_key(answer, language)
-                if reached_by.setdefault(key, version_id) != version_id:
-                    raise PromptListSelectionError(
-                        "Selected prompt lists contain ambiguous answers or aliases"
-                    )
+            if verdict.ambiguous:
+                raise PromptListSelectionError(AMBIGUOUS_SELECTION)
+            if not verdict.prompt_count:
+                raise PromptListSelectionError(EMPTY_SELECTION)
+            prompt_count = verdict.prompt_count
 
             letter_counts: Counter[str] = Counter()
             letter_total = 0
@@ -5677,6 +5862,111 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 letter_counts=dict(letter_counts),
                 letter_total=letter_total,
             )
+
+    async def _remembered_verdict(
+        self,
+        session: AsyncSession,
+        fold: tuple,
+        revision_ids: Sequence[UUID],
+        read_rows,
+        judge,
+    ) -> _SelectionVerdict:
+        """The verdict on these revisions under `fold`, remembered (#1237).
+
+        A revision never changes, so what its content concludes changes only
+        when a moderator hides or restores a version in it - which is what the
+        fingerprint reads, in one aggregate statement: how many members, how
+        many active, and the latest decision. Toggling a room between two
+        selections, or starting game after game on one, used to fold every
+        answer of every list each time on the only event loop (3.3 s for
+        twenty agnostic lists in a mixed room). A miss folds off the loop.
+
+        The fingerprint is read before the rows, so a decision landing between
+        the two leaves a verdict filed under the older fingerprint - which the
+        next authorization then refuses to reuse. Never the other way round.
+        """
+        key = (fold, tuple(sorted(str(revision_id) for revision_id in revision_ids)))
+        fingerprint = await self._moderation_fingerprint(session, revision_ids)
+        remembered = self._verdicts.get(key)
+        if remembered is not None and remembered[0] == fingerprint:
+            self._verdicts.move_to_end(key)
+            return remembered[1]
+        rows = await read_rows()
+        verdict = await _off_loop(judge, rows)
+        self._verdicts[key] = (fingerprint, verdict)
+        self._verdicts.move_to_end(key)
+        while len(self._verdicts) > MAX_REMEMBERED_VERDICTS:
+            self._verdicts.popitem(last=False)
+        return verdict
+
+    @staticmethod
+    async def _moderation_fingerprint(
+        session: AsyncSession, revision_ids: Sequence[UUID]
+    ) -> tuple:
+        """What moderation has made of these revisions' members, as one row.
+
+        The only way a version's state changes is a moderator's decision,
+        which stamps `moderated_at`; the counts catch a decision that left
+        the latest stamp where it was.
+        """
+        row = (
+            await session.execute(
+                select(
+                    func.count(),
+                    func.sum(
+                        case(
+                            (
+                                PromptVersion.moderation_state
+                                == PromptContentModerationState.ACTIVE.value,
+                                1,
+                            ),
+                            else_=0,
+                        )
+                    ),
+                    func.max(PromptVersion.moderated_at),
+                )
+                .select_from(PromptListRevisionItem)
+                .join(PromptVersion, PromptVersion.id == PromptListRevisionItem.prompt_version_id)
+                .where(PromptListRevisionItem.revision_id.in_(list(revision_ids)))
+            )
+        ).one()
+        return (int(row[0] or 0), int(row[1] or 0), row[2])
+
+    @staticmethod
+    async def _single_language_rows(
+        session: AsyncSession, revision_ids: Sequence[UUID]
+    ) -> list[Row]:
+        """Every active prompt version's own answer and its aliases, as text.
+
+        `resolve_selection` catches colliding answers by walking every prompt
+        it loads. Pinning loads none, so the same question is asked of these
+        rows instead: does any answer - a prompt's own or one of its aliases -
+        reach two different prompt versions?
+        """
+        active = [
+            PromptListRevisionItem.revision_id.in_(list(revision_ids)),
+            PromptVersion.moderation_state == PromptContentModerationState.ACTIVE.value,
+        ]
+        own_answers = select(
+            PromptListRevisionItem.prompt_version_id.label("version_id"),
+            PromptVersion.canonical_answer.label("answer"),
+        ).join(
+            PromptVersion,
+            PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+        ).where(*active)
+        alias_answers = select(
+            PromptListRevisionItem.prompt_version_id.label("version_id"),
+            PromptAlias.answer.label("answer"),
+        ).join(
+            PromptVersion,
+            PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+        ).join(
+            PromptVersionAlias,
+            PromptVersionAlias.prompt_version_id == PromptVersion.id,
+        ).join(
+            PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id
+        ).where(*active)
+        return await _rows_in_chunks(session, own_answers.union(alias_answers))
 
     async def sample_mixed_prompts(
         self, revision_ids: Sequence[str], *, limit: int
@@ -5820,8 +6110,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         prompt, however many languages spell it.
         """
         language_of = {revision.id: revision.language for revision in revisions}
-        rows = (
-            await session.execute(
+
+        active = [
+            PromptListRevisionItem.revision_id.in_(list(language_of)),
+            PromptVersion.moderation_state == PromptContentModerationState.ACTIVE.value,
+        ]
+
+        async def read_rows():
+            rows = await _rows_in_chunks(
+                session,
                 select(
                     PromptListRevisionItem.revision_id,
                     PromptVersion.id,
@@ -5832,45 +6129,40 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     PromptVersion,
                     PromptVersion.id == PromptListRevisionItem.prompt_version_id,
                 )
-                .where(
-                    PromptListRevisionItem.revision_id.in_(list(language_of)),
-                    PromptVersion.moderation_state
-                    == PromptContentModerationState.ACTIVE.value,
-                )
+                .where(*active),
             )
-        ).all()
-        if not rows:
-            raise PromptListSelectionError(
-                "Selected prompt lists do not contain any prompts"
-            )
-        aliases: dict[UUID, list[str]] = defaultdict(list)
-        for version_id, answer in (
-            await session.execute(
-                select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
-                .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
-                .where(
-                    PromptVersionAlias.prompt_version_id.in_(
-                        {version_id for _, version_id, _, _ in rows}
+            alias_rows = []
+            if rows:
+                # Joined to the items rather than listed by id: a selection at
+                # its ceiling is 10,000 versions, too many to bind one by one.
+                alias_rows = await _rows_in_chunks(
+                    session,
+                    select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
+                    .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+                    .join(
+                        PromptListRevisionItem,
+                        PromptListRevisionItem.prompt_version_id
+                        == PromptVersionAlias.prompt_version_id,
                     )
+                    .join(
+                        PromptVersion,
+                        PromptVersion.id == PromptListRevisionItem.prompt_version_id,
+                    )
+                    .where(*active),
                 )
-            )
-        ).all():
-            aliases[version_id].append(answer)
+            return rows, alias_rows
 
-        for room_language in PROMPT_LANGUAGES:
-            reached_by: dict[str, UUID] = {}
-            for revision_id, version_id, _concept, answer in rows:
-                if language_of[revision_id] not in (
-                    room_language,
-                    AGNOSTIC_PROMPT_LANGUAGE,
-                ):
-                    continue
-                for text in (answer, *aliases[version_id]):
-                    key = prompt_match_key(text, room_language)
-                    if reached_by.setdefault(key, version_id) != version_id:
-                        raise PromptListSelectionError(
-                            "Selected prompt lists contain ambiguous answers or aliases"
-                        )
+        verdict = await self._remembered_verdict(
+            session,
+            ("mixed",),
+            list(language_of),
+            read_rows,
+            lambda read: _mixed_verdict(*read, language_of),
+        )
+        if verdict.ambiguous:
+            raise PromptListSelectionError(AMBIGUOUS_SELECTION)
+        if not verdict.prompt_count:
+            raise PromptListSelectionError(EMPTY_SELECTION)
 
         counts: dict[str, Counter[str]] = {}
         totals: dict[str, int] = {}
@@ -5888,7 +6180,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             slugs=tuple(slugs),
             language=MIXED_PROMPT_LANGUAGE,
             revision_ids=tuple(_public_id(revision.id) for revision in revisions),
-            prompt_count=len({concept for _, _, concept, _ in rows}),
+            prompt_count=verdict.prompt_count,
             letter_counts_by_language={
                 language: dict(tally) for language, tally in counts.items()
             },

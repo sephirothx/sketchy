@@ -131,7 +131,15 @@ here, along with the room's own custom prompts; its **curated prompts do not**.
 A room holds only what its selected lists were pinned to - the revision IDs, how
 many prompts they hold, and a letter histogram for wheel pricing - and the
 prompts themselves stay in the database until a game starts and draws the
-bounded sample it can actually play (see `app/game.py` above). `to_state_payload()`
+bounded sample it can actually play (see `app/game.py` above). Pinning is checked at
+room creation, at every change of the selection and before every game: that no answer
+reaches two prompts under the room's fold, in a mixed room under every room language's.
+A revision never changes, so the verdict is remembered by the repository
+(`SqlAlchemyPromptListRepository._verdicts`, 512 selections, oldest out) under a
+fingerprint of what moderation has made of the revisions' members — one aggregate
+statement — and a miss is read a thousand rows per turn of the loop and folded on the
+drawings' encode threads rather than on the loop (#1237): twenty agnostic lists in a
+mixed room held the loop 3.3 s on every authorization. `to_state_payload()`
 ([`backend/app/rooms.py:768`](../backend/app/rooms.py)) and `to_public_summary()`
 ([`backend/app/rooms.py:714`](../backend/app/rooms.py)) are the two shapes the room is
 published in.
@@ -403,8 +411,9 @@ This is the table to consult before adding a feature: *where does this state liv
 | Phase/hint/restart/disconnect timers | `TimerManager` (memory) | No |
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
 | Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
-| Encoding a finished game | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `repositories/sqlalchemy.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
+| Encoding a finished game, and folding a prompt-list selection's answers cold (#1237) | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `repositories/sqlalchemy.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
+| Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by revision ids and fold, reused while the members' moderation fingerprint is unchanged (#1237) | No: re-derived from the revisions on a miss |
 | A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
@@ -1078,10 +1087,21 @@ with a refusal on its way to the client and one of them runs in a `finally`, whe
 raising would replace the reason the entry was refused. A reservation stranded that
 way is reclaimed by the same startup sweep that reclaims one stranded by a crash.
 
-Per-**address** ceilings are deliberately absent. Behind the reverse proxy #457
-introduces, every socket presents the proxy's address, and the forwarded header is
-attacker-controlled — `auth/rate_limit.client_key` refuses to read it for exactly that
-reason. The key arrives when an address worth keying on does.
+Per-**address** ceilings exist now that there is an address worth keying on (#1232):
+uvicorn rewrites the ASGI client from the forwarded header only for the proxy
+`FORWARDED_ALLOW_IPS` names, and `auth/rate_limit.address_key` groups an IPv6 caller by
+its /64 (#1233). Sockets are admitted a layer lower than rooms. The
+`TransportLedger` ([`services/room_quotas.py`](../backend/app/services/room_quotas.py))
+is consulted by the Engine.IO server at the handshake, before it allocates a socket
+([`socket_transport.py`](../backend/app/socket_transport.py)): a ticket is taken there,
+bound to the socket at Engine.IO's connect event through a context variable (the two
+run in one task), and given back by the disconnect event — or at once, when the
+handshake never produced a socket that will have one. Counting at the Socket.IO CONNECT,
+as the ceiling used to, saw none of the transports that never sent one. The account
+ceiling stays at the CONNECT, the first moment the account is known, and the per-address
+room ceiling beside the per-account one in `RoomQuotaService`. A waiting room that never
+starts a game is closed after 30 minutes by its own supervised loop
+([`services/idle_rooms.py`](../backend/app/services/idle_rooms.py), R-ROOM-15).
 
 ### Mail delivery
 
@@ -1437,8 +1457,11 @@ beside the target in `requirements.md`. The signals it reads are the ones below.
 queue's oldest packet is ten seconds old or the queue holds 4 MiB
 ([`socket_server.py`](../backend/app/socket_server.py), #602): accounted at the one
 place every packet is queued, re-read every second by a sweeper task the server starts on
-the first packet it queues, and closed with an abort so a stalled writer is never waited
-on. The client's recovery path — reconnect, rebind inside the grace, full sync — is what
+the first packet it queues, and ended by the one teardown every refused socket gets
+([`socket_transport.py`](../backend/app/socket_transport.py), #1235): the connection is
+aborted, a writer blocked in its send is interrupted, the disconnect handlers run once
+and the queue is released — leaving the server's table alone had left the writer, its
+handler and the queue behind it alive for as long as the peer's TCP connection. The client's recovery path — reconnect, rebind inside the grace, full sync — is what
 makes closing safe: nothing partial is ever delivered. Wire §3 has the bounds and what
 lies below them.
 
@@ -1483,8 +1506,11 @@ once by event name into a payload-size histogram — all before compression, so 
 numbers overstate what the network carries and answer "which command is the chatty one"
 rather than a bandwidth bill. Every inbound packet is judged at
 [`backend/app/socket_server.py`](../backend/app/socket_server.py) before a byte of it
-is kept — the envelope, the attachment size, the assembly's age, the socket's packet
-rate — and a refusal is a counter by reason, never a reply (R-RATE-10). What each WebSocket negotiated is counted once at the
+is kept — whether it decodes, the envelope, the attachment size, the assembly's age, the
+socket's packet rate — and a refusal is a counter by reason, never a reply (R-RATE-10);
+a raw transport message is screened a layer lower, in
+[`backend/app/socket_transport.py`](../backend/app/socket_transport.py), before
+Engine.IO decodes it. What each WebSocket negotiated is counted once at the
 upgrade (`sketchy_socket_transport_total{compression}`,
 [`backend/app/ws_transport.py`](../backend/app/ws_transport.py)), so a deployment whose
 proxy strips permessage-deflate is visible as a label rather than as byte counters that
@@ -1915,6 +1941,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/rooms.py`](../backend/app/rooms.py) | In-memory Player/Room domain model and RoomManager. |
 | [`app/server.py`](../backend/app/server.py) | Production Uvicorn runner that drains before closing live WebSockets. |
 | [`app/socket_server.py`](../backend/app/socket_server.py) | The Socket.IO server with the inbound envelope checked before anything is kept. |
+| [`app/socket_transport.py`](../backend/app/socket_transport.py) | The Engine.IO layer under Socket.IO: what a transport may hand up, and how one is ended. |
 | [`app/services/__init__.py`](../backend/app/services/__init__.py) | Application services shared by Socket.IO handlers. |
 | [`app/services/data_export_worker.py`](../backend/app/services/data_export_worker.py) | Build account data exports one at a time from the durable job table. |
 | [`app/services/drawing_storage.py`](../backend/app/services/drawing_storage.py) | What the drawing store holds: that it is still readable, and how big it is. |
@@ -1940,6 +1967,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/presence.py`](../backend/app/services/presence.py) | Which accounts hold a socket, and the lobby channel that broadcasts it and the room list. |
 | [`app/services/guest_names.py`](../backend/app/services/guest_names.py) | One guest name per person online (R-ACCT-09). |
 | [`app/services/lobby_rooms.py`](../backend/app/services/lobby_rooms.py) | The public room list as a snapshot and deltas, for that channel. |
+| [`app/services/idle_rooms.py`](../backend/app/services/idle_rooms.py) | Waiting rooms that never start a game are closed after a while (#1232). |
 | [`app/services/lobby_chat.py`](../backend/app/services/lobby_chat.py) | The last few lines said in the lobby, and the number each one was given. |
 | [`app/services/readiness.py`](../backend/app/services/readiness.py) | What `/api/ready` tests before it says this process can serve. |
 | [`app/request_timing.py`](../backend/app/request_timing.py) | Count and time every HTTP request by the route template it matched. |
@@ -1972,7 +2000,7 @@ Files are named for their single concern; the directory says the role.
 | `frontend/src/pages/` | `AccountRecoveryPage.tsx`, `AdminOperationsPage.tsx`, `BugReportsPage.tsx`, `CommunityCataloguePage.tsx`, `CreateRoomPage.tsx`, `GameRoomPage.tsx`, `LobbyBrowserPage.tsx`, `ModerationPage.tsx`, `MyPromptListsPage.tsx`, `NotFoundPage.tsx`, `ProfilePage.tsx`, `PromptStatsPage.tsx` |
 | `frontend/src/store/` | `authStore.ts`, `canvasBudgetStore.ts`, `emailStateStore.ts`, `friendInviteStore.ts`, `friendRequestNoticeStore.ts`, `friendsStore.ts`, `gameStore.ts`, `lobbyChatStore.ts`, `playLanguagesQuestionStore.ts`, `presenceStore.ts`, `roomEntryStore.ts`, `roomsStore.ts`, `serverNoticesStore.ts`, `settingsMigrations.ts`, `settingsStore.ts` |
 | `frontend/src/hooks/` | `useBottomDock.ts`, `useCanvasPointerInput.ts`, `useCanvasProtocol.ts`, `useDocumentTitle.ts`, `useEmailStateSync.ts`, `useFocusTrap.ts`, `useFriendInviteAnswer.ts`, `useGameSocketListeners.ts`, `useLobbyChannel.ts`, `useMediaQuery.ts`, `useNameField.ts`, `usePlayLanguages.ts`, `useRoomBarGiveWay.ts`, `useRoomEntry.ts`, `useRoomHistory.ts`, `useRoomSessionReconnect.ts`, `useScratchPadProtocol.ts`, `useServerNotices.ts`, `useSettingsRoute.ts`, `useToolbarLayout.ts`, `useToolbarState.ts`, `useVisualViewportCssVars.ts` |
-| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playLanguages.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptPick.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollHandles.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `widthKeyframes.ts` |
+| `frontend/src/lib/` | `accountData.ts`, `accountRecovery.ts`, `accountSettingsSync.ts`, `api.ts`, `appNotices.ts`, `avatar.ts`, `avatarCrop.ts`, `avatars.ts`, `brushSizes.ts`, `bugReports.ts`, `canvasCommands.ts`, `canvasDownload.ts`, `canvasGeometry.ts`, `canvasHistory.ts`, `canvasPixels.ts`, `canvasRecovery.ts`, `canvasRenderer.ts`, `canvasSurface.ts`, `canvasSyncRequests.ts`, `canvasThumbnail.ts`, `chatAnnouncements.ts`, `clientErrorLog.ts`, `confetti.ts`, `connectionStatus.ts`, `customPrompts.ts`, `documentTitle.ts`, `drawingRules.ts`, `firstRunArt.ts`, `firstRunLines.ts`, `friends.ts`, `friendsApi.ts`, `gameHighlights.ts`, `guessOrder.ts`, `guessTime.ts`, `reactions.ts`, `reactionRequests.ts`, `liveDrawing.ts`, `lobbyChannel.ts`, `lobbyChat.ts`, `lobbyControls.ts`, `lobbyPresence.ts`, `lobbyRooms.ts`, `maskedPrompt.ts`, `moderation.ts`, `operations.ts`, `operatorAccess.ts`, `pathWidths.ts`, `penPressure.ts`, `penStroke.ts`, `playLanguages.ts`, `playerName.ts`, `pngEncode.ts`, `pointThinning.ts`, `profile.ts`, `profileStats.ts`, `promptLanguages.ts`, `promptListDrafts.ts`, `promptLists.ts`, `promptPick.ts`, `promptStats.ts`, `protocolRenderer.ts`, `recapDrawings.ts`, `renderDiagnostics.ts`, `replayCheckpoints.ts`, `restartVote.ts`, `roomCardFacts.ts`, `roomEntryState.ts`, `roomHistory.ts`, `roomPresets.ts`, `roomSessionBinding.ts`, `roomSetup.ts`, `scratchPad.ts`, `screenCapture.ts`, `scrollHandles.ts`, `sessionRenewal.ts`, `sessions.ts`, `settingsSync.ts`, `shutdownNotice.ts`, `siteNav.ts`, `socket.ts`, `sound.ts`, `standings.ts`, `strokePlayback.ts`, `suspension.ts`, `textWidth.ts`, `toast.ts`, `toolbarLayout.ts`, `updateRequired.ts`, `userBlocks.ts`, `userSettings.ts`, `visibleText.ts`, `widthKeyframes.ts` |
 | `frontend/src/components/` | `AccountDataDialog.tsx`, `AccountMenu.tsx`, `ActiveGameRoom.tsx`, `AddEmailDialog.tsx`, `AppBanners.tsx`, `BugReportDialog.tsx`, `Canvas.tsx`, `CanvasSnapshot.tsx`, `DrawingThumbnail.tsx`, `ChangePasswordDialog.tsx`, `ChoosingPromptOverlay.tsx`, `ColorblindSafeSuggestionBanner.tsx`, `CommunityPromptsDialog.tsx`, `ConfettiCanvas.tsx`, `ConfirmationDialog.tsx`, `ConnectionStatusBanner.tsx`, `CopiedFromCredit.tsx`, `CustomPromptsEditor.tsx`, `CustomPromptsPreview.tsx`, `DeleteAccountDialog.tsx`, `DrawingReactionControl.tsx`, `DrawingRecapGallery.tsx`, `ReactionGlyph.tsx`, `EmailRecoveryReminder.tsx`, `FirstRunIdentity.tsx`, `FriendInviteNotice.tsx`, `GameAnnouncer.tsx`, `GameEndOverlay.tsx`, `GameHighlightsPanel.tsx`, `GameRoomRegions.tsx`, `GuessPips.tsx`, `InviteEntryPage.tsx`, `InviteFriendsList.tsx`, `LobbyChatPanel.tsx`, `OnlinePlayersPanel.tsx`, `PictureCropDialog.tsx`, `PlayLanguageExtras.tsx`, `PlayLanguageFlags.tsx`, `PlayLanguagesQuestion.tsx`, `PlayerList.tsx`, `PromptContentReportDialog.tsx`, `PromptDisplay.tsx`, `PromptListPicker.tsx`, `PublicRoomCard.tsx`, `ReportAccountDialog.tsx`, `ReportDialog.tsx`, `ReportDrawingDialog.tsx`, `ReportLobbyLineDialog.tsx`, `ReportPlayerDialog.tsx`, `ReportedDrawing.tsx`, `RestartVoteBanner.tsx`, `RoomChatPanel.tsx`, `RoomFacts.tsx`, `RoomPlayersPanel.tsx`, `RoomSettingsEditor.tsx`, `RoomMenu.tsx`, `RoomNoticeChips.tsx`, `RoomSetupControls.tsx`, `RoomStageNotice.tsx`, `RoomSetupForm.tsx`, `RoomShell.tsx`, `RoomVisibilityIcon.tsx`, `ScratchPad.tsx`, `SessionManagerDialog.tsx`, `SettingsOverlay.tsx`, `SuspensionNotice.tsx`, `Timer.tsx`, `ToastProvider.tsx`, `Toolbar.tsx`, `TurnResultsOverlay.tsx`, `WaitingRoomPanel.tsx` |
 | `frontend/src/components/ui/` | The shared recipes as components: `Avatar.tsx`, `AvatarPicture.tsx`, `BottomSheet.tsx`, `Button.tsx`, `Card.tsx` (with `SectionLabel`), `Chip.tsx`, `EmptyState.tsx`, `ModalShell.tsx` |
 

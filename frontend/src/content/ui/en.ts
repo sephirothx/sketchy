@@ -636,7 +636,7 @@ export const EN = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Follow the link sent to ${p.address}. Until you do, the address is not attached to your account and cannot be used to recover it${
+      `If ${p.address} can be used, a confirmation link is on its way. Until you follow it, the address is not attached to your account and cannot be used to recover it${
         p.replacing ? ", and the one you had stays in place." : "."
       }`,
     thatDoesNotLookLikeEmail: "That does not look like an email address.",
@@ -699,6 +699,7 @@ export const EN = {
       })} this visit`,
     couldNotTakeScreenshot: "Could not take the screenshot.",
     thanksYourReportWithPeopleWho: "Thanks — your report is with the people who run Sketchy.",
+    thanksSentWithoutScreenshot: "Thanks — your report is with the people who run Sketchy. The screenshot could not be kept this time.",
     couldNotSendReport: "Could not send the report.",
     reportBug: "Report a bug",
     somethingBrokenNotSomethingSomeoneSaid: "Something broken, not something someone said. This reaches the people who run Sketchy — never other players.",
@@ -2488,7 +2489,7 @@ export const EN = {
     youCanRecoverThisAccount:
       (p: { address: string }) => `You can recover this account through ${p.address}.`,
     checkPendingAddressForAConfirmation:
-      (p: { pendingAddress: string }) => `Check ${p.pendingAddress} for a confirmation link. Until you follow it, this account has no way back in.`,
+      (p: { pendingAddress: string }) => `If ${p.pendingAddress} can be used, a confirmation link is on its way. Until you follow it, this account has no way back in.`,
     thisServerCannotSendEmail:
       "This server cannot send email, so a lost password has to be reset by whoever runs it.",
     addAnEmailAddressSo: "Add an email address so you can get back in if you forget your password.",
@@ -2561,6 +2562,7 @@ export const EN = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy is full right now. Try again in a few minutes.",
+    tooManyTabsOpen: "Sketchy is open in too many tabs. Close one to continue.",
     connectionLostWhileTryingTo:
       (p: { action: string }) => `Connection lost while trying to ${p.action}. Please try again.`,
     theRequestToActionTimed:
@@ -2625,6 +2627,7 @@ export const EN = {
   roomNotices: {
     kickedByVote: "You were kicked from the room by vote.",
     roomClosed: "An administrator closed this room.",
+    roomExpired: "This room closed after 30 minutes without a game.",
     kickedByAdmin: "An administrator kicked you from the room.",
     accountDeleted: "Your account was deleted.",
     accountSuspended: "Your account was suspended.",

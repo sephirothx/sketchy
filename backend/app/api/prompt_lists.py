@@ -1,6 +1,7 @@
 """Prompt list discovery, and the usage statistics the games feed back into it."""
 from __future__ import annotations
 
+import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Query, Request, Response, status
@@ -19,7 +20,7 @@ from app.api.serializers import (
     prompt_stats_payload,
 )
 from app.auth.audit import audit_coordinates
-from app.auth.rate_limit import RateLimiter, client_key
+from app.auth.rate_limit import PersistentRateLimiter, RateLimiter, client_key
 from app.db.models import User, UserWarning
 from uuid import UUID
 from app.prompt_content import (
@@ -80,6 +81,32 @@ preview_limiter = RateLimiter(limit=60, window_seconds=60)
 # Starring is one click, and a person browsing does it a handful of times a
 # session. The limit is what stops one account walking the catalogue.
 star_limiter = RateLimiter(limit=60, window_seconds=60)
+
+# A player's own lists (#1236). Each save of a list at the ceiling - 500
+# prompts of 20 aliases - writes ~21,000 permanent rows, and a create as many,
+# so a script on one registered account could write gigabytes an hour and
+# hold the only event loop while doing it. Per account, because the account is
+# what does it; persistent for the writes, so a restart is not a fresh
+# allowance. Sized well above an editor's own pace: Save is a button a person
+# presses, and nobody builds twenty lists a day. A duplicate and a delete
+# count as creates, since create-then-delete is how a slot is churned.
+DEFAULT_OWNED_LIST_SAVES_PER_HOUR = 60
+DEFAULT_OWNED_LIST_CREATES_PER_DAY = 20
+DEFAULT_OWNED_LIST_READS_PER_HOUR = 300
+# Withdrawals from the catalogue one account may make in an hour (#1241):
+# each that changes anything writes a permanent audit row.
+DEFAULT_UNPUBLISHES_PER_HOUR = 30
+
+
+def _limit(name: str, default: int) -> int:
+    """A ceiling from the environment, or its default when unset or invalid."""
+    raw = os.environ.get(name, "").strip()
+    try:
+        value = int(raw) if raw else default
+    except ValueError:
+        return default
+    return value if value > 0 else default
+
 
 PUBLISHED_EVENT = "prompt_list.published"
 UNPUBLISHED_EVENT = "prompt_list.unpublished"
@@ -159,6 +186,52 @@ def create_prompt_list_router(
     session_factory: async_sessionmaker[AsyncSession] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api")
+    # Persistent where there is a database to keep them in; a router built
+    # without one (unit tests of the read paths) is not limited at all.
+    save_limiter = (
+        PersistentRateLimiter(
+            session_factory,
+            scope="owned_list_save",
+            limit=_limit("PROMPT_LIST_SAVE_LIMIT", DEFAULT_OWNED_LIST_SAVES_PER_HOUR),
+            window_seconds=3600,
+        )
+        if session_factory is not None
+        else None
+    )
+    create_limiter = (
+        PersistentRateLimiter(
+            session_factory,
+            scope="owned_list_create",
+            limit=_limit("PROMPT_LIST_CREATE_LIMIT", DEFAULT_OWNED_LIST_CREATES_PER_DAY),
+            window_seconds=86400,
+        )
+        if session_factory is not None
+        else None
+    )
+    unpublish_limiter = (
+        PersistentRateLimiter(
+            session_factory,
+            scope="list_unpublish",
+            limit=_limit("PROMPT_LIST_UNPUBLISH_LIMIT", DEFAULT_UNPUBLISHES_PER_HOUR),
+            window_seconds=3600,
+        )
+        if session_factory is not None
+        else None
+    )
+    # A read is cheap now (#1236) and writes nothing, so it is kept in memory.
+    read_limiter = RateLimiter(
+        limit=_limit("PROMPT_LIST_READ_LIMIT", DEFAULT_OWNED_LIST_READS_PER_HOUR),
+        window_seconds=3600,
+    )
+
+    async def spend(limiter: PersistentRateLimiter | None, user: UserData) -> None:
+        """Charge one of this account's own-list writes, or refuse it."""
+        if limiter is not None and not await limiter.check(user.id):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many changes to your prompt lists. Please wait and try again.",
+            )
 
     async def require_registered(request: Request) -> UserData:
         user_id = getattr(request.state, "user_id", None)
@@ -352,6 +425,7 @@ def create_prompt_list_router(
         body: CreateOwnedPromptListRequest, request: Request
     ):
         user = await require_registered(request)
+        await spend(create_limiter, user)
         try:
             created = await prompt_list_repo.create_owned(
                 user.id,
@@ -368,6 +442,12 @@ def create_prompt_list_router(
     @router.get("/prompt-lists/mine/{prompt_list_id}")
     async def get_my_prompt_list(prompt_list_id: str, request: Request):
         user = await require_registered(request)
+        if not read_limiter.check(user.id):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REQUESTS,
+                "Too many requests. Please wait and try again.",
+            )
         prompt_list = await prompt_list_repo.get_owned(user.id, prompt_list_id)
         if prompt_list is None:
             raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
@@ -380,6 +460,7 @@ def create_prompt_list_router(
         request: Request,
     ):
         user = await require_registered(request)
+        await spend(save_limiter, user)
         try:
             updated = await prompt_list_repo.update_owned(
                 user.id,
@@ -551,6 +632,7 @@ def create_prompt_list_router(
         """Take it back out. The stars stay as rows (R-LIST-16); the list
         simply stops being reachable, and publishing again finds them."""
         user = await require_registered(request)
+        await spend(unpublish_limiter, user)
         try:
             updated = await prompt_list_repo.set_owned_publication(
                 user.id,
@@ -576,6 +658,7 @@ def create_prompt_list_router(
         ordinary create would give them new, active identities (R-LIST-17).
         """
         user = await require_registered(request)
+        await spend(create_limiter, user)
         try:
             created = await prompt_list_repo.duplicate_owned(
                 user.id, prompt_list_id, name=body.name
@@ -590,6 +673,7 @@ def create_prompt_list_router(
     )
     async def delete_my_prompt_list(prompt_list_id: str, request: Request):
         user = await require_registered(request)
+        await spend(create_limiter, user)
         if not await prompt_list_repo.delete_owned(user.id, prompt_list_id):
             raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
         return Response(status_code=status.HTTP_204_NO_CONTENT)

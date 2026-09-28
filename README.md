@@ -804,9 +804,12 @@ process. These deployment settings can be tuned without code changes:
 | `HISTORY_ENCODE_WORKERS` | `2` | Threads that encode a finished game, in each of the two pools that do it (the envelope's and the drawings'), 1-16. The encode is CPU off the event loop, so this is how many endings can be encoded at once before the rest queue; a host that ends many games at once can widen it, and a wrong value is refused at startup rather than served as the default |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
+| `ROOM_PER_ADDRESS_LIMIT` | `6` | Live rooms opened from one address (an IPv4 address or an IPv6 /64) that may be open at once (#1232) |
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |
 | `ROOM_SPECTATOR_LIMIT` | `8` | Spectators one room will hold, independently of `maxPlayers` |
-| `SOCKET_LIMIT` | `600` | Sockets this process will hold at once |
+| `SOCKET_LIMIT` | `600` | Sockets this process will hold at once, counted from the Engine.IO handshake. Past it an arrival is told the server is full and closed; past it plus 32, refused at the handshake |
+| `SOCKET_PER_ADDRESS_LIMIT` | `32` | Sockets one address (an IPv4 address or an IPv6 /64) may hold, refused at the handshake past it (#1232). A full room behind one school or office network needs about 24 |
+| `SOCKET_PER_ACCOUNT_LIMIT` | `8` | Sockets one account may hold: a player's tabs. One more is told so and closed (#1232) |
 | `ALLOWED_ORIGINS` | unset | Comma-separated origins, besides this server's own, from which a browser may open a socket or make a state-changing request (#465): only for a frontend hosted on another origin. Everything else is refused at the handshake and on POST/PUT/PATCH/DELETE |
 | `ROOM_JOIN_LIMIT` | `20` | Seating joins per socket per minute; confirmations are free |
 | `ROOM_TAKEOVER_LIMIT` | `20` | Rebinds of one seat to a new socket, per minute |
@@ -1509,7 +1512,10 @@ an increasing wait (a minute, then five, fifteen, an hour), remembered across
 windows and cleared by one correct password. The account is keyed by a hash of the
 username, never the username itself. Bucket keys are HMAC-SHA-256
 digests under `IP_HASH_SECRET` (or an automatically generated database secret),
-so raw IP addresses are never stored. Expired buckets are cleaned in bounded
+so raw IP addresses are never stored. "Per address" means per subscriber: an
+IPv4 address, or the IPv6 /64 an address sits in, since every IPv6 line is handed
+at least a /64 and may answer from any address in it (an IPv4-mapped IPv6 address
+counts as the IPv4 address it carries). Expired buckets are cleaned in bounded
 batches. Lower-risk profile and prompt-statistics throttles remain
 process-local. Room creation uses the same persistent buckets, keyed by the
 account that opens the room: until there is a reverse proxy to read a
@@ -1526,14 +1532,24 @@ your players share one address:
 | `AUTH_REGISTER_LIMIT` | 10 per hour | `POST /api/auth/register` |
 | `AUTH_LOOKUP_LIMIT` | 60 per minute | name availability and display-name changes |
 | `AUTH_RESET_LIMIT` | 5 per hour | `POST /api/auth/password/forgot` |
+| `AUTH_RESET_ACCOUNT_LIMIT` | 3 per hour | Reset mails to one account, whatever address asks; past it nothing is sent and the answer is unchanged (#1240) |
+| `AUTH_RESET_ACCOUNT_DAILY_LIMIT` | 10 per day | The same, by the day |
 | `GUEST_PROVISION_LIMIT` | 60 per hour | Guests provisioned per address by `POST /api/auth/display-name` |
 | `GUEST_PROVISION_DAILY_LIMIT` | 5000 per day | Guests provisioned across the deployment, whatever the address. The bucket is a shared database row, so replicas count against one ceiling |
 | `AUTH_RESET_CHECK_LIMIT` | 30 per hour | `POST /api/auth/password/reset/check` |
 | `AUTH_RESET_PERFORM_LIMIT` | 10 per hour | `POST /api/auth/password/reset`, per address — its own bucket, so opening the page does not spend what finishing the reset needs (#975) |
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 per hour | `POST /api/auth/password/change` |
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
+| `AUTH_VERIFY_ACCOUNT_LIMIT` | 5 per day | `PUT /api/auth/email`, per account, charged after the password proof (#1240) |
+| `AUTH_VERIFY_RECIPIENT_LIMIT` | 3 per day | Verification mails to one address, whichever accounts ask; past it nothing is sent and the answer is unchanged |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
 | `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - per address |
+| `PROMPT_LIST_SAVE_LIMIT` | 60 per hour | Saves of one's own prompt lists, per account (#1236) |
+| `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
+| `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
+| `PROMPT_LIST_UNPUBLISH_LIMIT` | 30 per hour | Withdrawals of one's own lists from the catalogue, per account (#1241) |
+| `BUG_REPORT_SCREENSHOT_LIMIT` | 3 per day | Bug-report screenshots one account may have kept; past it the report lands without its picture (#1244) |
+| `BUG_REPORT_SCREENSHOT_BYTES_LIMIT` | 1 GiB | Undecided bug-report screenshots kept across the deployment; past it a report lands without its picture |
 | `FRIEND_REQUEST_LIMIT` | 20 per hour | Friend requests, keyed by account. Every attempt spends one whatever became of it, so the limit cannot say whether a request landed (#1062) |
 
 In-room commands answer to their own per-caller budgets, which are **not** environment
@@ -2099,6 +2115,16 @@ backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewe
 
 # A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
 METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
+
+# What one hostile client costs the socket door: garbage, no-argument commands, a deflate bomb,
+# a 1 MB-per-packet stream, sockets that never CONNECT (#1229). Starts its own server.
+backend/.venv/bin/python benchmarks/socket_abuse.py --scenario garbage --sockets 6 --seconds 10
+
+# Reading and saving one of a player's own prompt lists at the ceiling, 500 x 20 aliases (#1236)
+TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/owned_list_io.py
+
+# Authorizing a room's lists, cold and again unchanged: 20 agnostic lists in a mixed room (#1237)
+TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/authorize_selection.py --language zxx --room mixed
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
 ./benchmarks/run_load.sh --no-deflate   # clients that offer no permessage-deflate, as the gate did before #875
 ./benchmarks/run_load.sh --record docs/requirements.md   # rewrite the recorded result under the scale target
@@ -2309,6 +2335,15 @@ the socket is closed for its age, then the viewer's return and a check that the 
 takes back hashes to what the server said. It also measures the slack *under* the
 budget - about 1.2 MB on a loopback before the server's queue grows at all.
 
+`socket_abuse.py` measures the socket door against one hostile client (#1229). It
+starts its own throwaway server so it can read that process's CPU time, resident
+memory and log volume around each scenario: `garbage` (sockets sending undecodable
+packets and ignoring the CLOSE they are sent), `noargs` (commands with no argument
+and an ack id), `bomb` (text messages that permessage-deflate shrinks a
+thousandfold), `stream` (a connected socket sending valid ~1 MB packets as fast as
+it can) and `eio-only` (Engine.IO sockets that never send a Socket.IO CONNECT).
+The numbers are the machine's; compare a run before a change with one after it.
+
 `run_load.sh` is the **release load gate** (#461): it starts a server with the
 limits a swarm from one address would trip raised, then drives the documented scale
 target - 50 rooms of 8 seats, 400 seats, plus 20 lobby watchers - with real
@@ -2431,7 +2466,9 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    default is waiting it takes a seat in a **mixed-language room**, then in a room in
    each of the other languages you play in, in your order, before opening a new one in
    your default.
-2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. Wherever
+2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. A
+   waiting room that has not started its first game within 30 minutes is closed, and
+   everyone in it is told why (#1232). Wherever
    players are listed, the host's avatar wears a gold crown on its corner and your own
    avatar wears a ring, so neither needs a word beside the name.
 3. **Choosing** (15s): the current drawer picks one of 3 prompt options.

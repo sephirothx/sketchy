@@ -626,7 +626,7 @@ export const PT: Catalogue = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Segue a ligação enviada para ${p.address}. Até lá, o endereço não está associado à tua conta e não serve para a recuperar${
+      `Se ${p.address} puder ser usado, está a caminho uma ligação de confirmação. Até a seguires, o endereço não está associado à tua conta e não serve para a recuperar${
         p.replacing ? ", e o que tinhas fica como estava." : "."
       }`,
     thatDoesNotLookLikeEmail: "Isso não parece um endereço de e-mail.",
@@ -685,6 +685,7 @@ export const PT: Catalogue = {
       })} nesta visita`,
     couldNotTakeScreenshot: "Não foi possível tirar a captura.",
     thanksYourReportWithPeopleWho: "Obrigado — o teu relatório está com quem gere o Sketchy.",
+    thanksSentWithoutScreenshot: "Obrigado — o teu relatório está com quem gere o Sketchy. Desta vez não foi possível guardar a captura de ecrã.",
     couldNotSendReport: "Não foi possível enviar o relatório.",
     reportBug: "Comunicar um erro",
     somethingBrokenNotSomethingSomeoneSaid: "Algo avariado, não algo que alguém disse. Isto chega a quem gere o Sketchy — nunca a outros jogadores.",
@@ -2466,7 +2467,7 @@ export const PT: Catalogue = {
     youCanRecoverThisAccount: (p: { address: string }) =>
       `Podes recuperar esta conta através de ${p.address}.`,
     checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
-      `Procura em ${p.pendingAddress} uma ligação de confirmação. Até a seguires, esta conta não tem forma de ser recuperada.`,
+      `Se ${p.pendingAddress} puder ser usado, está a caminho uma ligação de confirmação. Até a seguires, esta conta não tem forma de ser recuperada.`,
     thisServerCannotSendEmail: "Este servidor não consegue enviar e-mails, por isso uma palavra-passe perdida tem de ser reposta por quem o gere.",
     addAnEmailAddressSo: "Adiciona um endereço de e-mail para poderes voltar a entrar se te esqueceres da palavra-passe.",
   },
@@ -2540,6 +2541,7 @@ export const PT: Catalogue = {
   },
   socket: {
     sketchyIsFullRightNow: "O Sketchy está cheio neste momento. Tenta de novo daqui a uns minutos.",
+    tooManyTabsOpen: "O Sketchy está aberto em demasiados separadores. Fecha um para continuar.",
     connectionLostWhileTryingTo: (p: { action: string }) =>
       `A ligação perdeu-se ao tentar ${p.action}. Tenta de novo.`,
     theRequestToActionTimed: (p: { action: string }) =>
@@ -2605,6 +2607,7 @@ export const PT: Catalogue = {
   roomNotices: {
     kickedByVote: "Foste expulso da sala por votação.",
     roomClosed: "Um administrador fechou esta sala.",
+    roomExpired: "Esta sala fechou após 30 minutos sem nenhum jogo.",
     kickedByAdmin: "Um administrador expulsou-te da sala.",
     accountDeleted: "A tua conta foi eliminada.",
     accountSuspended: "A tua conta foi suspensa.",

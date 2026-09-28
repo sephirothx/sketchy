@@ -7,6 +7,7 @@ import {
   promptEntriesFromQuickInput,
   MAX_LIST_PROMPTS,
 } from "../src/lib/promptListDrafts.ts";
+import { withoutInvisibleCharacters } from "../src/lib/visibleText.ts";
 
 const texts = (entries) => entries.map((entry) => entry.prompt);
 
@@ -68,4 +69,17 @@ test("a clean import says nothing; a lossy one explains itself", () => {
 test("an empty carry-over starts an empty list, not a blank row", () => {
   assert.deepEqual(promptEntriesFromQuickInput(undefined), []);
   assert.deepEqual(texts(promptEntriesFromQuickInput("apple, pear")), ["apple", "pear"]);
+});
+
+test("pasted prompts lose the characters nobody can see, before they are compared (#1245)", () => {
+  const result = mergePromptEntries([], "cat, c​at, cat­\ncat﻿, dog⁠");
+
+  assert.deepEqual(texts(result.entries), ["cat", "dog"]);
+  assert.equal(result.duplicates, 3);
+  assert.deepEqual(texts(promptEntriesFromQuickInput("b‍ird,‮bird")), ["bird"]);
+});
+
+test("only what draws nothing is taken out of a saved prompt", () => {
+  assert.equal(withoutInvisibleCharacters("caf\u00e9 cafe\u0301 M\u00fcller"), "caf\u00e9 cafe\u0301 M\u00fcller");
+  assert.equal(withoutInvisibleCharacters("a\u{E0041}b\ufe0f\u3164c\u2066"), "abc");
 });

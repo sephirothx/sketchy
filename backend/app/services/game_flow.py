@@ -953,6 +953,7 @@ class GameFlowService:
         for player in room.player_list():
             player.score = 0
         room.state = "playing"
+        room.started_a_game = True
         room.game = Game(
             turn_order=[player.id for player in active_players],
             rounds_total=room.rounds,

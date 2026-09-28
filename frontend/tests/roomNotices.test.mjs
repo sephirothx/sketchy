@@ -11,6 +11,7 @@ test("a removal is said from its code, never from the server's reason", () => {
   assert.equal(kickedText("kicked_by_vote"), "You were kicked from the room by vote.");
   assert.equal(kickedText("room_closed"), "An administrator closed this room.");
   assert.equal(kickedText("removed_by_admin"), "An administrator kicked you from the room.");
+  assert.equal(kickedText("room_expired"), "This room closed after 30 minutes without a game.");
   assert.equal(supersededText("account_deleted"), "Your account was deleted.");
   assert.equal(supersededText("opened_elsewhere"), "This room was opened in another tab.");
 });
@@ -19,6 +20,8 @@ test("a closed room is the one removal that is not a kick", () => {
   assert.equal(isKick("kicked_by_vote"), true);
   assert.equal(isKick("removed_by_admin"), true);
   assert.equal(isKick("room_closed"), false);
+  // Closed for never starting a game (#1232): the room ended, nobody was kicked.
+  assert.equal(isKick("room_expired"), false);
   // A newer server's code is said as the general kick, so it is titled as one.
   assert.equal(isKick("from_a_newer_server"), true);
   assert.equal(isKick(undefined), true);

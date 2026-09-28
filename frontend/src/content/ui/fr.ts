@@ -626,7 +626,7 @@ export const FR: Catalogue = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Suis le lien envoyé à ${p.address}. D’ici là, l’adresse n’est pas rattachée à ton compte et ne permet pas de le récupérer${
+      `Si ${p.address} peut être utilisée, un lien de confirmation est en route. Tant que tu ne l’as pas suivi, l’adresse n’est pas rattachée à ton compte et ne permet pas de le récupérer${
         p.replacing ? ", et celle que tu avais reste en place." : "."
       }`,
     thatDoesNotLookLikeEmail: "Cela ne ressemble pas à une adresse e-mail.",
@@ -685,6 +685,7 @@ export const FR: Catalogue = {
       })} pendant cette visite`,
     couldNotTakeScreenshot: "La capture n’a pas pu être prise.",
     thanksYourReportWithPeopleWho: "Merci — ton rapport est arrivé chez les personnes qui font tourner Sketchy.",
+    thanksSentWithoutScreenshot: "Merci — ton rapport est arrivé chez les personnes qui font tourner Sketchy. La capture d’écran n’a pas pu être gardée cette fois.",
     couldNotSendReport: "Le rapport n’a pas pu être envoyé.",
     reportBug: "Signaler un bug",
     somethingBrokenNotSomethingSomeoneSaid: "Quelque chose de cassé, pas quelque chose que quelqu’un a dit. Cela va aux personnes qui font tourner Sketchy — jamais aux autres joueurs.",
@@ -2469,7 +2470,7 @@ export const FR: Catalogue = {
     youCanRecoverThisAccount: (p: { address: string }) =>
       `Tu peux récupérer ce compte via ${p.address}.`,
     checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
-      `Cherche un lien de confirmation dans ${p.pendingAddress}. Tant que tu ne l’as pas suivi, ce compte n’a aucun moyen d’être récupéré.`,
+      `Si ${p.pendingAddress} peut être utilisée, un lien de confirmation est en route. Tant que tu ne l’as pas suivi, ce compte n’a aucun moyen d’être récupéré.`,
     thisServerCannotSendEmail: "Ce serveur ne peut pas envoyer d’e-mails : un mot de passe perdu doit être réinitialisé par la personne qui le gère.",
     addAnEmailAddressSo: "Ajoute une adresse e-mail pour pouvoir revenir si tu oublies ton mot de passe.",
   },
@@ -2543,6 +2544,7 @@ export const FR: Catalogue = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy est plein pour le moment. Réessaie dans quelques minutes.",
+    tooManyTabsOpen: "Sketchy est ouvert dans trop d’onglets. Ferme-en un pour continuer.",
     connectionLostWhileTryingTo: (p: { action: string }) =>
       `Connexion perdue en essayant ${/^[aeiouyhàâéèêîôû]/i.test(p.action) ? "d’" : "de "}${p.action}. Réessaie.`,
     theRequestToActionTimed: (p: { action: string }) =>
@@ -2608,6 +2610,7 @@ export const FR: Catalogue = {
   roomNotices: {
     kickedByVote: "Tu as été exclu du salon par vote.",
     roomClosed: "Un administrateur a fermé ce salon.",
+    roomExpired: "Ce salon a été fermé après 30 minutes sans partie.",
     kickedByAdmin: "Un administrateur t’a exclu du salon.",
     accountDeleted: "Ton compte a été supprimé.",
     accountSuspended: "Ton compte a été suspendu.",

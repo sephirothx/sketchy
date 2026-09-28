@@ -14,6 +14,7 @@ from app.api.errors import Refusal
 from app.refusals import ErrorCode
 from app.auth.audit import audit_coordinates
 from app.auth.blocks import BlockService
+from app.auth.rate_limit import PersistentRateLimiter
 from app.services.friends import FriendService
 from app.domain_values import AuditTargetType
 from app.db.models import (
@@ -59,18 +60,39 @@ async def _target_user(session: AsyncSession, user_id: UUID) -> User | None:
     return target
 
 
+#: Blocks and unblocks one account may make in an hour (#1241). Each one
+#: appends a permanent audit row the application role cannot remove, and a
+#: guest can make them: a script cycling one pair wrote 237 rows a second.
+#: A person muting a few people in a busy lobby is nowhere near this.
+BLOCK_CHANGES_PER_HOUR = 30
+
+
 def create_user_blocks_router(
     session_factory: async_sessionmaker[AsyncSession],
     block_service: BlockService,
     friend_service: FriendService | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/api/users/me/blocks")
+    change_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="block_change",
+        limit=BLOCK_CHANGES_PER_HOUR,
+        window_seconds=3600,
+    )
 
     def blocker_id(request: Request) -> UUID:
         value = getattr(request.state, "user_id", None)
         if not value:
             raise Refusal(401, ErrorCode.SIGN_IN_REQUIRED, "Sign in first.")
         return UUID(value)
+
+    async def spend(current_id: UUID) -> None:
+        if not await change_limiter.check(str(current_id)):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many changes to your block list. Please wait and try again.",
+            )
 
     @router.get("")
     async def list_blocks(request: Request):
@@ -89,6 +111,7 @@ def create_user_blocks_router(
     @router.post("")
     async def block_user(body: BlockBody, request: Request, response: Response):
         current_id = blocker_id(request)
+        await spend(current_id)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
 
         unfriended: tuple[str, ...] = ()
@@ -186,6 +209,7 @@ def create_user_blocks_router(
     @router.delete("/{user_id}", status_code=204)
     async def unblock_user(user_id: UUID, request: Request, response: Response):
         current_id = blocker_id(request)
+        await spend(current_id)
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         async with session_factory() as session:
             async with session.begin():

@@ -211,10 +211,12 @@ class ForgotPasswordBody(ControlFreeModel):
 
 
 class ResetPasswordBody(ControlFreeModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", populate_by_name=True)
 
     token: str = Field(max_length=256)
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    # The acting tab's own socket, the one socket a reset spares (#1246).
+    socket_id: str | None = Field(default=None, alias="socketId", max_length=64)
 
 
 class DisplayNameBody(ControlFreeModel):
@@ -236,6 +238,8 @@ class ChangePasswordBody(ControlFreeModel):
         max_length=MAX_PASSWORD_LENGTH, alias="currentPassword"
     )
     password: str = Field(max_length=MAX_PASSWORD_LENGTH)
+    # The acting tab's own socket, the one socket a change spares (#1246).
+    socket_id: str | None = Field(default=None, alias="socketId", max_length=64)
 
 
 class SecondFactorConfirmBody(ControlFreeModel):
@@ -314,7 +318,7 @@ def create_auth_router(
     # for every session it holds - so the sockets those sessions opened are
     # closed rather than left playing under the account (#1007).
     on_sessions_revoked: (
-        Callable[[str, list[str] | None, str | None], Awaitable[None]] | None
+        Callable[..., Awaitable[None]] | None
     ) = None,
     # Called with every account that lost a friendship or a pending request
     # to a deletion, so their lists stop showing somebody who is gone. Wired to
@@ -408,6 +412,51 @@ def create_auth_router(
         limit=_limit("AUTH_VERIFY_LIMIT", 10),
         window_seconds=3600,
     )
+    # Per account and per recipient (#1240): the address buckets above say
+    # how fast one caller may ask, not how much one inbox may receive, and
+    # the caller chooses whose inbox. From one /64, twenty reset mails
+    # reached one player; from one account, twenty-five verification mails
+    # reached an address that had never heard of Sketchy. Delivery sends 50
+    # a sweep, oldest first, so a queue past a few thousand an hour would
+    # delay every real reset past its link's expiry.
+    reset_account_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset_account",
+        limit=_limit("AUTH_RESET_ACCOUNT_LIMIT", 3),
+        window_seconds=3600,
+    )
+    reset_account_daily_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="password_reset_account_day",
+        limit=_limit("AUTH_RESET_ACCOUNT_DAILY_LIMIT", 10),
+        window_seconds=86400,
+    )
+    verify_account_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="email_verify_account",
+        limit=_limit("AUTH_VERIFY_ACCOUNT_LIMIT", 5),
+        window_seconds=86400,
+    )
+    verify_recipient_limiter = PersistentRateLimiter(
+        session_factory,
+        scope="email_verify_recipient",
+        limit=_limit("AUTH_VERIFY_RECIPIENT_LIMIT", 3),
+        window_seconds=86400,
+    )
+
+    async def reset_allowed(user_id: UUID) -> bool:
+        """One more reset mail for this account, by the hour and by the day."""
+        key = str(user_id)
+        if not await reset_account_limiter.check(key):
+            return False
+        if not await reset_account_daily_limiter.check(key):
+            await reset_account_limiter.refund(key)
+            return False
+        return True
+
+    async def recipient_allowed(address: str) -> bool:
+        """One more verification mail for this inbox today, whoever asks."""
+        return await verify_recipient_limiter.check(address)
     # Costs a password verification and a hash rather than somebody's inbox,
     # so it sits between the two - loose enough for a mistyped current
     # password, tight enough that a stolen session cannot grind at one.
@@ -475,11 +524,18 @@ def create_auth_router(
         return issued.session.id
 
     async def _sockets_signed_out(
-        user_id: str, session_ids: list[str] | None, *, keep: str | None = None
+        user_id: str,
+        session_ids: list[str] | None,
+        *,
+        keep: str | None = None,
+        keep_socket: str | None = None,
     ) -> None:
         """Best effort, after the commit: the revocation stands either way.
 
-        `keep` is the acting browser's session, whose sockets are left alone.
+        `keep` is the acting browser's session and `keep_socket` the one
+        socket of it that acted, which alone is left alone: any other socket
+        opened with that session - another tab, or a copy of the cookie - is
+        closed once the new cookie has had time to land (#1246).
 
         Named sessions reach the sockets opened before they were rotated in,
         which carry a predecessor's id (#1083). `keep` is deliberately not
@@ -496,7 +552,7 @@ def create_auth_router(
                 # The named ones still go; only the older sockets are missed.
                 logger.exception("Could not read the rotation chain for %s", user_id)
         try:
-            await on_sessions_revoked(str(user_id), session_ids, keep)
+            await on_sessions_revoked(str(user_id), session_ids, keep, keep_socket)
         except Exception:
             logger.exception("Could not close the sockets of revoked sessions for %s", user_id)
 
@@ -1002,6 +1058,7 @@ def create_auth_router(
                     email=body.email,
                     ip_hash=ip_hash,
                     request_id=request_id,
+                    allow_recipient=recipient_allowed,
                 )
             except (EmailAddressError, EmailAlreadyInUse, RecoveryError):
                 logger.info("Registration email not accepted for %s", claimed.id)
@@ -1365,6 +1422,16 @@ def create_auth_router(
         await _prove_password(user, body.password)
         if user.role in STAFF_ROLES:
             require_step_up(request)
+        # After the proof, so a mistyped password does not spend the day's
+        # allowance; the address bucket above is what the proof is ground
+        # against. Said out loud: it is the caller's own account, so the
+        # refusal tells them nothing about anybody else.
+        if not await verify_account_limiter.check(user.id):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_ATTEMPTS,
+                "Too many attempts. Please wait and try again.",
+            )
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:
             address = await request_email_verification(
@@ -1373,13 +1440,14 @@ def create_auth_router(
                 email=body.email,
                 ip_hash=ip_hash,
                 request_id=request_id,
+                allow_recipient=recipient_allowed,
             )
         except EmailAddressError as error:
             raise Refusal(400, ErrorCode.INVALID_EMAIL, str(error)) from error
-        except EmailAlreadyInUse as error:
-            raise Refusal(409, ErrorCode.EMAIL_IN_USE, str(error)) from error
         except RecoveryError as error:
             raise Refusal(403, ErrorCode.EMAIL_CHANGE_REFUSED, str(error)) from error
+        # The same answer for an address another account holds (#1247): no
+        # mail goes to it, and the click that would prove it is refused.
         await announce_email_state(user.id)
         return {"ok": True, "pendingAddress": address}
 
@@ -1427,6 +1495,7 @@ def create_auth_router(
             identifier=body.identifier,
             ip_hash=ip_hash,
             request_id=request_id,
+            allow_account=reset_allowed,
         )
         return {
             "ok": True,
@@ -1533,7 +1602,9 @@ def create_auth_router(
         # in as the account, stays and re-handshakes once the new cookie is
         # in hand: closed now, it would re-read itself before the cookie
         # landed and take the reset for a sign-out.
-        await _sockets_signed_out(str(outcome.user_id), None, keep=acting_session)
+        await _sockets_signed_out(
+            str(outcome.user_id), None, keep=acting_session, keep_socket=body.socket_id
+        )
         return {"ok": True, "signedIn": True}
 
     @router.post("/password/change")
@@ -1597,7 +1668,9 @@ def create_auth_router(
         # this account's still - and re-handshakes once the response has
         # delivered the new cookie; closed now, the notice would land first
         # and the tab would take its own change for a sign-out.
-        await _sockets_signed_out(user.id, None, keep=acting_session)
+        await _sockets_signed_out(
+            user.id, None, keep=acting_session, keep_socket=body.socket_id
+        )
         return {"ok": True}
 
     @router.get("/second-factor")

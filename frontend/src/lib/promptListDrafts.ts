@@ -1,5 +1,6 @@
 import type { EmailState } from "./accountRecovery";
 import type { PromptListDraftEntry } from "./promptLists";
+import { withoutInvisibleCharacters } from "./visibleText.ts";
 import { ui } from "../content/ui/index.ts";
 
 export function promptEntriesFromQuickInput(raw: string | undefined): PromptListDraftEntry[] {
@@ -9,7 +10,7 @@ export function promptEntriesFromQuickInput(raw: string | undefined): PromptList
   const seen = new Set<string>();
   return raw
     .split(/[\n\r,]+/)
-    .map((prompt) => prompt.trim())
+    .map((prompt) => withoutInvisibleCharacters(prompt).trim())
     .filter((prompt) => {
       const key = prompt.toLocaleLowerCase();
       if (!prompt || prompt.length > 32 || seen.has(key)) return false;
@@ -51,7 +52,10 @@ export function mergePromptEntries(
   let overLimit = 0;
 
   for (const part of raw.split(/[\n\r,]+/)) {
-    const prompt = part.trim();
+    // Before the length and duplicate checks: "cat" and "cat" with a
+    // zero-width space in it are one prompt, and the space is not a character
+    // anybody typed (#1245).
+    const prompt = withoutInvisibleCharacters(part).trim();
     if (!prompt) continue;
     if (prompt.length > MAX_LIST_PROMPT_LENGTH) {
       tooLong.push(prompt);

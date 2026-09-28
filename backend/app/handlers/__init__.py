@@ -39,7 +39,9 @@ from app.services.presence import (
     PresenceIdentityCache,
     PresenceRegistry,
 )
+from app.services.player_reports import ReportBudget
 from app.services.room_codes import RoomCodeService
+from app.services.idle_rooms import IdleRoomReaper
 from app.services.room_quotas import RoomCapacityService, RoomQuotaService
 from app.services.timers import TimerManager
 from app.services.shutdown import ShutdownCoordinator
@@ -86,6 +88,11 @@ def register_all_handlers(
             if session_factory is not None
             else None
         ),
+        report_budget=(
+            ReportBudget(session_factory)
+            if session_factory is not None
+            else None
+        ),
         friend_service=(
             friend_service
             if friend_service is not None
@@ -123,6 +130,7 @@ def register_all_handlers(
     # `game_flow` when a check goes unanswered. Built here rather than in the
     # context's defaults because it needs both of those (#677).
     ctx.afk_watch = AfkWatch(sio, room_manager, ctx.activity, ctx.game_flow)
+    ctx.idle_rooms = IdleRoomReaper(room_manager, ctx)
     ctx.friend_invites = FriendInviteBook()
     ctx.lobby_chat = LobbyChatLog()
 

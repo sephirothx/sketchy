@@ -1731,6 +1731,14 @@ class UserBan(Base):
         nullable=True,
     )
     revoke_reason: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    # Whether only an administrator may lift it, decided when it was placed:
+    # an administrator placed it, or its subject was staff (R-BAN-01, #1239).
+    # Recorded rather than read from today's roles, which a demotion changes
+    # - demote the administrator who placed it, or the staff member under it,
+    # and a moderator could lift what was out of their reach (#1294 review).
+    lift_requires_admin: Mapped[bool] = mapped_column(
+        Boolean, default=False, server_default=false(), nullable=False
+    )
 
 
 class UserWarning(Base):
@@ -2139,6 +2147,13 @@ class AuthSession(Base):
     anomaly_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     anomaly_count: Mapped[int] = mapped_column(
         Integer, nullable=False, default=0, server_default=text("0")
+    )
+    # When the ledger last recorded an anomaly of this session (#1299 review).
+    # Apart from `anomaly_at`, which every switch moves: throttled against
+    # that, a client switching every second never wrote a second row. Claimed
+    # by one conditional UPDATE, so two requests in flight cannot both write.
+    anomaly_audited_at: Mapped[datetime | None] = mapped_column(
+        UTCDateTime(), nullable=True
     )
     # The last time this device proved a second factor. Destructive staff
     # actions require one inside a short window (R-AUTH-21). Held here rather

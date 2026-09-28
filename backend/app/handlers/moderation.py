@@ -18,6 +18,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import IntegrityError
 
 from app.auth.avatars import uploaded_avatar_key
+from app.auth.rate_limit import address_key
 from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import User
 from app.domain_values import ReportReason, ReportScope
@@ -193,6 +194,7 @@ async def report_player(ctx: HandlerContext, sid, data):
 
     # Taken before the database is touched, so the frame is the one on the
     # canvas at the moment of the report rather than after a round-trip.
+    address = ctx.client_address(sid) or address_key(None)
     drawing = (
         drawing_from_live_room(room, target.id) if payload.include_drawing else None
     )
@@ -206,7 +208,7 @@ async def report_player(ctx: HandlerContext, sid, data):
     try:
         with entry_deadline():
             return await _bounded(
-                _file_player_report(ctx, room, reporter, target, payload, drawing),
+                _file_player_report(ctx, room, reporter, target, payload, drawing, address),
                 "filing the report",
             )
     except EntryTimedOut:
@@ -216,8 +218,18 @@ async def report_player(ctx: HandlerContext, sid, data):
         return BUSY_ACKNOWLEDGEMENT
 
 
-async def _file_player_report(ctx: HandlerContext, room, reporter, target, payload, drawing) -> dict:
+async def _file_player_report(ctx: HandlerContext, room, reporter, target, payload, drawing, address) -> dict:
     """Refuse or write the report, in two transactions; see `report_player`."""
+    # The same buckets the REST and Gallery doors charge, so filing from the
+    # room is not the unmetered way to fill the queue (#1243). Charged before
+    # the report can be refused for any other reason, as REST does.
+    if ctx.report_budget is not None and not await ctx.report_budget.charge(
+        address=address, account_id=reporter.user_id
+    ):
+        return {
+            "ok": False, "errorCode": ErrorCode.TOO_MANY_REPORTS,
+            "error": "Too many reports. Please wait before sending another.",
+        }
     # Two transactions with the flush between them (#972 fourth review). The
     # first answers everything that can refuse the report, cheaply; then the
     # connection goes back to the pool while the retention writer is waited

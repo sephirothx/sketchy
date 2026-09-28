@@ -14,6 +14,7 @@ from app.auth.password import password_hash_workers
 from app.deployment import reconnect_spread_seconds, shutdown_drain_seconds
 from app.logging_config import JSON_FORMAT, configure_logging, log_format
 from app.main import shutdown_coordinator, sio
+from app.socket_server import MAX_PACKET_BYTES
 from app.ws_transport import WS_PROTOCOL
 
 
@@ -139,6 +140,11 @@ def run() -> None:
         # Named, not "auto": which library answers a WebSocket decides the
         # deflate window, and auto decided it by what happened to be installed.
         ws=WS_PROTOCOL,
+        # A WebSocket message is one Engine.IO packet, so its ceiling is the
+        # packet's (#1234), not uvicorn's 16 MiB default. This bounds an
+        # uncompressed message as it arrives; a compressed one is bounded
+        # earlier, as it inflates (`ws_transport.SizedPerMessageDeflate`).
+        ws_max_size=MAX_PACKET_BYTES,
         timeout_keep_alive=KEEP_ALIVE_SECONDS,
         # This bound begins after the application drain. Leave enough time for
         # the ordinary 10-second atomic finished-history write to settle.

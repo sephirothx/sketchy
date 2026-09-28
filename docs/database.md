@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`e8f9a0b1c2d4_extra_prompt_languages.py` (#1209). Both this line and the table
+`b9c0d1e2f3a5_session_anomaly_audited_at.py` (#1299 review). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -291,7 +291,7 @@ One revocable signed-in device.
 
 `id` · `user_id` (CASCADE) · `token_hash` VARCHAR(64) **unique** · `device_label` ·
 `last_device_label` · `rotated_from_id` (self-FK, unique, `SET NULL`) · `ip_hash` · `last_ip_hash` ·
-`anomaly_at` · `anomaly_count` · `stepped_up_at` · `created_at` · `last_used_at` ·
+`anomaly_at` · `anomaly_count` · `anomaly_audited_at` · `stepped_up_at` · `created_at` · `last_used_at` ·
 `expires_at` · `revoked_at`, with `ck_auth_sessions_anomaly_count` and
 `ck_auth_sessions_anomaly_pair` (a session that never looked wrong has no time at
 which it did).
@@ -329,8 +329,9 @@ enrol from.
 `ip_hash` is the address the session was **issued** to and `last_ip_hash` the one it was
 last used from, both HMAC-SHA-256 under the same `IP_HASH_SECRET` the rate limiter uses
 — raw addresses are never stored, so these answer "same network?" without knowing which
-network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
-the one it was last seen from, or for staff from a different address. `device_label` is
+network. The address hashed is R-RATE-02's key, so an IPv6 address counts as its /64 and a
+privacy address rotating inside it is not a different network. `anomaly_at`/`anomaly_count` record a session used from a browser other than
+the one it was last seen from, or for staff from a different address. Every switch updates the row; the `session.anomaly` ledger entry is written at most once per five minutes per session, with `anomaly_count` in its `details` — the five minutes measured from the last entry written (`anomaly_audited_at`), not the last switch, which every switch moves, and claimed by one conditional `UPDATE` so two requests in flight cannot both write (#1299 review), so a client flipping between two browsers writes one permanent row an interval rather than one per request (#1242). `device_label` is
 the browser the session was issued to; `last_device_label` the one it was last used from
 (NULL until the session is first seen from another browser), and the comparison is against it, so a label
 that changed for good is one anomaly rather than one per request (#1016); a player's address change is
@@ -381,11 +382,14 @@ password with every old device still signed in (R-AUTH-10, R-AUTH-17).
 `scope` + `key_hash` composite **PK** · `attempt_count` · `window_started_at` ·
 `window_expires_at` · `updated_at`.
 
-`key_hash` is an HMAC-SHA-256 digest of the client address under `IP_HASH_SECRET` (or
-an auto-generated `app_config` secret) — **raw IP addresses are never stored.** The
-`room_create` scope is the one exception to "client address": it hashes the **account**
-that opened the room, because a socket behind a reverse proxy presents the proxy and
-the forwarded header is attacker-controlled. Buckets
+`key_hash` is an HMAC-SHA-256 digest under `IP_HASH_SECRET` (or an auto-generated
+`app_config` secret) of whatever the scope counts — **raw IP addresses are never
+stored.** Most scopes count a client address (keyed as R-RATE-02 says). A per-account
+scope hashes the **account** instead — `room_create`, the prompt-list and audited-route
+budgets, `report-account`, `password_reset_account` and `_day`, `email_verify_account`
+— because that is the key a caller cannot change by moving address; and
+`email_verify_recipient` hashes the **normalized address being verified**, so one inbox
+has one bucket whoever asks for it (#1240). Buckets
 are shared, so limits survive restarts and apply once across every replica. Expired
 buckets are cleaned in bounded batches. Rotating the secret starts fresh buckets without
 exposing or re-identifying old keys.
@@ -766,8 +770,14 @@ fields, linked guest identities, session metadata, game seats, drawn turns, corr
 guesses, prompt-list revision history, the lists it starred, unexpired authored retained
 messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
-message body the requester did not explicitly receive and pin. The field surface is
-pinned by [`fixtures/account_data_export_v12_fields.json`](../fixtures/account_data_export_v12_fields.json).
+message body the requester did not explicitly receive and pin — nor what other people
+did to the requester (schema 13, #1238): a friend request of theirs that was declined
+is left out (the decliner's export keeps it), account events that name them only as
+the **target** are limited to the ones they are told about as they happen (warnings,
+bans and revocations, a moderator removing their picture, role changes, and `session.*`,
+`account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
+not in it, and a report they filed carries `decided` and no status or review time. The field surface is
+pinned by [`fixtures/account_data_export_v13_fields.json`](../fixtures/account_data_export_v13_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -782,6 +792,16 @@ queue, so a send can happen hours after the queue. Resolving the language late
 would mean a preference changed in between re-languages a message that was
 already composed, including the one about the security event that prompted the
 change. `en` for an account with no settings row of its own. `last_error` holds the relay's answer **redacted before it is truncated** to the column's 256 characters: `SMTPRecipientsRefused` stringifies with the refused address in it, and a cut taken first can land inside one and leave the local part standing (R-AUTH-12).
+
+**Claimed reset first, but not only resets.** A sweep takes due `reset_password` rows
+before anything else, oldest first (#1240): a reset link lives an hour and is somebody
+locked out, a verification link lives a day, and oldest-first alone let a queue flooded
+with verification mail age every reset behind it past its expiry at 50 messages a
+sweep. A fifth of every batch (10 of 50) is kept for everything else, oldest first,
+and filled with resets only when nothing else is due: without it a sustained flood of
+resets held every verification until its link had expired (#1302 review). Any batch of two
+or more keeps at least one slot for it; a batch of one goes to whichever kind has
+waited longer, so a one-message drain starves neither.
 
 `ix_email_outbox_sent_at_sent`, a partial `(sent_at, id) WHERE state = 'sent'`, serves the retention sweep's sent branch (#550, #554): sent rows are most of the outbox and age by `sent_at`. The failed branch ages by `created_at` and is served by `ix_email_outbox_ready`'s state prefix; the sweep runs the two as separate bounded branches with the state inlined as a literal.
 
@@ -834,6 +854,13 @@ provider-login API is enabled until identity-linking flows ship.
 
 ### `audit_events`
 Append-only record of every security- and moderation-sensitive action.
+
+Nothing sweeps it, and the application role cannot delete from it, so every row a
+player's request writes is permanent (#1241): the player routes that append one
+are bounded per account — block/unblock and doodle/picture changes 30 an hour each,
+withdrawing a list from the catalogue 30 — and a request that changes nothing writes
+nothing (blocking somebody already blocked, the doodle already worn, removing a
+picture that is not there, withdrawing a list that is not out).
 
 `ix_audit_events_type_created_at` replaces the standalone `event_type` index (#554): the ledger filtered by one type, newest first, walks it in order instead of collecting every row of a rare type and sorting them, and the composite serves the plain equality the standalone did.
 
@@ -925,7 +952,10 @@ pending report receives one resolution and cannot later be silently rewritten.
 
 ### `room_messages`
 Accepted player-authored chat, wrong guesses, and correct-guess text, kept **30 days**
-in an audience-aware store — and, since #533, the lobby's chat too.
+in an audience-aware store — and, since #533, the lobby's chat too. A room line that
+reached **nobody but its author** — said alone in a room, or with every other seat
+blocking them — is not written (#1243): a report cites only a line its reporter
+received, so such a row could never be evidence, and it was storage anybody could fill.
 
 **Written in batches, never on the delivery path.** A queued writer inserts what
 arrived within `WRITE_LINGER_SECONDS` (0.25 s) of a batch's first line, up to 100,
@@ -1165,7 +1195,16 @@ counting the pictures that went.
 ### `user_bans`
 `id` · `user_id` (`SET NULL`) · `banned_by_user_id` (`SET NULL`) · `reason` ·
 `source_report_id` (FK → `player_reports`, `SET NULL`) · `category` · `expires_at` · `is_active` ·
-`created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason`.
+`created_at` · `revoked_at` · `revoked_by_user_id` · `revoke_reason` · `lift_requires_admin`.
+
+`lift_requires_admin` records, when the suspension is placed, whether only an
+administrator may lift it — an administrator placed it, or its subject was staff
+(R-BAN-01). Revocation checks it beside the roles held today, so a demotion since —
+of the administrator who placed it, or of the staff member under it — cannot bring
+it within a moderator's reach (#1294 review). A suspension already in force when the
+column arrived was backfilled `true`: nothing recorded the roles it was placed under,
+and needing an administrator is the reading that cannot be wrong in a moderator's
+favour.
 
 **Active is one predicate everywhere** (#553): `revoked_at IS NULL AND (expires_at IS NULL OR expires_at > now)`, from `auth/bans.py` `active_ban_filter`. The `is_active` flag it replaced recorded only the first half, so an expired-but-unrevoked ban was active in one reader and not in another; such a ban now stays as history and counts as nothing. `ck_user_bans_revocation_identity` ties the revoking actor and reason to a revocation (the actor may still become NULL when that moderator's account is deleted). `ix_user_bans_user_expires` serves the account lookup and the foreign-key walk on deletion; `ix_user_bans_unrevoked_newest`, a partial `(created_at) WHERE revoked_at IS NULL`, serves the moderation queue's newest active bans (#554).
 

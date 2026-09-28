@@ -449,6 +449,14 @@ class Room:
     # outlives its last player, so what counts against them is only ever a
     # room somebody is actually playing in.
     created_by_user_id: str | None = field(default=None, repr=False)
+    # The address the room was opened from (`auth/rate_limit.address_key`: an
+    # IPv4 address or an IPv6 /64), counted against that address's ceiling
+    # the same way (#1232). In memory only, like the room.
+    created_from: str | None = field(default=None, repr=False)
+    # Whether a game has ever started here. A waiting room that never starts
+    # one is closed after a while (`services/idle_rooms.py`): held by idle
+    # sockets, rooms were the one ceiling a handful of guests could fill.
+    started_a_game: bool = field(default=False, repr=False)
     custom_prompts: list[str] = field(default_factory=list)
     # What this room's quick prompts cost, kept beside them so the process
     # total is a sum of integers rather than a walk of every string. Written
@@ -831,6 +839,7 @@ class RoomManager:
         prompt_letter_total_by_language: dict[str, int] | None = None,
         code: str | None = None,
         created_by_user_id: str | None = None,
+        created_from: str | None = None,
     ) -> Room:
         room_id = str(uuid.uuid4())
         final_name = name.strip() if name and name.strip() else generate_random_room_name()
@@ -863,6 +872,7 @@ class RoomManager:
             prompt_letter_counts_by_language=dict(prompt_letter_counts_by_language or {}),
             prompt_letter_total_by_language=dict(prompt_letter_total_by_language or {}),
             created_by_user_id=created_by_user_id,
+            created_from=created_from,
         )
         self.set_custom_prompts(room, room.custom_prompts)
         self.rooms[room_id] = room
@@ -909,6 +919,12 @@ class RoomManager:
         return sum(
             1 for room in self.rooms.values() if room.created_by_user_id == user_id
         )
+
+    def rooms_created_from(self, address: str | None) -> int:
+        """How many live rooms were opened from this address and are still open."""
+        if not address:
+            return 0
+        return sum(1 for room in self.rooms.values() if room.created_from == address)
 
     def retained_prompt_characters(self) -> int:
         """What every live room's quick prompts cost this process together."""

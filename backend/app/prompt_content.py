@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 
 from app.domain_values import (
     AGNOSTIC_PROMPT_LANGUAGE,
@@ -112,6 +113,9 @@ def validate_prompt_language(language: str) -> str:
     return canonical
 
 
+_CANONICAL_LIST_LANGUAGES = frozenset((*PROMPT_LANGUAGES, AGNOSTIC_PROMPT_LANGUAGE))
+
+
 def validate_prompt_list_language(language: str) -> str:
     """Return the canonical tag a prompt list may declare, or reject it.
 
@@ -119,7 +123,13 @@ def validate_prompt_list_language(language: str) -> str:
     difference from `validate_prompt_language` is deliberate and one-way: a
     room still has to declare a language its guesses can be folded under, so
     `zxx` is refused there.
+
+    A tag already in its canonical form is answered by one set lookup: this
+    runs once per text on every fold, 210,000 times for a selection at its
+    ceiling (#1237), and the regular expression was a fifth of that fold.
     """
+    if language in _CANONICAL_LIST_LANGUAGES:
+        return language
     normalized = language.strip()
     if normalized.lower() == AGNOSTIC_PROMPT_LANGUAGE:
         return AGNOSTIC_PROMPT_LANGUAGE
@@ -202,6 +212,78 @@ _APOSTROPHES = str.maketrans(
 )
 
 
+# Code points that draw nothing (#1245): every format character (Unicode
+# category Cf - the zero-width space and joiners, the word joiner, the soft
+# hyphen, the byte-order mark, the bidirectional overrides) and the rest of
+# Unicode's Default_Ignorable_Code_Point set - variation selectors, fillers,
+# tags. Two texts that differ only by them look the same and keyed
+# differently, so a moderator's takedown of "badword" came back as
+# "bad<ZWSP>word", a list could hold "cat" three times over, and a U+202E in
+# a name turned the rest of the line around.
+#
+# Written out rather than derived from `unicodedata` at import, which would
+# walk all 1.1 million code points in every process; one class, because
+# testing a character against a list of ranges in Python made keying a
+# non-ASCII answer six times slower. `unicodedata` has no default-ignorable
+# property to derive it from anyway: `test_invisible_prompt_text` checks the
+# class against Unicode's list of them, reserved code points included
+# (U+FFF0-FFF8 were missing, #1303 review), and every Cf character the
+# running Python knows.
+_INVISIBLE = (
+    "\u00ad\u034f\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2"
+    "\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e"
+    "\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufffb"
+    "\U000110bd\U000110cd\U00013430-\U0001343f\U0001bca0-\U0001bca3"
+    "\U0001d173-\U0001d17a\U000e0000-\U000e0fff"
+)
+INVISIBLE_CHARACTER = re.compile(f"[{_INVISIBLE}]")
+# The joiner that builds one emoji out of several ("cook" is person, ZWJ,
+# frying pan) is left out of this one: a name or description may carry it,
+# since emoji are how plenty of people title a list; an answer may not, being
+# a word to guess.
+_INVISIBLE_BUT_THE_JOINER = re.compile(f"(?!\u200d)[{_INVISIBLE}]")
+
+# The most marks one letter may carry, counted decomposed so a precomposed
+# letter counts its own: Vietnamese stacks two ("ệ"), and nothing a language
+# writes needs more than four. A pile of them is text that paints over the
+# lines around it.
+MAX_COMBINING_MARKS = 4
+
+_LONG_NON_ASCII_RUN = re.compile(f"[^\\x00-\\x7f]{{{MAX_COMBINING_MARKS + 1},}}")
+
+INVISIBLE_CHARACTER_MESSAGE = "must not contain invisible or formatting characters"
+STACKED_MARKS_MESSAGE = f"must not stack more than {MAX_COMBINING_MARKS} marks on one letter"
+
+
+def visible_text_problem(text: str, *, emoji_joiner: bool = False) -> str | None:
+    """Why `text` may not be stored as prompt-list content, or None.
+
+    `emoji_joiner` admits the zero-width joiner, for a name or description.
+    ASCII has neither problem, and most of a list is ASCII.
+    """
+    if text.isascii():
+        return None
+    pattern = _INVISIBLE_BUT_THE_JOINER if emoji_joiner else INVISIBLE_CHARACTER
+    if pattern.search(text) is not None:
+        return INVISIBLE_CHARACTER_MESSAGE
+    decomposed = unicodedata.normalize("NFD", text)
+    # A mark is never ASCII, so a stack too high is at least that many
+    # non-ASCII characters in a row - which a decomposed Latin word never has
+    # ("Mu" + diaeresis + "ller"), and so is not walked character by character.
+    if _LONG_NON_ASCII_RUN.search(decomposed) is None:
+        return None
+    run = 0
+    for character in decomposed:
+        run = run + 1 if unicodedata.category(character)[0] == "M" else 0
+        if run > MAX_COMBINING_MARKS:
+            return STACKED_MARKS_MESSAGE
+    return None
+
+
+def _without_invisible(text: str) -> str:
+    return text if text.isascii() else INVISIBLE_CHARACTER.sub("", text)
+
+
 def _collapsed(answer: str) -> str:
     """Whitespace collapsed, case folded, *composed*, apostrophes made plain.
 
@@ -212,8 +294,14 @@ def _collapsed(answer: str) -> str:
     equivalent, so they have to fold to one key. The apostrophe fold runs on
     both the stored key and the guess, so a list written with typographic
     quotes matches a plain-keyboard guess as well as the other way round.
+
+    Invisible characters are dropped first (#1245): stored content refuses
+    them, but a key is also what a guess and a moderator's hidden word are
+    compared by, and "bad<ZWSP>word" is the same word as "badword".
     """
-    composed = unicodedata.normalize("NFC", " ".join(answer.split()).casefold())
+    composed = unicodedata.normalize(
+        "NFC", " ".join(_without_invisible(answer).split()).casefold()
+    )
     return composed.translate(_APOSTROPHES)
 
 
@@ -222,7 +310,13 @@ def _fold_accents(text: str) -> str:
 
     Letters such as "ø" and "ł" survive, because NFD does not decompose them
     into an ASCII letter and a mark.
+
+    ASCII has nothing to decompose and no marks, so it is returned as it is:
+    the per-character walk below is what folding a whole prompt list costs,
+    and most of a list is ASCII (#1236, #1237).
     """
+    if text.isascii():
+        return text
     return "".join(
         character
         for character in unicodedata.normalize("NFD", text)
@@ -278,6 +372,28 @@ def prompt_match_key(answer: str, language: str = "en") -> str:
     return _fold_accents(_transliterate(collapsed, language))
 
 
+def prompt_match_keys(answer: str, languages: Iterable[str]) -> dict[str, str]:
+    """`prompt_match_key(answer, language)` for each of `languages`, folded once.
+
+    A language without a transliteration keys with the shared rule alone, so
+    every such language shares one key: an agnostic list checked under every
+    room language used to fold each text seven times over for what is at most
+    four distinct keys (#1236).
+    """
+    collapsed = _collapsed(answer)
+    shared: str | None = None
+    keys: dict[str, str] = {}
+    for language in languages:
+        language = validate_prompt_list_language(language)
+        if _TRANSLITERATIONS.get(language):
+            keys[language] = _fold_accents(_transliterate(collapsed, language))
+        else:
+            if shared is None:
+                shared = _fold_accents(collapsed)
+            keys[language] = shared
+    return keys
+
+
 def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
     """Every spelling of `answer` this language accepts as the same word.
 
@@ -302,6 +418,9 @@ def normalize_prompt_answer(answer: str, language: str = "en") -> str:
     collapsed = " ".join(answer.split())
     if not collapsed or len(collapsed) > MAX_PROMPT_LENGTH:
         raise ValueError(f"answer must be 1-{MAX_PROMPT_LENGTH} characters")
+    problem = visible_text_problem(collapsed)
+    if problem is not None:
+        raise ValueError(f"answer {problem}")
     key = prompt_match_key(collapsed, language)
     # Bounded after folding, not only before: case-folding expands some
     # characters (`ﬃ` to "ffi", `ß` to "ss"), so 32 characters in could be 96
@@ -319,8 +438,21 @@ def clean_prompt_aliases(
     aliases: list[str], *, canonical_answer: str, language: str
 ) -> tuple[str, ...]:
     """Validate and deduplicate aliases by their language-specific match key."""
-    canonical_key = normalize_prompt_answer(canonical_answer, language)
+    cleaned, _ = clean_prompt_aliases_keyed(
+        aliases,
+        canonical_key=normalize_prompt_answer(canonical_answer, language),
+        language=language,
+    )
+    return cleaned
+
+
+def clean_prompt_aliases_keyed(
+    aliases: list[str], *, canonical_key: str, language: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """`clean_prompt_aliases`, for a caller that already holds the answer's key,
+    returning each kept alias's key beside it so nothing is folded twice."""
     cleaned: list[str] = []
+    keys: list[str] = []
     seen = {canonical_key}
     if len(aliases) > MAX_PROMPT_ALIASES:
         raise ValueError(f"too many aliases (max {MAX_PROMPT_ALIASES})")
@@ -330,7 +462,8 @@ def clean_prompt_aliases(
         if key not in seen:
             seen.add(key)
             cleaned.append(display)
-    return tuple(cleaned)
+            keys.append(key)
+    return tuple(cleaned), tuple(keys)
 
 
 def clean_prompt_tags(tags: list[str]) -> tuple[str, ...]:

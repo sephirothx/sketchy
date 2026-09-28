@@ -1,6 +1,8 @@
 """A revocation reaches the sockets the revoked sessions opened (#1007)."""
 from __future__ import annotations
 
+import asyncio
+
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -19,11 +21,13 @@ async def env(monkeypatch):
     monkeypatch.setenv("IP_HASH_SECRET", "revocation-test-secret")
     factory, engine = await create_test_db()
     revoked: list[tuple[str, list[str] | None, str | None]] = []
+    kept_sockets: list[str | None] = []
 
     async def record(
-        user_id: str, session_ids: list[str] | None, keep: str | None
+        user_id: str, session_ids: list[str] | None, keep: str | None, keep_socket: str | None = None
     ) -> None:
         revoked.append((user_id, session_ids, keep))
+        kept_sockets.append(keep_socket)
 
     app = FastAPI()
     app.add_middleware(SessionAuthMiddleware, session_factory=factory)
@@ -37,6 +41,7 @@ async def env(monkeypatch):
         clients.append(client)
         return client
 
+    new_client.kept_sockets = kept_sockets
     try:
         yield new_client, factory, revoked
     finally:
@@ -170,10 +175,42 @@ async def test_a_password_change_closes_every_other_browsers_sockets(env):
     [current] = [row["id"] for row in sessions if row["current"]]
     changed = await browser.post(
         "/api/auth/password/change",
-        json={"currentPassword": PASSWORD, "password": "another-good-password-42"},
+        json={
+            "currentPassword": PASSWORD,
+            "password": "another-good-password-42",
+            "socketId": "this-tab-sid",
+        },
     )
     assert changed.status_code == 200, changed.text
     assert revoked == [(account["id"], None, current)]
+    # The one socket spared is the one that said it acted (#1246).
+    assert new_client.kept_sockets == ["this-tab-sid"]
+
+
+async def test_a_reset_names_the_one_socket_it_spares(env, monkeypatch):
+    from app.auth import routes as auth_routes
+
+    new_client, factory, revoked = env
+    browser = new_client()
+    account = await register(browser, "Resetting")
+
+    async def identity(*_args, **_kwargs):
+        return "Resetting", None
+
+    async def reset(*_args, **_kwargs):
+        from types import SimpleNamespace
+        from uuid import UUID
+
+        return SimpleNamespace(user_id=UUID(account["id"]), role="user")
+
+    monkeypatch.setattr(auth_routes, "password_reset_identity", identity)
+    monkeypatch.setattr(auth_routes, "reset_password", reset)
+    done = await browser.post(
+        "/api/auth/password/reset",
+        json={"token": "t" * 43, "password": "a-brand-new-passphrase-7", "socketId": "reset-tab"},
+    )
+    assert done.status_code == 200, done.text
+    assert new_client.kept_sockets[-1] == "reset-tab"
 
 
 async def test_the_sockets_of_the_named_sessions_are_told_and_closed(monkeypatch):
@@ -209,10 +246,19 @@ async def test_the_sockets_of_the_named_sessions_are_told_and_closed(monkeypatch
     await main.close_sockets_of_revoked_sessions("u1", None)
     assert server.disconnected == ["laptop-sid", "phone-sid", "laptop-tab-2"]
 
-    # The acting browser keeps its sockets, every tab of it.
+    # The acting browser keeps the socket that acted; its other tab - or a
+    # copy of its cookie, which looks the same - is closed a moment later,
+    # quietly, once the new cookie is out (#1246).
+    monkeypatch.setattr(main, "SAME_BROWSER_GRACE_SECONDS", 0.0)
     server.disconnected.clear()
-    await main.close_sockets_of_revoked_sessions("u1", None, keep="s-laptop")
+    server.emitted.clear()
+    await main.close_sockets_of_revoked_sessions(
+        "u1", None, keep="s-laptop", keep_socket="laptop-sid"
+    )
     assert server.disconnected == ["phone-sid"]
+    await asyncio.gather(*main._regrant_closes)
+    assert server.disconnected == ["phone-sid", "laptop-tab-2"]
+    assert [to for _, _, to in server.emitted] == ["phone-sid"], "no sign-out notice for the regrant"
 
 
 async def test_a_socket_whose_opening_session_is_gone_is_closed_too(monkeypatch):

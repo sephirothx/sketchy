@@ -15,6 +15,8 @@ import time
 from types import SimpleNamespace
 from uuid import UUID, uuid4
 
+import os
+
 import pytest
 import pytest_asyncio
 from fastapi import FastAPI
@@ -65,6 +67,8 @@ from app.domain_values import UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 
 from tests.dbfixtures import create_test_db
+
+ON_POSTGRESQL = os.environ.get("TEST_DATABASE_URL", "").startswith("postgresql")
 from tests.staffauth import enrol_second_factor, step_up
 
 # Twelve characters, not on the list, not built from the identity.
@@ -478,7 +482,130 @@ async def test_a_browser_that_moved_is_one_anomaly_not_one_per_request(env):
                 select(AuditEvent).where(AuditEvent.event_type == "session.anomaly")
             )
         ).all()
-    assert len(events) == 2
+    # Counted on the session, recorded once in the interval (#1242).
+    assert len(events) == 1
+
+
+async def test_a_client_alternating_browsers_writes_one_ledger_row_an_interval(env):
+    """#1242: two User-Agents in turn were an anomaly on every request, and
+    each appended a permanent row - 410-525 a second from one guest cookie.
+    Every switch still counts on the session and still costs the step-up;
+    the ledger hears of it once per interval, with the count so far."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.auth.sessions import LAST_USED_WRITE_INTERVAL
+    from app.db.models import AuthSession
+
+    _, factory, repo = env
+    user = await repo.create_anonymous("Alternating")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
+    start = datetime.now(timezone.utc)
+    labels = ("Firefox on Linux", "Chrome on Windows")
+    for index in range(60):
+        async with factory() as session, session.begin():
+            row = await session.get(AuthSession, UUID(str(issued.session.id)))
+            row.stepped_up_at = start
+        resolved = await resolve_session(
+            factory, issued.token, device_label=labels[index % 2],
+            now=start + timedelta(seconds=index),
+        )
+        assert resolved is not None
+        async with factory() as session:
+            assert (await session.get(AuthSession, UUID(str(issued.session.id)))).stepped_up_at is None
+    assert resolved.anomaly_count == 60
+
+    async def rows():
+        async with factory() as session:
+            return (
+                await session.scalars(
+                    select(AuditEvent)
+                    .where(AuditEvent.event_type == "session.anomaly")
+                    .order_by(AuditEvent.created_at)
+                )
+            ).all()
+
+    assert len(await rows()) == 1
+
+    # A switch once the interval has passed is written again, carrying the
+    # count, so the ledger says how many lay between the two.
+    later = await resolve_session(
+        factory, issued.token, device_label=labels[0],
+        now=start + timedelta(seconds=59) + LAST_USED_WRITE_INTERVAL,
+    )
+    assert later is not None
+    written = await rows()
+    assert len(written) == 2
+    assert [row.details["anomaly_count"] for row in written] == [1, 61]
+
+
+async def _anomaly_rows(factory) -> list:
+    async with factory() as session:
+        return (
+            await session.scalars(
+                select(AuditEvent)
+                .where(AuditEvent.event_type == "session.anomaly")
+                .order_by(AuditEvent.created_at)
+            )
+        ).all()
+
+
+async def test_switching_without_a_pause_is_still_written_once_an_interval(env):
+    """#1299 review: the interval ran from the previous switch, which every
+    switch moves - so a client that never stopped switching wrote its first
+    row and never another. It runs from the last row written."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.auth.sessions import LAST_USED_WRITE_INTERVAL
+
+    _, factory, repo = env
+    user = await repo.create_anonymous("Relentless")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
+    start = datetime.now(timezone.utc)
+    labels = ("Firefox on Linux", "Chrome on Windows")
+    step = timedelta(seconds=30)
+    switches = int(2 * LAST_USED_WRITE_INTERVAL / step) + 1
+    for index in range(switches):
+        assert await resolve_session(
+            factory, issued.token, device_label=labels[index % 2], now=start + index * step,
+        ) is not None
+
+    assert len(await _anomaly_rows(factory)) == 3
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="two transactions racing for one row")
+async def test_two_requests_in_flight_write_one_row_between_them(env, monkeypatch):
+    """#1299 review: two requests both read the session before either wrote,
+    and both passed the check. Held here at that point: the first reads and
+    waits while the second resolves and commits, then goes on. The claim is
+    one conditional UPDATE, which then finds the interval already taken."""
+    import asyncio
+
+    from sqlalchemy import Select
+    from sqlalchemy.ext.asyncio import AsyncSession
+
+    _, factory, repo = env
+    user = await repo.create_anonymous("Twins")
+    issued = await create_session(factory, user_id=user.id, device_label="Chrome on Windows")
+    original = AsyncSession.execute
+    held, release = asyncio.Event(), asyncio.Event()
+
+    async def execute(self, statement, *args, **kwargs):
+        result = await original(self, statement, *args, **kwargs)
+        if not held.is_set() and isinstance(statement, Select) and "auth_sessions" in str(statement):
+            held.set()
+            await release.wait()
+        return result
+
+    monkeypatch.setattr(AsyncSession, "execute", execute)
+    first = asyncio.create_task(
+        resolve_session(factory, issued.token, device_label="Firefox on Linux")
+    )
+    await asyncio.wait_for(held.wait(), 5)
+    second = await resolve_session(factory, issued.token, device_label="Safari on macOS")
+    release.set()
+    assert (await first) is not None and second is not None
+
+    assert len(await _anomaly_rows(factory)) == 1
 
 
 async def test_a_step_up_made_after_the_anomaly_survives(env):

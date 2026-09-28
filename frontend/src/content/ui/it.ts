@@ -626,7 +626,7 @@ export const IT: Catalogue = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Segui il link inviato a ${p.address}. Finché non lo fai, l’indirizzo non è collegato al tuo account e non serve a recuperarlo${
+      `Se ${p.address} si può usare, è in arrivo un link di conferma. Finché non lo segui, l’indirizzo non è collegato al tuo account e non serve a recuperarlo${
         p.replacing ? ", e quello che avevi resta al suo posto." : "."
       }`,
     thatDoesNotLookLikeEmail: "Non sembra un indirizzo email.",
@@ -685,6 +685,7 @@ export const IT: Catalogue = {
       })} in questa visita`,
     couldNotTakeScreenshot: "Non è stato possibile fare lo screenshot.",
     thanksYourReportWithPeopleWho: "Grazie — la tua segnalazione è arrivata a chi gestisce Sketchy.",
+    thanksSentWithoutScreenshot: "Grazie — la tua segnalazione è arrivata a chi gestisce Sketchy. Questa volta non è stato possibile conservare lo screenshot.",
     couldNotSendReport: "Non è stato possibile inviare la segnalazione.",
     reportBug: "Segnala un bug",
     somethingBrokenNotSomethingSomeoneSaid: "Qualcosa di rotto, non qualcosa che qualcuno ha detto. Arriva a chi gestisce Sketchy — mai agli altri giocatori.",
@@ -2468,7 +2469,7 @@ export const IT: Catalogue = {
     youCanRecoverThisAccount: (p: { address: string }) =>
       `Puoi recuperare questo account tramite ${p.address}.`,
     checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
-      `Cerca in ${p.pendingAddress} un link di conferma. Finché non lo segui, questo account non ha modo di essere recuperato.`,
+      `Se ${p.pendingAddress} si può usare, è in arrivo un link di conferma. Finché non lo segui, questo account non ha modo di essere recuperato.`,
     thisServerCannotSendEmail: "Questo server non può inviare email, quindi una password persa deve essere reimpostata da chi lo gestisce.",
     addAnEmailAddressSo: "Aggiungi un indirizzo email per poter rientrare se dimentichi la password.",
   },
@@ -2542,6 +2543,7 @@ export const IT: Catalogue = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy è pieno in questo momento. Riprova tra qualche minuto.",
+    tooManyTabsOpen: "Sketchy è aperto in troppe schede. Chiudine una per continuare.",
     connectionLostWhileTryingTo: (p: { action: string }) =>
       `Connessione persa mentre si tentava di ${p.action}. Riprova.`,
     theRequestToActionTimed: (p: { action: string }) =>
@@ -2607,6 +2609,7 @@ export const IT: Catalogue = {
   roomNotices: {
     kickedByVote: "Sei stato espulso dalla stanza con una votazione.",
     roomClosed: "Un amministratore ha chiuso questa stanza.",
+    roomExpired: "Questa stanza è stata chiusa dopo 30 minuti senza una partita.",
     kickedByAdmin: "Un amministratore ti ha espulso dalla stanza.",
     accountDeleted: "Il tuo account è stato eliminato.",
     accountSuspended: "Il tuo account è stato sospeso.",

@@ -626,7 +626,7 @@ export const DE: Catalogue = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Folge dem Link an ${p.address}. Bis dahin gehört die Adresse nicht zu deinem Konto und kann es nicht wiederherstellen${
+      `Wenn ${p.address} verwendet werden kann, ist ein Bestätigungslink unterwegs. Bis du ihm folgst, gehört die Adresse nicht zu deinem Konto und kann es nicht wiederherstellen${
         p.replacing ? ", und die bisherige bleibt bestehen." : "."
       }`,
     thatDoesNotLookLikeEmail: "Das sieht nicht nach einer E-Mail-Adresse aus.",
@@ -685,6 +685,7 @@ export const DE: Catalogue = {
       })} in diesem Besuch`,
     couldNotTakeScreenshot: "Der Screenshot konnte nicht aufgenommen werden.",
     thanksYourReportWithPeopleWho: "Danke — dein Bericht liegt bei den Leuten, die Sketchy betreiben.",
+    thanksSentWithoutScreenshot: "Danke — dein Bericht liegt bei den Leuten, die Sketchy betreiben. Der Screenshot konnte diesmal nicht gespeichert werden.",
     couldNotSendReport: "Der Bericht konnte nicht gesendet werden.",
     reportBug: "Fehler melden",
     somethingBrokenNotSomethingSomeoneSaid: "Etwas ist kaputt, nicht etwas, das jemand gesagt hat. Das geht an die Leute, die Sketchy betreiben — nie an andere Spieler.",
@@ -2467,7 +2468,7 @@ export const DE: Catalogue = {
     youCanRecoverThisAccount: (p: { address: string }) =>
       `Du kannst dieses Konto über ${p.address} wiederherstellen.`,
     checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
-      `Sieh in ${p.pendingAddress} nach einem Bestätigungslink. Bis du ihm folgst, gibt es keinen Weg zurück in dieses Konto.`,
+      `Wenn ${p.pendingAddress} verwendet werden kann, ist ein Bestätigungslink unterwegs. Bis du ihm folgst, gibt es keinen Weg zurück in dieses Konto.`,
     thisServerCannotSendEmail: "Dieser Server kann keine E-Mails senden, ein verlorenes Passwort muss also der Betreiber zurücksetzen.",
     addAnEmailAddressSo: "Füge eine E-Mail-Adresse hinzu, damit du wieder hineinkommst, falls du dein Passwort vergisst.",
   },
@@ -2541,6 +2542,7 @@ export const DE: Catalogue = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy ist gerade voll. Versuch es in ein paar Minuten noch einmal.",
+    tooManyTabsOpen: "Sketchy ist in zu vielen Tabs offen. Schließ einen, um weiterzumachen.",
     connectionLostWhileTryingTo: (p: { action: string }) =>
       `Verbindung verloren bei: ${p.action}. Bitte versuch es noch einmal.`,
     theRequestToActionTimed: (p: { action: string }) =>
@@ -2606,6 +2608,7 @@ export const DE: Catalogue = {
   roomNotices: {
     kickedByVote: "Du wurdest per Abstimmung aus dem Raum geworfen.",
     roomClosed: "Ein Administrator hat diesen Raum geschlossen.",
+    roomExpired: "Dieser Raum wurde geschlossen, weil 30 Minuten lang kein Spiel gestartet wurde.",
     kickedByAdmin: "Ein Administrator hat dich aus dem Raum geworfen.",
     accountDeleted: "Dein Konto wurde gelöscht.",
     accountSuspended: "Dein Konto wurde gesperrt.",
