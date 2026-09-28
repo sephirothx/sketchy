@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 from types import SimpleNamespace
-from unittest.mock import AsyncMock
+from unittest.mock import AsyncMock, call
 
 import pytest
 
@@ -24,9 +24,13 @@ from tests.test_entry_timeouts import build_stack
 CLIENT_ACK_TIMEOUT_SECONDS = 8  # frontend/src/lib/socket.ts DEFAULT_ACK_TIMEOUT_MS
 
 
-def stalls(seconds: float, answer=None):
+def stalls(seconds: float, answer=None, *, answered: list | None = None):
+    """A call that answers after `seconds`, noting in `answered` that it did."""
+
     async def slow(*_args, **_kwargs):
         await asyncio.sleep(seconds)
+        if answered is not None:
+            answered.append(answer)
         return answer
 
     return AsyncMock(side_effect=slow)
@@ -52,17 +56,19 @@ def test_the_deadline_leaves_the_answer_time_to_arrive():
 
 
 async def test_one_step_past_the_deadline_is_a_refusal_and_no_room(scaled):
-    """The issue's 'database stalled 9 s': one call that outlasts the deadline."""
+    """The issue's 'database stalled 9 s': one call that outlasts the deadline,
+    though not its own bound, is cut at the deadline rather than waited out.
+    Shown by the call never answering, not by the time the refusal took."""
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
-    ctx.room_codes = codes(stalls(0.9, "ABCDEF"))
+    answered = []
+    ctx.room_codes = codes(stalls(0.9, "ABCDEF", answered=answered))
     await sessions.save("host", {"user_id": "user-1"})
 
-    started = asyncio.get_running_loop().time()
     answer = await sio.handlers["/"]["create_room"]("host", {"nickname": "Host"})
 
     assert answer["ok"] is False and answer["errorCode"] == "database_busy"
-    assert asyncio.get_running_loop().time() - started < 0.6
+    assert answered == [], "the call was cut at the deadline, not waited out"
     assert room_manager.rooms == {}
 
 
@@ -71,7 +77,8 @@ async def test_steps_each_inside_their_own_bound_are_refused_whole_past_the_dead
     not - and the refusal gives back what the attempt spent."""
     room_manager = RoomManager()
     ctx, sio, sessions = build_stack(room_manager)
-    ctx.room_quotas.check_creation_rate = stalls(0.12)
+    spent = []
+    ctx.room_quotas.check_creation_rate = stalls(0.12, answered=spent)
     ctx.room_quotas.refund_creation = AsyncMock()
     ctx.room_codes = codes(stalls(0.12, "ABCDEF"))
     real_settings = ctx.game_flow.room_settings_from_payload
@@ -87,7 +94,10 @@ async def test_steps_each_inside_their_own_bound_are_refused_whole_past_the_dead
 
     assert answer["ok"] is False and answer["errorCode"] == "database_busy"
     assert room_manager.rooms == {}
-    ctx.room_quotas.refund_creation.assert_awaited_once_with("user-1")
+    # The deadline falls in the allocation, after the allowance is spent -
+    # unless a loaded runner spends it sooner, cutting the allowance check,
+    # which is deliberately not refunded. Either way, what was spent comes back.
+    assert ctx.room_quotas.refund_creation.await_args_list == [call("user-1")] * len(spent)
 
 
 async def test_a_join_past_the_deadline_takes_no_seat(scaled, monkeypatch):
