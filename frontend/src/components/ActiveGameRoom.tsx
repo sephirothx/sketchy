@@ -8,7 +8,6 @@ import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { AccountMenu } from "../components/AccountMenu";
 import { AfkCheckDialog } from "../components/AfkCheckDialog";
-import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
@@ -518,7 +517,12 @@ export function ActiveGameRoom({ code }: { code: string }) {
         </div>
         <div className="game-header-center">
           <GameHeaderStatus />
-          <RoomNoticeChips />
+          <RoomNoticeChips
+            restartVote={roomView === "playing" ? restartVote : null}
+            voter={me}
+            voteBusy={restartBusy}
+            onVote={(vote) => void handleRestartVote(vote)}
+          />
           {/* Going AFK is a menu row; being away is worth seeing, because it
               skips your turns without asking. One click here comes back. */}
           {isAfk && (
@@ -553,15 +557,6 @@ export function ActiveGameRoom({ code }: { code: string }) {
           <AccountMenu inRoom compact={identityCompact} />
         </div>
       </header>
-
-      {roomView === "playing" && restartVote && (
-        <RestartVoteBanner
-          vote={restartVote}
-          player={me}
-          busy={restartBusy}
-          onVote={(vote) => void handleRestartVote(vote)}
-        />
-      )}
 
       {isHost && colorblindSafeSuggestion && (
         <ColorblindSafeSuggestionBanner

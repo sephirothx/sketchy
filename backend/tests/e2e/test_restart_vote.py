@@ -12,6 +12,21 @@ from tests.e2e.lobby_helpers import room_code as get_room_code, use_guest_name
 
 BASE_URL = "http://localhost:8000"
 
+# The vote is a chip in the room bar with a popover (#1266). The popover opens
+# by itself for a seat that can still vote and closes once it has; the chip
+# opens it again.
+VOTE_CHIP = '.room-notice-chip[data-notice="restart-vote"]'
+VOTE = '[data-testid="restart-vote"]'
+
+
+async def open_vote(page):
+    """The vote's popover, opened from its chip if it is not already open."""
+    popover = page.locator(VOTE)
+    if not await popover.is_visible():
+        await page.locator(VOTE_CHIP).click()
+    await popover.wait_for()
+    return popover
+
 
 async def test_players_approve_restart_without_losing_room_context():
     async with async_playwright() as playwright:
@@ -71,12 +86,14 @@ async def test_players_approve_restart_without_losing_room_context():
             await third_page.wait_for_selector(".game-layout")
 
             await room_menu_action(host_page, "Start the game over")
-            host_vote = host_page.get_by_test_id("restart-vote-banner")
-            player_vote = player_page.get_by_test_id("restart-vote-banner")
-            third_vote = third_page.get_by_test_id("restart-vote-banner")
-            await host_vote.wait_for()
+            # Opened by itself for the two who can still vote; the proposer has.
+            player_vote = player_page.locator(VOTE)
+            third_vote = third_page.locator(VOTE)
             await player_vote.wait_for()
             await third_vote.wait_for()
+            await host_page.locator(VOTE_CHIP).wait_for()
+            assert not await host_page.locator(VOTE).is_visible()
+            host_vote = await open_vote(host_page)
             assert "1 yes" in await player_vote.inner_text()
             assert "2 needed" in await player_vote.inner_text()
             assert await host_vote.locator('button:has-text("Restart")').get_attribute(
@@ -84,6 +101,8 @@ async def test_players_approve_restart_without_losing_room_context():
             ) == "true"
 
             await player_vote.locator('button:has-text("Keep playing")').click()
+            # Answered: the popover goes, and the chip brings it back.
+            await player_vote.wait_for(state="hidden")
             # A locator assertion rather than `wait_for_function`, which
             # evaluates its predicate as a *string* and so needs `eval` in the
             # page. This app forbids `unsafe-eval` on purpose (R-PLAT-20), so
@@ -91,23 +110,13 @@ async def test_players_approve_restart_without_losing_room_context():
             # happened to be installed in the frame - a race that any change
             # to page timing can lose, and this one did.
             await expect(host_vote).to_contain_text("1 no")
+            player_vote = await open_vote(player_page)
             await player_vote.locator('button:has-text("Restart")').click()
 
-            await host_page.wait_for_selector(
-                '[data-testid="restart-vote-banner"]:has-text("Restart approved")'
-            )
-            await player_page.wait_for_selector(
-                '[data-testid="restart-vote-banner"]:has-text("Restart approved")'
-            )
-            await host_page.wait_for_selector(
-                '[data-testid="restart-vote-banner"]', state="detached"
-            )
-            await player_page.wait_for_selector(
-                '[data-testid="restart-vote-banner"]', state="detached"
-            )
-            await third_page.wait_for_selector(
-                '[data-testid="restart-vote-banner"]', state="detached"
-            )
+            await host_page.wait_for_selector(f'{VOTE}:has-text("Restart approved")')
+            await player_page.wait_for_selector(f'{VOTE}:has-text("Restart approved")')
+            for page in (host_page, player_page, third_page):
+                await page.wait_for_selector(VOTE_CHIP, state="detached")
 
             assert await host_page.is_visible("text=Keep this message")
             assert await host_page.is_visible(".player-list >> text=RestartHost")
@@ -148,7 +157,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
             await player_page.wait_for_selector(".game-layout")
 
             await room_menu_action(host_page, "Start the game over")
-            player_vote = player_page.get_by_test_id("restart-vote-banner")
+            player_vote = player_page.locator(VOTE)
             await player_vote.wait_for()
             await player_vote.locator('button:has-text("Keep playing")').click()
 
@@ -158,9 +167,7 @@ async def test_players_see_a_rejected_restart_and_cooldown():
             await player_page.wait_for_selector(
                 '.chat-message:has-text("The restart vote was rejected.")'
             )
-            await host_page.wait_for_selector(
-                '[data-testid="restart-vote-banner"]', state="detached"
-            )
+            await host_page.wait_for_selector(VOTE_CHIP, state="detached")
             # The Room menu's row waits out the cooldown, and says for how long.
             menu = await open_room_menu(host_page)
             restart_button = menu.locator("button", has_text="Start the game over")
@@ -173,4 +180,83 @@ async def test_players_see_a_rejected_restart_and_cooldown():
         finally:
             await host_context.close()
             await player_context.close()
+            await browser.close()
+
+
+GEOMETRY = """
+() => {
+  const top = (selector) => {
+    const element = document.querySelector(selector);
+    if (!element) return null;
+    const box = element.getBoundingClientRect();
+    return { top: Math.round(box.top), bottom: Math.round(box.bottom), height: Math.round(box.height) };
+  };
+  return { canvas: top('canvas.drawing-canvas'), field: top('.chat-input input') };
+}
+"""
+
+
+async def test_a_restart_vote_moves_nothing_on_the_stage():
+    """#1266: the vote was a banner in the page flow, so proposing one moved
+    the drawer's canvas mid-stroke and, on a phone in a Wheel of Fortune room,
+    pushed a guesser's field below a fold that does not scroll for the whole
+    twenty seconds. As a room-bar chip it moves nothing, for any role."""
+    from uuid import uuid4
+
+    from tests.e2e.lobby_helpers import open_settings_section, save_room_settings
+
+    phone = {"viewport": {"width": 390, "height": 844}, "is_mobile": True, "has_touch": True}
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(**phone) for _ in range(3)]
+        pages = [await context.new_page() for context in contexts]
+        host = pages[0]
+        try:
+            tag = uuid4().hex[:5]
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"StillHost{tag}")
+            await open_new_room(host)
+            code = await get_room_code(host)
+            for index, page in enumerate(pages[1:]):
+                await page.goto(BASE_URL)
+                await use_guest_name(page, f"Still{index}{tag}")
+                await join_by_code(page, code)
+                await page.wait_for_selector('[data-testid="waiting-room"]')
+            await open_room_settings(host)
+            await open_settings_section(host, "Scoring and hints")
+            await host.locator('[aria-label="Hints"] button:has-text("Wheel of Fortune")').click()
+            await open_settings_section(host, "Prompts")
+            await host.locator("#custom-prompts").fill("lighthouse\numbrella")
+            await host.get_by_label("Only use custom prompts").check()
+            await save_room_settings(host)
+            await host.get_by_role("button", name="Start game").click()
+
+            drawer = None
+            for _ in range(100):
+                for page in pages:
+                    if await page.locator(".prompt-choices button").count():
+                        drawer = page
+                if drawer:
+                    break
+                await host.wait_for_timeout(100)
+            await drawer.locator(".prompt-choices button").first.click()
+            guessers = [page for page in pages if page is not drawer]
+            for page in guessers:
+                await page.locator(".wheel-letter-btn").first.wait_for()
+            await drawer.locator("canvas.drawing-canvas.drawable").wait_for()
+
+            before = [await page.evaluate(GEOMETRY) for page in pages]
+            await room_menu_action(guessers[0], "Start the game over")
+            for page in pages:
+                await page.locator(VOTE_CHIP).wait_for()
+            await guessers[1].locator(VOTE).wait_for()
+            await host.wait_for_timeout(300)
+            after = [await page.evaluate(GEOMETRY) for page in pages]
+            assert after == before, (before, after)
+            for page in guessers:
+                field = (await page.evaluate(GEOMETRY))["field"]
+                assert field["bottom"] <= 844, field
+        finally:
+            for context in contexts:
+                await context.close()
             await browser.close()

@@ -92,7 +92,6 @@ test("transitions and animations name their properties and use the motion tokens
     ["invite-spin", "a loading spinner's period, one turn"],
     ["choosing-prompt-pulse", "a looping pulse's period"],
     ["reaction-float", "how long a reaction drifts up the canvas before it fades"],
-    ["restart-approved-emphasis", "the approved banner's one beat of emphasis"],
     ["rank-change-pop", "a 300ms pop delayed 2550ms, both timed against the results rows' 420/600ms entrance so it lands as they settle"],
   ]);
   const literal = (value) =>
@@ -181,8 +180,6 @@ test("capitals come from the one eyebrow recipe", () => {
   const exceptions = new Set([
     // The name-tag sticker's printed "HELLO my name is" band: artwork.
     ".first-run-tag-top",
-    // The unit under the restart countdown's number, inside a 10px badge.
-    ".restart-approved-countdown span",
     // A status tag in a game's meta line on the profile.
     ".profile-game-outcome",
   ]);
