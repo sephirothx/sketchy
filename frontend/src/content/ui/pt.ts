@@ -1841,6 +1841,7 @@ export const PT: Catalogue = {
     finalStandings: "Classificação final",
     players: "Jogadores",
     joinAsAPlayer: "entrar como jogador",
+    youAreSpectating: "Estás a assistir como espectador.",
     aPlayerSeatIsOpen: "Há um lugar de jogador livre.",
     noPlayerSeatsOpen: "Não há lugares de jogador livres.",
     joining: "A entrar…",

@@ -1843,6 +1843,7 @@ export const IT: Catalogue = {
     finalStandings: "Classifica finale",
     players: "Giocatori",
     joinAsAPlayer: "entrare come giocatore",
+    youAreSpectating: "Stai guardando come spettatore.",
     aPlayerSeatIsOpen: "C’è un posto da giocatore libero.",
     noPlayerSeatsOpen: "Nessun posto da giocatore libero.",
     joining: "Ingresso…",

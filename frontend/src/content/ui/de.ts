@@ -1842,6 +1842,7 @@ export const DE: Catalogue = {
     finalStandings: "Endstand",
     players: "Spieler",
     joinAsAPlayer: "als Spieler beitreten",
+    youAreSpectating: "Du schaust zu.",
     aPlayerSeatIsOpen: "Ein Spielerplatz ist frei.",
     noPlayerSeatsOpen: "Keine Spielerplätze frei.",
     joining: "Trete bei …",
