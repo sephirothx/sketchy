@@ -635,3 +635,36 @@ async def test_the_deployment_keeps_so_many_undecided_screenshot_bytes(env, monk
     assert kept["screenshotKept"] is True
     assert dropped["screenshotKept"] is False
     assert await _stored_screenshot(factory, dropped["id"]) == "none"
+
+
+async def test_screenshots_sent_at_once_cannot_pass_the_ceiling_together(env, monkeypatch):
+    """#1300 review: each submission read the total, then stored its own; sent
+    together, every one of them read the same total under the ceiling and all
+    were kept. Admission is one at a time now (one worker)."""
+    import asyncio
+
+    from app.api import bug_reports as bug_report_api
+
+    monkeypatch.setenv("BUG_REPORT_SCREENSHOT_BYTES_LIMIT", str(len(PNG) + 1))
+    new_client, factory, room_manager = env
+    app = FastAPI()
+    app.add_middleware(SessionAuthMiddleware, session_factory=factory)
+    app.include_router(create_auth_router(SqlAlchemyUserRepository(factory), factory))
+    app.include_router(bug_report_api.create_bug_report_router(factory, room_manager))
+    clients = [
+        AsyncClient(transport=ASGITransport(app=app, client=(f"198.51.100.{index}", 1)), base_url="http://test")
+        for index in range(4)
+    ]
+    try:
+        for index, client in enumerate(clients):
+            await guest(client, f"Burst{index}")
+        answers = await asyncio.gather(*(
+            client.post("/api/bug-reports", json=a_report(screenshot=encoded(PNG)))
+            for client in clients
+        ))
+    finally:
+        for client in clients:
+            await client.aclose()
+    assert [answer.status_code for answer in answers] == [201] * 4, [a.text for a in answers]
+    kept = [answer.json()["screenshotKept"] for answer in answers]
+    assert kept.count(True) == 1, kept

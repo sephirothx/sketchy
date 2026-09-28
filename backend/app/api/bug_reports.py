@@ -12,8 +12,10 @@ here.
 """
 from __future__ import annotations
 
+import asyncio
 import base64
 import binascii
+import contextlib
 import hashlib
 import json
 import logging
@@ -359,14 +361,23 @@ def create_bug_report_router(
         "BUG_REPORT_SCREENSHOT_BYTES_LIMIT", DEFAULT_PENDING_SCREENSHOT_BYTES
     )
 
+    # Reports carrying a screenshot are admitted one at a time, from reading
+    # the total to committing the report (#1300 review): read concurrently,
+    # every one of them saw the same total under the ceiling, and a burst
+    # could land far past it. One worker holds every live request, so a
+    # process lock is the whole of the serialization.
+    screenshot_admission = asyncio.Lock()
+
+    def admitting(screenshot) -> contextlib.AbstractAsyncContextManager:
+        return screenshot_admission if screenshot is not None else contextlib.nullcontext()
+
     async def _room_for_screenshot(session, reporter_id: str, size: int) -> bool:
         """Whether this account, and the deployment, may keep one more.
 
         The deployment's total is read rather than kept: undecided screenshots
         are the ones taking room, and a decision or the 90-day sweep erases
-        them, so the sum of what is ready is the true answer. Soft by the
-        width of a race - two reports at the edge can both land - which is a
-        few MiB against a GiB.
+        them, so the sum of what is ready is the true answer. Read under
+        `screenshot_admission`, so it is also the answer for the next one.
         """
         held = await session.scalar(
             select(func.coalesce(func.sum(BugReport.screenshot_byte_size), 0)).where(
@@ -457,7 +468,7 @@ def create_bug_report_router(
             except ValueError:
                 server_context["clockSkewSeconds"] = None
 
-        async with session_factory() as session:
+        async with admitting(screenshot), session_factory() as session:
             async with session.begin():
                 # The erasure barrier: a session that passed the middleware
                 # may belong to an account deleted since (app.auth.erasure).
