@@ -4,6 +4,7 @@ import type { ModerationState, PlayerInfo } from "../types";
 import { emitWithAck, emitTransient } from "../lib/socket";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
+import { seatMayOfferFriendship } from "../lib/friends";
 import { ReportPlayerDialog } from "./ReportPlayerDialog";
 import { useAuthStore } from "../store/authStore";
 import { useGameStore } from "../store/gameStore";
@@ -161,14 +162,12 @@ export function PlayerList({
         // Offered only where it can work: a guest on either side has no
         // durable identity to hold a friendship, and the server refuses one
         // anyway. Guests are the common case in a room, so a control that
-        // always failed would be the usual experience of it.
-        // Not hidden for somebody who is already a friend, because the room
-        // payload has no account ids to match against (R-ROOM-07) and adding
-        // per-viewer flags to room state would make it differ per player,
-        // which is exactly what R-BLOCK-03 forbids. The server says what the
-        // request actually did instead, and the answer says so.
-        const canAddFriend = Boolean(
-          !isMe && !iAmAGuest && !p.isAnonymous && p.connected,
+        // always failed would be the usual experience of it. Nor to a seat
+        // the disc already marks as a friend's (#1218).
+        const canAddFriend = seatMayOfferFriendship(
+          p,
+          { playerId: myPlayerId ?? null, isAnonymous: iAmAGuest },
+          friendSeats,
         );
         const requiredVotes = moderation.requiredVotes;
         const kickVotes = eligibleModerationVotes(moderation, p.kickVotes);

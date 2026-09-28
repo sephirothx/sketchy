@@ -78,12 +78,21 @@ textarea::placeholder {
   opacity: 1;
 }
 
-/* Keep the browser's autofill wash on the theme's field surface. */
+/* Keep the browser's autofill wash on the theme's field surface. A field that
+   sits on some other surface - the name tag, white in both themes (#1223) -
+   says so through these two properties. It cannot override the rule below
+   instead: an !important declaration in an earlier layer beats one in a later
+   layer, so nothing in components could outrank reset's. */
+input {
+  --autofill-surface: var(--field);
+  --autofill-ink: var(--ink);
+}
+
 input:-webkit-autofill,
 input:-webkit-autofill:hover,
 input:-webkit-autofill:focus,
 input:-webkit-autofill:active {
-  -webkit-text-fill-color: var(--ink) !important;
-  -webkit-box-shadow: 0 0 0px 1000px var(--field) inset !important;
+  -webkit-text-fill-color: var(--autofill-ink) !important;
+  -webkit-box-shadow: 0 0 0px 1000px var(--autofill-surface) inset !important;
   transition: background-color 5000s ease-in-out 0s;
 }

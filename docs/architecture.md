@@ -2141,6 +2141,17 @@ wrapper, the same mechanism as the phone. `.canvas-area` is capped at the
 column rather than sized to it, because the turn-results scrim is `inset: 0` on
 it. Below 640px tall the room is the ordinary scrolling page again.
 
+The lobby is pinned the same way from 901px wide and 640px tall, the rooms
+taking what the people's row leaves them, with one exception: a visitor who
+has no name yet has the name tag above the rooms, which can outgrow a short
+window, so their page scrolls and only fills the window. Wherever the lobby
+scrolls — that page, a window 721 to 900px wide, one under 640px tall — the
+room list and the chat bound themselves to a share of the window instead, and
+from 1500px the people's column beside the rooms is sized by the row
+(`contain: size`) rather than by its contents (R-UX-19). Only the pinned lobby
+used to bound anything, so on those pages the rooms panel grew with its rooms
+(#1221). A phone keeps one scroll for the whole page.
+
 The lobby takes the steps from 1500px: the rooms and the people become two
 columns, who is online stacked over the chat in a column of its own
 (`--lobby-people-width`, growing with the window from 420 to 460px, and to 580px on the widest screens), the chat taking the larger share of the

@@ -615,6 +615,9 @@
      way to the indigo edge, which is dark in both. */
   --focus-ring: var(--primary-edge);
   background: #fff;
+  /* And so the browser's own colours are a light page's too: an autofilled
+     name is otherwise inked white in the dark theme, caret and all. */
+  color-scheme: light;
   /* A name tag is a name tag: it never runs the width of the card. */
   justify-self: center;
   max-width: 360px;
@@ -667,6 +670,10 @@
   padding: 2px 4px 4px 0;
   text-indent: var(--ink-overhang);
   width: 100%;
+  /* A name the browser filled in is still written on the white tag, not in
+     a dark theme's field box (#1223). */
+  --autofill-surface: #fff;
+  --autofill-ink: #292520;
 }
 
 .first-run-guest-row input::placeholder {

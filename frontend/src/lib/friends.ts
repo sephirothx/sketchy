@@ -254,6 +254,30 @@ export function lobbyRowMayOfferFriendship(
   return !lists.friends.some((entry) => entry.userId === subject.userId);
 }
 
+/** Whether a seat's menu in a room may offer to ask for a friendship.
+
+The room's counterpart to `lobbyRowMayOfferFriendship`, and blind to requests
+for the same reason. A seat carries no account id (R-ROOM-07), so the one
+friendship fact it can consult is the per-viewer set of friend seats the server
+resolved - the same set that draws the mark on the disc (R-FRIEND-13). Reading
+the mark and the offer from one answer is what keeps a seat from wearing the
+friend mark and offering *Add friend* beside it (#1218).
+
+A disconnected seat is not offered one either: the request names the seat, and
+a seat nobody is in may be gone before the server resolves it. */
+export function seatMayOfferFriendship(
+  seat: { playerId: string; isAnonymous?: boolean; connected: boolean },
+  viewer: { playerId: string | null; isAnonymous: boolean },
+  friendSeats: ReadonlySet<string>,
+): boolean {
+  // Both sides must be registered accounts (R-FRIEND-03), and nobody is their
+  // own friend.
+  if (viewer.isAnonymous || seat.isAnonymous) return false;
+  if (seat.playerId === viewer.playerId) return false;
+  if (!seat.connected) return false;
+  return !friendSeats.has(seat.playerId);
+}
+
 /** Somebody the viewer finished a game with lately, offered as a friend.
 
 The endpoint deliberately says nothing about friendships or refusals, because

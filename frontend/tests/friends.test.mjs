@@ -16,6 +16,7 @@ import {
   parseRecentPlayers,
   lobbyRowMayOfferFriendship,
   profileFriendActionFor,
+  seatMayOfferFriendship,
   stillFriends,
   stillWaiting,
   waitingRequestCount,
@@ -372,6 +373,27 @@ test("a lobby row says nothing about a request in either direction", () => {
     lobbyRowMayOfferFriendship(them, { ...NO_FRIENDS, incoming: [{ userId: "them" }] }, me),
     true,
   );
+});
+
+// ---------------------------------------------- offering from a room's seat
+
+test("a seat offers a friendship where one can exist, and not to a marked friend", () => {
+  const me = { playerId: "seat-me", isAnonymous: false };
+  const them = { playerId: "seat-them", isAnonymous: false, connected: true };
+  assert.equal(seatMayOfferFriendship(them, me, new Set()), true);
+  // The seat the disc marks as a friend's offers no friendship beside the
+  // mark (#1218): both read the one set the server resolved.
+  assert.equal(seatMayOfferFriendship(them, me, new Set(["seat-them"])), false);
+  assert.equal(seatMayOfferFriendship(them, me, new Set(["seat-other"])), true);
+  // Nobody is their own friend, a guest on either side cannot hold one, and
+  // an empty seat is not asked.
+  assert.equal(
+    seatMayOfferFriendship({ ...them, playerId: "seat-me" }, me, new Set()),
+    false,
+  );
+  assert.equal(seatMayOfferFriendship({ ...them, isAnonymous: true }, me, new Set()), false);
+  assert.equal(seatMayOfferFriendship(them, { ...me, isAnonymous: true }, new Set()), false);
+  assert.equal(seatMayOfferFriendship({ ...them, connected: false }, me, new Set()), false);
 });
 
 // ------------------------------------- an acceptance that lands during a load

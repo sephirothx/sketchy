@@ -1051,6 +1051,17 @@ async def test_the_roster_marks_a_friend_and_only_for_the_one_reading():
 
             # Cat is friends with neither, and sees an unmarked room.
             await expect(cat.locator(".player-row .avatar-friend")).to_have_count(0)
+
+            # The seat's menu reads the same answer as the mark: Bob's offers
+            # no friendship Ada already has, and Cat's still offers one (#1218).
+            menu = ada.locator(".player-vote-menu")
+            await seat(ada, bob_name).locator(".player-moderation-trigger").click()
+            await expect(menu.locator(".player-vote-report")).to_be_visible()
+            await expect(menu.locator(".player-vote-friend")).to_have_count(0)
+            await ada.keyboard.press("Escape")
+            await expect(menu).to_have_count(0)
+            await seat(ada, cat_name).locator(".player-moderation-trigger").click()
+            await expect(menu.locator(".player-vote-friend")).to_be_visible()
         finally:
             for context in contexts:
                 await context.close()
