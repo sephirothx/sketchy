@@ -182,3 +182,24 @@ async def test_the_header_links_the_site_and_marks_the_page_you_are_on():
             await named.close()
             await nameless.close()
             await browser.close()
+
+
+async def test_a_named_guest_on_a_phone_reaches_the_rules_from_the_chip():
+    """R-UX-16 (#1273): at 390px the header's site links are hidden by width
+    and the name tag's Rules link goes once a guest has a name, so the chip's
+    menu is the only way there - and its guest branch had no Rules."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 390, "height": 844})
+        page = await context.new_page()
+        try:
+            await use_guest_name(page, unique("Rules"))
+            await page.goto(BASE_URL)
+            await page.locator(".identity-chip").click()
+            menu = page.locator(".account-dropdown")
+            await expect(menu).to_be_visible()
+            await menu.get_by_role("menuitem", name="Rules").click()
+            await page.get_by_role("heading", name="Rules", exact=True).wait_for()
+        finally:
+            await context.close()
+            await browser.close()

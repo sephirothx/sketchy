@@ -322,6 +322,21 @@ export function AccountMenu({ compact = false, inRoom = false }: {
               >
                 {ui.galleryPage.gallery}
               </MenuItem>
+              {/* A permanent home for the rules, so they are reachable
+                  without having been reported or having reported anybody
+                  (R-RULES-01) - a guest's too: on a phone too narrow for the
+                  header's site links, a named guest had no other way there
+                  (R-UX-16, #1273). With the pages above, since it leaves
+                  the page as they do. */}
+              <MenuItem
+                icon={<InfoIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/rules");
+                }}
+              >
+                {ui.accountMenu.rules}
+              </MenuItem>
             </>
           )}
           {isGuest ? (
@@ -375,18 +390,6 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 }}
               >
                 {ui.accountMenu.myPromptLists}
-              </MenuItem>
-              {/* A permanent home for the rules, so they are reachable
-                  without having been reported or having reported anybody
-                  (R-RULES-01). */}
-              <MenuItem
-                icon={<InfoIcon size={16} />}
-                onClick={() => {
-                  setMenuOpen(false);
-                  navigate("/rules");
-                }}
-              >
-                {ui.accountMenu.rules}
               </MenuItem>
               {/* Shown, not enforced: each of these endpoints checks the role
                   again for itself and answers 404 to anyone else. Hiding them
