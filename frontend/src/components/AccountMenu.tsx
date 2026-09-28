@@ -282,8 +282,11 @@ export function AccountMenu({ compact = false, inRoom = false }: {
               {ui.accountMenu.finishYourRole({ role: pendingRole === "admin" ? "admin" : "moderator" })}
             </MenuItem>
           )}
-          {/* The two entries that leave the page. Hidden for a guest in a
-              live game, where following one would give up their seat. */}
+          {/* The entries that leave the page. Hidden for a guest with a
+              seat - in a room's bar, or behind the compact chip - where
+              following one would give up that seat: a guest has nothing to
+              come back as. Rules too, though the rules are about playing: a
+              seated guest keeps the seat over the link (#1273). */}
           {!seatBound && (
             <>
               <MenuItem
