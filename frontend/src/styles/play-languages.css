@@ -165,7 +165,7 @@
 }
 
 /* A narrow phone's chip gives its name the space between the name and the
-   arrows: at 320px that is the difference between "Neder…" and "Ne…". The
+   arrows: at 320px that is the difference between "Nederla…" and "Nede…". The
    buttons keep their size, as they are what a finger presses. */
 @media (max-width: 480px) {
   .play-language-chip {

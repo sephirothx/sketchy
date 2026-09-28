@@ -788,7 +788,11 @@ _NARROW_GEOMETRY = """async (card) => {
         right: box.right - parseFloat(style.borderRightWidth) - parseFloat(style.paddingRight),
     };
     const outside = [];
-    const pieces = [...card.querySelectorAll('.play-language-chip, .play-language-suggestions > *')];
+    // The chips, what they hold - a name that did not shorten pushed the
+    // remove button out of a chip that still fit - and the suggestions.
+    const pieces = [...card.querySelectorAll(
+        '.play-language-chip, .play-language-chip-actions, .play-language-suggestions > *'
+    )];
     for (const piece of pieces) {
         const r = piece.getBoundingClientRect();
         if (r.left < inner.left - 0.5 || r.right > inner.right + 0.5) {
@@ -796,7 +800,9 @@ _NARROW_GEOMETRY = """async (card) => {
         }
     }
     const unreachable = [];
-    for (const grip of card.querySelectorAll('.play-language-chip-handle')) {
+    const grips = [...card.querySelectorAll('.play-language-chip-handle')];
+    const gripWidths = grips.map((grip) => Math.round(grip.getBoundingClientRect().width));
+    for (const grip of grips) {
         // On screen first: Settings' chips start below a 640px window.
         grip.scrollIntoView({ block: 'center' });
         const r = grip.getBoundingClientRect();
@@ -811,6 +817,7 @@ _NARROW_GEOMETRY = """async (card) => {
         suggestions: card.querySelectorAll('.play-language-suggestion').length,
         outside,
         unreachable,
+        gripWidths,
     };
 }"""
 
@@ -859,6 +866,8 @@ async def test_the_ranked_chips_fit_a_320px_phone_and_drag_by_touch():
             geometry = await question.evaluate(_NARROW_GEOMETRY)
             assert geometry["chips"] == 3 and geometry["suggestions"] >= 1, geometry
             assert geometry["outside"] == [] and geometry["unreachable"] == [], geometry
+            # Every grip its full width, so they line up down the stack.
+            assert set(geometry["gripWidths"]) == {28}, geometry
 
             # Nederlands, first, carried by a finger below português.
             await _touch_drag(page, question.locator(".play-language-chip-handle").nth(0), 60)
@@ -871,6 +880,8 @@ async def test_the_ranked_chips_fit_a_320px_phone_and_drag_by_touch():
             geometry = await dialog.evaluate(_NARROW_GEOMETRY)
             assert geometry["chips"] == 3, geometry
             assert geometry["outside"] == [] and geometry["unreachable"] == [], geometry
+            # Every grip its full width, so they line up down the stack.
+            assert set(geometry["gripWidths"]) == {28}, geometry
         finally:
             await context.close()
             await browser.close()
