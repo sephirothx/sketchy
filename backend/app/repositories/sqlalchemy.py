@@ -4950,6 +4950,15 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if prompt_list is None:
                     raise PromptListNotFoundError("Prompt list not found.")
+                # Withdrawing a list that is not out is nothing to record
+                # (#1241): no ledger row - they are permanent - and no
+                # catalogue re-rank. 200 withdrawals of a private list wrote
+                # 200 rows in 1.7 s.
+                changed = published or (
+                    prompt_list.visibility == PromptListVisibility.PUBLIC.value
+                    or prompt_list.moderation_state
+                    == PromptContentModerationState.UNDER_REVIEW.value
+                )
                 if published:
                     if (
                         prompt_list.moderation_state
@@ -4970,7 +4979,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         prompt_list.moderation_state = (
                             PromptContentModerationState.UNDER_REVIEW.value
                         )
-                else:
+                elif changed:
                     prompt_list.visibility = PromptListVisibility.PRIVATE.value
                     prompt_list.published_at = None
                     # A hold is released by withdrawing, a finding is not.
@@ -4988,13 +4997,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         prompt_list.moderation_state = (
                             PromptContentModerationState.ACTIVE.value
                         )
-                prompt_list.updated_at = datetime.now(timezone.utc)
+                if changed:
+                    prompt_list.updated_at = datetime.now(timezone.utc)
                 # In this transaction, not a later one. Written after the
                 # refusals above, so the ledger records what happened rather
                 # than what was attempted - and with the change, so a failure
                 # between the two cannot leave a list published with nothing
                 # in the ledger to say who published it.
-                if audit is not None:
+                if audit is not None and changed:
                     session.add(
                         AuditEvent(
                             id=generate_uuid(),
@@ -5012,7 +5022,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
             # Committed: a list just published is in the catalogue for its
             # author's next read, not a minute later (#901).
-            self._ranking.invalidate()
+            if changed:
+                self._ranking.invalidate()
             result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
             return result

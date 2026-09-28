@@ -860,14 +860,18 @@ async def test_a_registered_player_wears_a_doodle_drawn_from_the_sprite(env):
     new_client, factory = env
     http = new_client()
     account = await register(http, "Doodler")
-    chosen = await http.put("/api/users/me/avatar/doodle", json={"name": "owl"})
+    # Not the doodle a new account happens to wear: picking that one again is
+    # a no-op that tells nobody (#1241), which failed this 1 time in 26.
+    worn = (await http.get("/api/auth/me")).json()["avatarUrl"]
+    name = "fox" if worn and worn.endswith("#owl") else "owl"
+    chosen = await http.put("/api/users/me/avatar/doodle", json={"name": name})
     assert chosen.status_code == 200, chosen.text
     assert chosen.json() == {
-        "avatarKey": "doodle:owl",
-        "avatarUrl": "/avatars/doodles.svg#owl",
+        "avatarKey": f"doodle:{name}",
+        "avatarUrl": f"/avatars/doodles.svg#{name}",
     }
-    assert (await http.get("/api/auth/me")).json()["avatarUrl"] == "/avatars/doodles.svg#owl"
-    new_client.changed.assert_awaited_with(account["id"], "doodle:owl")
+    assert (await http.get("/api/auth/me")).json()["avatarUrl"] == f"/avatars/doodles.svg#{name}"
+    new_client.changed.assert_awaited_with(account["id"], f"doodle:{name}")
     async with factory() as session:
         kinds = set((await session.scalars(select(AuditEvent.event_type))).all())
         assert "avatar.doodle_chosen" in kinds

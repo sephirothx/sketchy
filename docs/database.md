@@ -842,6 +842,13 @@ provider-login API is enabled until identity-linking flows ship.
 ### `audit_events`
 Append-only record of every security- and moderation-sensitive action.
 
+Nothing sweeps it, and the application role cannot delete from it, so every row a
+player's request writes is permanent (#1241): the player routes that append one
+are bounded per account — block/unblock and doodle/picture changes 30 an hour each,
+withdrawing a list from the catalogue 30 — and a request that changes nothing writes
+nothing (blocking somebody already blocked, the doodle already worn, removing a
+picture that is not there, withdrawing a list that is not out).
+
 `ix_audit_events_type_created_at` replaces the standalone `event_type` index (#554): the ledger filtered by one type, newest first, walks it in order instead of collecting every row of a rare type and sorting them, and the composite serves the plain equality the standalone did.
 
 `id` · `event_type` · `actor_user_id` (`SET NULL`) · `target_user_id` (`SET NULL`) ·

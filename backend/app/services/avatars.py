@@ -172,6 +172,9 @@ async def choose_doodle(
     async with session_factory() as session:
         async with session.begin():
             user = await _registered(session, db_user_id)
+            if user.avatar_key == key:
+                # Already worn: nothing changes, so nothing is written (#1241).
+                return key
             await session.execute(
                 delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
             )
@@ -314,6 +317,11 @@ async def remove_avatar(
                 delete(UploadedAvatarAsset).where(UploadedAvatarAsset.user_id == db_user_id)
             )
             had_one = bool(removed.rowcount) or uploaded_avatar_key(user.avatar_key) is not None
+            if not by_moderator and not had_one and user.avatar_key is None:
+                # A player's own removal of nothing: no row, no ledger entry
+                # (#1241). A moderator's is still recorded - it blocks
+                # re-upload whether or not there was a picture.
+                return AvatarRemoval(had_one=False, avatar_key=None)
             warning_id: UUID | None = None
             blocked_until: datetime | None = None
             # A moderator takes down an uploaded picture and nothing else. A
