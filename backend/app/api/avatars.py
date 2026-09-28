@@ -23,6 +23,7 @@ from app.refusals import ErrorCode
 from app.auth.audit import audit_coordinates
 from app.auth.avatars import (
     AVATAR_KEY_PATTERN,
+    NOT_A_PICTURE,
     MAX_AVATAR_BYTES,
     AvatarError,
     avatar_url,
@@ -133,7 +134,7 @@ def create_avatar_router(
             raise Refusal(
                 400,
                 ErrorCode.UNSUPPORTED_PICTURE_TYPE,
-                "That is not a WebP or PNG picture.",
+                NOT_A_PICTURE,
             ) from error
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         try:

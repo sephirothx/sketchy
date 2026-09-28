@@ -1,17 +1,21 @@
 """What an uploaded avatar may be, and how one is named (#573).
 
-The client crops and re-encodes a picture to a 256×256 WebP - or a PNG where
-the browser cannot encode WebP - before sending it, so the server never
-decodes an image: it reads the fixed-position header of either format, checks
-the picture is exactly that size and under the cap, and serves the bytes back
-only ever as the image type it found, with sniffing disabled. A modified
-client can send any valid WebP or PNG up to the cap and nothing more, which is
-the whole surface.
+The client crops and re-encodes a picture to a 256×256 WebP before sending
+it - or, in a browser that cannot encode WebP, a JPEG, or a PNG when the crop
+has transparency - so the server never decodes an image: it reads the header
+of each format, checks the picture is exactly that size and under the cap, and
+serves the bytes back only ever as the image type it found, with sniffing
+disabled. A modified client can send any valid WebP, PNG or JPEG up to the cap
+and nothing more, which is the whole surface.
 
 WebP rather than PNG alone because a photograph at 256×256 is ~136 KiB as a
 lossless PNG - over the cap - and ~22 KiB as WebP, and the primary database is
-where these bytes live; #471 measured the blobs and kept them inline (N-18). PNG stays accepted
-because it is what an older Safari produces from a canvas.
+where these bytes live; #471 measured the blobs and kept them inline (N-18).
+JPEG because WebKit - every iPhone browser, and Safari on a Mac - cannot encode
+WebP from a canvas and silently hands back a PNG: 10 of 14 real photographs
+came out over the cap and were refused as "too detailed", where as JPEG at
+0.85 the same 14 are 13-43 KiB (#1263). PNG stays for a crop with
+transparency, the one thing JPEG cannot carry.
 
 Keys are content-addressed - the SHA-256 of the bytes, plus the extension -
 so the same picture has one URL for ever and a changed picture is a new URL.
@@ -31,9 +35,9 @@ from app.auth.avatar_doodles import DOODLE_KEY_PREFIX, doodle_name
 
 AVATAR_SIZE = 256
 MAX_AVATAR_BYTES = 128 * 1024
-# Content type → the extension its key carries. Both are read from a fixed
-# header below; nothing else is an avatar.
-AVATAR_FORMATS = {"image/webp": "webp", "image/png": "png"}
+# Content type → the extension its key carries. Each is read from its header
+# below; nothing else is an avatar.
+AVATAR_FORMATS = {"image/webp": "webp", "image/png": "png", "image/jpeg": "jpg"}
 # How long an account waits before it may upload again, by how many pictures
 # a moderator has taken down from it. The first costs nothing: a picture can
 # be wrong without its owner meaning anything by it, and a removal they are
@@ -64,8 +68,10 @@ def avatar_reupload_block(prior_removals: int) -> timedelta:
     return AVATAR_REUPLOAD_BLOCKS[index]
 
 _PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
-_NOT_A_PICTURE = "That is not a WebP or PNG picture."
-AVATAR_KEY_PATTERN = re.compile(r"^[0-9a-f]{64}\.(webp|png)$")
+# Start of image, then the first marker's own 0xFF.
+_JPEG_SIGNATURE = b"\xff\xd8\xff"
+NOT_A_PICTURE = "That is not a WebP, PNG or JPEG picture."
+AVATAR_KEY_PATTERN = re.compile(r"^[0-9a-f]{64}\.(webp|png|jpg)$")
 
 
 class AvatarError(ValueError):
@@ -154,21 +160,77 @@ def _webp_dimensions(payload: bytes) -> tuple[int, int] | None:
     return None
 
 
+# Frame headers a browser draws: baseline and progressive Huffman. The other
+# SOF kinds - extended, lossless, hierarchical, arithmetic-coded - are ones a
+# canvas never writes and not every browser decodes.
+_JPEG_FRAMES = {0xC0, 0xC2}
+# Markers that stand alone, with no length after them: TEM and RST0-7. (SOI
+# and EOI too, but SOI is only ever first and EOI only ever last.)
+_JPEG_STANDALONE = {0x01, *range(0xD0, 0xD8)}
+
+
+def _jpeg_dimensions(payload: bytes) -> tuple[int, int] | None:
+    """A JPEG keeps its size in the frame header, after however many segments
+    the encoder chose to write first (JFIF, quantisation tables, ...).
+
+    So the header is walked rather than read at an offset: each segment is a
+    marker and a big-endian length that counts itself, and the walk stops at
+    the first frame header - 8-bit, one or three components, `_JPEG_FRAMES`
+    only - and refuses anything that runs past the end or reaches the scan
+    without one. Still no decoder: the bytes after the frame header are never
+    read, only the end-of-image marker that closes every file a canvas writes,
+    which is what refuses a truncated upload.
+    """
+    if not payload.startswith(_JPEG_SIGNATURE) or not payload.endswith(b"\xff\xd9"):
+        return None
+    index = 2
+    while index + 4 <= len(payload):
+        if payload[index] != 0xFF:
+            return None
+        marker = payload[index + 1]
+        if marker == 0xFF:
+            # A fill byte before the marker proper.
+            index += 1
+            continue
+        if marker in _JPEG_STANDALONE:
+            index += 2
+            continue
+        if marker in (0xD8, 0xD9, 0xDA):
+            # A second start, the end, or the scan, before any frame header.
+            return None
+        length = int.from_bytes(payload[index + 2 : index + 4], "big")
+        if length < 2 or index + 2 + length > len(payload):
+            return None
+        if 0xC0 <= marker <= 0xCF and marker not in (0xC4, 0xC8, 0xCC):
+            if marker not in _JPEG_FRAMES or length < 8:
+                return None
+            precision = payload[index + 4]
+            height, width = struct.unpack(">HH", payload[index + 5 : index + 9])
+            components = payload[index + 9]
+            if precision != 8 or components not in (1, 3):
+                return None
+            return width, height
+        index += 2 + length
+    return None
+
+
 def image_dimensions(payload: bytes) -> tuple[int, int] | None:
-    """Width and height of a PNG or WebP, read from its fixed-position header
-    without decoding anything; None when it is neither."""
+    """Width and height of a PNG, JPEG or WebP, read from its header without
+    decoding anything; None when it is none of them."""
     if payload.startswith(_PNG_SIGNATURE):
         return _png_dimensions(payload)
+    if payload.startswith(_JPEG_SIGNATURE):
+        return _jpeg_dimensions(payload)
     return _webp_dimensions(payload)
 
 
 def inspect_avatar(payload: bytes) -> tuple[str, int, int]:
-    """Refuse anything but a WebP or PNG of exactly AVATAR_SIZE square under the cap.
+    """Refuse anything but a WebP, PNG or JPEG of exactly AVATAR_SIZE square
+    under the cap.
 
     Returns the content type it found with the dimensions. Reads only the
-    fixed-position header of either format - which is the shape check a
-    browser would make before drawing it - without handing untrusted bytes to
-    a decoder.
+    header of each format - which is the shape check a browser would make
+    before drawing it - without handing untrusted bytes to a decoder.
     """
     if len(payload) > MAX_AVATAR_BYTES:
         raise AvatarError(
@@ -176,10 +238,12 @@ def inspect_avatar(payload: bytes) -> tuple[str, int, int]:
         )
     if payload.startswith(_PNG_SIGNATURE):
         content_type, dimensions = "image/png", _png_dimensions(payload)
+    elif payload.startswith(_JPEG_SIGNATURE):
+        content_type, dimensions = "image/jpeg", _jpeg_dimensions(payload)
     else:
         content_type, dimensions = "image/webp", _webp_dimensions(payload)
     if dimensions is None:
-        raise AvatarError(_NOT_A_PICTURE)
+        raise AvatarError(NOT_A_PICTURE)
     if dimensions != (AVATAR_SIZE, AVATAR_SIZE):
         raise AvatarError(f"A picture has to be {AVATAR_SIZE} by {AVATAR_SIZE} pixels.")
     return content_type, *dimensions

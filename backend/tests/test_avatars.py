@@ -30,6 +30,7 @@ from app.domain_values import UserRole
 from app.repositories.sqlalchemy import SqlAlchemyUserRepository
 from app.services.avatars import AvatarBlocked, choose_doodle, remove_avatar, set_avatar
 from tests.png_fixture import png_bytes
+from tests.jpeg_fixture import jpeg_bytes
 from tests.webp_fixture import webp_bytes
 
 from tests.dbfixtures import create_test_db
@@ -241,23 +242,65 @@ async def test_a_webp_of_any_layout_is_taken_and_served_as_webp(env, layout):
     assert fetched.headers["x-content-type-options"] == "nosniff"
 
 
+@pytest.mark.parametrize("frame", [0xC0, 0xC2], ids=["baseline", "progressive"])
+async def test_a_jpeg_is_taken_and_served_as_jpeg(env, frame):
+    """What a browser that cannot encode WebP sends for an opaque crop (#1263):
+    every iPhone browser and Safari. Its size is in the frame header, after
+    however many segments the encoder wrote first."""
+    new_client, _ = env
+    http = new_client()
+    await register(http, f"Jay{frame:X}")
+    picture = jpeg_bytes(seed=3, frame=frame)
+    uploaded = await http.post("/api/users/me/avatar", json=encoded(picture))
+    assert uploaded.status_code == 200, uploaded.text
+    key = uploaded.json()["avatarKey"]
+    assert key == avatar_key_for(picture, "image/jpeg")
+    assert key.endswith(".jpg")
+    fetched = await new_client().get(f"/api/avatars/{key}")
+    assert fetched.status_code == 200
+    assert fetched.content == picture
+    assert fetched.headers["content-type"] == "image/jpeg"
+    assert fetched.headers["x-content-type-options"] == "nosniff"
+
+
+_JPEG = jpeg_bytes()
+# Where the frame header starts in the fixture: after SOI, JFIF (18) and DQT (69).
+_SOF = 2 + 18 + 69
+
+
 @pytest.mark.parametrize(
     "payload, message",
     [
-        (b"not a picture at all", "not a WebP or PNG"),
+        (jpeg_bytes(200, 256), "256 by 256"),
+        (jpeg_bytes(256, 300, frame=0xC2), "256 by 256"),
+        # Cut short inside the header, or missing the end-of-image marker
+        # every file a canvas writes closes with.
+        (_JPEG[: _SOF + 4], "not a WebP, PNG or JPEG"),
+        (_JPEG[:-2], "not a WebP, PNG or JPEG"),
+        # The scan before any frame header: no size to read.
+        (_JPEG[:_SOF] + _JPEG[_SOF + 19 :], "not a WebP, PNG or JPEG"),
+        # A frame a canvas never writes: lossless, and 12-bit samples.
+        (jpeg_bytes(frame=0xC3), "not a WebP, PNG or JPEG"),
+        (jpeg_bytes(precision=12), "not a WebP, PNG or JPEG"),
+        # A segment length running past the end of the file.
+        (b"\xff\xd8\xff\xe0\xff\xf0" + b"\x00" * 20 + b"\xff\xd9", "not a WebP, PNG or JPEG"),
+        # A byte where a marker should be.
+        (b"\xff\xd8\xff\xe0\x00\x04\x00\x00\x12\x34" + b"\x00" * 20 + b"\xff\xd9", "not a WebP, PNG or JPEG"),
+
+        (b"not a picture at all", "not a WebP, PNG or JPEG"),
         (png_bytes(200, 256), "256 by 256"),
         (png_bytes(256, 300), "256 by 256"),
-        (b"\x89PNG\r\n\x1a\n" + b"\x00" * 40, "not a WebP or PNG"),
+        (b"\x89PNG\r\n\x1a\n" + b"\x00" * 40, "not a WebP, PNG or JPEG"),
         (webp_bytes(256, 128, layout="VP8L"), "256 by 256"),
         (webp_bytes(300, 256, layout="VP8 "), "256 by 256"),
         (webp_bytes(256, 257, layout="VP8X"), "256 by 256"),
         # A RIFF that is not WebP, and a WebP whose first chunk is unknown.
-        (b"RIFF\x10\x00\x00\x00WAVEfmt " + b"\x00" * 24, "not a WebP or PNG"),
-        (b"RIFF\x10\x00\x00\x00WEBPXXXX" + b"\x00" * 24, "not a WebP or PNG"),
+        (b"RIFF\x10\x00\x00\x00WAVEfmt " + b"\x00" * 24, "not a WebP, PNG or JPEG"),
+        (b"RIFF\x10\x00\x00\x00WEBPXXXX" + b"\x00" * 24, "not a WebP, PNG or JPEG"),
         # A lossless header without its signature byte, a lossy one without
         # its start code: neither is a frame a browser would draw.
-        (b"RIFF\x20\x00\x00\x00WEBPVP8L\x10\x00\x00\x00\x00" + b"\x00" * 40, "not a WebP or PNG"),
-        (b"RIFF\x20\x00\x00\x00WEBPVP8 \x10\x00\x00\x00" + b"\x00" * 40, "not a WebP or PNG"),
+        (b"RIFF\x20\x00\x00\x00WEBPVP8L\x10\x00\x00\x00\x00" + b"\x00" * 40, "not a WebP, PNG or JPEG"),
+        (b"RIFF\x20\x00\x00\x00WEBPVP8 \x10\x00\x00\x00" + b"\x00" * 40, "not a WebP, PNG or JPEG"),
     ],
 )
 async def test_only_a_square_picture_of_the_right_size_is_taken(env, payload, message):
