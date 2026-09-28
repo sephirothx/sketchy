@@ -1023,9 +1023,13 @@
    Two panels about the people rather than the rooms. Equal columns on a
    desktop; stacked in source order on a phone, where the room browser is
    what the page is for and these are what you scroll past it to reach. */
+/* minmax(0, 1fr), not 1fr: a bare fr track's minimum is its content's, so one
+   player online with a wide name (sixteen Ws) sized the column past the
+   screen, the name's ellipsis never engaged, and every phone viewer's lobby
+   scrolled sideways by up to 114px while they were online (#1271). */
 .lobby-social {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
 }
@@ -1188,7 +1192,7 @@ a.online-player-name:focus-visible {
 
 @media (max-width: 720px) {
   .lobby-social {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
