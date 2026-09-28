@@ -56,6 +56,7 @@ from app.auth.erasure import AccountErasedError, require_live_account
 from app.db.models import (
     AuditEvent,
     GameRecord,
+    IdentityAlias,
     TurnDrawing,
     PlayerReport,
     PlayerReportDrawingEvidence,
@@ -1129,6 +1130,31 @@ def _is_about_themselves(reviewer: User, subject_user_id: UUID | None) -> bool:
     )
 
 
+async def _is_about_themselves_through_aliases(
+    session, reviewer: User, subject_user_id: UUID | None
+) -> bool:
+    """`_is_about_themselves`, for a subject named by any identity it had.
+
+    A report keeps the id it was filed against, and a guest merge does not
+    re-point it: a moderator reported while playing as a guest who then
+    claimed that guest into their account could see and decide their own
+    case, and the ledger named them as its reviewer (#1248). The subject is
+    resolved to the account behind it first.
+    """
+    if subject_user_id is None or reviewer.role == UserRole.ADMIN.value:
+        return False
+    if subject_user_id == reviewer.id:
+        return True
+    return await canonical_user_id(session, subject_user_id) == reviewer.id
+
+
+def _merged_into(reviewer: User):
+    """The guest identities merged into the reviewer's account, as a subquery."""
+    return select(IdentityAlias.source_user_id).where(
+        IdentityAlias.target_user_id == reviewer.id
+    )
+
+
 async def _refuse_a_report_that_cannot_be_filed(
     session, *, body, reporter_user_id: UUID
 ) -> None:
@@ -1681,7 +1707,11 @@ def create_moderation_router(
                 plan = plan.where(
                     or_(
                         PlayerReport.reported_user_id.is_(None),
-                        PlayerReport.reported_user_id != reviewer.id,
+                        and_(
+                            PlayerReport.reported_user_id != reviewer.id,
+                            # Nor a guest of theirs since claimed (#1248).
+                            PlayerReport.reported_user_id.not_in(_merged_into(reviewer)),
+                        ),
                         PlayerReport.status != ReportStatus.PENDING.value,
                     )
                 )
@@ -1753,14 +1783,18 @@ def create_moderation_router(
             # on its own permission to suspend somebody.
             require_step_up(request)
             report = await session.get(PlayerReport, report_id)
-            target = (
-                await session.get(User, report.reported_user_id)
+            # The account behind the reported identity, a claimed guest's
+            # included (#1248): the picture, the boundaries and the self-check
+            # are all about the person, not the id the report was filed on.
+            target_id = (
+                await canonical_user_id(session, report.reported_user_id)
                 if report is not None and report.reported_user_id is not None
                 else None
             )
+            target = await session.get(User, target_id) if target_id is not None else None
         if report is None or report.reported_user_id is None or target is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if _is_about_themselves(actor, report.reported_user_id):
+        if _is_about_themselves(actor, target.id):
             raise HTTPException(
                 status_code=403,
                 detail="A report about you is for another moderator to decide.",
@@ -1792,7 +1826,7 @@ def create_moderation_router(
         try:
             outcome = await remove_avatar(
                 session_factory,
-                user_id=report.reported_user_id,
+                user_id=target.id,
                 actor_id=actor.id,
                 by_moderator=True,
                 report_id=report.id,
@@ -1811,12 +1845,12 @@ def create_moderation_router(
         if on_avatar_changed is not None:
             # What is left, not a blanket None: a doodle the removal left in
             # place must stay on the player's live seats (R-AVA-09).
-            await on_avatar_changed(str(report.reported_user_id), outcome.avatar_key)
+            await on_avatar_changed(str(target.id), outcome.avatar_key)
         # After the commit, so a socket can never announce a notice a
         # rolled-back transaction never wrote - the rule the warning route
         # above follows for the same reason.
         if outcome.warning_id is not None and on_user_warned is not None:
-            await on_user_warned(str(report.reported_user_id))
+            await on_user_warned(str(target.id))
         return {
             "ok": True,
             "removed": outcome.had_one,
@@ -1997,7 +2031,12 @@ def create_moderation_router(
                 plan = plan.where(
                     or_(
                         PromptContentReport.reported_owner_user_id.is_(None),
-                        PromptContentReport.reported_owner_user_id != reviewer.id,
+                        and_(
+                            PromptContentReport.reported_owner_user_id != reviewer.id,
+                            PromptContentReport.reported_owner_user_id.not_in(
+                                _merged_into(reviewer)
+                            ),
+                        ),
                         PromptContentReport.status != ReportStatus.PENDING.value,
                     )
                 )
@@ -2061,7 +2100,9 @@ def create_moderation_router(
         named = await session.get(PromptContentReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if _is_about_themselves(reviewer, named.reported_owner_user_id):
+        if await _is_about_themselves_through_aliases(
+            session, reviewer, named.reported_owner_user_id
+        ):
             # The player queue's rule, on the account that owns the list:
             # before the lock and whatever state the report is in (#1063).
             raise HTTPException(
@@ -2120,7 +2161,9 @@ def create_moderation_router(
         named = await session.get(PlayerReport, report_id)
         if named is None:
             raise HTTPException(status_code=404, detail="No such report.")
-        if _is_about_themselves(reviewer, named.reported_user_id):
+        if await _is_about_themselves_through_aliases(
+            session, reviewer, named.reported_user_id
+        ):
             # Before the lock and before the 409: the target never changes,
             # and "about you" is the answer whatever state the report is in,
             # so a reported moderator cannot learn from a 409 that their case
@@ -2657,7 +2700,9 @@ def create_moderation_router(
                     raise HTTPException(
                         status_code=404, detail="No such prompt list."
                     )
-                if _is_about_themselves(reviewer, prompt_list.owner_user_id):
+                if await _is_about_themselves_through_aliases(
+                    session, reviewer, prompt_list.owner_user_id
+                ):
                     # Releasing one's own held list is the same act as
                     # dismissing a report about it (#1063).
                     raise HTTPException(
