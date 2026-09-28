@@ -31,6 +31,8 @@ from __future__ import annotations
 import asyncio
 import binascii
 import logging
+import time
+from collections import deque
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -68,6 +70,15 @@ MAX_PAYLOAD_PACKETS = 64
 UPGRADE_DEADLINE_SECONDS = 10.0
 #: The separator between packets in a polling payload.
 RECORD_SEPARATOR = "\x1e"
+#: What one socket may send in a second, counted on the raw message (bytes, or
+#: characters for text) before anything decodes it (#1234). The packet-count
+#: door let a valid 1 MB command through 480 times a second - about 43% of
+#: the core for one socket, which closed nothing - while the heaviest
+#: legitimate second is a drawer at the drawing budget's tunable maximum
+#: (400 frames of at most 1,793 B, a third more as base64 on polling: under
+#: 1 MB) or one maximal `create_room` (under 1 MiB).
+INBOUND_BYTES_PER_WINDOW = 2 * 1024 * 1024
+INBOUND_BYTE_WINDOW_SECONDS = 1.0
 
 Refusal = Callable[[str, str], Awaitable[None]]
 
@@ -290,6 +301,13 @@ class GuardedEngineSocket(AsyncSocket):
             await self.server.terminate_socket(self)
             return
         raw = await environ["wsgi.input"].read(length)
+        # Charged as it arrived, before anything is decoded: a body that does
+        # not decode is bytes the socket sent too, and refused as malformed
+        # uncharged, twenty 1 MiB bodies a second passed the window (#1289
+        # review). The packets inside are not charged again.
+        if not self.server.charge_bytes(self.sid, len(raw)):
+            await self.server.refuse(self.sid, "bytes")
+            return
         try:
             body = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -304,7 +322,7 @@ class GuardedEngineSocket(AsyncSocket):
         for item in encoded:
             if self.terminated or self.closed:
                 return
-            problem = self.server.inbound_problem(self.sid, item, "polling")
+            problem = self.server.inbound_problem(self.sid, item, "polling", charged=True)
             if problem is not None:
                 await self.server.refuse(self.sid, problem)
                 continue
@@ -320,15 +338,61 @@ class GuardedEngineSocket(AsyncSocket):
                 await self.server.refuse(self.sid, "malformed")
 
 
+def _byte_size(data: Any) -> int:
+    """What `data` weighed in bytes as it arrived.
+
+    A polling body and a WebSocket text frame reach here decoded, and a
+    character is up to four bytes of UTF-8: counted by `len`, four-byte text
+    passed the 2 MiB window at 8 MiB a second (#1289 review). ASCII - nearly
+    all of it - is its own length, and `isascii` answers without a walk.
+    """
+    if isinstance(data, str):
+        return len(data) if data.isascii() else len(data.encode("utf-8", "surrogatepass"))
+    if isinstance(data, (bytes, bytearray, memoryview)):
+        return len(data)
+    return 0
+
+
+class _ByteWindow:
+    """Bytes each socket has sent inside a sliding window."""
+
+    __slots__ = ("seconds", "clock", "_sent")
+
+    def __init__(self, seconds: float, clock: Callable[[], float]) -> None:
+        self.seconds = seconds
+        self.clock = clock
+        self._sent: dict[str, tuple[deque, list[int]]] = {}
+
+    def add(self, key: str, size: int) -> int:
+        """Record `size` and return the window's total, this message included."""
+        now = self.clock()
+        entry = self._sent.get(key)
+        if entry is None:
+            entry = self._sent[key] = (deque(), [0])
+        records, total = entry
+        while records and records[0][0] <= now - self.seconds:
+            total[0] -= records.popleft()[1]
+        records.append((now, size))
+        total[0] += size
+        return total[0]
+
+    def forget(self, key: str) -> None:
+        self._sent.pop(key, None)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._sent
+
+
 class BoundedEngineServer(engineio.AsyncServer):
     """Engine.IO with screened inbound packets and a teardown that ends things."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, clock: Callable[[], float] = time.monotonic, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         # A copy: the driver table is the library module's own dict, shared by
         # every server in the process.
         self._async = {**self._async, "websocket": GuardedWebSocket}
         self._refusal: Refusal | None = None
+        self.inbound_bytes = _ByteWindow(INBOUND_BYTE_WINDOW_SECONDS, clock)
 
     def on_refusal(self, refusal: Refusal) -> None:
         """Where a refused packet is counted: the Socket.IO door's ledger, so a
@@ -339,8 +403,25 @@ class BoundedEngineServer(engineio.AsyncServer):
         if self._refusal is not None:
             await self._refusal(sid, reason)
 
-    def inbound_problem(self, sid: str, data: Any, transport: str = "websocket") -> str | None:
-        """Why this raw message must not reach Engine.IO's decoder, or None."""
+    def charge_bytes(self, sid: str, size: int) -> bool:
+        """Charge `size` bytes to the socket's window; False once it is past.
+
+        A charge that goes past still counts: a client sending faster than it
+        may is sending, refused or not.
+        """
+        return self.inbound_bytes.add(sid, size) <= INBOUND_BYTES_PER_WINDOW
+
+    def inbound_problem(
+        self, sid: str, data: Any, transport: str = "websocket", *, charged: bool = False
+    ) -> str | None:
+        """Why this raw message must not reach Engine.IO's decoder, or None.
+
+        Sized first: a message past the socket's byte window is refused
+        without being looked at. `charged` is a message whose bytes were
+        already counted - a polling body is, whole, before it is split.
+        """
+        if not charged and not self.charge_bytes(sid, _byte_size(data)):
+            return "bytes"
         return engine_packet_problem(data, transport)
 
     async def terminate(self, sid: str, *, reason: str | None = None) -> bool:
@@ -363,6 +444,7 @@ class BoundedEngineServer(engineio.AsyncServer):
         if getattr(socket, "terminated", False):
             return
         socket.terminated = True
+        self.inbound_bytes.forget(getattr(socket, "sid", None))
         websocket = getattr(socket, "websocket", None)
         if websocket is not None:
             websocket.terminate()
@@ -391,6 +473,8 @@ class BoundedEngineServer(engineio.AsyncServer):
             del self.sockets[sid]
 
     async def _trigger_event(self, event, *args, **kwargs):
+        if event == "disconnect" and args:
+            self.inbound_bytes.forget(args[0])
         if event == "connect":
             # The first moment the library hands over a socket it has just
             # built (`_handle_connect`), before it has served a request of its
