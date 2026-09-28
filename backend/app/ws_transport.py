@@ -49,8 +49,10 @@ zlib level (6, wsproto's ``Z_DEFAULT_COMPRESSION``) and memLevel (zlib's default
 """
 from __future__ import annotations
 
+from collections import deque
 import dataclasses
 import logging
+import time
 import zlib
 
 import wsproto
@@ -62,7 +64,11 @@ from wsproto.frame_protocol import CloseReason
 
 from app.services.telemetry import telemetry
 from app.socket_server import MAX_PACKET_BYTES
-from app.socket_transport import ABORT_EXTENSION
+from app.socket_transport import (
+    ABORT_EXTENSION,
+    INBOUND_BYTE_WINDOW_SECONDS,
+    INBOUND_BYTES_PER_WINDOW,
+)
 
 logger = logging.getLogger("sketchy.transport")
 
@@ -80,6 +86,19 @@ CLIENT_MAX_WINDOW_BITS = 15
 # which it checks only once the whole message has been handed up - by which
 # time a compressed message has already been inflated in full (#1234).
 INBOUND_MESSAGE_LIMIT = MAX_PACKET_BYTES
+# The most compressed input one inbound message may carry. Deflate never
+# expands data by more than a few bytes per 64 KiB block, so a legitimate
+# message is never much bigger compressed than inflated; the output cap alone
+# never counted input that produced nothing - empty stored blocks inflate to
+# no bytes at all - and one unfinished message could stream them for ever
+# (#1289 review).
+INBOUND_COMPRESSED_MESSAGE_LIMIT = INBOUND_MESSAGE_LIMIT + INBOUND_MESSAGE_LIMIT // 64
+# What one connection may send on the wire in a window: the Engine.IO byte
+# window's allowance, counted there after inflating, plus a quarter for
+# framing. Counted here before anything is inflated, so compressed input
+# that inflates to little - a 1 MiB message of empty blocks around a pong
+# counted as one byte up there - is bounded too (#1289 review).
+INBOUND_WIRE_BYTES_PER_WINDOW = INBOUND_BYTES_PER_WINDOW + INBOUND_BYTES_PER_WINDOW // 4
 # What permessage-deflate strips from the end of every compressed message, and
 # the receiver appends back before the final inflate (RFC 7692 §7.2.2).
 SYNC_FLUSH_TAIL = b"\x00\x00\xff\xff"
@@ -105,20 +124,26 @@ class SizedPerMessageDeflate(PerMessageDeflate):
             client_max_window_bits=CLIENT_MAX_WINDOW_BITS,
             server_max_window_bits=SERVER_MAX_WINDOW_BITS,
         )
-        # Bytes this message has inflated to so far, across its frames.
+        # Bytes this message has inflated to so far, across its frames, and
+        # the compressed bytes that produced them.
         self._inbound_inflated = 0
+        self._inbound_input = 0
 
     def frame_inbound_header(self, proto, opcode, rsv, payload_length):
         if self._inbound_compressed is None:
             # The first frame of a message: continuation frames and the
             # control frames between them keep the message's running total.
             self._inbound_inflated = 0
+            self._inbound_input = 0
         return super().frame_inbound_header(proto, opcode, rsv, payload_length)
 
     def frame_inbound_payload_data(self, proto, data):
         if not self._inbound_compressed or not self._inbound_is_compressible:
             return data
         assert self._decompressor is not None
+        self._inbound_input += len(data)
+        if self._inbound_input > INBOUND_COMPRESSED_MESSAGE_LIMIT:
+            return CloseReason.MESSAGE_TOO_BIG
         room = INBOUND_MESSAGE_LIMIT - self._inbound_inflated
         try:
             # Never `max_length=0`, which zlib reads as "unlimited": room is
@@ -260,6 +285,32 @@ class SketchyWebSocketProtocol(WSProtocol):
     def __init__(self, *args, **kwargs) -> None:
         super().__init__(*args, **kwargs)
         self.conn = NegotiatingConnection(connection_type=ConnectionType.SERVER)
+        # (arrival, size) of each read inside the wire window, and their sum.
+        self._wire_reads: deque[tuple[float, int]] = deque()
+        self._wire_bytes = 0
+
+    def data_received(self, data: bytes) -> None:
+        if self.conn.state in FRAME_RECEIVE_STATES and self._past_wire_window(len(data)):
+            # Past what any client inflating under the Engine.IO window could
+            # send: closed with 1008 and nothing more of it read (#1289 review).
+            telemetry.note_socket_packet_rejected("bytes")
+            if self.conn.state is ConnectionState.OPEN:
+                self.transport.write(
+                    self.conn.send(CloseConnection(code=1008, reason="Too much data"))
+                )
+            self.close_sent = True
+            self.transport.close()
+            return
+        super().data_received(data)
+
+    def _past_wire_window(self, size: int) -> bool:
+        now = time.monotonic()
+        reads = self._wire_reads
+        while reads and reads[0][0] <= now - INBOUND_BYTE_WINDOW_SECONDS:
+            self._wire_bytes -= reads.popleft()[1]
+        reads.append((now, size))
+        self._wire_bytes += size
+        return self._wire_bytes > INBOUND_WIRE_BYTES_PER_WINDOW
 
     def handle_connect(self, event) -> None:
         super().handle_connect(event)

@@ -471,3 +471,80 @@ def test_a_message_that_ends_its_stream_is_read_and_the_next_one_too(monkeypatch
     events, _ = _feed(server, second)
     assert _text(events) == "again"
     assert not [event for event in events if isinstance(event, CloseConnection)]
+
+
+# --- review of #1289: compressed input that inflates to nothing ------------------------
+
+# A non-final stored block with no data: valid deflate, inflates to no bytes.
+EMPTY_STORED_BLOCK = b"\x00\x00\x00\xff\xff"
+
+
+def test_an_unfinished_message_of_empty_blocks_is_cut_at_its_compressed_size(monkeypatch):
+    """The output cap counts what a message inflates to, and empty blocks
+    inflate to nothing: one message that never finished could stream them for
+    ever, uncounted by the inflate budget and by the byte window alike."""
+    client, server = _open_pair(monkeypatch)
+    chunk = EMPTY_STORED_BLOCK * (64 * 1024 // len(EMPTY_STORED_BLOCK))
+    frames = [_raw_frame(chunk, opcode=1, fin=False, rsv1=True)]
+    frames += [
+        _raw_frame(chunk, opcode=0, fin=False, rsv1=False)
+        for _ in range(ws_transport.INBOUND_COMPRESSED_MESSAGE_LIMIT // len(chunk) + 1)
+    ]
+    events, _ = _feed(server, b"".join(frames))
+    assert [event.code for event in events if isinstance(event, CloseConnection)] == [1009]
+
+
+def test_a_message_just_under_the_compressed_limit_still_passes(monkeypatch):
+    client, server = _open_pair(monkeypatch)
+    blocks = EMPTY_STORED_BLOCK * ((ws_transport.INBOUND_MESSAGE_LIMIT // 2) // len(EMPTY_STORED_BLOCK))
+    events, _ = _feed(server, _raw_frame(blocks + _final_block(b"42[\"x\"]"), opcode=1, fin=True, rsv1=True))
+    assert _text(events) == '42["x"]'
+
+
+def _flood_client(port: int, total: int) -> int | None:
+    """Send `total` bytes of uncompressed text frames as fast as the socket
+    takes them; return the close code the server answered with."""
+    client = wsproto.WSConnection(ConnectionType.CLIENT)
+    with socket.create_connection(("127.0.0.1", port), timeout=5) as sock:
+        sock.sendall(client.send(Request(host=f"127.0.0.1:{port}", target="/ws", extensions=[])))
+        client.receive_data(sock.recv(65536))
+        list(client.events())
+        frame = client.send(wsproto.events.TextMessage(data="x" * (256 * 1024)))
+        try:
+            for _ in range(total // len(frame) + 1):
+                sock.sendall(frame)
+        except OSError:
+            pass
+        while True:
+            try:
+                data = sock.recv(65536)
+            except OSError:
+                return None
+            if not data:
+                return None
+            client.receive_data(data)
+            for event in client.events():
+                if isinstance(event, CloseConnection):
+                    return event.code
+
+
+async def test_a_connection_sending_past_the_wire_window_is_closed(monkeypatch):
+    store = Telemetry()
+    monkeypatch.setattr(ws_transport, "telemetry", store)
+    port = _free_port()
+    config = uvicorn.Config(_accepting_app, host="127.0.0.1", port=port, ws=WS_PROTOCOL, log_level="warning", lifespan="off")
+    server = uvicorn.Server(config)
+    task = asyncio.create_task(server.serve())
+    try:
+        for _ in range(100):
+            if server.started:
+                break
+            await asyncio.sleep(0.05)
+        code = await asyncio.get_running_loop().run_in_executor(
+            None, _flood_client, port, 2 * ws_transport.INBOUND_WIRE_BYTES_PER_WINDOW
+        )
+        assert code == 1008
+        assert store.socket_packets_rejected.get(("bytes",)) == 1
+    finally:
+        server.should_exit = True
+        await task
