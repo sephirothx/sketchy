@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
+import { readdirSync, readFileSync } from "node:fs";
+import { join } from "node:path";
 
 import {
   MAX_NAMED_WINNERS,
@@ -190,4 +192,26 @@ test("the wait before the slide is two seconds, or less of a short phase", () =>
   assert.equal(reorderHoldMs(0), 2000);
   assert.equal(reorderHoldMs(2), 800);
   assert.equal(reorderHoldMs(0.5), 200);
+});
+
+test("every score on screen is written in the locale's numbers (#1279)", async () => {
+  // The game-over card said "1,182 points" in its sentence and "1182" on the
+  // podium, in its rows and in the standings panel beside it.
+  const { EN } = await import("../src/content/ui/en.ts");
+  const { DE } = await import("../src/content/ui/de.ts");
+  assert.equal(EN.format.number({ value: 1182 }), "1,182");
+  assert.equal(DE.format.number({ value: 1182 }), "1.182");
+  // A catalogue key (`ui.profilePage.totalScore`) is a label, not a score.
+  const raw = /\{\s*(?!ui\.)[A-Za-z_.]*\.(score|finalScore|totalScore)\s*\}|String\([^)]*[sS]core\b/;
+  const offenders = [];
+  for (const dir of ["components", "pages"]) {
+    const root = join(import.meta.dirname, "../src", dir);
+    for (const file of readdirSync(root, { recursive: true })) {
+      if (!String(file).endsWith(".tsx")) continue;
+      readFileSync(join(root, String(file)), "utf8").split("\n").forEach((line, index) => {
+        if (raw.test(line)) offenders.push(`${dir}/${file}:${index + 1} ${line.trim()}`);
+      });
+    }
+  }
+  assert.deepEqual(offenders, [], `a score printed as a bare number:\n${offenders.join("\n")}`);
 });

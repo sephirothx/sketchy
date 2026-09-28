@@ -162,7 +162,7 @@ export function GameEndOverlay({
                   </span>
                   <div className={`game-end-podium-block is-place-${Math.min(place, 3)}`} style={{ height }}>
                     <span className="game-end-podium-place">{place}</span>
-                    <span className="game-end-podium-score">{entry.score}</span>
+                    <span className="game-end-podium-score">{ui.format.number({ value: entry.score })}</span>
                   </div>
                 </div>
               );
@@ -188,7 +188,7 @@ export function GameEndOverlay({
                       <span className="visually-hidden">{ui.gameEndOverlay.friend}</span>
                     )}
                   </span>
-                  <strong>{score.score}</strong>
+                  <strong>{ui.format.number({ value: score.score })}</strong>
                 </li>
               ))}
             </ol>

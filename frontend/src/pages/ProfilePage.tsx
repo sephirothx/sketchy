@@ -96,7 +96,7 @@ function StatisticsPanel({ stats }: { stats: ProfileStats }) {
             label={ui.profilePage.winRate}
             value={`${Math.round(stats.winRate * 100)}%`}
           />
-          <StatTile label={ui.profilePage.averageScore} value={String(Math.round(stats.averageScore))} />
+          <StatTile label={ui.profilePage.averageScore} value={ui.format.number({ value: Math.round(stats.averageScore) })} />
         </div>
       ) : (
         <p className="profile-note">{ui.profilePage.winsAndScoresAppearAfterFirstGame}</p>
@@ -107,7 +107,7 @@ function StatisticsPanel({ stats }: { stats: ProfileStats }) {
             <StatTile key={key} label={turnStatLabel(key)} value={String(stats[key])} />
           ))}
           {statsLayout.gameStats && (
-            <StatTile label={ui.profilePage.totalScore} value={String(stats.totalScore)} />
+            <StatTile label={ui.profilePage.totalScore} value={ui.format.number({ value: stats.totalScore })} />
           )}
         </div>
       )}
@@ -345,7 +345,7 @@ function GameRow({
                     isAnonymous={p.isAnonymous}
                   />
                 )}
-                <span className="profile-standing-score">{p.finalScore}</span>
+                <span className="profile-standing-score">{ui.format.number({ value: p.finalScore })}</span>
               </li>
             ))}
           </ol>

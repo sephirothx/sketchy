@@ -35,7 +35,7 @@ WATCH = """
         rows: [...document.querySelectorAll('.turn-results-score-row')].map((row) => ({
           name: row.querySelector('.turn-results-score-name > span').textContent.trim(),
           rank: Number(row.querySelector('.turn-results-score-rank').textContent.replace('#', '')),
-          total: Number(row.querySelector('.turn-results-score-total').textContent),
+          total: Number(row.querySelector('.turn-results-score-total').textContent.replace(/[^0-9-]/g, '')),
           top: row.getBoundingClientRect().top,
         })),
       };

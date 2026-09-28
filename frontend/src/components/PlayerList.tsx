@@ -261,7 +261,7 @@ export function PlayerList({
               </span>
               {status}
             </span>
-            {showScores && <span className="player-score">{p.score}</span>}
+            {showScores && <span className="player-score">{ui.format.number({ value: p.score })}</span>}
             {showVoteRow && (
               <div className="player-vote-row">
                 {showAfkChip && (

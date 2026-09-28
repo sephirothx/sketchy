@@ -435,6 +435,8 @@ export const DE: Catalogue = {
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */
     ordinal: (p: { value: number }) => ordinal(p.value),
+    /** A score, as every place that prints one writes it: `1,182`. */
+    number: (p: { value: number }) => number(p.value),
   },
 
   promptListDrafts: {
