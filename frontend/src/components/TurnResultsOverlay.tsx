@@ -5,9 +5,12 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import {
   entranceDelays,
   hasPreviousOrder,
+  reorderHoldMs,
   rowStartOffsets,
   shownStanding,
+  waitsAtOldPlace,
 } from "../lib/standings";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { formatGuessTime } from "../lib/guessTime";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/reactions.css";
@@ -77,13 +80,17 @@ export function TurnResultsOverlay({
   const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
   const [settled, setSettled] = useState(false);
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  // Read once, as the card appears: a sync later in the phase rebases
+  // `nextTurnSeconds`, and must not restart the wait.
+  const [holdMs] = useState(() => reorderHoldMs(nextTurnSeconds));
 
   useEffect(() => {
     // Rearranging waits, so the standings can be read before they move.
     // An entrance has nothing to read yet and should not keep players waiting.
-    const timeout = setTimeout(() => setSettled(true), reordering ? 2000 : 250);
+    const timeout = setTimeout(() => setSettled(true), reordering ? holdMs : 250);
     return () => clearTimeout(timeout);
-  }, [reordering]);
+  }, [reordering, holdMs]);
 
   // The bar is measured off the clock every tick rather than handed to a CSS
   // animation once. The animation was told a duration and a negative delay
@@ -138,7 +145,9 @@ export function TurnResultsOverlay({
           <p className="turn-results-personal">
             {ui.turnResultsOverlay.thisTurnWithHints({
               base: myBreakdown.basePoints,
-              hintSpend: myBreakdown.hintSpend,
+              // What came off, which is the spend unless the award ran out
+              // first (R-SCORE-06): +120 - 250 = 0 did not add up.
+              hintSpend: myBreakdown.basePoints - myBreakdown.points,
               points: myBreakdown.points,
             })}
           </p>
@@ -162,7 +171,7 @@ export function TurnResultsOverlay({
               // Its old place and total while it waits there (#1278). What is
               // read aloud is the result, once: the visible numbers change
               // under a live region, and would be read again as they did.
-              const shown = shownStanding(entry, reordering && !settled);
+              const shown = shownStanding(entry, waitsAtOldPlace(reordering, settled, reducedMotion));
               return (
                 <li
                   key={entry.playerId}

@@ -80,7 +80,10 @@ def _in_place(rows: list[dict]) -> bool:
 async def test_the_card_shows_the_standings_it_came_in_with_and_no_personal_line():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
-        contexts = [await browser.new_context() for _ in range(3)]
+        # The third asks for reduced motion: its rows never slide, so they
+        # stand in the new order - with the new numbers - from the start.
+        contexts = [await browser.new_context() for _ in range(2)]
+        contexts.append(await browser.new_context(reduced_motion="reduce"))
         pages = [await context.new_page() for context in contexts]
         try:
             host = pages[0]
@@ -120,15 +123,24 @@ async def test_the_card_shows_the_standings_it_came_in_with_and_no_personal_line
             # and until they do, each shows where it stood coming in.
             drawer, prompt = await _choose_prompt(pages)
             guessers = [page for page in pages if page is not drawer]
-            await drawer.evaluate(WATCH)
+            for page in pages:
+                await page.evaluate(WATCH)
             await _guess(guessers[1], prompt)
             await asyncio.sleep(1.2)
             await _guess(guessers[0], prompt)
-            card = await _card(drawer)
-            assert {row["name"]: row["total"] for row in card["rows"]} == after_one, (card, after_one)
+            for page in pages[:2]:
+                card = await _card(page)
+                assert {row["name"]: row["total"] for row in card["rows"]} == after_one, (card, after_one)
+                assert _in_place(card["rows"]), card
+                for row in card["rows"]:
+                    assert row["rank"] == 1 + sum(total > row["total"] for total in after_one.values()), card
+            # Reduced motion: already the new standings, and in place.
+            card = await _card(pages[2])
+            now = {row["name"]: row["total"] for row in card["rows"]}
+            assert now != after_one, (card, after_one)
             assert _in_place(card["rows"]), card
             for row in card["rows"]:
-                assert row["rank"] == 1 + sum(total > row["total"] for total in after_one.values()), card
+                assert row["rank"] == 1 + sum(total > row["total"] for total in now.values()), card
         finally:
             for context in contexts:
                 await context.close()

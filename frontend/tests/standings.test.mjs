@@ -9,8 +9,10 @@ import {
   entranceDelays,
   hasPreviousOrder,
   placementLabel,
+  reorderHoldMs,
   rowStartOffsets,
   shownStanding,
+  waitsAtOldPlace,
 } from "../src/lib/standings.ts";
 
 test("distinct scores count up from one", () => {
@@ -170,4 +172,22 @@ test("a waiting row shows the place and total it came in with, and a settled one
     entries.map((entry) => shownStanding(entry, false)),
     [{ rank: 1, total: 1165 }, { rank: 2, total: 1130 }, { rank: 3, total: 1115 }],
   );
+});
+
+test("rows wait at their old place only while rearranging, before the slide, with motion (review of #1278)", () => {
+  assert.equal(waitsAtOldPlace(true, false, false), true);
+  // Slid: the new numbers.
+  assert.equal(waitsAtOldPlace(true, true, false), false);
+  // Introduced rather than rearranged: nothing old to show.
+  assert.equal(waitsAtOldPlace(false, false, false), false);
+  // Reduced motion puts the rows in their new order at once, so their
+  // numbers must be the new ones at once too.
+  assert.equal(waitsAtOldPlace(true, false, true), false);
+});
+
+test("the wait before the slide is two seconds, or less of a short phase", () => {
+  assert.equal(reorderHoldMs(5), 2000);
+  assert.equal(reorderHoldMs(0), 2000);
+  assert.equal(reorderHoldMs(2), 800);
+  assert.equal(reorderHoldMs(0.5), 200);
 });

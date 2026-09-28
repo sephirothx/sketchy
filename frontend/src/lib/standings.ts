@@ -108,6 +108,25 @@ export function shownStanding(
     : { rank: entry.newRank, total: entry.score };
 }
 
+/**
+ * Whether a turn-results row stands at its old place, and so shows its old
+ * numbers (`shownStanding`): only while the rows are rearranging and have not
+ * slid yet. Never under reduced motion, where the rows are in their new order
+ * from the first frame - old numbers there read "#1, #3, #2" top to bottom,
+ * the very card this was meant to fix (review of #1278).
+ */
+export function waitsAtOldPlace(reordering: boolean, settled: boolean, reducedMotion: boolean): boolean {
+  return reordering && !settled && !reducedMotion;
+}
+
+/** How long rearranging rows wait before they slide: two seconds to read the
+    old standings, but never most of a short results phase - the rows would
+    leave with the old numbers still on them. `phaseSeconds` is what is left
+    of the phase when the card appears (0 when unknown). */
+export function reorderHoldMs(phaseSeconds: number): number {
+  return phaseSeconds > 0 ? Math.min(2000, Math.round(phaseSeconds * 400)) : 2000;
+}
+
 /** Milliseconds between one row entering and the next. */
 export const ENTRANCE_STAGGER_MS = 110;
 
