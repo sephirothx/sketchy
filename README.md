@@ -1540,6 +1540,9 @@ your players share one address:
 | `AUTH_VERIFY_LIMIT` | 10 per hour | `PUT /api/auth/email` |
 | `ROOM_CREATE_LIMIT` | 10 per hour | `create_room`, keyed by account rather than address |
 | `PROFILE_READ_LIMIT` | 120 per minute | A profile's reads - its account and statistics, games, shelf and drawings - per address |
+| `PROMPT_LIST_SAVE_LIMIT` | 60 per hour | Saves of one's own prompt lists, per account (#1236) |
+| `PROMPT_LIST_CREATE_LIMIT` | 20 per day | Own prompt lists created, duplicated or deleted, per account — one bucket, since create-then-delete churns a slot |
+| `PROMPT_LIST_READ_LIMIT` | 300 per hour | Reads of one own prompt list, per account, in process memory |
 | `FRIEND_REQUEST_LIMIT` | 20 per hour | Friend requests, keyed by account. Every attempt spends one whatever became of it, so the limit cannot say whether a request landed (#1062) |
 
 In-room commands answer to their own per-caller budgets, which are **not** environment
@@ -2109,6 +2112,9 @@ METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/w
 # What one hostile client costs the socket door: garbage, no-argument commands, a deflate bomb,
 # a 1 MB-per-packet stream, sockets that never CONNECT (#1229). Starts its own server.
 backend/.venv/bin/python benchmarks/socket_abuse.py --scenario garbage --sockets 6 --seconds 10
+
+# Reading and saving one of a player's own prompt lists at the ceiling, 500 x 20 aliases (#1236)
+TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/owned_list_io.py
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
 ./benchmarks/run_load.sh --no-deflate   # clients that offer no permessage-deflate, as the gate did before #875
 ./benchmarks/run_load.sh --record docs/requirements.md   # rewrite the recorded result under the scale target

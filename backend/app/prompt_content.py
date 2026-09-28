@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import re
 import unicodedata
+from collections.abc import Iterable
 
 from app.domain_values import (
     AGNOSTIC_PROMPT_LANGUAGE,
@@ -222,7 +223,13 @@ def _fold_accents(text: str) -> str:
 
     Letters such as "ø" and "ł" survive, because NFD does not decompose them
     into an ASCII letter and a mark.
+
+    ASCII has nothing to decompose and no marks, so it is returned as it is:
+    the per-character walk below is what folding a whole prompt list costs,
+    and most of a list is ASCII (#1236, #1237).
     """
+    if text.isascii():
+        return text
     return "".join(
         character
         for character in unicodedata.normalize("NFD", text)
@@ -278,6 +285,28 @@ def prompt_match_key(answer: str, language: str = "en") -> str:
     return _fold_accents(_transliterate(collapsed, language))
 
 
+def prompt_match_keys(answer: str, languages: Iterable[str]) -> dict[str, str]:
+    """`prompt_match_key(answer, language)` for each of `languages`, folded once.
+
+    A language without a transliteration keys with the shared rule alone, so
+    every such language shares one key: an agnostic list checked under every
+    room language used to fold each text seven times over for what is at most
+    four distinct keys (#1236).
+    """
+    collapsed = _collapsed(answer)
+    shared: str | None = None
+    keys: dict[str, str] = {}
+    for language in languages:
+        language = validate_prompt_list_language(language)
+        if _TRANSLITERATIONS.get(language):
+            keys[language] = _fold_accents(_transliterate(collapsed, language))
+        else:
+            if shared is None:
+                shared = _fold_accents(collapsed)
+            keys[language] = shared
+    return keys
+
+
 def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
     """Every spelling of `answer` this language accepts as the same word.
 
@@ -319,8 +348,21 @@ def clean_prompt_aliases(
     aliases: list[str], *, canonical_answer: str, language: str
 ) -> tuple[str, ...]:
     """Validate and deduplicate aliases by their language-specific match key."""
-    canonical_key = normalize_prompt_answer(canonical_answer, language)
+    cleaned, _ = clean_prompt_aliases_keyed(
+        aliases,
+        canonical_key=normalize_prompt_answer(canonical_answer, language),
+        language=language,
+    )
+    return cleaned
+
+
+def clean_prompt_aliases_keyed(
+    aliases: list[str], *, canonical_key: str, language: str
+) -> tuple[tuple[str, ...], tuple[str, ...]]:
+    """`clean_prompt_aliases`, for a caller that already holds the answer's key,
+    returning each kept alias's key beside it so nothing is folded twice."""
     cleaned: list[str] = []
+    keys: list[str] = []
     seen = {canonical_key}
     if len(aliases) > MAX_PROMPT_ALIASES:
         raise ValueError(f"too many aliases (max {MAX_PROMPT_ALIASES})")
@@ -330,7 +372,8 @@ def clean_prompt_aliases(
         if key not in seen:
             seen.add(key)
             cleaned.append(display)
-    return tuple(cleaned)
+            keys.append(key)
+    return tuple(cleaned), tuple(keys)
 
 
 def clean_prompt_tags(tags: list[str]) -> tuple[str, ...]:

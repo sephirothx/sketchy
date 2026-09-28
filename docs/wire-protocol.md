@@ -2476,8 +2476,10 @@ address (#1074).
 | `AUTH_RESET_PERFORM_LIMIT` | 10 / hour | `POST /api/auth/password/reset` — the leg that hashes, so a stolen or guessed link cannot be used to keep the hashing pool busy (#975) |
 | `AUTH_PASSWORD_CHANGE_LIMIT` | 10 / hour | `POST /api/auth/password/change`, `DELETE /api/auth/account` |
 | `AUTH_VERIFY_LIMIT` | 10 / hour | `PUT /api/auth/email` |
+| `PROMPT_LIST_SAVE_LIMIT` | 60 / hour | `PUT /api/prompt-lists/mine/{id}`, keyed on the **account** (R-LIST-04, #1236) — `429 too_many_attempts` |
+| `PROMPT_LIST_CREATE_LIMIT` | 20 / day | `POST /api/prompt-lists/mine`, `POST …/duplicate` and `DELETE /api/prompt-lists/mine/{id}`, one bucket, keyed on the **account** — create-then-delete is how a slot is churned |
 
-Lower-risk profile and prompt-statistics throttles remain process-local.
+Lower-risk profile and prompt-statistics throttles remain process-local, and so does the read of one owned list (`PROMPT_LIST_READ_LIMIT`, 300 / hour per account, `429 too_many_requests`).
 
 Limits are keyed on the *connecting* address. Behind a reverse proxy or tunnel every
 request arrives from the proxy, so production must run with `PROXY_HEADERS=1` and
