@@ -6,6 +6,7 @@ import asyncio
 from datetime import datetime, timedelta, timezone
 import hashlib
 import hmac
+import ipaddress
 import os
 import secrets
 from collections import defaultdict, deque
@@ -503,4 +504,37 @@ def client_key(request: Request) -> str:
     address arrives here having actually been vouched for.
     """
     client = request.client
-    return client.host if client else "unknown"
+    return address_key(client.host if client else None)
+
+
+def address_key(host: str | None) -> str:
+    """The bucket an address belongs to: an IPv4 address, or an IPv6 /64.
+
+    Keying on the full IPv6 address is keying on nothing. Every home line and
+    every VPS is handed at least a /64, and a host may pick any of its 2**64
+    addresses for each request - so a per-address limit keyed that way gives
+    one client as many buckets as it cares to ask for (#1233). The /64 is the
+    smallest unit an ISP hands out, so it is what "one subscriber" means.
+
+    An IPv4-mapped address (``::ffff:192.0.2.1``, what a dual-stack socket
+    reports for an IPv4 peer) keys as the IPv4 address it carries: the same
+    caller must not get two buckets depending on which listener answered.
+
+    Anything that does not parse - a Unix socket, a test client's ``testclient``
+    - is its own key, unchanged.
+    """
+    if not host:
+        return "unknown"
+    try:
+        address = ipaddress.ip_address(host)
+    except ValueError:
+        return host
+    if isinstance(address, ipaddress.IPv6Address):
+        if address.ipv4_mapped is not None:
+            return str(address.ipv4_mapped)
+        # Built from the integer rather than the text: a scoped address
+        # (``fe80::1%eth0``) does not parse as a network, and the scope is
+        # an interface on this host, not a different caller.
+        prefix = int(address) >> 64 << 64
+        return str(ipaddress.IPv6Network((prefix, 64)))
+    return str(address)

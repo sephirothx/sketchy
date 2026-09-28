@@ -1509,7 +1509,10 @@ an increasing wait (a minute, then five, fifteen, an hour), remembered across
 windows and cleared by one correct password. The account is keyed by a hash of the
 username, never the username itself. Bucket keys are HMAC-SHA-256
 digests under `IP_HASH_SECRET` (or an automatically generated database secret),
-so raw IP addresses are never stored. Expired buckets are cleaned in bounded
+so raw IP addresses are never stored. "Per address" means per subscriber: an
+IPv4 address, or the IPv6 /64 an address sits in, since every IPv6 line is handed
+at least a /64 and may answer from any address in it (an IPv4-mapped IPv6 address
+counts as the IPv4 address it carries). Expired buckets are cleaned in bounded
 batches. Lower-risk profile and prompt-statistics throttles remain
 process-local. Room creation uses the same persistent buckets, keyed by the
 account that opens the room: until there is a reverse proxy to read a
