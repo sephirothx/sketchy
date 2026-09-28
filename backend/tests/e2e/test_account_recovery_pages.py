@@ -32,3 +32,19 @@ async def test_each_recovery_step_has_its_own_words_and_a_phone_gets_the_form_fi
             await laptop.close()
             await phone.close()
             await browser.close()
+
+
+async def test_a_verification_that_never_reached_the_server_does_not_call_the_link_dead():
+    """Review of #1329: any failure read "That link no longer works", though a
+    network error says nothing about a link that may work on a second try."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        await context.route("**/api/auth/email/verify", lambda route: route.abort())
+        page = await context.new_page()
+        try:
+            await page.goto(f"{BASE_URL}/verify-email?token=some-token")
+            await expect(page.get_by_role("heading", level=1)).to_have_text("Could not confirm your email")
+        finally:
+            await context.close()
+            await browser.close()
