@@ -55,9 +55,11 @@ async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
     """With a classic scrollbar, the header stands 16px from the window's
     edge on the pinned lobby, which does not scroll, and on Rules, which does
     (#1178). Below the shell's width the bar reaches to that gutter, measured
-    from `100vw`: Chromium leaves the root's stable gutter out of `100vw`, and
+    from `100vw`: Chromium left the root's stable gutter out of `100vw`, and
     taking a scrollbar's width off it as well, on a page that scrolls only,
-    put the bar 23.5px in on Rules and 16px on the lobby.
+    put the bar 23.5px in on Rules and 16px on the lobby. The lobby keeps the
+    lane inside the page now (#1222), and a reserve counted twice - once by
+    the page, once by the window's own scrollbar - would move the bar too.
 
     Headless Chromium hides its scrollbars unless told not to; on Linux, as
     on CI, they are then classic 15px ones. macOS draws overlay scrollbars,
@@ -96,6 +98,66 @@ async def test_a_classic_scrollbar_does_not_move_the_header_between_pages():
             assert abs(rules_header["width"] - lobby_header["width"]) <= 1, (rules_header, lobby_header)
             assert rules_chip is not None and lobby_chip is not None
             assert abs(rules_chip["x"] - lobby_chip["x"]) <= 1, (rules_chip, lobby_chip)
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_banner_reaches_the_window_edge_on_a_page_with_no_scrollbar():
+    """On a page that fits, the lane a classic scrollbar would take is kept
+    inside the page, not on the window, so the banner stack runs to the
+    window's right edge while the page below keeps its place (#1222). The lane
+    used to be the root's stable gutter, which nothing but the page's own
+    colour can paint: the banner stopped 15px short of the edge.
+
+    The platform's scrollbar is measured on a box that always has one: on the
+    pinned lobby the window has none to measure."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(
+            headless=True, args=["--mute-audio"], ignore_default_args=["--hide-scrollbars"]
+        )
+        context = await browser.new_context(viewport={"width": 1200, "height": 800})
+        page = await context.new_page()
+        try:
+            await use_guest_name(page, unique("Edge"))
+            await page.goto(BASE_URL)
+            header = page.locator(".lobby-header")
+            await header.locator(".identity-chip").wait_for()
+            lane = await page.evaluate(
+                """() => {
+                  const box = document.createElement('div');
+                  box.style.overflowY = 'scroll';
+                  document.body.append(box);
+                  const lane = box.offsetWidth - box.clientWidth;
+                  box.remove();
+                  return lane;
+                }"""
+            )
+            if lane == 0:
+                assert sys.platform != "linux", "Chromium on Linux drew no classic scrollbar"
+                pytest.skip("this platform's scrollbars take no lane")
+            before = await header.bounding_box()
+
+            await context.set_offline(True)
+            banner = page.locator(".connection-status-banner.offline")
+            await banner.wait_for()
+            # Polled: the lobby makes room for the stack a frame later (#797).
+            await page.wait_for_function(
+                "() => document.documentElement.scrollHeight <= document.documentElement.clientHeight",
+                timeout=5000,
+            )
+            box = await banner.bounding_box()
+            after = await header.bounding_box()
+            await context.set_offline(False)
+
+            assert box is not None and before is not None and after is not None
+            assert box["x"] == 0, box
+            assert abs(box["x"] + box["width"] - 1200) <= 1, (box, lane)
+            assert abs(after["x"] - before["x"]) <= 1, (before, after)
+            assert abs(after["width"] - before["width"]) <= 1, (before, after)
+            assert await page.evaluate(
+                "document.documentElement.scrollWidth <= document.documentElement.clientWidth"
+            ), "reaching the edge must not give the page something to scroll sideways"
         finally:
             await context.close()
             await browser.close()

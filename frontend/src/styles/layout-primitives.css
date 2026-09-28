@@ -96,6 +96,9 @@
   /* The part of a classic scrollbar's lane that `100vw` counts, written by
      lib/scrollbarWidth.ts: nothing measured from the window should count it. */
   --scrollbar-width: 0px;
+  /* The lane the page keeps for itself while the window shows no scrollbar
+     (`body`, reset.css), written by the same module. */
+  --scrollbar-reserve: 0px;
   --shell-width: 1240px;
   --canvas-cap: 760px;
   --room-players-width: 250px;

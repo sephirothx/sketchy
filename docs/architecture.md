@@ -2176,19 +2176,27 @@ Each page declares its content column as `--page-width` beside its max-width,
 and `.lobby-header` (in
 [`styles/settings-shared.css`](../frontend/src/styles/settings-shared.css))
 reaches out of that column with negative margins — out to `--shell-width`, or
-the window's 16px gutter when that is nearer. `html` reserves a classic
-scrollbar's lane on every page, scrolling or not (`scrollbar-gutter: stable`
-in [`styles/reset.css`](../frontend/src/styles/reset.css); a browser without
-it gets `overflow-y: scroll` instead), so no centred column moves between a
-page that scrolls and the pinned lobby, which does not. The window is `100vw`
-less `--scrollbar-width`, which
+the window's 16px gutter when that is nearer. Every page is laid out beside a
+classic scrollbar's lane, scrolling or not, so no centred column moves
+between a page that scrolls and the pinned lobby, which does not: where the
+window shows no scrollbar, `body` pads its right side by
+`--scrollbar-reserve` (in
+[`styles/reset.css`](../frontend/src/styles/reset.css)) — the platform's
+scrollbar width, measured on a hidden `overflow-y: scroll` probe, and 0 while
+the window shows its own or the scrollbars are overlay ones. The banner stack
+reaches back over it to the window's edge. The lane used to be the root's
+`scrollbar-gutter: stable`, but an empty root gutter is painted in the root's
+background colour and nothing else — no element, shadow or background image
+reaches into it — so the banner stopped 15px short of the edge on every page
+that fit (#1222). The window is `100vw` less `--scrollbar-width`, which
 [`lib/scrollbarWidth.ts`](../frontend/src/lib/scrollbarWidth.ts) keeps on
 `:root` as how far `100vw` (measured on a hidden probe) overstates the width
-`html` is laid out in. That is the lane in a browser whose `100vw` counts the
-gutter and 0 in Chromium, which leaves it out: writing the scrollbar's own
-width (`innerWidth - clientWidth`) took the lane off twice there, but only on
-a page that scrolls, and moved the bar 7.5px between Rules and the lobby
-below the shell's width (#1178). A container that clips has to leave
+the page is laid out in — the lane, since `100vw` counts the whole window.
+It is measured rather than assumed: with the stable gutter Chromium left the
+lane out of `100vw`, and writing the scrollbar's own width
+(`innerWidth - clientWidth`) took it off twice there, but only on a page that
+scrolls, and moved the bar 7.5px between Rules and the lobby below the
+shell's width (#1178). A container that clips has to leave
 the header's sideways reach alone — the pinned lobby clips top to bottom only
 (`overflow-y: clip`), since `overflow: hidden` cut the wordmark and the chip
 off at laptop widths. The space under the bar is one value, `--header-space`

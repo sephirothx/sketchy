@@ -5,8 +5,14 @@
    its height is published as --banner-height (AppBanners), so the screens that
    size themselves to the viewport make room instead of going underneath (#797).
    Above the page, below every overlay, sheet and dialog (the layers, in
-   layout-primitives.css). */
+   layout-primitives.css).
+
+   It runs to the window's edge, out over the lane the page keeps for a
+   scrollbar the window is not showing (--scrollbar-reserve, reset.css): it
+   stopped 15px short, beside a strip of the page's colour (#1222). Where the
+   window does show one it ends at the scrollbar, as anything must. */
 .app-banners {
+  margin-right: calc(-1 * var(--scrollbar-reserve));
   position: sticky;
   top: 0;
   z-index: var(--z-banner);
