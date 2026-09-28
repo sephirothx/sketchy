@@ -99,7 +99,16 @@ async def test_a_passkey_is_set_up_once_and_then_signs_in_on_its_own():
             await page.goto(BASE_URL)
             await page.click(".first-run-login")
             form = page.locator(".modal-card").filter(has_text="Password")
-            await form.get_by_role("button", name="Sign in with a passkey").click()
+            # Staff's way in, under the form: a player's sign-in no longer
+            # leads with a route none of them has (#1280).
+            assert await form.locator(".auth-passkey").count() == 0
+            order = await form.evaluate(
+                "card => [...card.querySelectorAll('input, button')].map(el => el.id || el.textContent.trim())"
+            )
+            assert [i for i, name in enumerate(order) if name.endswith("-username")][0] < order.index(
+                "Staff: sign in with a passkey"
+            ), order
+            await form.get_by_role("button", name="Staff: sign in with a passkey").click()
             await expect(form).to_have_count(0)
             await expect(page.locator(".identity-chip")).to_contain_text(
                 "PasskeyPlayer"

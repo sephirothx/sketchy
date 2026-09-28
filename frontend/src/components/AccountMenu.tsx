@@ -588,27 +588,24 @@ export function AuthDialog({
         </p>
       )}
 
-      {/* Signing in, not claiming: a passkey belongs to an account that
-          already exists. Above the fields because it is the shorter route
-          for the accounts that hold one, and because a staff account may
-          have nothing else to offer. */}
-      {!isClaim && canUsePasskeys && (
+      {/* The passkey leads only once the account has said it signs in with
+          one (a `passkey` answer to the password). Passkeys are staff-only
+          (R-AUTH-23), and a button with an "or" above every player's
+          username field led them to a route none of them has (#1280); the
+          way in for staff otherwise is the small link under the form. */}
+      {!isClaim && canUsePasskeys && passkeyOnly && (
         <>
           <button
             type="button"
-            className={`btn ${passkeyOnly ? "btn-primary" : "btn-secondary"} auth-passkey`}
+            className="btn btn-primary auth-passkey"
             onClick={() => void signInWithPasskey()}
             disabled={busy}
           >
             {busy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.signInWithAPasskey}
           </button>
-          {passkeyOnly ? (
-            <p className="modal-hint">
-              {ui.accountMenu.thisAccountSignsWithPasskey}
-            </p>
-          ) : (
-            <p className="auth-divider"><span>{ui.accountMenu.or}</span></p>
-          )}
+          <p className="modal-hint">
+            {ui.accountMenu.thisAccountSignsWithPasskey}
+          </p>
         </>
       )}
       {showForm && (
@@ -752,6 +749,18 @@ export function AuthDialog({
           <Link className="auth-link" to="/forgot-password" onClick={onClose}>
             {ui.accountMenu.forgotYourPassword}
           </Link>
+        </p>
+      )}
+      {!isClaim && canUsePasskeys && !passkeyOnly && (
+        <p className="auth-switch">
+          <button
+            type="button"
+            className="auth-link auth-passkey-link"
+            onClick={() => void signInWithPasskey()}
+            disabled={busy}
+          >
+            {busy ? ui.accountMenu.waitingForYourDevice : ui.accountMenu.staffSignInWithPasskey}
+          </button>
         </p>
       )}
 

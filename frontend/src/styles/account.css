@@ -433,23 +433,9 @@
 .two-factor-manage { text-align: left; }
 
 
-/* The passkey route, above the fields it replaces. */
+/* The passkey route, above the fields it replaces - once the account has
+   said it signs in with one. */
 .auth-passkey { width: 100%; }
-.auth-divider {
-  align-items: center;
-  color: var(--muted);
-  display: flex;
-  font-size: 13px;
-  gap: 10px;
-  margin: 12px 0 0;
-}
-.auth-divider::before,
-.auth-divider::after {
-  background: var(--line-strong);
-  content: "";
-  flex: 1;
-  height: 1px;
-}
 
 .two-factor-choose { text-align: left; }
 .two-factor-choose .modal-hint { margin: 2px 0 0; }
