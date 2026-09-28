@@ -626,7 +626,7 @@ export const ES: Catalogue = {
 
   addEmailDialog: {
     followTheLink: (p: { address: string; replacing: boolean }) =>
-      `Sigue el enlace enviado a ${p.address}. Hasta entonces, la dirección no está asociada a tu cuenta y no sirve para recuperarla${
+      `Si ${p.address} se puede usar, te llegará un enlace de confirmación. Hasta que lo sigas, la dirección no está asociada a tu cuenta y no sirve para recuperarla${
         p.replacing ? ", y la que tenías sigue en su sitio." : "."
       }`,
     thatDoesNotLookLikeEmail: "Eso no parece una dirección de correo.",
@@ -2466,7 +2466,7 @@ export const ES: Catalogue = {
     youCanRecoverThisAccount: (p: { address: string }) =>
       `Puedes recuperar esta cuenta a través de ${p.address}.`,
     checkPendingAddressForAConfirmation: (p: { pendingAddress: string }) =>
-      `Busca en ${p.pendingAddress} un enlace de confirmación. Hasta que lo sigas, esta cuenta no tiene forma de recuperarse.`,
+      `Si ${p.pendingAddress} se puede usar, te llegará un enlace de confirmación. Hasta que lo sigas, esta cuenta no tiene forma de recuperarse.`,
     thisServerCannotSendEmail: "Este servidor no puede enviar correos, así que una contraseña perdida la tiene que restablecer quien lo administra.",
     addAnEmailAddressSo: "Añade una dirección de correo para poder volver a entrar si olvidas tu contraseña.",
   },
