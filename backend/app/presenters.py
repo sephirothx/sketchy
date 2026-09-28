@@ -256,9 +256,23 @@ def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
     }
     # An account that left and rejoined is ranked by all its seats' points,
     # as the final standings and the record rank it: by its newest seat alone
-    # it jumped at game over (#1318).
+    # it jumped at game over (#1318). Its turn is all its seats' turn too - a
+    # guess made before leaving, or a drawer's bonus credited to the seat that
+    # walked out - so that `score - delta` is what it came in with, the rule
+    # the card's waiting rows show (shownStanding, review of #1331).
     carried = room.carried_points()
     totals = {player.id: Room.standing_score(player, carried) for player in players}
+    departed_turn: dict[str, int] = {}
+    for seat in room.departed_seats.values():
+        if seat.user_id and not seat.is_spectator:
+            departed_turn[seat.user_id] = (
+                departed_turn.get(seat.user_id, 0)
+                + game.guess_points.get(seat.player_id, 0)
+                + (drawer_bonus if seat.player_id == game.current_drawer else 0)
+            )
+    for player in players:
+        if player.user_id:
+            deltas[player.id] += departed_turn.get(player.user_id, 0)
     previous_scores = {
         player.id: totals[player.id] - deltas[player.id] for player in players
     }

@@ -553,6 +553,9 @@ def test_turn_results_and_the_players_list_carry_a_rejoined_accounts_earlier_poi
     # Ranked by what each account holds: Ada came in on 250, Bo on nothing.
     assert (scores["Ada"]["previousRank"], scores["Bo"]["previousRank"]) == (1, 2)
     assert (scores["Ada"]["newRank"], scores["Bo"]["newRank"]) == (1, 2)
+    # The seat that only watched is no account's carried points - which is what
+    # decides the spectators the final standings keep (#1262).
+    assert "u-bo" not in room.carried_points()
     # And the players list beside the card says the same.
     listed = {entry["nickname"]: entry["score"] for entry in room.to_state_payload()["players"]}
     assert listed == {"Ada": ada.score + 250, "Bo": bo.score}

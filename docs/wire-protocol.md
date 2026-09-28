@@ -1217,7 +1217,7 @@ when retention withheld it, and absent means the line cannot be cited. Room chat
 lines are retained under the same rule but never carry the id (#869).
 
 
-**`room_state`** ([`backend/app/rooms.py:768`](../backend/app/rooms.py) →
+**`room_state`** ([`backend/app/rooms.py:814`](../backend/app/rooms.py) →
 `RoomStatePayload` in [`frontend/src/types.ts`](../frontend/src/types.ts)) carries the
 room identity (`id`, `code`, `name`, `isPublic`), every setting listed
 in §4, `state` (`waiting | playing`), `customPromptCount` (a count, never the prompts),
@@ -1344,7 +1344,8 @@ that left and rejoined as a player is carried the same way everywhere its standi
 `turn_ended.scores[].score` (and the `previousRank`/`newRank` read off it) and
 `room_state.players[].score` as well as `game_ended.scores` - one sum
 (`Room.carried_points`, [`backend/app/rooms.py`](../backend/app/rooms.py)), so no results card
-ranks it by its newest seat and then jumps at game over (#1318). Ranks use standard competition ranking (1, 2, 2, 4) via
+ranks it by its newest seat and then jumps at game over (#1318). Its `delta` counts every
+seat's turn the same way, so `score - delta` is always what the account came into the turn with. Ranks use standard competition ranking (1, 2, 2, 4) via
 `competition_ranks()` ([`backend/app/game.py:52`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 
