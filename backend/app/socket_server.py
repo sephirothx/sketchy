@@ -109,6 +109,13 @@ PACKET_WINDOW_SECONDS = 1.0
 MAX_PACKETS_PER_WINDOW = DRAWING.maximum + 100
 #: Refusals in one window after which the socket is closed.
 MAX_REJECTIONS = 20
+#: How long an Engine.IO socket may stay open without a Socket.IO CONNECT.
+#: The client sends its CONNECT the moment the transport opens - in the same
+#: flight as the handshake on a WebSocket, the next POST on polling - so ten
+#: seconds is a slow network's margin, not a client's. Before this a socket
+#: that never connected was never counted, never reaped and cost ~180 KB:
+#: 1,000 of them were all still open a minute later (#1234).
+CONNECT_DEADLINE_SECONDS = 10.0
 #: The per-packet ceiling engineio enforces; made explicit here rather than
 #: inherited as a default. #566 owns its sizing (a custom-prompts blob is the
 #: largest JSON command, 80,000 characters before escaping and UTF-8).
@@ -139,6 +146,7 @@ BACKLOG_SWEEP_SECONDS = 1.0
 REJECTION_REASONS = (
     "flood",
     "malformed",
+    "bytes",
     "binary_ack",
     "binary_event",
     "attachment_count",
@@ -239,7 +247,9 @@ class BoundedSocketServer(socketio.AsyncServer):
         # a message Engine.IO could not decode - count against the same
         # per-socket limit as the ones made here.
         self.eio.on_refusal(self._reject)
+        self.eio.inbound_bytes.clock = clock
         self._clock = clock
+        self._deadline_tasks: set[asyncio.Task] = set()
         self._assembly_started: dict[str, float] = {}
         self._packets = _Window(PACKET_WINDOW_SECONDS, clock)
         self._rejections = _Window(PACKET_WINDOW_SECONDS, clock)
@@ -259,6 +269,31 @@ class BoundedSocketServer(socketio.AsyncServer):
 
     def _engineio_server_class(self):
         return BoundedEngineServer
+
+    # --- a transport that never connects (#1234) ---------------------------
+
+    async def _handle_eio_connect(self, eio_sid: str, environ: Any):
+        result = await super()._handle_eio_connect(eio_sid, environ)
+        asyncio.get_running_loop().call_later(
+            CONNECT_DEADLINE_SECONDS, self._enforce_connect_deadline, eio_sid
+        )
+        return result
+
+    def _enforce_connect_deadline(self, eio_sid: str) -> None:
+        """End a transport still without a Socket.IO session at its deadline.
+
+        An Engine.IO socket needs no CONNECT, no account and no Origin, and
+        until it sends a CONNECT nothing above this layer knows it exists.
+        """
+        engine_socket = self.eio.sockets.get(eio_sid)
+        if engine_socket is None or getattr(engine_socket, "terminated", False):
+            return
+        if self.manager.sid_from_eio_sid(eio_sid, "/") is not None:
+            return
+        logger.info("closing %s: no CONNECT within %.0fs", eio_sid, CONNECT_DEADLINE_SECONDS)
+        task = asyncio.ensure_future(self.eio.terminate_socket(engine_socket))
+        self._deadline_tasks.add(task)
+        task.add_done_callback(self._deadline_tasks.discard)
 
     # --- the door ---------------------------------------------------------
 

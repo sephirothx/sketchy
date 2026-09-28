@@ -192,3 +192,18 @@ async def test_a_forced_exit_during_uvicorns_own_wait_still_runs_the_teardown():
     await server.shutdown([])
 
     assert timeline == ["drain", "lifespan"]
+
+
+def test_a_websocket_message_is_capped_at_the_packet_ceiling():
+    """#1234: uvicorn's default is 16 MiB, sixteen times the largest packet
+    Engine.IO accepts - and Engine.IO checks only once all of it is buffered."""
+    from app.socket_server import MAX_PACKET_BYTES
+
+    with (
+        patch.object(server, "DrainingServer") as draining,
+        patch.object(server, "asyncio"),
+    ):
+        server.run()
+
+    config = draining.call_args.args[0]
+    assert config.ws_max_size == MAX_PACKET_BYTES

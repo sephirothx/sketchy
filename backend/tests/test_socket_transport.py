@@ -469,3 +469,60 @@ async def test_nothing_is_read_after_the_peer_says_close(monkeypatch):
         peer.say("x")
     await finished(handler)
     assert rejected(store) == {}, "a socket that closed has nothing more to say"
+# --- the byte window and the CONNECT deadline (#1234) ---------------------------
+
+
+async def test_a_stream_of_megabyte_packets_is_refused_as_bytes_and_ended(monkeypatch):
+    """One socket sending a valid 1 MB command 480 times a second took ~43% of
+    the core and was never closed: the packet count let it through."""
+    from app.socket_transport import INBOUND_BYTES_PER_WINDOW
+
+    sio, store = build_server(monkeypatch)
+    handled = []
+
+    @sio.on("session_ping")
+    async def session_ping(sid, data):
+        handled.append(len(data["pad"]))
+
+    peer = Peer()
+    handler = await open_websocket(sio, peer)
+    peer.say("40")
+    packet = '42["session_ping",{"pad":"' + "x" * (1024 * 1024 - 64) + '"}]'
+    for _ in range(40):
+        peer.say(packet)
+
+    await finished(handler)
+    assert rejected(store) == {"bytes": MAX_REJECTIONS + 1}
+    assert len(handled) == INBOUND_BYTES_PER_WINDOW // len(packet), "the window's worth, then nothing"
+    assert sio.eio.sockets == {}
+
+
+async def test_ordinary_traffic_is_far_inside_the_byte_window(monkeypatch):
+    sio, store = build_server(monkeypatch)
+    peer = Peer()
+    handler = await open_websocket(sio, peer)
+    peer.say("40")
+    for _ in range(400):  # the drawing budget's tunable maximum, as text
+        peer.say('42["send_chat",{"text":"' + "y" * 1800 + '"}]')
+    await asyncio.sleep(0.2)
+    assert rejected(store) == {}
+    peer.inbound.put_nowait({"type": "websocket.disconnect", "code": 1000})
+    await finished(handler)
+
+
+async def test_a_transport_that_never_connects_is_ended_at_its_deadline(monkeypatch):
+    monkeypatch.setattr(socket_server, "CONNECT_DEADLINE_SECONDS", 0.1)
+    sio, store = build_server(monkeypatch)
+    before = asyncio.all_tasks()
+    idle = Peer()
+    idle_handler = await open_websocket(sio, idle)
+    connected = Peer()
+    connected_handler = await open_websocket(sio, connected)
+    connected.say("40")
+
+    await finished(idle_handler)
+    assert len(sio.eio.sockets) == 1, "the one that connected is still here"
+    assert not connected_handler.done()
+    connected.inbound.put_nowait({"type": "websocket.disconnect", "code": 1000})
+    await finished(connected_handler)
+    assert await settled(sio, before) == set()

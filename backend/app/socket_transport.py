@@ -31,6 +31,8 @@ from __future__ import annotations
 import asyncio
 import binascii
 import logging
+import time
+from collections import deque
 from collections.abc import Awaitable, Callable
 from typing import Any
 
@@ -68,6 +70,15 @@ MAX_PAYLOAD_PACKETS = 64
 UPGRADE_DEADLINE_SECONDS = 10.0
 #: The separator between packets in a polling payload.
 RECORD_SEPARATOR = "\x1e"
+#: What one socket may send in a second, counted on the raw message (bytes, or
+#: characters for text) before anything decodes it (#1234). The packet-count
+#: door let a valid 1 MB command through 480 times a second - about 43% of
+#: the core for one socket, which closed nothing - while the heaviest
+#: legitimate second is a drawer at the drawing budget's tunable maximum
+#: (400 frames of at most 1,793 B, a third more as base64 on polling: under
+#: 1 MB) or one maximal `create_room` (under 1 MiB).
+INBOUND_BYTES_PER_WINDOW = 2 * 1024 * 1024
+INBOUND_BYTE_WINDOW_SECONDS = 1.0
 
 Refusal = Callable[[str, str], Awaitable[None]]
 
@@ -320,15 +331,46 @@ class GuardedEngineSocket(AsyncSocket):
                 await self.server.refuse(self.sid, "malformed")
 
 
+class _ByteWindow:
+    """Bytes each socket has sent inside a sliding window."""
+
+    __slots__ = ("seconds", "clock", "_sent")
+
+    def __init__(self, seconds: float, clock: Callable[[], float]) -> None:
+        self.seconds = seconds
+        self.clock = clock
+        self._sent: dict[str, tuple[deque, list[int]]] = {}
+
+    def add(self, key: str, size: int) -> int:
+        """Record `size` and return the window's total, this message included."""
+        now = self.clock()
+        entry = self._sent.get(key)
+        if entry is None:
+            entry = self._sent[key] = (deque(), [0])
+        records, total = entry
+        while records and records[0][0] <= now - self.seconds:
+            total[0] -= records.popleft()[1]
+        records.append((now, size))
+        total[0] += size
+        return total[0]
+
+    def forget(self, key: str) -> None:
+        self._sent.pop(key, None)
+
+    def __contains__(self, key: str) -> bool:
+        return key in self._sent
+
+
 class BoundedEngineServer(engineio.AsyncServer):
     """Engine.IO with screened inbound packets and a teardown that ends things."""
 
-    def __init__(self, *args: Any, **kwargs: Any) -> None:
+    def __init__(self, *args: Any, clock: Callable[[], float] = time.monotonic, **kwargs: Any) -> None:
         super().__init__(*args, **kwargs)
         # A copy: the driver table is the library module's own dict, shared by
         # every server in the process.
         self._async = {**self._async, "websocket": GuardedWebSocket}
         self._refusal: Refusal | None = None
+        self.inbound_bytes = _ByteWindow(INBOUND_BYTE_WINDOW_SECONDS, clock)
 
     def on_refusal(self, refusal: Refusal) -> None:
         """Where a refused packet is counted: the Socket.IO door's ledger, so a
@@ -340,7 +382,15 @@ class BoundedEngineServer(engineio.AsyncServer):
             await self._refusal(sid, reason)
 
     def inbound_problem(self, sid: str, data: Any, transport: str = "websocket") -> str | None:
-        """Why this raw message must not reach Engine.IO's decoder, or None."""
+        """Why this raw message must not reach Engine.IO's decoder, or None.
+
+        Sized first: a message past the socket's byte window is refused
+        without being looked at, and still counts against the window - a
+        client sending faster than it may is sending, refused or not.
+        """
+        size = len(data) if isinstance(data, (str, bytes, bytearray, memoryview)) else 0
+        if self.inbound_bytes.add(sid, size) > INBOUND_BYTES_PER_WINDOW:
+            return "bytes"
         return engine_packet_problem(data, transport)
 
     async def terminate(self, sid: str, *, reason: str | None = None) -> bool:
@@ -363,6 +413,7 @@ class BoundedEngineServer(engineio.AsyncServer):
         if getattr(socket, "terminated", False):
             return
         socket.terminated = True
+        self.inbound_bytes.forget(getattr(socket, "sid", None))
         websocket = getattr(socket, "websocket", None)
         if websocket is not None:
             websocket.terminate()
@@ -391,6 +442,8 @@ class BoundedEngineServer(engineio.AsyncServer):
             del self.sockets[sid]
 
     async def _trigger_event(self, event, *args, **kwargs):
+        if event == "disconnect" and args:
+            self.inbound_bytes.forget(args[0])
         if event == "connect":
             # The first moment the library hands over a socket it has just
             # built (`_handle_connect`), before it has served a request of its
