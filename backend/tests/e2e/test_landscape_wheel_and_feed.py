@@ -42,6 +42,22 @@ LAYOUT = """
 """
 
 
+NOTICES = """
+() => {
+  const toast = document.querySelector('.toast-viewport');
+  const main = document.querySelector('.room-shell-main').getBoundingClientRect();
+  const style = getComputedStyle(toast);
+  const box = toast.getBoundingClientRect();
+  return {
+    toastMax: parseFloat(style.maxWidth),
+    toastCentre: box.left + box.width / 2,
+    mainLeft: main.left,
+    mainRight: main.right,
+  };
+}
+"""
+
+
 async def test_a_sideways_wheel_room_keeps_the_canvas_and_widens_the_feed():
     phone = {"viewport": {"width": 844, "height": 390}, "is_mobile": True, "has_touch": True}
     async with async_playwright() as p:
@@ -89,18 +105,59 @@ async def test_a_sideways_wheel_room_keeps_the_canvas_and_widens_the_feed():
                 assert guessing["feed"]["width"] > 250 and guessing["text"] >= 200, (size, guessing)
                 assert not guessing["sideways"] and not drawing["sideways"]
 
+            # The toasts stand between the rail and the column, centred in the
+            # space they leave, not narrowed by the column on both sides: a
+            # 320px column left a toast 68px wide that way.
+            notices = await guesser.evaluate(NOTICES)
+            assert notices["toastMax"] >= 300, notices
+            assert notices["mainLeft"] <= notices["toastCentre"] <= notices["mainRight"], notices
+
+            # Escape closes the keys and hands the focus back to the toggle.
+            await toggle.click()
+            keys = guesser.get_by_test_id("wheel-hint-popover")
+            await keys.wait_for()
+            await guesser.keyboard.press("Escape")
+            await keys.wait_for(state="detached")
+            await guesser.wait_for_function("() => document.activeElement?.classList.contains('wheel-hint-toggle')")
+
+            # Turned to portrait and back, it does not come back open.
+            await toggle.click()
+            await keys.wait_for()
+            await guesser.set_viewport_size({"width": 390, "height": 844})
+            await guesser.locator(".wheel-hint-panel").wait_for()
+            await guesser.set_viewport_size({"width": 740, "height": 360})
+            await toggle.wait_for()
+            assert await keys.count() == 0
+
+            # On a short screen every key can still be reached: the keys scroll
+            # inside a popover no taller than the screen below it.
+            await guesser.set_viewport_size({"width": 667, "height": 331})
+            await toggle.click()
+            await keys.wait_for()
+            last = keys.locator(".wheel-letter-btn").last
+            await last.scroll_into_view_if_needed()
+            reachable = await last.evaluate(
+                "(key) => { const box = key.getBoundingClientRect();"
+                " const hit = document.elementFromPoint(box.left + box.width / 2, box.top + box.height / 2);"
+                " return key === hit || key.contains(hit); }"
+            )
+            assert reachable
+            await guesser.keyboard.press("Escape")
+            await keys.wait_for(state="detached")
+            await guesser.set_viewport_size({"width": 740, "height": 360})
+            await toggle.wait_for()
+
             # One tap opens the keys over the canvas; buying one closes them.
             spent_before = await guesser.locator(".hint-spend-total").count()
             await toggle.click()
-            keys = guesser.get_by_test_id("wheel-hint-popover")
             await keys.wait_for()
             await keys.locator(".wheel-letter-btn:not(:disabled)").first.click()
             await keys.wait_for(state="detached")
             assert spent_before == 0
             await guesser.locator(".hint-spend-total").wait_for()
 
-            # A short phone gives the drawer no slack: the column keeps 180px
-            # and the canvas is what it was.
+            # A short phone gives the drawer little slack: the column stays
+            # near 180px and the canvas is what it was.
             for page in (drawer, guesser):
                 await page.set_viewport_size({"width": 667, "height": 375})
             await drawer.wait_for_timeout(300)

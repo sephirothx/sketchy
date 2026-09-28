@@ -2,6 +2,8 @@ import { useLayoutEffect, type RefObject } from "react";
 
 /** The custom property the landscape feed column is sized by (game-room.css). */
 export const LANDSCAPE_FEED_WIDTH = "--landscape-feed-width";
+/** The drawer's tool rail on the other side, for the notices' centring. */
+export const LANDSCAPE_RAIL_WIDTH = "--landscape-rail-width";
 const FEED_MIN = 180;
 const FEED_MAX = 320;
 /** The column's border, and a little air between it and the drawing. */
@@ -18,13 +20,15 @@ const FEED_ALLOWANCE = 12;
  * text and read "Type your g". The canvas's width here is the wrapper's height
  * times 4/3, so what is left of the shell after the rail and that width is the
  * column's to take - but never so much that the prompt's row (its tiles, and
- * the wheel's toggle) wraps onto a second line, whose height would come off
- * the canvas and be counted as width to spare on the next measure. So the
- * height is read with the column at its narrowest, and the column then backs
- * off while the row has wrapped: the same answer from either side of a resize.
+ * the wheel's toggle) grows taller than it is at the narrowest column, whose
+ * height would come off the canvas and be counted as width to spare on the
+ * next measure. So the height is read with the column at its narrowest, and
+ * the column then backs off while the row is taller: the same answer from
+ * either side of a resize.
  * Written a frame later, as the banner stack's late measure is, so a resize
  * this causes is never delivered inside the observer that caused it; written
- * on the root, where the notices' `--dock-inline-inset` reads it.
+ * on the root, with the rail's width beside it, where the notices'
+ * `--dock-inline-start` and `--dock-inline-end` read them.
  *
  * While the canvas is hidden - the drawer choosing a prompt - the last width
  * stands, so the column does not jump between the two phases.
@@ -55,12 +59,13 @@ export function useLandscapeFeedWidth(active: boolean, shellRef: RefObject<HTMLE
       const canvasWidth = (wrapper.clientHeight * 4) / 3;
       const barHeight = turnBar?.offsetHeight ?? 0;
       const rail = shell!.querySelector<HTMLElement>(".room-shell-dock")?.getBoundingClientRect().width ?? 0;
+      root.style.setProperty(LANDSCAPE_RAIL_WIDTH, `${Math.round(rail)}px`);
       let width = Math.floor(
         Math.min(FEED_MAX, Math.max(FEED_MIN, shell!.clientWidth - rail - canvasWidth - FEED_ALLOWANCE)),
       );
       set(width);
-      // Only as wide as keeps the prompt's row on one line: its tiles and the
-      // wheel's "Buy a letter" share it (#1267).
+      // Only as wide as keeps the prompt's row no taller than it was: its
+      // tiles and the wheel's "Buy a letter" share it (#1267).
       while (turnBar && width > FEED_MIN && turnBar.offsetHeight > barHeight) {
         width = Math.max(FEED_MIN, width - 16);
         set(width);
@@ -78,6 +83,7 @@ export function useLandscapeFeedWidth(active: boolean, shellRef: RefObject<HTMLE
       observer.disconnect();
       cancelAnimationFrame(frame);
       root.style.removeProperty(LANDSCAPE_FEED_WIDTH);
+      root.style.removeProperty(LANDSCAPE_RAIL_WIDTH);
     };
   }, [active, shellRef]);
 }

@@ -145,7 +145,10 @@ test("the invite stands on the bottom dock, and the toasts on both (R-UX-07)", (
     ["global-feedback.css", ".lazy-overlay-notice"],
     ["lobby-page.css", ".friend-invite-notice"],
   ]) {
-    assert.match(block(file, selector), /- 2 \* var\(--dock-inline-inset\)\)/, selector);
+    // Centred in the space the two columns leave, not narrowed by either on
+    // both sides: a 320px feed left a toast 68px wide that way (#1267).
+    assert.match(block(file, selector), /- var\(--dock-inline-start\) - var\(--dock-inline-end\)\)/, selector);
+    assert.match(block(file, selector), /left: calc\(var\(--dock-inline-start\) \+/, selector);
   }
   const source = (file) => scriptFiles.find(({ path }) => path.endsWith(file)).text;
   assert.match(source("components/FriendInviteNotice.tsx"), /setProperty\("--friend-invite-clearance"/);

@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { useEscapeLayer } from "../hooks/useFocusTrap";
 import { PHONE_LANDSCAPE_QUERY } from "../lib/roomLayout";
 import { promptPickPayload } from "../lib/promptPick";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
@@ -124,20 +125,30 @@ export function PromptDisplay({
   const [wheelOpen, setWheelOpen] = useState(false);
   const wheelId = useId();
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const toggleRef = useRef<HTMLButtonElement | null>(null);
+  const popoverRef = useRef<HTMLDivElement | null>(null);
+  // Closing from inside - Escape, or a letter bought - hands the focus back to
+  // the toggle rather than dropping it with the key that had it.
+  function closeWheel(returnFocus: boolean) {
+    setWheelOpen(false);
+    if (returnFocus) requestAnimationFrame(() => toggleRef.current?.focus());
+  }
+  useEscapeLayer(wheelOpen, () => closeWheel(true));
   useEffect(() => {
     if (!wheelOpen) return;
     const onPointerDown = (event: PointerEvent) => {
       if (!rootRef.current?.contains(event.target as Node)) setWheelOpen(false);
     };
-    const onKeyDown = (event: KeyboardEvent) => {
-      if (event.key === "Escape") setWheelOpen(false);
-    };
     document.addEventListener("pointerdown", onPointerDown);
-    document.addEventListener("keydown", onKeyDown);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown);
-      document.removeEventListener("keydown", onKeyDown);
-    };
+    return () => document.removeEventListener("pointerdown", onPointerDown);
+  }, [wheelOpen]);
+  // Only as tall as the screen below it: a short phone with the prompt's tiles
+  // on two rows clipped the last keys out of reach. Past that it scrolls.
+  useLayoutEffect(() => {
+    const popover = popoverRef.current;
+    if (!wheelOpen || !popover) return;
+    const bottom = window.visualViewport?.height ?? window.innerHeight;
+    popover.style.maxHeight = `${Math.max(120, Math.floor(bottom - popover.getBoundingClientRect().top - 8))}px`;
   }, [wheelOpen]);
 
   async function runAction(key: string, event: string, data: unknown, action: string) {
@@ -186,8 +197,11 @@ export function PromptDisplay({
   // is independent of the running score.
   const remaining = maxHintSpend - hintSpend;
   const wheelBehindToggle = canBuyWheel && shortLandscape;
+  // Turned to portrait, the turn over or the letters bought out: the popover
+  // goes with its toggle rather than coming back open over the next turn.
+  if (wheelOpen && !wheelBehindToggle) setWheelOpen(false);
 
-  function letterGrid(afterBuy?: () => void) {
+  function letterGrid(inPopover: boolean) {
     return (
       <div className="wheel-letter-grid">
         {Object.entries(letterPrices ?? {})
@@ -201,7 +215,9 @@ export function PromptDisplay({
               title={ui.promptDisplay.buyLetter({ letter: letter.toUpperCase(), price })}
               onClick={() =>
                 void runAction(`letter:${letter}`, "buy_wheel_letter", { letter }, ui.promptDisplay.buyTheLetterHint)
-                  .then(afterBuy)
+                  .then(() => {
+                    if (inPopover) closeWheel(true);
+                  })
               }
             >
               {letter.toUpperCase()}
@@ -253,6 +269,7 @@ export function PromptDisplay({
       {wheelBehindToggle ? (
         <>
           <button
+            ref={toggleRef}
             type="button"
             className="btn btn-secondary btn-compact wheel-hint-toggle"
             aria-expanded={wheelOpen}
@@ -262,16 +279,16 @@ export function PromptDisplay({
             {ui.promptDisplay.buyALetter}
           </button>
           {wheelOpen && (
-            <div id={wheelId} className="wheel-hint-popover" data-testid="wheel-hint-popover">
+            <div id={wheelId} ref={popoverRef} className="wheel-hint-popover" data-testid="wheel-hint-popover">
               <p className="hint-wheel-label">{ui.promptDisplay.buyLetterRevealsEveryMatch}</p>
-              {letterGrid(() => setWheelOpen(false))}
+              {letterGrid(true)}
             </div>
           )}
         </>
       ) : canBuyWheel && (
         <div className="wheel-hint-panel">
           <p className="hint-wheel-label">{ui.promptDisplay.buyLetterRevealsEveryMatch}</p>
-          {letterGrid()}
+          {letterGrid(false)}
         </div>
       )}
     </div>

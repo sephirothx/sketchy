@@ -2390,6 +2390,13 @@
   flex: none;
 }
 
+/* The tiles take what the toggle leaves and wrap within it, so the toggle
+   never drops to a row of its own - a row the canvas would pay for. */
+.prompt-display.has-wheel-toggle .prompt-masked {
+  flex: 1 1 0;
+  min-width: 0;
+}
+
 .wheel-hint-popover {
   background: var(--card);
   border: 1.5px solid var(--line);
@@ -2399,6 +2406,8 @@
   margin-inline: auto;
   max-width: 560px;
   padding: 8px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
   position: absolute;
   right: 0;
   top: calc(100% + 4px);
@@ -2752,17 +2761,19 @@ button.guess-pips {
      the canvas - but sideways the 4:3 canvas is bound by the height, not the
      width, so at 844 x 390 a guesser's column was 664px against a 402px
      drawing while the guess field read "Type your g". The fallback stands
-     until the first measure, and wherever the canvas is too wide to spare
-     more (667 x 375 keeps 180px).
+     until the first measure; where the canvas can spare little the column
+     stays near it (a 667 x 375 drawer, 193px).
 
      The friend invite and the toasts, which stand at the bottom centre
-     outside this shell, keep the feed's width clear on each side
-     (--dock-inline-inset): a wide toast at 740px reached 17px into the
-     column, over the guess field and the verdict above it. The token mirrors
-     the column's width rather than setting it, so a browser without :has()
-     only loses the notices' narrowing, not the column. Change both together. */
+     outside this shell, stand between the rail and the feed
+     (--dock-inline-start, --dock-inline-end): a wide toast at 740px reached
+     17px into the column, over the guess field and the verdict above it. The
+     tokens mirror the columns' widths rather than setting them, so a browser
+     without :has() only loses the notices' placing, not the columns. Change
+     them together. */
   :root:has(.game-room.game-room-playing) {
-    --dock-inline-inset: var(--landscape-feed-width, min(26vw, 180px));
+    --dock-inline-start: var(--landscape-rail-width, 0px);
+    --dock-inline-end: var(--landscape-feed-width, min(26vw, 180px));
   }
 
   .game-room.game-room-playing .room-shell-chat {
@@ -2791,7 +2802,7 @@ button.guess-pips {
      verdict hangs above it in the space the feed left. Growing upward, a
      verdict that wraps in the narrow column still has room. No --dock-reserve
      is needed: this column is beside the bottom centre, not under it, and
-     what stands there keeps clear of it (--dock-inline-inset, above). */
+     what stands there keeps clear of it (--dock-inline-end, above). */
   .game-room.guess-focused .room-chat-panel.guess-chat {
     justify-content: flex-end;
   }
