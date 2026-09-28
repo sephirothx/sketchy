@@ -2561,6 +2561,7 @@ export const EN = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy is full right now. Try again in a few minutes.",
+    tooManyTabsOpen: "Sketchy is open in too many tabs. Close one to continue.",
     connectionLostWhileTryingTo:
       (p: { action: string }) => `Connection lost while trying to ${p.action}. Please try again.`,
     theRequestToActionTimed:
@@ -2625,6 +2626,7 @@ export const EN = {
   roomNotices: {
     kickedByVote: "You were kicked from the room by vote.",
     roomClosed: "An administrator closed this room.",
+    roomExpired: "This room closed after 30 minutes without a game.",
     kickedByAdmin: "An administrator kicked you from the room.",
     accountDeleted: "Your account was deleted.",
     accountSuspended: "Your account was suspended.",

@@ -21,6 +21,15 @@ resident memory and log volume around each attack, then runs one scenario:
 ``eio-only``  #1234/#1232. ``--sockets`` Engine.IO WebSockets that never send a
               Socket.IO CONNECT, held for ``--seconds``: how many are still
               open, and what they cost in memory.
+``flood``     #1232. One address opens ``--sockets`` cookieless connected
+              sockets, then a visitor from another address connects: is the
+              visitor admitted, or told the server is full? Addresses are
+              set with ``X-Forwarded-For``, which the server trusts from
+              127.0.0.1 as production trusts its proxy.
+
+``--backend`` runs the server from another checkout's ``backend/`` - a
+worktree of the parent branch, say - so a before and an after run the same
+script.
 
 Usage (from the repository root)::
 
@@ -60,7 +69,8 @@ def _free_port() -> int:
 class Server:
     """A throwaway `app.server` whose process this script can measure."""
 
-    def __init__(self, env: dict[str, str]) -> None:
+    def __init__(self, env: dict[str, str], backend: Path = BACKEND) -> None:
+        self.backend = backend
         self.port = _free_port()
         self.base = f"http://127.0.0.1:{self.port}"
         self._scratch = tempfile.TemporaryDirectory(prefix="sketchy-abuse-")
@@ -80,7 +90,7 @@ class Server:
         self._log = open(self.log_path, "wb")
         self.process = subprocess.Popen(
             [sys.executable, "-m", "app.server"],
-            cwd=BACKEND, env=self._env, stdout=self._log, stderr=subprocess.STDOUT,
+            cwd=self.backend, env=self._env, stdout=self._log, stderr=subprocess.STDOUT,
         )
 
     async def ready(self) -> None:
@@ -132,28 +142,32 @@ def _delta(before: dict[str, float], after: dict[str, float]) -> dict[str, float
 # --- clients ------------------------------------------------------------------
 
 
-async def open_engine(http: aiohttp.ClientSession, base: str, *, compress: int = 15):
+async def open_engine(http: aiohttp.ClientSession, base: str, *, compress: int = 15, address: str | None = None):
     """A raw Engine.IO WebSocket, with the OPEN packet read."""
     ws = await http.ws_connect(
         base.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket",
         compress=compress,
         max_msg_size=0,
+        headers={"X-Forwarded-For": address} if address else None,
     )
     opened = await ws.receive(timeout=10)
     assert opened.type == aiohttp.WSMsgType.TEXT and opened.data.startswith("0"), opened
     return ws
 
 
-async def open_connected(http: aiohttp.ClientSession, base: str):
-    """A raw WebSocket that has completed the Socket.IO CONNECT."""
+async def open_connected(http: aiohttp.ClientSession, base: str, *, address: str | None = None, told: list | None = None):
+    """A raw WebSocket that has completed the Socket.IO CONNECT. A
+    `server_full` notice on the way is appended to `told`."""
     from app.protocol import PROTOCOL_VERSION
 
-    ws = await open_engine(http, base)
+    ws = await open_engine(http, base, address=address)
     await ws.send_str("40" + json.dumps({"protocol": PROTOCOL_VERSION}))
     while True:
         message = await ws.receive(timeout=10)
         if message.type != aiohttp.WSMsgType.TEXT:
             raise RuntimeError(f"CONNECT not answered: {message}")
+        if message.data.startswith('42["server_full"') and told is not None:
+            told.append(message.data)
         if message.data.startswith("40"):
             return ws
         if message.data == "2":
@@ -326,12 +340,51 @@ async def eio_only(server: Server, args) -> dict:
     }
 
 
+async def flood(server: Server, args) -> dict:
+    before = server.sample()
+    admitted, refused, told = 0, 0, []
+    started = time.monotonic()
+    async with aiohttp.ClientSession(connector=aiohttp.TCPConnector(limit=0)) as http:
+        held = []
+
+        async def one():
+            nonlocal admitted, refused
+            try:
+                held.append(await open_connected(http, server.base, address="198.51.100.1", told=told))
+                admitted += 1
+            except Exception:
+                refused += 1
+
+        await asyncio.gather(*(one() for _ in range(args.sockets)))
+        flood_seconds = time.monotonic() - started
+        visitor_told: list = []
+        try:
+            visitor = await open_connected(http, server.base, address="203.0.113.9", told=visitor_told)
+            visitor_outcome = "told server_full" if visitor_told else "admitted"
+            await visitor.close()
+        except Exception as error:
+            visitor_outcome = f"refused ({type(error).__name__})"
+        for ws in held:
+            await ws.close()
+    after = server.sample()
+    return {
+        "flood_sockets": args.sockets,
+        "flood_seconds": round(flood_seconds, 2),
+        "flood_admitted": admitted,
+        "flood_told_full": len(told),
+        "flood_refused": refused,
+        "visitor": visitor_outcome,
+        "cpu_s": round(after["cpu_s"] - before["cpu_s"], 3),
+    }
+
+
 SCENARIOS = {
     "garbage": garbage,
     "noargs": noargs,
     "bomb": bomb,
     "stream": stream,
     "eio-only": eio_only,
+    "flood": flood,
 }
 
 
@@ -343,10 +396,11 @@ def main() -> None:
     parser.add_argument("--seconds", type=float, default=10.0)
     parser.add_argument("--packets", type=int, default=50)
     parser.add_argument("--megabytes", type=int, default=15)
+    parser.add_argument("--backend", type=Path, default=BACKEND, help="the backend/ directory to run the server from")
     args = parser.parse_args()
     sys.path.insert(0, str(BACKEND))
 
-    server = Server({})
+    server = Server({}, backend=args.backend.resolve())
 
     async def run() -> dict:
         await server.ready()

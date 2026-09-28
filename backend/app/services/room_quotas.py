@@ -14,16 +14,26 @@ Three ceilings, answering three different questions:
 * **This process** - how many rooms exist at all, and how many characters of
   quick prompts they are collectively holding.
 
-Per-IP creation quotas are deliberately absent until there is a client address
-worth keying on: behind the reverse proxy #457 introduces, every socket
-presents the proxy's address, and the forwarded header is attacker-controlled
-(see `auth/rate_limit.client_key`).
+And one keyed by **address** (#1232), now that there is one worth keying on:
+uvicorn rewrites the ASGI client from the forwarded header only for the proxy
+`FORWARDED_ALLOW_IPS` names, and `auth/rate_limit.address_key` groups an IPv6
+caller by its /64. An account costs nothing to make and a socket needs no
+account at all, so the per-account ceilings alone let one laptop hold every
+socket and, through 67 guests, every room.
+
+Sockets are admitted a layer lower than rooms: `TransportLedger` counts every
+Engine.IO transport from the handshake - pending or connected, polling or
+WebSocket, an upgrade counted once - so a transport that never sends a
+Socket.IO CONNECT is still one of its address's, and a refusal costs the
+server an HTTP answer rather than a socket.
 """
 from __future__ import annotations
 
 import logging
 import os
+from collections import Counter
 from collections.abc import Iterable, Mapping
+from dataclasses import dataclass
 
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
@@ -39,6 +49,10 @@ DEFAULT_GLOBAL_ROOMS = 200
 # Enough for a host running a couple of rooms and setting up a third; far
 # below what a script would want.
 DEFAULT_PER_ACCOUNT_ROOMS = 3
+# Rooms one address may hold open (#1232): two households' worth of the
+# per-account ceiling, so a family or a flat sharing one line is not refused,
+# and one client minting guests cannot hold more than this many of the 200.
+DEFAULT_PER_ADDRESS_ROOMS = 6
 DEFAULT_CREATIONS_PER_HOUR = 10
 # The per-room ceiling (MAX_RAW_INPUT_LENGTH) bounds one room; this bounds the
 # sum, which is otherwise that ceiling multiplied by DEFAULT_GLOBAL_ROOMS.
@@ -51,6 +65,18 @@ DEFAULT_SPECTATORS_PER_ROOM = 8
 # Above the 400-seat validation target in `docs/requirements.md` with room to
 # spare, and still a number one process can be reasoned about holding.
 DEFAULT_SOCKETS = 600
+# Transports one address may hold (#1232). A room seats 16 players and 8
+# spectators, and a school, an office or a party behind one NAT can fill one:
+# 32 is that room with spare, and about 5% of the process ceiling, so taking
+# the server takes about nineteen addresses rather than one laptop (600
+# cookieless sockets from one address in 0.2 s, measured).
+DEFAULT_SOCKETS_PER_ADDRESS = 32
+# Sockets one account may hold at once: a player's tabs, with room to spare.
+DEFAULT_SOCKETS_PER_ACCOUNT = 8
+# Transports admitted past the process ceiling only to be told it is full
+# (`server_full`, #998) and then closed. Bounded, so the notice path is not
+# itself a way past the ceiling.
+TURNED_AWAY_ALLOWANCE = 32
 # A client re-enters a room for ordinary reasons - a reconnect, a stall
 # recovery - but a seating join costs the room a broadcast, so the churn is
 # worth bounding. Confirmations of a seat already held are free.
@@ -62,6 +88,99 @@ DEFAULT_JOINS_PER_SOCKET = 20
 # by the seat, which is the part the attacker is not replacing.
 DEFAULT_TAKEOVERS_PER_SEAT = 20
 JOIN_WINDOW_SECONDS = 60.0
+
+
+@dataclass(eq=False)
+class TransportTicket:
+    """One transport's claim on its address's allowance, from handshake to close."""
+
+    address: str
+    #: Admitted past the process ceiling: it may connect only to be told so.
+    over_capacity: bool
+    sid: str | None = None
+
+
+class TransportLedger:
+    """Every Engine.IO transport the process holds, by address (#1232).
+
+    Admission happens at the handshake, before Engine.IO allocates a socket:
+    counting at the Socket.IO CONNECT, as the ceiling used to, saw none of the
+    transports that never sent one - four handshakes against a ceiling of two
+    were four sockets with the count still at zero. Each ticket is taken once
+    and given back once: `release` finds it by identity and does nothing the
+    second time, and `reconcile` returns any a missed close left behind.
+    """
+
+    def __init__(self, capacity: "RoomCapacityService") -> None:
+        self._capacity = capacity
+        self._bound: dict[str, TransportTicket] = {}
+        self._pending: set[TransportTicket] = set()
+        self._by_address: Counter[str] = Counter()
+
+    @property
+    def open(self) -> int:
+        """Transports held now, pending and connected."""
+        return len(self._bound) + len(self._pending)
+
+    def held_by(self, address: str) -> int:
+        return self._by_address.get(address, 0)
+
+    def admit(self, address: str) -> tuple[TransportTicket | None, str | None]:
+        """A ticket for one more transport from `address`, or why not.
+
+        Refused past the address's allowance, and past the process ceiling
+        plus the allowance kept for telling arrivals the server is full.
+        Between the two, a transport is admitted marked over capacity.
+        """
+        if self._by_address[address] >= self._capacity.sockets_per_address:
+            return None, "address"
+        held = self.open
+        if held >= self._capacity.sockets + TURNED_AWAY_ALLOWANCE:
+            return None, "server"
+        ticket = TransportTicket(address=address, over_capacity=held >= self._capacity.sockets)
+        self._pending.add(ticket)
+        self._by_address[address] += 1
+        return ticket, None
+
+    def bind(self, ticket: TransportTicket, sid: str) -> None:
+        """The handshake produced socket `sid`: the ticket is now its."""
+        if ticket not in self._pending:
+            return
+        self._pending.discard(ticket)
+        ticket.sid = sid
+        self._bound[sid] = ticket
+
+    def release(self, ticket: TransportTicket) -> None:
+        """Give the ticket back. Once: a second call finds nothing to return."""
+        if ticket.sid is not None and self._bound.get(ticket.sid) is ticket:
+            del self._bound[ticket.sid]
+        elif ticket in self._pending:
+            self._pending.discard(ticket)
+        else:
+            return
+        remaining = self._by_address[ticket.address] - 1
+        if remaining > 0:
+            self._by_address[ticket.address] = remaining
+        else:
+            del self._by_address[ticket.address]
+
+    def release_sid(self, sid: str) -> None:
+        ticket = self._bound.get(sid)
+        if ticket is not None:
+            self.release(ticket)
+
+    def over_capacity(self, sid: str) -> bool | None:
+        """Whether `sid` was admitted past the ceiling; None if it is not held."""
+        ticket = self._bound.get(sid)
+        return None if ticket is None else ticket.over_capacity
+
+    def reconcile(self, live: Iterable[str]) -> int:
+        """Give back the tickets of sockets that are gone, however they went."""
+        alive = set(live)
+        stranded = [ticket for sid, ticket in self._bound.items() if sid not in alive]
+        for ticket in stranded:
+            self.release(ticket)
+        return len(stranded)
 
 
 class RoomQuotaExceeded(Exception):
@@ -109,6 +228,9 @@ class RoomQuotaService:
         self.per_account_rooms = _ceiling(
             values, "ROOM_PER_ACCOUNT_LIMIT", DEFAULT_PER_ACCOUNT_ROOMS
         )
+        self.per_address_rooms = _ceiling(
+            values, "ROOM_PER_ADDRESS_LIMIT", DEFAULT_PER_ADDRESS_ROOMS
+        )
         self.prompt_characters = _ceiling(
             values, "ROOM_PROMPT_CHARACTER_LIMIT", DEFAULT_PROMPT_CHARACTERS
         )
@@ -144,8 +266,9 @@ class RoomQuotaService:
         if self._creations is not None:
             self._creations.limit = value
 
-    def check_capacity(self, user_id: str) -> None:
-        """Refuse a room the process, or this account, has no room for.
+    def check_capacity(self, user_id: str, address: str | None = None) -> None:
+        """Refuse a room the process, this account, or this address has no
+        room for.
 
         Deliberately synchronous and in-memory: the caller runs it again
         immediately before the room is created, where there is no await left
@@ -160,6 +283,13 @@ class RoomQuotaService:
         if held >= self.per_account_rooms:
             raise RoomQuotaExceeded(
                 f"You already have {held} rooms open. "
+                "Close one before opening another."
+            )
+        # A guest costs nothing to make, so the account ceiling alone is one
+        # client holding three rooms per name it mints (#1232).
+        if address is not None and self._rooms.rooms_created_from(address) >= self.per_address_rooms:
+            raise RoomQuotaExceeded(
+                "Too many rooms are already open from your network. "
                 "Close one before opening another."
             )
 
@@ -224,6 +354,15 @@ class RoomCapacityService:
             values, "ROOM_SPECTATOR_LIMIT", DEFAULT_SPECTATORS_PER_ROOM
         )
         self.sockets = _ceiling(values, "SOCKET_LIMIT", DEFAULT_SOCKETS)
+        self.sockets_per_address = _ceiling(
+            values, "SOCKET_PER_ADDRESS_LIMIT", DEFAULT_SOCKETS_PER_ADDRESS
+        )
+        self.sockets_per_account = _ceiling(
+            values, "SOCKET_PER_ACCOUNT_LIMIT", DEFAULT_SOCKETS_PER_ACCOUNT
+        )
+        self.transports = TransportLedger(self)
+        self._account_sockets: dict[str, set[str]] = {}
+        self._socket_accounts: dict[str, str] = {}
         self.joins_per_socket = _ceiling(
             values, "ROOM_JOIN_LIMIT", DEFAULT_JOINS_PER_SOCKET
         )
@@ -261,17 +400,54 @@ class RoomCapacityService:
 
     def note_socket_closed(self, sid: str) -> None:
         self._open_sockets.discard(sid)
+        user_id = self._socket_accounts.pop(sid, None)
+        if user_id is not None:
+            held = self._account_sockets.get(user_id)
+            if held is not None:
+                held.discard(sid)
+                if not held:
+                    del self._account_sockets[user_id]
 
-    def has_socket_capacity(self) -> bool:
-        """Whether the sockets now open are within the ceiling.
+    def has_socket_capacity(self, eio_sid: str | None = None) -> bool:
+        """Whether this socket is within the process ceiling.
 
-        Held as a set of sids rather than a count, because a count is only
-        ever as right as the last event that moved it: one missed close, or
-        one close counted twice, and it drifts for the life of the process -
-        upwards, into refusing everybody. A set cannot drift, and it makes
-        both notifications idempotent.
+        Decided at the Engine.IO handshake when there was one to decide it
+        (#1232): the transport ledger says whether this socket's transport was
+        admitted past the ceiling, to be told so. A socket the ledger never
+        saw - a server without the bounded transport, as in unit tests - is
+        measured against the Socket.IO sockets open now instead.
+
+        Held as sets rather than counts, because a count is only ever as
+        right as the last event that moved it: one missed close, or one close
+        counted twice, and it drifts for the life of the process - upwards,
+        into refusing everybody. A set cannot drift, and it makes every
+        notification idempotent.
         """
+        if eio_sid is not None:
+            over = self.transports.over_capacity(eio_sid)
+            if over is not None:
+                return not over
         return len(self._open_sockets) <= self.sockets
+
+    def admit_account_socket(self, sid: str, user_id: str | None) -> bool:
+        """Count `sid` against its account's allowance, or refuse it.
+
+        A cookieless socket has no account to count against; the address
+        ceiling at the handshake is what bounds those.
+        """
+        if not user_id:
+            return True
+        held = self._account_sockets.setdefault(user_id, set())
+        if sid not in held and len(held) >= self.sockets_per_account:
+            if not held:
+                del self._account_sockets[user_id]
+            return False
+        held.add(sid)
+        self._socket_accounts[sid] = user_id
+        return True
+
+    def account_sockets(self, user_id: str) -> int:
+        return len(self._account_sockets.get(user_id, ()))
 
     def admits_a_spectator(self, room: Room) -> bool:
         watching = sum(1 for player in room.players.values() if player.is_spectator)

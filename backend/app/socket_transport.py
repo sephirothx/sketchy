@@ -34,12 +34,16 @@ import logging
 import time
 from collections import deque
 from collections.abc import Awaitable, Callable
+from contextvars import ContextVar
 from typing import Any
 
 import engineio
 from engineio import exceptions
 from engineio import packet as eio_packet
 from engineio.async_socket import AsyncSocket
+
+from app.auth.rate_limit import address_key
+from app.services.telemetry import telemetry
 
 logger = logging.getLogger("sketchy.socket_transport")
 
@@ -81,6 +85,34 @@ INBOUND_BYTES_PER_WINDOW = 2 * 1024 * 1024
 INBOUND_BYTE_WINDOW_SECONDS = 1.0
 
 Refusal = Callable[[str, str], Awaitable[None]]
+
+#: The admission ticket of the handshake this task is serving, between the
+#: moment it is taken and the moment the socket it paid for exists (#1232).
+_ADMITTING: ContextVar[Any] = ContextVar("sketchy_transport_admitting", default=None)
+#: A refused handshake is logged at most this often: a client at its ceiling
+#: retries, and one line per retry is a log a flood writes.
+REFUSAL_LOG_SECONDS = 10.0
+#: How often a refusal may trigger a sweep of the ledger against the sockets
+#: that actually exist, which is a walk of all of them.
+RECONCILE_SECONDS = 1.0
+#: What a refused handshake is told. The client cannot read a body here, but
+#: an operator reading a proxy log can.
+REFUSAL_STATUS = {
+    "address": "429 TOO MANY REQUESTS",
+    "server": "503 SERVICE UNAVAILABLE",
+}
+
+
+def handshake_address(environ: dict) -> str:
+    """The address a handshake came from, as every per-address limit keys it.
+
+    Off the ASGI scope - which uvicorn rewrites from a trusted proxy's
+    forwarded header - and never Engine.IO's `REMOTE_ADDR`, a constant in its
+    ASGI driver.
+    """
+    scope = environ.get("asgi.scope") or {}
+    client = scope.get("client")
+    return address_key(client[0] if client else None)
 
 
 def engine_packet_problem(data: Any, transport: str = "websocket") -> str | None:
@@ -393,6 +425,14 @@ class BoundedEngineServer(engineio.AsyncServer):
         self._async = {**self._async, "websocket": GuardedWebSocket}
         self._refusal: Refusal | None = None
         self.inbound_bytes = _ByteWindow(INBOUND_BYTE_WINDOW_SECONDS, clock)
+        #: The transport ledger (`services/room_quotas.TransportLedger`) that
+        #: admits each handshake; None admits everything. Set by the
+        #: application once the handlers exist, since the ceilings are tunable
+        #: there.
+        self.admission = None
+        self._clock = clock
+        self._refusal_logged_at = float("-inf")
+        self._reconciled_at = float("-inf")
 
     def on_refusal(self, refusal: Refusal) -> None:
         """Where a refused packet is counted: the Socket.IO door's ledger, so a
@@ -472,9 +512,69 @@ class BoundedEngineServer(engineio.AsyncServer):
         if sid is not None and self.sockets.get(sid) is socket:
             del self.sockets[sid]
 
+    # --- admission (#1232) --------------------------------------------------
+
+    async def _handle_connect(self, environ, transport, jsonp_index=None):
+        """Admit the handshake before the library allocates a socket for it.
+
+        A new session is the only request that allocates, so this is the one
+        place a ceiling can refuse without the refusal itself costing a
+        socket. The ticket is taken here, bound to the socket at the connect
+        event, and given back by the disconnect - or right here, if the
+        handshake never produced a socket that will have one.
+        """
+        ledger = self.admission
+        if ledger is None:
+            return await super()._handle_connect(environ, transport, jsonp_index)
+        address = handshake_address(environ)
+        ticket, refusal = ledger.admit(address)
+        if ticket is None and self._reconcile(ledger):
+            ticket, refusal = ledger.admit(address)
+        if ticket is None:
+            return self._refuse_handshake(refusal, address)
+        token = _ADMITTING.set(ticket)
+        try:
+            return await super()._handle_connect(environ, transport, jsonp_index)
+        finally:
+            _ADMITTING.reset(token)
+            if ticket.sid is None:
+                ledger.release(ticket)
+
+    def _reconcile(self, ledger) -> bool:
+        """Return tickets a missed close stranded, at most once a second.
+
+        A ledger that drifts only ever drifts upwards, into refusing people,
+        so a refusal is when it is worth checking against what exists.
+        """
+        now = self._clock()
+        if now - self._reconciled_at < RECONCILE_SECONDS:
+            return False
+        self._reconciled_at = now
+        return ledger.reconcile(self.sockets.keys()) > 0
+
+    def _refuse_handshake(self, reason: str, address: str) -> dict:
+        telemetry.note_socket_admission_refused(reason)
+        now = self._clock()
+        if now - self._refusal_logged_at >= REFUSAL_LOG_SECONDS:
+            self._refusal_logged_at = now
+            logger.warning(
+                "refusing handshakes: %s ceiling reached (%d transports open)",
+                reason, self.admission.open if self.admission is not None else -1,
+            )
+        return {
+            "status": REFUSAL_STATUS.get(reason, "503 SERVICE UNAVAILABLE"),
+            "headers": [("Content-Type", "text/plain"), ("Retry-After", "30")],
+            "response": b"Too many connections",
+        }
+
     async def _trigger_event(self, event, *args, **kwargs):
         if event == "disconnect" and args:
             self.inbound_bytes.forget(args[0])
+            if self.admission is not None:
+                self.admission.release_sid(args[0])
+        ticket = _ADMITTING.get() if event == "connect" else None
+        if ticket is not None and args and self.admission is not None:
+            self.admission.bind(ticket, args[0])
         if event == "connect":
             # The first moment the library hands over a socket it has just
             # built (`_handle_connect`), before it has served a request of its
@@ -485,4 +585,9 @@ class BoundedEngineServer(engineio.AsyncServer):
             engine_socket = self.sockets.get(args[0]) if args else None
             if type(engine_socket) is AsyncSocket:
                 engine_socket.__class__ = GuardedEngineSocket
-        return await super()._trigger_event(event, *args, **kwargs)
+        result = await super()._trigger_event(event, *args, **kwargs)
+        if ticket is not None and result is not None and result is not True:
+            # The application refused the connection, and the library drops
+            # such a socket without a disconnect event to give the ticket back.
+            self.admission.release(ticket)
+        return result

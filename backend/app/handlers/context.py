@@ -13,6 +13,7 @@ import socketio
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app import correlation
+from app.auth.rate_limit import address_key
 from app.repositories.interfaces import (
     GameHistoryRepository,
     UserRepository,
@@ -37,6 +38,7 @@ from app.services.timers import TimerManager
 if TYPE_CHECKING:
     from app.auth.blocks import BlockService
     from app.services.afk import AfkWatch
+    from app.services.idle_rooms import IdleRoomReaper
     from app.services.game_flow import GameFlowService
     from app.services.game_handoff import FinishedGameHandoffWorker
     from app.services.friend_invites import FriendInviteBook
@@ -208,6 +210,9 @@ class HandlerContext:
         default_factory=ActivityLedger, init=False, repr=False
     )
     afk_watch: AfkWatch = field(init=False, repr=False)
+    # Closes waiting rooms that never start a game (#1232); built beside the
+    # AFK watch, since it needs the eviction this context owns.
+    idle_rooms: IdleRoomReaper = field(init=False, repr=False)
 
     def on(self, command: str, handler) -> None:
         """Register a client command, with the budget it answers to.
@@ -368,6 +373,25 @@ class HandlerContext:
         task = asyncio.create_task(close_later())
         self._capacity_closes.add(task)
         task.add_done_callback(self._capacity_closes.discard)
+
+    def client_address(self, sid: str) -> str | None:
+        """The address this socket connected from, as every per-address limit
+        keys it (an IPv4 address or an IPv6 /64), or None if it is unknown.
+
+        Read off the ASGI scope the handshake arrived with - behind a trusted
+        proxy uvicorn has already rewritten it from the forwarded header -
+        never from Engine.IO's own `REMOTE_ADDR`, which its ASGI driver fills
+        with a constant.
+        """
+        try:
+            environ = self.sio.get_environ(sid)
+        except Exception:
+            return None
+        scope = environ.get("asgi.scope") if isinstance(environ, dict) else None
+        client = scope.get("client") if isinstance(scope, dict) else None
+        if not client:
+            return None
+        return address_key(client[0])
 
     def is_turned_away(self, sid: str) -> bool:
         """Whether this socket was told the server is full and awaits its close."""

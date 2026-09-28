@@ -1,5 +1,6 @@
 import { io, Socket } from "socket.io-client";
 import { applyClientConfig } from "./clientConfig.ts";
+import { serverFullText, type ServerFullNotice } from "./serverFullNotice.ts";
 import { recordClientError } from "./clientErrorLog.ts";
 import {
   HEALTH_REPORT_INTERVAL_MS,
@@ -443,10 +444,10 @@ let turnedAwayThisHandshake = false;
 socket.io.on("open", () => {
   turnedAwayThisHandshake = false;
 });
-socket.on("server_full", () => {
-  recordClientError("socket", "server_full");
+socket.on("server_full", (notice: ServerFullNotice | undefined) => {
+  recordClientError("socket", `server_full: ${notice?.limit ?? "server"}`);
   turnedAwayThisHandshake = true;
-  serverFullReason = ui.socket.sketchyIsFullRightNow;
+  serverFullReason = serverFullText(notice);
   serverFullListeners.forEach((listener) => listener(serverFullReason));
 });
 

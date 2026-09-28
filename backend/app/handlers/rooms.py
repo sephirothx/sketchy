@@ -384,8 +384,9 @@ async def _create_room(ctx: HandlerContext, sid, data, seated: list):
 
 async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: list):
     """Everything a creation does once it is known not to be a repeat."""
+    address = ctx.client_address(sid)
     try:
-        ctx.room_quotas.check_capacity(identity.user_id)
+        ctx.room_quotas.check_capacity(identity.user_id, address)
     except RoomQuotaExceeded as error:
         return {"ok": False, "errorCode": ErrorCode.ROOM_QUOTA, "error": str(error)}
     try:
@@ -457,7 +458,7 @@ async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: 
             # Everything above this line awaited, and a second create_room from
             # this account may have arrived in one of those gaps. This is the last
             # instant where the answer and the room are not separated by an await.
-            ctx.room_quotas.check_capacity(identity.user_id)
+            ctx.room_quotas.check_capacity(identity.user_id, address)
         except RoomQuotaExceeded as error:
             await _give_back_code(ctx, code)
             return {"ok": False, "errorCode": ErrorCode.ROOM_QUOTA, "error": str(error)}
@@ -479,6 +480,7 @@ async def _create_new_room(ctx: HandlerContext, sid, payload, identity, seated: 
                 **settings,
                 code=code,
                 created_by_user_id=identity.user_id,
+                created_from=address,
             )
         except Exception:
             await _give_back_code(ctx, code)

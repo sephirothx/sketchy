@@ -804,9 +804,12 @@ process. These deployment settings can be tuned without code changes:
 | `HISTORY_ENCODE_WORKERS` | `2` | Threads that encode a finished game, in each of the two pools that do it (the envelope's and the drawings'), 1-16. The encode is CPU off the event loop, so this is how many endings can be encoded at once before the rest queue; a host that ends many games at once can widen it, and a wrong value is refused at startup rather than served as the default |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
+| `ROOM_PER_ADDRESS_LIMIT` | `6` | Live rooms opened from one address (an IPv4 address or an IPv6 /64) that may be open at once (#1232) |
 | `ROOM_PROMPT_CHARACTER_LIMIT` | `4194304` | Quick-prompt characters held across every live room |
 | `ROOM_SPECTATOR_LIMIT` | `8` | Spectators one room will hold, independently of `maxPlayers` |
-| `SOCKET_LIMIT` | `600` | Sockets this process will hold at once |
+| `SOCKET_LIMIT` | `600` | Sockets this process will hold at once, counted from the Engine.IO handshake. Past it an arrival is told the server is full and closed; past it plus 32, refused at the handshake |
+| `SOCKET_PER_ADDRESS_LIMIT` | `32` | Sockets one address (an IPv4 address or an IPv6 /64) may hold, refused at the handshake past it (#1232). A full room behind one school or office network needs about 24 |
+| `SOCKET_PER_ACCOUNT_LIMIT` | `8` | Sockets one account may hold: a player's tabs. One more is told so and closed (#1232) |
 | `ALLOWED_ORIGINS` | unset | Comma-separated origins, besides this server's own, from which a browser may open a socket or make a state-changing request (#465): only for a frontend hosted on another origin. Everything else is refused at the handshake and on POST/PUT/PATCH/DELETE |
 | `ROOM_JOIN_LIMIT` | `20` | Seating joins per socket per minute; confirmations are free |
 | `ROOM_TAKEOVER_LIMIT` | `20` | Rebinds of one seat to a new socket, per minute |
@@ -2447,7 +2450,9 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    default is waiting it takes a seat in a **mixed-language room**, then in a room in
    each of the other languages you play in, in your order, before opening a new one in
    your default.
-2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. Wherever
+2. **Waiting room**: once 2+ players have joined, the host clicks **Start game**. A
+   waiting room that has not started its first game within 30 minutes is closed, and
+   everyone in it is told why (#1232). Wherever
    players are listed, the host's avatar wears a gold crown on its corner and your own
    avatar wears a ring, so neither needs a word beside the name.
 3. **Choosing** (15s): the current drawer picks one of 3 prompt options.

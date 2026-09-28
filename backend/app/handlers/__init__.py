@@ -40,6 +40,7 @@ from app.services.presence import (
     PresenceRegistry,
 )
 from app.services.room_codes import RoomCodeService
+from app.services.idle_rooms import IdleRoomReaper
 from app.services.room_quotas import RoomCapacityService, RoomQuotaService
 from app.services.timers import TimerManager
 from app.services.shutdown import ShutdownCoordinator
@@ -123,6 +124,7 @@ def register_all_handlers(
     # `game_flow` when a check goes unanswered. Built here rather than in the
     # context's defaults because it needs both of those (#677).
     ctx.afk_watch = AfkWatch(sio, room_manager, ctx.activity, ctx.game_flow)
+    ctx.idle_rooms = IdleRoomReaper(room_manager, ctx)
     ctx.friend_invites = FriendInviteBook()
     ctx.lobby_chat = LobbyChatLog()
 

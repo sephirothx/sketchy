@@ -2541,6 +2541,7 @@ export const NL: Catalogue = {
   },
   socket: {
     sketchyIsFullRightNow: "Sketchy zit nu vol. Probeer het over een paar minuten nog eens.",
+    tooManyTabsOpen: "Sketchy is in te veel tabbladen open. Sluit er een om verder te gaan.",
     connectionLostWhileTryingTo: (p: { action: string }) =>
       `Verbinding verbroken bij: ${p.action}. Probeer het nog eens.`,
     theRequestToActionTimed: (p: { action: string }) =>
@@ -2606,6 +2607,7 @@ export const NL: Catalogue = {
   roomNotices: {
     kickedByVote: "Je bent per stemming uit de kamer gezet.",
     roomClosed: "Een beheerder heeft deze kamer gesloten.",
+    roomExpired: "Deze kamer is gesloten na 30 minuten zonder spel.",
     kickedByAdmin: "Een beheerder heeft je uit de kamer gezet.",
     accountDeleted: "Je account is verwijderd.",
     accountSuspended: "Je account is geschorst.",

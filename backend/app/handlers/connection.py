@@ -50,6 +50,35 @@ def _transport_of(ctx: HandlerContext, sid) -> str:
         return "unknown"
 
 
+def _engine_sid(ctx: HandlerContext, sid) -> str | None:
+    """The Engine.IO transport under a Socket.IO socket, if there is one."""
+    try:
+        return ctx.sio.manager.eio_sid_from_sid(sid, "/")
+    except Exception:
+        return None
+
+
+#: What a turned-away socket is told, by the ceiling that turned it away. The
+#: client writes its own sentence from `limit` (R-I18N-01); this is for a log.
+TURNED_AWAY_REASONS = {
+    "server": "Sketchy is full right now. Try again in a few minutes.",
+    "account": "This account has too many connections open. Close a tab to continue.",
+}
+
+
+async def _turn_away(ctx: HandlerContext, sid, *, limit: str) -> None:
+    """Tell a socket it is past a ceiling, then close it once the notice lands."""
+    await ctx.sio.emit(
+        "server_full",
+        {"reason": TURNED_AWAY_REASONS[limit], "limit": limit},
+        to=sid,
+    )
+    # Not awaited here: the CONNECT this handshake ends with has to
+    # reach the client before the close does, or the notice is
+    # buffered against a namespace that never connected and lost.
+    ctx.close_after_handshake(sid)
+
+
 async def connect(ctx: HandlerContext, sid, environ, auth):
     """Bind the socket to whatever account the session cookie names.
 
@@ -80,9 +109,11 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
     # suspension raises out, and so would any failure in the lookups below.
     outcome = "refused"
     try:
-        # Counted before the ceiling is read, so this socket is measured
-        # against a ceiling that includes it.
-        if not ctx.room_capacity.has_socket_capacity():
+        # Decided at the Engine.IO handshake, where the transport was admitted
+        # - or admitted past the ceiling only to be told so (#1232). Without a
+        # ledger, counted before the ceiling is read, so this socket is
+        # measured against a ceiling that includes it.
+        if not ctx.room_capacity.has_socket_capacity(_engine_sid(ctx, sid)):
             # Told, not refused. A refusal carries no diagnosable signal and
             # `ConnectionRefusedError` is reserved for suspensions, so the client
             # learns why and can say so instead of retrying into silence.
@@ -90,15 +121,7 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
                 "refusing socket %s: %d already open", sid, ctx.room_capacity.open_sockets
             )
             outcome = "full"
-            await ctx.sio.emit(
-                "server_full",
-                {"reason": "Sketchy is full right now. Try again in a few minutes."},
-                to=sid,
-            )
-            # Not awaited here: the CONNECT this handshake ends with has to
-            # reach the client before the close does, or the notice is
-            # buffered against a namespace that never connected and lost.
-            ctx.close_after_handshake(sid)
+            await _turn_away(ctx, sid, limit="server")
             turned_away = True
             return
         user_id = None
@@ -121,6 +144,18 @@ async def connect(ctx: HandlerContext, sid, environ, auth):
                 raise ConnectionRefusedError("This account is suspended.")
             auth_session = resolution.session
             user_id = auth_session.user_id if auth_session else None
+        # One account's tabs, not one account's thousand sockets (#1232):
+        # counted per account because an account can arrive from any number
+        # of addresses, which the handshake's per-address ceiling cannot see.
+        if not ctx.room_capacity.admit_account_socket(sid, user_id):
+            logger.warning(
+                "refusing socket %s: account already holds %d",
+                sid, ctx.room_capacity.account_sockets(user_id),
+            )
+            outcome = "account_full"
+            await _turn_away(ctx, sid, limit="account")
+            turned_away = True
+            return
         # The session too (#1007): a revocation names sessions, and the
         # sockets a revoked one opened have to be found by it.
         await ctx.sio.save_session(
