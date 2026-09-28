@@ -224,12 +224,15 @@ _APOSTROPHES = str.maketrans(
 # Written out rather than derived from `unicodedata` at import, which would
 # walk all 1.1 million code points in every process; one class, because
 # testing a character against a list of ranges in Python made keying a
-# non-ASCII answer six times slower. `test_invisible_prompt_text` checks it
-# still covers every Cf character the running Python knows.
+# non-ASCII answer six times slower. `unicodedata` has no default-ignorable
+# property to derive it from anyway: `test_invisible_prompt_text` checks the
+# class against Unicode's list of them, reserved code points included
+# (U+FFF0-FFF8 were missing, #1303 review), and every Cf character the
+# running Python knows.
 _INVISIBLE = (
     "\u00ad\u034f\u0600-\u0605\u061c\u06dd\u070f\u0890\u0891\u08e2"
     "\u115f\u1160\u17b4\u17b5\u180b-\u180f\u200b-\u200f\u202a-\u202e"
-    "\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff9-\ufffb"
+    "\u2060-\u206f\u3164\ufe00-\ufe0f\ufeff\uffa0\ufff0-\ufffb"
     "\U000110bd\U000110cd\U00013430-\U0001343f\U0001bca0-\U0001bca3"
     "\U0001d173-\U0001d17a\U000e0000-\U000e0fff"
 )
