@@ -507,7 +507,7 @@ async def test_game_history_stable_id_is_idempotent_and_rejects_conflicts():
         await engine.dispose()
 
 
-async def test_score_event_ledger_reconciles_and_is_returned_in_order():
+async def test_score_event_ledger_reconciles_and_is_stored_in_order():
     factory, engine = await create_test_db()
     try:
         users = SqlAlchemyUserRepository(factory)

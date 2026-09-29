@@ -3414,7 +3414,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     # Not the prompt offers or the score ledger: the page
                     # reads neither, and for a 16-seat, 10-round game they
                     # were half the load and half the 1.5 MB response (#1254).
-                    # The ledger is in the owner's export.
+                    # A player's own seats' events, and the offers on the
+                    # turns they drew, are in their export.
                 )
             )
             result = await session.execute(stmt)

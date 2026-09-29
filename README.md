@@ -323,8 +323,8 @@ turn gets an ordered immutable row with its text snapshot, selected flag,
 curated prompt-version ID when applicable, and every list revision containing
 that version. Custom and fallback options have explicit source kinds and null
 curated identities, so collisions cannot inflate curated statistics or make a
-bad prompt untraceable. Exact offers are participant-only history and private
-export data.
+bad prompt untraceable. Exact offers are private export data - the drawer's own
+turns' - and are shown on no history page (#1254).
 The turn row also carries the selected option's source kind and a nullable
 foreign key directly to its immutable prompt version. Curated turns are
 therefore joinable without text normalization; custom/fallback turns retain
@@ -410,9 +410,9 @@ writer proves the gameplay events agree with correct guesses and hint spend,
 then requires every participant's ledger sum to equal the cached final score in
 the same transaction. Legacy games explicitly use ledger version `0` because
 gross awards and drawer bonuses cannot be reconstructed from their net totals.
-No-scoring games use the current ledger version with an empty event list. Game
-detail, the profile breakdown, and private account export expose these audit
-facts to participants.
+No-scoring games use the current ledger version with an empty event list. The
+private account export carries each player's own seats' events; the game-detail
+route does not carry the ledger (#1254).
 Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt usage is not stored as mutable totals on the current display row.
