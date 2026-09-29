@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
@@ -140,6 +140,19 @@ DEFAULT_EXPORT_BATCH_SIZE = 25
 # list section, so this - not the size of the account's history - is what one
 # build holds in memory besides its compressed output.
 EXPORT_PAGE_SIZE = 500
+# A list revision's prompts are written in smaller pieces than that: at the
+# ceiling (500 prompts of 20 aliases) encoding them as one page held the loop
+# ~30 ms, once per revision (#1250 review).
+REVISION_PROMPT_PAGE = 100
+# Joins one prompt's aliases in the database. No stored alias can hold it:
+# alias text is whitespace-collapsed before it is kept (`clean_prompt_aliases`)
+# and U+001F is whitespace to `str.split`.
+ALIAS_SEPARATOR = "\x1f"
+
+
+async def _yield_to_rooms() -> None:
+    """Give the one worker's loop back between pieces of a build (N-01)."""
+    await asyncio.sleep(0)
 # The ceiling on one document, in JSON bytes before compression (R-PRIV-13).
 # One worker (N-01) means a build's working set is every player's latency, so
 # a document is refused past the ceiling rather than built at any size; an
@@ -471,7 +484,11 @@ class _ExportWriter:
 
     def __init__(self, *, max_bytes: int):
         self._buffer = io.BytesIO()
-        self._gzip = gzip.GzipFile(fileobj=self._buffer, mode="wb")
+        # Level 6, not gzip's default 9: nine spent ~9x the CPU for output
+        # 0.6% smaller, and `GzipFile` compresses its 128 KB write buffer in
+        # one call - ~40 ms of the loop at a time on a list's repetitive
+        # aliases, the export's longest stall (#1250 review).
+        self._gzip = gzip.GzipFile(fileobj=self._buffer, mode="wb", compresslevel=6)
         self._max_bytes = max_bytes
         # One flag per open container: whether its next member is the first.
         self._first: list[bool] = []
@@ -650,13 +667,21 @@ async def _write_revision_prompts(
     """One revision's prompts in position order.
 
     Read whole, not through a server-side cursor: a revision holds at most
-    `MAX_PROMPTS_PER_OWNED_LIST` prompts, the page size, so a cursor never
-    pages, and on PostgreSQL each one stayed open as a portal until the
-    build's transaction ended - one per revision, ~350 MB of the
-    database's memory for a list saved 800 times (#1250 review)."""
-    aliases: dict[UUID, list[str]] = {}
+    `MAX_PROMPTS_PER_OWNED_LIST` prompts, so a cursor saves nothing, and on
+    PostgreSQL each one stayed open as a portal until the build's
+    transaction ended - one per revision, ~350 MB of the database's memory
+    for a list saved 800 times (#1250 review). The prompts are then written
+    a page of `REVISION_PROMPT_PAGE` at a time."""
+    # One row per prompt, its aliases joined in the database. At the ceiling
+    # that is 500 rows rather than 10,000, and `AsyncSession.execute` builds
+    # every row it returns before it gives the loop back: ~40 ms of it for
+    # one revision's alias rows, which no paging afterwards could split
+    # (#1250 review).
     alias_rows = await session.execute(
-        select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
+        select(
+            PromptVersionAlias.prompt_version_id,
+            func.aggregate_strings(PromptAlias.answer, ALIAS_SEPARATOR),
+        )
         .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
         .join(
             PromptListRevisionItem,
@@ -664,12 +689,10 @@ async def _write_revision_prompts(
             == PromptVersionAlias.prompt_version_id,
         )
         .where(PromptListRevisionItem.revision_id == revision_id)
+        .group_by(PromptVersionAlias.prompt_version_id)
     )
-    for version_id, answer in alias_rows:
-        aliases.setdefault(version_id, []).append(answer)
-    # The alias read can be thousands of rows at the ceiling (500 prompts of
-    # 20 aliases): the loop goes back to the rooms before the prompts.
-    await asyncio.sleep(0)
+    aliases = {version_id: joined.split(ALIAS_SEPARATOR) for version_id, joined in alias_rows}
+    await _yield_to_rooms()
     writer.begin_array()
     result = await session.execute(
         select(
@@ -684,7 +707,7 @@ async def _write_revision_prompts(
         .where(PromptListRevisionItem.revision_id == revision_id)
         .order_by(PromptListRevisionItem.position)
     )
-    for page in result.partitions(EXPORT_PAGE_SIZE):
+    for page in result.partitions(REVISION_PROMPT_PAGE):
         for concept_id, version_id, version, answer, position in page:
             writer.value(
                 {
@@ -696,7 +719,7 @@ async def _write_revision_prompts(
                     "position": position,
                 }
             )
-        await asyncio.sleep(0)
+        await _yield_to_rooms()
     writer.end_array()
 
 

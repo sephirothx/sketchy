@@ -745,7 +745,13 @@ revisions are read as metadata, then each revision's aliases and its items by
 `revision_id`, one revision at a time with the loop given back between them
 (`_write_prompt_lists`). A revision is read whole rather than through a server-side
 cursor: it is never more than a page, and on PostgreSQL each cursor stayed open as a
-portal until the build's transaction ended, one per revision.
+portal until the build's transaction ended, one per revision. Its aliases come one row
+per prompt, joined in the database (500 rows rather than 10,000 at the ceiling), its
+prompts are written 100 at a time, and the document is compressed at gzip level 6: level
+9 cost ~9× the CPU for 0.6% less, in 128 KB steps that held the loop ~40 ms on repetitive
+aliases. Benchmark (`export_list_revisions.py`, PostgreSQL 17, a 500-prompt list of 20
+aliases each saved 60 times): worst loop wait 45 → 20 ms, build CPU 2,059 → 389 ms;
+without aliases, 300 saves, 13.5 → 5 ms.
 The download hands a client that accepts gzip the stored bytes untouched, and one that
 does not the same bytes decompressed a chunk at a time with the length the gzip trailer
 records — never parsed, never held whole, never compressed twice (R-PRIV-14).

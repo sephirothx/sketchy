@@ -1674,6 +1674,7 @@ async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env,
     from app.auth.account_data import _ExportWriter, _timestamp, _write_export_artifact
     from app.db.models import PromptListRevision, PromptListRevisionItem, PromptVersion, PromptVersionAlias
     from app.repositories.interfaces import PromptListEntryInput
+    from app.prompt_content import clean_prompt_aliases
     from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
     http, _, _, factory = env
@@ -1752,16 +1753,33 @@ async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env,
             await _write_export_artifact(session, writer, user_id=UUID(owner["id"]), generated_at=STARTED)
             return gzip.decompress(writer.finish())
 
+    yields = 0
+    real_yield = account_data_module._yield_to_rooms
+
+    async def counted_yield() -> None:
+        nonlocal yields
+        yields += 1
+        await real_yield()
+
+    monkeypatch.setattr(account_data_module, "_yield_to_rooms", counted_yield)
     event.listen(engine.sync_engine, "before_cursor_execute", note)
     try:
         whole = await build()
         reads_per_build = len(item_reads)
+        whole_yields, yields = yields, 0
         monkeypatch.setattr(account_data_module, "EXPORT_PAGE_SIZE", 2)
+        monkeypatch.setattr(account_data_module, "REVISION_PROMPT_PAGE", 2)
         paged = await build()
     finally:
         event.remove(engine.sync_engine, "before_cursor_execute", note)
 
     assert paged == whole
+    # A revision's prompts give the loop back a page at a time, not once for
+    # the whole revision (#1250 review): at the ceiling that was ~30 ms of it
+    # per revision. Its aliases arrive one row per prompt, after one yield.
+    pages = sum(1 + -(-len(revision["prompts"]) // 2) for revision in expected_revisions)
+    assert whole_yields == 2 * len(expected_revisions)
+    assert yields == pages
     (document_list,) = json.loads(whole)["promptLists"]
     assert document_list["revisions"] == expected_revisions
     # Byte for byte, key order included: the document is written as it
@@ -1773,7 +1791,13 @@ async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env,
     ]
     # Two statements per revision - its aliases, then its prompts - and each
     # names one revision: none reads the items of a list, or of every list.
+    # The aliases come joined, one row per prompt, on a separator no stored
+    # alias can hold, because alias text is whitespace-collapsed on the way in.
     assert reads_per_build == 2 * len(expected_revisions)
+    assert account_data_module.ALIAS_SEPARATOR.isspace()
+    assert clean_prompt_aliases(
+        [f"a{account_data_module.ALIAS_SEPARATOR}b"], canonical_answer="thing", language="en"
+    ) == ("a b",)
     for statement, _parameters in item_reads:
         assert "prompt_list_revision_items.revision_id =" in statement, statement
         assert " IN (" not in statement.upper(), statement
