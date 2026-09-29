@@ -2493,7 +2493,9 @@ in the guesser's own language. Such a room plays Standard and lists in Any langu
 custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings, the highlights, and the drawing recap — where a registered
-   player in a public room can **Pin** a drawing to their profile.
+   player in a public room can **Pin** a drawing to their profile. Back in the waiting
+   room each seat keeps its place and final score until the next game starts: in the
+   players panel on a desktop, on the roster's tiles on a phone.
 
 At any point, a seat that has sent nothing a person sent for five minutes is asked
 whether anybody is still there, and marked AFK 25 seconds later if it does not

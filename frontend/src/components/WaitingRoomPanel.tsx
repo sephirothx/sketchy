@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { RoomSettingsEditor } from "./RoomSettingsEditor";
 import { CustomPromptsPreview } from "./CustomPromptsPreview";
 import { Avatar } from "./ui/Avatar";
@@ -8,6 +8,7 @@ import { RoomFacts } from "./RoomFacts";
 import { RoomVisibilityIcon } from "./RoomVisibilityIcon";
 import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
+import { competitionRanks } from "../lib/standings";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { SpectatorPromotion } from "./SpectatorPromotion";
 import { useMediaQuery } from "../hooks/useMediaQuery";
@@ -41,6 +42,8 @@ interface WaitingRoomPanelProps {
   myPlayerId: string | null;
   isHost: boolean;
   finalScores: ScoreEntry[] | null;
+  /** What the finished game was played as; its standings follow it. */
+  finalScoringMode?: ScoringMode | null;
   startBusy: boolean;
   startError: string | null;
   onStart: () => void;
@@ -118,11 +121,29 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   useLayoutEffect(() => reserveDock(footerRef.current), [drawing, isNarrow]);
   const activePlayers = players.filter((player) => !player.isSpectator);
   const spectators = players.filter((player) => player.isSpectator);
+  // After a game the phone's roster is the standings too (#1270): a desktop
+  // keeps its "Final standings" panel, but a phone hides that panel here, and
+  // the game-over card continues by itself after ten seconds - a player who
+  // looked away had lost the result. Places and scores stay on the tiles until
+  // the next game starts and clears them.
+  const standings = useMemo(() => {
+    if (!finalScores || (props.finalScoringMode ?? props.scoringMode) === "none") return null;
+    const places = competitionRanks(finalScores.map((entry) => entry.score));
+    return new Map(finalScores.map((entry, index) => [entry.playerId, { place: places[index], score: entry.score }]));
+  }, [finalScores, props.finalScoringMode, props.scoringMode]);
+  const rosterPlayers = standings
+    ? [...activePlayers].sort(
+        (a, b) =>
+          (standings.get(a.playerId)?.place ?? Number.POSITIVE_INFINITY)
+          - (standings.get(b.playerId)?.place ?? Number.POSITIVE_INFINITY),
+      )
+    : activePlayers;
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const host = players.find((player) => player.isHost);
   const me = players.find((player) => player.playerId === myPlayerId);
   const canStart = eligiblePlayers.length >= 2;
   function rosterTile(player: PlayerInfo, size: number) {
+    const standing = standings?.get(player.playerId);
     return (
       <li key={player.playerId} className="waiting-roster-tile">
         <Avatar
@@ -150,6 +171,14 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             <span className="visually-hidden">{ui.waitingRoomPanel.friend}</span>
           )}
         </span>
+        {standing && (
+          <>
+            <span className="waiting-roster-standing" data-testid="roster-standing" aria-hidden="true">
+              {ui.waitingRoomPanel.finalStanding(standing)}
+            </span>
+            <span className="visually-hidden">{ui.waitingRoomPanel.finalStandingSpoken(standing)}</span>
+          </>
+        )}
       </li>
     );
   }
@@ -352,7 +381,15 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
       {/* Who is here, as faces rather than a list in another column. The one
           thing you watch while waiting used to be the last thing on the page,
           below the chat card. */}
-      {isNarrow && <section className="surface-card waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
+      {isNarrow && <section
+        className="surface-card waiting-card waiting-roster"
+        aria-labelledby={standings ? "waiting-roster-kicker waiting-roster-title" : "waiting-roster-title"}
+      >
+        {standings && (
+          <p id="waiting-roster-kicker" className="section-label waiting-roster-kicker">
+            {ui.roomPlayersPanel.finalStandings}
+          </p>
+        )}
         <div className="waiting-roster-head">
           <h2 id="waiting-roster-title" className="panel-title" tabIndex={-1}>{ui.waitingRoomPanel.inTheRoom}</h2>
           <span
@@ -366,7 +403,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           </span>
         </div>
         <ul className="waiting-roster-grid">
-          {activePlayers.map((player) => rosterTile(player, 46))}
+          {rosterPlayers.map((player) => rosterTile(player, 46))}
           {activePlayers.length < props.maxPlayers && (
             <li className="waiting-roster-tile is-empty">
               <span className="waiting-roster-empty-avatar" aria-hidden="true">

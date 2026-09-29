@@ -121,6 +121,8 @@ interface GameStore {
   messages: ChatMessage[];
   lastTurnResult: TurnEndedPayload | null;
   finalScores: GameEndedPayload["scores"] | null;
+  /** The finished game's scoring mode, beside its scores. */
+  finalScoringMode: ScoringMode | null;
   drawingRecap: DrawingRecapMetadata[];
   gameHighlights: GameHighlight[];
   error: string | null;
@@ -239,6 +241,7 @@ const initialGameFields = {
   messages: [] as ChatMessage[],
   lastTurnResult: null as TurnEndedPayload | null,
   finalScores: null as GameEndedPayload["scores"] | null,
+  finalScoringMode: null as ScoringMode | null,
   drawingRecap: [] as DrawingRecapMetadata[],
   gameHighlights: [] as GameHighlight[],
 };
@@ -324,6 +327,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       ...(payload.state === "playing" || payload.id !== state.roomId
         ? {
             finalScores: null,
+            finalScoringMode: null,
             drawingRecap: [],
             gameHighlights: [],
             // A different room also leaves the last one's screen: its game-over
@@ -481,6 +485,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
     roomState: "waiting",
     phase: s.phase === "game_end" ? s.phase : "idle",
     finalScores: payload.scores,
+    finalScoringMode: payload.scoringMode,
     drawingRecap: payload.drawings ?? [],
     drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
     gameHighlights: payload.highlights ?? [],
@@ -488,6 +493,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
   endGame: (payload) => set((s) => ({
     phase: "game_end",
     finalScores: payload.scores,
+    finalScoringMode: payload.scoringMode,
     drawingRecap: payload.drawings ?? [],
     drawingReactions: { ...s.drawingReactions, ...reactionsByTurn(payload.drawings ?? []) },
     gameHighlights: payload.highlights ?? [],

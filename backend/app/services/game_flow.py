@@ -943,6 +943,7 @@ class GameFlowService:
         room.restart_vote = None
         room.restart_vote_cooldown_until = 0
         room.last_game_scores = []
+        room.last_game_scoring_mode = None
         room.last_game_highlights = []
         room.last_game_drawings = []
         room.drawing_reactions = {}
@@ -1890,6 +1891,7 @@ class GameFlowService:
             # its account's 500 belongs above one holding 300 (review of
             # #1047).
             room.last_game_scores = sorted(standings, key=lambda entry: -entry["score"])
+            room.last_game_scoring_mode = game.scoring_mode
             # Built from the snapshot above, before the emit and before any
             # await, for the same reason the scores are: by the time anything
             # yields, the room is an editable waiting room again.

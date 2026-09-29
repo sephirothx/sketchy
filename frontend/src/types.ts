@@ -446,6 +446,9 @@ export interface HighlightName {
 
 export interface GameEndedPayload {
   scores: ScoreEntry[];
+  /** What the finished game was played as: its standings are shown or not by
+      this, not by the rules since changed for the next game (#1270). */
+  scoringMode: ScoringMode;
   highlights?: GameHighlight[];
   drawings: DrawingRecapMetadata[];
 }

@@ -2603,6 +2603,9 @@
   "rooms:drawing_reactions_for": [
    "playerId"
   ],
+  "rooms:last_game_payload": [
+   "scoringMode"
+  ],
   "rooms:metadata": [
    "actionCount",
    "drawerId",
@@ -2849,7 +2852,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 47,
+ "protocolVersion": 48,
  "refusal": {
   "codes": [
    "invalid_payload",

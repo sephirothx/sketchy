@@ -499,6 +499,10 @@ class Room:
     game: Optional[Game] = None
     canvas_generation: int = 0
     last_game_scores: list[dict] = field(default_factory=list)
+    # The finished game's own scoring mode, so its standings are shown or not
+    # by what it was played as - not by the rules the host has since changed
+    # for the next one (#1270).
+    last_game_scoring_mode: str | None = None
     last_game_highlights: list[dict] = field(default_factory=list)
     last_game_drawings: list[DrawingRecapEntry] = field(default_factory=list)
     # Reactions to this game's drawings (#520): turn id -> reactor's seat token
@@ -602,6 +606,7 @@ class Room:
             return None
         return {
             "scores": self.last_game_scores,
+            "scoringMode": self.last_game_scoring_mode or self.scoring_mode,
             "highlights": self.last_game_highlights,
             "drawings": self.drawing_recap_metadata(),
         }
