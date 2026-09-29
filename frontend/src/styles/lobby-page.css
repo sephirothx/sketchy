@@ -290,6 +290,10 @@
 .room-list {
   display: grid;
   gap: 12px;
+  /* minmax(0, 1fr) for the reason .lobby-social has it: a card is as wide as
+     its widest line otherwise, and a wide name in an opened roster widened
+     the page (#1271). */
+  grid-template-columns: minmax(0, 1fr);
   /* Cards keep their own height. A grid stretches its rows to fill a taller
      container by default, and on the pinned desktop lobby the list is one:
      a single public room became a 280px card with its name and Join button
@@ -987,7 +991,18 @@
   font-size: 13.5px;
   font-weight: 700;
   gap: 7px;
+  max-width: 100%;
   min-width: 0;
+}
+
+.public-room-roster li > .colored-player-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  /* The clip clears an italic guest name's ink (--ink-overhang in theme.css). */
+  padding-inline: var(--ink-overhang);
+  margin-inline: calc(-1 * var(--ink-overhang));
 }
 
 .public-room-roster-note {
@@ -1023,9 +1038,13 @@
    Two panels about the people rather than the rooms. Equal columns on a
    desktop; stacked in source order on a phone, where the room browser is
    what the page is for and these are what you scroll past it to reach. */
+/* minmax(0, 1fr), not 1fr: a bare fr track's minimum is its content's, so one
+   player online with a wide name (sixteen Ws) sized the column past the
+   screen, and every phone viewer's lobby scrolled sideways by up to 114px
+   while they were online (#1271). */
 .lobby-social {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   align-items: start;
 }
@@ -1188,7 +1207,7 @@ a.online-player-name:focus-visible {
 
 @media (max-width: 720px) {
   .lobby-social {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 
@@ -1711,6 +1730,13 @@ a.online-player-name:focus-visible {
   max-width: 100%;
   padding: 1px 3px;
   text-align: left;
+}
+
+/* A block inside the trigger, or its ellipsis does nothing: an inline span
+   ignores overflow, and a registered player's wide name - every row with a
+   menu - ran over "In the lobby" and past the panel (review of #1271). */
+.online-player-trigger > .online-player-name {
+  display: block;
 }
 
 .online-player-trigger:hover .online-player-name,
