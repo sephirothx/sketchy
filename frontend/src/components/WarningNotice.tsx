@@ -1,5 +1,5 @@
 import { useClock } from "../hooks/useClock";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, lazy, Suspense, type ComponentProps, type ComponentType } from "react";
 
 import {
   acknowledgeWarning,
@@ -12,10 +12,22 @@ import { asReportReason, humanizeCategory } from "../lib/moderation";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { onConnectSpread, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
-import { ReportedDrawing } from "./ReportedDrawing";
 import { ModalShell } from "./ui/ModalShell";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
+
+import type { ReportedDrawing as ReportedDrawingType } from "./ReportedDrawing";
+
+// The reported drawing's picture pulls the whole canvas renderer, which the
+// first-load chunk has no room for (#1257): fetched when a notice shows one.
+// A chunk that cannot be fetched leaves the notice's words, not the crash
+// page.
+const ReportedDrawing = lazy(() =>
+  import("./ReportedDrawing").then(
+    (module) => ({ default: module.ReportedDrawing }),
+    (): { default: ComponentType<ComponentProps<typeof ReportedDrawingType>> } => ({ default: () => null }),
+  ),
+);
 
 /** Keep only a payload shaped like a warning; a malformed one is dropped
 rather than rendered as "undefined" in front of the player. */
@@ -223,15 +235,17 @@ export function WarningNotice() {
               ? ui.moderationNotice.theDrawingThisWasAbout
               : ui.moderationNotice.theDrawingsThisWasAbout}
           </p>
-          {warning.drawings.map((drawing) => (
-            <ReportedDrawing
-              key={drawing.reportId}
-              className="suspension-drawing"
-              load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
-              label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
-              caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
-            />
-          ))}
+          <Suspense fallback={null}>
+            {warning.drawings.map((drawing) => (
+              <ReportedDrawing
+                key={drawing.reportId}
+                className="suspension-drawing"
+                load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
+                label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
+                caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
+              />
+            ))}
+          </Suspense>
         </>
       )}
       {failed && (

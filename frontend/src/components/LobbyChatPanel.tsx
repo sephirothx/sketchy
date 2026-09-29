@@ -10,11 +10,18 @@ import { formatDateTime, type TimeFormat } from "../lib/clock";
 import { useLobbyChatStore } from "../store/lobbyChatStore";
 import type { AckResponse } from "../types";
 import { ChevronRightIcon } from "./icons";
-import { ReportLobbyLineDialog } from "./ReportLobbyLineDialog";
+import { lazyOverlay } from "./LazyOverlay";
 import { refusalText } from "../lib/refusals.ts";
 import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { ui } from "../content/ui/index.ts";
 import { EmptyState } from "./ui/EmptyState";
+
+// Opened on demand, so fetched on demand: kept out of the first-load chunk,
+// which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
+// that fails to arrive is a notice, not the crash page.
+const ReportLobbyLineDialog = lazyOverlay(() =>
+  import("./ReportLobbyLineDialog").then((module) => module.ReportLobbyLineDialog),
+);
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"
 without a new line arriving, which is the point of the label. */

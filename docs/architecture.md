@@ -269,7 +269,14 @@ asks for chunk names the server no longer has.
 once per build, and only when the failed chunk itself answers 404: a reload with the server
 down lands on the browser's error page, and one after a one-off failure throws the page away
 for nothing. The two overlays load themselves ([`LazyOverlay`](../frontend/src/components/LazyOverlay.tsx)),
-so a chunk that cannot be fetched over a live room is a notice with a reload, not the crash page. CI holds the first-load set to a
+so a chunk that cannot be fetched over a live room is a notice with a reload, not the crash page.
+So do the dialogs a player opens on demand (#1257): the bug report, adding an email,
+reporting a lobby line or an account, and the step-up check - each its own chunk,
+fetched when it is opened, and a notice if it cannot be. A reported drawing's picture
+in the suspension and warning notices, which pulls the canvas renderer, is
+`React.lazy` under its own `Suspense` and shows nothing if its chunk cannot be had -
+the notice's words still stand. Together they took 10.6 KB of gzip out of the first
+load (213.6 → 203.0 KB). CI holds the first-load set to a
 gzip budget (`npm run bundle:check`, [`scripts/bundle-report.mjs`](../frontend/scripts/bundle-report.mjs)).
 
 Routes ([`frontend/src/App.tsx:90`](../frontend/src/App.tsx)):
