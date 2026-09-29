@@ -22,6 +22,10 @@ asked for, so no obsolete image is shown and no URL is left behind.
 Fetched when it first comes within a screen of the viewport, as the gallery
 always did and the pinned shelf now does too. */
 
+/** How long a card with no IntersectionObserver waits to ask again after the
+    queue dropped its job. */
+const DROPPED_RETRY_MS = 1_000;
+
 /** Draw `bytes` at `cssWidth` CSS pixels as a PNG object URL the caller revokes. */
 async function thumbnailUrl(
   bytes: ArrayBuffer,
@@ -53,6 +57,8 @@ export function DrawingThumbnail({
   const wrapper = useRef<HTMLDivElement | null>(null);
   const loadRef = useRef(load);
   const [visible, setVisible] = useState(typeof IntersectionObserver === "undefined");
+  // Bumped to ask again after the queue dropped this card's job.
+  const [retry, setRetry] = useState(0);
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -60,20 +66,25 @@ export function DrawingThumbnail({
     loadRef.current = load;
   });
 
+  // Watched both ways until its picture is on screen: a card a scroll takes
+  // past before its turn cancels its job and gives its place in the queue to
+  // the cards now in view, and asks again if it comes back (#1282 review).
   useEffect(() => {
-    if (visible || typeof IntersectionObserver === "undefined") return;
+    if (src !== null || failed || typeof IntersectionObserver === "undefined") return;
     const element = wrapper.current;
     if (!element) return;
     const observer = new IntersectionObserver((records) => {
-      if (records.some((record) => record.isIntersecting)) setVisible(true);
+      const latest = records[records.length - 1];
+      if (latest) setVisible(latest.isIntersecting);
     }, { rootMargin: "200px" });
     observer.observe(element);
     return () => observer.disconnect();
-  }, [visible]);
+  }, [src, failed, retry]);
 
   // The fetched bytes are kept - a few kilobytes - so the thumbnail can be
   // drawn again at a larger size; the decoded actions and pixels are not.
   const bytesRef = useRef<ArrayBuffer | null>(null);
+  const bytesKeyRef = useRef<string | null>(null);
   const encodedWidthRef = useRef(0);
 
   const encode = useCallback(async (bytes: ArrayBuffer, signal: AbortSignal): Promise<string | null> => {
@@ -92,9 +103,13 @@ export function DrawingThumbnail({
     const abort = new AbortController();
     void (async () => {
       try {
-        const bytes = await loadRef.current();
+        // A card that left and came back asks the worker again, not the server.
+        const bytes = bytesKeyRef.current === drawingKey && bytesRef.current
+          ? bytesRef.current
+          : await loadRef.current();
         if (abort.signal.aborted) return;
         bytesRef.current = bytes;
+        bytesKeyRef.current = drawingKey;
         const url = await encode(bytes, abort.signal);
         if (abort.signal.aborted) {
           if (url) URL.revokeObjectURL(url);
@@ -106,12 +121,19 @@ export function DrawingThumbnail({
         if (abort.signal.aborted || error instanceof ThumbnailCancelled) return;
         // Dropped from a queue a long scroll overfilled: asked for again
         // when the card next comes into view, rather than shown as broken.
-        if (error instanceof ThumbnailDropped) setVisible(false);
-        else setFailed(true);
+        if (!(error instanceof ThumbnailDropped)) {
+          setFailed(true);
+        } else if (typeof IntersectionObserver === "undefined") {
+          // Nothing will say when it is in view again: ask again shortly.
+          window.setTimeout(() => setRetry((count) => count + 1), DROPPED_RETRY_MS);
+        } else {
+          setVisible(false);
+          setRetry((count) => count + 1);
+        }
       }
     })();
     return () => abort.abort();
-  }, [visible, drawingKey, encode]);
+  }, [visible, drawingKey, encode, retry]);
 
   // Each image's URL is let go when it is replaced or the card goes.
   useEffect(() => () => {

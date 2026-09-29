@@ -8,8 +8,9 @@ and encoded (`pngEncode.ts`) in JS.
 
 The replay is the price. It is proportional to what the history makes the
 renderer do rather than to its size on the wire: an accepted turn of 100
-full-canvas fills is 1.2 KB and repaints 48 million pixels, 1.18 s of
-desktop Chromium - on the main thread, a frozen page per such thumbnail. */
+full-canvas fills is 1.2 KB and repaints 48 million pixels - 244 ms a
+thumbnail on desktop Chromium, 972 ms at 4x CPU, and on the main thread a
+frozen page for each such thumbnail. */
 
 import { CANVAS_HEIGHT, CANVAS_WIDTH, decodeCanvasHistory } from "./canvasHistory.ts";
 import { renderCanvasActions } from "./canvasRenderer.ts";

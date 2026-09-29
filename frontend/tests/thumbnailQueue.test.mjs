@@ -120,7 +120,8 @@ test("past the cap the oldest waiting job is dropped, not the newest", async () 
     await tick();
   }
   await Promise.all([running, middle, newest]);
-  assert.deepEqual(workers[0].sent.map((job) => new Uint8Array(job.bytes)[0]), [1, 3, 4]);
+  // Newest first: the card a scroll just brought in before one it passed.
+  assert.deepEqual(workers[0].sent.map((job) => new Uint8Array(job.bytes)[0]), [1, 4, 3]);
 });
 
 test("an undecodable history comes back as no image", async () => {
@@ -177,4 +178,25 @@ test("an already-cancelled request is refused at once", async () => {
   abort.abort();
   await assert.rejects(queue.draw(bytes(1), 100, abort.signal), ThumbnailCancelled);
   assert.equal(workers.length, 0);
+});
+
+test("the newest card waiting is drawn next", async () => {
+  const { queue, workers } = queueWith();
+  const drawn = [queue.draw(bytes(1), 100), queue.draw(bytes(2), 100), queue.draw(bytes(3), 100)];
+  for (let index = 0; index < 3; index++) {
+    workers[0].answer(index);
+    await tick();
+  }
+  await Promise.all(drawn);
+  assert.deepEqual(workers[0].sent.map((job) => new Uint8Array(job.bytes)[0]), [1, 3, 2]);
+});
+
+test("a cancelled job is not drawn on the page when its worker dies", async () => {
+  const { queue, workers, onPage } = queueWith();
+  const abort = new AbortController();
+  const gone = queue.draw(bytes(1), 100, abort.signal);
+  abort.abort();
+  workers[0].onerror(new Error("worker died"));
+  await assert.rejects(gone, ThumbnailCancelled);
+  assert.deepEqual(onPage, [], "nobody wanted that picture");
 });

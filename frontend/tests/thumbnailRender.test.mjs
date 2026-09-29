@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
@@ -54,4 +55,51 @@ test("sizes stay inside the drawing and never reach zero", () => {
   assert.deepEqual(thumbnailSize(5000), { width: 800, height: 600 });
   assert.deepEqual(thumbnailSize(0), { width: 400, height: 300 });
   assert.deepEqual(thumbnailSize(0.2), { width: 1, height: 1 });
+});
+
+test("thumbnails are main's images, byte for byte, pinned at a size that is not a whole factor", async () => {
+  // Hashes of what main's on-page pipeline encoded before #1282, at 333 px -
+  // a scale the box filter has to average unevenly. The fill fixture is one
+  // flat colour; `width-runs` is strokes of changing width, where a scaling
+  // difference would show.
+  const protocol = JSON.parse(readFileSync(new URL("../../fixtures/canvas_protocol_v1.json", import.meta.url), "utf8"));
+  const widthRuns = Uint8Array.from(
+    protocol.histories.find((history) => history.name === "width-runs").binary.match(/../g),
+    (byte) => Number.parseInt(byte, 16),
+  ).buffer;
+  const pinned = [
+    [widthRuns, "654adf0ce7171050a79cc814df7a1e87d3987f900434aa2242160cf842cba35d"],
+    [fillHeavy, "7eb8cd7974e6198aaa098b28a62e4913b489ef27561d10800f3214857b62eb6f"],
+  ];
+  for (const [bytes, digest] of pinned) {
+    const drawn = await renderThumbnail(bytes, 333);
+    assert.equal(createHash("sha256").update(drawn.png).digest("hex"), digest);
+  }
+});
+
+test("the worker answers with the PNG transferred, not copied", async () => {
+  const sent = [];
+  let answered;
+  const done = new Promise((resolve) => { answered = resolve; });
+  globalThis.self = {
+    onmessage: null,
+    postMessage(message, transfer) {
+      sent.push({ message, transfer });
+      answered();
+    },
+  };
+  try {
+    await import("../src/workers/thumbnail.worker.ts");
+    globalThis.self.onmessage({ data: { id: 7, bytes: fillHeavy.slice(0), pixelWidth: 320 } });
+    await done;
+  } finally {
+    delete globalThis.self;
+  }
+  const [{ message, transfer }] = sent;
+  const reference = await renderThumbnail(fillHeavy, 320);
+  assert.equal(message.id, 7);
+  assert.equal(message.width, 320);
+  assert.ok(message.png instanceof ArrayBuffer);
+  assert.deepEqual(new Uint8Array(message.png), reference.png);
+  assert.deepEqual(transfer, [message.png], "the buffer is handed over, not cloned");
 });

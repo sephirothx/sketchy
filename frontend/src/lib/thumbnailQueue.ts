@@ -2,18 +2,20 @@
 
 A thumbnail's replay is synchronous and its cost is whatever the history
 makes the renderer do - an accepted turn of 100 full-canvas fills froze the
-page for 1.18 s, and a gallery page could hold several. So thumbnails are
-drawn on a worker (`workers/thumbnail.worker.ts`), and the page only asks
-and waits.
+page for 244 ms a thumbnail on desktop Chromium and 972 ms at 4x CPU, and a
+gallery page could hold several. So thumbnails are drawn on a worker
+(`workers/thumbnail.worker.ts`), and the page only asks and waits.
 
 Bounded three ways. One worker, sent one job at a time, so at most one
 history, one full-size buffer and one scaled copy exist off the page, and
-the worker is let go once the queue has been idle a while. At most
-`MAX_PENDING_THUMBNAILS` jobs wait: past that the oldest is dropped with
-`ThumbnailDropped`, and its card asks again when it next comes into view.
-And a job whose card went, or whose drawing changed, is cancelled: taken
-out of the queue if it is still waiting, its answer thrown away if it is
-not - a worker cannot be interrupted mid-replay, but nothing waits on it.
+the worker is let go once the queue has been idle a while. The newest job
+waiting is drawn next - the card a scroll just brought in, not one it left
+behind - and at most `MAX_PENDING_THUMBNAILS` wait: past that the oldest is
+dropped with `ThumbnailDropped`, and its card asks again when it next comes
+into view. And a job whose card went, left the screen, or changed drawing
+is cancelled: taken out of the queue if it is still waiting, its answer
+thrown away if it is not - a worker cannot be interrupted mid-replay, but
+nothing waits on it.
 
 Where no worker can be had - none in this environment, or one that failed
 to start or died - the same `renderThumbnail` runs on the page, one at a
@@ -103,7 +105,10 @@ export function createThumbnailQueue({
         own.terminate();
         worker = null;
         const job = running;
-        if (job) runOnPage(job);
+        if (!job) return;
+        // Nobody wants a cancelled job's picture: it is not drawn on the page.
+        if (job.cancelled) settle(job, null);
+        else runOnPage(job);
       };
     }
     return worker;
@@ -126,7 +131,7 @@ export function createThumbnailQueue({
 
   function pump(): void {
     if (running) return;
-    const job = pending.shift();
+    const job = pending.pop();
     if (!job) {
       scheduleIdle();
       return;

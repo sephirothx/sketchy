@@ -1797,6 +1797,7 @@ frontend/
                   format.ts holds the Intl formatters)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
+    workers/      thumbnail.worker.ts - drawing thumbnails replayed off the page's thread (#1282)
     lib/socket.ts socket.io-client singleton + REST base URL
     lib/refusals.ts What a refusal says to the player: the sentence per `errorCode`
     lib/announcements.ts The room's own lines, rendered per reader from a code
