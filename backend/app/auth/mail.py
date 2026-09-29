@@ -41,7 +41,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import delete, literal, select, update
+from sqlalchemy import delete, event, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.deployment import is_production, public_base_url
@@ -393,6 +393,35 @@ async def recipient_locale(session: AsyncSession, user_id: UUID | None) -> str:
     return locale or InterfaceLocale.ENGLISH.value
 
 
+# Who hears that a message was queued, once the transaction holding it
+# commits (#1255): the delivery loop, while it runs, so a verification or a
+# reset mail leaves now rather than at the next sweep - up to
+# `EMAIL_SWEEP_SECONDS` later, long enough for a player to press *Send again*
+# and retire the token in the mail still waiting (R-AUTH-11a). On commit and
+# not on `queue_email`, so the sweep never runs ahead of the row it is for,
+# and a transaction that rolls back wakes nobody for nothing.
+_queued_listeners: list[Callable[[], None]] = []
+_WAKE_ON_COMMIT = "mail.wake_on_commit"
+
+
+def on_queued(callback: Callable[[], None]) -> Callable[[], None]:
+    """Call `callback` after every commit that queued a message; returns the
+    way to stop. Runs on the event loop's thread, inside the commit."""
+    _queued_listeners.append(callback)
+
+    def stop() -> None:
+        if callback in _queued_listeners:
+            _queued_listeners.remove(callback)
+
+    return stop
+
+
+def _queued_and_committed(session) -> None:
+    session.info.pop(_WAKE_ON_COMMIT, None)
+    for callback in list(_queued_listeners):
+        callback()
+
+
 def queue_email(
     session: AsyncSession,
     *,
@@ -422,6 +451,12 @@ def queue_email(
         next_attempt_at=now or datetime.now(timezone.utc),
     )
     session.add(entry)
+    # One listener per transaction however many messages it queues; `once`
+    # takes it off again when it fires.
+    sync_session = getattr(session, "sync_session", None)
+    if sync_session is not None and not sync_session.info.get(_WAKE_ON_COMMIT):
+        sync_session.info[_WAKE_ON_COMMIT] = True
+        event.listen(sync_session, "after_commit", _queued_and_committed, once=True)
     return entry
 
 
