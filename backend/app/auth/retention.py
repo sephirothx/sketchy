@@ -437,7 +437,8 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt=(
                 "a live list's current revision, and any a finished game pins, a fork was "
-                "copied from, or a hidden prompt is recorded in, for ever"
+                "copied from, a copy records its origin in, or a hidden prompt is recorded "
+                "in, for ever; one holding a prompt a report waits on, until it is decided"
             ),
         ),
         Sweep(

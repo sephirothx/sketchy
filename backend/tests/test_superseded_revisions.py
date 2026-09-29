@@ -20,12 +20,18 @@ from app.db.models import (
     PromptListRevisionItem,
     PromptVersion,
 )
-from app.domain_values import PromptContentModerationState
+from app.domain_values import PromptContentModerationState, UserRole
 from app.repositories.interfaces import PromptListEntryInput
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 from app.services.prompt_reclaim import RETIRED_LIST_GRACE, reclaim_superseded_revisions
 from app.services.sweeps import SweepBudget
 from tests.test_owned_prompt_lists import _database, _pin_a_game_to
+from tests.test_prompt_content_moderation import (  # noqa: F401 - env is a fixture
+    _staff_member,
+    env,
+    published,
+    register,
+)
 
 LONG_AGO = datetime.now(timezone.utc) - timedelta(days=10)
 
@@ -177,3 +183,121 @@ async def test_a_run_deletes_no_more_rows_than_its_budget_has():
         assert await _revisions(factory, list_id) == [revisions[-1]]
     finally:
         await engine.dispose()
+
+
+async def _hide(factory, version_id: str) -> None:
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(PromptVersion)
+            .where(PromptVersion.id == UUID(version_id))
+            .values(moderation_state=PromptContentModerationState.HIDDEN.value)
+        )
+
+
+async def test_a_revision_holding_a_hidden_word_among_others_is_kept():
+    """The hidden-word check is asked of the revision, not of each of its
+    items: with a second word beside it, the revision used to go, and the word
+    could be typed into a new list and be born active (#1258 review)."""
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id, name="Mixed", description="", language="en",
+            prompts=(PromptListEntryInput(answer="offensive word"), PromptListEntryInput(answer="fine")),
+        )
+        word = next(prompt for prompt in created.prompts if prompt.answer == "offensive word")
+        fine = next(prompt for prompt in created.prompts if prompt.answer == "fine")
+        await _hide(factory, word.prompt_version_id)
+        await repo.update_owned(
+            owner_id, created.id, expected_version=created.version, name="Mixed", description="",
+            prompts=(PromptListEntryInput(answer="fine", concept_id=fine.concept_id),),
+        )
+        revisions = await _revisions(factory, created.id)
+        await _age(factory, revisions, LONG_AGO)
+
+        report = await reclaim_superseded_revisions(factory)
+
+        assert int(report) == 0
+        assert await _revisions(factory, created.id) == revisions
+        again = await repo.create_owned(
+            owner_id, name="Again", description="", language="en",
+            prompts=(PromptListEntryInput(answer="offensive word"),),
+        )
+        assert again.prompts[0].moderation_state == PromptContentModerationState.HIDDEN.value
+    finally:
+        await engine.dispose()
+
+
+async def test_an_edited_copy_keeps_what_it_was_copied_from():
+    """A copy's first revision says what it was copied from; the copy count,
+    the credit and the lineage all read it there. Editing the copy supersedes
+    it, and reclaiming it erased all three (#1258 review)."""
+    factory, engine, owner_id, other_id = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        original = await repo.create_owned(
+            owner_id, name="Original", description="", language="en",
+            prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="heron")),
+        )
+        await published(factory, original.id)
+        copy = await repo.fork_published(other_id, original.id)
+        lineage = (await repo.get_owned(other_id, copy.id)).forked_from_revision_id
+        await repo.update_owned(
+            other_id, copy.id, expected_version=copy.version, name=copy.name, description="",
+            prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="crane")),
+        )
+        await _age(factory, await _revisions(factory, copy.id), LONG_AGO)
+
+        assert int(await reclaim_superseded_revisions(factory)) == 0
+
+        assert (await repo.get_owned(owner_id, original.id)).copy_count == 1
+        edited = await repo.get_owned(other_id, copy.id)
+        assert edited.copied_from.status == "published"
+        assert edited.forked_from_revision_id == lineage is not None
+    finally:
+        await engine.dispose()
+
+
+async def test_a_word_a_report_waits_on_keeps_its_revision_until_it_is_decided(env):  # noqa: F811
+    """A report outlives the grace easily. Reclaim the only revision that tied
+    the reported word to its owner, and a takedown decided afterwards is
+    hidden from nobody's next list (#1258 review)."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "SqOwner")
+    await register(reporter_http, "SqReporter")
+    moderator = await register(moderator_http, "SqModerator")
+    await _staff_member(factory, moderator, UserRole.MODERATOR)
+    first = await prompts.create_owned(
+        owner["id"], name="Original", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"), PromptListEntryInput(answer="fine")),
+    )
+    await published(factory, first.id)
+    word = next(prompt for prompt in first.prompts if prompt.answer == "borderline word")
+    fine = next(prompt for prompt in first.prompts if prompt.answer == "fine")
+    filed = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": first.id, "promptVersionId": word.prompt_version_id,
+              "reason": "other", "details": "Decide it."},
+    )
+    assert filed.status_code == 201, filed.text
+    await prompts.update_owned(
+        owner["id"], first.id, expected_version=first.version, name="Original", description="",
+        prompts=(PromptListEntryInput(answer="fine", concept_id=fine.concept_id),),
+    )
+    later = datetime.now(timezone.utc) + timedelta(days=2)
+
+    assert int(await reclaim_superseded_revisions(factory, now=later)) == 0, "the report still waits"
+
+    decided = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
+        json={"status": "resolved", "note": "hidden", "moderationState": "hidden"},
+    )
+    assert decided.status_code == 200, decided.text
+    again = await prompts.create_owned(
+        owner["id"], name="Again", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"),),
+    )
+    assert again.prompts[0].moderation_state == PromptContentModerationState.HIDDEN.value
+    # Decided, and hidden: kept now as the takedown's record, not for the report.
+    assert int(await reclaim_superseded_revisions(factory, now=later)) == 0

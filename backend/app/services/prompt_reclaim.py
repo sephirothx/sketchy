@@ -1,4 +1,4 @@
-"""Retiring owned prompt lists without touching the games that played them.
+"""Reclaiming prompt-list revisions nothing needs, without touching the games that played them.
 
 Deleting a list used to delete its revisions, and an account deletion its
 concepts too. A finished game pins the exact revision it drew from
@@ -22,6 +22,11 @@ The grace is for the room that pinned a revision before the list was retired
 and is still playing (R-LIST-07): its finished-game write lands within the
 grace and lands intact, because the revision is still there to be
 referenced. A day is far longer than a game.
+
+A live list's superseded revisions go the same way (#1258):
+`reclaim_superseded_revisions`, also hourly, deletes a revision a newer save
+replaced more than the grace ago, unless something still needs it
+(`_superseded_reclaimable`), with the same orphan step after it.
 """
 from __future__ import annotations
 
@@ -50,7 +55,7 @@ from app.db.models import (
     TurnPromptOfferSource,
     TurnRecord,
 )
-from app.domain_values import PromptContentModerationState, PromptListVisibility
+from app.domain_values import PromptContentModerationState, PromptListVisibility, ReportStatus
 
 logger = logging.getLogger(__name__)
 
@@ -98,6 +103,15 @@ class ReclaimResult:
 
 
 def _revision_is_pinned(revision_id):
+    # Aliased, every table below: embedded in a query that reads the same
+    # tables - the superseded sweep's sizes a revision by its items - a bare
+    # name correlates to that query's row, and the question is asked of one
+    # item rather than of the revision. A revision holding a hidden word and
+    # any other word was reclaimed through that (#1258 review).
+    item = aliased(PromptListRevisionItem)
+    version = aliased(PromptVersion)
+    revision = aliased(PromptListRevision)
+    owner_list = aliased(PromptList)
     return (
         exists().where(GamePromptSource.prompt_list_revision_id == revision_id)
         | exists().where(TurnPromptOfferSource.prompt_list_revision_id == revision_id)
@@ -109,12 +123,12 @@ def _revision_is_pinned(revision_id):
         # Only while the list has an owner: an erased account's lists are
         # looked up by nobody's saves, so there it would keep the text alone.
         | exists().where(
-            PromptListRevisionItem.revision_id == revision_id,
-            PromptListRevisionItem.prompt_version_id == PromptVersion.id,
-            PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
-            PromptListRevision.id == revision_id,
-            PromptList.id == PromptListRevision.prompt_list_id,
-            PromptList.owner_user_id.is_not(None),
+            item.revision_id == revision_id,
+            item.prompt_version_id == version.id,
+            version.moderation_state == PromptContentModerationState.HIDDEN.value,
+            revision.id == revision_id,
+            owner_list.id == revision.prompt_list_id,
+            owner_list.owner_user_id.is_not(None),
         )
     )
 
@@ -372,12 +386,17 @@ def _superseded_reclaimable(cutoff: datetime):
     retired-list reclaim waits, for the same room: one that pinned this
     revision when its game started and is still playing it - and kept for
     good while anything needs it: a finished game's pin, a fork that says it
-    was copied from here (R-LIST-20's copy count reads that), or a hidden
-    version, which is where the owner's saves look for a takedown (#1091).
+    was copied from here (R-LIST-20's copy count reads that), a copy's own
+    first revision (the one that says what it was copied from: the count, the
+    credit and the lineage all read it, so editing a copy would otherwise
+    erase all three a day later), or a hidden version or one a report waits
+    on, which is where the owner's saves look for a takedown (#1091).
     The current revision is never superseded, so never a candidate.
     """
     newer = _successor()
     fork = aliased(PromptListRevision)
+    item = aliased(PromptListRevisionItem)
+    report = aliased(PromptContentReport)
     return (
         PromptList.id == PromptListRevision.prompt_list_id,
         PromptList.deleted_at.is_(None),
@@ -389,6 +408,16 @@ def _superseded_reclaimable(cutoff: datetime):
         ),
         ~_revision_is_pinned(PromptListRevision.id),
         ~exists().where(fork.forked_from_revision_id == PromptListRevision.id),
+        PromptListRevision.forked_from_revision_id.is_(None),
+        # A report outlives the grace easily: reclaim the only revision that
+        # tied a reported word to its owner, and a takedown decided afterwards
+        # is hidden from nobody's next list (#1258 review). Held until the
+        # report is decided; hidden, it is then kept as the takedown's record.
+        ~exists().where(
+            item.revision_id == PromptListRevision.id,
+            report.prompt_version_id == item.prompt_version_id,
+            report.status == ReportStatus.PENDING.value,
+        ),
     )
 
 
@@ -425,18 +454,16 @@ async def reclaim_superseded_revisions(
     candidates = 0
     async with session_factory() as session:
         async with session.begin():
+            items = aliased(PromptListRevisionItem)
             sized = (
                 await session.execute(
                     select(
                         PromptListRevision.id,
-                        func.count(PromptListRevisionItem.prompt_version_id),
-                    )
-                    .outerjoin(
-                        PromptListRevisionItem,
-                        PromptListRevisionItem.revision_id == PromptListRevision.id,
+                        select(func.count())
+                        .where(items.revision_id == PromptListRevision.id)
+                        .scalar_subquery(),
                     )
                     .where(*_superseded_reclaimable(cutoff))
-                    .group_by(PromptListRevision.id, PromptListRevision.created_at)
                     .order_by(PromptListRevision.created_at, PromptListRevision.id)
                     .limit(limit)
                 )
