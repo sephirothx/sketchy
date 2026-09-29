@@ -24,14 +24,11 @@ from app.auth.mail import (
     DeliveryResult,
     deliver_pending,
     on_queued,
-    purge_expired_outbox_entries,
 )
 from app.services.readiness import LoopHealth
 
 
 logger = logging.getLogger(__name__)
-
-PURGE_INTERVAL_SECONDS = 3600.0
 
 DEFAULT_INTERVAL_SECONDS = 30.0
 
@@ -64,17 +61,12 @@ async def run_delivery_loop(
     interval = interval_seconds or sweep_interval_seconds()
     wake = asyncio.Event()
     stop_listening = on_queued(wake.set)
-    clock = asyncio.get_running_loop().time
-    last_purge = clock()
     try:
         while True:
             # Cleared before the sweep rather than after, so a message queued
             # while this one sends is not left for the interval.
             wake.clear()
             full = await _sweep(session_factory, health)
-            if clock() - last_purge >= PURGE_INTERVAL_SECONDS:
-                last_purge = clock()
-                await _purge(session_factory, health)
             if full:
                 await asyncio.sleep(0)
                 continue
@@ -110,23 +102,6 @@ async def _sweep(
             health.record_failure()
         logger.exception("email sweep failed")
         return False
-
-
-async def _purge(
-    session_factory: async_sessionmaker[AsyncSession], health: LoopHealth | None
-) -> None:
-    """Hourly, not per sweep: retention has day-scale precision. Rides the
-    delivery loop so nobody has to remember to start a second one."""
-    try:
-        removed = await purge_expired_outbox_entries(session_factory)
-        if removed:
-            logger.info("email sweep: purged %d expired rows", removed)
-    except asyncio.CancelledError:
-        raise
-    except Exception:
-        if health is not None:
-            health.record_failure()
-        logger.exception("email purge failed")
 
 
 def start_delivery_loop(

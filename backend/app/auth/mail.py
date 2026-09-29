@@ -400,8 +400,16 @@ async def recipient_locale(session: AsyncSession, user_id: UUID | None) -> str:
 # and retire the token in the mail still waiting (R-AUTH-11a). On commit and
 # not on `queue_email`, so the sweep never runs ahead of the row it is for,
 # and a transaction that rolls back wakes nobody for nothing.
+#
+# The listeners are installed once per session and stay, and each
+# transaction marks itself pending: a `once` listener re-registered on a
+# reused session was dropped as a duplicate of its spent self, so the second
+# transaction woke nobody, and the release of a savepoint - which SQLAlchemy
+# also reports as `after_commit` - spent it before the real commit
+# (#1255 review).
 _queued_listeners: list[Callable[[], None]] = []
-_WAKE_ON_COMMIT = "mail.wake_on_commit"
+_LISTENING = "mail.wake_listening"
+_PENDING = "mail.wake_pending"
 
 
 def on_queued(callback: Callable[[], None]) -> Callable[[], None]:
@@ -417,9 +425,22 @@ def on_queued(callback: Callable[[], None]) -> Callable[[], None]:
 
 
 def _queued_and_committed(session) -> None:
-    session.info.pop(_WAKE_ON_COMMIT, None)
+    if session.in_nested_transaction():
+        return  # a savepoint released; the transaction itself has not committed
+    if not session.info.pop(_PENDING, False):
+        return
     for callback in list(_queued_listeners):
-        callback()
+        # Inside `commit()`, after the row is committed: a callback that
+        # raised would turn a ban or a reset that happened into an error.
+        try:
+            callback()
+        except Exception:  # noqa: BLE001 - logged, never the committer's problem
+            logger.exception("waking the mail sender failed")
+
+
+def _queued_and_rolled_back(session, previous_transaction) -> None:
+    if previous_transaction.parent is None:
+        session.info.pop(_PENDING, None)
 
 
 def queue_email(
@@ -451,12 +472,13 @@ def queue_email(
         next_attempt_at=now or datetime.now(timezone.utc),
     )
     session.add(entry)
-    # One listener per transaction however many messages it queues; `once`
-    # takes it off again when it fires.
     sync_session = getattr(session, "sync_session", None)
-    if sync_session is not None and not sync_session.info.get(_WAKE_ON_COMMIT):
-        sync_session.info[_WAKE_ON_COMMIT] = True
-        event.listen(sync_session, "after_commit", _queued_and_committed, once=True)
+    if sync_session is not None:
+        sync_session.info[_PENDING] = True
+        if not sync_session.info.get(_LISTENING):
+            sync_session.info[_LISTENING] = True
+            event.listen(sync_session, "after_commit", _queued_and_committed)
+            event.listen(sync_session, "after_soft_rollback", _queued_and_rolled_back)
     return entry
 
 

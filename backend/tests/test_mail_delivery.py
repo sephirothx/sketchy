@@ -971,3 +971,55 @@ async def test_a_full_batch_is_followed_by_another_sweep_at_once(tmp_path, monke
         with pytest.raises(asyncio.CancelledError):
             await loop
         await engine.dispose()
+
+
+async def test_every_committed_transaction_that_queued_mail_wakes_the_sender(tmp_path):
+    """One session, several transactions: each wakes the sender once, a
+    savepoint's release is not the commit, a rolled-back message is
+    forgotten, and a callback that raises does not fail the commit
+    (#1255 review)."""
+    from app.auth.mail import on_queued
+
+    engine, factory = await outbox(tmp_path, count=0)
+    wakes: list[int] = []
+    stop = on_queued(lambda: wakes.append(1))
+
+    def queue(session, name: str) -> None:
+        queue_email(session, to_address=f"{name}@example.test", template=EmailTemplate.VERIFY_EMAIL,
+                    payload={"displayName": name, "token": "t"})
+
+    try:
+        async with factory() as session:
+            for index in range(3):
+                async with session.begin():
+                    queue(session, f"reused{index}")
+            assert len(wakes) == 3, "a reused session wakes the sender for every transaction"
+
+            async with session.begin():
+                queue(session, "saved")
+                async with session.begin_nested():
+                    pass
+                assert len(wakes) == 3, "a savepoint released is not the transaction committed"
+            assert len(wakes) == 4
+
+            transaction = await session.begin()
+            queue(session, "rolledback")
+            await transaction.rollback()
+            async with session.begin():
+                pass
+            assert len(wakes) == 4, "nothing pending after a rollback"
+
+        def broken() -> None:
+            raise RuntimeError("listener broke")
+
+        stop_broken = on_queued(broken)
+        try:
+            async with factory() as session:
+                async with session.begin():
+                    queue(session, "still")
+            assert len(wakes) == 5, "the other listeners still heard it, and the commit stood"
+        finally:
+            stop_broken()
+    finally:
+        stop()
+        await engine.dispose()
