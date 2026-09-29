@@ -9,6 +9,7 @@ import { RoomVisibilityIcon } from "./RoomVisibilityIcon";
 import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
+import { SpectatorPromotion } from "./SpectatorPromotion";
 import { useMediaQuery } from "../hooks/useMediaQuery";
 import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { useBottomDock } from "../hooks/useBottomDock";
@@ -116,10 +117,42 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // it is open, with the width: its footer exists only on a phone.
   useLayoutEffect(() => reserveDock(footerRef.current), [drawing, isNarrow]);
   const activePlayers = players.filter((player) => !player.isSpectator);
+  const spectators = players.filter((player) => player.isSpectator);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
   const host = players.find((player) => player.isHost);
   const me = players.find((player) => player.playerId === myPlayerId);
   const canStart = eligiblePlayers.length >= 2;
+  function rosterTile(player: PlayerInfo, size: number) {
+    return (
+      <li key={player.playerId} className="waiting-roster-tile">
+        <Avatar
+          name={player.nickname}
+          nameColor={player.nameColor}
+          avatarUrl={player.avatarUrl}
+          isAnonymous={player.isAnonymous}
+          isHost={player.isHost}
+          isSelf={player.playerId === myPlayerId}
+          isFriend={friendSeats.has(player.playerId)}
+          size={size}
+        />
+        <span className="waiting-roster-name">
+          <span
+            className={playerNameClass(player.isAnonymous)}
+            style={playerNameStyle(player.nameColor, player.isAnonymous)}
+          >
+            {player.nickname}
+          </span>
+          {player.playerId === myPlayerId && (
+            <span className="visually-hidden">{ui.waitingRoomPanel.you}</span>
+          )}
+          {player.isHost && <span className="visually-hidden">{ui.waitingRoomPanel.host}</span>}
+          {friendSeats.has(player.playerId) && (
+            <span className="visually-hidden">{ui.waitingRoomPanel.friend}</span>
+          )}
+        </span>
+      </li>
+    );
+  }
   const needsPlayers = Math.max(0, 2 - eligiblePlayers.length);
   // The button says how many are missing; the tooltip says what counts, which
   // is the part nobody needs until they wonder why a spectator is not enough.
@@ -321,8 +354,11 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           below the chat card. */}
       {isNarrow && <section className="surface-card waiting-card waiting-roster" aria-labelledby="waiting-roster-title">
         <div className="waiting-roster-head">
-          <h2 id="waiting-roster-title" className="panel-title">{ui.waitingRoomPanel.inTheRoom}</h2>
-          <span className="waiting-roster-count">
+          <h2 id="waiting-roster-title" className="panel-title" tabIndex={-1}>{ui.waitingRoomPanel.inTheRoom}</h2>
+          <span
+            className="waiting-roster-count"
+            aria-label={ui.roomPlayersPanel.playersOfCapacity({ here: activePlayers.length, capacity: props.maxPlayers })}
+          >
             {ui.waitingRoomPanel.rosterCount({
               here: activePlayers.length,
               capacity: props.maxPlayers,
@@ -330,38 +366,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
           </span>
         </div>
         <ul className="waiting-roster-grid">
-          {activePlayers.map((player) => (
-            <li
-              key={player.playerId}
-              className="waiting-roster-tile"
-            >
-              <Avatar
-                name={player.nickname}
-                nameColor={player.nameColor}
-                avatarUrl={player.avatarUrl}
-                isAnonymous={player.isAnonymous}
-                isHost={player.isHost}
-                isSelf={player.playerId === myPlayerId}
-                isFriend={friendSeats.has(player.playerId)}
-                size={46}
-              />
-              <span className="waiting-roster-name">
-                <span
-                  className={playerNameClass(player.isAnonymous)}
-                  style={playerNameStyle(player.nameColor, player.isAnonymous)}
-                >
-                  {player.nickname}
-                </span>
-                {player.playerId === myPlayerId && (
-                  <span className="visually-hidden">{ui.waitingRoomPanel.you}</span>
-                )}
-                {player.isHost && <span className="visually-hidden">{ui.waitingRoomPanel.host}</span>}
-                {friendSeats.has(player.playerId) && (
-                  <span className="visually-hidden">{ui.waitingRoomPanel.friend}</span>
-                )}
-              </span>
-            </li>
-          ))}
+          {activePlayers.map((player) => rosterTile(player, 46))}
           {activePlayers.length < props.maxPlayers && (
             <li className="waiting-roster-tile is-empty">
               <span className="waiting-roster-empty-avatar" aria-hidden="true">
@@ -371,6 +376,22 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
             </li>
           )}
         </ul>
+        {/* The desktop players panel lists spectators and offers a spectator
+            the open seat; a phone hides that panel here, so both live in the
+            roster too (#1269). */}
+        {spectators.length > 0 && (
+          <div className="waiting-roster-spectators">
+            <p className="section-label">
+              {ui.roomPlayersPanel.spectatorsHeading({ count: spectators.length })}
+            </p>
+            <ul className="waiting-roster-grid">
+              {spectators.map((player) => rosterTile(player, 34))}
+            </ul>
+          </div>
+        )}
+        {me?.isSpectator && (
+          <SpectatorPromotion playerSpaceAvailable={activePlayers.length < props.maxPlayers} />
+        )}
       </section>}
 
       {/* Players get a read-only look at the prompts; the host has the editor

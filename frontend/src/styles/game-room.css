@@ -784,6 +784,22 @@
 
 .waiting-roster-tile.is-empty .waiting-roster-name { color: var(--faint); }
 
+/* Spectators, smaller and under their own label, below the seats (#1269). */
+.waiting-roster-spectators {
+  border-top: 1.5px solid var(--line);
+  margin-top: 12px;
+  padding-top: 10px;
+}
+
+.waiting-roster-spectators .section-label {
+  margin: 0 0 8px;
+}
+
+/* A phone spectator's own row: that they are watching, and the open seat. */
+.waiting-roster .spectator-promotion > p:first-child {
+  font-size: 13px;
+}
+
 .waiting-roster-empty-avatar {
   align-items: center;
   border: 2px dashed var(--line-strong);

@@ -1,11 +1,11 @@
-import { useState } from "react";
-import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { recordRender } from "../lib/renderDiagnostics";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
-import type { AckResponse, ModerationState, PlayerInfo, ScoreEntry } from "../types";
+import type { ModerationState, PlayerInfo, ScoreEntry } from "../types";
 import { PlayerList } from "./PlayerList";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
+import { SpectatorPromotion } from "./SpectatorPromotion";
 import { EyeIcon } from "./icons";
-import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 
 interface RoomPlayersPanelProps {
@@ -32,13 +32,14 @@ export function RoomPlayersPanel({
   turnCorrectGuesses,
 }: RoomPlayersPanelProps) {
   recordRender("players");
-  const [promotionBusy, setPromotionBusy] = useState(false);
-  const [promotionError, setPromotionError] = useState<string | null>(null);
   const activePlayers = players.filter((player) => !player.isSpectator);
   const spectators = players.filter((player) => player.isSpectator);
   const me = players.find((player) => player.playerId === myPlayerId);
   const eligiblePlayers = activePlayers.filter((player) => player.connected && !player.isAfk);
-  const canPromoteSelf = mode === "waiting" && me?.isSpectator;
+  // A phone's waiting room hides this panel and offers the seat in its roster
+  // grid instead (#1269); rendering it here too left a second, hidden offer.
+  const isPhone = useMediaQuery(PHONE_ROOM_QUERY);
+  const canPromoteSelf = mode === "waiting" && me?.isSpectator && !isPhone;
   const playerSpaceAvailable = activePlayers.length < maxPlayers;
   const showFinalStandings = mode !== "playing" && Boolean(finalScores) && showScores;
   const displayPlayers =
@@ -52,29 +53,13 @@ export function RoomPlayersPanel({
           .sort((a, b) => b.score - a.score)
       : activePlayers;
 
-  async function becomePlayer() {
-    if (!canPromoteSelf || promotionBusy || !playerSpaceAvailable) return;
-    setPromotionBusy(true);
-    setPromotionError(null);
-    try {
-      const response = await emitWithAck<AckResponse>("become_player", {});
-      if (!response.ok) setPromotionError(refusalText(response, ui.roomPlayersPanel.couldNotJoinAsPlayer));
-    } catch (promotionRequestError) {
-      setPromotionError(
-        socketRequestErrorMessage(promotionRequestError, ui.roomPlayersPanel.joinAsAPlayer),
-      );
-    } finally {
-      setPromotionBusy(false);
-    }
-  }
-
   return (
     <section className="room-players-panel" aria-labelledby="room-players-title">
       <div className="room-panel-heading">
         <div>
           {showFinalStandings && <p className="section-label room-panel-kicker">{ui.roomPlayersPanel.finalStandings}</p>}
           <div className="room-players-title-row">
-            <h2 id="room-players-title" className="panel-title">{ui.roomPlayersPanel.players}</h2>
+            <h2 id="room-players-title" className="panel-title" tabIndex={-1}>{ui.roomPlayersPanel.players}</h2>
             <span
               className="room-player-occupancy"
               aria-label={ui.roomPlayersPanel.playersOfCapacity({ here: activePlayers.length, capacity: maxPlayers })}
@@ -140,28 +125,7 @@ export function RoomPlayersPanel({
           turnCorrectGuesses={mode === "playing" ? turnCorrectGuesses : undefined}
         />
       </div>
-      {canPromoteSelf && (
-        <div className="spectator-promotion" data-testid="spectator-promotion">
-          <p>
-            {playerSpaceAvailable
-              ? ui.roomPlayersPanel.aPlayerSeatIsOpen
-              : ui.roomPlayersPanel.noPlayerSeatsOpen}
-          </p>
-          <button
-            type="button"
-            className="btn btn-primary btn-compact"
-            disabled={!playerSpaceAvailable || promotionBusy}
-            onClick={() => void becomePlayer()}
-          >
-            {promotionBusy ? ui.roomPlayersPanel.joining : ui.roomPlayersPanel.joinAsPlayer}
-          </button>
-          {promotionError && (
-            <p className="spectator-promotion-error" role="alert">
-              {promotionError}
-            </p>
-          )}
-        </div>
-      )}
+      {canPromoteSelf && <SpectatorPromotion playerSpaceAvailable={playerSpaceAvailable} />}
     </section>
   );
 }

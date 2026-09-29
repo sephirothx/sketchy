@@ -1842,6 +1842,7 @@ export const NL: Catalogue = {
     finalStandings: "Eindstand",
     players: "Spelers",
     joinAsAPlayer: "als speler meedoen",
+    youAreSpectating: "Je kijkt mee als toeschouwer.",
     aPlayerSeatIsOpen: "Er is een spelersplek vrij.",
     noPlayerSeatsOpen: "Geen spelersplekken vrij.",
     joining: "Deelnemen…",

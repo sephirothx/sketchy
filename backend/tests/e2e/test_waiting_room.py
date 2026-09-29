@@ -1,6 +1,10 @@
+from uuid import uuid4
+
 from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import (
     close_room_settings,
+    join_by_code,
+    open_new_room,
     open_create_room,
     open_room_settings,
     open_settings_section,
@@ -174,4 +178,58 @@ async def test_waiting_room_shows_host_and_guest_settings_and_start_eligibility(
         finally:
             await host_context.close()
             await player_context.close()
+            await browser.close()
+
+
+async def test_a_phone_spectator_sees_they_are_watching_and_takes_an_open_seat():
+    """#1269: a phone hides the players panel in the waiting room, and the
+    seat offer lived only there - a spectator on a phone could not take a free
+    seat and was never told they were spectating. The roster says both now,
+    and lists the spectators under the seats."""
+    phone = {
+        "viewport": {"width": 390, "height": 844},
+        "is_mobile": True,
+        "has_touch": True,
+    }
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(**phone), await browser.new_context(**phone)]
+        host, watcher = [await context.new_page() for context in contexts]
+        try:
+            tag = uuid4().hex[:5]
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"SeatHost{tag}")
+            await open_new_room(host)
+            code = await room_code(host)
+            name = f"SeatWatch{tag}"
+            await watcher.goto(BASE_URL)
+            await use_guest_name(watcher, name)
+            await join_by_code(watcher, code, spectate=True)
+            roster = watcher.locator(".waiting-roster")
+            await roster.wait_for(state="visible")
+
+            offer = roster.get_by_test_id("spectator-promotion")
+            await offer.wait_for(state="visible")
+            assert "You're spectating." in await offer.inner_text()
+            assert "A player seat is open." in await offer.inner_text()
+            watching = roster.locator(".waiting-roster-spectators")
+            await watching.get_by_text(name).wait_for()
+            # The host's roster lists the spectator too, and offers them nothing.
+            await host.locator(".waiting-roster-spectators").get_by_text(name).wait_for()
+            assert await host.locator(".waiting-roster").get_by_test_id("spectator-promotion").count() == 0
+
+            # One offer in the page at a phone's width, not a hidden second one.
+            assert await watcher.get_by_test_id("spectator-promotion").count() == 1
+            await offer.get_by_role("button", name="Join as player").click()
+            await offer.wait_for(state="detached")
+            await watching.wait_for(state="detached")
+            await roster.locator(".waiting-roster-grid .waiting-roster-tile", has_text=name).wait_for()
+            # The offer is gone with the focus it had; the roster's heading takes it.
+            await watcher.wait_for_function(
+                "() => document.activeElement?.id === 'waiting-roster-title'"
+            )
+
+        finally:
+            for context in contexts:
+                await context.close()
             await browser.close()

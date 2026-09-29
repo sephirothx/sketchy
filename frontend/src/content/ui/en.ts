@@ -1857,6 +1857,7 @@ export const EN = {
     finalStandings: "Final standings",
     players: "Players",
     joinAsAPlayer: "join as a player",
+    youAreSpectating: "You're spectating.",
     aPlayerSeatIsOpen: "A player seat is open.",
     noPlayerSeatsOpen: "No player seats open.",
     joining: "Joining…",
