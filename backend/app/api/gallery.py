@@ -3,6 +3,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 import hashlib
+import os
 
 from fastapi import APIRouter, Query, Request, Response
 from pydantic import ConfigDict, Field
@@ -27,9 +28,25 @@ async def _read_shelf(game_history_repo: GameHistoryRepository):
     )
     return page.entries
 
-# The same ceiling as the profile routes: a human's pace, and enough to make
-# walking turn ids inconvenient.
-gallery_limiter = RateLimiter(limit=120, window_seconds=60)
+def _read_limit() -> int:
+    """Gallery reads per address per minute: `GALLERY_READ_LIMIT`, 120 unset.
+
+    The same ceiling as the profile routes - a human's pace, and enough to
+    make walking turn ids inconvenient - and configurable like them, for the
+    same reason: every player behind one address shares the bucket, and a
+    test harness puts every browser on one loopback address. A shard whose
+    other tests read the Gallery too spent it, and the page with a drawing
+    just finished was refused on every reload (#1332).
+    """
+    raw = os.environ.get("GALLERY_READ_LIMIT", "").strip()
+    try:
+        value = int(raw) if raw else 120
+    except ValueError:
+        return 120
+    return value if value > 0 else 120
+
+
+gallery_limiter = RateLimiter(limit=_read_limit(), window_seconds=60)
 # The bytes get a budget of their own: a page of the Gallery replays up to
 # 24 thumbnails and a scroll adds 24 more, so at the listing's ceiling five
 # pages in a minute would refuse the sixth thumbnail. Most of these are
