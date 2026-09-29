@@ -1764,6 +1764,10 @@ async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env,
     assert paged == whole
     (document_list,) = json.loads(whole)["promptLists"]
     assert document_list["revisions"] == expected_revisions
+    # Byte for byte, key order included: the document is written as it
+    # comes, so equal parsed values would not catch fields written out of
+    # the order the graph's dicts had them in.
+    assert json.dumps(expected_revisions, separators=(",", ":")).encode() in whole
     assert [prompt["prompt"] for prompt in document_list["revisions"][-1]["prompts"]] == [
         "changed 0", "changed 1", "thing 2", "thing 3", "thing 4",
     ]

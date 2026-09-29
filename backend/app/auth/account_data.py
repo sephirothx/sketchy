@@ -593,9 +593,10 @@ async def _write_prompt_lists(
     room shares for ~3 s and took ~1 GB, and a refused build does not count
     against the week (R-PRIV-12), so it could be asked for again at once
     (#1250). Here a list's revisions are read as metadata, then each
-    revision's prompts streamed with its aliases beside them, and the loop is
-    given back between pages: a build holds one page and one revision's
-    aliases whatever the history. The document is the one the graph made.
+    revision's aliases and its prompts, one revision at a time, and the loop
+    is given back between them: a build holds one revision's prompts and
+    aliases, and each list's revision metadata - a row per save - rather
+    than every revision's content. The document is the one the graph made.
     """
     writer.begin_array()
     lists = (
@@ -646,7 +647,13 @@ async def _write_prompt_lists(
 async def _write_revision_prompts(
     writer: _ExportWriter, session: AsyncSession, revision_id: UUID
 ) -> None:
-    """One revision's prompts in position order, streamed a page at a time."""
+    """One revision's prompts in position order.
+
+    Read whole, not through a server-side cursor: a revision holds at most
+    `MAX_PROMPTS_PER_OWNED_LIST` prompts, the page size, so a cursor never
+    pages, and on PostgreSQL each one stayed open as a portal until the
+    build's transaction ended - one per revision, ~350 MB of the
+    database's memory for a list saved 800 times (#1250 review)."""
     aliases: dict[UUID, list[str]] = {}
     alias_rows = await session.execute(
         select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
@@ -660,8 +667,11 @@ async def _write_revision_prompts(
     )
     for version_id, answer in alias_rows:
         aliases.setdefault(version_id, []).append(answer)
+    # The alias read can be thousands of rows at the ceiling (500 prompts of
+    # 20 aliases): the loop goes back to the rooms before the prompts.
+    await asyncio.sleep(0)
     writer.begin_array()
-    result = await session.stream(
+    result = await session.execute(
         select(
             PromptVersion.concept_id,
             PromptVersion.id,
@@ -673,9 +683,8 @@ async def _write_revision_prompts(
         .join(PromptVersion, PromptVersion.id == PromptListRevisionItem.prompt_version_id)
         .where(PromptListRevisionItem.revision_id == revision_id)
         .order_by(PromptListRevisionItem.position)
-        .execution_options(yield_per=EXPORT_PAGE_SIZE)
     )
-    async for page in result.partitions():
+    for page in result.partitions(EXPORT_PAGE_SIZE):
         for concept_id, version_id, version, answer, position in page:
             writer.value(
                 {

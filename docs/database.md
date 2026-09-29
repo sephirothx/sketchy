@@ -735,15 +735,17 @@ says how to read itself, and a row with no document claims no encoding.
 
 A document is written, not assembled: the builder reads each section a page at a time
 and hands every row to the compressor as it comes, counting the JSON bytes against
-`EXPORT_MAX_BYTES` (64 MiB before compression by default, R-PRIV-13). Prompt lists are
-paged below the list: every content save writes the whole list again as a new
-revision, so the section grows with how often the owner saved, and it once loaded
-every revision's items as one graph - 801 saves of a 500-prompt list stalled the
-loop ~3 s and took ~1 GB before failing `too_large`, repeatably (#1250). Each list's
-revisions are read as metadata, then each revision's aliases and its items, the
-items streamed by `revision_id` a page at a time with the loop given back between
-pages (`_write_prompt_lists`). Past it the job is
+`EXPORT_MAX_BYTES` (64 MiB before compression by default, R-PRIV-13). Past it the job is
 failed as `too_large` with no document stored; `generation_failed` is anything else.
+Prompt lists are read below the list: every content save writes the whole list again as
+a new revision, so the section grows with how often the owner saved, and it once loaded
+every revision's items as one graph - 801 saves of a 500-prompt list stalled the loop
+~3 s and took ~1 GB before failing `too_large`, repeatably (#1250). Each list's
+revisions are read as metadata, then each revision's aliases and its items by
+`revision_id`, one revision at a time with the loop given back between them
+(`_write_prompt_lists`). A revision is read whole rather than through a server-side
+cursor: it is never more than a page, and on PostgreSQL each cursor stayed open as a
+portal until the build's transaction ended, one per revision.
 The download hands a client that accepts gzip the stored bytes untouched, and one that
 does not the same bytes decompressed a chunk at a time with the length the gzip trailer
 records — never parsed, never held whole, never compressed twice (R-PRIV-14).
