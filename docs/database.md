@@ -1418,6 +1418,16 @@ few hundred milliseconds rather than stopping for them. The encode's thread time
 recorded where the encode runs: at staging for a finished game's drawings, by `sizing`
 for one written directly.
 
+What the transaction writes scales with turns × seats, and the largest room is sixteen
+seats and ten rounds: 160 turns, 2,400 guesser outcomes and 2,560 score events. Those two
+go in as plain rows, in one bulk insert each, after a flush of the turns and seats they
+name — as ORM objects the unit of work tracked and flushed them one by one, on the loop
+(#1260). Same benchmark, that game: the loop's longest wait fell 100 → 17 ms, stage and
+replay 724 → 644 ms. Score events are inserted in ledger order, so a correction's
+target is always a row already written. The benchmark builds each game before its ticker
+starts; before #1260 it drew the ordinary shape's eight drawings inside the measured
+window, which is where most of that shape's 21 ms came from (1.4 ms now).
+
 ```bash
 cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # replay by hand
 ```

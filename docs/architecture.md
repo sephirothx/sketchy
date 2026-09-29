@@ -1701,6 +1701,10 @@ all-or-nothing and keyed on the game's stable UUIDv7:
   game it last held and ignores an outcome for a game the room has moved on from.
 - The ledger is *proved* against the cached scores: every participant's signed deltas
   must sum to their final score, in that transaction, or the write fails.
+- Guesser outcomes and score events, the rows that grow with turns × seats (2,400 and
+  2,560 in a sixteen-seat, ten-round game), are validated as inputs and written as
+  plain rows in one bulk insert each, not as objects the unit of work flushes on the
+  loop (#1260).
 - No drawing is encoded on the event loop, and none inside that transaction (#976).
   The envelope's JSON, deflate and checksum at staging, its decode at replay, the
   content digest and each drawing's stored form all run on the history write's own

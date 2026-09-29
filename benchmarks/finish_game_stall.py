@@ -5,13 +5,17 @@ A finished game is staged as one envelope and replayed into history by the
 handoff worker (#541). Both ends encode drawings: the envelope deflates every
 turn's wire frame, and the replay turns each frame into its stored form before
 writing it. On the loop, that work stalls every room's strokes and timers for
-as long as it runs. This stages and replays games of eight drawn turns through
-the real worker and repositories, with a 1 ms ticker on the loop, and reports
-the longest the ticker was kept waiting - for an ordinary drawing and for a
-stroke-heavy one, the two shapes the issue measured. Per shape it also reports
-the envelope as staged, the envelope encode's time, and on PostgreSQL the WAL a
-whole finished game writes - staging, replay and the envelope's deletion -
-which is what WAL archiving and backups have to be sized on (#1259).
+as long as it runs. This stages and replays scored games - a guess award for
+every guesser and a drawer bonus every turn, as the scorer writes them -
+through the real worker and repositories, with a 1 ms ticker on the loop, and
+reports the longest the ticker was kept waiting. Three shapes: four seats and
+two rounds with an ordinary drawing and with a stroke-heavy one, the two the
+issue measured, and the largest room there is, sixteen seats and ten rounds:
+160 turns, 2,400 guesser outcomes and 2,560 score events, which is where the
+rows the replay writes cost more than its drawings (#1260). Per shape it also
+reports the envelope as staged, the envelope encode's time, and on PostgreSQL
+the WAL a whole finished game writes - staging, replay and the envelope's
+deletion - which is what WAL archiving and backups have to be sized on (#1259).
 
     TEST_DATABASE_URL=postgresql+asyncpg://sketchy:sketchy@127.0.0.1:5433/sketchy_test \\
         backend/.venv/bin/python benchmarks/finish_game_stall.py --games 4
@@ -20,6 +24,7 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import functools
 import json
 import os
 import statistics
@@ -34,13 +39,7 @@ sys.path.insert(0, os.path.join(ROOT, "benchmarks"))
 
 import canvas_history as bench  # noqa: E402
 from app.db.models import generate_uuid  # noqa: E402
-from app.repositories.interfaces import (  # noqa: E402
-    GameParticipantInput,
-    GameRecordInput,
-    TurnDrawingInput,
-    TurnParticipantOutcomeInput,
-    TurnRecordInput,
-)
+from app.repositories.interfaces import TurnDrawingInput  # noqa: E402
 from app.repositories.sqlalchemy import (  # noqa: E402
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -55,12 +54,21 @@ from app.services.game_handoff import (  # noqa: E402
     encode_envelope,
 )
 from app.services.game_history import GameHistoryWrite  # noqa: E402
+from integrity_audit_stall import scored_game  # noqa: E402
 from tests.dbfixtures import create_test_db  # noqa: E402
 
-TURNS = 8
-SEATS = 4
+MAX_SEATS = 16
+
+# name, seats, rounds, and the frame every turn draws (None: each its own
+# realistic drawing).
+SHAPES = (
+    ("realistic", 4, 2, None),
+    ("stroke_heavy", 4, 2, "stroke_heavy"),
+    ("max_room", MAX_SEATS, 10, None),
+)
 
 
+@functools.cache
 def _realistic(turn: int) -> bytes:
     """`canvas_history.realistic_history`, drawn differently for each turn.
 
@@ -90,45 +98,20 @@ def _realistic(turn: int) -> bytes:
     return history.binary_payload()
 
 
-def _game(players: list[str], frame: bytes | None) -> GameHistoryWrite:
-    """`frame` for every turn, or None for a realistic drawing of each turn's own."""
-    now = datetime.now(timezone.utc)
-    seats = [str(generate_uuid()) for _ in players]
-    turns, drawings = [], []
-    for index in range(TURNS):
-        drawer = index % len(players)
-        turn_id = str(generate_uuid())
-        turns.append(
-            TurnRecordInput(
-                id=turn_id, round_number=index // SEATS + 1, turn_number=index + 1,
-                drawer_user_id=players[drawer], drawer_seat_id=seats[drawer], prompt="cat",
-                duration_seconds=40.0, guesser_count=len(players) - 1,
-                participant_outcomes=tuple(
-                    TurnParticipantOutcomeInput(
-                        seat_id=seats[seat], user_id=players[seat], eligible=True,
-                        eligibility_reason="eligible", outcome="correct", terminal_state="active",
-                        correct_guess_time_seconds=5.0, points_awarded=0,
-                    )
-                    for seat in range(len(players))
-                    if seat != drawer
-                ),
-            )
-        )
-        drawings.append(TurnDrawingInput(turn_id=turn_id, payload=frame if frame is not None else _realistic(index)))
+def _game(players: list[str], rounds: int, frame: bytes | None) -> GameHistoryWrite:
+    """A scored game of `rounds` rounds; `frame` for every turn's drawing, or
+    None for a realistic drawing of each turn's own."""
+    game = scored_game(players, rounds)
     return GameHistoryWrite(
-        record=GameRecordInput(
-            id=str(generate_uuid()), room_name="Bench", scoring_mode="default", scoring_version=1,
-            score_ledger_version=1, rule_snapshot_version=1, rule_snapshot={"schemaVersion": 1},
-            hint_mode="checkpoints", drawing_seconds=90, total_rounds=TURNS // SEATS,
-            player_count=len(players), started_at=now, finished_at=now + timedelta(minutes=10),
-            visibility="public",
-        ),
-        participants=[
-            GameParticipantInput(user_id=player, final_score=0, final_rank=index + 1,
-                                 seat_id=seats[index], display_name=f"P{index}")
-            for index, player in enumerate(players)
+        record=game["game_record"],
+        participants=game["participants"],
+        turns=game["turns"],
+        score_events=game["score_events"],
+        drawings=[
+            TurnDrawingInput(turn_id=turn.id, payload=frame if frame is not None else _realistic(index))
+            for index, turn in enumerate(game["turns"])
         ],
-        turns=turns, score_events=[], drawings=drawings, reactions=[],
+        reactions=[],
     )
 
 
@@ -150,8 +133,11 @@ async def _wal_since(factory, lsn: int | None) -> int | None:
     return (await _wal_lsn(factory)) - lsn
 
 
-async def _finish(worker, players, frame) -> tuple[float, float]:
-    """Stage and replay one game; the loop's longest wait, and the wall time."""
+async def _finish(worker, game: GameHistoryWrite) -> tuple[float, float]:
+    """Stage and replay one game; the loop's longest wait, and the wall time.
+
+    The game is built before the ticker starts: drawing its turns is the
+    benchmark's work, not the server's."""
     waits: list[float] = []
     done = False
 
@@ -164,7 +150,7 @@ async def _finish(worker, players, frame) -> tuple[float, float]:
     tick = asyncio.create_task(ticker())
     await asyncio.sleep(0.01)
     started = perf_counter()
-    await worker.stage(FinishedGameEnvelope(_game(players, frame)))
+    await worker.stage(FinishedGameEnvelope(game))
     report = await worker.drain()
     elapsed = (perf_counter() - started) * 1000
     done = True
@@ -178,7 +164,7 @@ async def run(games: int) -> dict:
     factory, engine = await create_test_db()
     try:
         users = SqlAlchemyUserRepository(factory)
-        players = [(await users.create_anonymous(display_name=f"P{i}")).id for i in range(SEATS)]
+        players = [(await users.create_anonymous(display_name=f"P{i}")).id for i in range(MAX_SEATS)]
         worker = FinishedGameHandoffWorker(
             SqlEnvelopeStore(factory),
             game_history_repo=SqlAlchemyGameHistoryRepository(factory),
@@ -187,10 +173,12 @@ async def run(games: int) -> dict:
         result = {}
         # Realistic drawings differ turn to turn; the stroke-heavy frame is
         # far past the deflate window, so repeating it flatters nothing.
-        for name, frame in (("realistic", None), ("stroke_heavy", bench.mixed_history().binary_payload())):
-            samples = [await _finish(worker, players, frame) for _ in range(games)]
+        stroke_heavy = bench.mixed_history().binary_payload()
+        for name, seats, rounds, drawn in SHAPES:
+            frame = stroke_heavy if drawn == "stroke_heavy" else None
+            samples = [await _finish(worker, _game(players[:seats], rounds, frame)) for _ in range(games)]
             # One more, staged alone first to read its envelope, then replayed.
-            game = _game(players, frame)
+            game = _game(players[:seats], rounds, frame)
             encode_started = perf_counter()
             encode_envelope(FinishedGameEnvelope(game))
             encode_ms = (perf_counter() - encode_started) * 1000
@@ -203,6 +191,9 @@ async def run(games: int) -> dict:
             await worker.drain()
             wal = await _wal_since(factory, lsn)
             result[name] = {
+                "turns": len(game.turns),
+                "outcomes": sum(len(turn.participant_outcomes) for turn in game.turns),
+                "scoreEvents": len(game.score_events),
                 "frameBytes": len(frame if frame is not None else _realistic(0)),
                 "worstLoopStallMsMedian": round(statistics.median(s[0] for s in samples), 1),
                 "stageAndReplayMsMedian": round(statistics.median(s[1] for s in samples), 1),
