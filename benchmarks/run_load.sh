@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
 # The release load gate against a throwaway server (#461).
 #
-# Starts a server with the limits a swarm from one address would otherwise trip
-# (guest provisioning, name lookups, the socket and room ceilings, per address
-# too) and a metrics token,
+# Starts a server with the limits a population from one host would otherwise
+# trip raised (guest provisioning, name lookups, the socket and room ceilings)
+# and a metrics token,
 # then runs benchmarks/load.py against it. Every argument is passed through.
 #
 # Usage: benchmarks/run_load.sh [load.py args...]

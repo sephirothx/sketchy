@@ -63,11 +63,16 @@ the same script. They are diagnostic baselines in the sense of R-ENG-11 - this
 is not a CI job - and a gate in the sense of #461: it is run before a release,
 and a breach is a decision, not a warning.
 
-Usage (the server needs the limits a swarm from one address trips; use the
-wrapper, which starts one with them set):
+Every seat names an address of its own in `X-Forwarded-For`, which the
+wrapper's server trusts from the loopback, so the per-address budgets meet a
+room population rather than one address; `--shared-address` sends none.
+
+Usage (the wrapper starts a throwaway server with the limits a population
+from one host would otherwise trip raised):
   benchmarks/run_load.sh                                  # 50 rooms x 8 seats, 5 minutes
   benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60
   benchmarks/run_load.sh --finish-games                   # every room finishes games
+  benchmarks/run_load.sh --shared-address                 # every seat on this host's one address
   benchmarks/run_load.sh --json-output /tmp/load.json
 """
 from __future__ import annotations
@@ -142,6 +147,18 @@ FINISH_GAMES_FLOORS = {
 }
 FINISH_GAMES_THRESHOLDS = {
     "roomsWithoutAFinishedGame": 0,
+    # Every game that ended is written or given up on by the end of the
+    # history wait: a handoff falling behind under load, still retrying,
+    # is the game-end regression this mode exists to catch.
+    "historyGamesUnwritten": 0,
+}
+
+# Unless every seat is meant to share one address (`--shared-address`), a
+# throttled guess means the per-address budgets (#1243) met this generator's
+# address: the server is not trusting the seats' forwarded addresses, and
+# the run is a swarm from one address - not the workload it claims to be.
+PER_SEAT_ADDRESS_THRESHOLDS = {
+    "guessesThrottled": 0,
 }
 
 FAULT_NOTICE_REASONS = ("invalid_frame", "refused_tool", "stale_generation", "unknown_sequence", "dropped_frame")
@@ -173,6 +190,8 @@ class Samples:
     canvas_claims_mid_stroke: int = 0
     canvas_full_syncs: int = 0
     canvas_tails: int = 0
+    # Guesses refused `too_fast`: a budget some seat's traffic went past.
+    guesses_throttled: int = 0
     errors: list[str] = field(default_factory=list)
 
     def ack(self, command: str, ms: float) -> None:
@@ -484,6 +503,8 @@ class Seat:
             return None
         self.harness.samples.ack(command, (time.monotonic() - started) * 1000)
         if isinstance(answer, dict):
+            if command == "guess" and answer.get("errorCode") == "too_fast":
+                self.harness.samples.guesses_throttled += 1
             return answer
         return {"ok": True} if answer is not None else None
 
@@ -528,7 +549,7 @@ class Seat:
                     # browser's per-action random draw, required since #1102;
                     # without it every stroke opener was refused as `invalid`
                     # and the gate measured no drawing at all (#1249).
-                    await self.sio.emit("draw", (data, [generation, sequence, action_nonce()]))
+                    await self.sio.emit("draw", (data, draw_identity(generation, sequence)))
                 else:
                     await self.sio.emit("draw", data)
             await asyncio.sleep(0.3)
@@ -657,6 +678,16 @@ WRONG = ["cat", "house", "tree", "boat", "sun", "car", "fish", "hat"]
 def action_nonce() -> int:
     """What the browser draws for each action it opens (#1102)."""
     return random.randint(1, MAX_ACTION_NONCE)
+
+
+def draw_identity(generation: int, sequence: int) -> list[int]:
+    """The identity a stroke opener carries: `[generation, sequence, nonce]`.
+
+    Without the nonce, required since #1102, every opener was refused as
+    `invalid`, and the gate measured no drawing at all (#1249). Shared with
+    `slow_viewer.py`, and pinned against the server's parser in
+    `tests/test_load_gate.py`."""
+    return [generation, sequence, action_nonce()]
 
 
 class SlowViewer:
@@ -836,9 +867,13 @@ class Harness:
         swarm from one address had its guesses throttled - 4,102 in one
         300 s run - which is a workload no real room population makes. The
         throwaway server trusts the loopback's forwarded header (uvicorn's
-        `FORWARDED_ALLOW_IPS` default), so each client names its own.
-        `--shared-address` sends none, for a server behind a proxy that
-        rewrites the header, where every seat is then the proxy's address.
+        `FORWARDED_ALLOW_IPS` default), so each client names its own; a
+        run in which a guess is still throttled is judged a breach, since
+        it means the server did not take them (`PER_SEAT_ADDRESS_THRESHOLDS`).
+        `--shared-address` sends none, so every seat is this generator's one
+        address and meets the per-address budgets together - what a run
+        through a proxy measures anyway, since a proxy rewrites or appends
+        to the header - and throttling is then reported, not judged.
         """
         return {} if self.args.shared_address else {"X-Forwarded-For": address}
 
@@ -919,7 +954,8 @@ class Harness:
                 # ends; give the last ones a moment to land before counting.
                 for _ in range(20):
                     written = after.get("history_writes", 0.0) - before.get("history_writes", 0.0)
-                    if written >= self.samples.games_ended:
+                    given_up = after.get("history_abandoned", 0.0) - before.get("history_abandoned", 0.0)
+                    if written + given_up >= self.samples.games_ended:
                         break
                     await asyncio.sleep(1.0)
                     after = await self.metrics(http)
@@ -1045,6 +1081,11 @@ class Harness:
             "roomsWithoutAFinishedGame": sum(1 for room in self.rooms if room.games_ended == 0),
             "historyGamesWritten": (after.get("history_writes", 0.0) - before.get("history_writes", 0.0)) if after else 0.0,
             "historyWritesAbandoned": (after.get("history_abandoned", 0.0) - before.get("history_abandoned", 0.0)) if after else 0.0,
+            "historyGamesUnwritten": max(0.0, s.games_ended - (
+                (after.get("history_writes", 0.0) - before.get("history_writes", 0.0))
+                + (after.get("history_abandoned", 0.0) - before.get("history_abandoned", 0.0))
+            )) if after else float(s.games_ended),
+            "guessesThrottled": s.guesses_throttled,
             "guesses": s.guesses,
             "chats": s.chats,
             "framesSent": s.frames_sent,
@@ -1056,6 +1097,8 @@ class Harness:
         }
         thresholds = dict(DEFAULT_THRESHOLDS)
         floors = dict(DEFAULT_FLOORS)
+        if not self.args.shared_address:
+            thresholds.update(PER_SEAT_ADDRESS_THRESHOLDS)
         if self.args.finish_games:
             thresholds.update(FINISH_GAMES_THRESHOLDS)
             floors.update(FINISH_GAMES_FLOORS)
@@ -1382,7 +1425,7 @@ def record_result(report: dict, path: Path) -> None:
         ("Unexpected disconnects / failed reconnects", f"{m['unexpectedDisconnects']:.0f} / {m['failedReconnects']:.0f} (of {m['reconnects']:.0f} reconnects)", "0 / 0"),
         ("Outbound backlog high-water (bytes / oldest) and closures", f"{m['backlogBytesMax']:.0f} B / {m['backlogAgeMaxMs']:.0f} ms; closures {', '.join(f'{k} {v:.0f}' for k, v in m['backlogClosures'].items()) or 'none'} with {m['slowViewers']} slow viewers", "closures = slow viewers; budget 10 s / 4 MiB"),
         ("Packets rejected / fault notices (all notices by reason)", f"{m['packetsRejected']:.0f} / {m['faultNotices']:.0f} ({', '.join(f'{k} {v:.0f}' for k, v in m['recoveryNotices'].items()) or 'none'})", "0 / 0"),
-        ("Games started / ended / histories written (abandoned)", f"{m['gamesStarted']} / {m['gamesEnded']} / {m['historyGamesWritten']:.0f} ({m['historyWritesAbandoned']:.0f})", "abandoned 0" + ("; every room finishes a game, a history written" if sc.get("finishGames") else "")),
+        ("Games started / ended / histories written (abandoned, unwritten)", f"{m['gamesStarted']} / {m['gamesEnded']} / {m['historyGamesWritten']:.0f} ({m['historyWritesAbandoned']:.0f}, {m['historyGamesUnwritten']:.0f})", "abandoned 0" + ("; every room finishes a game, every ended game written" if sc.get("finishGames") else "")),
         ("Traffic", f"{m['bytesOutMB']:.1f} MB out, {m['bytesInMB']:.1f} MB in; {m['framesSent']} frames sent, {m['framesReceived']} received; {m['guesses']} guesses, {m['chats']} chats", "—"),
         ("On the wire (after permessage-deflate)", f"{m['wireBytesOutMB']:.1f} MB out ({100 * m['wireBytesOutMB'] / max(m['bytesOutMB'], 1e-9):.1f}% of packet bytes), {m['wireBytesInMB']:.1f} MB in; sockets by compression {_by_label(m['transports'])}", "—"),
     ]

@@ -42,7 +42,6 @@ from __future__ import annotations
 import asyncio
 import json
 import os
-import random
 import sys
 import time
 
@@ -53,14 +52,16 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 from app.canvas_history import (
     canvas_history_hash,
     decode_binary_canvas_history,
 )
-from app.handlers.payloads import MAX_ACTION_NONCE
 from app.live_drawing import encode_live_drawing
 from app.protocol import PROTOCOL_VERSION
+from benchmarks.load import draw_identity
 
 COOKIE = "sketchy_session"
 HANDLERS = "sketchy_websocket_handlers_open"
@@ -151,9 +152,8 @@ async def main() -> int:
     # per 2 s): 120 strokes of 200 points is 24 000 of the 25 000 allowed.
     for _stroke in range(120):
         sequence += 1
-        # `[generation, sequence, nonce]`, the nonce required since #1102.
         opener = encode_live_drawing("draw_start", {"x": 0.05, "y": 0.05, "color": "#000000", "width": 4})
-        await drawer.emit("draw", (opener, [generation, sequence, random.randint(1, MAX_ACTION_NONCE)]))
+        await drawer.emit("draw", (opener, draw_identity(generation, sequence)))
         points = [{"x": 0.05 + (index % 40) / 50, "y": 0.05 + (index // 40) / 8} for index in range(200)]
         await drawer.emit("draw", encode_live_drawing("draw_move", {"points": points}))
         await drawer.emit("draw", encode_live_drawing("draw_end"))

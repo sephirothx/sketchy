@@ -2376,8 +2376,13 @@ refused, and that empty percentile passed. A default run never finishes a game (
 rounds of 90 s turns outlast it), so `--finish-games` plays one-round games in which
 every guesser answers: turns end early, every room finishes games inside the run, and
 the game-end path - history, handoff, replay, stats projection - is under load; it
-reports games ended and histories written, and fails if a room finished none or no
-history landed. It is run by hand on the reference environment before a release
+reports games ended and histories written, and fails if a room finished none, if no
+history landed, or if an ended game's history was neither written nor given up on by the
+end of the run. Every seat names an address of its own in `X-Forwarded-For`, which the
+throwaway server trusts from the loopback, so the per-address budgets (#1232, #1243) meet
+a room population; a throttled guess means they met one address instead and fails the
+run. `--shared-address` sends no header, putting every seat on the generator's one
+address, and only reports the throttling. It is run by hand on the reference environment before a release
 (R-ENG-11 keeps it out of CI), and the numbers it last produced are recorded with that
 environment in `docs/requirements.md` under the scale target. Record it on PostgreSQL
 at the full 300 s: a shorter run breaches `rssGrowthPercent`, because the warm-up

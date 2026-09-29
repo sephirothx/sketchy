@@ -13,8 +13,9 @@ from benchmarks.load import (  # noqa: E402
     FAULT_NOTICE_REASONS,
     FINISH_GAMES_FLOORS,
     FINISH_GAMES_THRESHOLDS,
-    action_nonce,
+    Harness,
     database_engine,
+    draw_identity,
     histogram_quantile,
     histogram_upper_bound,
     judge,
@@ -163,7 +164,7 @@ def test_a_stroke_carries_the_nonce_the_server_requires():
     from app.live_drawing import encode_live_drawing
 
     opener = encode_live_drawing("draw_start", {"x": 0.1, "y": 0.1, "color": "#000000", "width": 4})
-    payload = parse_draw_payload(opener, [1, 1, action_nonce()])
+    payload = parse_draw_payload(opener, draw_identity(1, 1))
     assert payload.action_identity == (1, 1)
     assert 1 <= payload.action_nonce <= 2**31 - 1
 
@@ -172,3 +173,42 @@ def test_the_record_names_the_database_the_server_ran_on():
     assert database_engine("postgresql+asyncpg://sketchy@127.0.0.1/gate") == "PostgreSQL"
     assert database_engine("sqlite+aiosqlite:///tmp/gate.db") == "SQLite"
     assert database_engine("") == "unknown"
+
+
+def _gate_args(**overrides):
+    from argparse import Namespace
+
+    values = dict(
+        base_url="http://127.0.0.1:1", no_deflate=False, capture_seat=None, rooms=1, seats=2,
+        lobby_watchers=0, duration=1.0, reconnect_share=0.0, finish_games=False, shared_address=False,
+    )
+    values.update(overrides)
+    return Namespace(**values)
+
+
+def test_a_run_that_measured_nothing_is_reported_as_breaching():
+    """Judged where the run is, not only in `judge`: a report built from a
+    run with no drawing and no fan-out names both floors."""
+    harness = Harness(_gate_args())
+    report = harness.report(parse_metrics(METRICS), [], parse_metrics(METRICS), 0.0, 0.0)
+    assert {"drawFanoutSamples", "drawFramesAccepted"} <= set(report["breaches"])
+    assert report["passed"] is False
+
+
+def test_throttled_guesses_breach_unless_every_seat_is_meant_to_share_an_address():
+    harness = Harness(_gate_args())
+    harness.samples.guesses_throttled = 3
+    assert "guessesThrottled" in harness.report({}, [], {}, 0.0, 0.0)["breaches"]
+    shared = Harness(_gate_args(shared_address=True))
+    shared.samples.guesses_throttled = 3
+    assert "guessesThrottled" not in shared.report({}, [], {}, 0.0, 0.0)["breaches"]
+
+
+def test_a_finish_games_run_counts_an_ended_game_without_a_history_as_a_breach():
+    harness = Harness(_gate_args(finish_games=True))
+    harness.samples.games_ended = 3
+    before = parse_metrics("sketchy_history_write_seconds_count 10\n")
+    after = parse_metrics("sketchy_history_write_seconds_count 12\n")
+    report = harness.report(before, [], after, 0.0, 0.0)
+    assert report["measured"]["historyGamesUnwritten"] == 1
+    assert "historyGamesUnwritten" in report["breaches"]
