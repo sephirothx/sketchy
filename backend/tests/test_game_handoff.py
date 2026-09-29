@@ -199,20 +199,48 @@ async def rows(session_factory) -> list[EnvelopeRow]:
 
 
 def test_an_envelope_survives_the_round_trip_whole():
+    """Everything as it went in, the drawings in their stored form (#1259)."""
+    import dataclasses
+    import hashlib
+
+    from app.canvas_storage import stored_drawing_wire_payload
+
     game_id = str(generate_uuid())
     envelope = FinishedGameEnvelope(history_for(game_id, "a", "b"), usage_for(game_id), ("rev-1",))
 
     decoded = decode_envelope(encode_envelope(envelope), ENVELOPE_VERSION)
 
-    assert decoded == envelope
+    [drawing] = decoded.history.drawings
+    assert drawing.payload is None, "the frame is not carried twice"
+    assert stored_drawing_wire_payload(drawing.stored.blob, checksum=drawing.stored.checksum) == _frame(0)
+    assert drawing.stored.wire_sha256 == hashlib.sha256(_frame(0)).hexdigest()
+    assert drawing.stored.wire_bytes == len(_frame(0))
+    as_sent = dataclasses.replace(
+        decoded, history=dataclasses.replace(decoded.history, drawings=envelope.history.drawings)
+    )
+    assert as_sent == envelope
     assert decoded.history.record.started_at.tzinfo is not None
-    assert decoded.history.drawings[0].payload == _frame(0)
+
+
+def test_a_frame_that_cannot_be_prepared_travels_as_it_is():
+    """So the replay refuses it where it always did: only if its row is
+    written, and not at all for an erased drawer (#976 review)."""
+    import dataclasses
+
+    envelope = FinishedGameEnvelope(history_for(str(generate_uuid()), "a", "b", drawing=b"not a frame"))
+    [drawing] = decode_envelope(encode_envelope(envelope), ENVELOPE_VERSION).history.drawings
+    assert drawing.stored is None
+    assert drawing == dataclasses.replace(envelope.history.drawings[0])
 
 
 def test_a_version_this_build_cannot_read_is_refused_not_guessed():
     envelope = FinishedGameEnvelope(history_for(str(generate_uuid()), "a", "b"))
     with pytest.raises(handoff_module.EnvelopeUnreadable):
         decode_envelope(encode_envelope(envelope), ENVELOPE_VERSION + 1)
+    # Nor the shape before drawings travelled prepared: pre-launch, nothing
+    # pending of it exists anywhere (#1259).
+    with pytest.raises(handoff_module.EnvelopeUnreadable):
+        decode_envelope(encode_envelope(envelope), ENVELOPE_VERSION - 1)
     with pytest.raises(handoff_module.EnvelopeUnreadable):
         decode_envelope(b"not an envelope", ENVELOPE_VERSION)
 
@@ -600,7 +628,9 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
     monkeypatch.setattr(handoff_module, "encode_envelope", watched("encode", handoff_module.encode_envelope))
     monkeypatch.setattr(handoff_module, "decode_envelope", watched("decode", handoff_module.decode_envelope))
     monkeypatch.setattr(handoff_module, "envelope_checksum", watched("checksum", handoff_module.envelope_checksum))
-    monkeypatch.setattr(repository_module, "prepare_stored_drawing", watched("prepare", prepare_stored_drawing))
+    # Prepared at staging, on the envelope's threads (#1259); the replay only
+    # verifies each blob's checksum, on the drawings' threads.
+    monkeypatch.setattr(handoff_module, "prepare_stored_drawing", watched("prepare", prepare_stored_drawing))
     monkeypatch.setattr(
         repository_module.SqlAlchemyGameHistoryRepository,
         "_payload_hash",
@@ -618,11 +648,11 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
         "before_cursor_execute",
         lambda _c, _cur, statement, *_a: order.append(statement),
     )
-    real_prepare = repository_module.prepare_stored_drawing
+    real_verify = repository_module.stored_drawing_checksum
     monkeypatch.setattr(
         repository_module,
-        "prepare_stored_drawing",
-        watched("prepare", lambda payload: (order.append("<prepare>"), real_prepare(payload))[1]),
+        "stored_drawing_checksum",
+        watched("verify", lambda blob: (order.append("<verify>"), real_verify(blob))[1]),
     )
     ann, bob = await two_players(users)
     worker = worker_for(store, history)
@@ -637,12 +667,13 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
     # spend its ten-second bound and lose the game (#976 review).
     assert all(name.startswith("history-envelope") for name in ran_on["encode"]), ran_on
     assert all(name.startswith("history-envelope") for name in ran_on["decode"]), ran_on
-    assert all(name.startswith("history-encode") for name in ran_on["prepare"]), ran_on
+    assert ran_on["prepare"] and all(name.startswith("history-envelope") for name in ran_on["prepare"]), ran_on
+    assert ran_on["verify"] and all(name.startswith("history-encode") for name in ran_on["verify"]), ran_on
     assert all(name.startswith("history-encode") for name in ran_on["digest"]), ran_on
     write_opens = next(
         index for index, statement in enumerate(order) if statement.startswith("SELECT game_records.id AS")
     )
-    assert "<prepare>" in order and order.index("<prepare>") < write_opens
+    assert "<verify>" in order and order.index("<verify>") < write_opens
     expected_blob, magic, version, checksum = prepare_stored_drawing(frame)
     async with session_factory() as session:
         [drawing] = (await session.scalars(select(TurnDrawing))).all()
@@ -1205,3 +1236,66 @@ async def test_the_last_flush_gives_up_rather_than_holding_the_shutdown(caplog):
 
     assert "left unflushed at shutdown" in caplog.text
     assert real_bound == 5
+
+
+async def test_a_staged_blob_that_fails_its_checksum_is_refused_at_replay(env):
+    """The replay writes the staged blob as it is only once it is proved to
+    be the one prepared (#1259)."""
+    import dataclasses
+
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    game = history_for(str(generate_uuid()), ann, bob, drawing=_path_heavy_frame())
+    staged = decode_envelope(encode_envelope(FinishedGameEnvelope(game)), ENVELOPE_VERSION).history
+    [drawing] = staged.drawings
+    damaged = bytearray(drawing.stored.blob)
+    damaged[-1] ^= 0xFF
+    broken = dataclasses.replace(drawing, stored=dataclasses.replace(drawing.stored, blob=bytes(damaged)))
+    with pytest.raises(ValueError, match="checksum"):
+        await history.save_game(
+            staged.record, staged.participants, staged.turns, staged.score_events, [broken], staged.reactions,
+        )
+
+
+async def test_a_game_hashes_the_same_whether_its_drawings_arrive_as_frames_or_prepared(env):
+    """The content hash names each frame's digest either way, so a replay of
+    a game the direct path already wrote is the same game, not a conflict."""
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    game = history_for(str(generate_uuid()), ann, bob, drawing=_path_heavy_frame())
+    written = await history.save_game(
+        game.record, game.participants, game.turns, game.score_events, game.drawings, game.reactions,
+    )
+    staged = decode_envelope(encode_envelope(FinishedGameEnvelope(game)), ENVELOPE_VERSION).history
+    assert staged.drawings[0].stored is not None
+    assert await history.save_game(
+        staged.record, staged.participants, staged.turns, staged.score_events, staged.drawings, staged.reactions,
+    ) == written
+
+
+async def test_a_replayed_drawing_is_stored_byte_for_byte_as_a_direct_write_stores_it(env):
+    """Preparing at staging moves the work, not the result: the same frame,
+    written directly and replayed from an envelope, is the same row."""
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    frame = _path_heavy_frame()
+    direct = history_for(str(generate_uuid()), ann, bob, drawing=frame)
+    await history.save_game(
+        direct.record, direct.participants, direct.turns, direct.score_events, direct.drawings, direct.reactions,
+    )
+    staged = decode_envelope(
+        encode_envelope(FinishedGameEnvelope(history_for(str(generate_uuid()), ann, bob, drawing=frame))),
+        ENVELOPE_VERSION,
+    ).history
+    await history.save_game(
+        staged.record, staged.participants, staged.turns, staged.score_events, staged.drawings, staged.reactions,
+    )
+    async with session_factory() as session:
+        rows = {
+            str(row.game_id): (
+                row.status, row.format_magic, row.format_version, row.payload, row.byte_size, row.checksum_sha256,
+            )
+            for row in (await session.scalars(select(TurnDrawing))).all()
+        }
+    assert rows[direct.record.id][0] == "ready"
+    assert rows[staged.record.id] == rows[direct.record.id]

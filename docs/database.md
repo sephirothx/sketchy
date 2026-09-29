@@ -1334,8 +1334,10 @@ loop once the game is in history — so a table with no rows is the healthy stat
 row is a game that is on its way or that was lost.
 
 `game_id` **PK** (the game's own UUIDv7, R-HIST-01) · `envelope_version` ·
-`payload` (deflated JSON: the history rows, the drawings as base64, the prompt-usage
-batch; nullable, **null on a failed row**) · `byte_size` · `checksum_sha256` ·
+`payload` (deflated JSON: the history rows, the drawings **already prepared** - each
+one's stored `SKCD` blob as base64 with its checksum, format and the digest of the frame
+it came from - and the prompt-usage batch; nullable, **null on a failed row**) ·
+`byte_size` · `checksum_sha256` ·
 `state` (`pending \| processing \| failed`) · `history_state`, `usage_state`
 (`pending \| done \| none` — the two parts under one manifest, so a crash between them
 resumes only the missing one; `none` is decided at staging when the game had no usage
@@ -1344,6 +1346,17 @@ to write, which is a fact, not a gap) · `attempts` · `next_attempt_at` · `cla
 `failure_code` (`conflict \| exhausted \| unreadable \| invalid`) · `last_error` · `created_at` ·
 `failed_at`. `ix_finished_game_envelopes_due` on `(state, next_attempt_at)` is the
 loop's queue scan.
+
+Since `envelope_version` 2 (#1259) a drawing is prepared once, at staging on the
+envelope's threads, and the replay writes that blob as it is after verifying its
+checksum. Version 1 carried each wire frame as base64 and the replay prepared it again:
+the row, written and deleted within seconds, was the larger part of the WAL a finished
+game wrote. Measured on PostgreSQL 17 (`benchmarks/finish_game_stall.py`, 4 seats ×
+8 turns, a distinct realistic drawing each turn): envelope 227.8 → 59.4 KB, whole-game
+WAL 336.8 → 152.0 KB; a stroke-heavy game's WAL 3.68 → 2.73 MB. A frame that cannot be
+prepared travels as it is, so the replay refuses it exactly where it always did. The
+game's content hash names each frame's digest either way, so a game written directly and
+the same game replayed from its envelope are one game.
 
 The checks keep a row honest: a `failed` row has a code and a time and **no payload**;
 any other row has a payload; a `processing` row has both halves of its claim.
@@ -1566,7 +1579,8 @@ object store. Measured on PostgreSQL 17 over 200 games seeded through the real w
 | One stored drawing | 7,638 B (`SKCD` v2; 34.6 KB on the wire) |
 | `turn_drawings` per finished game | 67.2 KB — heap 1.6, TOAST 64.8, index 0.8 |
 | Every other history table per game | 13.2 KB |
-| WAL per game | 86.2 KB |
+| WAL per game, `turn_drawings` alone | 86.2 KB |
+| WAL per finished game, whole (staging, replay, the envelope's deletion) | 152 KB (#1259; 337 KB before the envelope carried prepared drawings) |
 | Reading one drawing back, checksum verified and decoded | 1.4 ms p95 |
 
 So a drawing is about **five sixths of what a finished game adds to the database**, and

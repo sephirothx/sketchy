@@ -1704,9 +1704,10 @@ all-or-nothing and keyed on the game's stable UUIDv7:
 - No drawing is encoded on the event loop, and none inside that transaction (#976).
   The envelope's JSON, deflate and checksum at staging, its decode at replay, the
   content digest and each drawing's stored form all run on the history write's own
-  small thread pools, not the default one blocking SMTP shares; the drawings are
-  prepared after a one-read check that the game is not already written and before
-  the transaction that locks the players' rows opens. The loop still shares the GIL
+  small thread pools, not the default one blocking SMTP shares. Each drawing is
+  prepared once, at staging, and travels in the envelope in its stored form (#1259);
+  the replay verifies each blob's checksum after a one-read check that the game is
+  not already written and before the transaction that locks the players' rows opens. The loop still shares the GIL
   with a stroke-heavy encode while it runs, at reduced throughput, rather than
   stalling for all of it.
 

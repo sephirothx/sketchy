@@ -179,12 +179,38 @@ class TurnRecordInput:
 
 
 @dataclass(frozen=True)
+class StoredDrawingInput:
+    """A drawing already in its stored form, as the handoff envelope carries it
+    (#1259): the blob the row will hold, and what describes it.
+
+    `wire_sha256` is the digest of the frame it was prepared from, which is
+    what the game's content hash names, so a game hashes the same whether its
+    drawings arrive as frames or already prepared."""
+
+    blob: bytes
+    magic: str
+    version: int
+    checksum: str
+    wire_sha256: str
+    wire_bytes: int
+    action_count: int
+
+
+@dataclass(frozen=True)
 class TurnDrawingInput:
-    """One turn's drawing as it will be stored, or the reason it was not kept."""
+    """One turn's drawing as it will be stored, or the reason it was not kept.
+
+    The drawing is either the wire frame (`payload`) or, from a replayed
+    envelope, its stored form (`stored`); with neither it was not kept."""
 
     turn_id: str
     payload: bytes | None
     unavailable_reason: str | None = None
+    stored: StoredDrawingInput | None = None
+
+    @property
+    def is_kept(self) -> bool:
+        return self.payload is not None or self.stored is not None
 
 
 @dataclass(frozen=True)

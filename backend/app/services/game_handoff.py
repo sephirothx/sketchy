@@ -63,6 +63,8 @@ from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import DataError, DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.canvas_history import binary_action_count
+from app.canvas_storage import prepare_stored_drawing
 from app.deployment import history_encode_workers
 from app.db.models import FinishedGameEnvelope as EnvelopeRow
 from app.db.models import generate_uuid
@@ -83,6 +85,7 @@ from app.repositories.interfaces import (
     PromptUsage,
     PromptUsageConflictError,
     ScoreEventInput,
+    StoredDrawingInput,
     TurnDrawingInput,
     TurnDrawingReactionInput,
     TurnParticipantOutcomeInput,
@@ -96,7 +99,11 @@ from app.services.telemetry import telemetry
 
 logger = logging.getLogger("sketchy.services.game_handoff")
 
-ENVELOPE_VERSION = 1
+# 2 since #1259: drawings travel prepared - the stored SKCD blob, its
+# checksum and the frame's digest - rather than as base64 frames the replay
+# prepared again. No decoder is kept for 1: nothing has been deployed, so no
+# pending envelope of that shape exists anywhere (docs/database.md, Pre-v1).
+ENVELOPE_VERSION = 2
 
 # The one write a room waits on after a game ends: the staging insert. Ten
 # seconds, the same bound the direct write had, and the same one the entry
@@ -362,19 +369,65 @@ def _score_event_out(event: ScoreEventInput) -> dict:
     }
 
 
+def _stored_form(drawing: TurnDrawingInput) -> StoredDrawingInput | None:
+    """The drawing as the row will store it, prepared here, at staging.
+
+    The envelope used to carry each frame as base64 and the replay prepared it
+    again: the envelope row - written and deleted within seconds - was 64% of
+    the WAL a finished game wrote, more than the history itself, and every
+    drawing was deflated twice (#1259). A frame that cannot be prepared
+    travels as it is, so the replay refuses it exactly where it always did:
+    only if its row is written (#976 review)."""
+    if drawing.stored is not None or drawing.payload is None:
+        return drawing.stored
+    try:
+        blob, magic, version, checksum = prepare_stored_drawing(drawing.payload)
+    except Exception:  # noqa: BLE001 - left for the replay to refuse
+        return None
+    return StoredDrawingInput(
+        blob=blob,
+        magic=magic.decode("ascii"),
+        version=version,
+        checksum=checksum,
+        wire_sha256=hashlib.sha256(drawing.payload).hexdigest(),
+        wire_bytes=len(drawing.payload),
+        action_count=binary_action_count(drawing.payload),
+    )
+
+
 def _drawing_out(drawing: TurnDrawingInput) -> dict:
+    stored = _stored_form(drawing)
     return {
         "turn_id": drawing.turn_id,
-        "payload": _bytes_out(drawing.payload),
+        "payload": None if stored is not None else _bytes_out(drawing.payload),
+        "stored": None if stored is None else {
+            "blob": _bytes_out(stored.blob),
+            "magic": stored.magic,
+            "version": stored.version,
+            "checksum": stored.checksum,
+            "wire_sha256": stored.wire_sha256,
+            "wire_bytes": stored.wire_bytes,
+            "action_count": stored.action_count,
+        },
         "unavailable_reason": drawing.unavailable_reason,
     }
 
 
 def _drawing_in(value: dict) -> TurnDrawingInput:
+    stored = value.get("stored")
     return TurnDrawingInput(
         turn_id=value["turn_id"],
         payload=_bytes_in(value.get("payload")),
         unavailable_reason=value.get("unavailable_reason"),
+        stored=None if stored is None else StoredDrawingInput(
+            blob=_bytes_in(stored["blob"]),
+            magic=stored["magic"],
+            version=int(stored["version"]),
+            checksum=stored["checksum"],
+            wire_sha256=stored["wire_sha256"],
+            wire_bytes=int(stored["wire_bytes"]),
+            action_count=int(stored["action_count"]),
+        ),
     )
 
 
@@ -420,7 +473,8 @@ def _usage_in(value: dict | None) -> PromptUsage | None:
 
 
 def encode_envelope(envelope: FinishedGameEnvelope) -> bytes:
-    """One deflated JSON document. Drawings ride as base64 and are the bulk."""
+    """One deflated JSON document. Drawings ride prepared - their stored,
+    already deflated form, base64 - and are still the bulk (#1259)."""
     history = envelope.history
     document = {
         "version": ENVELOPE_VERSION,
