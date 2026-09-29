@@ -1875,6 +1875,12 @@ class GameFlowService:
                     "score": p.score + (carried.get(p.user_id, 0) if p.user_id else 0),
                 }
                 for p in room.player_list()
+                # Seated players, and a spectator only when their account
+                # sat earlier in this game and carries that seat's points -
+                # the record holds the account, so the screen does too. Any
+                # other spectator never scored (R-SPEC-02): placed last with
+                # 0, they read "You finished 4th" (#1262).
+                if not p.is_spectator or (p.user_id is not None and p.user_id in carried)
             ]
             # Ordered by the score each entry carries, not the seat's alone:
             # the podium is read off this order, and a seat holding 100 of

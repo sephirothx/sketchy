@@ -206,7 +206,11 @@ def last_game_for_seat(payload: dict, language: str | None) -> dict:
 def turn_ended_payload(room: Room, drawer_bonus: int | None = None) -> dict:
     game = room.game
     assert game is not None
-    players = room.player_list()
+    # Seated players only: a spectator never scores (R-SPEC-02), and ranked
+    # with the players they read "#3 Watchy 0" on every card and "Your turn:
+    # +0 points · now #3" on their own - while the history record, which
+    # never held them, disagreed with the screen (#1262).
+    players = room.seated_players()
     if drawer_bonus is None:
         drawer_bonus = sum(game.guess_points.values())
     deltas = {

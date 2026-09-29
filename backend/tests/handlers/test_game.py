@@ -365,3 +365,53 @@ async def test_a_pick_is_a_plain_position_and_nothing_else(payload):
     assert response["ok"] is False
     assert response["errorCode"] == "invalid_payload"
     assert room.game.phase == Phase.CHOOSING_PROMPT
+
+
+async def test_a_spectator_is_left_out_of_turn_results_and_final_standings():
+    """R-SPEC-02: spectators never score, so no card ranks them (#1262).
+
+    Ranked with the seated players they read "#3 Watchy 0" on every results
+    card and final standings, and "You finished 3rd with 0 points" on their
+    own - while the history record, which never held them, disagreed.
+    """
+    from tests.fake_game_history_repo import FakeGameHistoryRepository
+    from tests.handlers.helpers import build_context, build_room
+
+    room_manager, room, players = build_room(rounds=1)
+    spectator = room_manager.add_player(room, "Watchy", is_spectator=True)
+    spectator.sid = "sid-watchy"
+    history = FakeGameHistoryRepository()
+    ctx = build_context(room_manager, history)
+    flow = ctx.game_flow
+
+    seated = {player.id for player in players.values()}
+    await flow._start_fresh_game(room, room.seated_players())
+    turn_payloads = []
+    while room.game is not None:
+        game = room.game
+        game.force_prompt_choice()
+        game.snapshot_turn_participants(
+            {p.id: "eligible" for p in room.seated_players() if p.id != game.current_drawer}
+        )
+        game.set_phase_deadline(game.drawing_seconds)
+        for player in room.seated_players():
+            if player.id != game.current_drawer:
+                correct, points = game.submit_guess(player.id, game.prompt)
+                if correct:
+                    player.score += points
+        ctx.sio.emit.reset_mock()
+        await flow._end_turn(room)
+        turn_payloads += [
+            call.args[1] for call in ctx.sio.emit.await_args_list if call.args[0] == "turn_ended"
+        ]
+        ctx.timers.cancel_phase_timer(room.id)
+        await flow._finish_or_next(room)
+        ended = [call.args[1] for call in ctx.sio.emit.await_args_list if call.args[0] == "game_ended"]
+    await ctx.timers.close()
+
+    assert len(turn_payloads) == 2
+    for payload in turn_payloads:
+        assert {entry["playerId"] for entry in payload["scores"]} == seated
+        assert sorted(entry["newRank"] for entry in payload["scores"]) in ([1, 1], [1, 2])
+    assert len(ended) == 1
+    assert {entry["playerId"] for entry in ended[0]["scores"]} == seated
