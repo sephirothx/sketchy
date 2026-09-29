@@ -1784,6 +1784,7 @@ export const NL: Catalogue = {
     sayHelloBeforeTheGame: "Zeg hallo voordat het spel begint.",
     noMessagesYet: "Nog geen berichten.",
     typeYourGuess: "Typ je gok…",
+    youGuessFromTheNextTurn: "Je raadt vanaf de volgende beurt – chat tot dan",
     typeAMessage: "Typ een bericht…",
   },
 

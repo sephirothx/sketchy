@@ -474,7 +474,8 @@ class Game:
     near_misses: dict[str, int] = field(default_factory=dict)
     # Snapshotted when drawing begins. None exists only in direct domain tests
     # and pre-snapshot compatibility paths; an empty dict means nobody may
-    # guess. Later joiners are added explicitly as joined_late.
+    # guess. Later joiners are added as eligible - or as joined_late, when
+    # their account already knows this drawing's prompt (#1317).
     turn_eligibility_reasons: dict[str, str] | None = None
     prompt_auto_picked: bool = False
     completed_turns: list[CompletedTurnStats] = field(default_factory=list)
@@ -725,8 +726,12 @@ class Game:
             return True
         return self.turn_index + 1 >= self.total_turns
 
-    def add_player_to_rotation(self, token: str) -> None:
-        """Add a mid-game player without moving the current turn cursor."""
+    def add_player_to_rotation(self, token: str, *, watched_turn: bool = False) -> None:
+        """Add a mid-game player without moving the current turn cursor.
+
+        `watched_turn` is a seat whose account spectated the drawing underway
+        (`Room.turn_prompt_aware`): it sits that turn out and guesses from the next.
+        """
         if token in self.turn_order:
             return
         if token not in self.roster:
@@ -743,8 +748,13 @@ class Game:
             # mean typing into a chat nobody but the drawer reads. The turn
             # therefore also waits on it, and its outcome is recorded like any
             # other guesser's - late arrival is not a reason to be ineligible.
+            # Having watched this very drawing as a spectator is (#1317): the
+            # prompt, or the chat that gives it away, is already theirs.
             self.turn_eligibility_reasons.setdefault(
-                token, TurnEligibilityReason.ELIGIBLE.value
+                token,
+                TurnEligibilityReason.JOINED_LATE.value
+                if watched_turn
+                else TurnEligibilityReason.ELIGIBLE.value,
             )
         current_round = self.round_number
         current_drawer = self.current_drawer

@@ -499,6 +499,14 @@ class Room:
     # room - let them straight back in with a fresh seat and a clean score,
     # and the vote had bought the room a few seconds.
     kicked_user_ids: set[str] = field(default_factory=set, repr=False)
+    # Accounts that know the prompt of the drawing now underway: the spectators
+    # when it began and any who arrived during it (#1317) - a spectator may
+    # have seen the prompt (spectators_see_prompt) and has read the drawer's
+    # and correct guessers' chat (R-SPEC-04) - and every correct guesser.
+    # Leaving and coming back as a player must not make any of them a guesser
+    # of that turn again: a correct guesser scored it twice (review of #1330).
+    # Replaced as each drawing begins; they are free to guess the next.
+    turn_prompt_aware: set[str] = field(default_factory=set, repr=False)
     state: str = "waiting"  # waiting | playing
     game: Optional[Game] = None
     canvas_generation: int = 0

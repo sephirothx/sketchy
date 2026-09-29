@@ -986,6 +986,137 @@ async def test_a_player_who_joins_mid_turn_may_still_guess():
     await ctx.timers.close()
 
 
+async def test_a_spectator_who_rejoins_as_a_player_sits_out_the_turn_it_watched():
+    """#1317: leaving and coming back as a player enrolled a spectator in the
+    turn it had just watched - seen the prompt, or the chat that gives it
+    away - so it could score a guess it already knew. It guesses next turn."""
+    ctx, sio, room, drawer = await _room_with_a_turn_in_progress()
+    watched = await sio.handlers["/"]["join_room"](
+        "watcher-sid", {"roomId": room.id, "nickname": "Watcher", "asSpectator": True}
+    )
+    assert watched["ok"] is True
+    assert "user-watcher-sid" in room.turn_prompt_aware
+    await sio.handlers["/"]["leave_room"]("watcher-sid")
+    assert all(player.user_id != "user-watcher-sid" for player in room.players.values())
+
+    rejoined = await sio.handlers["/"]["join_room"](
+        "watcher-sid", {"roomId": room.id, "nickname": "Watcher"}
+    )
+    assert rejoined["ok"] is True
+    seat = room.players[rejoined["playerId"]]
+    assert not seat.is_spectator
+    assert room.game.is_turn_eligible(seat.id) is False
+    await sio.handlers["/"]["guess"]("watcher-sid", {"text": "volleyball"})
+    assert seat.id not in room.game.correct_guessers
+    assert seat.score == 0
+
+    # The turn ends on the one eligible guesser; the next is the seat's own.
+    guesser = next(
+        player for player in room.seated_players()
+        if player.id not in (drawer.id, seat.id)
+    )
+    await sio.handlers["/"]["guess"](guesser.sid, {"text": "volleyball"})
+    assert room.game.phase.value == "turn_results"
+    turn = room.game.completed_turns[-1]
+    assert turn.total_guesser_count == 1
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
+async def test_a_correct_guesser_who_rejoins_cannot_score_the_turn_again():
+    """Review of #1330: a correct guesser knows the prompt too, and leaving
+    and rejoining as a player made the new seat an eligible guesser - the
+    account scored the same drawing twice."""
+    ctx, sio, room, drawer = await _room_with_a_turn_in_progress()
+    joined = await sio.handlers["/"]["join_room"](
+        "twice-sid", {"roomId": room.id, "nickname": "Twice"}
+    )
+    first = room.players[joined["playerId"]]
+    await sio.handlers["/"]["guess"]("twice-sid", {"text": "volleyball"})
+    assert first.id in room.game.correct_guessers
+    assert "user-twice-sid" in room.turn_prompt_aware
+
+    await sio.handlers["/"]["leave_room"]("twice-sid")
+    rejoined = await sio.handlers["/"]["join_room"](
+        "twice-sid", {"roomId": room.id, "nickname": "Twice"}
+    )
+    seat = room.players[rejoined["playerId"]]
+    assert room.game.is_turn_eligible(seat.id) is False
+    await sio.handlers["/"]["guess"]("twice-sid", {"text": "volleyball"})
+    assert seat.id not in room.game.correct_guessers
+    assert seat.score == 0
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
+async def test_a_seat_that_sits_the_turn_out_is_told_and_guesses_the_next():
+    """A spectator present when the drawing began leaves and rejoins: its
+    client is told it sits the turn out (review of #1330), so it offers chat
+    rather than a guess field that goes nowhere - and the next drawing is its
+    to guess."""
+    ctx, sio, room, drawer = await _room_with_a_turn_in_progress()
+    # Watching from before this drawing began: taken by the snapshot itself.
+    watched = await sio.handlers["/"]["join_room"](
+        "watcher-sid", {"roomId": room.id, "nickname": "Watcher", "asSpectator": True}
+    )
+    assert watched["ok"] is True
+    room.turn_prompt_aware = set()
+    await ctx.game_flow._begin_drawing(room)
+    assert room.turn_prompt_aware == {"user-watcher-sid"}
+    await sio.handlers["/"]["leave_room"]("watcher-sid")
+    sio.emit.reset_mock()
+    rejoined = await sio.handlers["/"]["join_room"](
+        "watcher-sid", {"roomId": room.id, "nickname": "Watcher"}
+    )
+    seat = room.players[rejoined["playerId"]]
+    assert room.game.is_turn_eligible(seat.id) is False
+    synced = [
+        call.args[1] for call in sio.emit.await_args_list
+        if call.args[0] == "sync_game" and call.kwargs.get("to") == "watcher-sid"
+    ]
+    assert synced and synced[-1].get("sitsOutTurn") is True
+    # Every other guesser's payload stays as it was: no key at all.
+    regular = next(p for p in room.seated_players() if p.id not in (drawer.id, seat.id))
+    from app.presenters import turn_payload
+    assert "sitsOutTurn" not in turn_payload(room.game, regular)
+
+    # The turn ends on its eligible guesser; the next drawing takes its
+    # prompt-aware accounts afresh, and this seat was a player when it began.
+    await sio.handlers["/"]["guess"](regular.sid, {"text": "volleyball"})
+    assert room.game.phase.value == "turn_results"
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.game_flow._start_turn(room)
+    next_drawer = room.players[room.game.current_drawer]
+    picked = await sio.handlers["/"]["select_prompt"](next_drawer.sid, {"index": 0})
+    assert picked == {"ok": True}
+    assert room.game.phase.value == "drawing"
+    assert "user-watcher-sid" not in room.turn_prompt_aware
+    if next_drawer.id != seat.id:
+        assert room.game.is_turn_eligible(seat.id) is True
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
+async def test_a_drawing_takes_its_watchers_afresh():
+    """Only the drawing a spectator watched is closed to it (#1317): the set is
+    replaced as each drawing begins, from the spectators present then."""
+    ctx, sio, room, _drawer = await _room_with_a_turn_in_progress()
+    watched = await sio.handlers["/"]["join_room"](
+        "watcher-sid", {"roomId": room.id, "nickname": "Watcher", "asSpectator": True}
+    )
+    assert watched["ok"] is True
+    room.turn_prompt_aware = {"user-someone-who-left"}
+    room.game.phase = Phase.DRAWING
+    await ctx.game_flow._begin_drawing(room)
+    assert room.turn_prompt_aware == {"user-watcher-sid"}
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
 async def test_a_turn_waits_for_the_player_who_joined_mid_turn():
     """Every eligible guesser ends the turn early, and the latecomer is one."""
     ctx, sio, room, drawer = await _room_with_a_turn_in_progress()

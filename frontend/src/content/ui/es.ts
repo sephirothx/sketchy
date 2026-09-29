@@ -1783,6 +1783,7 @@ export const ES: Catalogue = {
     sayHelloBeforeTheGame: "Saluda antes de que empiece la partida.",
     noMessagesYet: "Aún no hay mensajes.",
     typeYourGuess: "Escribe tu respuesta…",
+    youGuessFromTheNextTurn: "Adivinas desde el siguiente turno; por ahora, chatea",
     typeAMessage: "Escribe un mensaje…",
   },
 

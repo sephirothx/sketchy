@@ -83,6 +83,10 @@ interface GameStore {
   drawerTransport: string | null;
   myPrompt: string | null;
   guessedPrompt: string | null;
+  /** This seat is a guesser the drawing froze out - AFK or away when it
+      began, or an account that already knew the prompt (#1317) - so it
+      chats rather than guesses this turn (review of #1330). */
+  sitsOutTurn: boolean;
   promptChoices: string[];
   /** The turn `promptChoices` were offered for, sent back with the pick so a
   click that lands after the turn moved on is refused rather than taken as
@@ -169,6 +173,7 @@ interface GameStore {
         drawing, and this seat's own receipt if it is one of them (#870). */
     correctGuessers?: [string, number][];
     guessed?: (GuessBreakdown & { prompt: string }) | null;
+    sitsOutTurn?: boolean;
   }) => void;
   setMyPrompt: (prompt: string | null) => void;
   setGuessedPrompt: (prompt: string | null, breakdown?: GuessBreakdown | null) => void;
@@ -222,6 +227,7 @@ const initialGameFields = {
   drawerTransport: null as string | null,
   myPrompt: null as string | null,
   guessedPrompt: null as string | null,
+  sitsOutTurn: false,
   promptChoices: [] as string[],
   promptChoicesTurnId: null as string | null,
   roundNumber: 0,
@@ -365,6 +371,7 @@ export const useGameStore = create<GameStore>((set, get) => ({
       maskedPrompt: "",
       myPrompt: null,
       guessedPrompt: null,
+      sitsOutTurn: false,
       promptChoices: [],
       lastTurnResult: null,
       turnCorrectGuesses: {},
@@ -377,9 +384,10 @@ export const useGameStore = create<GameStore>((set, get) => ({
       phaseStartedAt: Date.now(),
       phaseDurationSeconds: seconds,
     }),
-  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions, correctGuessers, guessed, drawerTransport }) =>
+  startDrawing: ({ drawerId, maskedPrompt, roundNumber, totalRounds, seconds, hintCost, letterPrices, hintSpend, maxHintSpend, isSync, turnId, reactions, correctGuessers, guessed, drawerTransport, sitsOutTurn }) =>
     set((s) => ({
       phase: "drawing",
+      sitsOutTurn: sitsOutTurn ?? false,
       // Null until a turn says otherwise, and back to null between turns,
       // where the baseline applies - what playback assumed before the server
       // said anything (#887). Nothing to bound here: `flushIntervalFor`

@@ -2588,6 +2588,7 @@
    "maxHintSpend",
    "remainingSeconds",
    "roundNumber",
+   "sitsOutTurn",
    "totalRounds",
    "turnId"
   ],
@@ -2691,6 +2692,7 @@
    "maskedPrompt",
    "maxHintSpend",
    "roundNumber",
+   "sitsOutTurn",
    "totalRounds",
    "turnId"
   ],
@@ -2853,7 +2855,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 49,
+ "protocolVersion": 50,
  "refusal": {
   "codes": [
    "invalid_payload",

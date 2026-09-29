@@ -1799,6 +1799,7 @@ export const EN = {
     sayHelloBeforeTheGame: "Say hello before the game starts.",
     noMessagesYet: "No messages yet.",
     typeYourGuess: "Type your guess…",
+    youGuessFromTheNextTurn: "Chat for now: you guess from the next turn",
     typeAMessage: "Type a message…",
   },
 

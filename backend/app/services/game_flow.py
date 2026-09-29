@@ -41,6 +41,7 @@ from app.presenters import (
     spelled_for_seat,
     turn_ended_payload,
     hint_prices,
+    sits_out_turn,
     room_state_payload,
     system_chat_message,
     turn_payload,
@@ -1454,6 +1455,14 @@ class GameFlowService:
                 if player.id != game.current_drawer
             }
         )
+        # Who is watching this drawing, so a spectator who leaves and comes
+        # back as a player sits it out (#1317); correct guessers join them as
+        # they guess (handlers/chat.py). Last turn's are free.
+        room.turn_prompt_aware = {
+            player.user_id
+            for player in room.players.values()
+            if player.is_spectator and player.user_id
+        }
         # The drawing deadline first: a turn ended below reads its duration
         # off it, and the choose-prompt deadline still standing here would
         # record a turn that lasted nothing as most of a drawing phase.
@@ -1508,6 +1517,8 @@ class GameFlowService:
                     "hintSpend": 0,
                     "maxHintSpend": MAX_HINT_SPEND,
                     "drawerTransport": drawer_transport,
+                    # A guesser the turn froze out, told so (review of #1330).
+                    **({"sitsOutTurn": True} if sits_out_turn(game, p) else {}),
                 },
                 to=p.sid,
             )

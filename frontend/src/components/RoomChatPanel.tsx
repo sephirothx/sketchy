@@ -24,6 +24,8 @@ interface RoomChatPanelProps {
   mode: "waiting" | "playing" | "game-end";
   isDrawer: boolean;
   canGuess: boolean;
+  /** A guesser this drawing froze out: the field chats, and says why. */
+  sitsOutTurn?: boolean;
   myPlayerId?: string | null;
   targetPromptLengths: string[];
   hideMaskedPrompt?: boolean;
@@ -63,6 +65,7 @@ export function RoomChatPanel({
   mode,
   isDrawer,
   canGuess,
+  sitsOutTurn = false,
   myPlayerId = null,
   targetPromptLengths,
   hideMaskedPrompt = false,
@@ -466,7 +469,13 @@ export function RoomChatPanel({
                   }, 150);
                 }}
                 placeholder={
-                  mode === "playing" && canGuess ? ui.roomChatPanel.typeYourGuess : ui.roomChatPanel.typeAMessage
+                  mode === "playing" && canGuess
+                    ? ui.roomChatPanel.typeYourGuess
+                    : mode === "playing" && sitsOutTurn
+                      // Not "Type your guess" over a field that cannot guess:
+                      // it chats this turn, and says so (review of #1330).
+                      ? ui.roomChatPanel.youGuessFromTheNextTurn
+                      : ui.roomChatPanel.typeAMessage
                 }
                 maxLength={500}
                 autoComplete="off"
