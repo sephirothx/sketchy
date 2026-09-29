@@ -2754,7 +2754,10 @@ The database holds three kinds of value nothing re-checked unless somebody thoug
 the stored drawings, the projections derived from facts, and the invariants only the
 writers prove. A supervised loop checks all of them (#894,
 [`services/integrity_audit.py`](../backend/app/services/integrity_audit.py)), a bounded
-slice per pass, off the request path, and **reports without repairing**:
+slice per pass, off the request path and off the event loop - a stored drawing's hash and
+decodes run on the history encode pool, and the games check's comparisons are made by
+the database, which returns only the rows that disagree (#1251) - and **reports without
+repairing**:
 
 | Check | What it compares | On a mismatch |
 | --- | --- | --- |

@@ -66,6 +66,10 @@ DEFAULT_BATCH_SIZE = 500
 DEFAULT_BYTE_BUDGET = 64 * 1024 * 1024
 # How many failing rows a report names before it only counts them.
 DEFAULT_REPORTED_ERRORS = 200
+# Drawings checked per job on the history encode pool: about 25 ms of a
+# thread for realistic drawings, so a finished game's encode queued behind
+# the audit waits that long rather than a whole group's ~160 ms (#1251).
+CHECKS_PER_JOB = 16
 
 
 @dataclass(frozen=True)
@@ -285,11 +289,15 @@ async def verify_stored_drawings(
                 del payloads
                 # The hash, the SKCD inflate and the history decode are the
                 # pass's whole cost, and on the loop they were ~155 ms stalls
-                # back to back for ~2 s every five minutes (#1251).
-                kinds = await off_loop(_check_group, present)
-                for (row, _blob), kind in zip(present, kinds, strict=True):
-                    if kind is not None:
-                        result._note(kind, row.turn_id, reported_errors)
+                # back to back for ~2 s every five minutes (#1251). A few
+                # rows per job, so a finished game's encode, which shares
+                # these threads, never waits behind a whole group.
+                for start in range(0, len(present), CHECKS_PER_JOB):
+                    chunk = present[start:start + CHECKS_PER_JOB]
+                    kinds = await off_loop(_check_group, chunk)
+                    for (row, _blob), kind in zip(chunk, kinds, strict=True):
+                        if kind is not None:
+                            result._note(kind, row.turn_id, reported_errors)
                 del present
             last = rows[-1]
             position = DrawingCursor(created_at=last.created_at, turn_id=last.turn_id)

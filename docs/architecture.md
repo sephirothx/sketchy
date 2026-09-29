@@ -422,7 +422,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Phase/hint/restart/disconnect timers | `TimerManager` (memory) | No |
 | Drawing recap for the last game in a room | `Room.last_game_drawings` (memory) | No |
 | Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
-| Encoding a finished game, folding a prompt-list selection's answers cold (#1237), and the integrity audit's drawing checks (#1251) | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `encode_pool.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
+| Encoding a finished game, folding a prompt-list selection's answers cold (#1237), and the integrity audit's drawing checks (#1251, 16 drawings a job) | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `encode_pool.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
 | Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by revision ids and fold, reused while the members' moderation fingerprint is unchanged (#1237) | No: re-derived from the revisions on a miss |
 | A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
@@ -1918,9 +1918,9 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/db/models.py`](../backend/app/db/models.py) | SQLAlchemy ORM models for Sketchy database tables. |
 | [`app/db/types.py`](../backend/app/db/types.py) | Database types that normalize dialect differences at persistence boundaries. |
 | [`app/deployment.py`](../backend/app/deployment.py) | Deployment invariants that must fail before application startup mutates state. |
-| [`app/encode_pool.py`](../backend/app/encode_pool.py) | The threads CPU-bound drawing work runs on, so the event loop does not. |
 | [`app/domain_values.py`](../backend/app/domain_values.py) | Canonical stored values shared by validation, domain logic, and schema. |
 | [`app/drawing_rules.py`](../backend/app/drawing_rules.py) | A room's drawing rules: which tools and which colors a drawer may use. |
+| [`app/encode_pool.py`](../backend/app/encode_pool.py) | The threads CPU-bound drawing work runs on, so the event loop does not. |
 | [`app/game.py`](../backend/app/game.py) | Per-room game state machine: turn rotation, prompt choice, drawing timer, scoring. |
 | [`app/handlers/__init__.py`](../backend/app/handlers/__init__.py) | Wire all Socket.IO handler domains onto a server. |
 | [`app/handlers/chat.py`](../backend/app/handlers/chat.py) | Socket.IO handlers for the chat domain. |

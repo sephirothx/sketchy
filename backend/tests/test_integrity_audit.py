@@ -198,6 +198,32 @@ async def test_guesser_counts_are_of_eligible_rows_and_only_where_there_are_rows
     assert report["games"]["mismatches_total"] == 0, "no rows: nothing to compare"
 
 
+async def test_the_games_check_is_counted_by_the_database_not_in_python(world):
+    """A slice of maximum-size games pulled 240,000 outcome rows into
+    Python to recount them - a 514 ms stall (#1251). Every statement the
+    slice sends that reads outcome or ledger rows aggregates them."""
+    from sqlalchemy import event
+
+    factory, _ = world
+    engine = factory.kw["bind"]
+    reads: list[str] = []
+
+    def note(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if "turn_participant_outcomes" in statement or "score_events" in statement:
+            reads.append(statement)
+
+    event.listen(engine.sync_engine, "before_cursor_execute", note)
+    try:
+        async with factory() as session, session.begin():
+            await integrity._games_slice(session, None)
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", note)
+    assert reads, "the slice read outcomes"
+    for statement in reads:
+        aggregated = "count(" in statement.lower() or "sum(" in statement.lower()
+        assert "GROUP BY" in statement.upper() and aggregated, statement
+
+
 async def test_a_pass_stops_at_its_byte_budget_and_a_restart_resumes_where_it_stopped(world, monkeypatch):
     factory, _ = world
     users = SqlAlchemyUserRepository(factory)
