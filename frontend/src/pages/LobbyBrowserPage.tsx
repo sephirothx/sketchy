@@ -38,7 +38,7 @@ import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useOverlayOpen } from "../hooks/useOverlayRoute";
-import { pendingStylesheets } from "../lib/pendingStylesheets";
+import { whenStyleRule } from "../lib/styleRuleReady";
 
 /* The first-time languages question (#1219) is asked once per identity, so it
    waits for its own chunk rather than sitting in the entry one, and arrives
@@ -51,14 +51,14 @@ import { pendingStylesheets } from "../lib/pendingStylesheets";
    when that is what fails, throws past a `.then` failure handler - to the
    app's crash page (review of #1274). The helper does not wait for a sheet
    another chunk's prefetch already put in the page - Settings shares this
-   one - so the question also waits for links still loading (review of
-   #1312). */
+   one - so the question waits for its own rule to be in the page, and is not
+   asked this time if it is not there within the wait (review of #1312). */
 const loadQuestion = () => import("../components/PlayLanguagesQuestion");
 const PlayLanguagesQuestion = lazy(
   async (): Promise<{ default: ComponentType<{ onDone: () => void }> }> => {
     try {
       const { PlayLanguagesQuestion: Question } = await loadQuestion();
-      await pendingStylesheets();
+      if (!(await whenStyleRule(".play-languages-question-body"))) return { default: () => null };
       return { default: Question };
     } catch {
       return { default: () => null };

@@ -163,3 +163,43 @@ async def test_a_question_whose_stylesheet_cannot_load_is_not_asked_and_breaks_n
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_a_shared_sheet_later_than_the_wait_skips_the_question_rather_than_unstyling_it():
+    """Review of #1312, round two: the wait's timeout was taken for "loaded",
+    so a shared sheet still loading after three seconds let the question draw
+    without its rules. Past the wait it is not asked this time, and stays due
+    for the next load."""
+    shared = _sheets_holding_the_question()
+    assert shared, "no built stylesheet holds the question's rules"
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        await context.add_init_script(DUE)
+        await context.add_init_script(WATCH_QUESTION)
+        await context.add_init_script(
+            "document.addEventListener('DOMContentLoaded', () => {"
+            + "".join(
+                f"const l{i} = document.createElement('link'); l{i}.rel = 'stylesheet';"
+                f" l{i}.href = '/assets/{name}'; document.head.append(l{i});"
+                for i, name in enumerate(shared)
+            )
+            + "});"
+        )
+
+        async def hold_back(route):
+            await asyncio.sleep(5)
+            await route.continue_()
+
+        await context.route(re.compile(r".*/assets/(" + "|".join(re.escape(n) for n in shared) + r")$"), hold_back)
+        page = await context.new_page()
+        try:
+            await use_guest_name(page, f"Late{uuid4().hex[:6]}")
+            await page.goto(BASE_URL)
+            await page.wait_for_timeout(7_000)
+            first = await page.evaluate("() => window.__questionFirstDisplay")
+            assert first is None, f"the question was drawn, first with display: {first}"
+            assert await page.evaluate("localStorage.getItem('sketchy_playlanguages_question_due')") == "1"
+        finally:
+            await context.close()
+            await browser.close()

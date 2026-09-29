@@ -259,8 +259,9 @@ in Settings' sheet, prefetched on a 1 s timer in Safari, so it showed unstyled f
 second; it is now its own lazy chunk importing `styles/lazy/play-languages.css`, which
 a lazy chunk waits for before it renders (#1274). Vite's preload helper does not wait
 for a sheet another chunk's prefetch already put in the page, and Settings shares this
-one, so the question also waits, bounded, for any stylesheet link still loading
-([`lib/pendingStylesheets.ts`](../frontend/src/lib/pendingStylesheets.ts)). The import is
+one, so the question waits for its own rule to be in the page - and when it is not
+there within three seconds, the question is not asked this time rather than drawn
+without it ([`lib/styleRuleReady.ts`](../frontend/src/lib/styleRuleReady.ts)). The import is
 caught whole, because the helper throws past a `.then` failure handler when the sheet
 is what fails. A tab open across a deploy
 asks for chunk names the server no longer has.
