@@ -65,36 +65,51 @@ export function WarningNotice() {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const acknowledgeRef = useRef<HTMLButtonElement | null>(null);
+  // Pushes so far. A read that was already on its way when one landed was
+  // sent before that warning existed, and its "nothing pending" must not take
+  // the notice back (#1336).
+  const pushes = useRef(0);
+  // Connections so far. A push reaches the sockets that are there when it is
+  // sent, so a tab still opening its connection - or between a drop and the
+  // reconnect - hears nothing, and reads again once it is connected (#1336).
+  const [connections, setConnections] = useState(0);
 
   useEffect(() => {
     if (!hasResolved || !userId) return;
     let cancelled = false;
+    const pushesBefore = pushes.current;
     void fetchPendingWarning()
       .then((result) => {
-        if (!cancelled) setWarning(result.warning);
+        if (!cancelled && pushes.current === pushesBefore) setWarning(result.warning);
       })
       .catch(() => {
         // Nothing to do: the warning stays pending server-side and will be
-        // fetched again on the next visit.
+        // fetched again on the next connection or visit.
       });
     return () => {
       cancelled = true;
     };
-  }, [hasResolved, userId]);
+  }, [hasResolved, userId, connections]);
 
   useEffect(() => {
     // A player who is online when the moderator decides hears it now; the
-    // fetch above is the catch-up route for everybody else.
+    // read above is the catch-up route for everybody else.
     function onModeratorWarning(payload: unknown) {
       const pushed = warningFromPayload(payload);
       if (pushed) {
+        pushes.current += 1;
         setWarning(pushed);
         setFailed(false);
       }
     }
+    function onConnect() {
+      setConnections((count) => count + 1);
+    }
     socket.on("moderator_warning", onModeratorWarning);
+    socket.on("connect", onConnect);
     return () => {
       socket.off("moderator_warning", onModeratorWarning);
+      socket.off("connect", onConnect);
     };
   }, []);
 

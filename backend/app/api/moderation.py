@@ -3191,7 +3191,8 @@ def create_moderation_router(
     @router.get("/warnings/pending")
     async def pending_warning(request: Request):
         """The caller's own oldest unacknowledged warning - the catch-up
-        route for a player who was offline when it was issued. The payload is
+        route for a player who was offline when it was issued, or whose tab had
+        no socket to carry the push (#1336). The payload is
         shared with the live socket push (`app/auth/warnings.py`)."""
         user_id = getattr(request.state, "user_id", None)
         if not user_id:
