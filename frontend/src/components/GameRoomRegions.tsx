@@ -326,6 +326,11 @@ export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPl
   );
 
   const amDrawer = useGameStore(selectAmDrawer);
+  // Offered only where buying can work: a seat that may guess this turn
+  // (R-SPEC-02). A spectator was shown every price and each tap was an error
+  // toast (#1268); the server sends them no prices either.
+  const canBuyHint = phase === "drawing" && !amDrawer && !guessedPrompt
+    && Boolean(me) && !me?.isSpectator && !me?.isAfk;
   const canDrawNow = phase === "drawing" && drawerId === playerId;
   const isDrawerPerson = drawerId === playerId;
   const drawerPrompt =
@@ -384,7 +389,7 @@ export const GameplayRegion = memo(function GameplayRegion({ canvasRef, onOpenPl
           promptChoicesTurnId={promptChoicesTurnId}
           revealedPrompt={phase === "turn_results" ? lastTurnResult?.prompt ?? null : guessedPrompt}
           hintMode={hintMode}
-          canBuyHint={phase === "drawing" && !amDrawer && !guessedPrompt}
+          canBuyHint={canBuyHint}
           nextHintCost={nextHintCost}
           letterPrices={letterPrices}
           hintSpend={hintSpend}

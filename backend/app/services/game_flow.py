@@ -40,6 +40,7 @@ from app.presenters import (
     last_game_for_seat,
     spelled_for_seat,
     turn_ended_payload,
+    hint_prices,
     room_state_payload,
     system_chat_message,
     turn_payload,
@@ -1471,7 +1472,8 @@ class GameFlowService:
         drawer_transport = self._drawer_transport(room)
         # One emit per socket, deliberately, even though at turn start every
         # guesser's payload is identical - nothing has been bought yet, so only
-        # the drawer and prompt-seeing spectators actually diverge. Broadcasting
+        # the drawer, the spectators (no prices, #1268; the answer too where
+        # they may see it) and seats the turn froze out actually diverge. Broadcasting
         # the guesser shape and following with a private event for the few that
         # differ saves no bytes at all (a deflate context is per connection, so
         # a broadcast is compressed once per socket regardless) and about 55-271
@@ -1486,6 +1488,7 @@ class GameFlowService:
                 # countdown - and the client takes `turn_started` as the
                 # phase it is in.
                 return
+            hint_cost, letter_prices = hint_prices(game, p.id, is_spectator=p.is_spectator)
             await self._sio.emit(
                 "turn_started",
                 {
@@ -1499,8 +1502,8 @@ class GameFlowService:
                     "roundNumber": game.round_number,
                     "totalRounds": game.rounds_total,
                     "seconds": game.drawing_seconds,
-                    "hintCost": game.hint_cost(p.id),
-                    "letterPrices": game.wheel_letter_prices(p.id) if game.hint_mode == "wheel" else None,
+                    "hintCost": hint_cost,
+                    "letterPrices": letter_prices,
                     "hintSpend": 0,
                     "maxHintSpend": MAX_HINT_SPEND,
                     "drawerTransport": drawer_transport,

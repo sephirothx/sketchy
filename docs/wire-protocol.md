@@ -1254,9 +1254,15 @@ all resolve seats server-side.
 **`turn_started`** is emitted per socket because `maskedPrompt`, `hintCost`,
 `letterPrices`, and `hintSpend` are private to that viewer. A spectator sees the masked
 prompt unless the room enabled `spectatorsSeePrompt`; the drawer sees the answer.
+`hintCost` and `letterPrices` are `null` for a seat that cannot buy this turn - a
+spectator, or a seat that was not eligible when drawing began - here and in
+`sync_game`'s turn payload ([`presenters.hint_prices`](../backend/app/presenters.py)):
+spectators were sent both, and a Wheel of Fortune room showed them 26 priced keys that
+refused every tap (#1268).
 
 At *turn start* those four are in fact identical for every guesser — nothing has been
-bought yet — so only the drawer and any prompt-seeing spectators genuinely diverge, and
+bought yet — so only the drawer, the spectators (no prices, #1268; the answer too where
+they may see the prompt) and seats the turn froze out genuinely diverge, and
 collapsing the loop into one broadcast plus a small private follow-up looks free.
 [`benchmarks/turn_start.py`](../benchmarks/turn_start.py) measures what that would buy:
 **zero bytes** (see §1 — a broadcast is compressed per connection either way) and
