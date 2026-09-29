@@ -291,7 +291,9 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         if hint:
             # The guesser should always see their own guess, even when it's
             # not broadcast to the rest of the room.
-            recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
+            recipients = ctx.game_flow._privileged_sids(
+                room, game, exclude_sid=sid, spectators=room.spectators_see_prompt
+            )
             line = _chat_line(player, text)
             await _emit_player_chat(
                 ctx,
@@ -338,7 +340,9 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
     # line still reaches the prompt-aware room, and is still retained with
     # the guesser in its audience.
     line = _chat_line(player, text, correct=True)
-    recipients = ctx.game_flow._privileged_sids(room, game, exclude_sid=sid)
+    recipients = ctx.game_flow._privileged_sids(
+        room, game, exclude_sid=sid, spectators=room.spectators_see_prompt
+    )
     await _emit_player_chat(
         ctx,
         room,

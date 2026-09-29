@@ -1928,9 +1928,19 @@ class GameFlowService:
         game: Game,
         *,
         exclude_sid: str | None = None,
+        spectators: bool = True,
     ) -> list[str]:
         """Return sids of players who may see spectator chat during this turn:
-        the drawer, all correct guessers, and all spectators.
+        the drawer, all correct guessers, and - unless `spectators` is false -
+        all spectators.
+
+        A guess's own echo passes `spectators=room.spectators_see_prompt`: a
+        correct guess is the answer and a close one nearly, so in a room that
+        keeps the prompt from spectators (R-SPEC-03, the default) they read
+        "Gerda: helmet" beside tiles still masked, and after the first correct
+        guess the rule no longer meant what it said (#1281). They keep the
+        room-wide `correct_guess` - who got it - and the chat among the
+        prompt-aware audience R-SPEC-04 gives them.
         """
         return [
             p.sid
@@ -1940,7 +1950,7 @@ class GameFlowService:
             and (
                 p.id in game.correct_guessers
                 or p.id == game.current_drawer
-                or p.is_spectator
+                or (spectators and p.is_spectator)
             )
         ]
 
