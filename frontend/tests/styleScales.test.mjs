@@ -82,8 +82,8 @@ test("transitions and animations name their properties and use the motion tokens
   // A transition that joins the steps of a clock follows that clock's
   // cadence, not the motion scale.
   const clocked = new Set([
-    ".timer-bar-fill", // Timer.tsx recomputes the width every 250ms
-    ".turn-results-progress-track span", // the phase clock ticks every 100ms
+    ".timer-bar-fill", // Timer.tsx moves the fill every 250ms
+    ".turn-results-progress-track span", // the phase clock moves it every 100ms
   ]);
   // Animations whose length is part of what they show rather than how fast
   // something arrives, named by keyframes.
@@ -117,7 +117,9 @@ test("transitions and animations name their properties and use the motion tokens
     // never arrives, which is not a motion at all.
     if (rule.selector.startsWith("input:-webkit-autofill")) return [];
     return literal(value)
-      .filter((part) => !(clocked.has(rule.selector) && /^\s*width /.test(part)))
+      // The clocked bars move by `transform` (#1256); a `width` there is a
+      // layout per frame again, and is not exempt.
+      .filter((part) => !(clocked.has(rule.selector) && /^\s*transform /.test(part)))
       .map((part) => `${rule.where}: ${part.trim()}`);
   });
   assert.deepEqual(
