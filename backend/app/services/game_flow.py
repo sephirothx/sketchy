@@ -1442,6 +1442,21 @@ class GameFlowService:
     async def _begin_drawing(self, room: Room) -> None:
         game = room.game
         assert game is not None
+        # A seat the game started without - inside its reconnect grace, or
+        # AFK, when the host pressed start (`Room.active_players`) - that is
+        # back is enrolled the way a mid-game arrival is, before the guessers
+        # are frozen below: it guesses and scores from this turn (R-GUESS-05),
+        # so it draws in its turn too, and the history has a seat to credit.
+        # Left out, its awards had no seat while the drawer's bonus still
+        # counted them, and the writer refused the whole game (#1338).
+        for player in room.seated_players():
+            if (
+                player.connected
+                and not player.is_afk
+                and player.id not in game.turn_order
+                and player.id != game.current_drawer
+            ):
+                game.add_player_to_rotation(player.id)
         game.snapshot_turn_participants(
             {
                 player.id: (
