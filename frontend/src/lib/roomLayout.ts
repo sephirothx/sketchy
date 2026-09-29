@@ -20,3 +20,12 @@
     this constant, so `stylesheetScales.test.mjs` holds them to it. */
 // Not copy: a media query.
 export const PHONE_ROOM_QUERY = "(max-width: 900px), (max-height: 520px)";
+
+/** The phone room's landscape layout - the rail, the canvas and the feed
+    column - inside PHONE_ROOM_QUERY: sideways, at most 520px tall, and wide
+    enough to be a phone turned over rather than a portrait one with its
+    keyboard up (game-room.css says why the width floor is 481). The landscape
+    block restates it as `@media`; `stylesheetScales.test.mjs` holds the two
+    together. */
+// Not copy: a media query.
+export const PHONE_LANDSCAPE_QUERY = "(orientation: landscape) and (max-height: 520px) and (min-width: 481px)";

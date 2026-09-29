@@ -1557,6 +1557,7 @@ export const NL: Catalogue = {
     autoPicksWhenTimeRunsOut: "Kiest vanzelf als de tijd om is.",
     hintSpendLimitReached: "Hintlimiet bereikt",
     hintSpendComesOutOfTurnPoints: "Gaat af van de punten van deze beurt als je het woord raadt.",
+    buyALetter: "Letter kopen",
     buyLetterRevealsEveryMatch: "Koop een letter — laat elke plek zien",
     selectThePrompt: "het woord kiezen",
     choosing: "Kiezen…",

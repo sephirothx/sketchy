@@ -1,6 +1,9 @@
-import type { ReactNode } from "react";
+import { useRef, type ReactNode } from "react";
 import { recordRender } from "../lib/renderDiagnostics";
 import { useBottomDock } from "../hooks/useBottomDock";
+import { useLandscapeFeedWidth } from "../hooks/useLandscapeFeedWidth";
+import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_LANDSCAPE_QUERY } from "../lib/roomLayout";
 import "../styles/lazy/toolbar.css";
 
 export type RoomShellMode = "waiting" | "playing" | "game-end";
@@ -18,8 +21,12 @@ interface RoomShellProps {
 export function RoomShell({ mode, players, main, chat, inert = false, overlay = null }: RoomShellProps) {
   recordRender("roomShell");
   const dockRef = useBottomDock();
+  const shellRef = useRef<HTMLDivElement | null>(null);
+  const landscape = useMediaQuery(PHONE_LANDSCAPE_QUERY);
+  useLandscapeFeedWidth(mode === "playing" && landscape, shellRef);
   return (
     <div
+      ref={shellRef}
       className={`room-shell room-shell-${mode}${mode === "playing" ? " game-layout" : ""}`}
       data-room-view={mode}
     >

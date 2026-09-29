@@ -145,7 +145,10 @@ test("the invite stands on the bottom dock, and the toasts on both (R-UX-07)", (
     ["global-feedback.css", ".lazy-overlay-notice"],
     ["lobby-page.css", ".friend-invite-notice"],
   ]) {
-    assert.match(block(file, selector), /- 2 \* var\(--dock-inline-inset\)\)/, selector);
+    // Centred in the space the two columns leave, not narrowed by either on
+    // both sides: a 320px feed left a toast 68px wide that way (#1267).
+    assert.match(block(file, selector), /- var\(--dock-inline-start\) - var\(--dock-inline-end\)\)/, selector);
+    assert.match(block(file, selector), /left: calc\(var\(--dock-inline-start\) \+/, selector);
   }
   const source = (file) => scriptFiles.find(({ path }) => path.endsWith(file)).text;
   assert.match(source("components/FriendInviteNotice.tsx"), /setProperty\("--friend-invite-clearance"/);
@@ -246,7 +249,9 @@ test("every media query width and height is one of the breakpoints", () => {
 // stylesheets restate it, so the two are held together here: above 900px a
 // short landscape viewport once got the desktop DOM under the phone's
 // landscape stylesheet, and a 0 x 0 canvas (#1261).
-const ROOM_QUERY = /PHONE_ROOM_QUERY = "([^"]+)"/.exec(readFileSync(join(SRC, "lib", "roomLayout.ts"), "utf8"))[1];
+const ROOM_LAYOUT = readFileSync(join(SRC, "lib", "roomLayout.ts"), "utf8");
+const ROOM_QUERY = /PHONE_ROOM_QUERY = "([^"]+)"/.exec(ROOM_LAYOUT)[1];
+const LANDSCAPE_QUERY = /PHONE_LANDSCAPE_QUERY = "([^"]+)"/.exec(ROOM_LAYOUT)[1];
 const ROOM_STYLESHEETS = ["game-room.css", "chat.css", "drawing-recap.css"];
 const ROOM_COMPONENTS = [
   "ActiveGameRoom.tsx",
@@ -290,9 +295,12 @@ test("the room's phone and desktop sides are one breakpoint definition", () => {
   // here put the desktop DOM under it again - 0 x 0 at 1180 x 600.
   const short = /\(max-height: (\d+)px\)/.exec(ROOM_QUERY)[1];
   const gameRoom = cssFiles.find((file) => basename(file.path) === "game-room.css").text;
-  const landscape = [...gameRoom.matchAll(/@media \(orientation: landscape\) and \(max-height: (\d+)px\) and \(min-width: 481px\) \{/g)];
-  assert.equal(landscape.length, 1, "the landscape block moved or changed shape");
-  assert.equal(landscape[0][1], short);
+  assert.equal(/\(max-height: (\d+)px\)/.exec(LANDSCAPE_QUERY)[1], short);
+  assert.equal(
+    gameRoom.split(`@media ${LANDSCAPE_QUERY} {`).length - 1,
+    1,
+    "the landscape block is not PHONE_LANDSCAPE_QUERY, which the components ask",
+  );
   const toolbar = cssFiles.find((file) => file.path.endsWith(join("styles", "toolbar.css")) && !file.path.includes("lazy")).text;
   assert.match(toolbar, new RegExp(`\\(min-width: 901px\\) and \\(max-height: ${short}px\\) \\{`));
 });
