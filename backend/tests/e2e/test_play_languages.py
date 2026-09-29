@@ -642,6 +642,13 @@ async def test_a_name_given_on_the_way_to_create_asks_back_in_the_lobby_and_a_si
         page = await context.new_page()
         try:
             await page.goto(BASE_URL)
+            # The question's chunk is fetched for a visitor with no name, so it
+            # is ready to draw: without it the navigation below could beat the
+            # fetch and this would pass however the guard behaved.
+            await page.wait_for_function(
+                "() => performance.getEntriesByType('resource')"
+                ".some((entry) => entry.name.includes('/PlayLanguagesQuestion-'))"
+            )
             await page.fill(".first-run-guest-row input", f"Leaver{uuid4().hex[:6]}")
             await page.locator(
                 ".lobby-rooms-actions .btn-primary:visible, .lobby-dock-row .btn-primary:visible"

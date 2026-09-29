@@ -1,10 +1,9 @@
-import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useId, useMemo, useRef, useState, type ComponentType } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { emitEntry, emitTransient, socketRequestErrorMessage } from "../lib/socket";
 import { sessionFrom } from "../lib/roomEntryState";
 import { AppHeader } from "../components/AppHeader";
 import { FirstRunIdentity } from "../components/FirstRunIdentity";
-import { PlayLanguagesQuestion } from "../components/PlayLanguagesQuestion";
 import { usePlayLanguagesQuestionStore } from "../store/playLanguagesQuestionStore";
 import { LobbyChatPanel } from "../components/LobbyChatPanel";
 import { OnlinePlayersPanel } from "../components/OnlinePlayersPanel";
@@ -39,6 +38,33 @@ import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useOverlayOpen } from "../hooks/useOverlayRoute";
+import { whenStyleRule } from "../lib/styleRuleReady";
+
+/* The first-time languages question (#1219) is asked once per identity, so it
+   waits for its own chunk rather than sitting in the entry one, and arrives
+   with its stylesheet: drawn from the entry bundle, it used to wait for
+   Settings' sheet to be prefetched - a 1 s timer on Safari - and a player who
+   came back with the question due saw it unstyled for that second (#1274).
+   If the chunk or its stylesheet cannot be fetched the question is simply not
+   asked this time; it stays due for the next load. The catch wraps the whole
+   import, because Vite's preload helper waits for the stylesheet first and,
+   when that is what fails, throws past a `.then` failure handler - to the
+   app's crash page (review of #1274). The helper does not wait for a sheet
+   another chunk's prefetch already put in the page - Settings shares this
+   one - so the question waits for its own rule to be in the page, and is not
+   asked this time if it is not there within the wait (review of #1312). */
+const loadQuestion = () => import("../components/PlayLanguagesQuestion");
+const PlayLanguagesQuestion = lazy(
+  async (): Promise<{ default: ComponentType<{ onDone: () => void }> }> => {
+    try {
+      const { PlayLanguagesQuestion: Question } = await loadQuestion();
+      if (!(await whenStyleRule(".play-languages-question-body"))) return { default: () => null };
+      return { default: Question };
+    } catch {
+      return { default: () => null };
+    }
+  },
+);
 
 const ROOM_CODE_LENGTH = 6;
 
@@ -226,6 +252,13 @@ export function LobbyBrowserPage() {
   // Not over Settings or Friends: a name chosen in Settings makes the question
   // due, and it waits for the sheet to close (review of #1265).
   const overlayOpen = useOverlayOpen();
+  // Fetched as soon as somebody here is about to be asked - a visitor with no
+  // name yet, or a question already due - so it is ready the moment the lobby
+  // may show it rather than a round trip later.
+  const aboutToBeAsked = useAuthStore((state) => state.hasResolved && needsIdentity(state.user));
+  useEffect(() => {
+    if (questionDue || aboutToBeAsked) void loadQuestion().catch(() => {});
+  }, [questionDue, aboutToBeAsked]);
   const markQuestionAsked = usePlayLanguagesQuestionStore((state) => state.markAsked);
   // Set once a press has decided to leave the lobby: navigating waits for the
   // next page's code, and the question must not open over the way out.
@@ -499,7 +532,9 @@ export function LobbyBrowserPage() {
 
       <FirstRunIdentity />
       {questionDue && pendingJoin === null && !leaving && !criticalError && !overlayOpen && (
-        <PlayLanguagesQuestion onDone={answerQuestion} />
+        <Suspense fallback={null}>
+          <PlayLanguagesQuestion onDone={answerQuestion} />
+        </Suspense>
       )}
 
       {error && !isNarrow && <p className="lobby-action-error" role="alert">{error}</p>}

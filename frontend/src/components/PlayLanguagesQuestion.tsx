@@ -5,6 +5,7 @@ import { usePlayLanguages } from "../hooks/usePlayLanguages";
 import { SUPPORTED_PROMPT_LANGUAGES } from "../lib/promptLanguages";
 import type { PromptLanguage } from "../types";
 import { ui } from "../content/ui/index.ts";
+import "../styles/lazy/play-languages.css";
 
 /**
  * Which languages a first-time player plays in, asked once (#1219): the
