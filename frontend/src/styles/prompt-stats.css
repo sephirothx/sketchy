@@ -170,7 +170,7 @@
   border-radius: var(--radius-sm);
   color: var(--ink);
   font: inherit;
-  font-size: 14px;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
   font-weight: 600;
   min-height: 38px;
   padding: 6px 10px;

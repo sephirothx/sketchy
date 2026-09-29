@@ -1059,6 +1059,7 @@
   box-sizing: border-box;
   color: var(--ink);
   font: inherit;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
   padding: 9px 10px;
   padding-inline-start: calc(10px - var(--ink-overhang));
   text-indent: var(--ink-overhang);

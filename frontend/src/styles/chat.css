@@ -204,7 +204,7 @@
   margin-inline-start: calc(-1 * var(--ink-overhang));
   text-indent: var(--ink-overhang);
   font-family: var(--font-body);
-  font-size: 14.5px;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
   background: transparent;
   color: var(--ink);
 }
