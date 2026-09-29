@@ -178,7 +178,7 @@ async def test_reactions_travel_from_the_live_canvas_to_the_recap_and_the_profil
             await react_from_recap(other, "wow")
             await expect(chip(other, "wow")).to_have_text("1")
 
-            await host.get_by_role("button", name="View drawings", exact=True).click()
+            await host.get_by_role("button", name="Drawings", exact=True).click()
             await host.locator(".drawing-recap").wait_for()
             await expect(chip(host, "wow")).to_have_text("1")
             await expect(host.locator('[data-testid="reaction-toggle"]')).to_have_count(0)

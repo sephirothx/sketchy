@@ -53,16 +53,16 @@ test("a cancel reason the client has not heard of still reads as a sentence", ()
 
 test("a hint line gets its own plural right", () => {
   assert.equal(
-    announcementText(line("hint_letter_found", { letter: "A", cost: 5, count: 1 })),
-    "'A' -5 pts - found 1 time!",
+    announcementText(line("hint_letter_found", { letter: "A", cost: 35, count: 1 })),
+    'Bought "A" for 35 points: found once.',
   );
   assert.equal(
-    announcementText(line("hint_letter_found", { letter: "A", cost: 5, count: 3 })),
-    "'A' -5 pts - found 3 times!",
+    announcementText(line("hint_letter_found", { letter: "A", cost: 1, count: 3 })),
+    'Bought "A" for 1 point: found 3 times.',
   );
   assert.equal(
     announcementText(line("hint_letter_missing", { letter: "Z", cost: 5 })),
-    "'Z' -5 pts - not in the prompt.",
+    'Bought "Z" for 5 points: not in the prompt.',
   );
 });
 

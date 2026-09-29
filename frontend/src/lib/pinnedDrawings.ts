@@ -123,6 +123,7 @@ export function pinsAsRecapEntries(pins: readonly ProfilePin[]): DrawingRecapMet
     drawerId: "",
     drawerNickname: pin.drawerDisplayName,
     drawerNameColor: pin.drawerNameColor ?? undefined,
+    drawerIsAnonymous: pin.drawerIsAnonymous,
     prompt: pin.prompt,
     actionCount: pin.strokeCount,
     available: true,

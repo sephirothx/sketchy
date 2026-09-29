@@ -2609,6 +2609,7 @@
   "rooms:metadata": [
    "actionCount",
    "drawerId",
+   "drawerIsAnonymous",
    "drawerNameColor",
    "drawerNickname",
    "roundNumber",
@@ -2852,7 +2853,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 48,
+ "protocolVersion": 49,
  "refusal": {
   "codes": [
    "invalid_payload",

@@ -419,15 +419,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "The game was restarted by player vote.",
   game_ended_too_few_players: () => "The game ended: fewer than two players remain.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - found ${counted(count(p.count, 1), {
-    one: "time",
-    other: "times",
-  })}!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `Bought "${text(p.letter)}" for ${counted(count(p.cost), { one: "point", other: "points" })}: ${
+      found === 1 ? "found once" : `found ${found} times`
+    }.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - not in the prompt.`,
+    `Bought "${text(p.letter)}" for ${counted(count(p.cost), { one: "point", other: "points" })}: not in the prompt.`,
   guess_very_close: (p) => `"${text(p.text)}" is very close!`,
-  guess_some_words_correct: () => "Some words are correct",};
+  guess_some_words_correct: () => "Some words are correct.",
+};
 
 export const EN = {
   refusals: REFUSALS,
@@ -445,6 +447,8 @@ export const EN = {
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */
     ordinal: (p: { value: number }) => ordinal(p.value),
+    /** A score, as every place that prints one writes it: `1,182`. */
+    number: (p: { value: number }) => number(p.value),
   },
 
   promptListDrafts: {
@@ -958,7 +962,7 @@ export const EN = {
     thisDrawingCouldNotBeDecoded: "This drawing could not be decoded.",
     drawingRecap: "Drawing recap",
     saveImage: "Save image",
-    close: "Close",
+    closeDrawings: "Close drawings",
     thisDrawingWasNotKept: "This drawing was not kept.",
     earlierDrawingsFilledTheSpace: "This game's earlier drawings used up the space the room keeps for them.",
     tryAgain: "Try again",
@@ -1079,7 +1083,6 @@ export const EN = {
     closeHighlights: "Close highlights",
     thatGameWasTooShortSay: "That game was too short to say much about. Play a longer one and the\n            highlights will show up here.",
     seeIt: "See it",
-    back: "Back",
   },
 
   inviteEntryPage: {
@@ -1478,7 +1481,7 @@ export const EN = {
     couldNotLoadProfile: "Could not load this profile. Please try again.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "round", other: "rounds" })} · ${counted(p.players, { one: "player", other: "players" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} pts`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "point", other: "points" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Rules: ${p.scoring} · ${p.hints} · ${p.seconds} seconds · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Report ${p.name}`,
@@ -1810,6 +1813,7 @@ export const EN = {
   },
 
   roomFacts: {
+    seats: "Seats",
     customShort: (p: { count: number }) =>
       `${number(p.count)} custom`,
     customOnlyShort: (p: { count: number }) =>
@@ -1878,7 +1882,6 @@ export const EN = {
     saveRoomRules: "save room rules",
     saving: "Saving…",
     saveRules: "Save room rules",
-    saved: "Saved",
   },
 
   roomSetupForm: {
@@ -2341,8 +2344,6 @@ export const EN = {
     host: "Host",
     friend: "Friend",
     invite: "Invite",
-    viewHighlights: "View highlights",
-    viewDrawings: "View drawings",
     spectatorsAfkAndDisconnectedPlayers:
       "Spectators, AFK, and disconnected players do not count toward the two active players a game needs.",
     joinMySketchyRoomCode: (p: { code: string }) => `Join my Sketchy room: ${p.code}`,

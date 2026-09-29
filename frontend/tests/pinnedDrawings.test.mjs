@@ -85,6 +85,8 @@ test("recap entries follow shelf order and carry no seat", () => {
       drawerId: "",
       drawerNickname: "Ann",
       drawerNameColor: undefined,
+      // So the recap credits a guest in the guest style (#1279).
+      drawerIsAnonymous: false,
       prompt: "jackpot",
       actionCount: 12,
       available: true,

@@ -407,15 +407,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "A partida foi reiniciada por votação dos jogadores.",
   game_ended_too_few_players: () => "O jogo terminou: restam menos de dois jogadores.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - encontrada ${counted(count(p.count, 1), {
-    one: "vez",
-    other: "vezes",
-  })}!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `«${text(p.letter)}» comprada por ${counted(count(p.cost), { one: "ponto", other: "pontos" })}: ${
+      found === 1 ? "aparece uma vez" : `aparece ${found} vezes`
+    }.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - não está na palavra.`,
+    `«${text(p.letter)}» comprada por ${counted(count(p.cost), { one: "ponto", other: "pontos" })}: não está na palavra.`,
   guess_very_close: (p) => `«${text(p.text)}» está muito perto!`,
-  guess_some_words_correct: () => "Algumas palavras estão certas",};
+  guess_some_words_correct: () => "Algumas palavras estão certas.",
+};
 
 export const PT: Catalogue = {
   refusals: REFUSALS,
@@ -433,6 +435,8 @@ export const PT: Catalogue = {
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */
     ordinal: (p: { value: number }) => ordinal(p.value),
+    /** A score, as every place that prints one writes it: `1,182`. */
+    number: (p: { value: number }) => number(p.value),
   },
 
   promptListDrafts: {
@@ -942,7 +946,7 @@ export const PT: Catalogue = {
     thisDrawingCouldNotBeDecoded: "Não foi possível descodificar este desenho.",
     drawingRecap: "Resumo dos desenhos",
     saveImage: "Guardar imagem",
-    close: "Fechar",
+    closeDrawings: "Fechar os desenhos",
     thisDrawingWasNotKept: "Este desenho não foi guardado.",
     earlierDrawingsFilledTheSpace: "Os desenhos anteriores deste jogo ocuparam o espaço que a sala guarda para eles.",
     tryAgain: "Tentar de novo",
@@ -1061,7 +1065,6 @@ export const PT: Catalogue = {
     closeHighlights: "Fechar os melhores momentos",
     thatGameWasTooShortSay: "Essa partida foi curta demais para se dizer grande coisa. Joga uma mais\n            longa e os melhores momentos aparecem aqui.",
     seeIt: "Ver",
-    back: "Voltar",
   },
 
   inviteEntryPage: {
@@ -1459,7 +1462,7 @@ export const PT: Catalogue = {
     couldNotLoadProfile: "Não foi possível carregar este perfil. Tenta de novo.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronda", other: "rondas" })} · ${counted(p.players, { one: "jogador", other: "jogadores" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} pts`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "ponto", other: "pontos" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Regras: ${p.scoring} · ${p.hints} · ${p.seconds} segundos · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Denunciar ${p.name}`,
@@ -1794,6 +1797,7 @@ export const PT: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Lugares",
     customShort: (p: { count: number }) =>
       `${number(p.count)} próprias`,
     customOnlyShort: (p: { count: number }) =>
@@ -1862,7 +1866,6 @@ export const PT: Catalogue = {
     saveRoomRules: "guardar as regras da sala",
     saving: "A guardar…",
     saveRules: "Guardar regras da sala",
-    saved: "Guardado",
   },
 
   roomSetupForm: {
@@ -2319,8 +2322,6 @@ export const PT: Catalogue = {
     host: "Anfitrião",
     friend: "Amigo",
     invite: "Convidar",
-    viewHighlights: "Ver os melhores momentos",
-    viewDrawings: "Ver os desenhos",
     spectatorsAfkAndDisconnectedPlayers: "Espectadores, jogadores AFK e desligados não contam para os dois jogadores ativos de que um jogo precisa.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Entra na minha sala do Sketchy: ${p.code}`,

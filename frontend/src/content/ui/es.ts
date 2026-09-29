@@ -407,15 +407,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "La partida se reinició por votación de los jugadores.",
   game_ended_too_few_players: () => "La partida terminó: quedan menos de dos jugadores.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - encontrada ${counted(count(p.count, 1), {
-    one: "vez",
-    other: "veces",
-  })}!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `«${text(p.letter)}» comprada por ${counted(count(p.cost), { one: "punto", other: "puntos" })}: ${
+      found === 1 ? "aparece una vez" : `aparece ${found} veces`
+    }.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - no está en la palabra.`,
+    `«${text(p.letter)}» comprada por ${counted(count(p.cost), { one: "punto", other: "puntos" })}: no está en la palabra.`,
   guess_very_close: (p) => `¡«${text(p.text)}» está muy cerca!`,
-  guess_some_words_correct: () => "Algunas palabras son correctas",};
+  guess_some_words_correct: () => "Algunas palabras son correctas.",
+};
 
 export const ES: Catalogue = {
   refusals: REFUSALS,
@@ -433,6 +435,8 @@ export const ES: Catalogue = {
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */
     ordinal: (p: { value: number }) => ordinal(p.value),
+    /** A score, as every place that prints one writes it: `1,182`. */
+    number: (p: { value: number }) => number(p.value),
   },
 
   promptListDrafts: {
@@ -942,7 +946,7 @@ export const ES: Catalogue = {
     thisDrawingCouldNotBeDecoded: "Este dibujo no se pudo descodificar.",
     drawingRecap: "Resumen de dibujos",
     saveImage: "Guardar imagen",
-    close: "Cerrar",
+    closeDrawings: "Cerrar los dibujos",
     thisDrawingWasNotKept: "Este dibujo no se conservó.",
     earlierDrawingsFilledTheSpace: "Los dibujos anteriores de esta partida ocuparon el espacio que la sala guarda para ellos.",
     tryAgain: "Inténtalo de nuevo",
@@ -1061,7 +1065,6 @@ export const ES: Catalogue = {
     closeHighlights: "Cerrar los destacados",
     thatGameWasTooShortSay: "Esa partida fue demasiado corta para decir gran cosa. Juega una más larga y\n            aquí aparecerán los momentos destacados.",
     seeIt: "Verlo",
-    back: "Atrás",
   },
 
   inviteEntryPage: {
@@ -1459,7 +1462,7 @@ export const ES: Catalogue = {
     couldNotLoadProfile: "No se pudo cargar este perfil. Inténtalo de nuevo.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronda", other: "rondas" })} · ${counted(p.players, { one: "jugador", other: "jugadores" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} pts`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "punto", other: "puntos" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Reglas: ${p.scoring} · ${p.hints} · ${p.seconds} segundos · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Denunciar a ${p.name}`,
@@ -1794,6 +1797,7 @@ export const ES: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Plazas",
     customShort: (p: { count: number }) =>
       `${number(p.count)} propias`,
     customOnlyShort: (p: { count: number }) =>
@@ -1862,7 +1866,6 @@ export const ES: Catalogue = {
     saveRoomRules: "guardar las reglas de la sala",
     saving: "Guardando…",
     saveRules: "Guardar reglas de la sala",
-    saved: "Guardado",
   },
 
   roomSetupForm: {
@@ -2319,8 +2322,6 @@ export const ES: Catalogue = {
     host: "Anfitrión",
     friend: "Amigo",
     invite: "Invitar",
-    viewHighlights: "Ver los destacados",
-    viewDrawings: "Ver los dibujos",
     spectatorsAfkAndDisconnectedPlayers: "Los espectadores, los jugadores AFK y los desconectados no cuentan para los dos jugadores activos que necesita una partida.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Únete a mi sala de Sketchy: ${p.code}`,

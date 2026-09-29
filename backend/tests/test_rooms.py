@@ -257,6 +257,7 @@ def test_the_recap_is_metadata_only_and_offered_only_while_waiting():
             prompt="apple",
             action_count=0,
             canvas_history=PackedCanvasHistory().binary_payload(),
+            drawer_is_anonymous=True,
         )
     )
 
@@ -273,6 +274,8 @@ def test_the_recap_is_metadata_only_and_offered_only_while_waiting():
         "drawerId": drawer.id,
         "drawerNickname": "Drawer",
         "drawerNameColor": drawer.name_color,
+        # A guest drawer, credited in the guest style (#1279).
+        "drawerIsAnonymous": True,
         "prompt": "apple",
         "actionCount": 0,
         "available": True,

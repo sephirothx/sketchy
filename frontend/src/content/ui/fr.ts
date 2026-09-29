@@ -407,15 +407,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "La partie a été redémarrée par vote des joueurs.",
   game_ended_too_few_players: () => "La partie est terminée : il reste moins de deux joueurs.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - trouvée ${counted(count(p.count, 1), {
-    one: "fois",
-    other: "fois",
-  })} !`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `« ${text(p.letter)} » achetée pour ${counted(count(p.cost), { one: "point", other: "points" })} : ${
+      found === 1 ? "trouvée une fois" : `trouvée ${found} fois`
+    }.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} pts - absente du mot.`,
+    `« ${text(p.letter)} » achetée pour ${counted(count(p.cost), { one: "point", other: "points" })} : absente du mot.`,
   guess_very_close: (p) => `« ${text(p.text)} » est tout proche !`,
-  guess_some_words_correct: () => "Certains mots sont corrects",};
+  guess_some_words_correct: () => "Certains mots sont corrects.",
+};
 
 export const FR: Catalogue = {
   refusals: REFUSALS,
@@ -433,6 +435,8 @@ export const FR: Catalogue = {
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */
     ordinal: (p: { value: number }) => ordinal(p.value),
+    /** A score, as every place that prints one writes it: `1,182`. */
+    number: (p: { value: number }) => number(p.value),
   },
 
   promptListDrafts: {
@@ -942,7 +946,7 @@ export const FR: Catalogue = {
     thisDrawingCouldNotBeDecoded: "Ce dessin n’a pas pu être décodé.",
     drawingRecap: "Récapitulatif des dessins",
     saveImage: "Enregistrer l’image",
-    close: "Fermer",
+    closeDrawings: "Fermer les dessins",
     thisDrawingWasNotKept: "Ce dessin n’a pas été conservé.",
     earlierDrawingsFilledTheSpace: "Les dessins précédents de cette partie ont rempli la place que le salon leur réserve.",
     tryAgain: "Réessayer",
@@ -1061,7 +1065,6 @@ export const FR: Catalogue = {
     closeHighlights: "Fermer les moments forts",
     thatGameWasTooShortSay: "Cette partie était trop courte pour en dire grand-chose. Joues-en une plus\n            longue et les moments forts apparaîtront ici.",
     seeIt: "Voir",
-    back: "Retour",
   },
 
   inviteEntryPage: {
@@ -1459,7 +1462,7 @@ export const FR: Catalogue = {
     couldNotLoadProfile: "Ce profil n’a pas pu être chargé. Réessaie.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "manche", other: "manches" })} · ${counted(p.players, { one: "joueur", other: "joueurs" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} pts`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "point", other: "points" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Règles : ${p.scoring} · ${p.hints} · ${p.seconds} secondes · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `Signaler ${p.name}`,
@@ -1797,6 +1800,7 @@ export const FR: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Places",
     customShort: (p: { count: number }) =>
       `${number(p.count)} perso`,
     customOnlyShort: (p: { count: number }) =>
@@ -1865,7 +1869,6 @@ export const FR: Catalogue = {
     saveRoomRules: "enregistrer les règles du salon",
     saving: "Enregistrement…",
     saveRules: "Enregistrer les règles du salon",
-    saved: "Enregistré",
   },
 
   roomSetupForm: {
@@ -2322,8 +2325,6 @@ export const FR: Catalogue = {
     host: "Hôte",
     friend: "Ami",
     invite: "Inviter",
-    viewHighlights: "Voir les moments forts",
-    viewDrawings: "Voir les dessins",
     spectatorsAfkAndDisconnectedPlayers: "Les spectateurs, les joueurs AFK et les joueurs déconnectés ne comptent pas parmi les deux joueurs actifs nécessaires à une partie.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Rejoins mon salon Sketchy : ${p.code}`,

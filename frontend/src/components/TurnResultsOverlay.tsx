@@ -221,10 +221,11 @@ export function TurnResultsOverlay({
                         <BrushIcon size={12} />
                       </span>
                     )}
-                    {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
+                    {entry.delta > 0 ? "+" : ""}
+                    {ui.format.number({ value: entry.delta })}
                   </span>
-                  <span className="turn-results-score-total" aria-hidden="true">{shown.total}</span>
-                  <span className="visually-hidden">{entry.score}</span>
+                  <span className="turn-results-score-total" aria-hidden="true">{ui.format.number({ value: shown.total })}</span>
+                  <span className="visually-hidden">{ui.format.number({ value: entry.score })}</span>
                 </li>
               );
             })}

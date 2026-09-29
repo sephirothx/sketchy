@@ -106,6 +106,8 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
 
             assert await host.get_by_text("1 of 2", exact=True).is_visible()
             assert await host.get_by_role("heading", name=first_prompt).is_visible()
+            # A guest drawer, credited in the guest style (#1279).
+            assert await host.locator(".drawing-recap-meta .colored-player-name.is-guest").count() == 1
             assert not await host.get_by_text(
                 "No drawing was captured for this turn.",
                 exact=True,
@@ -131,7 +133,8 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
 
             await host.get_by_role("button", name="Previous").click()
             assert await host.get_by_text("1 of 2", exact=True).is_visible()
-            await host.get_by_role("button", name="Close").click()
+            # One close, the header's, named for what it closes (#1279).
+            await host.get_by_role("button", name="Close drawings").click()
             await host.locator('[data-testid="waiting-room"]').wait_for()
             assert not await host.get_by_text("Previous game", exact=True).is_visible()
             assert await host.get_by_text("Final standings", exact=True).is_visible()
@@ -139,7 +142,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             assert await host.locator(".room-players-panel .player-score").count() == 2
             assert await host.get_by_role(
                 "button",
-                name="View drawings",
+                name="Drawings",
                 exact=True,
             ).is_visible()
             assert not await host.get_by_role(
@@ -163,7 +166,7 @@ async def test_post_game_drawing_recap_includes_drawn_and_empty_turns():
             # rematch must not reopen the gallery when that rematch ends.
             await guest.get_by_role(
                 "button",
-                name="View drawings",
+                name="Drawings",
                 exact=True,
             ).click()
             await guest.get_by_text("Drawing recap", exact=True).wait_for()

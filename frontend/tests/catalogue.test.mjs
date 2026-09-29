@@ -24,6 +24,12 @@ import { join, relative } from "node:path";
 import ts from "typescript";
 
 import { EN } from "../src/content/ui/en.ts";
+import { DE } from "../src/content/ui/de.ts";
+import { ES } from "../src/content/ui/es.ts";
+import { FR } from "../src/content/ui/fr.ts";
+import { IT } from "../src/content/ui/it.ts";
+import { NL } from "../src/content/ui/nl.ts";
+import { PT } from "../src/content/ui/pt.ts";
 
 const ROOT = "src";
 const STAFF = [
@@ -474,6 +480,12 @@ const STYLE = [
   ["\"Couldn't\" (errors say \"Could not …\")", (text) => /\bCouldn't\b/i.test(text)],
   ["a double space", (text) => /\S {2,}\S/.test(text.replace(/\n\s*/g, " "))],
   ["a British spelling", (text) => BRITISH.test(text)],
+  // The wheel's purchase line broke all three at once: 'A' -35 pts - found
+  // 1 time! (#1279).
+  ["single quotes around a quotation (use \"…\")",
+    (text) => /(^|\s)'$|^'(\s|[.,:;!?]|$)|(^|\s)'[^'\s][^']*'(?=[\s.,:;!?)]|$)/.test(text)],
+  ["a spaced hyphen as a separator (use a colon or a full stop)", (text) => /(^|\s)-(\s|$)/.test(text)],
+  ["\"pts\" or \"pt\" (write the word)", (text) => /\bpts?\b/.test(text)],
 ];
 
 test("the English copy keeps one house style", () => {
@@ -516,17 +528,33 @@ test("an error is a sentence, and ends like one", () => {
   assert.deepEqual(unfinished, [], `these errors stop short of a full stop:\n${unfinished.join("\n")}`);
 });
 
+test("an announcement is a sentence, and ends like one, in every language", () => {
+  // Said in the feed, among lines that end in a full stop: "Some words are
+  // correct" stopped short of one in all seven (#1279). Every language ends a
+  // sentence with one of these, so the check need not know which it reads.
+  const params = { letter: "A", cost: 35, count: 2, text: "tree", nickname: "Ana", reason: "timeout", seconds: 3 };
+  const unfinished = Object.entries({ en: EN, de: DE, es: ES, fr: FR, it: IT, nl: NL, pt: PT }).flatMap(([lang, catalogue]) =>
+    Object.entries(catalogue.announcements)
+      .map(([code, line]) => [code, typeof line === "function" ? line(params) : line])
+      .filter(([, line]) => !/[.!?…]$/.test(line))
+      .map(([code, line]) => `${lang} announcements.${code}: ${JSON.stringify(line)}`));
+  assert.deepEqual(unfinished, [], `these announcements stop short of a full stop:\n${unfinished.join("\n")}`);
+});
+
 test("the style check would notice a slip", () => {
   const breaks = (text) => STYLE.filter(([, rule]) => rule(text)).map(([name]) => name);
   for (const slip of [
     "Couldn’t copy the link.", "Type a message...", "Failed to load", "Couldn't copy.",
     "Two  spaces.", "Your behaviour was reviewed.", "The vote was cancelled.", "Ask them to help you enrol.",
+    "'", "' -", " pts - found ", "Costs 12 pt", "Type 'yes' to confirm.",
   ]) {
     assert.ok(breaks(slip).length > 0, `the style check cannot see: ${slip}`);
   }
   for (const fine of [
     "Could not copy the link.", "Type a message…", "Community catalogue", "Every signed-in device, including any you did\n              not recognize.",
     "Kick vote, AFK vote or report Ana", "Otherwise the room carries on.",
+    "Bought \"", "\" for ", "Don't leave yet.", "the players' drawings", "A well-known prompt", "points: found once.",
+    "It's the players' turn, isn't it?",
   ]) {
     assert.deepEqual(breaks(fine), [], `the style check takes good copy for a slip: ${fine}`);
   }

@@ -407,15 +407,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "Das Spiel wurde per Spielerabstimmung neu gestartet.",
   game_ended_too_few_players: () => "Das Spiel ist beendet: weniger als zwei Spieler sind übrig.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} Pkt. – ${counted(count(p.count, 1), {
-    one: "Mal",
-    other: "Mal",
-  })} gefunden!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `„${text(p.letter)}“ für ${counted(count(p.cost), { one: "Punkt", other: "Punkte" })} gekauft: ${
+      found === 1 ? "einmal" : `${found}-mal`
+    } gefunden.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} Pkt. – nicht im Begriff.`,
+    `„${text(p.letter)}“ für ${counted(count(p.cost), { one: "Punkt", other: "Punkte" })} gekauft: nicht im Begriff.`,
   guess_very_close: (p) => `„${text(p.text)}“ ist ganz nah dran!`,
-  guess_some_words_correct: () => "Einige Wörter stimmen",};
+  guess_some_words_correct: () => "Einige Wörter stimmen.",
+};
 
 export const DE: Catalogue = {
   refusals: REFUSALS,
@@ -433,6 +435,8 @@ export const DE: Catalogue = {
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */
     ordinal: (p: { value: number }) => ordinal(p.value),
+    /** A score, as every place that prints one writes it: `1,182`. */
+    number: (p: { value: number }) => number(p.value),
   },
 
   promptListDrafts: {
@@ -942,7 +946,7 @@ export const DE: Catalogue = {
     thisDrawingCouldNotBeDecoded: "Diese Zeichnung konnte nicht dekodiert werden.",
     drawingRecap: "Zeichnungsrückblick",
     saveImage: "Bild speichern",
-    close: "Schließen",
+    closeDrawings: "Zeichnungen schließen",
     thisDrawingWasNotKept: "Diese Zeichnung wurde nicht aufbewahrt.",
     earlierDrawingsFilledTheSpace: "Die früheren Zeichnungen dieses Spiels haben den Platz belegt, den der Raum dafür hat.",
     tryAgain: "Noch einmal versuchen",
@@ -1061,7 +1065,6 @@ export const DE: Catalogue = {
     closeHighlights: "Höhepunkte schließen",
     thatGameWasTooShortSay: "Diese Runde war zu kurz, um viel dazu zu sagen. Spiel eine längere, dann\n            erscheinen hier die Höhepunkte.",
     seeIt: "Ansehen",
-    back: "Zurück",
   },
 
   inviteEntryPage: {
@@ -1459,7 +1462,7 @@ export const DE: Catalogue = {
     couldNotLoadProfile: "Dieses Profil konnte nicht geladen werden. Bitte versuch es noch einmal.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "Runde", other: "Runden" })} · ${counted(p.players, { one: "Spieler", other: "Spieler" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} Pkt.`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "Punkt", other: "Punkte" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Regeln: ${p.scoring} · ${p.hints} · ${p.seconds} Sekunden · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
@@ -1795,6 +1798,7 @@ export const DE: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Plätze",
     customShort: (p: { count: number }) =>
       `${number(p.count)} eigene`,
     customOnlyShort: (p: { count: number }) =>
@@ -1863,7 +1867,6 @@ export const DE: Catalogue = {
     saveRoomRules: "die Raumregeln speichern",
     saving: "Wird gespeichert …",
     saveRules: "Raumregeln speichern",
-    saved: "Gespeichert",
   },
 
   roomSetupForm: {
@@ -2320,8 +2323,6 @@ export const DE: Catalogue = {
     host: "Gastgeber",
     friend: "Freund",
     invite: "Einladen",
-    viewHighlights: "Höhepunkte ansehen",
-    viewDrawings: "Zeichnungen ansehen",
     spectatorsAfkAndDisconnectedPlayers: "Zuschauer, AFK- und getrennte Spieler zählen nicht zu den zwei aktiven Spielern, die ein Spiel braucht.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Komm in meinen Sketchy-Raum: ${p.code}`,

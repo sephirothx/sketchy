@@ -208,7 +208,11 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
         disabled={!dirty || saving || promptsError || loading}
         onClick={() => void save()}
       >
-        {saving ? ui.roomSettingsEditor.saving : dirty ? ui.roomSettingsEditor.saveRules : ui.roomSettingsEditor.saved}
+        {/* What it does, disabled while there is nothing to do. It said
+            "Saved" whenever the draft matched the room - on opening too -
+            and a save closes the editor, so "Saved" never followed one
+            (#1279). */}
+        {saving ? ui.roomSettingsEditor.saving : ui.roomSettingsEditor.saveRules}
       </button>
     </>}
   >

@@ -467,6 +467,8 @@ export interface DrawingRecapMetadata {
   drawerId: string;
   drawerNickname: string;
   drawerNameColor?: string;
+  /** A guest drawer, credited in the guest style (#1279). */
+  drawerIsAnonymous?: boolean;
   prompt: string;
   prompts?: PromptSpellings;
   actionCount: number;

@@ -1,4 +1,8 @@
-.visually-hidden {
+/* The players sheet's panel heading too: the sheet's own title says
+   "Players", and the panel's heading said it again under it (#1279). Kept for
+   a screen reader, which the panel's section is labelled by. */
+.visually-hidden,
+.players-sheet .room-players-title-row .panel-title {
   border: 0;
   clip: rect(0 0 0 0);
   clip-path: inset(50%);

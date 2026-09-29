@@ -407,15 +407,17 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
   game_restarted_by_vote: () => "Het spel is opnieuw gestart door een stemming van de spelers.",
   game_ended_too_few_players: () => "Het spel is afgelopen: er zijn minder dan twee spelers over.",
 
-  hint_letter_found: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} ptn - ${counted(count(p.count, 1), {
-    one: "keer",
-    other: "keer",
-  })} gevonden!`,
+  hint_letter_found: (p) => {
+    const found = count(p.count, 1);
+    return `„${text(p.letter)}” gekocht voor ${counted(count(p.cost), { one: "punt", other: "punten" })}: ${
+      found === 1 ? "één keer" : `${found} keer`
+    } gevonden.`;
+  },
   hint_letter_missing: (p) =>
-  `'${text(p.letter)}' -${count(p.cost)} ptn - zit niet in het woord.`,
+    `„${text(p.letter)}” gekocht voor ${counted(count(p.cost), { one: "punt", other: "punten" })}: zit niet in het woord.`,
   guess_very_close: (p) => `„${text(p.text)}” zit er heel dichtbij!`,
-  guess_some_words_correct: () => "Sommige woorden kloppen",};
+  guess_some_words_correct: () => "Sommige woorden kloppen.",
+};
 
 export const NL: Catalogue = {
   refusals: REFUSALS,
@@ -433,6 +435,8 @@ export const NL: Catalogue = {
   format: {
     /** `1st`, `2nd`, `3rd`; a language with no ordinal form gets the number. */
     ordinal: (p: { value: number }) => ordinal(p.value),
+    /** A score, as every place that prints one writes it: `1,182`. */
+    number: (p: { value: number }) => number(p.value),
   },
 
   promptListDrafts: {
@@ -942,7 +946,7 @@ export const NL: Catalogue = {
     thisDrawingCouldNotBeDecoded: "Deze tekening kon niet gedecodeerd worden.",
     drawingRecap: "Tekeningenoverzicht",
     saveImage: "Afbeelding opslaan",
-    close: "Sluiten",
+    closeDrawings: "Tekeningen sluiten",
     thisDrawingWasNotKept: "Deze tekening is niet bewaard.",
     earlierDrawingsFilledTheSpace: "De eerdere tekeningen van dit spel hebben de ruimte gevuld die de kamer ervoor heeft.",
     tryAgain: "Opnieuw proberen",
@@ -1061,7 +1065,6 @@ export const NL: Catalogue = {
     closeHighlights: "Hoogtepunten sluiten",
     thatGameWasTooShortSay: "Dat spel was te kort om er veel over te zeggen. Speel een langere en de\n            hoogtepunten verschijnen hier.",
     seeIt: "Bekijken",
-    back: "Terug",
   },
 
   inviteEntryPage: {
@@ -1459,7 +1462,7 @@ export const NL: Catalogue = {
     couldNotLoadProfile: "Dit profiel kon niet geladen worden. Probeer het nog eens.",
     gameMeta: (p: { finishedAt: string; rounds: number; players: number }) =>
       `${p.finishedAt} · ${counted(p.rounds, { one: "ronde", other: "rondes" })} · ${counted(p.players, { one: "speler", other: "spelers" })}`,
-    seatScore: (p: { points: number }) => `${number(p.points)} ptn`,
+    seatScore: (p: { points: number }) => counted(p.points, { one: "punt", other: "punten" }),
     gameRules: (p: { scoring: string; hints: string; seconds: number; promptSource: string }) =>
       `Regels: ${p.scoring} · ${p.hints} · ${p.seconds} seconden · ${p.promptSource}`,
     reportPlayer: (p: { name: string }) => `${p.name} melden`,
@@ -1795,6 +1798,7 @@ export const NL: Catalogue = {
   },
 
   roomFacts: {
+    seats: "Plaatsen",
     customShort: (p: { count: number }) =>
       `${number(p.count)} eigen`,
     customOnlyShort: (p: { count: number }) =>
@@ -1863,7 +1867,6 @@ export const NL: Catalogue = {
     saveRoomRules: "de kamerregels opslaan",
     saving: "Opslaan…",
     saveRules: "Kamerregels opslaan",
-    saved: "Opgeslagen",
   },
 
   roomSetupForm: {
@@ -2320,8 +2323,6 @@ export const NL: Catalogue = {
     host: "Gastheer",
     friend: "Vriend",
     invite: "Uitnodigen",
-    viewHighlights: "Hoogtepunten bekijken",
-    viewDrawings: "Tekeningen bekijken",
     spectatorsAfkAndDisconnectedPlayers: "Toeschouwers, AFK- en losgekoppelde spelers tellen niet mee voor de twee actieve spelers die een spel nodig heeft.",
     joinMySketchyRoomCode: (p: { code: string }) =>
       `Kom in mijn Sketchy-kamer: ${p.code}`,
