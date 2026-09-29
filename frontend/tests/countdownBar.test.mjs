@@ -17,10 +17,13 @@ function rule(css, selector) {
 test("a bar is slid, not sized: full, emptying and empty", () => {
   assert.equal(barTransform(1), "translateX(0%)");
   assert.equal(barTransform(0.25), "translateX(-75%)");
-  assert.equal(barTransform(0), "translateX(-100%)");
   assert.equal(barTransform(1.4), "translateX(0%)");
-  assert.equal(barTransform(-2), "translateX(-100%)");
-  assert.equal(barTransform(Number.NaN), "translateX(-100%)");
+});
+
+test("an empty bar is slid a pixel past its track, so no sliver shows", () => {
+  for (const fraction of [0, -2, Number.NaN]) {
+    assert.equal(barTransform(fraction), "translateX(calc(-100% - 1px))");
+  }
 });
 
 test("neither countdown bar transitions or sets a width (#1256)", () => {
@@ -37,6 +40,14 @@ test("neither countdown bar transitions or sets a width (#1256)", () => {
     assert.match(transition, /\btransform\b/, `${selector} transitions transform`);
     assert.doesNotMatch(transition, /\bwidth\b/, `${selector} must not transition width`);
     assert.match(declarations, /\bwidth:\s*100%/, `${selector} is drawn full width and slid`);
+  }
+  // The slid-away part is hidden by its track, not drawn beside it.
+  const tracks = [
+    [read("../src/styles/game-room.css"), ".timer-bar-track"],
+    [read("../src/styles/game-results.css"), ".turn-results-progress-track"],
+  ];
+  for (const [css, selector] of tracks) {
+    assert.match(rule(css, selector), /\boverflow:\s*hidden;/, `${selector} clips its fill`);
   }
   for (const component of ["../src/components/Timer.tsx", "../src/components/TurnResultsOverlay.tsx"]) {
     const source = read(component);
