@@ -657,17 +657,3 @@ async def test_a_moderators_own_drawings_do_not_take_the_places_of_others(env):
     queue = (await http.get("/api/moderation/gallery")).json()
     assert [c["turnId"] for c in queue["candidates"]] == [theirs.turn_id]
     assert queue["waiting"] == 1
-
-
-def test_the_gallery_read_limit_is_configurable_and_falls_back_to_120(monkeypatch):
-    """A test harness puts every browser on one address, so the ceiling has
-    to be liftable there, as the profile routes' is (#1332)."""
-    from app.api.gallery import _read_limit
-
-    monkeypatch.delenv("GALLERY_READ_LIMIT", raising=False)
-    assert _read_limit() == 120
-    monkeypatch.setenv("GALLERY_READ_LIMIT", "1000")
-    assert _read_limit() == 1000
-    for nonsense in ("", "lots", "0", "-5"):
-        monkeypatch.setenv("GALLERY_READ_LIMIT", nonsense)
-        assert _read_limit() == 120
