@@ -813,9 +813,11 @@
     min-height: 46px;
   }
 
-  /* Room for the dock, so the last card is never under it. */
+  /* Room for the dock, so the last card is never under it - and for an
+     invitation standing on the dock, which spans the width and would
+     otherwise hold the last rows' Invite and Join under it. */
   .lobby-page {
-    padding-bottom: 132px;
+    padding-bottom: calc(132px + var(--friend-invite-clearance));
   }
 
   .lobby-code-spectate {
@@ -1679,7 +1681,11 @@ a.online-player-name:focus-visible {
    passing by like a toast - above a phone page's dock rather than on it
    (--dock-clearance, useBottomDock): it sat on Quick play and Create a room.
    And between the columns docked down either side (--dock-inline-start,
-   --dock-inline-end), centred in the space they leave. */
+   --dock-inline-end), centred in the space they leave. Its own width, as
+   .toast-viewport has: centred by `left` and a translate, a box with no width
+   shrinks to fit the space right of `left` - half the viewport, whatever its
+   max-width says - so on every phone it was 241px, its sentence three or four
+   lines, standing over the room list's Join and Spectate (#1276). */
 .friend-invite-notice {
   position: fixed;
   left: calc(var(--dock-inline-start) + (100% - var(--dock-inline-start) - var(--dock-inline-end)) / 2);
@@ -1690,6 +1696,7 @@ a.online-player-name:focus-visible {
   align-items: center;
   gap: 12px;
   max-width: min(calc(92vw - var(--dock-inline-start) - var(--dock-inline-end)), 460px);
+  width: max-content;
   padding: 10px 12px 10px 16px;
   background: var(--card);
   border: 1.5px solid var(--primary);
@@ -1699,9 +1706,12 @@ a.online-player-name:focus-visible {
   font-size: 14px;
 }
 
+/* A name may be sixteen letters with nowhere to break, and ran on under
+   Join; it breaks where it must instead. */
 .friend-invite-text {
   flex: 1;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .friend-invite-dismiss {

@@ -386,9 +386,12 @@
 }
 
 /* Offered once the reader is past the top, over everything, in the corner
-   the thumb reaches; the icon button's recipe, raised. */
+   the thumb reaches; the icon button's recipe, raised. Above a friend's
+   invitation, which shows on this page too and spans a phone's width: a tap
+   on the button landed on the card's dismiss, and threw the invitation away
+   (#1276, R-UX-07). */
 .gallery-back-to-top {
-  bottom: 24px;
+  bottom: calc(24px + var(--friend-invite-clearance));
   box-shadow: var(--shadow-raised);
   position: fixed;
   right: 24px;
@@ -396,7 +399,7 @@
 }
 
 @media (max-width: 480px) {
-  .gallery-back-to-top { bottom: 20px; right: 16px; }
+  .gallery-back-to-top { bottom: calc(20px + var(--friend-invite-clearance)); right: 16px; }
 }
 
 /* ---------------------------------------------------------- drawing page
