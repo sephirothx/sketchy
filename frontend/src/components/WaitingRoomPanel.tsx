@@ -10,6 +10,7 @@ import { ScratchPad } from "./ScratchPad";
 import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import { InviteFriendsList } from "./InviteFriendsList";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { useBottomDock } from "../hooks/useBottomDock";
 import { useToast } from "../lib/toast";
 import { useRoomFriendsStore } from "../store/roomFriendsStore";
@@ -55,7 +56,8 @@ interface WaitingRoomPanelProps {
  * than fixed: the dock is one row or two (the host's Start under Edit and the
  * pad, an error line, a wait that wraps), and the fixed 84px it replaced was
  * shorter than the host's two rows, which left the chat's last lines under it.
- * Above 900px the footer is in the card and the reserve is not applied.
+ * On a desktop room (above 900px, taller than 520px) the footer is in the
+ * card and the reserve is not applied.
  */
 function reserveDock(dock: HTMLDivElement | null) {
   const shell = dock?.closest<HTMLElement>(".room-shell");
@@ -79,7 +81,7 @@ export function WaitingRoomPanel(props: WaitingRoomPanelProps) {
   // Narrow only. Above this the players panel has a column of its own and
   // says more than a grid of faces can, so rendering both would put every
   // nickname on the page twice.
-  const isNarrow = useMediaQuery("(max-width: 900px)");
+  const isNarrow = useMediaQuery(PHONE_ROOM_QUERY);
   const dockRef = useBottomDock();
   // Up to where the bar gives the room's name back (1100px) the rules card's
   // footer is a column about 340px wide on a desktop and a dock on a phone:

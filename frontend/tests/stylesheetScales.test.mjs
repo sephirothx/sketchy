@@ -238,3 +238,61 @@ test("every media query width and height is one of the breakpoints", () => {
   assert.deepEqual(wrong, [], "min-width is a breakpoint, max-width one less - see layout-primitives.css");
   assert.deepEqual(EXCEPTIONS.filter((e) => !used.has(e)), [], "an exception nothing uses any more");
 });
+
+// -------------------------------------------------------- the room's switch
+
+// A room is the phone's shell or the desktop's columns by one rule
+// (lib/roomLayout.ts). The components ask it through useMediaQuery and the
+// stylesheets restate it, so the two are held together here: above 900px a
+// short landscape viewport once got the desktop DOM under the phone's
+// landscape stylesheet, and a 0 x 0 canvas (#1261).
+const ROOM_QUERY = /PHONE_ROOM_QUERY = "([^"]+)"/.exec(readFileSync(join(SRC, "lib", "roomLayout.ts"), "utf8"))[1];
+const ROOM_STYLESHEETS = ["game-room.css", "chat.css", "drawing-recap.css"];
+const ROOM_COMPONENTS = [
+  "ActiveGameRoom.tsx",
+  "GameHeaderStatus.tsx",
+  "GameRoomRegions.tsx",
+  "RoomChatPanel.tsx",
+  "Toolbar.tsx",
+  "WaitingRoomPanel.tsx",
+];
+
+test("the room's phone and desktop sides are one breakpoint definition", () => {
+  assert.equal(ROOM_QUERY, "(max-width: 900px), (max-height: 520px)");
+  for (const name of ROOM_COMPONENTS) {
+    const { path, text } = scriptFiles.find((file) => basename(file.path) === name);
+    assert.match(text, /useMediaQuery\(PHONE_ROOM_QUERY\)/, `${path} does not ask the room's rule`);
+    assert.doesNotMatch(text, /\(max-width: 900px\)/, `${path} asks a width of its own`);
+  }
+  let phoneBlocks = 0;
+  for (const name of ROOM_STYLESHEETS) {
+    const { path, text } = cssFiles.find((file) => basename(file.path) === name);
+    for (const [, query] of text.matchAll(/@media([^{]*)\{/g)) {
+      const q = query.trim();
+      if (q === ROOM_QUERY) phoneBlocks += 1;
+      // Either side of 900px alone is the old rule: the phone's needs the
+      // short viewport too, the desktop's has to leave it out.
+      assert.ok(!/^\(max-width: 900px\)$/.test(q), `${path}: @media ${q} leaves out short viewports`);
+      if (/min-width: 9\d\d|min-width: 1\d\d\dpx/.test(q) && !/min-height: (521|640)px/.test(q)) {
+        assert.fail(`${path}: @media ${q} also matches a short viewport the room draws as a phone`);
+      }
+    }
+  }
+  assert.ok(phoneBlocks >= 4, `only ${phoneBlocks} room stylesheet blocks use the room's query`);
+  // The overlays that belong to the room follow it; the bottom sheets and
+  // dialogs everywhere else keep the site's own 900px, and the room's own
+  // sheets take the phone's shape in its short half.
+  const overlays = cssFiles.find((file) => basename(file.path) === "overlays.css").text;
+  assert.equal([...overlays.matchAll(/@media \(max-width: 900px\), \(max-height: 520px\) \{/g)].length, 2);
+  assert.match(overlays, /@media \(min-width: 901px\) and \(max-height: 520px\) \{\s*\.game-room \.bottom-sheet-scrim/);
+  // The landscape layout is the rule's short half: the same height, so every
+  // viewport it styles is one the components drew as a phone. A taller one
+  // here put the desktop DOM under it again - 0 x 0 at 1180 x 600.
+  const short = /\(max-height: (\d+)px\)/.exec(ROOM_QUERY)[1];
+  const gameRoom = cssFiles.find((file) => basename(file.path) === "game-room.css").text;
+  const landscape = [...gameRoom.matchAll(/@media \(orientation: landscape\) and \(max-height: (\d+)px\) and \(min-width: 481px\) \{/g)];
+  assert.equal(landscape.length, 1, "the landscape block moved or changed shape");
+  assert.equal(landscape[0][1], short);
+  const toolbar = cssFiles.find((file) => file.path.endsWith(join("styles", "toolbar.css")) && !file.path.includes("lazy")).text;
+  assert.match(toolbar, new RegExp(`\\(min-width: 901px\\) and \\(max-height: ${short}px\\) \\{`));
+});

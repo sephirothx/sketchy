@@ -177,7 +177,7 @@
    name at all. One breakpoint for both, so no width says it twice or never.
    The whole head, not only its heading: out of the flow, it takes no row of
    the waiting room's grid and so no gap above the invite card. */
-@media (min-width: 1101px) {
+@media (min-width: 1101px) and (min-height: 521px) {
   .waiting-room-head {
     border: 0;
     clip: rect(0 0 0 0);
@@ -735,8 +735,8 @@
 
    Phones only — the component itself decides, because hiding it here would
    still leave every nickname on the page twice for anything reading the DOM.
-   Above 900px the players panel has a column of its own and says more than a
-   grid of faces can: roles, AFK, the moderation controls. */
+   In a desktop room (above 900px and taller than 520px) the players panel
+   has a column of its own and says more than a grid of faces can: roles, AFK, the moderation controls. */
 
 .waiting-roster-head {
   align-items: baseline;
@@ -808,7 +808,7 @@
   justify-content: space-between;
 }
 
-@media (min-width: 901px) {
+@media (min-width: 901px) and (min-height: 521px) {
   .waiting-rules-footer.waiting-start-card {
     border-top: 1.5px solid var(--line);
     margin-top: 14px;
@@ -926,7 +926,7 @@
 
 /* A phone's strip is the way back and the code, one line, one at each end:
    Start is in the dock. */
-@media (max-width: 900px) {
+@media (max-width: 900px), (max-height: 520px) {
   .waiting-pad-strip {
     flex-wrap: nowrap;
     justify-content: space-between;
@@ -1391,7 +1391,9 @@
    the turn-results overlay, which is positioned against `.canvas-area`.
 
    A short window keeps the ordinary page, for the same reason the lobby does:
-   below 640px the pinned panels would each be a few rows tall. */
+   below 640px the pinned panels would each be a few rows tall. At 520px or
+   less the room is not a desktop one at all but the phone's landscape shell
+   (lib/roomLayout.ts, #1261), so the ordinary page is 521 to 639px. */
 @media (min-width: 901px) and (min-height: 640px) {
   .game-room {
     box-sizing: border-box;
@@ -1490,7 +1492,10 @@
   margin: 10px 0 0;
 }
 
-@media (max-width: 900px) {
+/* The phone's room: at most 900px wide, or at most 520px tall at any width -
+   a large phone held sideways, or a short desktop window (PHONE_ROOM_QUERY,
+   lib/roomLayout.ts, which the components ask the same question through). */
+@media (max-width: 900px), (max-height: 520px) {
   .waiting-room { padding: 0 0 32px; }
   .waiting-start-card {
     align-items: stretch;
@@ -1532,8 +1537,8 @@
   /* ── Waiting room ─────────────────────────────────────────────────────
      The panel says the same thing the roster grid does, a screen further
      down. The grid is the one with the faces on it, so the column goes; it
-     comes back above 900px, where it has a column of its own to live in and
-     is not costing the page anything. */
+     comes back in a desktop room, where it has a column of its own to live
+     in and is not costing the page anything. */
   .room-shell-waiting .room-shell-players { display: none; }
   .room-shell-waiting .room-shell-chat { order: 3; }
 
@@ -2751,7 +2756,15 @@ button.guess-pips {
    almost all 430px or less across - a few folding ones reach about 540, and
    with the keyboard up those would take this layout - and none is under 481
    turned sideways: the 568px of the smallest iPhones, which the old floor of
-   600 left in portrait, included. */
+   600 left in portrait, included.
+
+   There is no upper width, on purpose: a large phone held sideways is 915 to
+   956px across, and a desktop window can be as short. Every viewport this
+   matches is a phone to the room as well (PHONE_ROOM_QUERY, lib/roomLayout.ts,
+   and the `(max-height: 520px)` half of the phone blocks above), so the rules
+   below always meet the phone's DOM. Past 900px they used to meet the
+   desktop's, and the empty dock took a track of its three-column grid: 0 x 0
+   canvas (#1261). */
 @media (orientation: landscape) and (max-height: 520px) and (min-width: 481px) {
   .game-room.game-room-playing {
     padding: 0;

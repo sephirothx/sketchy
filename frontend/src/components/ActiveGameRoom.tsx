@@ -28,6 +28,7 @@ import {
 } from "../components/GameRoomRegions";
 import { useAfkCheck } from "../hooks/useAfkCheck";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { useRoomFriendSeats } from "../hooks/useRoomFriendSeats";
 import { useRoomBarGiveWay } from "../hooks/useRoomBarGiveWay";
 import {
@@ -114,7 +115,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   const [roomMenuOpen, setRoomMenuOpen] = useState(false);
   const [restartBusy, setRestartBusy] = useState(false);
   const [colorSuggestionBusy, setColorSuggestionBusy] = useState(false);
-  const isMobile = useMediaQuery("(max-width: 900px)");
+  const isMobile = useMediaQuery(PHONE_ROOM_QUERY);
   // The identity chip gives up its name before anything else in the bar does
   // (after the room's), and is the avatar alone from here down - the compact
   // chip, drawn round, not the full one with its label hidden inside it.

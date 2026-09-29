@@ -3,6 +3,7 @@ import type { FormEvent } from "react";
 import { MAX_PROMPT_LENGTH } from "../lib/customPrompts";
 import { chatAnnouncement } from "../lib/chatAnnouncements";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { PHONE_ROOM_QUERY } from "../lib/roomLayout";
 import { recordRender } from "../lib/renderDiagnostics";
 import { emitWithAck, socketRequestErrorMessage } from "../lib/socket";
 import { sendGuess } from "../lib/guessSender";
@@ -97,7 +98,7 @@ export function RoomChatPanel({
   const blurTimeoutRef = useRef<number | null>(null);
   const wasFocusedRef = useRef(false);
   // Matches the mobile block in game-room.css so JS and CSS agree on the breakpoint.
-  const isMobile = useMediaQuery("(max-width: 900px)");
+  const isMobile = useMediaQuery(PHONE_ROOM_QUERY);
   const inputVisible = mode !== "playing" || !isDrawer;
   useEffect(() => {
     return () => {
