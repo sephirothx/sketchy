@@ -1100,6 +1100,39 @@ async def test_a_seat_that_sits_the_turn_out_is_told_and_guesses_the_next():
     await ctx.timers.close()
 
 
+async def test_a_turn_guessed_before_leaving_counts_in_the_rejoined_accounts_delta():
+    """Review of #1331: the card's score carried the account's earlier seat,
+    but its delta did not, so a guess made before leaving and rejoining read
+    as points the account came in with - "+0", and a reorder on the first
+    turn of the game where everyone was level."""
+    ctx, sio, room, drawer = await _room_with_a_turn_in_progress()
+    joined = await sio.handlers["/"]["join_room"](
+        "hopper-sid", {"roomId": room.id, "nickname": "Hopper"}
+    )
+    first = room.players[joined["playerId"]]
+    await sio.handlers["/"]["guess"]("hopper-sid", {"text": "volleyball"})
+    earned = first.score
+    assert earned > 0
+    await sio.handlers["/"]["leave_room"]("hopper-sid")
+    await sio.handlers["/"]["join_room"]("hopper-sid", {"roomId": room.id, "nickname": "Hopper"})
+
+    sio.emit.reset_mock()
+    regular = next(p for p in room.seated_players() if p.id != drawer.id and p.user_id != "user-hopper-sid")
+    await sio.handlers["/"]["guess"](regular.sid, {"text": "volleyball"})
+    ended = [call.args[1] for call in sio.emit.await_args_list if call.args[0] == "turn_ended"]
+    assert ended, "the turn did not end"
+    scores = {entry["nickname"]: entry for entry in ended[-1]["scores"]}
+    hopper = scores["Hopper"]
+    assert hopper["score"] == earned
+    assert hopper["delta"] == earned
+    # Everyone came in on nothing: no row came in ahead of another.
+    assert {entry["score"] - entry["delta"] for entry in scores.values()} == {0}
+    assert {entry["previousRank"] for entry in scores.values()} == {1}
+
+    ctx.timers.cancel_phase_timer(room.id)
+    await ctx.timers.close()
+
+
 async def test_a_drawing_takes_its_watchers_afresh():
     """Only the drawing a spectator watched is closed to it (#1317): the set is
     replaced as each drawing begins, from the spectators present then."""

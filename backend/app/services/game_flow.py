@@ -1879,10 +1879,7 @@ class GameFlowService:
             # An account that left and rejoined holds the points of both
             # seats, here as in the record (R-HIST-12, #992): the standings
             # a room is shown and the ones it is written with agree.
-            carried: dict[str, int] = {}
-            for seat in room.departed_seats.values():
-                if seat.user_id and not seat.is_spectator:
-                    carried[seat.user_id] = carried.get(seat.user_id, 0) + seat.score
+            carried = room.carried_points()
             standings = [
                 {
                     "playerId": p.id,
@@ -1890,7 +1887,7 @@ class GameFlowService:
                     "nameColor": p.name_color,
                     "avatarUrl": avatar_url(p.avatar_key),
                     "isAnonymous": p.is_anonymous,
-                    "score": p.score + (carried.get(p.user_id, 0) if p.user_id else 0),
+                    "score": room.standing_score(p, carried),
                 }
                 for p in room.player_list()
                 # Seated players, and a spectator only when their account

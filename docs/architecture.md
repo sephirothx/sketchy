@@ -140,7 +140,7 @@ fingerprint of what moderation has made of the revisions' members — one aggreg
 statement — and a miss is read a thousand rows per turn of the loop and folded on the
 drawings' encode threads rather than on the loop (#1237): twenty agnostic lists in a
 mixed room held the loop 3.3 s on every authorization. `to_state_payload()`
-([`backend/app/rooms.py:768`](../backend/app/rooms.py)) and `to_public_summary()`
+([`backend/app/rooms.py:814`](../backend/app/rooms.py)) and `to_public_summary()`
 ([`backend/app/rooms.py:714`](../backend/app/rooms.py)) are the two shapes the room is
 published in.
 
