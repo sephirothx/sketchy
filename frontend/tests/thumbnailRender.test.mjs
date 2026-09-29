@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
+import { inflateSync } from "node:zlib";
 
 import { CANVAS_HEIGHT, CANVAS_WIDTH, decodeCanvasHistory } from "../src/lib/canvasHistory.ts";
 import { renderCanvasActions } from "../src/lib/canvasRenderer.ts";
@@ -57,23 +58,43 @@ test("sizes stay inside the drawing and never reach zero", () => {
   assert.deepEqual(thumbnailSize(0.2), { width: 1, height: 1 });
 });
 
-test("thumbnails are main's images, byte for byte, pinned at a size that is not a whole factor", async () => {
-  // Hashes of what main's on-page pipeline encoded before #1282, at 333 px -
-  // a scale the box filter has to average unevenly. The fill fixture is one
-  // flat colour; `width-runs` is strokes of changing width, where a scaling
-  // difference would show.
+/** A PNG's header and its inflated scanlines: the image itself. The
+compressed bytes are `CompressionStream`'s, and its deflate differs between
+platforms - CI's Linux runner and a Mac encode the same pixels differently -
+so a pin on them fails for a reason that is not the picture. */
+function imageOf(png) {
+  const view = new DataView(png.buffer, png.byteOffset, png.byteLength);
+  let offset = 8;
+  let header;
+  const data = [];
+  while (offset < png.length) {
+    const length = view.getUint32(offset);
+    const type = String.fromCharCode(...png.subarray(offset + 4, offset + 8));
+    const body = Buffer.from(png.subarray(offset + 8, offset + 8 + length));
+    if (type === "IHDR") header = body;
+    if (type === "IDAT") data.push(body);
+    offset += 12 + length;
+  }
+  return Buffer.concat([header, inflateSync(Buffer.concat(data))]);
+}
+
+test("thumbnails are main's images, pixel for pixel, pinned at a size that is not a whole factor", async () => {
+  // Hashes of the images main's on-page pipeline encoded before #1282, at
+  // 333 px - a scale the box filter has to average unevenly. The fill fixture
+  // is one flat colour; `width-runs` is strokes of changing width, where a
+  // scaling difference would show.
   const protocol = JSON.parse(readFileSync(new URL("../../fixtures/canvas_protocol_v1.json", import.meta.url), "utf8"));
   const widthRuns = Uint8Array.from(
     protocol.histories.find((history) => history.name === "width-runs").binary.match(/../g),
     (byte) => Number.parseInt(byte, 16),
   ).buffer;
   const pinned = [
-    [widthRuns, "654adf0ce7171050a79cc814df7a1e87d3987f900434aa2242160cf842cba35d"],
-    [fillHeavy, "7eb8cd7974e6198aaa098b28a62e4913b489ef27561d10800f3214857b62eb6f"],
+    [widthRuns, "831473e2f68998176ed0f088e7520cf0290a2002583966b54a319c24ab625899"],
+    [fillHeavy, "5965b99f8514d3f05187809130e5cc30e293b5a34c268f1b61b794602468ba73"],
   ];
   for (const [bytes, digest] of pinned) {
     const drawn = await renderThumbnail(bytes, 333);
-    assert.equal(createHash("sha256").update(drawn.png).digest("hex"), digest);
+    assert.equal(createHash("sha256").update(imageOf(drawn.png)).digest("hex"), digest);
   }
 });
 
