@@ -1,0 +1,57 @@
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import test from "node:test";
+
+import { CANVAS_HEIGHT, CANVAS_WIDTH, decodeCanvasHistory } from "../src/lib/canvasHistory.ts";
+import { renderCanvasActions } from "../src/lib/canvasRenderer.ts";
+import { downscalePixels } from "../src/lib/canvasThumbnail.ts";
+import { encodePng } from "../src/lib/pngEncode.ts";
+import { renderThumbnail, thumbnailSize } from "../src/lib/thumbnailRender.ts";
+
+/** The accepted 100-fill turn (#1282), regenerated and pinned by the backend. */
+const fixture = JSON.parse(readFileSync(new URL("../../fixtures/fill_replay_100.json", import.meta.url), "utf8"));
+const fillHeavy = Uint8Array.from(Buffer.from(fixture.base64, "base64")).buffer;
+
+/** What `DrawingThumbnail` did on the page before #1282, kept as the reference. */
+async function pagePipeline(bytes, pixelWidth) {
+  const actions = decodeCanvasHistory(bytes);
+  const pixels = new Uint8ClampedArray(CANVAS_WIDTH * CANVAS_HEIGHT * 4);
+  renderCanvasActions({ pixels, commit: () => undefined }, actions);
+  const width = Math.max(1, Math.min(CANVAS_WIDTH, Math.round(pixelWidth)));
+  const height = Math.max(1, Math.round((width * CANVAS_HEIGHT) / CANVAS_WIDTH));
+  const small = width === CANVAS_WIDTH ? pixels.slice() : downscalePixels(pixels, CANVAS_WIDTH, CANVAS_HEIGHT, width, height);
+  return { png: await encodePng(small, width, height), width, height };
+}
+
+test("the fill-heavy fixture decodes to the hundred fills the server accepted", () => {
+  const actions = decodeCanvasHistory(fillHeavy);
+  assert.equal(actions.length, fixture.actions);
+  assert.ok(actions.every((action) => action.kind === "fill"));
+});
+
+test("a thumbnail is the same image, byte for byte, wherever it is drawn", async () => {
+  // The worker runs `renderThumbnail`; the page ran the pipeline above.
+  const drawn = await renderThumbnail(fillHeavy, 320);
+  const reference = await pagePipeline(fillHeavy, 320);
+  assert.equal(drawn.width, 320);
+  assert.equal(drawn.height, 240);
+  assert.deepEqual(drawn.png, reference.png);
+});
+
+test("full width keeps every pixel, and the staging buffer is reused cleanly", async () => {
+  const first = await renderThumbnail(fillHeavy, 800);
+  const again = await renderThumbnail(fillHeavy, 800);
+  assert.deepEqual(first.png, again.png);
+  assert.equal(first.width, 800);
+});
+
+test("a history that does not decode is no image, not an exception", async () => {
+  assert.equal(await renderThumbnail(new Uint8Array([1, 2, 3]).buffer, 200), null);
+});
+
+test("sizes stay inside the drawing and never reach zero", () => {
+  assert.deepEqual(thumbnailSize(64), { width: 64, height: 48 });
+  assert.deepEqual(thumbnailSize(5000), { width: 800, height: 600 });
+  assert.deepEqual(thumbnailSize(0), { width: 400, height: 300 });
+  assert.deepEqual(thumbnailSize(0.2), { width: 1, height: 1 });
+});

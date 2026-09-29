@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Thumbnail replay benchmark</title>
+  </head>
+  <body>
+    <script type="module">
+      // What drawing thumbnails costs the page's thread (#1282): the replay on
+      // the page, as `DrawingThumbnail` did it, against the thumbnail worker.
+      import { renderThumbnail } from "/src/lib/thumbnailRender.ts";
+      import { drawThumbnail } from "/src/lib/thumbnailQueue.ts";
+
+      function bytesFromBase64(encoded) {
+        const binary = atob(encoded);
+        const bytes = new Uint8Array(binary.length);
+        for (let index = 0; index < binary.length; index++) bytes[index] = binary.charCodeAt(index);
+        return bytes.buffer;
+      }
+
+      window.runThumbnailBenchmark = async (encoded, count, mode, pixelWidth = 320) => {
+        const bytes = bytesFromBase64(encoded);
+        const longTasks = [];
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) longTasks.push(entry.duration);
+        });
+        observer.observe({ type: "longtask" });
+        // What a player feels: how late a 10 ms timer - an input, a frame -
+        // gets to run while the thumbnails are drawn.
+        let last = performance.now();
+        let worstGap = 0;
+        const timer = setInterval(() => {
+          const now = performance.now();
+          worstGap = Math.max(worstGap, now - last);
+          last = now;
+        }, 10);
+        const started = performance.now();
+        if (mode === "page") {
+          for (let index = 0; index < count; index++) {
+            await renderThumbnail(bytes.slice(0), pixelWidth);
+            await new Promise((resolve) => setTimeout(resolve, 0));
+          }
+        } else {
+          await Promise.all(Array.from({ length: count }, () => drawThumbnail(bytes, pixelWidth)));
+        }
+        const totalMs = performance.now() - started;
+        await new Promise((resolve) => setTimeout(resolve, 100));
+        clearInterval(timer);
+        observer.disconnect();
+        return {
+          mode,
+          count,
+          totalMs,
+          longTasks: longTasks.length,
+          longestTaskMs: Math.max(0, ...longTasks),
+          worstTimerGapMs: worstGap,
+        };
+      };
+    </script>
+  </body>
+</html>

@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # Run near-limit decode/replay measurements in a real browser.
+#   BENCHMARK=thumbnail_browser   what drawing thumbnails costs the page (#1282)
 
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 PORT="${PORT:-4174}"
+BENCHMARK="${BENCHMARK:-canvas_history_browser}"
 BASE_URL="http://127.0.0.1:$PORT"
 
 if lsof -nP -tiTCP:"$PORT" -sTCP:LISTEN >/dev/null 2>&1; then
@@ -38,5 +40,5 @@ if ! curl -fsS "$BASE_URL/benchmarks/canvas-history.html" >/dev/null; then
 fi
 
 "$ROOT_DIR/backend/.venv/bin/python" \
-  "$ROOT_DIR/benchmarks/canvas_history_browser.py" \
+  "$ROOT_DIR/benchmarks/$BENCHMARK.py" \
   --base-url "$BASE_URL" "$@"
