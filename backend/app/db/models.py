@@ -369,7 +369,7 @@ class User(Base):
     password_hash: Mapped[str | None] = mapped_column(String(255), nullable=True)
     display_name: Mapped[str] = mapped_column(String(32), nullable=False)
     name_color: Mapped[str | None] = mapped_column(String(16), nullable=True)
-    # The content address of the uploaded picture (`<sha256>.webp` or `.png`), or none.
+    # The content address of the uploaded picture (`<sha256>.webp`, `.png` or `.jpg`), or none.
     # Denormalised from uploaded_avatar_assets so every identity payload can
     # carry the URL without a join (#573).
     avatar_key: Mapped[str | None] = mapped_column(String(80), nullable=True)
@@ -1997,7 +1997,7 @@ class IdentityAlias(Base):
 class UploadedAvatarAsset(Base):
     """One account's uploaded picture: the bytes and what they are (#573).
 
-    Small by construction - 256×256 WebP or PNG, 128 KiB at most - which is what keeps
+    Small by construction - 256×256 WebP, PNG or JPEG, 128 KiB at most - which is what keeps
     the bytes in the primary database defensible; #471 measured every blob and kept
     them all there (N-18), a picture being the least of them. `object_key` is the content address the picture is served under:
     indexed for the fetch, not unique, because two accounts uploading the

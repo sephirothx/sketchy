@@ -285,7 +285,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   too_many_pictures: "Trop d’images. Réessaie plus tard.",
 
   // Pictures
-  unsupported_picture_type: "Ce n’est pas une image WebP ou PNG.",
+  unsupported_picture_type: "Ce n’est pas une image WebP, PNG ou JPEG.",
   picture_not_found: "Image introuvable.",
   picture_refused: "Cette image ne peut pas être utilisée ici.",
 

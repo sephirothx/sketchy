@@ -10,15 +10,17 @@ export { AVATAR_SIZE, MAX_AVATAR_BYTES };
  * makes one from whatever file was chosen.
  *
  * The browser does the cropping and re-encoding - the square the player
- * framed, AVATAR_SIZE on a side, WebP where it can encode one and PNG where
- * it cannot - so the server never decodes an image: it reads the header of
- * either, checks the size and the cap, and serves the bytes back only ever
- * as an image.
+ * framed, AVATAR_SIZE on a side, WebP where it can encode one, and JPEG (or
+ * PNG, for a crop with transparency) where it cannot - so the server never
+ * decodes an image: it reads the header of each, checks the size and the cap,
+ * and serves the bytes back only ever as an image.
  */
 export const ACCEPTED_INPUT_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"];
 const MAX_INPUT_BYTES = 10 * 1024 * 1024;
 /** WebP at this quality is ~22 KiB for a photograph; lossless PNG is ~136 KiB. */
 const WEBP_QUALITY = 0.85;
+/** JPEG at this quality: 13-43 KiB for 14 real photographs in WebKit (#1263). */
+const JPEG_QUALITY = 0.85;
 
 export class AvatarInputError extends Error {}
 
@@ -61,9 +63,12 @@ export async function loadPicture(file: File): Promise<LoadedPicture> {
  *
  * Drawn through a canvas, which is what strips metadata and settles the
  * format; a transparent source gets a transparent picture, which the disc
- * behind it paints its colour through. WebP first: a browser that cannot
- * encode it answers `toDataURL` with a PNG instead, which the server also
- * takes, so the fallback is the browser's own.
+ * behind it paints its colour through. WebP first. A browser that cannot
+ * encode it answers `toDataURL` with a PNG instead - WebKit, so every iPhone
+ * browser and Safari on a Mac - and a photograph as a lossless PNG is usually
+ * over the cap: 10 of 14 real ones were refused as too detailed (#1263). So an
+ * opaque crop goes as JPEG there, and only one with transparency, which JPEG
+ * cannot carry, keeps the PNG.
  */
 export function encodePicture(
   image: CanvasImageSource,
@@ -76,8 +81,11 @@ export function encodePicture(
   if (!context) throw new AvatarInputError(ui.avatars.thisBrowserCannotResizePictures);
   context.imageSmoothingQuality = "high";
   context.drawImage(image, crop.x, crop.y, crop.side, crop.side, 0, 0, AVATAR_SIZE, AVATAR_SIZE);
-  const dataUrl = canvas.toDataURL("image/webp", WEBP_QUALITY);
-  const contentType = dataUrl.startsWith("data:image/webp") ? "image/webp" : "image/png";
+  let dataUrl = canvas.toDataURL("image/webp", WEBP_QUALITY);
+  if (!dataUrl.startsWith("data:image/webp") && isOpaque(context)) {
+    dataUrl = canvas.toDataURL("image/jpeg", JPEG_QUALITY);
+  }
+  const contentType = dataUrl.slice("data:".length, dataUrl.indexOf(";"));
   const base64 = dataUrl.slice(dataUrl.indexOf(",") + 1);
   if (Math.ceil((base64.length * 3) / 4) > MAX_AVATAR_BYTES) {
     throw new AvatarInputError(
@@ -85,6 +93,15 @@ export function encodePicture(
     );
   }
   return { base64, previewUrl: dataUrl, contentType };
+}
+
+/** Whether every pixel of the picture is fully opaque, so JPEG loses nothing. */
+function isOpaque(context: CanvasRenderingContext2D): boolean {
+  const { data } = context.getImageData(0, 0, AVATAR_SIZE, AVATAR_SIZE);
+  for (let index = 3; index < data.length; index += 4) {
+    if (data[index] !== 255) return false;
+  }
+  return true;
 }
 
 export function uploadAvatar(base64: string): Promise<{ avatarKey: string; avatarUrl: string }> {

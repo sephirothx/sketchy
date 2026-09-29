@@ -466,6 +466,102 @@ async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tm
             await browser.close()
 
 
+# What WebKit answers a canvas asked for WebP - every iPhone browser, and
+# Safari on a Mac: a PNG, silently. Installed in Chromium, it walks the same
+# fallback on the runners that have no WebKit.
+WEBKIT_CANVAS = """
+(() => {
+  const toDataURL = HTMLCanvasElement.prototype.toDataURL;
+  HTMLCanvasElement.prototype.toDataURL = function (type, quality) {
+    return toDataURL.call(this, type === "image/webp" ? "image/png" : type, quality);
+  };
+})();
+"""
+
+
+def _webkit_installed(p) -> bool:
+    import os
+
+    try:
+        return os.path.exists(p.webkit.executable_path)
+    except Exception:
+        return False
+
+
+async def _upload_picture(page, source) -> str:
+    """Choose `source` in Settings, use the crop as framed; the stored key."""
+    await open_player_settings(page)
+    dialog = page.locator(".settings-modal-card")
+    await dialog.wait_for(state="visible")
+    await dialog.get_by_label("Choose a picture").set_input_files(str(source))
+    crop = page.get_by_role("dialog", name="Frame your picture")
+    await crop.wait_for(state="visible")
+    async with page.expect_response(
+        lambda response: response.url.endswith("/api/users/me/avatar")
+        and response.request.method == "POST"
+    ) as uploaded:
+        await crop.get_by_role("button", name="Use picture").click()
+    response = await uploaded.value
+    assert response.status == 200, await response.text()
+    await crop.wait_for(state="hidden")
+    await dialog.get_by_role("button", name="Close settings").click()
+    await dialog.wait_for(state="hidden")
+    return (await response.json())["avatarKey"]
+
+
+@pytest.mark.parametrize("engine", ["chromium-without-webp", "webkit"])
+async def test_a_browser_that_cannot_encode_webp_uploads_a_photo_as_jpeg(tmp_path, engine):
+    """#1263: WebKit cannot encode WebP from a canvas and hands back a PNG,
+    which for a photograph is usually over the cap - 10 of 14 real ones were
+    refused as too detailed. An opaque crop goes as JPEG there instead; one
+    with transparency, which JPEG cannot carry, still goes as PNG."""
+    from uuid import uuid4
+
+    from tests.png_fixture import png_bytes
+
+    photo = tmp_path / "photo.png"
+    photo.write_bytes(png_bytes(640, 400, seed=11))
+    see_through = tmp_path / "sticker.png"
+    see_through.write_bytes(png_bytes(300, 300, seed=12, alpha=128))
+    async with async_playwright() as p:
+        if engine == "webkit":
+            if not _webkit_installed(p):
+                pytest.skip("WebKit is not installed here (CI installs Chromium and Firefox)")
+            browser = await p.webkit.launch(headless=True)
+        else:
+            browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        if engine != "webkit":
+            await context.add_init_script(WEBKIT_CANVAS)
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            name = f"Jpeg{uuid4().hex[:6]}"
+            await use_guest_name(page, name)
+            await register_account(page, name)
+
+            key = await _upload_picture(page, photo)
+            assert key.endswith(".jpg") and len(key) == 68
+            picture = await page.evaluate(
+                """async (key) => {
+                    const blob = await (await fetch('/api/avatars/' + key)).blob();
+                    const bitmap = await createImageBitmap(blob);
+                    return { type: blob.type, width: bitmap.width, height: bitmap.height };
+                }""",
+                key,
+            )
+            assert picture == {"type": "image/jpeg", "width": 256, "height": 256}
+            chip = page.locator(".identity-avatar img")
+            await chip.wait_for(state="visible")
+            assert (await chip.get_attribute("src")).endswith(key)
+
+            key = await _upload_picture(page, see_through)
+            assert key.endswith(".png")
+        finally:
+            await context.close()
+            await browser.close()
+
+
 async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
     """#579: claiming an account gives it one of our doodles, drawn through the
     sprite in the disc's ink; Settings picks another, which the chip and the

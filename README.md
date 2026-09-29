@@ -1385,10 +1385,11 @@ password and a typed `DELETE` rather than the bottom of the data export.
 A registered player can upload a **picture** to stand in for their initial, from
 **Settings → Account**: the pencil on the disc. The browser lets the player
 frame a square of it — drag to move, zoom to get closer — then shrinks that square
-to 256 pixels and encodes it as WebP (PNG where the browser cannot) before it is
-sent; the server takes only a WebP or PNG of exactly that size under 128 KiB,
+to 256 pixels and encodes it as WebP — JPEG where the browser cannot, as on an
+iPhone or in Safari, or PNG if the crop has transparency — before it is
+sent; the server takes only a WebP, PNG or JPEG of exactly that size under 128 KiB,
 checked from its header without decoding it, and serves it only as an image from
-`/api/avatars/{sha256}.webp` (or `.png`), cacheable for ever because a changed
+`/api/avatars/{sha256}.webp` (or `.png`, `.jpg`), cacheable for ever because a changed
 picture is a new address. Guests keep the grey initial.
 
 Instead of a picture, a registered player can wear a **doodle** — one of 26 line
