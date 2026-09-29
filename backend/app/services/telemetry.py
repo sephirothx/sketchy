@@ -203,6 +203,13 @@ DEFAULT_SAMPLE_INTERVAL_SECONDS = 1.0
 # pauses a minute under the load gate read as "at most 5 ms" (#1253). At
 # 50 ms a stall of `d` is always seen, as at least `d - 50 ms` of lateness:
 # still a sample, not a trace, and it costs twenty cheap wake-ups a second.
+#
+# Recorded once a second all the same, as the worst of that second's ticks:
+# one observation per tick would have made a stall one twentieth of the
+# histogram it was a whole of before, and SLO-5's p95 - with its page -
+# would have stopped moving for anything short of a stall every second
+# (#1253 review). Once a second, SLO-5 still reads "in 95% of seconds the
+# loop was never held longer than this", and now every stall counts.
 DEFAULT_LAG_TICK_SECONDS = 0.05
 # A single sample this late is a loop that was *blocked*, not one that was busy:
 # every timer, hint and turn end in the process fired that much late, and any
@@ -211,8 +218,9 @@ DEFAULT_LAG_TICK_SECONDS = 0.05
 # and the runs that most need to answer "was the loop stuck?" - a CI shard, a
 # one-off report - are exactly the ones where nothing is (#735, R-OBS-15).
 LAG_WARNING_SECONDS = 1.0
-# Resident size and disk are read once a minute: they move slowly, and the
-# ring they feed has one slot per minute anyway.
+# Resident size and disk are read once a minute - every 60th process sample,
+# not every 60th lag tick: they move slowly, and the ring they feed has one
+# slot per minute anyway.
 SLOW_SAMPLE_EVERY_TICKS = 60
 CPU_SMOOTHING = 0.2
 
@@ -991,7 +999,7 @@ class Telemetry:
 
         self.loop_lag = Histogram(
             "sketchy_event_loop_lag_seconds",
-            "How late a one-second timer fired: time the event loop was not free.",
+            "Worst lateness of a 50 ms timer in each second: time the event loop was not free.",
             FAST_BUCKETS,
         )
         self.loop_lag_last: float | None = None
@@ -1731,26 +1739,35 @@ async def run_lag_sampler(
     that it actually was. Everything that blocked the loop meanwhile - a
     synchronous write, a large JSON dump, a garbage-collection pause - shows
     up as that lateness, which is what makes it the one number that separates
-    "the server is busy" from "the server is stuck". The process's CPU and
-    memory are sampled once every `interval_seconds` of those ticks.
+    "the server is busy" from "the server is stuck". Once every
+    `interval_seconds` the worst lateness since the last record is recorded -
+    one observation an interval, however many ticks it held - and the
+    process's CPU and memory are sampled.
 
     Past `warn_after_seconds` it also writes a line, one per sample, so a stall
     leaves its length and its duration in the log rather than only in a
     histogram somebody has to be scraping to see.
     """
-    next_process_sample = store._monotonic() + interval_seconds
+    next_record = store._monotonic() + interval_seconds
+    worst = 0.0
     while True:
         due = store._monotonic() + tick_seconds
         await asyncio.sleep(tick_seconds)
+        now = store._monotonic()
+        lag = now - due
+        worst = max(worst, lag)
+        if lag >= warn_after_seconds:
+            logger.warning("Event loop blocked for %.3f seconds", lag)
+        if now < next_record:
+            continue
+        # On the interval's own grid, not from whenever this tick landed:
+        # stepping from `now` drifted a tick an interval, and the once-a-
+        # minute memory reading then skipped a minute every hour or so.
+        next_record = max(next_record + interval_seconds, now)
         try:
-            now = store._monotonic()
-            lag = now - due
-            store.record_loop_lag(lag)
-            if lag >= warn_after_seconds:
-                logger.warning("Event loop blocked for %.3f seconds", lag)
-            if now >= next_process_sample:
-                next_process_sample = now + interval_seconds
-                store.sample_process()
+            store.record_loop_lag(worst)
+            worst = 0.0
+            store.sample_process()
             if health is not None:
                 health.record_success()
         except asyncio.CancelledError:

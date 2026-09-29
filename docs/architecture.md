@@ -1509,8 +1509,8 @@ outside. So every HTTP request is counted and timed at the outermost middleware
 after gzip so the number is what a client actually waited), every client command is
 timed at `HandlerContext.on`, the one door they all use (outcome `ok`, `refused` for a
 handler's own `ok: False`, `error` for an exception, counted before it propagates, or
-`throttled`), a supervised sampler measures how late a one-second timer fires (event-loop
-lag) and reads CPU and resident memory, two cursor listeners time every statement and the
+`throttled`), a supervised sampler measures how late a 50 ms timer fires and records the
+worst of each second (event-loop lag, #1253) and reads CPU and resident memory, two cursor listeners time every statement and the
 pool is asked for its occupancy, and the two durable queues (mail outbox, account
 exports) report their depth and oldest age. Bytes cross the socket in three places
 ([`backend/app/handlers/socket_wire.py`](../backend/app/handlers/socket_wire.py)): every
