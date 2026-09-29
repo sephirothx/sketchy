@@ -625,7 +625,7 @@ async def test_no_drawing_is_encoded_on_the_event_loop_at_game_end(env, monkeypa
             return function(*args, **kwargs)
         return call
 
-    monkeypatch.setattr(handoff_module, "encode_envelope", watched("encode", handoff_module.encode_envelope))
+    monkeypatch.setattr(handoff_module, "_encoded", watched("encode", handoff_module._encoded))
     monkeypatch.setattr(handoff_module, "decode_envelope", watched("decode", handoff_module.decode_envelope))
     monkeypatch.setattr(handoff_module, "envelope_checksum", watched("checksum", handoff_module.envelope_checksum))
     # Prepared at staging, on the envelope's threads (#1259); the replay only
@@ -986,9 +986,10 @@ def test_the_shutdown_hands_the_drain_that_budget():
     assert budget == history_encode_drain_seconds() + HISTORY_WRITE_TIMEOUT_SECONDS
     assert budget > HISTORY_WRITE_TIMEOUT_SECONDS, "the write bound alone is the old budget"
     # The measurement the budget is computed from: one stroke-heavy envelope
-    # on the machine #976 measured. Shrinking it shrinks the budget with every
-    # test still green (#976 sixth review).
-    assert ENVELOPE_ENCODE_SECONDS == 0.15
+    # on the machine #976 measured, re-measured once staging began preparing
+    # each drawing (#1259). Shrinking it shrinks the budget with every test
+    # still green (#976 sixth review).
+    assert ENVELOPE_ENCODE_SECONDS == 0.25
 
 
 def test_each_encode_pool_is_built_once():
@@ -1255,6 +1256,52 @@ async def test_a_staged_blob_that_fails_its_checksum_is_refused_at_replay(env):
         await history.save_game(
             staged.record, staged.participants, staged.turns, staged.score_events, [broken], staged.reactions,
         )
+
+
+@pytest.mark.parametrize(
+    ("change", "refusal"),
+    [
+        ({"magic": "SKCH"}, "format"),
+        ({"version": 9}, "format"),
+        ({"action_count": -5}, "negative"),
+        ({"wire_bytes": -1}, "negative"),
+    ],
+)
+async def test_a_staged_drawing_whose_description_disagrees_with_its_blob_is_refused(env, change, refusal):
+    """The checksum proves the blob, not what travels beside it: a row whose
+    format contradicts its own header is one the integrity audit would later
+    call mismatched (#1259 review)."""
+    import dataclasses
+
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    game = history_for(str(generate_uuid()), ann, bob, drawing=_path_heavy_frame())
+    staged = decode_envelope(encode_envelope(FinishedGameEnvelope(game)), ENVELOPE_VERSION).history
+    [drawing] = staged.drawings
+    broken = dataclasses.replace(drawing, stored=dataclasses.replace(drawing.stored, **change))
+    with pytest.raises(ValueError, match=refusal):
+        await history.save_game(
+            staged.record, staged.participants, staged.turns, staged.score_events, [broken], staged.reactions,
+        )
+
+
+async def test_a_drawing_encode_is_timed_at_staging_and_not_again_at_replay(env):
+    """`sketchy_drawing_encode_seconds` times preparing a drawing. That moved
+    to staging; the replay only checks the blob, and timing that would report
+    a checksum as the encode (#1259 review)."""
+    from app.services.telemetry import telemetry
+
+    session_factory, users, history, store = env
+    ann, bob = await two_players(users)
+    worker = FinishedGameHandoffWorker(store, game_history_repo=history, prompt_list_repo=None)
+
+    samples = telemetry.drawing_encode_seconds.count
+    before = samples()
+    await worker.stage(FinishedGameEnvelope(history_for(str(generate_uuid()), ann, bob, drawing=_path_heavy_frame())))
+    staged = samples()
+    await worker.drain()
+    assert staged == before + 1, "timed once, where it was encoded"
+    assert samples() == staged, "and not again when the replay writes it"
 
 
 async def test_a_game_hashes_the_same_whether_its_drawings_arrive_as_frames_or_prepared(env):

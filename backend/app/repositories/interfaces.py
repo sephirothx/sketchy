@@ -185,7 +185,8 @@ class StoredDrawingInput:
 
     `wire_sha256` is the digest of the frame it was prepared from, which is
     what the game's content hash names, so a game hashes the same whether its
-    drawings arrive as frames or already prepared."""
+    drawings arrive as frames or already prepared. The replay checks the blob
+    against `checksum` and its header against `magic` and `version`."""
 
     blob: bytes
     magic: str

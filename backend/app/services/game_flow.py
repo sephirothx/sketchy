@@ -68,8 +68,9 @@ TIMER_OVERRUN_REPORT_MS = 250
 # history itself is written by the handoff loop with its own budget and
 # retries. The reaction path and the entry path share this bound.
 HISTORY_WRITE_TIMEOUT_SECONDS = WRITE_TIMEOUT_SECONDS
-#: What one stroke-heavy envelope costs a thread, measured (#976).
-ENVELOPE_ENCODE_SECONDS = 0.15
+#: What one stroke-heavy envelope costs a thread, measured (#976): 0.15 s,
+#: then ~0.24 s once staging began preparing each drawing's stored form (#1259).
+ENVELOPE_ENCODE_SECONDS = 0.25
 
 
 def history_encode_drain_seconds() -> float:

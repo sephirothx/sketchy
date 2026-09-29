@@ -67,6 +67,7 @@ from app.canvas_storage import (
     CorruptStoredDrawingError,
     prepare_stored_drawing,
     stored_drawing_checksum,
+    stored_drawing_format,
 )
 from app.services.gallery_ranking import (
     HOT_HORIZON,
@@ -361,7 +362,7 @@ class _GameSizing:
     reported only once the transaction has committed, so a retried or
     refused write is never counted."""
 
-    drawings: list[tuple[str, int, int, int, float]] = field(default_factory=list)
+    drawings: list[tuple[str, int, int, int, float | None]] = field(default_factory=list)
     offer_sources: int = 0
 
     def record(
@@ -408,7 +409,8 @@ class _PreparedDrawing:
     checksum: str
     wire_bytes: int
     action_count: int
-    seconds: float
+    # None for a drawing prepared at staging: its encode was recorded there.
+    seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -438,18 +440,27 @@ def _prepare_drawing(payload: bytes) -> _PreparedDrawing:
 
 def _verified_stored_drawing(stored: StoredDrawingInput) -> _PreparedDrawing:
     """A drawing the envelope carried already prepared (#1259), written as it
-    is once its bytes are proved to be the ones it was prepared as."""
-    started = thread_time()
+    is once its bytes are proved to be the ones it was prepared as.
+
+    What travels beside the blob is checked too, as far as the blob can say:
+    a row whose format disagrees with its own header is one the integrity
+    audit would later call mismatched (#1259 review). Its encode was timed
+    where it happened, at staging."""
     if stored_drawing_checksum(stored.blob) != stored.checksum:
         raise CorruptStoredDrawingError("a staged drawing failed its checksum")
+    magic = stored.magic.encode("ascii")
+    if stored_drawing_format(stored.blob) != (magic, stored.version):
+        raise CorruptStoredDrawingError("a staged drawing's format disagrees with its header")
+    if stored.action_count < 0 or stored.wire_bytes < 0:
+        raise CorruptStoredDrawingError("a staged drawing carries a negative count")
     return _PreparedDrawing(
         blob=stored.blob,
-        magic=stored.magic.encode("ascii"),
+        magic=magic,
         version=stored.version,
         checksum=stored.checksum,
         wire_bytes=stored.wire_bytes,
         action_count=stored.action_count,
-        seconds=thread_time() - started,
+        seconds=None,
     )
 
 
