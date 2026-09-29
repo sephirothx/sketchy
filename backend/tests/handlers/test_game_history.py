@@ -1363,7 +1363,8 @@ async def test_an_account_that_scored_then_left_and_rejoined_is_saved_with_its_p
         await engine.dispose()
 
 
-async def test_a_seat_away_when_the_game_started_plays_it_on_the_record():
+@pytest.mark.parametrize("away_as", ["disconnected", "afk"])
+async def test_a_seat_away_when_the_game_started_plays_it_on_the_record(away_as):
     """A seat inside its reconnect grace when the host starts is left out of
     the rotation (`Room.active_players`). Back a moment later, it is frozen
     into the next turn's guessers like any seat (R-GUESS-05) and scores; the
@@ -1377,13 +1378,18 @@ async def test_a_seat_away_when_the_game_started_plays_it_on_the_record():
         ctx = build_context(room_manager, history)
         flow = ctx.game_flow
         away = players["Cid"]
-        away.connected = False
+        if away_as == "afk":
+            away.is_afk = True
+        else:
+            away.connected = False
         await flow._start_fresh_game(room, room.active_players())
         game = room.game
         game_id = game.id
         assert away.id not in game.turn_order
 
-        away.connected = True  # rebound inside its grace
+        # Rebound inside its grace, or back from AFK.
+        away.connected = True
+        away.is_afk = False
         game.force_prompt_choice()
         await flow._begin_drawing(room)
         assert away.id in game.turn_order, "enrolled before the guessers are frozen"
