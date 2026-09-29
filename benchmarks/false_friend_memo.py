@@ -73,8 +73,11 @@ def main() -> None:
     parser.add_argument("--seats", type=int, default=16)
     parser.add_argument("--languages", type=int, default=7, choices=range(2, len(LANGUAGES) + 1))
     parser.add_argument("--rounds", type=int, default=10)
-    parser.add_argument("--pool", type=int, default=130, help="concepts the game drew")
-    parser.add_argument("--aliases", type=int, default=1)
+    # The Standard family: 260 concepts a language and next to no aliases.
+    # A 16 x 10 game draws rounds x seats x 3 = 480, so it holds all 260, and
+    # each of its 160 turns plays a prompt of its own for most of the game.
+    parser.add_argument("--pool", type=int, default=260, help="concepts the game drew")
+    parser.add_argument("--aliases", type=int, default=0)
     args = parser.parse_args()
     game = build(args)
     play(game, args.seats * args.rounds)
