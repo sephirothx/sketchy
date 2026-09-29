@@ -1725,6 +1725,11 @@ telemetry = Telemetry()
 # --- the sampler -------------------------------------------------------------
 
 
+# The most intervals one stall records: ten minutes of seconds, twice the
+# window SLO-5 reads. A longer one is already a page and a log line.
+MAX_STALLED_INTERVALS = 600
+
+
 async def run_lag_sampler(
     store: Telemetry = telemetry,
     *,
@@ -1741,8 +1746,8 @@ async def run_lag_sampler(
     up as that lateness, which is what makes it the one number that separates
     "the server is busy" from "the server is stuck". Once every
     `interval_seconds` the worst lateness since the last record is recorded -
-    one observation an interval, however many ticks it held - and the
-    process's CPU and memory are sampled.
+    one observation an interval, however many ticks it held, and one for each
+    interval a stall covered - and the process's CPU and memory are sampled.
 
     Past `warn_after_seconds` it also writes a line, one per sample, so a stall
     leaves its length and its duration in the log rather than only in a
@@ -1763,10 +1768,24 @@ async def run_lag_sampler(
         # On the interval's own grid, not from whenever this tick landed:
         # stepping from `now` drifted a tick an interval, and the once-a-
         # minute memory reading then skipped a minute every hour or so.
-        next_record = max(next_record + interval_seconds, now)
+        next_record += interval_seconds
         try:
             store.record_loop_lag(worst)
-            worst = 0.0
+            # A stall that ran past more boundaries blocked every interval it
+            # covered, and each is recorded: a timer due at one's start waited
+            # until now. Recorded once, a 20 s stall was one bad second of
+            # three hundred, and SLO-5's p95 never saw it (#1253 review).
+            # Bounded, so a clock that leaps does not record for ever.
+            covered = 0
+            while next_record <= now and covered < MAX_STALLED_INTERVALS:
+                store.record_loop_lag(now - (next_record - interval_seconds))
+                next_record += interval_seconds
+                covered += 1
+            if next_record <= now:
+                next_record = now + interval_seconds
+            # The interval the stall ended in waited too, from its start.
+            start = next_record - interval_seconds
+            worst = now - start if due < start else 0.0
             store.sample_process()
             if health is not None:
                 health.record_success()

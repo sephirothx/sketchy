@@ -331,6 +331,37 @@ async def test_a_stall_is_seen_wherever_in_the_tick_it_starts():
             await task
 
 
+async def test_a_stall_across_several_intervals_is_recorded_in_each():
+    """Every interval a stall covered was blocked. Recorded once, a 20 s stall
+    was one bad second of three hundred in SLO-5's window, and its p95 stayed
+    under the page (#1253 review). Each covered interval records how long a
+    timer due at its start waited."""
+    telemetry = Telemetry()
+    lags: list[float] = []
+    record = telemetry.record_loop_lag
+
+    def recording(seconds: float) -> None:
+        lags.append(seconds)
+        record(seconds)
+
+    telemetry.record_loop_lag = recording
+    task = asyncio.create_task(run_lag_sampler(telemetry, tick_seconds=0.01, interval_seconds=0.05))
+    try:
+        await asyncio.sleep(0.12)
+        before = len(lags)
+        time.sleep(0.3)  # noqa: ASYNC251 - blocking the loop is the point
+        await asyncio.sleep(0.06)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    stalled = [lag for lag in lags[before:] if lag >= 0.04]
+    # 300 ms over 50 ms intervals: five or six of them blocked, each for at
+    # least most of an interval, and the first for nearly all of the stall.
+    assert len(stalled) >= 5, lags[before:]
+    assert max(stalled) >= 0.25, lags[before:]
+
+
 async def test_the_process_is_still_sampled_once_an_interval(monkeypatch):
     """Twenty lag ticks a second, not twenty CPU and memory reads - and one
     lag observation an interval, the worst of its ticks: one a tick would
