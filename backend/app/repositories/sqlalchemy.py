@@ -2412,12 +2412,22 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
                 # The turns and seats they point at go first, then the rows,
                 # in event order: a correction names an earlier event, which
-                # an earlier row - or an earlier page of the insert - wrote.
+                # an earlier row wrote. `render_nulls` because a bulk insert
+                # otherwise leaves a row's None values out and batches only
+                # neighbouring rows with the same columns: a right guesser
+                # beside a wrong one - a time and an award beside none - split
+                # a real game's outcomes into ~1,600 statements (#1260 review).
                 await session.flush()
                 if outcome_rows:
-                    await session.execute(insert(TurnParticipantOutcome), outcome_rows)
+                    await session.execute(
+                        insert(TurnParticipantOutcome).execution_options(render_nulls=True),
+                        outcome_rows,
+                    )
                 if score_event_rows:
-                    await session.execute(insert(ScoreEvent), score_event_rows)
+                    await session.execute(
+                        insert(ScoreEvent).execution_options(render_nulls=True),
+                        score_event_rows,
+                    )
 
                 await increment_user_stats_projection(
                     session,

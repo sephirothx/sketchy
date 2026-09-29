@@ -5,13 +5,13 @@ A finished game is staged as one envelope and replayed into history by the
 handoff worker (#541). Both ends encode drawings: the envelope deflates every
 turn's wire frame, and the replay turns each frame into its stored form before
 writing it. On the loop, that work stalls every room's strokes and timers for
-as long as it runs. This stages and replays scored games - a guess award for
-every guesser and a drawer bonus every turn, as the scorer writes them -
-through the real worker and repositories, with a 1 ms ticker on the loop, and
+as long as it runs. This stages and replays scored games - right, hinted,
+wrong and silent guessers, with the guess awards, hint charges and drawer
+bonuses the scorer writes for them - through the real worker and repositories, with a 1 ms ticker on the loop, and
 reports the longest the ticker was kept waiting. Three shapes: four seats and
 two rounds with an ordinary drawing and with a stroke-heavy one, the two the
 issue measured, and the largest room there is, sixteen seats and ten rounds:
-160 turns, 2,400 guesser outcomes and 2,560 score events, which is where the
+160 turns, 2,400 guesser outcomes and ~1,500 score events, which is where the
 rows the replay writes cost more than its drawings (#1260). Per shape it also
 reports the envelope as staged, the envelope encode's time, and on PostgreSQL
 the WAL a whole finished game writes - staging, replay and the envelope's
@@ -24,12 +24,12 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import dataclasses
 import functools
 import json
 import os
 import statistics
 import sys
-from datetime import datetime, timedelta, timezone
 from time import perf_counter
 from uuid import UUID
 
@@ -38,13 +38,12 @@ sys.path.insert(0, os.path.join(ROOT, "backend"))
 sys.path.insert(0, os.path.join(ROOT, "benchmarks"))
 
 import canvas_history as bench  # noqa: E402
-from app.db.models import generate_uuid  # noqa: E402
-from app.repositories.interfaces import TurnDrawingInput  # noqa: E402
+from app.repositories.interfaces import ScoreEventInput, TurnDrawingInput  # noqa: E402
 from app.repositories.sqlalchemy import (  # noqa: E402
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
 )
-from sqlalchemy import select, text  # noqa: E402
+from sqlalchemy import event, select, text  # noqa: E402
 
 from app.db.models import FinishedGameEnvelope as EnvelopeRow  # noqa: E402
 from app.services.game_handoff import (  # noqa: E402
@@ -54,7 +53,7 @@ from app.services.game_handoff import (  # noqa: E402
     encode_envelope,
 )
 from app.services.game_history import GameHistoryWrite  # noqa: E402
-from integrity_audit_stall import scored_game  # noqa: E402
+from integrity_audit_stall import AWARD, scored_game  # noqa: E402
 from tests.dbfixtures import create_test_db  # noqa: E402
 
 MAX_SEATS = 16
@@ -98,10 +97,66 @@ def _realistic(turn: int) -> bytes:
     return history.binary_payload()
 
 
+def _mixed(game: dict) -> dict:
+    """The game as games go: some guessers right, some with a hint bought,
+    some wrong, some who never tried, and the ledger to match.
+
+    Every guesser right is the one shape where every outcome row carries the
+    same columns; a real game alternates rows with a time and an award and
+    rows without, which is what a bulk insert that leaves NULLs out splits
+    on (#1260 review)."""
+    seats = {participant.seat_id: participant for participant in game["participants"]}
+    totals = dict.fromkeys(seats, 0)
+    turns, events = [], []
+
+    def award(turn, seat, kind, points) -> None:
+        events.append(ScoreEventInput(
+            participant_seat_id=seat, participant_user_id=seats[seat].user_id,
+            event_order=len(events) + 1, event_type=kind, points_delta=points, turn_id=turn,
+        ))
+        totals[seat] += points
+
+    for index, turn in enumerate(game["turns"]):
+        outcomes, bonus = [], 0
+        for position, outcome in enumerate(turn.participant_outcomes):
+            pick = position + index
+            if pick % 3 == 0:
+                outcome = dataclasses.replace(
+                    outcome, outcome="incorrect", correct_guess_time_seconds=None,
+                    points_awarded=None, wrong_guess_count=2,
+                )
+            elif pick % 5 == 1:
+                outcome = dataclasses.replace(
+                    outcome, outcome="no_attempt", correct_guess_time_seconds=None, points_awarded=None,
+                )
+            elif pick % 4 == 2:
+                outcome = dataclasses.replace(
+                    outcome, hints_used=1, points_spent_on_hints=AWARD // 2, points_awarded=AWARD - AWARD // 2,
+                )
+            outcomes.append(outcome)
+            if outcome.outcome == "correct":
+                award(turn.id, outcome.seat_id, "guess_award", outcome.points_awarded + outcome.points_spent_on_hints)
+                if outcome.points_spent_on_hints:
+                    award(turn.id, outcome.seat_id, "hint_charge", -outcome.points_spent_on_hints)
+                bonus += outcome.points_awarded
+        if bonus:
+            award(turn.id, turn.drawer_seat_id, "drawer_bonus", bonus)
+        turns.append(dataclasses.replace(
+            turn, participant_outcomes=tuple(outcomes),
+            wrong_guess_count=sum(outcome.wrong_guess_count for outcome in outcomes),
+        ))
+    ranked = sorted(totals, key=lambda seat: -totals[seat])
+    participants = [
+        dataclasses.replace(participant, final_score=totals[seat], final_rank=ranked.index(seat) + 1)
+        for seat, participant in seats.items()
+    ]
+    return {**game, "turns": turns, "score_events": events, "participants": participants}
+
+
 def _game(players: list[str], rounds: int, frame: bytes | None) -> GameHistoryWrite:
-    """A scored game of `rounds` rounds; `frame` for every turn's drawing, or
-    None for a realistic drawing of each turn's own."""
-    game = scored_game(players, rounds)
+    """A scored game of `rounds` rounds, its outcomes mixed; `frame` for every
+    turn's drawing, or None for a realistic drawing of each turn's own."""
+    game = _mixed(scored_game(players, rounds))
     return GameHistoryWrite(
         record=game["game_record"],
         participants=game["participants"],
@@ -162,6 +217,16 @@ async def _finish(worker, game: GameHistoryWrite) -> tuple[float, float]:
 
 async def run(games: int) -> dict:
     factory, engine = await create_test_db()
+    # Statements that write outcome and score-event rows: one each is the
+    # bulk insert working; hundreds is it split by the rows' shapes (#1260).
+    row_statements = [0]
+
+    @event.listens_for(engine.sync_engine, "before_cursor_execute")
+    def _count(conn, cursor, statement, parameters, context, executemany):  # noqa: ARG001
+        head = statement.lstrip()[:40].lower()
+        if head.startswith(("insert into turn_participant_outcomes", "insert into score_events")):
+            row_statements[0] += 1
+
     try:
         users = SqlAlchemyUserRepository(factory)
         players = [(await users.create_anonymous(display_name=f"P{i}")).id for i in range(MAX_SEATS)]
@@ -188,12 +253,15 @@ async def run(games: int) -> dict:
                 envelope_bytes = await session.scalar(
                     select(EnvelopeRow.byte_size).where(EnvelopeRow.game_id == UUID(game.record.id))
                 )
+            row_statements[0] = 0
             await worker.drain()
+            statements = row_statements[0]
             wal = await _wal_since(factory, lsn)
             result[name] = {
                 "turns": len(game.turns),
                 "outcomes": sum(len(turn.participant_outcomes) for turn in game.turns),
                 "scoreEvents": len(game.score_events),
+                "rowInsertStatements": statements,
                 "frameBytes": len(frame if frame is not None else _realistic(0)),
                 "worstLoopStallMsMedian": round(statistics.median(s[0] for s in samples), 1),
                 "stageAndReplayMsMedian": round(statistics.median(s[1] for s in samples), 1),

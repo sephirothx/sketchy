@@ -2092,8 +2092,8 @@ TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test
 # frame, so a `pg_dump` of its output compresses ~50x and says nothing about a real store.
 
 # How long finishing a game holds the event loop: stage and replay scored 8-turn games, ordinary
-# and stroke-heavy drawings, and the largest room - 16 seats, 10 rounds, 2,400 outcomes and
-# 2,560 score events - with a 1 ms ticker on the loop (#976, #1260; disposable database only)
+# and stroke-heavy drawings, and the largest room - 16 seats, 10 rounds, 2,400 mixed outcomes -
+# with a 1 ms ticker on the loop and the row statements counted (#976, #1260; disposable database only)
 TEST_DATABASE_URL=postgresql+asyncpg://user:password@localhost:5432/sketchy_test \
   backend/.venv/bin/python benchmarks/finish_game_stall.py --games 4
 # Which permessage-deflate window and memLevel the server should use (bytes, CPU, memory)

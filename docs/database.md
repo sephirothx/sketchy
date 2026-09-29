@@ -1419,14 +1419,18 @@ recorded where the encode runs: at staging for a finished game's drawings, by `s
 for one written directly.
 
 What the transaction writes scales with turns × seats, and the largest room is sixteen
-seats and ten rounds: 160 turns, 2,400 guesser outcomes and 2,560 score events. Those two
-go in as plain rows, in one bulk insert each, after a flush of the turns and seats they
-name — as ORM objects the unit of work tracked and flushed them one by one, on the loop
-(#1260). Same benchmark, that game: the loop's longest wait fell 100 → 17 ms, stage and
-replay 724 → 644 ms. Score events are inserted in ledger order, so a correction's
-target is always a row already written. The benchmark builds each game before its ticker
-starts; before #1260 it drew the ordinary shape's eight drawings inside the measured
-window, which is where most of that shape's 21 ms came from (1.4 ms now).
+seats and ten rounds: 160 turns, 2,400 guesser outcomes and up to 2,560 score events.
+Those two go in as plain rows, one bulk insert each, after a flush of the turns and seats
+they name — as ORM objects the unit of work tracked and flushed them one by one, on the
+loop (#1260). The inserts render NULLs: left out, a right guesser's row (a time, an
+award) and a wrong one's (neither) have different columns and the insert splits wherever
+they alternate, ~1,600 statements for one game. Same benchmark, that game with a mix of
+right, hinted, wrong and silent guessers (1,758 events): the loop's longest wait fell
+67.5 → 14.8 ms, stage and replay 625 → 609 ms, row statements 5 → 2. Score events are
+inserted in ledger order, so a correction's target is always a row already written. The
+benchmark builds each game before its ticker starts; before #1260 it drew the ordinary
+shape's eight drawings inside the measured window, which is where most of that shape's
+21 ms came from (~1 ms now).
 
 ```bash
 cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # replay by hand
