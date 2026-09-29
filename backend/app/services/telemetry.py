@@ -635,6 +635,8 @@ class Sources:
     socket_transports: Callable[[], dict[str, str]] | None = None
     # Sockets watching the lobby channel right now (#882).
     lobby_watchers: Callable[[], int] | None = None
+    # WebSocket handlers still running, writer included (#1249).
+    websocket_handlers: Callable[[], int] | None = None
     # Bytes of decoded drawings held for re-serving (#979).
     drawing_cache_bytes: Callable[[], int] | None = None
     pool: Callable[[], PoolGauges | None] | None = None
@@ -1600,6 +1602,12 @@ class Telemetry:
         lines += gauge_lines(
             "sketchy_sockets_connected", "Sockets currently open on this worker.", self._sockets()
         )
+        if self.sources.websocket_handlers is not None:
+            lines += gauge_lines(
+                "sketchy_websocket_handlers_open",
+                "WebSocket connections whose handler, writer included, has not finished.",
+                self.sources.websocket_handlers(),
+            )
         transport_rows = self._socket_transport_rows()
         if transport_rows is not None:
             lines += labelled_gauge_lines(

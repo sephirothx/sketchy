@@ -212,6 +212,7 @@ async def test_a_stalled_socket_evicted_for_its_backlog_releases_writer_and_queu
             break
         await asyncio.sleep(0.01)
     blob = "x" * (512 * 1024)
+    assert sio.eio.websocket_handlers == 1
     for _ in range(socket_server.BACKLOG_MAX_BYTES // len(blob) + 2):
         await sio.emit("sync_strokes", blob, to=sid)
         await asyncio.sleep(0)
@@ -221,6 +222,8 @@ async def test_a_stalled_socket_evicted_for_its_backlog_releases_writer_and_queu
     assert sio.eio.sockets == {}
     assert retained_packets(engine_socket) == []
     assert await settled(sio, before) == set()
+    # What `/metrics` reports, and the load gate's slow viewer reads (#1249).
+    assert sio.eio.websocket_handlers == 0
 
 
 async def test_repeated_stalled_connections_leave_nothing_behind(monkeypatch):

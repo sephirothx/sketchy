@@ -2110,6 +2110,8 @@ backend/.venv/bin/python benchmarks/path_widths.py --brush 6 12 32 --tolerance 0
 
 # The release load gate: 50 rooms x 8 seats sustained for 5 minutes against a throwaway server (#461)
 ./benchmarks/run_load.sh
+# The same population playing one-round games whose guessers all answer, so every room finishes games (#1249)
+./benchmarks/run_load.sh --finish-games
 
 # Would room-state deltas pay? Replayed on a real viewer's stream captured under the gate (#493)
 backend/.venv/bin/python benchmarks/room_state_deltas.py
@@ -2118,7 +2120,7 @@ backend/.venv/bin/python benchmarks/room_state_deltas.py
 # workload, its gate with #938's chat fix applied. A before/after needs both runs, not an old capture.
 backend/.venv/bin/python benchmarks/room_state_deltas.py --stream fixtures/viewer_streams/gate-viewer-180s-888-baseline.jsonl
 
-# A viewer that stops reading, closed for its outbound backlog and recovered with a verified canvas (#602)
+# A viewer that stops reading, closed for its outbound backlog, its transport ended, and recovered with a verified canvas (#602, #1249)
 METRICS_TOKEN=x GUEST_PROVISION_LIMIT=1000 AUTH_LOOKUP_LIMIT=1000 ./benchmarks/with_server.sh benchmarks/slow_viewer.py
 
 # What one hostile client costs the socket door: garbage, no-argument commands, a deflate bomb,
@@ -2336,9 +2338,13 @@ capture either change would have been credited to the protocol.
 `slow_viewer.py` stages the case the outbound budget exists for (#602): a room near the
 canvas ceiling, a spectator that stops reading at the transport while pulling a full
 sync every window, the server's backlog high-water and age read every two seconds until
-the socket is closed for its age, then the viewer's return and a check that the sync it
-takes back hashes to what the server said. It also measures the slack *under* the
-budget - about 1.2 MB on a loopback before the server's queue grows at all.
+the socket is closed for its age, then proof that the transport ended rather than only
+left the registry - the server's `sketchy_websocket_handlers_open` falls back to what it
+was before the spectator came (the handler returns only once its writer has), and the
+spectator, reading again, reaches the end of its connection - and finally the viewer's
+return under a new name, a canvas request, and a check that the sync it takes back
+hashes to what the server said (#1249). It also measures the slack *under* the budget -
+about 1.2 MB on a loopback before the server's queue grows at all.
 
 `socket_abuse.py` measures the socket door against one hostile client (#1229). It
 starts its own throwaway server so it can read that process's CPU time, resident
@@ -2363,10 +2369,19 @@ latency (p50/p95/p99, per command), draw fan-out latency from the drawer's send 
 viewer's receipt, timer overrun on turns that ran their full length, unexpected
 disconnects and failed reconnects, and, scraped from `/metrics`, event-loop lag,
 resident memory and its growth, database query latency, rejected packets and canvas
-recovery notices - each against a threshold, exiting non-zero on a breach. It is run
-by hand on the reference environment before a release (R-ENG-11 keeps it out of CI),
-and the numbers it last produced are recorded with that environment in
-`docs/requirements.md` under the scale target.
+recovery notices - each against a threshold, exiting non-zero on a breach. A run in
+which the server accepted no drawing frame or no viewer timed one is a breach too, not a
+fan-out of 0.0: from #1102 until #1249 the gate sent no action nonce, every stroke was
+refused, and that empty percentile passed. A default run never finishes a game (two
+rounds of 90 s turns outlast it), so `--finish-games` plays one-round games in which
+every guesser answers: turns end early, every room finishes games inside the run, and
+the game-end path - history, handoff, replay, stats projection - is under load; it
+reports games ended and histories written, and fails if a room finished none or no
+history landed. It is run by hand on the reference environment before a release
+(R-ENG-11 keeps it out of CI), and the numbers it last produced are recorded with that
+environment in `docs/requirements.md` under the scale target. Record it on PostgreSQL
+at the full 300 s: a shorter run breaches `rssGrowthPercent`, because the warm-up
+sample it grows from precedes the rooms filling.
 
 The deflate-window benchmark decides the WebSocket compressor's two constants in
 `backend/app/ws_transport.py`. It runs one viewer's session — join, late-join

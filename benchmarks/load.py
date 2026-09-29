@@ -22,6 +22,12 @@ back through the reconnect grace (R-CONN-01), and a set of lobby watchers hold
 the lobby channel open for the whole run so presence and room-list deltas are
 being fanned out too.
 
+A default run never finishes a game: two rounds of 90 s turns is longer than
+five minutes. With `--finish-games` a game is one round and every guesser
+answers, so turns end early and each room finishes games inside the run, which
+puts the game-end path - history, handoff, replay, stats projection - under
+load; the run fails if a room finished none or no history was written (#1249).
+
 Every seat asks for the drawing when the browser would (R-DRAW-13, #877): once
 when a game starts, which is when the browser's canvas mounts and stays
 mounted for the game, and again after every reconnect, claiming the prefix it
@@ -38,7 +44,9 @@ What is measured, client-side with one clock for every seat:
 - **Acknowledgement latency** of every command that has one, p50/p95/p99.
 - **Draw fan-out latency**: the drawer stamps each frame as it sends it; every
   viewer stamps it as it arrives. The gap is what a viewer's lag *is*, before
-  the playback interval it adds on purpose (#559).
+  the playback interval it adds on purpose (#559). A run with no samples, or
+  no frame the server accepted, fails: from #1102 to #1249 every stroke was
+  refused for a missing nonce and the empty percentile read 0.0, a pass.
 - **Timer overrun**: a turn that ran its full length ends `seconds` after
   `turn_started`; how late `turn_ended` arrives is how far behind the server's
   timers are, which is the number that fails a game before CPU looks busy.
@@ -59,6 +67,7 @@ Usage (the server needs the limits a swarm from one address trips; use the
 wrapper, which starts one with them set):
   benchmarks/run_load.sh                                  # 50 rooms x 8 seats, 5 minutes
   benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60
+  benchmarks/run_load.sh --finish-games                   # every room finishes games
   benchmarks/run_load.sh --json-output /tmp/load.json
 """
 from __future__ import annotations
@@ -84,8 +93,10 @@ if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
 
 from app.canvas_history import binary_action_count
+from app.handlers.payloads import MAX_ACTION_NONCE
 from app.live_drawing import CLEAR_TAG, FILL_TAG, PATH_START_TAG, SHAPE_TAG
 from app.protocol import PROTOCOL_VERSION
+from app.rooms import MAX_PLAYERS_MIN
 
 TRACE = Path(ROOT_DIR) / "fixtures" / "live_strokes" / "hand-long.json"
 COOKIE = "sketchy_session"
@@ -111,6 +122,26 @@ DEFAULT_THRESHOLDS = {
     # that reconnects mid-turn inside a spent resync window is told to wait,
     # which is the bound working as designed (R-DRAW-13), not a fault.
     "faultNotices": 0,
+    # A finished game whose history the handoff gave up on.
+    "historyWritesAbandoned": 0,
+}
+
+# What a run must have done at all for its other numbers to mean anything. A
+# gate whose drawing was refused wholesale read a fan-out p95 of 0.0 and
+# passed that row (#1249): no samples is a breach, never a zero.
+DEFAULT_FLOORS = {
+    "drawFramesAccepted": 1,
+    "drawFanoutSamples": 1,
+}
+
+# `--finish-games` exists to put the game-end path under load, so a run of it
+# in which a room never finished a game, or no history was written, measured
+# nothing it was for.
+FINISH_GAMES_FLOORS = {
+    "historyGamesWritten": 1,
+}
+FINISH_GAMES_THRESHOLDS = {
+    "roomsWithoutAFinishedGame": 0,
 }
 
 FAULT_NOTICE_REASONS = ("invalid_frame", "refused_tool", "stale_generation", "unknown_sequence", "dropped_frame")
@@ -129,6 +160,7 @@ class Samples:
     turns_skipped: int = 0
     heartbeats_skipped: int = 0
     games_started: int = 0
+    games_ended: int = 0
     guesses: int = 0
     chats: int = 0
     frames_sent: int = 0
@@ -220,6 +252,7 @@ class Seat:
         self.harness = harness
         self.room = room
         self.name = name
+        self.address = harness.next_address()
         self.cookie: str | None = None
         self.sio: socketio.AsyncClient | None = None
         self.player_id: str | None = None
@@ -240,11 +273,14 @@ class Seat:
         # or for a request a new turn abandoned, is stale and ignored.
         self.outstanding_sync: int | None = None
         self.closing = False
+        # The turn this seat last guessed right in (`--finish-games`).
+        self.guessed_turn = -1
 
     async def provision(self, http: aiohttp.ClientSession) -> None:
         async with http.post(
             f"{self.harness.base_url}/api/auth/display-name",
             json={"displayName": self.name},
+            headers=self.harness.forwarded(self.address),
         ) as response:
             if response.status != 200:
                 raise RuntimeError(f"provisioning {self.name}: HTTP {response.status}")
@@ -334,6 +370,8 @@ class Seat:
             # fresh one and asks again.
             self.held = None
             if self.room.seats[0] is self:
+                samples.games_ended += 1
+                self.room.games_ended += 1
                 self.harness.spawn(self.room.start_game(delay=2.0))
 
         @sio.on("correct_guess")
@@ -426,7 +464,7 @@ class Seat:
 
         await sio.connect(
             self.harness.base_url,
-            headers={"Cookie": self.cookie},
+            headers={"Cookie": self.cookie, **self.harness.forwarded(self.address)},
             auth={"protocol": PROTOCOL_VERSION},
             transports=["websocket"],
             wait_timeout=30,
@@ -486,7 +524,11 @@ class Seat:
                 self.room.frame_sent_at[data] = time.monotonic()
                 self.harness.samples.frames_sent += 1
                 if frame["identity"]:
-                    await self.sio.emit("draw", (data, [generation, sequence]))
+                    # `[generation, sequence, nonce]`: the nonce is the
+                    # browser's per-action random draw, required since #1102;
+                    # without it every stroke opener was refused as `invalid`
+                    # and the gate measured no drawing at all (#1249).
+                    await self.sio.emit("draw", (data, [generation, sequence, action_nonce()]))
                 else:
                     await self.sio.emit("draw", data)
             await asyncio.sleep(0.3)
@@ -510,10 +552,17 @@ class Seat:
                 self.harness.samples.chats += 1
                 continue
             elapsed = self.turn_deadline - time.monotonic()
-            correct = self.room.guess_correctly and elapsed < 45 and self.room.correct_guesser is None
+            if self.harness.args.finish_games:
+                # Every guesser answers once the drawing has been on a
+                # few seconds, so the turn ends when the last one has and
+                # a game ends inside the run (#1249).
+                correct = self.guessed_turn != self.room.turn_index
+            else:
+                correct = self.room.guess_correctly and elapsed < 45 and self.room.correct_guesser is None
             text = self.room.prompt if correct else f"maybe {random.choice(WRONG)}"
             if correct:
                 self.room.correct_guesser = self
+                self.guessed_turn = self.room.turn_index
             # The receipt is bare (wire §4), so the count is the acknowledgements'.
             await self.call("guess", {"text": text, "code": self.room.code})
             self.harness.samples.guesses += 1
@@ -605,6 +654,10 @@ class Seat:
 
 WRONG = ["cat", "house", "tree", "boat", "sun", "car", "fish", "hat"]
 
+def action_nonce() -> int:
+    """What the browser draws for each action it opens (#1102)."""
+    return random.randint(1, MAX_ACTION_NONCE)
+
 
 class SlowViewer:
     """A seat that joins a room and then stops reading (#602).
@@ -628,6 +681,7 @@ class SlowViewer:
         self.harness = harness
         self.room = room
         self.name = name
+        self.address = harness.next_address()
         self.cookie: str | None = None
         self.ws = None
         self.session: aiohttp.ClientSession | None = None
@@ -640,7 +694,9 @@ class SlowViewer:
         self.session = aiohttp.ClientSession()
         url = self.harness.base_url.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket"
         self.ws = await self.session.ws_connect(
-            url, headers={"Cookie": self.cookie}, **self.harness.websocket_options
+            url,
+            headers={"Cookie": self.cookie, **self.harness.forwarded(self.address)},
+            **self.harness.websocket_options,
         )
         opened = await self.ws.receive_str()
         assert opened.startswith("0"), opened
@@ -703,6 +759,7 @@ class RoomRun:
         self.guess_correctly = False
         self.correct_guesser: Seat | None = None
         self.frame_sent_at: dict = {}
+        self.games_ended = 0
 
     _drawer: Seat | None = None
 
@@ -711,7 +768,15 @@ class RoomRun:
 
     async def open(self) -> None:
         host = self.seats[0]
-        answer = await host.call("create_room", {"nickname": host.name, "name": f"Load {self.index}", "isPublic": self.index % 2 == 0, "rounds": 2})
+        answer = await host.call("create_room", {
+            "nickname": host.name,
+            "name": f"Load {self.index}",
+            "isPublic": self.index % 2 == 0,
+            # One round when games are to finish inside the run: a turn per seat.
+            "rounds": 1 if self.harness.args.finish_games else 2,
+            # The default is 8; a larger room has to say so (#1249).
+            "maxPlayers": max(MAX_PLAYERS_MIN, len(self.seats)),
+        })
         if not answer or not answer.get("ok"):
             raise RuntimeError(f"room {self.index}: create refused: {answer}")
         self.code = answer["code"]
@@ -755,6 +820,27 @@ class Harness:
         self.capture = args.capture_seat.open("w") if args.capture_seat else None
         self.capture_started = time.monotonic()
         self.captured_seat: Seat | None = None
+        self.addresses = 0
+
+    def next_address(self) -> str:
+        """An address of its own for each client, in the private 10/8."""
+        self.addresses += 1
+        n = self.addresses
+        return f"10.{(n >> 16) & 0xFF}.{(n >> 8) & 0xFF}.{n & 0xFF}"
+
+    def forwarded(self, address: str) -> dict[str, str]:
+        """Where a client says it comes from, as a proxy would forward it.
+
+        Players arrive from addresses of their own, and since #1232 and #1243
+        the server holds sockets, rooms and chat to per-address budgets: a
+        swarm from one address had its guesses throttled - 4,102 in one
+        300 s run - which is a workload no real room population makes. The
+        throwaway server trusts the loopback's forwarded header (uvicorn's
+        `FORWARDED_ALLOW_IPS` default), so each client names its own.
+        `--shared-address` sends none, for a server behind a proxy that
+        rewrites the header, where every seat is then the proxy's address.
+        """
+        return {} if self.args.shared_address else {"X-Forwarded-For": address}
 
     def spawn(self, coroutine) -> None:
         task = asyncio.create_task(coroutine)
@@ -828,6 +914,15 @@ class Harness:
                 await viewer.close()
             await asyncio.sleep(1.0)
             after = await self.metrics(http)
+            if args.finish_games:
+                # A game's history is written by the handoff worker after it
+                # ends; give the last ones a moment to land before counting.
+                for _ in range(20):
+                    written = after.get("history_writes", 0.0) - before.get("history_writes", 0.0)
+                    if written >= self.samples.games_ended:
+                        break
+                    await asyncio.sleep(1.0)
+                    after = await self.metrics(http)
         if self.capture is not None:
             self.capture.close()
         return self.report(before, during, after, connect_seconds, open_seconds)
@@ -856,6 +951,8 @@ class Harness:
             "ackP95Ms": percentile(acks, 0.95),
             "ackP99Ms": percentile(acks, 0.99),
             "ackByCommand": {c: {"n": len(v), "p95Ms": percentile(v, 0.95)} for c, v in sorted(s.ack_ms.items())},
+            "drawFramesAccepted": (after.get("draw_accepted", 0.0) - before.get("draw_accepted", 0.0)) if after else 0.0,
+            "drawFanoutSamples": len(s.fanout_ms),
             "drawFanoutP50Ms": percentile(s.fanout_ms, 0.50),
             "drawFanoutP95Ms": percentile(s.fanout_ms, 0.95),
             "timerOverrunP95Ms": percentile(s.overrun_ms, 0.95),
@@ -944,6 +1041,10 @@ class Harness:
             "turnsSkipped": s.turns_skipped,
             "heartbeatsSkipped": s.heartbeats_skipped,
             "gamesStarted": s.games_started,
+            "gamesEnded": s.games_ended,
+            "roomsWithoutAFinishedGame": sum(1 for room in self.rooms if room.games_ended == 0),
+            "historyGamesWritten": (after.get("history_writes", 0.0) - before.get("history_writes", 0.0)) if after else 0.0,
+            "historyWritesAbandoned": (after.get("history_abandoned", 0.0) - before.get("history_abandoned", 0.0)) if after else 0.0,
             "guesses": s.guesses,
             "chats": s.chats,
             "framesSent": s.frames_sent,
@@ -954,10 +1055,11 @@ class Harness:
             "errorCount": len(s.errors),
         }
         thresholds = dict(DEFAULT_THRESHOLDS)
-        breaches = [
-            key for key, limit in thresholds.items()
-            if key in measured and isinstance(measured[key], (int, float)) and measured[key] > limit
-        ]
+        floors = dict(DEFAULT_FLOORS)
+        if self.args.finish_games:
+            thresholds.update(FINISH_GAMES_THRESHOLDS)
+            floors.update(FINISH_GAMES_FLOORS)
+        breaches = judge(measured, thresholds, floors)
         return {
             "environment": {
                 "machine": platform.machine(),
@@ -965,20 +1067,41 @@ class Harness:
                 "python": platform.python_version(),
                 "cpuCount": os.cpu_count(),
                 "processor": platform.processor(),
+                # The server's, which `with_server.sh` exports to this script:
+                # the gate is recorded on PostgreSQL (#1249).
+                "database": database_engine(os.environ.get("DATABASE_URL", "")),
             },
             "scenario": {
                 "rooms": self.args.rooms, "seatsPerRoom": self.args.seats,
                 "seats": self.args.rooms * self.args.seats, "lobbyWatchers": self.args.lobby_watchers,
                 "durationSeconds": self.args.duration, "reconnectShare": self.args.reconnect_share,
+                "finishGames": self.args.finish_games,
                 "deflate": not self.args.no_deflate,
                 "slowViewers": len(self.slow_viewers),
                 "metricsScrapes": 2 + len(during),
             },
             "measured": measured,
             "thresholds": thresholds,
+            "floors": floors,
             "breaches": breaches,
             "passed": not breaches,
         }
+
+
+def database_engine(url: str) -> str:
+    """`postgresql`, `sqlite`, or `unknown`: the scheme without its driver."""
+    scheme = url.split(":", 1)[0] if ":" in url else ""
+    return {"postgresql": "PostgreSQL", "sqlite": "SQLite"}.get(scheme.split("+")[0], "unknown")
+
+
+def judge(measured: dict, thresholds: dict, floors: dict) -> list[str]:
+    """Every measured value past its ceiling, and every one short of its
+    floor - a floor missing from `measured` is short of it, not waived."""
+    over = [
+        key for key, limit in thresholds.items()
+        if key in measured and isinstance(measured[key], (int, float)) and measured[key] > limit
+    ]
+    return over + [key for key, floor in floors.items() if measured.get(key, 0) < floor]
 
 
 def load_strokes() -> list[dict]:
@@ -1011,6 +1134,9 @@ def parse_metrics(text: str) -> dict[str, float]:
             number = float(value)
         except ValueError:
             continue
+        if name.startswith("sketchy_draw_frames_total{") and 'result="accepted"' in name:
+            # Kept whole below as well, for the decisions report.
+            values["draw_accepted"] = values.get("draw_accepted", 0.0) + number
         if name.startswith("sketchy_event_loop_lag_seconds_bucket{"):
             le = name.split('le="')[1].split('"')[0]
             buckets.append((float("inf") if le == "+Inf" else float(le), number))
@@ -1062,6 +1188,10 @@ def parse_metrics(text: str) -> dict[str, float]:
             values[f"bucket:{family}:{le}"] = number
         elif name == "sketchy_lobby_watchers":
             values["lobby_watchers"] = number
+        elif name == "sketchy_history_write_seconds_count":
+            values["history_writes"] = number
+        elif name.startswith("sketchy_history_writes_abandoned_total"):
+            values["history_abandoned"] = values.get("history_abandoned", 0.0) + number
     values["lag_p99_ms"] = histogram_quantile(buckets, 0.99) * 1000
     values["lag_max_ms"] = histogram_upper_bound(buckets) * 1000
     values["db_p99_ms"] = histogram_quantile(db_buckets, 0.99) * 1000
@@ -1184,17 +1314,22 @@ def print_report(report: dict) -> None:
     sc = report["scenario"]
     print(f"\nLoad gate: {sc['rooms']} rooms x {sc['seatsPerRoom']} seats = {sc['seats']} seats, "
           f"{sc['lobbyWatchers']} lobby watchers, {sc['durationSeconds']} s")
-    print(f"  on {env['system']} {env['machine']} ({env['cpuCount']} cpus), Python {env['python']}")
-    print(f"  {m['gamesStarted']} games, {m['turnsStarted']} turns started, {m['turnsEnded']} ended, "
+    print(f"  on {env['system']} {env['machine']} ({env['cpuCount']} cpus), Python {env['python']}, {env.get('database', 'unknown')}")
+    print(f"  {m['gamesStarted']} games started, {m['gamesEnded']} ended ({m['historyGamesWritten']:.0f} histories written), "
+          f"{m['turnsStarted']} turns started, {m['turnsEnded']} ended, "
           f"{m['guesses']} guesses, {m['chats']} chats, {m['framesSent']} frames sent, "
           f"{m['framesReceived']} received, {m['reconnects']} reconnects")
     print(f"  all seats connected in {m['connectAllSeconds']:.1f} s, rooms open in {m['openAllSeconds']:.1f} s; "
           f"{m['bytesOutMB']:.1f} MB out, {m['bytesInMB']:.1f} MB in")
-    print(f"  {'metric':<24}{'measured':>12}{'limit':>10}")
-    for key in DEFAULT_THRESHOLDS:
+    print(f"  {'metric':<26}{'measured':>12}{'limit':>10}")
+    for key in t:
         value = m.get(key, 0.0)
         flag = "  BREACH" if key in report["breaches"] else ""
-        print(f"  {key:<24}{value:>12.1f}{t[key]:>10.1f}{flag}")
+        print(f"  {key:<26}{value:>12.1f}{'≤ ' + format(t[key], '.1f'):>10}{flag}")
+    for key, floor in report["floors"].items():
+        value = m.get(key, 0.0)
+        flag = "  BREACH" if key in report["breaches"] else ""
+        print(f"  {key:<26}{value:>12.1f}{'≥ ' + format(floor, '.1f'):>10}{flag}")
     if m["recoveryNotices"]:
         print(f"  recovery notices by reason: {m['recoveryNotices']}")
     print(f"  outbound backlog high-water: {m['backlogBytesMax']:.0f} B, oldest {m['backlogAgeMaxMs']:.0f} ms; "
@@ -1239,7 +1374,7 @@ def record_result(report: dict, path: Path) -> None:
     sc = report["scenario"]
     rows = [
         ("Acknowledgement latency p50 / p95 / p99", f"{m['ackP50Ms']:.1f} / {m['ackP95Ms']:.1f} / {m['ackP99Ms']:.1f} ms", f"p95 ≤ {report['thresholds']['ackP95Ms']:.0f}, p99 ≤ {report['thresholds']['ackP99Ms']:.0f} ms"),
-        ("Draw fan-out latency p50 / p95", f"{m['drawFanoutP50Ms']:.1f} / {m['drawFanoutP95Ms']:.1f} ms", f"p95 ≤ {report['thresholds']['drawFanoutP95Ms']:.0f} ms"),
+        ("Draw fan-out latency p50 / p95", f"{m['drawFanoutP50Ms']:.1f} / {m['drawFanoutP95Ms']:.1f} ms over {m['drawFanoutSamples']} samples; {m['drawFramesAccepted']:.0f} frames accepted", f"p95 ≤ {report['thresholds']['drawFanoutP95Ms']:.0f} ms; samples and accepted frames ≥ 1"),
         ("Timer overrun p95 / max", f"{m['timerOverrunP95Ms']:.1f} / {m['timerOverrunMaxMs']:.1f} ms", f"p95 ≤ {report['thresholds']['timerOverrunP95Ms']:.0f} ms"),
         ("Event-loop lag p99 / worst (histogram bucket bounds)", f"≤ {m['eventLoopLagP99Ms']:.0f} / ≤ {m['eventLoopLagMaxMs']:.0f} ms", f"≤ {report['thresholds']['eventLoopLagP99Ms']:.0f} / ≤ {report['thresholds']['eventLoopLagMaxMs']:.0f} ms"),
         ("Resident memory idle → after warm-up → peak", f"{m['rssIdleMB']:.0f} → {m['rssLoadedMB']:.0f} → {m['rssPeakMB']:.0f} MB ({m['rssPerSeatKB']:.0f} KB per seat above idle)", f"growth after warm-up ≤ {report['thresholds']['rssGrowthPercent']:.0f} % (measured {m['rssGrowthPercent']:.1f} %)"),
@@ -1247,14 +1382,15 @@ def record_result(report: dict, path: Path) -> None:
         ("Unexpected disconnects / failed reconnects", f"{m['unexpectedDisconnects']:.0f} / {m['failedReconnects']:.0f} (of {m['reconnects']:.0f} reconnects)", "0 / 0"),
         ("Outbound backlog high-water (bytes / oldest) and closures", f"{m['backlogBytesMax']:.0f} B / {m['backlogAgeMaxMs']:.0f} ms; closures {', '.join(f'{k} {v:.0f}' for k, v in m['backlogClosures'].items()) or 'none'} with {m['slowViewers']} slow viewers", "closures = slow viewers; budget 10 s / 4 MiB"),
         ("Packets rejected / fault notices (all notices by reason)", f"{m['packetsRejected']:.0f} / {m['faultNotices']:.0f} ({', '.join(f'{k} {v:.0f}' for k, v in m['recoveryNotices'].items()) or 'none'})", "0 / 0"),
+        ("Games started / ended / histories written (abandoned)", f"{m['gamesStarted']} / {m['gamesEnded']} / {m['historyGamesWritten']:.0f} ({m['historyWritesAbandoned']:.0f})", "abandoned 0" + ("; every room finishes a game, a history written" if sc.get("finishGames") else "")),
         ("Traffic", f"{m['bytesOutMB']:.1f} MB out, {m['bytesInMB']:.1f} MB in; {m['framesSent']} frames sent, {m['framesReceived']} received; {m['guesses']} guesses, {m['chats']} chats", "—"),
         ("On the wire (after permessage-deflate)", f"{m['wireBytesOutMB']:.1f} MB out ({100 * m['wireBytesOutMB'] / max(m['bytesOutMB'], 1e-9):.1f}% of packet bytes), {m['wireBytesInMB']:.1f} MB in; sockets by compression {_by_label(m['transports'])}", "—"),
     ]
     lines = [
         f"**Last result** — {'PASSED' if report['passed'] else 'FAILED (' + ', '.join(report['breaches']) + ')'}: "
         f"{sc['rooms']} rooms × {sc['seatsPerRoom']} seats = {sc['seats']} seats and {sc['lobbyWatchers']} lobby watchers "
-        f"for {sc['durationSeconds']:.0f} s ({m['gamesStarted']} games, {m['turnsStarted']} turns), "
-        f"on {env['system']} {env['machine']}, {env['cpuCount']} CPUs, Python {env['python']} — the reference environment for now; "
+        f"for {sc['durationSeconds']:.0f} s{' with --finish-games' if sc.get('finishGames') else ''} ({m['gamesStarted']} games, {m['turnsStarted']} turns), "
+        f"on {env['system']} {env['machine']}, {env['cpuCount']} CPUs, Python {env['python']}, {env.get('database', 'unknown')} — the reference environment for now; "
         f"a production host is re-measured with the same script.",
         "",
         "| Signal | Measured | Threshold |",
@@ -1275,6 +1411,8 @@ def main() -> int:
     parser.add_argument("--duration", type=float, default=300.0, help="seconds of sustained play")
     parser.add_argument("--reconnect-share", type=float, default=0.25, help="share of non-host seats that drop and reconnect on a schedule")
     parser.add_argument("--slow-viewers", type=int, default=4, help="spectators that join a room and stop reading, for the outbound budget (#602); each is expected to be closed by the server")
+    parser.add_argument("--shared-address", action="store_true", help="send no X-Forwarded-For, so every client is the load generator's one address and meets the per-address budgets together (by default each names an address of its own)")
+    parser.add_argument("--finish-games", action="store_true", help="one-round games whose guessers all answer, so every room finishes games inside the run and the game-end path (history, handoff, replay, stats) is under load (#1249)")
     parser.add_argument("--no-deflate", action="store_true", help="connect without offering permessage-deflate, as the gate did before #875")
     parser.add_argument("--metrics-token", default=os.environ.get("METRICS_TOKEN"))
     parser.add_argument("--json-output", type=Path)

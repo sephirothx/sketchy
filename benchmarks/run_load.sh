@@ -17,7 +17,9 @@ export GUEST_PROVISION_DAILY_LIMIT="${GUEST_PROVISION_DAILY_LIMIT:-100000}"
 export AUTH_LOOKUP_LIMIT="${AUTH_LOOKUP_LIMIT:-100000}"
 export AUTH_LOGIN_LIMIT="${AUTH_LOGIN_LIMIT:-100000}"
 export SOCKET_LIMIT="${SOCKET_LIMIT:-2000}"
-# Every seat of the swarm arrives from this one address (#1232).
+# Each seat names an address of its own in X-Forwarded-For (#1249), which this
+# server trusts from the loopback; the per-address ceilings are raised all the
+# same for a `--shared-address` run, where every seat is one address (#1232).
 export SOCKET_PER_ADDRESS_LIMIT="${SOCKET_PER_ADDRESS_LIMIT:-2000}"
 export ROOM_GLOBAL_LIMIT="${ROOM_GLOBAL_LIMIT:-400}"
 export ROOM_PER_ADDRESS_LIMIT="${ROOM_PER_ADDRESS_LIMIT:-400}"

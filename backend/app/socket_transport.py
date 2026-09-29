@@ -173,10 +173,12 @@ class GuardedWebSocket:
         # The socket's one WebSocket: `GuardedEngineSocket._upgrade_websocket`
         # refuses a second while this one is here.
         self.socket.websocket = self
+        self.server.websocket_handlers += 1
         try:
             await self.asgi_send({"type": "websocket.accept"})
             await self.handler(self)
         finally:
+            self.server.websocket_handlers -= 1
             if not self.socket.upgraded and self.socket.websocket is self:
                 # An upgrade that never completed: the socket goes on polling,
                 # and may try again. `upgrading` too: the library clears it on
@@ -431,6 +433,11 @@ class BoundedEngineServer(engineio.AsyncServer):
         #: there.
         self.admission = None
         self._clock = clock
+        #: WebSocket connections whose handler has not returned. The library
+        #: returns only once its writer task has, so this counts transports
+        #: still held - where the socket registry drops a socket the moment
+        #: it is torn down, whatever its writer is doing (#1235, #1249).
+        self.websocket_handlers = 0
         self._refusal_logged_at = float("-inf")
         self._reconciled_at = float("-inf")
 
