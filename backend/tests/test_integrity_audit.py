@@ -6,10 +6,18 @@ import os
 from uuid import UUID
 
 import pytest
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
 
 import app.services.integrity_audit as integrity
-from app.db.models import AuditEvent, GameParticipant, GameRecord, TurnDrawing, TurnRecord, UserStatsDaily
+from app.db.models import (
+    AuditEvent,
+    GameParticipant,
+    GameRecord,
+    TurnDrawing,
+    TurnParticipantOutcome,
+    TurnRecord,
+    UserStatsDaily,
+)
 from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
@@ -137,6 +145,57 @@ async def test_a_ledger_that_does_not_sum_and_a_wrong_guesser_count_are_reported
     # And the edited score no longer matches the projection built from it,
     # which the stats check says on its own account.
     assert report["user_stats"]["mismatches_total"] == 1
+
+
+async def test_the_drawing_checks_run_on_the_encode_pool_not_the_loop(world, monkeypatch):
+    """The hash and the decodes were ~155 ms stalls of the loop every room
+    shares, back to back for ~2 s of each pass (#1251)."""
+    import threading
+
+    import app.services.drawing_storage as storage
+
+    threads = []
+    check = storage._check
+
+    def recording(*args, **kwargs):
+        threads.append(threading.current_thread())
+        return check(*args, **kwargs)
+
+    monkeypatch.setattr(storage, "_check", recording)
+    factory, _ = world
+    report = await IntegrityAudit(factory, budget=GENEROUS).run_pass()
+    assert report["drawings"]["rows_verified_total"] == 1
+    assert threads, "the drawing was checked"
+    assert threading.current_thread() not in threads
+    assert all(thread.name.startswith("history-encode") for thread in threads)
+
+
+async def test_guesser_counts_are_of_eligible_rows_and_only_where_there_are_rows(world):
+    """The comparison moved into SQL (#1251) keeps the writer's own rule: a
+    count is of the eligible outcome rows, and a turn with none is not
+    compared at all."""
+    factory, recorded = world
+    turn = UUID(recorded.turn_id)
+    async with factory() as session, session.begin():
+        await session.execute(
+            update(TurnParticipantOutcome)
+            .where(TurnParticipantOutcome.turn_id == turn)
+            .values(eligible=False, eligibility_reason="afk", outcome="ineligible")
+        )
+        await session.execute(update(TurnRecord).where(TurnRecord.id == turn).values(guesser_count=0))
+    report = await IntegrityAudit(factory, budget=GENEROUS).run_pass()
+    assert report["games"]["mismatches_total"] == 0
+
+    async with factory() as session, session.begin():
+        await session.execute(update(TurnRecord).where(TurnRecord.id == turn).values(guesser_count=1))
+    report = await IntegrityAudit(factory, budget=GENEROUS).run_pass()
+    assert report["games"]["mismatches_total"] == 1, "one row, not eligible: a count of 1 is wrong"
+
+    async with factory() as session, session.begin():
+        await session.execute(delete(TurnParticipantOutcome).where(TurnParticipantOutcome.turn_id == turn))
+        await session.execute(update(TurnRecord).where(TurnRecord.id == turn).values(guesser_count=5))
+    report = await IntegrityAudit(factory, budget=GENEROUS).run_pass()
+    assert report["games"]["mismatches_total"] == 0, "no rows: nothing to compare"
 
 
 async def test_a_pass_stops_at_its_byte_budget_and_a_restart_resumes_where_it_stopped(world, monkeypatch):

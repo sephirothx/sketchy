@@ -731,19 +731,19 @@ def test_a_drawing_row_cannot_be_built_without_its_prepared_bytes():
 def test_both_encode_pools_are_as_wide_as_the_setting(monkeypatch):
     """The setting is only worth having if it reaches both pools: replacing
     each `max_workers` with a literal passed every test (#976 third review)."""
-    import app.repositories.sqlalchemy as repository_module
+    import app.encode_pool as encode_module
     import app.services.game_handoff as handoff
 
     monkeypatch.setenv("HISTORY_ENCODE_WORKERS", "3")
-    monkeypatch.setattr(repository_module, "_ENCODE_POOL", None)
+    monkeypatch.setattr(encode_module, "_POOL", None)
     monkeypatch.setattr(handoff, "_ENVELOPE_POOL", None)
     try:
-        assert repository_module._encode_pool()._max_workers == 3
+        assert encode_module.encode_pool()._max_workers == 3
         assert handoff._envelope_pool()._max_workers == 3
-        assert repository_module._encode_pool()._thread_name_prefix == "history-encode"
+        assert encode_module.encode_pool()._thread_name_prefix == "history-encode"
         assert handoff._envelope_pool()._thread_name_prefix == "history-envelope"
     finally:
-        for module, name in ((repository_module, "_ENCODE_POOL"), (handoff, "_ENVELOPE_POOL")):
+        for module, name in ((encode_module, "_POOL"), (handoff, "_ENVELOPE_POOL")):
             pool = getattr(module, name)
             if pool is not None:
                 pool.shutdown(wait=False)
@@ -964,14 +964,14 @@ def test_each_encode_pool_is_built_once():
     """Lazily, not per call: a fresh executor on every finished game would be
     two new pools of N threads per game, which passed every test (#976 fifth
     review)."""
-    import app.repositories.sqlalchemy as repository_module
+    import app.encode_pool as encode_module
     import app.services.game_handoff as handoff
 
     try:
-        assert repository_module._encode_pool() is repository_module._encode_pool()
+        assert encode_module.encode_pool() is encode_module.encode_pool()
         assert handoff._envelope_pool() is handoff._envelope_pool()
     finally:
-        for module, name in ((repository_module, "_ENCODE_POOL"), (handoff, "_ENVELOPE_POOL")):
+        for module, name in ((encode_module, "_POOL"), (handoff, "_ENVELOPE_POOL")):
             pool = getattr(module, name)
             if pool is not None:
                 pool.shutdown(wait=False)

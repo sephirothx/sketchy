@@ -13,7 +13,6 @@ from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import time
-from concurrent.futures import ThreadPoolExecutor
 from time import thread_time
 from uuid import UUID
 
@@ -26,7 +25,7 @@ from sqlalchemy.orm import aliased, defer, selectinload
 from app.services.runtime_metrics import metrics
 from app.services.telemetry import database_operation_of, telemetry
 from app.db import read_session
-from app.deployment import history_encode_workers
+from app.encode_pool import off_loop as _off_loop
 from app.db.models import (
     GalleryShelfReview,
     AuditEvent,
@@ -416,26 +415,6 @@ class _UnpreparedDrawing:
     its bytes were, as it was when this ran inside the transaction."""
 
     error: Exception
-
-
-# The drawings' own threads (#976 review), rather than the default pool
-# `asyncio.to_thread` shares with blocking SMTP and everything else: a game's
-# drawings must never wait behind a slow mail relay for a thread. Built on
-# first use, so the value that sizes it is one startup has validated.
-_ENCODE_POOL: ThreadPoolExecutor | None = None
-
-
-def _encode_pool() -> ThreadPoolExecutor:
-    global _ENCODE_POOL
-    if _ENCODE_POOL is None:
-        _ENCODE_POOL = ThreadPoolExecutor(
-            max_workers=history_encode_workers(), thread_name_prefix="history-encode"
-        )
-    return _ENCODE_POOL
-
-
-async def _off_loop(function, *args):
-    return await asyncio.get_running_loop().run_in_executor(_encode_pool(), function, *args)
 
 
 def _prepare_drawing(payload: bytes) -> _PreparedDrawing:

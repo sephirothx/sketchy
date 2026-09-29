@@ -29,6 +29,11 @@ decodes the frame anyway and a scan is where a bad frame should be found.
 It is also how a second stored format proves itself: after one is introduced,
 a clean run is the evidence that every row written under either format still
 decodes.
+
+The checks run on the history encode pool (`app/encode_pool.py`), a payload
+group at a time: the scheduled audit calls this walk, and on the loop every
+room shares its hashing and decoding were ~155 ms stalls, back to back, for
+the ~2 s of each pass (#1251).
 """
 
 from __future__ import annotations
@@ -52,6 +57,7 @@ from app.canvas_storage import (
     stored_drawing_wire_payload,
 )
 from app.db import init_db, maintenance_engine
+from app.encode_pool import off_loop
 from app.db.models import TurnDrawing
 from app.domain_values import TurnDrawingStatus
 
@@ -165,6 +171,20 @@ def _check(
     return None
 
 
+def _check_group(present: list[tuple[object, bytes]]) -> list[str | None]:
+    """`_check` for each row and its payload, in order; run off the loop."""
+    return [
+        _check(
+            blob,
+            byte_size=row.byte_size,
+            format_magic=row.format_magic,
+            format_version=row.format_version,
+            checksum=row.checksum_sha256,
+        )
+        for row, blob in present
+    ]
+
+
 async def verify_stored_drawings(
     session_factory: async_sessionmaker[AsyncSession],
     *,
@@ -251,6 +271,7 @@ async def verify_stored_drawings(
                             )
                         ).all()
                     )
+                present = []
                 for row in group:
                     blob = payloads.get(row.turn_id)
                     if blob is None:
@@ -260,16 +281,16 @@ async def verify_stored_drawings(
                         continue
                     result.checked += 1
                     result.bytes_checked += len(blob)
-                    kind = _check(
-                        bytes(blob),
-                        byte_size=row.byte_size,
-                        format_magic=row.format_magic,
-                        format_version=row.format_version,
-                        checksum=row.checksum_sha256,
-                    )
+                    present.append((row, bytes(blob)))
+                del payloads
+                # The hash, the SKCD inflate and the history decode are the
+                # pass's whole cost, and on the loop they were ~155 ms stalls
+                # back to back for ~2 s every five minutes (#1251).
+                kinds = await off_loop(_check_group, present)
+                for (row, _blob), kind in zip(present, kinds, strict=True):
                     if kind is not None:
                         result._note(kind, row.turn_id, reported_errors)
-                del payloads
+                del present
             last = rows[-1]
             position = DrawingCursor(created_at=last.created_at, turn_id=last.turn_id)
             result.cursor = position
