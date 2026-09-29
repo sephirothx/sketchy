@@ -274,7 +274,7 @@ async def test_the_sampler_measures_a_blocked_loop():
     telemetry = Telemetry()
     health = LoopHealth("loop_lag")
     task = asyncio.create_task(
-        run_lag_sampler(telemetry, interval_seconds=0.01, health=health)
+        run_lag_sampler(telemetry, tick_seconds=0.01, health=health)
     )
     try:
         await asyncio.sleep(0.03)
@@ -292,6 +292,59 @@ async def test_the_sampler_measures_a_blocked_loop():
     ) >= 0.05
 
 
+async def test_a_stall_is_seen_wherever_in_the_tick_it_starts():
+    """At one wake-up a second a 100 ms stall was seen about one time in ten
+    (#1253). At the default tick a stall is always seen, as at least its
+    length less one tick - here 150 ms, so at least ~100 ms - wherever in the
+    tick it begins. Lateness only ever adds to that, so the bound holds
+    however late this host's scheduler runs."""
+    from app.services.telemetry import DEFAULT_LAG_TICK_SECONDS
+
+    telemetry = Telemetry()
+    lags: list[float] = []
+    ticked = asyncio.Event()
+    record = telemetry.record_loop_lag
+
+    def recording(seconds: float) -> None:
+        lags.append(seconds)
+        ticked.set()
+        record(seconds)
+
+    telemetry.record_loop_lag = recording
+    task = asyncio.create_task(run_lag_sampler(telemetry))
+    try:
+        for fraction in (0.0, 0.25, 0.5, 0.75):
+            ticked.clear()
+            await asyncio.wait_for(ticked.wait(), 5)  # just after a tick
+            await asyncio.sleep(fraction * DEFAULT_LAG_TICK_SECONDS)
+            seen = len(lags)
+            time.sleep(0.15)  # noqa: ASYNC251 - blocking the loop is the point
+            ticked.clear()
+            await asyncio.wait_for(ticked.wait(), 5)
+            # 150 ms less a 50 ms tick, less 5 ms of clock arithmetic.
+            assert max(lags[seen:]) >= 0.095, (fraction, lags[seen:])
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+
+async def test_the_process_is_still_sampled_once_an_interval(monkeypatch):
+    """Twenty lag ticks a second, not twenty CPU and memory reads."""
+    telemetry = Telemetry()
+    samples = []
+    monkeypatch.setattr(telemetry, "sample_process", lambda: samples.append(time.monotonic()))
+    task = asyncio.create_task(run_lag_sampler(telemetry, tick_seconds=0.01, interval_seconds=0.1))
+    try:
+        await asyncio.sleep(0.35)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert telemetry.loop_lag.count() >= 15
+    assert 2 <= len(samples) <= 4
+
+
 async def test_a_blocked_loop_says_so_in_the_log(caplog):
     """#735: a histogram nobody is scraping records a stall for nobody.
 
@@ -301,7 +354,7 @@ async def test_a_blocked_loop_says_so_in_the_log(caplog):
     """
     telemetry = Telemetry()
     task = asyncio.create_task(
-        run_lag_sampler(telemetry, interval_seconds=0.01, warn_after_seconds=0.05)
+        run_lag_sampler(telemetry, tick_seconds=0.01, warn_after_seconds=0.05)
     )
     try:
         with caplog.at_level(logging.WARNING, logger="app.services.telemetry"):
@@ -322,7 +375,7 @@ async def test_an_unblocked_loop_stays_quiet(caplog):
     """Or the line means nothing: every run of every suite would carry it."""
     telemetry = Telemetry()
     task = asyncio.create_task(
-        run_lag_sampler(telemetry, interval_seconds=0.01, warn_after_seconds=5.0)
+        run_lag_sampler(telemetry, tick_seconds=0.01, warn_after_seconds=5.0)
     )
     try:
         with caplog.at_level(logging.WARNING, logger="app.services.telemetry"):

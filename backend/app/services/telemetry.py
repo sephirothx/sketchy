@@ -196,6 +196,14 @@ SOCKET_OUTCOMES = ("ok", "refused", "error", "throttled")
 CONNECTION_OUTCOMES = ("accepted", "refused", "full", "account_full")
 
 DEFAULT_SAMPLE_INTERVAL_SECONDS = 1.0
+# How often the loop's lateness is measured, apart from the process samples.
+# A sampled wake-up sees a stall only if the stall covers it: at one wake-up
+# a second a 100 ms stall was seen about one time in ten, so the 50-250 ms
+# stalls this number exists for mostly went unrecorded - two 59-97 ms GC
+# pauses a minute under the load gate read as "at most 5 ms" (#1253). At
+# 50 ms a stall of `d` is always seen, as at least `d - 50 ms` of lateness:
+# still a sample, not a trace, and it costs twenty cheap wake-ups a second.
+DEFAULT_LAG_TICK_SECONDS = 0.05
 # A single sample this late is a loop that was *blocked*, not one that was busy:
 # every timer, hint and turn end in the process fired that much late, and any
 # connection waiting to be accepted waited that long to be. Logged as well as
@@ -1712,31 +1720,37 @@ telemetry = Telemetry()
 async def run_lag_sampler(
     store: Telemetry = telemetry,
     *,
+    tick_seconds: float = DEFAULT_LAG_TICK_SECONDS,
     interval_seconds: float = DEFAULT_SAMPLE_INTERVAL_SECONDS,
     warn_after_seconds: float = LAG_WARNING_SECONDS,
     health: LoopHealth | None = None,
 ) -> None:
     """Measure how late a timer fires, for ever, and say so when it is far late.
 
-    The loop asks to be woken in `interval_seconds` and notes how much later
-    than that it actually was. Everything that blocked the loop meanwhile - a
+    The loop asks to be woken in `tick_seconds` and notes how much later than
+    that it actually was. Everything that blocked the loop meanwhile - a
     synchronous write, a large JSON dump, a garbage-collection pause - shows
     up as that lateness, which is what makes it the one number that separates
-    "the server is busy" from "the server is stuck".
+    "the server is busy" from "the server is stuck". The process's CPU and
+    memory are sampled once every `interval_seconds` of those ticks.
 
     Past `warn_after_seconds` it also writes a line, one per sample, so a stall
     leaves its length and its duration in the log rather than only in a
     histogram somebody has to be scraping to see.
     """
+    next_process_sample = store._monotonic() + interval_seconds
     while True:
-        due = store._monotonic() + interval_seconds
-        await asyncio.sleep(interval_seconds)
+        due = store._monotonic() + tick_seconds
+        await asyncio.sleep(tick_seconds)
         try:
-            lag = store._monotonic() - due
+            now = store._monotonic()
+            lag = now - due
             store.record_loop_lag(lag)
             if lag >= warn_after_seconds:
                 logger.warning("Event loop blocked for %.3f seconds", lag)
-            store.sample_process()
+            if now >= next_process_sample:
+                next_process_sample = now + interval_seconds
+                store.sample_process()
             if health is not None:
                 health.record_success()
         except asyncio.CancelledError:
@@ -1750,6 +1764,7 @@ async def run_lag_sampler(
 def start_lag_sampler(
     store: Telemetry = telemetry,
     *,
+    tick_seconds: float = DEFAULT_LAG_TICK_SECONDS,
     interval_seconds: float = DEFAULT_SAMPLE_INTERVAL_SECONDS,
     health: LoopHealth | None = None,
 ) -> asyncio.Task[None]:
@@ -1757,7 +1772,9 @@ def start_lag_sampler(
     # process card for the first minute of a fresh process.
     store.sample_process()
     return asyncio.create_task(
-        run_lag_sampler(store, interval_seconds=interval_seconds, health=health),
+        run_lag_sampler(
+            store, tick_seconds=tick_seconds, interval_seconds=interval_seconds, health=health
+        ),
         name="telemetry-sampler",
     )
 
