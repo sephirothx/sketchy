@@ -1,4 +1,5 @@
 import type { PlayerInfo, RestartVoteState } from "../types";
+import { ui } from "../content/ui/index.ts";
 
 export type RestartVoter = Pick<
   PlayerInfo,
@@ -34,4 +35,22 @@ export function canCastRestartVote(
 export function secondsUntil(timestamp: number | null, now = Date.now()) {
   if (!timestamp) return 0;
   return Math.max(0, Math.ceil((timestamp - now) / 1000));
+}
+
+/** What this seat has voted, if anything. */
+export function myRestartVote(vote: RestartVoteState, player: RestartVoter | undefined): boolean | null {
+  if (!player) return null;
+  if (vote.yesVoterIds.includes(player.playerId)) return true;
+  if (vote.noVoterIds.includes(player.playerId)) return false;
+  return null;
+}
+
+/** The chip's sentence, which is also its accessible name. */
+export function restartVoteSentence(vote: RestartVoteState, seconds: number): string {
+  return vote.status === "approved"
+    ? ui.restartVoteBanner.restartingIn({ seconds })
+    : ui.restartVoteBanner.proposerNicknameProposedRestartingRemainingS({
+        proposerNickname: vote.proposerNickname,
+        remaining: seconds,
+      });
 }

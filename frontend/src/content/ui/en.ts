@@ -1745,12 +1745,11 @@ export const EN = {
   },
 
   restartVoteBanner: {
-    voteTally: (p: { yes: number; no: number; pending: number }) =>
-      `${p.yes} yes, ${p.no} no, ${p.pending} pending`,
+    proposerProposedRestarting: (p: { proposerNickname: string }) =>
+      `${p.proposerNickname} proposed restarting the game.`,
     restartingIn: (p: { seconds: number }) =>
       `Restarting in ${counted(p.seconds, { one: "second", other: "seconds" })}`,
     restartApproved: "Restart approved!",
-    seconds: "seconds",
     voteRestartGame: "Vote to restart the game",
     restart: "Restart",
     keepPlaying: "Keep playing",
@@ -1834,6 +1833,8 @@ export const EN = {
 
   roomNoticeChips: {
     serverUpdateWord: "Update ·",
+    restartVote: "Restart vote ·",
+    restarting: "Restarting ·",
     serverUpdateSeconds: (p: { seconds: number }) =>
       p.seconds > 0 ? `${p.seconds}s` : "now",
     reconnecting: "Reconnecting",

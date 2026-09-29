@@ -1729,12 +1729,11 @@ export const PT: Catalogue = {
   },
 
   restartVoteBanner: {
-    voteTally: (p: { yes: number; no: number; pending: number }) =>
-      `${p.yes} a favor, ${p.no} contra, ${p.pending} por decidir`,
+    proposerProposedRestarting: (p: { proposerNickname: string }) =>
+      `${p.proposerNickname} propõe reiniciar o jogo.`,
     restartingIn: (p: { seconds: number }) =>
       `A reiniciar dentro de ${counted(p.seconds, { one: "segundo", other: "segundos" })}`,
     restartApproved: "Reinício aprovado!",
-    seconds: "segundos",
     voteRestartGame: "Votar para reiniciar a partida",
     restart: "Reiniciar",
     keepPlaying: "Continuar a jogar",
@@ -1818,6 +1817,8 @@ export const PT: Catalogue = {
 
   roomNoticeChips: {
     serverUpdateWord: "Atualização ·",
+    restartVote: "Votação para reiniciar ·",
+    restarting: "A reiniciar ·",
     serverUpdateSeconds: (p: { seconds: number }) =>
       p.seconds > 0 ? `${p.seconds} s` : "agora",
     reconnecting: "A religar",

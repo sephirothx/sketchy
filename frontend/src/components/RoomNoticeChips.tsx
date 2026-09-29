@@ -1,6 +1,9 @@
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 
-import { ClockIcon, MailIcon, UsersIcon, WifiOffIcon } from "./icons";
+import { ClockIcon, MailIcon, RoundsIcon, UsersIcon, WifiOffIcon } from "./icons";
+import { RestartVoteChipBody, RestartVotePopover } from "./RestartVoteNotice";
+import { canCastRestartVote, myRestartVote, type RestartVoter } from "../lib/restartVote";
+import type { RestartVoteState } from "../types";
 import { DRAIN_FINAL_SECONDS, placeNotices, type ChipNotice } from "../lib/appNotices";
 import { connectionStatusText, type ConnectionStatus } from "../lib/connectionStatus";
 import { useDrainSecondsLeft } from "../hooks/useServerNotices";
@@ -37,12 +40,25 @@ function connectionLabel(status: Exclude<ConnectionStatus, "connected">): string
   return ui.roomNoticeChips.reconnecting;
 }
 
-/** A chip in the room bar: a server notice, a friend's invitation, or a
-    friend request. */
-type RoomChip = ChipNotice | "invite" | "friend-request";
+/** A chip in the room bar: a server notice, a restart vote, a friend's
+    invitation, or a friend request. */
+type RoomChip = ChipNotice | "restart-vote" | "invite" | "friend-request";
 
-/** A planned-deploy drain, a dropped connection, a friend's invitation and a
-friend request, as chips in the room header.
+interface RoomNoticeChipsProps {
+  /** The vote under way in a game being played, if any. */
+  restartVote?: RestartVoteState | null;
+  /** This seat, for whether and how it may vote. */
+  voter?: RestartVoter;
+  voteBusy?: boolean;
+  /** Hold the popover back for now: the drawer mid-stroke, or a phone with
+      the guess keyboard up, when the bar itself is hidden. It opens by itself
+      once this clears, if the seat can still vote. */
+  voteQuiet?: boolean;
+  onVote?: (vote: boolean) => void;
+}
+
+/** A planned-deploy drain, a dropped connection, a restart vote, a friend's
+invitation and a friend request, as chips in the room header.
 
 A room lays itself out to the viewport (R-UX-01), so a banner there is height
 taken off the canvas - and, on a phone, it used to sit on top of this very
@@ -66,10 +82,24 @@ lasts while the request waits, so an answer given anywhere else takes it down.
 Every chip always renders its word. On a phone the bar decides whether it
 shows: the band is a phone's width and already holds the round, the ring, the
 menu and the avatar, so once the round's word and the wordmark have gone the
-chips keep their icons alone - the drain its countdown too, which goes only if
-the bar takes a second row (`useRoomBarGiveWay`, R-UX-11). Their accessible
-names are their `aria-label`s, so hiding the word takes nothing from them. */
-export function RoomNoticeChips() {
+chips keep their icons alone - the drain's and the vote's countdowns too, which go
+only if the bar takes a second row (`useRoomBarGiveWay`, R-UX-11). Their accessible
+names are their `aria-label`s - the vote's, a visually hidden sentence led by its
+word - so hiding the word takes nothing from them.
+
+A **Restart vote** is a chip here as well, after the server's two: it was a
+banner in the page flow, and proposing one moved the stage - the drawer's
+canvas mid-stroke, and a phone guesser's field off the bottom of a screen that
+does not scroll, for the vote's twenty seconds (#1266). Its popover opens by
+itself once for a seat that can still vote, and closes when that seat has; the
+chip carries the countdown, and the outcome is announced once. */
+export function RoomNoticeChips({
+  restartVote = null,
+  voter,
+  voteBusy = false,
+  voteQuiet = false,
+  onVote,
+}: RoomNoticeChipsProps = {}) {
   const shutdownNotice = useServerNoticesStore((state) => state.shutdownNotice);
   const updateRequired = useServerNoticesStore((state) => state.updateRequired);
   const connection = useServerNoticesStore((state) => state.connection);
@@ -105,6 +135,7 @@ export function RoomNoticeChips() {
   // invitation first, since it runs out and a request does not.
   const chips: RoomChip[] = [
     ...serverChips,
+    ...(restartVote ? ["restart-vote" as const] : []),
     ...(invite ? ["invite" as const] : []),
     ...(requests.length > 0 ? ["friend-request" as const] : []),
   ];
@@ -112,6 +143,25 @@ export function RoomNoticeChips() {
   // describes something no longer true - and closes it for good: only hiding
   // it kept the choice, so the next outage opened the card nobody asked for.
   if (open !== null && !chips.includes(open)) setOpen(null);
+  // The vote asks for an answer: its popover opens by itself once per vote for
+  // a seat that can still give one, and closes once that seat has - after
+  // which the chip opens it again on a tap. Adjusted during render, as the
+  // line above is, so the answer and the popover never disagree for a frame.
+  const voteKey = restartVote ? `${restartVote.proposerId}:${restartVote.expiresAt}` : null;
+  const myVote = restartVote ? myRestartVote(restartVote, voter) : null;
+  const [voteOpenedFor, setVoteOpenedFor] = useState<string | null>(null);
+  const [voteAnsweredFor, setVoteAnsweredFor] = useState<string | null>(null);
+  if (
+    voteKey !== null && voteKey !== voteOpenedFor && myVote === null && !voteQuiet
+    && restartVote !== null && canCastRestartVote(restartVote, voter)
+  ) {
+    setVoteOpenedFor(voteKey);
+    setOpen("restart-vote");
+  }
+  if (voteKey !== null && myVote !== null && voteKey !== voteAnsweredFor) {
+    setVoteAnsweredFor(voteKey);
+    if (open === "restart-vote") setOpen(null);
+  }
   const openNotice = open !== null && chips.includes(open) ? open : null;
 
   useEffect(() => {
@@ -139,6 +189,22 @@ export function RoomNoticeChips() {
   return (
     <div className="room-notice-chips" ref={groupRef}>
       {chips.map((notice) => {
+        if (notice === "restart-vote" && restartVote) {
+          return (
+            <button
+              key={notice}
+              type="button"
+              className={`chip chip-${restartVote.status === "approved" ? "warm" : "primary"} room-notice-chip`}
+              data-notice={notice}
+              aria-expanded={openNotice === notice}
+              aria-controls={openNotice === notice ? popoverId : undefined}
+              onClick={() => setOpen((current) => (current === notice ? null : notice))}
+            >
+              <RoundsIcon size={13} strokeWidth={2.4} />
+              <RestartVoteChipBody vote={restartVote} />
+            </button>
+          );
+        }
         const isDrain = notice === "drain";
         const isInvite = notice === "invite";
         const isRequest = notice === "friend-request";
@@ -252,7 +318,18 @@ export function RoomNoticeChips() {
           </div>
         </div>
       )}
-      {openNotice !== null && openNotice !== "invite" && openNotice !== "friend-request" && (
+      {openNotice === "restart-vote" && restartVote && (
+        <RestartVotePopover
+          key={voteKey}
+          id={popoverId}
+          vote={restartVote}
+          player={voter}
+          busy={voteBusy}
+          arming={myVote === null && voteOpenedFor === voteKey}
+          onVote={(vote) => onVote?.(vote)}
+        />
+      )}
+      {openNotice !== null && openNotice !== "invite" && openNotice !== "friend-request" && openNotice !== "restart-vote" && (
         <div id={popoverId} className="room-notice-popover" data-notice={openNotice}>
           <p>{openNotice === "drain" ? drainText : connectionTrouble ? connectionStatusText(connectionTrouble) : null}</p>
           {openNotice === "connection" && connection === "failed" && (
@@ -269,6 +346,7 @@ export function RoomNoticeChips() {
       <span className="visually-hidden" role="status" aria-live="polite">
         {chips.includes("drain") ? ui.roomNoticeChips.serverUpdateStarted : ""}
       </span>
+
     </div>
   );
 }

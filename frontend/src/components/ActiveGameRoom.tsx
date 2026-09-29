@@ -8,13 +8,14 @@ import { GameHighlightsPanel } from "../components/GameHighlightsPanel";
 import { ConfirmationDialog } from "../components/ConfirmationDialog";
 import { AccountMenu } from "../components/AccountMenu";
 import { AfkCheckDialog } from "../components/AfkCheckDialog";
-import { RestartVoteBanner } from "../components/RestartVoteBanner";
 import { ColorblindSafeSuggestionBanner } from "../components/ColorblindSafeSuggestionBanner";
 import { RoomShell, type RoomShellMode } from "../components/RoomShell";
 import { ConnectedDrawingReactionControl } from "../components/GameRoomRegions";
 import { ConnectedPinControl } from "../components/ConnectedPinControl";
 import { GameHeaderStatus } from "../components/GameHeaderStatus";
 import { RoomNoticeChips } from "../components/RoomNoticeChips";
+import { RestartVoteAnnouncer } from "../components/RestartVoteNotice";
+import { canCastRestartVote, myRestartVote } from "../lib/restartVote";
 import { RoomVisibilityIcon } from "../components/RoomVisibilityIcon";
 import { RoomDrainCue, RoomEndedCard, RoomPausedCard } from "../components/RoomStageNotice";
 import { useRoomStage } from "../hooks/useServerNotices";
@@ -85,6 +86,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useDocumentTitle(roomName || code);
   const roomIsPublic = useGameStore((s) => s.isPublic);
   const phase = useGameStore((s) => s.phase);
+  const drawerId = useGameStore((s) => s.drawerId);
   const scoringMode = useGameStore((s) => s.scoringMode);
   const finalScores = useGameStore((s) => s.finalScores);
   const drawingRecap = useGameStore((s) => s.drawingRecap);
@@ -441,9 +443,16 @@ export function ActiveGameRoom({ code }: { code: string }) {
   useBackCloses(recapShown, closeRecap);
   useBackCloses(highlightsOpen && !recapShown, () => setHighlightsOpen(false));
 
+  // A vote this seat can still answer keeps the room bar up while the phone's
+  // keyboard is: the bar is where the vote lives, and a guesser who typed
+  // through its twenty seconds never saw it (review of #1316).
+  const voteAwaitsMe = roomView === "playing"
+    && restartVote !== null
+    && canCastRestartVote(restartVote, me)
+    && myRestartVote(restartVote, me) === null;
   const room = (
     <div
-      className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}`}
+      className={`game-room${roomView === "playing" ? " game-room-playing" : ""}${isGuessFocused ? " guess-focused" : ""}${voteAwaitsMe ? " vote-awaits-me" : ""}`}
     >
       {afkCheck.secondsLeft !== null && (
         <AfkCheckDialog
@@ -518,7 +527,13 @@ export function ActiveGameRoom({ code }: { code: string }) {
         </div>
         <div className="game-header-center">
           <GameHeaderStatus />
-          <RoomNoticeChips />
+          <RoomNoticeChips
+            restartVote={roomView === "playing" ? restartVote : null}
+            voter={me}
+            voteBusy={restartBusy}
+            voteQuiet={isGuessFocused || (phase === "drawing" && drawerId === playerId)}
+            onVote={(vote) => void handleRestartVote(vote)}
+          />
           {/* Going AFK is a menu row; being away is worth seeing, because it
               skips your turns without asking. One click here comes back. */}
           {isAfk && (
@@ -553,15 +568,7 @@ export function ActiveGameRoom({ code }: { code: string }) {
           <AccountMenu inRoom compact={identityCompact} />
         </div>
       </header>
-
-      {roomView === "playing" && restartVote && (
-        <RestartVoteBanner
-          vote={restartVote}
-          player={me}
-          busy={restartBusy}
-          onVote={(vote) => void handleRestartVote(vote)}
-        />
-      )}
+      <RestartVoteAnnouncer vote={roomView === "playing" ? restartVote : null} />
 
       {isHost && colorblindSafeSuggestion && (
         <ColorblindSafeSuggestionBanner
