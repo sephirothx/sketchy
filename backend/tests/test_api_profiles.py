@@ -361,24 +361,15 @@ async def test_participants_see_the_turn_by_turn_detail(env):
     assert body["scoreLedgerVersion"] == 1
     assert body["ruleSnapshotVersion"] == 1
     assert body["ruleSnapshot"] == {}
-    assert [event["eventType"] for event in body["scoreEvents"]] == [
-        "guess_award",
-        "drawer_bonus",
-        "correction",
-    ]
-    assert sum(
-        event["pointsDelta"]
-        for event in body["scoreEvents"]
-        if event["participantUserId"] == ann.id
-    ) == 300
-    assert body["scoreEvents"][2]["correctsEventOrder"] == body["scoreEvents"][1]["eventOrder"]
-    assert "id" not in body["scoreEvents"][0]
+    # Neither the ledger nor the offers: the page reads neither, and at 16
+    # seats and 10 rounds they were half of a 1.54 MB response (#1254).
+    assert "scoreEvents" not in body
+    assert "promptOffers" not in body["turns"][0]
     assert body["promptSourceMode"] == "custom"
     assert len(body["turns"]) == 1
     assert body["turns"][0]["prompt"] == "jackpot"
     assert body["turns"][0]["promptVersionId"] is None
     assert body["turns"][0]["promptSourceKind"] == "custom"
-    assert body["turns"][0]["promptOffers"] == []
     assert body["turns"][0]["drawerDisplayName"] == "Ann"
     assert body["turns"][0]["drawerNameColor"] is None
     assert body["turns"][0]["drawerIsAnonymous"] is True

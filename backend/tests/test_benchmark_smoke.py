@@ -30,6 +30,7 @@ SMOKE_ARGS: dict[str, tuple[str, ...]] = {
     "export_list_revisions": ("--prompts", "20", "--aliases", "2", "--saves", "3"),
     "finish_game_stall": ("--games", "1"),
     "fk_delete_paths": ("--rows", "200"),
+    "game_detail_cost": ("--seats", "3", "--rounds", "1", "--requests", "2"),
     "guest_name_check": ("--online", "20", "--samples", "3"),
     "history_row_footprint": ("--games", "2"),
     "index_plans": ("--scale", "0.01"),

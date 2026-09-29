@@ -126,20 +126,6 @@ def game_detail_payload(detail: GameDetail) -> dict:
         **game_summary_payload(detail.summary),
         "ruleSnapshot": detail.summary.rule_snapshot,
         "mySeatId": detail.my_seat_id,
-        "scoreEvents": [
-            {
-                "participantSeatId": event.participant_seat_id,
-                "participantUserId": event.participant_user_id,
-                "turnId": event.turn_id,
-                "eventOrder": event.event_order,
-                "eventType": event.event_type,
-                "pointsDelta": event.points_delta,
-                "scoringVersion": event.scoring_version,
-                "ruleSnapshotVersion": event.rule_snapshot_version,
-                "correctsEventOrder": event.corrects_event_order,
-            }
-            for event in detail.score_events
-        ],
         "turns": [
             {
                 "id": r.id,
@@ -156,17 +142,6 @@ def game_detail_payload(detail: GameDetail) -> dict:
                 "durationSeconds": r.duration_seconds,
                 "strokeCount": r.stroke_count,
                 "drawingStatus": r.drawing_status,
-                "promptOffers": [
-                    {
-                        "position": offer.position,
-                        "prompt": offer.prompt,
-                        "selected": offer.selected,
-                        "sourceKind": offer.source_kind,
-                        "promptVersionId": offer.prompt_version_id,
-                        "sourceRevisionIds": list(offer.source_revision_ids),
-                    }
-                    for offer in r.prompt_offers
-                ],
                 "participantOutcomes": [
                     {
                         "seatId": outcome.seat_id,

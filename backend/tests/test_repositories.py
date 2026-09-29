@@ -618,11 +618,13 @@ async def test_score_event_ledger_reconciles_and_is_returned_in_order():
         detail = await history.get_game_detail(game_id, drawer.id)
         assert detail is not None
         assert detail.summary.score_ledger_version == 1
-        assert [event.event_order for event in detail.score_events] == [1, 2, 3]
-        assert [event.scoring_version for event in detail.score_events] == [1, 1, 1]
-        assert [event.points_delta for event in detail.score_events] == [300, -50, 250]
         async with factory() as session:
-            assert await session.scalar(select(func.count(ScoreEvent.event_order))) == 3
+            stored = (
+                await session.execute(
+                    select(ScoreEvent.event_order, ScoreEvent.points_delta).order_by(ScoreEvent.event_order)
+                )
+            ).all()
+        assert [tuple(row) for row in stored] == [(1, 300), (2, -50), (3, 250)]
     finally:
         await engine.dispose()
 
@@ -715,18 +717,19 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
             "banana"
         ]
         assert detail.turns[0].prompt_source_kind == "curated"
-        assert [offer.prompt for offer in detail.turns[0].prompt_offers] == [
-            "apple",
-            "banana",
-            "castle",
-        ]
-        assert [
-            offer.prompt for offer in detail.turns[0].prompt_offers if offer.selected
-        ] == ["banana"]
-        assert all(
-            offer.source_revision_ids == (revision_id,)
-            for offer in detail.turns[0].prompt_offers
-        )
+        async with factory() as session:
+            offers = (
+                await session.execute(
+                    select(TurnPromptOffer.prompt_snapshot, TurnPromptOffer.selected)
+                    .order_by(TurnPromptOffer.position)
+                )
+            ).all()
+            sources = set(
+                (await session.scalars(select(TurnPromptOfferSource.prompt_list_revision_id))).all()
+            )
+        assert [offer.prompt_snapshot for offer in offers] == ["apple", "banana", "castle"]
+        assert [offer.prompt_snapshot for offer in offers if offer.selected] == ["banana"]
+        assert {str(source) for source in sources} == {revision_id}
     finally:
         await engine.dispose()
 

@@ -139,7 +139,6 @@ from app.repositories.interfaces import (
     GameRecordInput,
     GameSummary,
     RecentCoPlayer,
-    ScoreEventDetail,
     ScoreEventInput,
     InvalidProfileDataError,
     IdentityMergeError,
@@ -165,7 +164,6 @@ from app.repositories.interfaces import (
     PromptListEntryInput,
     PromptListMutationError,
     PromptListNotFoundError,
-    PromptOfferDetail,
     PromptListSelectionError,
     MixedRoomListError,
     PromptTranslation,
@@ -3413,10 +3411,10 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     selectinload(GameRecord.turns).selectinload(
                         TurnRecord.participant_outcomes
                     ),
-                    selectinload(GameRecord.turns)
-                    .selectinload(TurnRecord.prompt_offers)
-                    .selectinload(TurnPromptOffer.sources),
-                    selectinload(GameRecord.score_events),
+                    # Not the prompt offers or the score ledger: the page
+                    # reads neither, and for a 16-seat, 10-round game they
+                    # were half the load and half the 1.5 MB response (#1254).
+                    # The ledger is in the owner's export.
                 )
             )
             result = await session.execute(stmt)
@@ -3494,54 +3492,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                         reaction_counts=reaction_summaries.get(
                             r.id, _NO_REACTIONS
                         ).counts,
-                        prompt_offers=[
-                            PromptOfferDetail(
-                                position=offer.position,
-                                prompt=offer.prompt_snapshot,
-                                selected=offer.selected,
-                                source_kind=offer.source_kind,
-                                prompt_version_id=(
-                                    _public_id(offer.prompt_version_id)
-                                    if offer.prompt_version_id
-                                    else None
-                                ),
-                                source_revision_ids=tuple(
-                                    _public_id(source.prompt_list_revision_id)
-                                    for source in offer.sources
-                                ),
-                            )
-                            for offer in sorted(
-                                r.prompt_offers, key=lambda item: item.position
-                            )
-                        ],
                     )
                 )
 
-            participants_by_id = {
-                participant.id: participant for participant in g.participants
-            }
-            score_event_details = [
-                ScoreEventDetail(
-                    participant_seat_id=_public_id(event.participant_id),
-                    participant_user_id=(
-                        _public_id(participants_by_id[event.participant_id].user_id)
-                        if participants_by_id[event.participant_id].user_id
-                        else None
-                    ),
-                    turn_id=_public_id(event.turn_id) if event.turn_id else None,
-                    event_order=event.event_order,
-                    event_type=event.event_type,
-                    points_delta=event.points_delta,
-                    scoring_version=g.scoring_version,
-                    rule_snapshot_version=g.rule_snapshot_version,
-                    corrects_event_order=event.corrects_event_order,
-                )
-                for event in sorted(g.score_events, key=lambda item: item.event_order)
-            ]
             return GameDetail(
                 summary=summary,
                 turns=turn_details,
-                score_events=score_event_details,
                 my_seat_id=_public_id(requester_seats[0].id),
             )
 

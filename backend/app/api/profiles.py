@@ -9,6 +9,7 @@ import logging
 import os
 
 from fastapi import APIRouter, Query, Request, Response
+from fastapi.responses import JSONResponse
 from pydantic import ConfigDict, Field, field_validator
 from app.request_text import ControlFreeModel
 
@@ -493,7 +494,10 @@ def create_profile_router(
         )
         if detail is None:
             raise Refusal(404, ErrorCode.NO_SUCH_GAME, "No such game.")
-        return game_detail_payload(detail)
+        # Encoded here rather than returned for FastAPI to walk: the payload
+        # is plain JSON already, and `jsonable_encoder` over a large game's
+        # turns and outcomes was a third of the request's loop time (#1254).
+        return JSONResponse(game_detail_payload(detail))
 
     @router.get("/games/{game_id}/turns/{turn_id}/drawing")
     async def turn_drawing(game_id: str, turn_id: str, request: Request):
