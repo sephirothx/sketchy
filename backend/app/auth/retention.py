@@ -429,7 +429,11 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             "retired_prompt_lists",
             reclaim_retired_prompt_lists,
             sla_seconds=HEAVY_SLA_SECONDS,
-            exempt="revisions a finished game pins, and the tombstones holding them, for ever",
+            exempt=(
+                "revisions a finished game pins or a hidden prompt is recorded in, and the "
+                "tombstones holding them, for ever; one holding a prompt a report waits on, "
+                "until it is decided"
+            ),
         ),
         Sweep(
             "superseded_list_revisions",

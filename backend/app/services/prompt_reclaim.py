@@ -54,8 +54,14 @@ from app.db.models import (
     TurnPromptOffer,
     TurnPromptOfferSource,
     TurnRecord,
+    User,
 )
-from app.domain_values import PromptContentModerationState, PromptListVisibility, ReportStatus
+from app.domain_values import (
+    AccountState,
+    PromptContentModerationState,
+    PromptListVisibility,
+    ReportStatus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,8 +116,10 @@ def _revision_is_pinned(revision_id):
     # any other word was reclaimed through that (#1258 review).
     item = aliased(PromptListRevisionItem)
     version = aliased(PromptVersion)
+    report = aliased(PromptContentReport)
     revision = aliased(PromptListRevision)
     owner_list = aliased(PromptList)
+    owner = aliased(User)
     return (
         exists().where(GamePromptSource.prompt_list_revision_id == revision_id)
         | exists().where(TurnPromptOfferSource.prompt_list_revision_id == revision_id)
@@ -129,6 +137,21 @@ def _revision_is_pinned(revision_id):
             revision.id == revision_id,
             owner_list.id == revision.prompt_list_id,
             owner_list.owner_user_id.is_not(None),
+        )
+        # And one holding a word a report still waits on, until it is decided:
+        # a report outlives the grace easily, and a word hidden after the only
+        # revisions tying it to its owner were reclaimed is hidden from none of
+        # their next lists (#1258 review, #1354). Decided hidden, the revision
+        # is kept above; dismissed, it goes. Not for an account that was
+        # deleted, which saves no next list.
+        | exists().where(
+            item.revision_id == revision_id,
+            report.prompt_version_id == item.prompt_version_id,
+            report.status == ReportStatus.PENDING.value,
+            revision.id == revision_id,
+            owner_list.id == revision.prompt_list_id,
+            owner.id == owner_list.owner_user_id,
+            owner.state != AccountState.DELETED.value,
         )
     )
 
@@ -395,8 +418,6 @@ def _superseded_reclaimable(cutoff: datetime):
     """
     newer = _successor()
     fork = aliased(PromptListRevision)
-    item = aliased(PromptListRevisionItem)
-    report = aliased(PromptContentReport)
     return (
         PromptList.id == PromptListRevision.prompt_list_id,
         PromptList.deleted_at.is_(None),
@@ -409,15 +430,6 @@ def _superseded_reclaimable(cutoff: datetime):
         ~_revision_is_pinned(PromptListRevision.id),
         ~exists().where(fork.forked_from_revision_id == PromptListRevision.id),
         PromptListRevision.forked_from_revision_id.is_(None),
-        # A report outlives the grace easily: reclaim the only revision that
-        # tied a reported word to its owner, and a takedown decided afterwards
-        # is hidden from nobody's next list (#1258 review). Held until the
-        # report is decided; hidden, it is then kept as the takedown's record.
-        ~exists().where(
-            item.revision_id == PromptListRevision.id,
-            report.prompt_version_id == item.prompt_version_id,
-            report.status == ReportStatus.PENDING.value,
-        ),
     )
 
 

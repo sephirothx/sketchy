@@ -1943,7 +1943,10 @@ prompt versions and concepts that no revision, list, turn, offer, usage fact or 
 report names any more, aliases cascading with them. A list a game pinned stays as a
 non-discoverable, private tombstone (`deleted_at` set). A revision holding a prompt a moderator hid counts as
 pinned too, while its list has an owner: it is where an owner's saves look for the takedown, so reclaiming it would
-let the word into a new list a day after its list was deleted (#1091).
+let the word into a new list a day after its list was deleted (#1091). So does one holding a prompt a report still
+waits on, until the report is decided, unless the owner's account was deleted: a report outlives the grace easily, and
+a takedown decided after the reclaim reached none of the owner's next lists (#1354). Decided hidden, the revision is
+then kept as the takedown's record; dismissed, it goes on the next pass.
 
 That tombstone is **permanent, and the sweep no longer selects it**. A pin is a finished
 game's provenance and never lapses, so a list whose every remaining revision is pinned
@@ -2142,7 +2145,7 @@ pinned it when its game started plays it to the end - unless it is the current r
 count reads `forked_from_revision_id`), it is a copy's first revision (the one carrying
 that pointer, which the count, the credit and the lineage all read), or it holds a hidden
 prompt (the takedown record, #1091) or one a pending report names (so a takedown decided
-later still reaches the owner's next list). Versions and concepts only the deleted
+later still reaches the owner's next list; the same hold as the retired-list reclaim's, #1354). Versions and concepts only the deleted
 revisions named go with them, as in the retired-list reclaim.
 
 `prompt_list_revision_items`: `revision_id` + `prompt_version_id` composite **PK** ·
@@ -2421,7 +2424,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Superseded revisions of live prompt lists | Until the save that superseded one is a day old (`RETIRED_LIST_GRACE`); each hourly pass deletes as many as the row budget allows, items counted | 24 h | A live list's current revision, and any a finished game pins, a fork was copied from, a copy records its origin in, or a hidden prompt is recorded in, for ever; one holding a prompt a report waits on, until it is decided | `services.prompt_reclaim.reclaim_superseded_revisions`; the overdue age is measured from the superseding save (#1258) | `superseded_list_revisions` |
-| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set | `retired_prompt_lists` |
+| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins or a hidden prompt is recorded in, and the tombstones holding them, for ever; one holding a prompt a report waits on, until it is decided | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set | `retired_prompt_lists` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep

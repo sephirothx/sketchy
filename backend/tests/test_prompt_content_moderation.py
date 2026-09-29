@@ -21,7 +21,7 @@ from app.db.models import (
     PromptVersion,
     User,
 )
-from app.domain_values import UserRole
+from app.domain_values import PromptContentModerationState, UserRole
 from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.repositories.interfaces import PromptListEntryInput, PromptListSelectionError
 from app.repositories.sqlalchemy import (
@@ -310,6 +310,50 @@ async def test_report_snapshots_survive_owner_deletion(env):
         assert report.prompt_list_id is None
         assert report.prompt_version_id == UUID(prompt_list.prompts[0].prompt_version_id)
         _snapshots_intact(report)
+
+
+async def test_a_takedown_decided_after_its_list_was_deleted_still_reaches_the_owner(env):
+    """The owner deletes a list while a report on one of its words waits. A
+    report outlives the reclaim's day easily; reclaiming the list's revisions
+    then left the word tied to none of the owner's lists, and a takedown
+    decided afterwards let them type it into the next one as active (#1354)."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "RetiredOwner")
+    await register(reporter_http, "RetiredReporter")
+    moderator = await register(moderator_http, "RetiredModerator")
+    await _staff_member(factory, moderator, UserRole.MODERATOR)
+    reported = await prompts.create_owned(
+        owner["id"], name="Soon deleted", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"), PromptListEntryInput(answer="fine")),
+    )
+    await published(factory, reported.id)
+    word = next(prompt for prompt in reported.prompts if prompt.answer == "borderline word")
+    filed = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": reported.id, "promptVersionId": word.prompt_version_id,
+              "reason": "other", "details": "Decide it."},
+    )
+    assert filed.status_code == 201, filed.text
+    assert await prompts.delete_owned(owner["id"], reported.id) is True
+    later = datetime.now(timezone.utc) + timedelta(days=2)
+
+    waiting = await reclaim_retired_prompt_lists(factory, now=later)
+    assert waiting.lists_deleted == 0 and waiting.revisions_deleted == 0, "the report still waits"
+
+    decided = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
+        json={"status": "resolved", "note": "hidden", "moderationState": "hidden"},
+    )
+    assert decided.status_code == 200, decided.text
+    again = await prompts.create_owned(
+        owner["id"], name="Again", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"),),
+    )
+    assert again.prompts[0].moderation_state == PromptContentModerationState.HIDDEN.value
+    # Decided hidden, the revision is the takedown's record, kept as before.
+    kept = await reclaim_retired_prompt_lists(factory, now=later)
+    assert kept.revisions_deleted == 0
 
 
 async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):
