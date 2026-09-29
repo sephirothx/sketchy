@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { ApiError } from "../lib/api";
 import { Link, useSearchParams } from "react-router-dom";
 
 import { Squiggle, Wordmark } from "../components/icons";
@@ -34,6 +35,9 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
   const [busy, setBusy] = useState(mode === "verify" && token !== "");
   const [error, setError] = useState<string | null>(null);
   const [done, setDone] = useState<string | null>(null);
+  // Whether a failed confirmation was the link's fault (spent, expired, the
+  // address taken meanwhile) or the network's: only the first is a dead link.
+  const [linkDead, setLinkDead] = useState(false);
   // null while the answer is still coming. A reset link is checked when the
   // page opens rather than when the form is sent, so nobody chooses a password
   // only to be told the link was already spent.
@@ -59,6 +63,8 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
       })
       .catch((confirmError) => {
         if (cancelled) return;
+        const code = confirmError instanceof ApiError ? confirmError.errorCode : undefined;
+        setLinkDead(code === "verification_link_invalid" || code === "email_in_use");
         setError(
           refusalText(confirmError, ui.accountRecoveryPage.thatConfirmationLinkCouldNotBe),
         );
@@ -151,14 +157,31 @@ export function AccountRecoveryPage({ mode }: { mode: Mode }) {
           linkUsable === false
           ? ui.accountRecoveryPage.thatLinkNoLongerWorks
           : ui.accountRecoveryPage.chooseANewPassword
-        : ui.accountRecoveryPage.confirmingYourEmail;
+        : // Verifying says what happened, as a reset does: the heading read
+          // "Confirming your email" over a dead link and over a done one.
+          done
+          ? ui.accountRecoveryPage.emailConfirmed
+          : busy
+            ? ui.accountRecoveryPage.confirmingYourEmail
+            : !token || linkDead
+              ? ui.accountRecoveryPage.thatLinkNoLongerWorks
+              // A network error or a server fault says nothing about the
+              // link, which may well work on a second try (review of #1329).
+              : ui.accountRecoveryPage.couldNotConfirmYourEmail;
   useDocumentTitle(heading);
 
   return (
     <main className="recovery-page">
       <div className="recovery-card">
+        {/* Its own line per step (#1280): "Even the best guessers forget
+            sometimes" stood over confirming an address too, which nobody had
+            forgotten. Not on a phone, where it pushed the form down. */}
         <section className="recovery-aside" aria-hidden="true">
-          <h2>{ui.accountRecoveryPage.evenBestGuessersForgetSometimes}</h2>
+          <h2>
+            {mode === "verify"
+              ? ui.accountRecoveryPage.asideVerifyHeading
+              : ui.accountRecoveryPage.evenBestGuessersForgetSometimes}
+          </h2>
           <Squiggle width={110} color="var(--primary)" />
           <p>
             {mode === "forgot"

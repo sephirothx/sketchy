@@ -161,7 +161,7 @@ export function BugReportsPage() {
 
   return (
     <main className="ops-page">
-      <AppHeader backLabel="Back to lobby" />
+      <AppHeader backLabel="Back to lobby" languageSwitch={false} />
       {stepUpDialog}
 
       {error && <p className="auth-error" role="alert">{error}</p>}

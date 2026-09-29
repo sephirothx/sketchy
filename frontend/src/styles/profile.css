@@ -91,13 +91,8 @@
   margin: 0;
 }
 
-/* A panel's one-line note sits in the heading's gap, not a paragraph's. */
-.profile-page .panel > .profile-note {
-  margin: 0;
-}
-
 /* Turn counts under the "no finished game yet" line, clear of it. */
-.profile-statistics .profile-note + .profile-stats-small {
+.profile-statistics .empty-state + .profile-stats-small {
   padding-top: 12px;
 }
 
@@ -407,10 +402,6 @@
 
 .profile-shelf-unpin {
   margin-left: auto;
-}
-
-.profile-shelf-empty {
-  margin: 0;
 }
 
 /* Prompt stats: how a list's prompts have actually played. */

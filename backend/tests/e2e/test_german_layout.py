@@ -142,3 +142,28 @@ async def test_german_room_facts_keep_their_words_whole_on_a_phone():
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_german_appearance_settings_hold_no_english():
+    """#1280: the time formats were English literals and the system theme was
+    named by its raw value, so German Settings read "Jetzt: light",
+    "12-hour" and "24-hour" - as did every other locale."""
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(color_scheme="light")
+        await context.add_init_script("localStorage.setItem('sketchy_locale', 'de')")
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, "OhneEnglisch")
+            await page.goto(f"{BASE_URL}/settings/appearance")
+            pane = page.get_by_test_id("settings")
+            await pane.wait_for()
+            text = await pane.inner_text()
+            assert "Jetzt: Hell" in text, text
+            for english in ("light", "12-hour", "24-hour"):
+                assert english not in text, (english, text)
+            assert "12-Stunden-Format" in text and "24-Stunden-Format" in text, text
+        finally:
+            await context.close()
+            await browser.close()

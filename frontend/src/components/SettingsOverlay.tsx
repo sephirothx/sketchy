@@ -150,8 +150,8 @@ const THEME_OPTIONS: { value: AppTheme; label: string }[] = [
 
 const TIME_FORMAT_OPTIONS: { value: TimeFormat; label: string }[] = [
   { value: "system", get label() { return ui.settingsOverlay.system; } },
-  { value: "12h", label: "12-hour" },
-  { value: "24h", label: "24-hour" },
+  { value: "12h", get label() { return ui.settingsOverlay.twelveHour; } },
+  { value: "24h", get label() { return ui.settingsOverlay.twentyFourHour; } },
 ];
 
 const BRUSH_CURSOR_OPTIONS: { value: BrushCursorStyle; label: string }[] = [
@@ -1095,7 +1095,11 @@ function AppearancePane() {
                 <strong>
                   {option.label}
                   {option.value === "system" && (
-                    <small>{ui.settingsOverlay.systemThemeNow({ theme: getSystemTheme() === "dark" ? "dark" : "light" })}</small>
+                    <small>{ui.settingsOverlay.systemThemeNow({
+                      // The theme's name in the reader's language: the raw
+                      // value read "Jetzt: light" in German (#1280).
+                      theme: getSystemTheme() === "dark" ? ui.settingsOverlay.dark : ui.settingsOverlay.light,
+                    })}</small>
                   )}
                 </strong>
               </button>

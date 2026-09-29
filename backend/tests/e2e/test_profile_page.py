@@ -1,5 +1,6 @@
 """A finished game reaches the profile page: stats, history, and round detail."""
 import asyncio
+import re
 
 from playwright.async_api import Page, async_playwright
 from tests.e2e.lobby_helpers import (
@@ -147,4 +148,87 @@ async def test_finished_game_shows_up_on_the_profile_page():
         finally:
             await host_context.close()
             await guest_context.close()
+            await browser.close()
+
+
+async def test_a_new_profile_says_empty_one_way_and_offers_no_filter_over_nothing():
+    """#1280: a guest's first look at their own profile had Pinned and
+    Statistics as plain notes, the history as a dashed card, and "Include
+    abandoned games" over an empty list."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 900})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await use_guest_name(page, f"Fresh{uuid4().hex[:6]}")
+            await page.goto(f"{BASE_URL}/profile")
+            await page.locator(".profile-history").wait_for()
+            await page.wait_for_timeout(300)
+            empties = page.locator(".profile-page .empty-state")
+            assert await empties.count() >= 2, await page.locator(".profile-page").inner_text()
+            assert await empties.evaluate_all("els => els.every(el => el.classList.contains('is-compact'))")
+            # No bare note standing in for an empty state.
+            assert await page.locator(".profile-page .panel > p.profile-note").count() == 0
+            assert await page.get_by_text("Include abandoned games").count() == 0
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_a_player_whose_only_game_was_abandoned_can_still_reach_it():
+    """Review of #1329: the history lists finished games only, so a filter
+    shown "once there is a game" hid the one way to a new player's abandoned
+    games. Turns played say there is something to include."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        contexts = [await browser.new_context(viewport={"width": 1280, "height": 900}) for _ in range(2)]
+        host, guest = [await context.new_page() for context in contexts]
+        try:
+            tag = uuid4().hex[:5]
+            await host.goto(BASE_URL)
+            await use_guest_name(host, f"Left{tag}")
+            await open_new_room(host)
+            code = await room_code(host)
+            await guest.goto(BASE_URL)
+            await use_guest_name(guest, f"Stay{tag}")
+            await join_by_code(guest, code)
+            await guest.locator('[data-testid="waiting-room"]').wait_for()
+            await host.get_by_role("button", name="Start game").click()
+            drawer = None
+            for _ in range(100):
+                for page in (host, guest):
+                    if await page.locator(".prompt-choices button").count():
+                        drawer = page
+                if drawer:
+                    break
+                await asyncio.sleep(0.1)
+            prompt = (await drawer.locator(".prompt-choices button").first.inner_text()).strip()
+            await drawer.locator(".prompt-choices button").first.click()
+            guesser = guest if drawer is host else host
+            await guesser.locator(".chat-input input").fill(prompt)
+            await guesser.keyboard.press("Enter")
+            await guesser.locator(".turn-results-overlay, .prompt-choices, .choosing-prompt-overlay").first.wait_for()
+            # One of two leaves: the game stops, recorded as abandoned.
+            from tests.e2e.lobby_helpers import leave_room
+
+            await leave_room(host)
+            confirm = host.locator('[role="alertdialog"]')
+            if await confirm.count():
+                await confirm.get_by_role("button", name=re.compile("^Leave")).click()
+            await guest.locator('[data-testid="waiting-room"]').wait_for(timeout=20_000)
+
+            await guest.goto(f"{BASE_URL}/profile")
+            await guest.locator(".profile-history").wait_for()
+            toggle = guest.get_by_text("Include abandoned games")
+            await toggle.wait_for(timeout=10_000)
+            await toggle.click()
+            await guest.locator(".profile-games li").first.wait_for(timeout=10_000)
+        finally:
+            for context in contexts:
+                await context.close()
             await browser.close()

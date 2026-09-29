@@ -91,7 +91,7 @@ export function GalleryDrawingPage() {
 
   return (
     <div className="page gallery-page gallery-drawing-page">
-      <AppHeader parent={{ label: ui.galleryPage.gallery, to: "/gallery" }} backLabel={ui.galleryPage.backToGallery} backTo="/gallery" languageSwitch />
+      <AppHeader parent={{ label: ui.galleryPage.gallery, to: "/gallery" }} backLabel={ui.galleryPage.backToGallery} backTo="/gallery" />
 
       {signedOut ? (
         <EmptyState

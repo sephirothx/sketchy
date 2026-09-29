@@ -3,7 +3,7 @@ import contextlib
 import re
 from uuid import uuid4
 
-from playwright.async_api import Error as PlaywrightError, async_playwright
+from playwright.async_api import Error as PlaywrightError, async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
     answer_play_languages_question,
@@ -212,4 +212,27 @@ async def test_a_form_without_a_catalogue_leaves_mixed_for_the_players_language(
             await page.locator("#custom-prompts").wait_for()
             await page.locator(".create-room-language-field").get_by_text("English").wait_for()
         finally:
+            await browser.close()
+
+
+async def test_join_by_code_on_a_laptop_closes_from_its_own_x():
+    """#1280: Paste took the ✕'s place in the sheet's header, and above 900px
+    the grab handle that still dismissed it is hidden - a laptop's sheet
+    closed only by Escape or the scrim. The ✕ now stands beside Paste."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context(viewport={"width": 1280, "height": 800})
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.get_by_role("button", name="Join by code").first.click()
+            sheet = page.locator('[data-testid="lobby-code-sheet"]')
+            await sheet.wait_for()
+            await expect(sheet.get_by_role("button", name="Paste")).to_be_visible()
+            close = sheet.get_by_role("button", name="Close")
+            await expect(close).to_be_visible()
+            await close.click()
+            await sheet.wait_for(state="detached")
+        finally:
+            await context.close()
             await browser.close()

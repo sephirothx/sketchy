@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { EmptyState } from "./ui/EmptyState";
 import { DrawingThumbnail } from "./DrawingThumbnail";
 import { DrawingReactionControl } from "./DrawingReactionControl";
 import { DrawingRecapGallery } from "./DrawingRecapGallery";
@@ -85,10 +86,10 @@ export function PinnedDrawingsShelf({
     }
   };
 
+  // The profile's one empty-state recipe, as the history and the statistics
+  // use it: three empty panels on a new profile wore two looks (#1280).
   if (pins.length === 0) {
-    return (
-      <p className="profile-note profile-shelf-empty">{ui.profilePage.nothingPinnedYet}</p>
-    );
+    return <EmptyState compact title={ui.profilePage.nothingPinnedYet} />;
   }
 
   return (

@@ -555,9 +555,9 @@
   width: 100%;
 }
 
-/* A real control, not an ornament: it takes a tap and follows a downward
-   drag, which is what a thumb tries first and what carries the dismiss when
-   the header slot is spent on something else. */
+/* A real control for a pointer, not an ornament: it takes a tap and follows a
+   downward drag, which is what a thumb tries first. The ✕ is the one a
+   keyboard and a screen reader reach. */
 .bottom-sheet-grab {
   background: none;
   border: 0;
@@ -588,6 +588,15 @@
   flex: 0 0 auto;
   gap: 10px;
   justify-content: space-between;
+}
+
+/* A sheet's own action - Join by code's Paste - and the ✕, together at the
+   head's end. */
+.bottom-sheet-head-actions {
+  align-items: center;
+  display: inline-flex;
+  flex: none;
+  gap: 8px;
 }
 
 .bottom-sheet-close {

@@ -167,6 +167,12 @@
   cursor: pointer;
 }
 
+/* The staff passkey link, while a sign-in is already under way. */
+.auth-link:disabled {
+  cursor: default;
+  opacity: var(--opacity-disabled);
+}
+
 
 /* The identity chip: avatar, name, and a dot when the name is unclaimed. */
 .identity-chip {
@@ -433,23 +439,9 @@
 .two-factor-manage { text-align: left; }
 
 
-/* The passkey route, above the fields it replaces. */
+/* The passkey route, above the fields it replaces - once the account has
+   said it signs in with one. */
 .auth-passkey { width: 100%; }
-.auth-divider {
-  align-items: center;
-  color: var(--muted);
-  display: flex;
-  font-size: 13px;
-  gap: 10px;
-  margin: 12px 0 0;
-}
-.auth-divider::before,
-.auth-divider::after {
-  background: var(--line-strong);
-  content: "";
-  flex: 1;
-  height: 1px;
-}
 
 .two-factor-choose { text-align: left; }
 .two-factor-choose .modal-hint { margin: 2px 0 0; }
@@ -1049,8 +1041,10 @@
     grid-template-columns: 1fr;
   }
 
+  /* Above the form it pushed the form ~180px down a phone, for a line of
+     encouragement (#1280). */
   .recovery-aside {
-    padding: 24px 28px;
+    display: none;
   }
 }
 
