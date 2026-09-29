@@ -176,6 +176,8 @@ async def test_a_guest_in_a_live_game_can_still_reach_the_report_dialog():
             assert "Report a bug" in entries
             assert "My profile" not in entries, entries
             assert "Prompt stats" not in entries, entries
+            # Rules leaves the page as those do, and would cost the seat (#1273).
+            assert "Rules" not in entries, entries
 
             await guest_page.click('button:has-text("Report a bug")')
             await guest_page.wait_for_selector(".bug-report-dialog")
