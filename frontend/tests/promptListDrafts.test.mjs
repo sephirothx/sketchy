@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   describePromptMerge,
   mergePromptEntries,
+  newListLanguage,
   promptEntriesFromQuickInput,
   MAX_LIST_PROMPTS,
 } from "../src/lib/promptListDrafts.ts";
@@ -82,4 +83,16 @@ test("pasted prompts lose the characters nobody can see, before they are compare
 test("only what draws nothing is taken out of a saved prompt", () => {
   assert.equal(withoutInvisibleCharacters("caf\u00e9 cafe\u0301 M\u00fcller"), "caf\u00e9 cafe\u0301 M\u00fcller");
   assert.equal(withoutInvisibleCharacters("a\u{E0041}b\ufe0f\u3164c\u2066"), "abc");
+});
+
+test("a new list opens in the player's play language, or English (#1272)", () => {
+  // A list's language is fixed at its first save, so opening every new one on
+  // English mislabelled a German player's first list for good.
+  assert.equal(newListLanguage("de"), "de");
+  assert.equal(newListLanguage("pt"), "pt");
+  assert.equal(newListLanguage("en"), "en");
+  // Nothing a list can be in: Mixed, an unknown code, nothing at all.
+  assert.equal(newListLanguage("mul"), "en");
+  assert.equal(newListLanguage("xx"), "en");
+  assert.equal(newListLanguage(undefined), "en");
 });

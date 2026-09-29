@@ -567,7 +567,7 @@ export function CreateRoomPage() {
         <button
           type="button"
           className="btn btn-primary custom-prompts-apply"
-          onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value } })}
+          onClick={() => navigate("/my-prompt-lists", { state: { quickPrompts: customPrompts.value, language: promptLanguage } })}
         >
           {ui.createRoomPage.saveAsPromptList}
         </button>

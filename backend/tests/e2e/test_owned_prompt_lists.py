@@ -129,3 +129,80 @@ async def test_a_list_in_any_language_is_offered_to_a_room_in_another_language()
         finally:
             await context.close()
             await browser.close()
+
+
+async def test_a_new_list_opens_in_the_players_play_language():
+    """#1272: every new list opened on English, and a list's language is fixed
+    at its first save (R-LIST-05) - a German player's first list, saved without
+    a look at the picker, was English for good. Both ways in - the first list
+    and New list - open on the player's default play language."""
+    from uuid import uuid4
+
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        await context.add_init_script("localStorage.setItem('sketchy_promptlanguage', 'de')")
+        owner = await context.new_page()
+        try:
+            await owner.goto(BASE_URL)
+            await register_account(owner, f"Listy{uuid4().hex[:6]}")
+            await owner.goto(f"{BASE_URL}/my-prompt-lists")
+            picker = owner.locator(".prompt-list-language .language-picker-trigger")
+            await picker.wait_for()
+            assert "Deutsch" in await picker.inner_text()
+
+            await owner.get_by_label("Name").fill("Tiere")
+            await owner.get_by_label("Add prompts", exact=True).fill("Hund, Katze")
+            await owner.get_by_role("button", name="Add to list").click()
+            await owner.get_by_role("button", name="Save list").click()
+            await owner.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
+
+            await owner.get_by_role("button", name="New list").click()
+            await owner.get_by_label("Name").wait_for()
+            assert await owner.get_by_label("Name").input_value() == ""
+            assert "Deutsch" in await picker.inner_text()
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_signing_in_on_the_page_moves_a_new_list_to_the_accounts_language():
+    """Review of #1272: the draft was built once, from this browser's default,
+    so a German account signing in from the page's own dialog on a fresh
+    English browser still got a first list on English."""
+    from uuid import uuid4
+
+    name = f"Konto{uuid4().hex[:6]}"
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        owner_context = await browser.new_context()
+        await owner_context.add_init_script("localStorage.setItem('sketchy_promptlanguage', 'de')")
+        visitor_context = await browser.new_context()
+        try:
+            owner = await owner_context.new_page()
+            await owner.goto(BASE_URL)
+            await register_account(owner, name)
+            await owner_context.close()
+
+            page = await visitor_context.new_page()
+            await page.goto(f"{BASE_URL}/my-prompt-lists")
+            await page.get_by_role("button", name="Create account").click()
+            dialog = page.get_by_role("dialog", name="Create your account")
+            await dialog.wait_for()
+            await dialog.get_by_role("button", name="Sign in").click()
+            sign_in = page.get_by_role("dialog", name="Sign in")
+            await sign_in.wait_for()
+            inputs = sign_in.locator("input")
+            await inputs.nth(0).fill(name)
+            await inputs.nth(1).fill("a-good-password")
+            await sign_in.locator('button[type="submit"]').click()
+            await sign_in.wait_for(state="hidden")
+            picker = page.locator(".prompt-list-language .language-picker-trigger")
+            await picker.wait_for()
+            await page.wait_for_function(
+                "() => document.querySelector('.prompt-list-language .language-picker-trigger')"
+                "?.textContent?.includes('Deutsch')"
+            )
+        finally:
+            await visitor_context.close()
+            await browser.close()
