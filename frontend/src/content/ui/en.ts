@@ -2211,12 +2211,8 @@ export const EN = {
   },
 
   turnResultsOverlay: {
-    yourTurnWithHints: (p: { base: number; hintSpend: number; points: number; rank: number }) =>
-      `Your turn: +${p.base} -${p.hintSpend} hints = ${counted(p.points, { one: "point", other: "points" })} · now #${p.rank}`,
-    yourTurn: (p: { delta: number; rank: number }) =>
-      `Your turn: ${p.delta >= 0 ? "+" : ""}${p.delta} ${
-        Math.abs(p.delta) === 1 ? "point" : "points"
-      } · now #${p.rank}`,
+    thisTurnWithHints: (p: { base: number; hintSpend: number; points: number }) =>
+      `This turn: +${p.base} − ${p.hintSpend} hints = ${counted(p.points, { one: "point", other: "points" })}`,
     promptWas: "The prompt was",
     noOneGuessedCorrectly: "No one guessed correctly.",
     you: "(you)",

@@ -5,8 +5,12 @@ import { playerNameClass, playerNameStyle } from "../lib/playerName";
 import {
   entranceDelays,
   hasPreviousOrder,
+  reorderHoldMs,
   rowStartOffsets,
+  shownStanding,
+  waitsAtOldPlace,
 } from "../lib/standings";
+import { useMediaQuery } from "../hooks/useMediaQuery";
 import { formatGuessTime } from "../lib/guessTime";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/reactions.css";
@@ -19,7 +23,8 @@ interface TurnResultsOverlayProps {
   guesses?: TurnEndedPayload["guesses"];
   scores: TurnScoreEntry[];
   showScores?: boolean;
-  /** How my own turn score was arrived at, when I bought hints this turn. */
+  /** How my own turn score was arrived at, when I bought hints this turn:
+      the one thing about my turn that my row below does not already say. */
   myBreakdown?: GuessBreakdown | null;
   /** The results phase duration, driving the next-turn progress bar. */
   nextTurnSeconds?: number;
@@ -75,13 +80,17 @@ export function TurnResultsOverlay({
   const mine = sorted.find((entry) => entry.playerId === myPlayerId);
 
   const [settled, setSettled] = useState(false);
+  const reducedMotion = useMediaQuery("(prefers-reduced-motion: reduce)");
+  // Read once, as the card appears: a sync later in the phase rebases
+  // `nextTurnSeconds`, and must not restart the wait.
+  const [holdMs] = useState(() => reorderHoldMs(nextTurnSeconds));
 
   useEffect(() => {
     // Rearranging waits, so the standings can be read before they move.
     // An entrance has nothing to read yet and should not keep players waiting.
-    const timeout = setTimeout(() => setSettled(true), reordering ? 2000 : 250);
+    const timeout = setTimeout(() => setSettled(true), reordering ? holdMs : 250);
     return () => clearTimeout(timeout);
-  }, [reordering]);
+  }, [reordering, holdMs]);
 
   // The bar is measured off the clock every tick rather than handed to a CSS
   // animation once. The animation was told a duration and a negative delay
@@ -127,19 +136,20 @@ export function TurnResultsOverlay({
           {ui.turnResultsOverlay.promptWas} <strong>{prompt}</strong>
         </p>
         {reactions && <div className="turn-results-reactions">{reactions}</div>}
-        {showScores && mine && (
+        {/* Only when hints were bought, as how the row's points were
+            reached (#1278). It was said to every guesser as "Your turn: +N
+            points · now #k" - the row directly below, again, under a name
+            that means drawing everywhere else, and "+0 points · now #1" to
+            everyone after a turn nobody got. A spectator has no row. */}
+        {showScores && mine && myBreakdown && myBreakdown.hintSpend > 0 && (
           <p className="turn-results-personal">
-            {myBreakdown && myBreakdown.hintSpend > 0
-              ? ui.turnResultsOverlay.yourTurnWithHints({
-                  base: myBreakdown.basePoints,
-                  hintSpend: myBreakdown.hintSpend,
-                  points: myBreakdown.points,
-                  rank: mine.newRank,
-                })
-              : ui.turnResultsOverlay.yourTurn({
-                  delta: mine.delta,
-                  rank: mine.newRank,
-                })}
+            {ui.turnResultsOverlay.thisTurnWithHints({
+              base: myBreakdown.basePoints,
+              // What came off, which is the spend unless the award ran out
+              // first (R-SCORE-06): +120 - 250 = 0 did not add up.
+              hintSpend: myBreakdown.basePoints - myBreakdown.points,
+              points: myBreakdown.points,
+            })}
           </p>
         )}
         {guesses.length === 0 && (
@@ -158,6 +168,10 @@ export function TurnResultsOverlay({
               const waiting = reordering
                 ? { transform: `translateY(${startOffset}px)`, opacity: 1 }
                 : { transform: `translateX(${-ENTRANCE_TRAVEL}px)`, opacity: 0 };
+              // Its old place and total while it waits there (#1278). What is
+              // read aloud is the result, once: the visible numbers change
+              // under a live region, and would be read again as they did.
+              const shown = shownStanding(entry, waitsAtOldPlace(reordering, settled, reducedMotion));
               return (
                 <li
                   key={entry.playerId}
@@ -173,7 +187,8 @@ export function TurnResultsOverlay({
                       settled && !reordering ? `${delays[index]}ms` : "0ms",
                   }}
                 >
-                  <span className="turn-results-score-rank">#{entry.newRank}</span>
+                  <span className="turn-results-score-rank" aria-hidden="true">#{shown.rank}</span>
+                  <span className="visually-hidden">#{entry.newRank}</span>
                   <span className="turn-results-score-name">
                     <span
                       className={playerNameClass(entry.isAnonymous)}
@@ -208,7 +223,8 @@ export function TurnResultsOverlay({
                     )}
                     {entry.delta > 0 ? `+${entry.delta}` : entry.delta}
                   </span>
-                  <span className="turn-results-score-total">{entry.score}</span>
+                  <span className="turn-results-score-total" aria-hidden="true">{shown.total}</span>
+                  <span className="visually-hidden">{entry.score}</span>
                 </li>
               );
             })}

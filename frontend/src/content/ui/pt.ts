@@ -2189,12 +2189,8 @@ export const PT: Catalogue = {
   },
 
   turnResultsOverlay: {
-    yourTurnWithHints: (p: { base: number; hintSpend: number; points: number; rank: number }) =>
-      `A tua vez: +${p.base} -${p.hintSpend} pistas = ${counted(p.points, { one: "ponto", other: "pontos" })} · agora #${p.rank}`,
-    yourTurn: (p: { delta: number; rank: number }) =>
-      `A tua vez: ${p.delta >= 0 ? "+" : ""}${p.delta} ${
-        Math.abs(p.delta) === 1 ? "ponto" : "pontos"
-      } · agora #${p.rank}`,
+    thisTurnWithHints: (p: { base: number; hintSpend: number; points: number }) =>
+      `Esta vez: +${p.base} − ${p.hintSpend} pistas = ${counted(p.points, { one: "ponto", other: "pontos" })}`,
     promptWas: "A palavra era",
     noOneGuessedCorrectly: "Ninguém acertou.",
     you: "(tu)",

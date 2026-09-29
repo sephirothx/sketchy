@@ -91,9 +91,11 @@ async def test_a_bought_hint_is_only_paid_for_by_a_correct_guess():
             personal = guesser.locator(".turn-results-personal")
             await personal.wait_for(timeout=12_000)
             breakdown = (await personal.inner_text()).strip()
-            assert "-12 hints" in breakdown, breakdown
+            assert "− 12 hints" in breakdown, breakdown
+            # How the row's points were reached, and nothing the row says.
+            assert "#" not in breakdown, breakdown
 
-            # "Your turn: +300 -12 hints = 288 points · now #1"
+            # "This turn: +300 − 12 hints = 288 points"
             gross = int(breakdown.split("+")[1].split()[0])
             net = int(breakdown.split("=")[1].split()[0])
             assert net == gross - 12

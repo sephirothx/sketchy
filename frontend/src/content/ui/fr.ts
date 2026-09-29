@@ -2192,12 +2192,8 @@ export const FR: Catalogue = {
   },
 
   turnResultsOverlay: {
-    yourTurnWithHints: (p: { base: number; hintSpend: number; points: number; rank: number }) =>
-      `Ton tour : +${p.base} -${p.hintSpend} indices = ${counted(p.points, { one: "point", other: "points" })} · maintenant #${p.rank}`,
-    yourTurn: (p: { delta: number; rank: number }) =>
-      `Ton tour : ${p.delta >= 0 ? "+" : ""}${p.delta} ${
-        Math.abs(p.delta) === 1 ? "point" : "points"
-      } · maintenant #${p.rank}`,
+    thisTurnWithHints: (p: { base: number; hintSpend: number; points: number }) =>
+      `Ce tour : +${p.base} − ${p.hintSpend} indices = ${counted(p.points, { one: "point", other: "points" })}`,
     promptWas: "Le mot était",
     noOneGuessedCorrectly: "Personne n’a trouvé.",
     you: "(toi)",

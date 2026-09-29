@@ -9,7 +9,10 @@ import {
   entranceDelays,
   hasPreviousOrder,
   placementLabel,
+  reorderHoldMs,
   rowStartOffsets,
+  shownStanding,
+  waitsAtOldPlace,
 } from "../src/lib/standings.ts";
 
 test("distinct scores count up from one", () => {
@@ -148,4 +151,43 @@ test("rows enter lowest place first, building up to the leader", () => {
 test("a lone player waits for nobody", () => {
   assert.deepEqual(entranceDelays(1), [0]);
   assert.deepEqual(entranceDelays(0), []);
+});
+
+test("a waiting row shows the place and total it came in with, and a settled one the new (#1278)", () => {
+  // Hostina overtakes Deskar: new order first, as the card sorts them.
+  const entries = [
+    { playerId: "p", previousRank: 1, newRank: 1, score: 1165, delta: 40 },
+    { playerId: "h", previousRank: 3, newRank: 2, score: 1130, delta: 130 },
+    { playerId: "d", previousRank: 2, newRank: 3, score: 1115, delta: 0 },
+  ];
+  const offsets = rowStartOffsets(entries);
+  // Where each row stands while it waits, top to bottom: its number there
+  // must be its place there.
+  const waiting = entries
+    .map((entry, index) => ({ row: index + offsets[index], ...shownStanding(entry, true) }))
+    .sort((a, b) => a.row - b.row);
+  assert.deepEqual(waiting.map(({ rank }) => rank), [1, 2, 3]);
+  assert.deepEqual(waiting.map(({ total }) => total), [1125, 1115, 1000]);
+  assert.deepEqual(
+    entries.map((entry) => shownStanding(entry, false)),
+    [{ rank: 1, total: 1165 }, { rank: 2, total: 1130 }, { rank: 3, total: 1115 }],
+  );
+});
+
+test("rows wait at their old place only while rearranging, before the slide, with motion (review of #1278)", () => {
+  assert.equal(waitsAtOldPlace(true, false, false), true);
+  // Slid: the new numbers.
+  assert.equal(waitsAtOldPlace(true, true, false), false);
+  // Introduced rather than rearranged: nothing old to show.
+  assert.equal(waitsAtOldPlace(false, false, false), false);
+  // Reduced motion puts the rows in their new order at once, so their
+  // numbers must be the new ones at once too.
+  assert.equal(waitsAtOldPlace(true, false, true), false);
+});
+
+test("the wait before the slide is two seconds, or less of a short phase", () => {
+  assert.equal(reorderHoldMs(5), 2000);
+  assert.equal(reorderHoldMs(0), 2000);
+  assert.equal(reorderHoldMs(2), 800);
+  assert.equal(reorderHoldMs(0.5), 200);
 });

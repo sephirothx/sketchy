@@ -2482,8 +2482,10 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    the canvas and the masked prompt are already on their screen - and the turn waits for
    them like any other guesser. Players who were AFK or disconnected when the drawing began
    sit that turn out and rejoin the guessers on the next one.
-5. **Turn results** (5s by default): the prompt is revealed and scores update, reactions
-   stay open on the drawing, then the next player's turn begins.
+5. **Turn results** (5s by default): the prompt is revealed and scores update - each row
+   shows the place and total its player came in with, then slides to the new order - reactions
+   stay open on the drawing, then the next player's turn begins. A guesser who bought hints
+   also sees how their points were reached: "This turn: +300 − 12 hints = 288 points".
 
 In a **mixed-language room** every seat plays in the language it joined with: the drawer
 is offered prompts in theirs, each guesser's letter tiles, hints and near misses are in
