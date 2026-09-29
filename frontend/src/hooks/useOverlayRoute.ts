@@ -1,4 +1,4 @@
-import { useCallback } from "react";
+import { createContext, useCallback, useContext } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import {
@@ -63,4 +63,18 @@ export function useCloseOverlay(): () => void {
     if (background) navigate(-1);
     else navigate("/", { replace: true });
   }, [navigate, background]);
+}
+
+/** Whether an overlay route - Settings, Friends - is open over the page.
+
+The page underneath is drawn against the location the overlay was opened from
+(`AppRoutes`), so its own `useLocation()` cannot tell; this is how it asks. A
+page that raises a dialog of its own waits while one is open: the lobby's
+first-time languages question opened over Settings when a visitor named
+themselves there, and its Done put the focus on Quick play behind the sheet
+(review of #1265). */
+export const OverlayOpenContext = createContext(false);
+
+export function useOverlayOpen(): boolean {
+  return useContext(OverlayOpenContext);
 }

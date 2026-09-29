@@ -396,6 +396,33 @@
   flex-wrap: wrap;
 }
 
+/* The nameless visitor's card (#1265): the name first, the account second. */
+.settings-nameless-form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.settings-nameless-form input[type="search"] {
+  background: var(--field);
+  border: 1.5px solid var(--line-strong);
+  border-radius: var(--radius-sm);
+  color: var(--ink);
+  flex: 1 1 180px;
+  font: inherit;
+  font-size: 16px; /* 16px avoids the iOS zoom-on-focus behaviour (#1264). */
+  font-weight: 700;
+  min-height: 38px;
+  min-width: 0;
+  padding: 8px 11px;
+  padding-inline-start: calc(11px - var(--ink-overhang));
+  text-indent: var(--ink-overhang);
+}
+
+.settings-nameless-form input[aria-invalid="true"] {
+  border-color: var(--danger);
+}
+
 .settings-empty {
   display: grid;
   justify-items: center;

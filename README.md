@@ -1371,8 +1371,10 @@ value stays applied locally. The rows a server can refuse — the display name,
 the email address, the password — keep a button of their own. Guests see every
 section, but not the rows only an account has: the card at the top of Account,
 with **Create an account** and **Sign in**, is the one invitation, and **Signing
-in** appears once there is an account to sign in to. A guest who signs in from
-inside Settings is told once that the account's values took over.
+in** appears once there is an account to sign in to. A visitor with no name
+yet gets one card instead — choose a name, create an account or sign in — since
+there is no account behind them to show. A guest, or a visitor with no name, who
+signs in from inside Settings is told once that the account's values took over.
 
 The identity menu is navigation only: Settings, profile, prompt stats, prompt
 lists, bug reports, sign out. Account absorbs what the menu used to hold: the

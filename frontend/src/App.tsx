@@ -6,6 +6,7 @@ import {
   isSettingsPath,
   overlayBackgroundOf,
 } from "./lib/overlayRoutes";
+import { OverlayOpenContext } from "./hooks/useOverlayRoute";
 import "./App.css";
 import { useEmailStateSync } from "./hooks/useEmailStateSync";
 import { useGameSocketListeners } from "./hooks/useGameSocketListeners";
@@ -88,6 +89,7 @@ function AppRoutes() {
   // live room is a retry notice, not the crash page.
   return (
     <>
+      <OverlayOpenContext.Provider value={onOverlay}>
       <Suspense fallback={null}>
       <Routes location={behind}>
         <Route path="/" element={<LobbyBrowserPage />} />
@@ -123,6 +125,7 @@ function AppRoutes() {
         <Route path="*" element={<NotFoundPage />} />
       </Routes>
       </Suspense>
+      </OverlayOpenContext.Provider>
       {isSettingsPath(location.pathname) && <SettingsOverlay />}
       {isFriendsPath(location.pathname) && <FriendsOverlay />}
     </>

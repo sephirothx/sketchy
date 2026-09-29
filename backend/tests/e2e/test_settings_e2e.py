@@ -370,6 +370,118 @@ async def test_changing_the_password_from_settings_signs_other_devices_out():
             await browser.close()
 
 
+async def test_a_visitor_with_no_name_gets_a_choose_a_name_settings():
+    """#1265: before a name there is no account, so the header's gear - the
+    only control the bar offers - opens a card to choose a name, make an
+    account or sign in. It used to open a registered account's pane: swatches
+    the server refused, a Manage that said "Sign in first.", a Delete that
+    asked for a password."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        refused: list[str] = []
+        page.on(
+            "response",
+            lambda response: refused.append(f"{response.request.method} {response.url}")
+            if response.status == 401
+            else None,
+        )
+        try:
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".first-run")
+            await page.locator(".header-settings-button").click()
+            dialog = page.locator(".settings-modal-card")
+            card = dialog.get_by_test_id("settings-nameless")
+            await card.wait_for(state="visible")
+            # None of a registered account's controls, and nothing that 401s.
+            assert await dialog.locator(".settings-you").count() == 0
+            assert await dialog.locator(".settings-swatches").count() == 0
+            assert await dialog.get_by_text("Signing in").count() == 0
+            assert await dialog.get_by_text("Your data").count() == 0
+            assert await dialog.get_by_role("button", name="Delete").count() == 0
+            assert await card.get_by_role("button", name="Create account").count() == 1
+            assert await card.get_by_role("button", name="Sign in").count() == 1
+            # The one thing to do here: choose a name, which makes the guest.
+            name = f"Nameless{uuid4().hex[:6]}"
+            await card.get_by_label("Display name").fill(name)
+            await card.get_by_role("button", name="Save").click()
+            await card.wait_for(state="detached")
+            await dialog.get_by_text("Playing as a guest").wait_for()
+            await dialog.locator(".settings-you-name", has_text=name).wait_for()
+            # The guest card takes the focus the gone Save had, not the page.
+            assert await page.evaluate(
+                "() => Boolean(document.activeElement?.closest('.settings-guest-card'))"
+            )
+            # A first name makes the languages question due; it waits for the
+            # sheet, rather than opening over it (review of #1265).
+            await page.wait_for_timeout(500)
+            assert await page.get_by_test_id("play-languages-question").count() == 0
+            await dialog.get_by_role("button", name="Close settings").click()
+            await page.get_by_test_id("play-languages-question").wait_for()
+            assert refused == [], refused
+        finally:
+            await context.close()
+            await browser.close()
+
+
+# How many times a password form is put in the page.
+COUNT_PASSWORD_FORMS = """
+(() => {
+  window.__passwordForms = 0;
+  new MutationObserver((records) => {
+    for (const record of records) for (const node of record.addedNodes) {
+      if (node.nodeType === 1 && node.querySelector?.('input[type="password"]')) {
+        window.__passwordForms += 1;
+      }
+    }
+  }).observe(document, { childList: true, subtree: true });
+})();
+"""
+
+
+async def test_signing_in_from_the_no_name_card_keeps_its_dialog_and_says_so():
+    """Review of #1265: the sign-in dialog opened from the no-name card was
+    remounted blank as the account arrived mid-submit, and nobody was told
+    the account's settings had replaced the browser's (R-SET-03)."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        owner = await browser.new_context()
+        visitor = await browser.new_context()
+        await visitor.add_init_script(COUNT_PASSWORD_FORMS)
+        try:
+            account = await owner.new_page()
+            await account.goto(BASE_URL)
+            name = f"Back{uuid4().hex[:6]}"
+            await use_guest_name(account, name)
+            await register_account(account, name)
+
+            page = await visitor.new_page()
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".first-run")
+            await page.locator(".header-settings-button").click()
+            card = page.get_by_test_id("settings-nameless")
+            await card.get_by_role("button", name="Sign in").click()
+            form = page.get_by_role("dialog", name="Sign in")
+            await form.wait_for(state="visible")
+            inputs = form.locator("input")
+            await inputs.nth(0).fill(name)
+            await inputs.nth(1).fill("a-good-password")
+            await form.locator('button[type="submit"]').click()
+            await form.wait_for(state="hidden")
+            dialog = page.locator(".settings-modal-card")
+            await dialog.get_by_text(f"These are {name}'s settings now.").wait_for()
+            assert await page.evaluate("() => window.__passwordForms") == 1
+        finally:
+            await owner.close()
+            await visitor.close()
+            await browser.close()
+
+
 async def test_a_registered_player_uploads_a_picture_and_wears_it_in_the_room(tmp_path):
     """#573: the picture chosen in Settings replaces the initial on the chip
     and on the seat, cropped and shrunk by the browser before it is sent."""
@@ -635,6 +747,33 @@ async def test_a_new_account_wears_a_doodle_and_picks_another_from_settings():
             await page.locator(".player-list .avatar svg.avatar-doodle").first.wait_for(
                 state="hidden"
             )
+        finally:
+            await context.close()
+            await browser.close()
+
+
+async def test_create_account_from_the_no_name_card_keeps_the_name_typed_there():
+    """Review of #1311: a name typed in the no-name card, then "Create
+    account", opened the dialog with a blank username - there was no user to
+    suggest one from - so the name had to be typed again."""
+    from uuid import uuid4
+
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        context = await browser.new_context()
+        page = await context.new_page()
+        try:
+            await page.goto(BASE_URL)
+            await page.wait_for_selector(".first-run")
+            await page.locator(".header-settings-button").click()
+            card = page.locator(".settings-modal-card").get_by_test_id("settings-nameless")
+            await card.wait_for(state="visible")
+            name = f"Typed{uuid4().hex[:6]}"
+            await card.get_by_label("Display name").fill(name)
+            await card.get_by_role("button", name="Create account").click()
+            dialog = page.get_by_role("dialog", name="Create your account")
+            await dialog.wait_for()
+            assert await dialog.get_by_label("Username").input_value() == name
         finally:
             await context.close()
             await browser.close()

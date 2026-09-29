@@ -2042,6 +2042,8 @@ export const IT: Catalogue = {
     themeSoundShortcutsCameFromAccount: "Il tema, l’audio e le\n            scorciatoie arrivano dall’account. Quello che aveva questo browser resta\n            intatto e torna se esci.",
     dismiss: "Chiudi",
     playingAsGuest: "Stai giocando come ospite",
+    noNameYet: "Ancora nessun nome",
+    namelessExplainer: "Scegli un nome per giocare come ospite, oppure accedi. Un account conserva il nome, i tuoi punti e la tua cronologia su ogni dispositivo.",
     createAccount: "Crea account",
     logIn: "Accedi",
     you: "Tu",

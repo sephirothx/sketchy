@@ -2040,6 +2040,8 @@ export const ES: Catalogue = {
     themeSoundShortcutsCameFromAccount: "El tema, el sonido y los atajos\n            vienen de la cuenta. Lo que tenía este navegador sigue intacto y\n            vuelve si cierras sesión.",
     dismiss: "Descartar",
     playingAsGuest: "Juegas como invitado",
+    noNameYet: "Todavía sin nombre",
+    namelessExplainer: "Elige un nombre para jugar como invitado, o inicia sesión. Una cuenta conserva el nombre, tus puntos y tu historial en todos los dispositivos.",
     createAccount: "Crear cuenta",
     logIn: "Iniciar sesión",
     you: "Tú",

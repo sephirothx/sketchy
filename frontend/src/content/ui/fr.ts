@@ -2043,6 +2043,8 @@ export const FR: Catalogue = {
     themeSoundShortcutsCameFromAccount: "Le thème, le son et les\n            raccourcis viennent du compte. Ce que ce navigateur avait reste intact et\n            revient si tu te déconnectes.",
     dismiss: "Masquer",
     playingAsGuest: "Tu joues en invité",
+    noNameYet: "Pas encore de nom",
+    namelessExplainer: "Choisis un nom pour jouer en invité, ou connecte-toi. Un compte garde le nom, tes points et ton historique sur tous les appareils.",
     createAccount: "Créer un compte",
     logIn: "Se connecter",
     you: "Toi",
