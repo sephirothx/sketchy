@@ -542,5 +542,9 @@ class MessageRetentionService:
         # a line is given an identifier - which a report may later cite - and
         # written by nobody (#972 seventh review).
         self._worker = None
-        with contextlib.suppress(asyncio.CancelledError):
-            await worker
+        # Watched, not awaited inside `suppress(CancelledError)`: that
+        # swallowed this call's own cancellation along with the writer's, so a
+        # caller's `wait_for(aclose(), t)` over a writer slow to die returned
+        # at `t` as though the close had finished, and a writer that never
+        # died hung its caller (#1334 review).
+        await asyncio.wait({worker})
