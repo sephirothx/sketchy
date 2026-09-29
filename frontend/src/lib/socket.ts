@@ -200,8 +200,9 @@ export function restartExpected(): boolean {
 
 /** Run *handler* on every connection, spread behind a reconnect (#872).
 
-For the REST refetches a reconnect triggers - friends, the recovery address -
-which would otherwise land beside the seat rebind, from every client at once.
+For the REST refetches a reconnect triggers - friends, the recovery address,
+the pending warning - which would otherwise land beside the seat rebind, from
+every client at once.
 The first connection runs it immediately. Returns the unsubscribe. */
 export function onConnectSpread(handler: () => void): () => void {
   let timer: number | null = null;

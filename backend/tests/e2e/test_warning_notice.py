@@ -61,16 +61,25 @@ async def test_a_read_already_on_its_way_does_not_take_a_pushed_warning_back():
             admin, target, user_id = await _admin_and_target(browser, "HeldRead")
             held = asyncio.Event()
             released = asyncio.Event()
+            answers: list[dict] = []
+            delivered: list[asyncio.Event] = []
 
             async def hold(route):
                 # The server answers now, before the warning exists; only the
                 # answer is late. Holding the request itself would let it
                 # reach the server after the warning and find it.
                 answer = await route.fetch()
-                if not released.is_set():
-                    held.set()
-                    await released.wait()
-                await route.fulfill(response=answer)
+                answers.append(await answer.json())
+                done = asyncio.Event()
+                delivered.append(done)
+                held.set()
+                await released.wait()
+                try:
+                    await route.fulfill(response=answer)
+                except Exception:
+                    pass  # a read the page gave up on has nobody to answer
+                finally:
+                    done.set()
 
             await target.route(PENDING, hold)
             await target.reload()
@@ -82,11 +91,26 @@ async def test_a_read_already_on_its_way_does_not_take_a_pushed_warning_back():
             notice = _notice(target)
             await expect(notice).to_be_visible()
 
-            async with target.expect_response(PENDING) as answered:
-                released.set()
-            assert (await (await answered.value).json())["warning"] is None
-            # Every read held above has answered by now, each with nothing.
-            await target.wait_for_timeout(500)
+            # Watched from inside the page, so a notice taken back and put up
+            # again between two polls of the assertion below still counts.
+            await target.evaluate(
+                """() => {
+                    const shown = () => [...document.querySelectorAll('[role="alertdialog"]')]
+                        .some((dialog) => dialog.textContent.includes('A moderator warning'));
+                    window.__warningTakenBack = false;
+                    new MutationObserver(() => {
+                        if (!shown()) window.__warningTakenBack = true;
+                    }).observe(document.body, {childList: true, subtree: true});
+                }"""
+            )
+            released.set()
+            await asyncio.wait_for(
+                asyncio.gather(*(done.wait() for done in delivered)), timeout=10
+            )
+            assert answers and all(answer["warning"] is None for answer in answers), answers
+            # A delivered answer is applied on the page's next task.
+            await target.wait_for_timeout(300)
+            assert not await target.evaluate("window.__warningTakenBack")
             await expect(notice).to_be_visible()
         finally:
             await browser.close()
@@ -130,5 +154,25 @@ async def test_a_warning_pushed_while_the_tab_had_no_socket_shows_once_it_connec
             opened.set()
             # The client's reconnect backoff is at most 10 s, randomised by half.
             await expect(notice).to_be_visible(timeout=30_000)
+        finally:
+            await browser.close()
+
+
+async def test_a_second_warning_issued_while_the_first_is_up_follows_it():
+    """A push carries the oldest warning still pending, so a second one issued
+    while the first is on screen pushes the first again. Answering the first
+    reads again and finds the second, which used to wait for the next visit."""
+    async with async_playwright() as p:
+        browser = await p.chromium.launch(headless=True, args=["--mute-audio"])
+        try:
+            admin, target, user_id = await _admin_and_target(browser, "Second")
+            await target.wait_for_function("() => window.__SKETCHY_SOCKET__?.connected === true")
+            await _warn(admin, user_id, "First warning check")
+            notice = _notice(target)
+            await expect(notice).to_contain_text("First warning check")
+
+            await _warn(admin, user_id, "Second warning check")
+            await notice.get_by_role("button", name="OK", exact=True).click()
+            await expect(notice).to_contain_text("Second warning check")
         finally:
             await browser.close()

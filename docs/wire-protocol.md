@@ -278,7 +278,7 @@ returns ([`hooks/useLobbyChannel.ts`](../frontend/src/hooks/useLobbyChannel.ts),
 
 How a client comes back ([`lib/reconnectPolicy.ts`](../frontend/src/lib/reconnectPolicy.ts),
 #872). Every (re)connect costs the server a session resolve, presence and block
-warm-ups, a lobby baseline or a seat rebind, and two REST refetches; socket.io's
+warm-ups, a lobby baseline or a seat rebind, and three REST refetches; socket.io's
 defaults put every client's first retry 0.5–1.5 s after the close, so a restart
 used to be all of that from every client inside a second, against a pool of ten.
 
@@ -291,8 +291,10 @@ used to be all of that from every client inside a second, against a pool of ten.
   is its drain plus a boot. Measured at 400 registered clients on PostgreSQL
   (`benchmarks/reconnect_herd.py`): summed pool wait over the herd 694–738 s →
   0.01–0.11 s, REST refetch p95 1.9–2.0 s → 17–19 ms, and every client back in
-  9.9 s instead of 2.7–2.9 s — the spread, as intended.
-- **The REST refetches** a reconnect triggers (friends, recovery address) run
+  9.9 s instead of 2.7–2.9 s — the spread, as intended (measured with the two
+  refetches of the time; the pending-warning read joined them in #1336).
+- **The REST refetches** a reconnect triggers (friends, recovery address,
+  pending warning) run
   a random 0–3 s behind it, so they queue behind the seat rebind rather than
   beside it. A first connection does not wait.
 - **A close the server made** (`io server disconnect`: another tab took the
@@ -1053,7 +1055,7 @@ Acknowledgement: `{ ok, id, evidenceCount, drawingAttached }`.
 | `session_superseded` | `{code, reason}` — `opened_elsewhere`, `account_deleted`, `account_suspended` or `signed_out` (the session this socket was opened with was revoked: a sign-out on this browser, a sign-out everywhere, a password change or reset, a device revoked from the list — #1007), said by the client from the code; `reason` is English, for a log — then the socket is disconnected. On `signed_out` and `account_deleted` a tab anywhere in the app re-reads its account, so a lobby tab of a deleted account does not reconnect as nobody under the old identity (#1056) | the superseded socket |
 | `upgrade_required` | `{reason, expected, received}` — the socket stays open; the client reloads (§1) | one socket, at handshake |
 | `account_suspended` | `{detail, suspended, reason, expiresAt, …}` — the same body the HTTP refusal returns | every socket of the suspended account (each socket joins a `user:{id}` broadcast room at connect), which is then disconnected |
-| `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account; a tab with none at that moment reads `GET /api/warnings/pending` again when it connects, and a read older than the push never replaces it (R-MOD-12) |
+| `moderator_warning` | `{warning: {id, reason, createdAt, messages}}` — the same body `GET /api/warnings/pending` returns | every socket of the warned account — always the **oldest** pending one, so the client reads `GET /api/warnings/pending` again after each acknowledgement; a tab with no socket at that moment reads it when it connects, and a read a push or an acknowledgement overtook never replaces what is shown (R-MOD-12) |
 | `role_changed` | `{notice: {id, role, pending, createdAt} | null, pendingRole}` — the same body `GET /api/role-notices/pending` returns. Emitted whether or not there is a notice: `pendingRole` says what is still outstanding on the account, and **withdrawing an offer** is the case with nothing to say and a change worth hearing — it settles the notice and ends the offer together, and a browser that missed it would go on offering an enrolment that would now grant nothing. The role and nothing else: the reason the administrator recorded is ledger text written for other administrators and can name a report or a second account. `pending` distinguishes a role the account **holds** from one it has been **offered** and takes up by enrolling a second factor (R-AUTH-20) — the second asks something of the reader, so it cannot be worded like the first, and it revokes nothing | every socket of the account whose role changed |
 | `server_shutdown` | `ServerShutdownNotice` | every socket |
 | `server_paused` | `ServerPausedNotice` — an administrator stopped, or resumed, admitting new rooms | every socket on each toggle; one socket at handshake while paused |

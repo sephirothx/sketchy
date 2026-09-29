@@ -4,14 +4,16 @@ Provisions ``--clients`` registered accounts, then replays what each browser
 does when its connection returns, under two schedules:
 
 - ``before``: socket.io's default first retry, 0.5-1.5 s after the close, and
-  the REST refetches (friends, recovery address) fired the moment it connects;
+  the REST refetches (friends, recovery address, pending warning) fired the
+  moment it connects;
 - ``after``: the first attempt held a uniform 0-``--spread`` s, as a
   ``server_shutdown`` naming ``reconnectSpreadMs`` now asks, and the refetches
   spread 0-3 s behind the connection (`frontend/src/lib/reconnectPolicy.ts`).
 
 Each client's return is the handshake, a ``watch_lobby`` (a lobby is the only
 place a restarted process can put anyone: rooms died with the old one), and
-``GET /api/users/me/friends`` + ``GET /api/auth/email``. Reports, per schedule, how long
+``GET /api/users/me/friends`` + ``GET /api/auth/email`` + ``GET /api/warnings/pending``
+(the third since #1336). Reports, per schedule, how long
 until every client had its lobby back (p50/p95/max), how long a lobby baseline
 took to answer, and the database pool's wait and timeouts over the herd, read
 from ``/metrics``.
@@ -141,7 +143,7 @@ async def come_back(
             if schedule == "after":
                 await asyncio.sleep(rng.uniform(0.0, POST_RECONNECT_JITTER_S))
             began = time.monotonic()
-            for path in ("/api/users/me/friends", "/api/auth/email"):
+            for path in ("/api/users/me/friends", "/api/auth/email", "/api/warnings/pending"):
                 async with http.get(f"{base}{path}", headers={"Cookie": cookie}) as response:
                     await response.read()
                     # A refusal, a pool timeout or an error is a failed
@@ -159,7 +161,7 @@ async def come_back(
         back_s = time.monotonic() - started
         rest_s = await rest
         return {
-            # Back only when the lobby and both refetches were answered.
+            # Back only when the lobby and every refetch was answered.
             "ok": True,
             "back_s": back_s,
             "baseline_s": baseline_s,
