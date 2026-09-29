@@ -1660,3 +1660,116 @@ async def test_a_reporter_is_told_a_report_was_decided_and_nothing_else(env):
     (report,) = artifact["reportsSubmitted"]
     assert report["decided"] is True
     assert not {"status", "reviewedAt", "updatedAt"} & set(report)
+
+
+async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env, monkeypatch):
+    """#1250: every save of a list is a whole new revision, and the export
+    loaded every revision's prompts as one graph before writing a byte - a
+    ~3 s stall at 801 saves of a 500-prompt list. Each revision's prompts are
+    now read by statements naming that one revision, a page at a time, and
+    the section is the one the graph produced, byte for byte."""
+    from sqlalchemy import event
+    from sqlalchemy.orm import selectinload
+
+    from app.auth.account_data import _ExportWriter, _timestamp, _write_export_artifact
+    from app.db.models import PromptListRevision, PromptListRevisionItem, PromptVersion, PromptVersionAlias
+    from app.repositories.interfaces import PromptListEntryInput
+    from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
+
+    http, _, _, factory = env
+    owner = await register(http, "Reviser")
+    lists = SqlAlchemyPromptListRepository(factory)
+    created = await lists.create_owned(
+        owner["id"],
+        name="Revised",
+        description="",
+        language="en",
+        prompts=[
+            PromptListEntryInput(answer=f"thing {index}", aliases=(f"zed {index}", f"alpha {index}"))
+            for index in range(5)
+        ],
+    )
+    for salt in range(2):
+        current = await lists.get_owned(owner["id"], created.id)
+        rows = [
+            PromptListEntryInput(concept_id=entry.concept_id, answer=entry.answer, aliases=entry.aliases)
+            for entry in current.prompts
+        ]
+        rows[salt] = PromptListEntryInput(answer=f"changed {salt}", aliases=(f"new {salt}",))
+        await lists.update_owned(
+            owner["id"], created.id, expected_version=current.version,
+            name=current.name, description=current.description, prompts=rows,
+        )
+
+    # What the eager graph wrote, kept here as the reference.
+    async with factory() as session:
+        graph = (
+            await session.scalars(
+                select(PromptList)
+                .where(PromptList.id == UUID(created.id))
+                .options(
+                    selectinload(PromptList.revisions)
+                    .selectinload(PromptListRevision.items)
+                    .selectinload(PromptListRevisionItem.prompt_version)
+                    .selectinload(PromptVersion.version_aliases)
+                    .selectinload(PromptVersionAlias.alias)
+                )
+            )
+        ).one()
+        expected_revisions = [
+            {
+                "id": str(revision.id),
+                "version": revision.version,
+                "language": revision.language,
+                "contentHash": revision.content_hash,
+                "createdAt": _timestamp(revision.created_at),
+                "prompts": [
+                    {
+                        "conceptId": str(item.prompt_version.concept_id),
+                        "promptVersionId": str(item.prompt_version.id),
+                        "promptVersion": item.prompt_version.version,
+                        "prompt": item.prompt_version.canonical_answer,
+                        "aliases": sorted(link.alias.answer for link in item.prompt_version.version_aliases),
+                        "position": item.position,
+                    }
+                    for item in revision.items
+                ],
+            }
+            for revision in sorted(graph.revisions, key=lambda revision: revision.version)
+        ]
+    assert len(expected_revisions) == 3
+
+    engine = factory.kw["bind"]
+    item_reads: list[tuple[str, object]] = []
+
+    def note(_conn, _cursor, statement, parameters, _context, _executemany):
+        if "prompt_list_revision_items" in statement and "prompt_lists" not in statement:
+            item_reads.append((statement, parameters))
+
+    async def build() -> bytes:
+        async with factory() as session:
+            writer = _ExportWriter(max_bytes=10_000_000)
+            await _write_export_artifact(session, writer, user_id=UUID(owner["id"]), generated_at=STARTED)
+            return gzip.decompress(writer.finish())
+
+    event.listen(engine.sync_engine, "before_cursor_execute", note)
+    try:
+        whole = await build()
+        reads_per_build = len(item_reads)
+        monkeypatch.setattr(account_data_module, "EXPORT_PAGE_SIZE", 2)
+        paged = await build()
+    finally:
+        event.remove(engine.sync_engine, "before_cursor_execute", note)
+
+    assert paged == whole
+    (document_list,) = json.loads(whole)["promptLists"]
+    assert document_list["revisions"] == expected_revisions
+    assert [prompt["prompt"] for prompt in document_list["revisions"][-1]["prompts"]] == [
+        "changed 0", "changed 1", "thing 2", "thing 3", "thing 4",
+    ]
+    # Two statements per revision - its aliases, then its prompts - and each
+    # names one revision: none reads the items of a list, or of every list.
+    assert reads_per_build == 2 * len(expected_revisions)
+    for statement, _parameters in item_reads:
+        assert "prompt_list_revision_items.revision_id =" in statement, statement
+        assert " IN (" not in statement.upper(), statement

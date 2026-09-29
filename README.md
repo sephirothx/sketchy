@@ -2130,6 +2130,9 @@ backend/.venv/bin/python benchmarks/socket_abuse.py --scenario garbage --sockets
 # Reading and saving one of a player's own prompt lists at the ceiling, 500 x 20 aliases (#1236)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/owned_list_io.py
 
+# An account export when the owner saved a 500-prompt list 300 times: worst loop wait, build, memory (#1250)
+TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/export_list_revisions.py --saves 300
+
 # Authorizing a room's lists, cold and again unchanged: 20 agnostic lists in a mixed room (#1237)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/authorize_selection.py --language zxx --room mixed
 ./benchmarks/run_load.sh --rooms 5 --seats 4 --duration 60 --json-output /tmp/load.json
