@@ -5,11 +5,10 @@ gallery at all. A report filed from the Gallery reaches the moderation
 queue with its drawing, and a moderator hides the drawing from there."""
 from __future__ import annotations
 
-import random
 import re
-import string
 from collections.abc import Awaitable, Callable
 from urllib.parse import parse_qsl, urlsplit
+from uuid import uuid4
 
 from playwright.async_api import Locator, Page, async_playwright, expect
 from playwright.async_api import TimeoutError as PlaywrightTimeoutError
@@ -83,6 +82,8 @@ async def find_in_gallery(
     refused: str | None = None
     counts: list[int] = []
     for attempt in range(20):
+        # What the page said on an earlier read is not what this one says.
+        refused = None
         if attempt:
             await page.wait_for_timeout(2_000)
             await page.reload()
@@ -211,7 +212,7 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             # other public game that drew one put a second card in the match
             # and `count() == 1` never held - twenty full reads of the feed,
             # reported as "never listed" (#1332).
-            run = "".join(random.choices(string.ascii_lowercase, k=6))
+            run = uuid4().hex[:6]
             await host.locator("#custom-prompts").fill(f"lantern {run}\nkite {run}")
             await host.get_by_label("Only use custom prompts").check()
             await save_room_settings(host)
@@ -235,9 +236,8 @@ async def test_a_stranger_finds_a_public_drawing_in_the_gallery_and_reacts():
             await stranger.goto(BASE_URL)
             await use_guest_name(stranger, "GalStranger")
             await register_account(stranger, "galstranger")
-            # Newest first: a drawing that just finished is on the first page
-            # there, where Hot puts other tests' reacted drawings ahead of an
-            # unreacted one and the stranger has pages to read (#1332).
+            # New orders by the finish alone, so a drawing that just finished
+            # is on the first page whatever other tests reacted to.
             await stranger.goto(f"{BASE_URL}/gallery?sort=new")
             # Other tests' public games share this server, so the feed is
             # read for *these* drawings rather than counted.
