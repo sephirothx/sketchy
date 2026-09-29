@@ -583,7 +583,7 @@ async def test_drain_does_not_wait_out_the_linger():
         await asyncio.wait_for(service.drain(), timeout=5)
         async with factory() as session:
             assert await session.scalar(select(RoomMessage.text)) == "now, please"
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -600,7 +600,7 @@ async def test_a_full_batch_is_written_without_waiting_out_the_linger():
         await _say(service, room, player, "three")
         await asyncio.wait_for(service._queue.join(), timeout=5)
         assert sizes == [3]
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -613,11 +613,19 @@ async def test_flush_waits_for_what_was_queued_and_no_longer():
     The first write is stalled, so the flush is genuinely in flight while the
     rest of the server talks: against a `join()`-based flush the chatter's
     rows are part of what it waits for, and it does not return here.
+
+    What this is about is which rows the flush waits for, not how long it
+    waits for them, so its bound is lifted out of the way: under a loaded CI
+    runner the write after the release once took longer than the two-second
+    bound, the flush gave up as designed with its row unwritten, and a test
+    waiting two seconds on it failed for a reason it was not about (#1333).
     """
     factory, engine = await create_test_db()
+    service = MessageRetentionService(factory, linger_seconds=0.01)
+    chatter: asyncio.Task | None = None
+    keep_talking = True
     try:
         room, player = await _talking_room(factory)
-        service = MessageRetentionService(factory, linger_seconds=0.01)
         held = asyncio.Event()
         released = asyncio.Event()
         real_write = service._write
@@ -634,7 +642,6 @@ async def test_flush_waits_for_what_was_queued_and_no_longer():
         target = service._enqueued
         assert target == 1
 
-        keep_talking = True
         said = 0
 
         async def another_room_keeps_talking():
@@ -645,13 +652,14 @@ async def test_flush_waits_for_what_was_queued_and_no_longer():
                 await asyncio.sleep(0.005)
 
         chatter = asyncio.create_task(another_room_keeps_talking())
-        flushing = asyncio.create_task(service.flush())
-        await asyncio.sleep(0.05)
-        # A flush is not a drain: everyone else keeps lingering while it waits.
-        assert service._draining == 0
-        assert not flushing.done() and said > 0
-        released.set()
-        await asyncio.wait_for(flushing, timeout=2)
+        with patch("app.services.message_retention.EVIDENCE_FLUSH_SECONDS", 60):
+            flushing = asyncio.create_task(service.flush())
+            await asyncio.sleep(0.05)
+            # A flush is not a drain: everyone else keeps lingering while it waits.
+            assert service._draining == 0
+            assert not flushing.done() and said > 0
+            released.set()
+            await asyncio.wait_for(flushing, timeout=60)
         # It returned on its own row, with the chatter's still outstanding.
         assert service._written >= target
         assert service._enqueued > target
@@ -660,8 +668,46 @@ async def test_flush_waits_for_what_was_queued_and_no_longer():
         async with factory() as session:
             kept = (await session.scalars(select(RoomMessage.text))).all()
         assert "cited line" in kept
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        # Above the drain's own bound, never equal to it: a close that has to
+        # give up does so on its own clock and still returns.
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
+        # The writer is stopped before the database goes: left running past a
+        # failure it wrote into a disposed engine, and the "closed database"
+        # it logged read as the cause (#1333).
+        keep_talking = False
+        if chatter is not None:
+            with contextlib.suppress(Exception):
+                await chatter
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
+        await engine.dispose()
+
+
+async def test_a_batch_that_fails_still_releases_the_flush_waiting_on_it():
+    """A report's flush must not wait out its bound for a row whose batch the
+    database refused: the batch is settled, written or not, and the flush
+    wakes on it (#1333). Written against the bound lifted to a minute, so
+    only the settling can return it promptly."""
+    factory, engine = await create_test_db()
+    service = MessageRetentionService(factory, linger_seconds=0.01)
+    try:
+        room, player = await _talking_room(factory)
+
+        async def refusing_write(batch):
+            raise RuntimeError("the database is not answering")
+
+        service._write = refusing_write
+        with patch("app.services.message_retention.EVIDENCE_FLUSH_SECONDS", 60):
+            await _say(service, room, player, "cited line")
+            target = service._enqueued
+            started = time.monotonic()
+            await asyncio.wait_for(service.flush(), timeout=10)
+        assert time.monotonic() - started < 2
+        assert service._written >= target
+    finally:
+        with contextlib.suppress(Exception):
+            await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
         await engine.dispose()
 
 
@@ -682,7 +728,7 @@ async def test_a_flush_that_lands_before_the_linger_still_cuts_it():
         assert time.monotonic() - started < 1
         async with factory() as session:
             assert await session.scalar(select(RoomMessage.text)) == "cited line"
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -707,7 +753,7 @@ async def test_a_flush_lands_on_a_writer_already_inside_its_linger():
         assert time.monotonic() - started < 1
         async with factory() as session:
             assert await session.scalar(select(RoomMessage.text)) == "cited line"
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -753,7 +799,7 @@ async def test_a_flush_that_gave_up_stops_holding_the_linger_open():
 
         assert monkey._cut == monkey._written, "the cut is not left standing"
         held.set()
-        await asyncio.wait_for(monkey.aclose(), timeout=5)
+        await asyncio.wait_for(monkey.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -802,7 +848,7 @@ async def test_the_counters_follow_the_whole_batch_not_one_row():
         assert service._enqueued == 5
         assert service._written == 5
         assert service._queue._unfinished_tasks == 0
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -845,7 +891,7 @@ async def test_a_flush_that_finishes_first_leaves_the_others_their_cut():
         assert service._flushing == 0
         assert service._cut == service._written, "and nothing is left holding it"
         service._write = real_write
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -862,7 +908,7 @@ async def test_a_line_said_after_the_shutdown_is_not_kept(caplog):
         room, player = await _talking_room(factory)
         service = MessageRetentionService(factory, linger_seconds=0)
         await _say(service, room, player, "before the shutdown")
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
 
         with caplog.at_level(logging.WARNING):
             assert await _say(service, room, player, "after the shutdown") is None
@@ -914,7 +960,7 @@ async def test_a_service_with_no_linger_writes_without_waiting():
         assert service._written == 1
         assert time.monotonic() - started < 0.5
         assert service._wake.is_set(), "the linger never touched the event"
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -941,7 +987,7 @@ async def test_a_flush_after_a_writer_was_lost_does_not_wait_out_its_bound(caplo
         async with factory() as session:
             kept = (await session.scalars(select(RoomMessage.text))).all()
         assert "cited line" in kept
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
@@ -974,7 +1020,7 @@ async def test_a_writer_that_died_another_way_is_reconciled_too(caplog):
         async with factory() as session:
             kept = (await session.scalars(select(RoomMessage.text))).all()
         assert "cited line" in kept
-        await asyncio.wait_for(service.aclose(), timeout=5)
+        await asyncio.wait_for(service.aclose(), timeout=SHUTDOWN_DRAIN_SECONDS + 10)
     finally:
         await engine.dispose()
 
