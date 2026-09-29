@@ -1543,8 +1543,10 @@ export const FR: Catalogue = {
   promptDisplay: {
     couldNotDoAction: (p: { action: string }) =>
       `Impossible ${/^[aeiouyhàâéèêîôû]/i.test(p.action) ? "d’" : "de "}${p.action}.`,
-    nextHintCost: (p: { cost: number }) => `Indice suivant : ${p.cost}`,
-    hintSpendTotal: (p: { spent: number }) => `Total : ${p.spent}`,
+    nextHintCost: (p: { cost: number }) =>
+      `Choisis une case pour la révéler · ${counted(p.cost, { one: "point", other: "points" })}`,
+    hintSpendTotal: (p: { spent: number }) =>
+      `Total : ${counted(p.spent, { one: "point", other: "points" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `Acheter « ${p.letter} » pour ${counted(p.price, { one: "point", other: "points" })}`,
     maskedPrompt: (p: { shape: string }) => `Mot masqué, ${p.shape} lettres`,

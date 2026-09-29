@@ -1543,8 +1543,10 @@ export const NL: Catalogue = {
   promptDisplay: {
     couldNotDoAction: (p: { action: string }) =>
       `Dat is niet gelukt: ${p.action}.`,
-    nextHintCost: (p: { cost: number }) => `Volgende hint: ${p.cost}`,
-    hintSpendTotal: (p: { spent: number }) => `Totaal: ${p.spent}`,
+    nextHintCost: (p: { cost: number }) =>
+      `Kies een leeg vakje om het te onthullen · ${counted(p.cost, { one: "punt", other: "punten" })}`,
+    hintSpendTotal: (p: { spent: number }) =>
+      `Totaal: ${counted(p.spent, { one: "punt", other: "punten" })}`,
     buyLetter: (p: { letter: string; price: number }) =>
       `„${p.letter}” kopen voor ${counted(p.price, { one: "punt", other: "punten" })}`,
     maskedPrompt: (p: { shape: string }) => `Verborgen woord, ${p.shape} letters`,

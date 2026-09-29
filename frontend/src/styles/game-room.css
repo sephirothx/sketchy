@@ -2316,14 +2316,22 @@
   cursor: help;
 }
 
-/* A blank the player can buy: the tile itself is the button, so it carries a
-   real touch target rather than the 19x26 a decorative tile can get away with.
-   The extra height is padding, so the glyph box still lines up with its
-   unbuyable neighbours. */
+/* Buy letters: the price and the total one above the other, the total's line
+   held while there is none yet (PromptDisplay). */
+.hint-meta.is-stacked {
+  flex-direction: column;
+  align-items: center;
+  gap: 0;
+}
+
+.hint-spend-total.is-empty {
+  visibility: hidden;
+}
+
+/* A blank the player can buy: the tile itself is the button. Its size is the
+   whole word's, below (.masked-words.is-buyable). */
 .masked-tile.hint-blank {
   cursor: pointer;
-  min-width: 44px;
-  min-height: 44px;
 }
 
 .masked-tile.hint-blank:hover:not(:disabled) {
@@ -2334,6 +2342,39 @@
 .masked-tile.hint-blank:disabled {
   cursor: default;
   opacity: 1;
+}
+
+/* Buy letters (#1277). Every tile of a word is one size while letters can be
+   bought - the buyable size, 44px, where the word fits - so a bought letter
+   moves nothing: it used to fall back to the plain tile's 19px and shift the
+   row 13px under the finger that bought it. A word too long for 44px tiles
+   takes smaller ones, sized from its letter count (--letters, set per run) to
+   fit the prompt's width, down to 22px; only a word too long even for that
+   wraps. Tiles that wrapped at 44px broke an 8-letter word 7 + 1 on a 390px
+   phone, so it read as two words. 22px tiles with the 4px gap are 26px apart,
+   which keeps the targets usable by spacing (WCAG 2.5.8). */
+.prompt-masked:has(> .masked-words.is-buyable) {
+  display: flex;
+  width: 100%;
+}
+
+.masked-words.is-buyable {
+  container-type: inline-size;
+  display: flex;
+  width: 100%;
+}
+
+.masked-words.is-buyable .masked-tile {
+  /* One box model for the buttons and the revealed letters. */
+  box-sizing: border-box;
+  flex: none;
+  height: 44px;
+  min-height: 0;
+  min-width: 0;
+  padding-inline: 0;
+  /* The prompt's width, less the count's superscript, shared by the word's
+     letters and the gaps between them. */
+  width: clamp(22px, calc((100cqw - 28px - (var(--letters, 1) - 1) * 4px) / var(--letters, 1)), 44px);
 }
 
 .wheel-hint-panel {
