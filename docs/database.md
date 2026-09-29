@@ -1239,8 +1239,8 @@ reason, which is their claim rather than a finding.
 
 **Flow.** The step between dismissing a report and suspending the account: nothing is
 restricted. A connected player is told immediately over the socket (`moderator_warning`);
-otherwise the client's `GET /api/warnings/pending` on their next visit
-returns the oldest unacknowledged warning together with the pinned messages of its
+otherwise the client's `GET /api/warnings/pending` on their next visit - or when a tab
+that had no socket connects, and after each acknowledgement (#1336) - returns the oldest unacknowledged warning together with the pinned messages of its
 source report — the same own-words rule as a suspension, and a warning naming a report
 about somebody else is refused for the same reason. Acknowledging sets
 `acknowledged_at`, which is what stops it being shown again and records that the notice

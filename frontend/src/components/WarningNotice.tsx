@@ -10,7 +10,7 @@ import {
 } from "../lib/moderation";
 import { asReportReason, humanizeCategory } from "../lib/moderation";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
-import { socket } from "../lib/socket";
+import { onConnectSpread, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
 import { ReportedDrawing } from "./ReportedDrawing";
 import { ModalShell } from "./ui/ModalShell";
@@ -65,36 +65,54 @@ export function WarningNotice() {
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState(false);
   const acknowledgeRef = useRef<HTMLButtonElement | null>(null);
+  // Bumped by a push and by an acknowledgement. A read that was already on its
+  // way when either happened is older news - sent before that warning existed,
+  // or before this one was answered - and must not replace what is on screen
+  // (#1336).
+  const newer = useRef(0);
+  // Bumped on every connection and after an acknowledgement, each of which
+  // reads again. A push reaches the sockets that are there when it is sent, so
+  // a tab still opening its connection - or between a drop and the reconnect -
+  // heard nothing; and a push carries the *oldest* pending warning, so a second
+  // one issued while the first is up is found only by reading once the first
+  // is answered (#1336).
+  const [reads, setReads] = useState(0);
 
   useEffect(() => {
     if (!hasResolved || !userId) return;
     let cancelled = false;
+    const before = newer.current;
     void fetchPendingWarning()
       .then((result) => {
-        if (!cancelled) setWarning(result.warning);
+        if (!cancelled && newer.current === before) setWarning(result.warning);
       })
       .catch(() => {
         // Nothing to do: the warning stays pending server-side and will be
-        // fetched again on the next visit.
+        // fetched again on the next connection or visit.
       });
     return () => {
       cancelled = true;
     };
-  }, [hasResolved, userId]);
+  }, [hasResolved, userId, reads]);
 
   useEffect(() => {
     // A player who is online when the moderator decides hears it now; the
-    // fetch above is the catch-up route for everybody else.
+    // read above is the catch-up route for everybody else.
     function onModeratorWarning(payload: unknown) {
       const pushed = warningFromPayload(payload);
       if (pushed) {
+        newer.current += 1;
         setWarning(pushed);
         setFailed(false);
       }
     }
     socket.on("moderator_warning", onModeratorWarning);
+    // Spread behind a reconnect like every REST refetch one triggers
+    // (R-CONN-14); a first connection reads at once.
+    const stopReading = onConnectSpread(() => setReads((count) => count + 1));
     return () => {
       socket.off("moderator_warning", onModeratorWarning);
+      stopReading();
     };
   }, []);
 
@@ -110,7 +128,9 @@ export function WarningNotice() {
     setFailed(false);
     try {
       await acknowledgeWarning(warning.id);
+      newer.current += 1;
       setWarning(null);
+      setReads((count) => count + 1);
     } catch {
       // Leave the notice up: closing it without the receipt landing would
       // mark nothing. Said, so the button that did nothing is not a mystery,

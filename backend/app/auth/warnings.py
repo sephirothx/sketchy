@@ -2,7 +2,8 @@
 
 A warning arrives by two routes and they must say the same thing: the socket
 tells a player who is online the moment a moderator issues it, and
-`GET /api/warnings/pending` tells everybody else on their next visit. Both
+`GET /api/warnings/pending` tells everybody else on their next visit - and a
+tab that had no socket when the push went out, once it connects (#1336). Both
 build their payload here so the two cannot drift.
 """
 from __future__ import annotations

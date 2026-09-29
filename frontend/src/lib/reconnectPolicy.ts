@@ -34,7 +34,8 @@ export function shutdownHoldMs(spreadMs: unknown, random: number): number {
   return Math.floor(Math.min(Math.max(random, 0), 1) * window);
 }
 
-/** How far a reconnect's REST refetches (friends, recovery address) are spread
+/** How far a reconnect's REST refetches (friends, recovery address, pending
+warning) are spread
 behind it, so they queue behind the seat rebind rather than beside it. A first
 connection does not wait: nothing else is competing for it. */
 export const POST_RECONNECT_JITTER_MS = 3000;
