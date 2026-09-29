@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import { CANVAS_WIDTH } from "../lib/canvasHistory";
 import { ThumbnailCancelled, ThumbnailDropped, drawThumbnail } from "../lib/thumbnailQueue";
+import { droppedFromQueue, newThumbnailAsk, retryIsDue, visibilityFromRecord } from "../lib/thumbnailAsk";
 
 /** A finished drawing at the size it is shown, and nothing kept once it is.
 
@@ -22,8 +23,9 @@ asked for, so no obsolete image is shown and no URL is left behind.
 Fetched when it first comes within a screen of the viewport, as the gallery
 always did and the pinned shelf now does too. */
 
-/** How long a card with no IntersectionObserver waits to ask again after the
-    queue dropped its job. */
+/** How long a card waits to ask again after the queue dropped its job, when
+    nothing says it left the view: there is no IntersectionObserver, or it is
+    still in view. */
 const DROPPED_RETRY_MS = 1_000;
 
 /** Draw `bytes` at `cssWidth` CSS pixels as a PNG object URL the caller revokes. */
@@ -59,6 +61,9 @@ export function DrawingThumbnail({
   const [visible, setVisible] = useState(typeof IntersectionObserver === "undefined");
   // Bumped to ask again after the queue dropped this card's job.
   const [retry, setRetry] = useState(0);
+  // Whether the queue dropped this card while it was in view, which decides
+  // when it asks again (`lib/thumbnailAsk.ts`, #1282 review).
+  const askRef = useRef(newThumbnailAsk());
   const [src, setSrc] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
 
@@ -75,7 +80,9 @@ export function DrawingThumbnail({
     if (!element) return;
     const observer = new IntersectionObserver((records) => {
       const latest = records[records.length - 1];
-      if (latest) setVisible(latest.isIntersecting);
+      if (!latest) return;
+      const next = visibilityFromRecord(askRef.current, latest.isIntersecting);
+      if (next !== null) setVisible(next);
     }, { rootMargin: "200px" });
     observer.observe(element);
     return () => observer.disconnect();
@@ -127,8 +134,12 @@ export function DrawingThumbnail({
           // Nothing will say when it is in view again: ask again shortly.
           window.setTimeout(() => setRetry((count) => count + 1), DROPPED_RETRY_MS);
         } else {
+          droppedFromQueue(askRef.current);
           setVisible(false);
-          setRetry((count) => count + 1);
+          window.setTimeout(() => {
+            // A fresh observer says whether it is in view now.
+            if (retryIsDue(askRef.current)) setRetry((count) => count + 1);
+          }, DROPPED_RETRY_MS);
         }
       }
     })();
