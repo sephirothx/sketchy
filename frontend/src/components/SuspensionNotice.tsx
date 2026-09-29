@@ -1,11 +1,12 @@
 import { useClock } from "../hooks/useClock";
-import { useEffect, useRef, useState, lazy, Suspense, type ComponentProps, type ComponentType } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { apiRequest } from "../lib/api";
 import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { socket } from "../lib/socket";
 import { ModalShell } from "./ui/ModalShell";
+import { LazyReportedDrawing } from "./LazyReportedDrawing";
 import {
   onSuspended,
   reportedDrawings,
@@ -16,19 +17,6 @@ import {
 } from "../lib/suspension";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
-
-import type { ReportedDrawing as ReportedDrawingType } from "./ReportedDrawing";
-
-// The reported drawing's picture pulls the whole canvas renderer, which the
-// first-load chunk has no room for (#1257): fetched when a notice shows one.
-// A chunk that cannot be fetched leaves the notice's words, not the crash
-// page.
-const ReportedDrawing = lazy(() =>
-  import("./ReportedDrawing").then(
-    (module) => ({ default: module.ReportedDrawing }),
-    (): { default: ComponentType<ComponentProps<typeof ReportedDrawingType>> } => ({ default: () => null }),
-  ),
-);
 
 /** Tell a suspended player what happened, before they are simply signed out.
 
@@ -157,17 +145,15 @@ export function SuspensionNotice() {
               when several reporters each caught the canvas at their own
               moment. The bytes come through the one path a suspended
               account may still reach for them. */}
-          <Suspense fallback={null}>
-            {suspension.drawings.map((drawing) => (
-              <ReportedDrawing
-                key={drawing.reportId}
-                className="suspension-drawing"
-                load={() => fetchSuspensionDrawing(drawing.reportId)}
-                label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
-                caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
-              />
-            ))}
-          </Suspense>
+          {suspension.drawings.map((drawing) => (
+            <LazyReportedDrawing
+              key={drawing.reportId}
+              className="suspension-drawing"
+              load={() => fetchSuspensionDrawing(drawing.reportId)}
+              label={ui.moderationNotice.yourReportedDrawing({ prompt: drawing.prompt })}
+              caption={<>{ui.moderationNotice.youWereAskedDraw} <strong>{drawing.prompt}</strong>.</>}
+            />
+          ))}
         </>
       )}
     </ModalShell>

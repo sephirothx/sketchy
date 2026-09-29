@@ -54,8 +54,11 @@ import { AvatarPicture } from "./ui/AvatarPicture";
 
 // Opened on demand, so fetched on demand: kept out of the first-load chunk,
 // which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
-// that fails to arrive is a notice, not the crash page.
-const BugReportDialog = lazyOverlay(() => import("./BugReportDialog").then((module) => module.BugReportDialog));
+// that fails to arrive is a notice, not the crash page - one that closes it.
+const BugReportDialog = lazyOverlay(
+  () => import("./BugReportDialog").then((module) => module.BugReportDialog),
+  (props) => props.onClose(),
+);
 
 function MenuItem({
   icon,

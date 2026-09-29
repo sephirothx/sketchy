@@ -18,9 +18,10 @@ import { EmptyState } from "./ui/EmptyState";
 
 // Opened on demand, so fetched on demand: kept out of the first-load chunk,
 // which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
-// that fails to arrive is a notice, not the crash page.
-const ReportLobbyLineDialog = lazyOverlay(() =>
-  import("./ReportLobbyLineDialog").then((module) => module.ReportLobbyLineDialog),
+// that fails to arrive is a notice, not the crash page - one that closes it.
+const ReportLobbyLineDialog = lazyOverlay(
+  () => import("./ReportLobbyLineDialog").then((module) => module.ReportLobbyLineDialog),
+  (props) => props.onClose(),
 );
 
 /** How often the labels beside the lines are re-read. "now" becomes "1m"

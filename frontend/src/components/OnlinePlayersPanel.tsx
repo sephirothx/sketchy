@@ -28,9 +28,10 @@ import { EmptyState } from "./ui/EmptyState";
 
 // Opened on demand, so fetched on demand: kept out of the first-load chunk,
 // which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
-// that fails to arrive is a notice, not the crash page.
-const ReportAccountDialog = lazyOverlay(() =>
-  import("./ReportAccountDialog").then((module) => module.ReportAccountDialog),
+// that fails to arrive is a notice, not the crash page - one that closes it.
+const ReportAccountDialog = lazyOverlay(
+  () => import("./ReportAccountDialog").then((module) => module.ReportAccountDialog),
+  (props) => props.onClose(),
 );
 
 /** Who else is here, beside the room list.

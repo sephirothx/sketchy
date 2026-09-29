@@ -1,10 +1,12 @@
 """Dialogs opened on demand are fetched on demand, and a fetch that fails is
 a notice rather than the crash page (#1257).
 
-Seven dialogs used to ride in the first-load chunk - which has a CI budget -
-for players who never open them. They load themselves now (`lazyOverlay`),
-so a chunk that cannot be fetched, over a live room, has to leave the room
-standing and say so; and each still has to open when its chunk arrives.
+Five dialogs and a reported drawing's picture used to ride in the first-load
+chunk - which has a CI budget - for players who never open them. The dialogs
+load themselves now (`lazyOverlay`) and the picture through
+`LazyReportedDrawing`, so a chunk that cannot be fetched, over a live room,
+has to leave the room standing and say so, and a dialog's notice has to close
+it; and each still has to open when its chunk arrives.
 """
 from __future__ import annotations
 
@@ -52,6 +54,11 @@ async def test_a_dialog_whose_chunk_will_not_load_is_a_notice_over_the_room():
             assert await guest.locator(".crash-page").count() == 0
             assert await guest.locator('[data-testid="waiting-room"]').count() == 1, "the room is still there"
             assert await guest.locator(".bug-report-dialog").count() == 0
+
+            # Nothing reopens a dialog with no address, so its notice closes it.
+            await notice.get_by_role("button", name="Close").click()
+            await expect(notice).to_have_count(0)
+            assert await guest.locator('[data-testid="waiting-room"]').count() == 1
         finally:
             await host_context.close()
             await guest_context.close()
@@ -66,6 +73,10 @@ async def test_the_report_account_dialog_arrives_when_asked_for():
         reporter = await reporter_context.new_page()
         subject = await subject_context.new_page()
         run = uuid4().hex[:6]
+        # Listening from the first request: a chunk preloaded with the page
+        # would otherwise be missed, and "not fetched before" would pass.
+        fetched: list[str] = []
+        reporter.on("request", lambda request: fetched.append(request.url))
         try:
             await subject.goto(BASE_URL)
             await use_guest_name(subject, f"Lazysub{run}")
@@ -74,8 +85,6 @@ async def test_the_report_account_dialog_arrives_when_asked_for():
             await use_guest_name(reporter, f"Lazyrep{run}")
             await register_account(reporter, f"lazyrep{run}")
 
-            fetched: list[str] = []
-            reporter.on("request", lambda request: fetched.append(request.url))
             menu = await open_row_menu(reporter, f"lazysub{run}")
             assert not [url for url in fetched if "ReportAccountDialog" in url], "fetched before it was asked for"
             await menu.get_by_role("menuitem", name="Report").click()
