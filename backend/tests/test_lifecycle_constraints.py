@@ -93,7 +93,7 @@ async def test_a_curated_offer_names_its_version_and_nothing_else_does():
                                        drawing_seconds=60, total_rounds=1, player_count=1,
                                        started_at=NOW, finished_at=NOW))
                 await session.flush()
-                session.add(GameParticipant(id=seat_id, game_id=game_id, user_id=user_id, final_score=0, final_rank=1))
+                session.add(GameParticipant(id=seat_id, game_id=game_id, user_id=user_id, finished_at=NOW, final_score=0, final_rank=1))
                 await session.flush()
                 session.add(TurnRecord(id=turn_id, game_id=game_id, round_number=1, turn_number=1,
                                        drawer_user_id=user_id, drawer_participant_id=seat_id, prompt="p",
@@ -171,7 +171,7 @@ async def test_a_stored_drawing_says_when_and_its_size_is_its_bytes():
                                        drawing_seconds=60, total_rounds=1, player_count=1,
                                        started_at=NOW, finished_at=NOW))
                 await session.flush()
-                session.add(GameParticipant(id=seat_id, game_id=game_id, user_id=user_id, final_score=0, final_rank=1))
+                session.add(GameParticipant(id=seat_id, game_id=game_id, user_id=user_id, finished_at=NOW, final_score=0, final_rank=1))
                 await session.flush()
                 session.add(TurnRecord(id=turn_id, game_id=game_id, round_number=1, turn_number=1,
                                        drawer_user_id=user_id, drawer_participant_id=seat_id, prompt="p",

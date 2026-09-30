@@ -550,6 +550,10 @@ function ProfileView({ userId }: { userId: string }) {
   // Where the next page starts; `null` once the list is whole.
   const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
+  // The guard itself, beside the state that draws it: two clicks before the
+  // re-render both read `loadingMore` as false, and both appended the same
+  // page.
+  const loadingMoreRef = useRef(false);
   // Off by default: a history made mostly of rooms that collapsed is not what
   // anyone came looking for. Reachable, because a game somebody remembers
   // falling apart should still be findable.
@@ -649,7 +653,8 @@ function ProfileView({ userId }: { userId: string }) {
   }, [isOwnProfile, myPinsLoaded, myTurnIds, userId]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore || nextCursor === null) return;
+    if (loadingMoreRef.current || nextCursor === null) return;
+    loadingMoreRef.current = true;
     const generation = listGeneration.current;
     setLoadingMore(true);
     try {
@@ -661,9 +666,10 @@ function ProfileView({ userId }: { userId: string }) {
       if (generation !== listGeneration.current) return;
       setError(ui.profilePage.couldNotLoadMoreGames);
     } finally {
+      loadingMoreRef.current = false;
       setLoadingMore(false);
     }
-  }, [userId, nextCursor, includeAbandoned, loadingMore]);
+  }, [userId, nextCursor, includeAbandoned]);
 
   const shownName = subject?.displayName ?? "";
   useDocumentTitle(shownName || null);

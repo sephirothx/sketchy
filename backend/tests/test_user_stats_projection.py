@@ -565,6 +565,7 @@ async def _seed_finished_games(factory, user_id: UUID, count: int, *, start: dat
                 "id": seat_id,
                 "game_id": game_id,
                 "user_id": user_id,
+                "finished_at": finished_at,
                 "display_name_snapshot": "Veteran",
                 "is_anonymous_snapshot": True,
                 "final_score": 10,

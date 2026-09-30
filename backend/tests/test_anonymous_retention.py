@@ -410,6 +410,7 @@ async def test_a_candidate_seated_or_written_into_a_game_before_the_delete_is_ke
                         id=generate_uuid(),
                         game_id=game_id,
                         user_id=UUID(played.id),
+                        finished_at=now,
                         final_score=0,
                         final_rank=1,
                     )

@@ -286,6 +286,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "d4e5f6a7b8c0",
         "b9c0d1e2f3a5",
         "c1d2e3f4a5b7",
         "e8f9a0b1c2d4",
@@ -483,9 +484,10 @@ async def test_a_migration_run_that_orphans_rows_fails_loudly(tmp_path):
             await connection.exec_driver_sql("PRAGMA foreign_keys=OFF")
             await connection.execute(
                 text(
-                    "INSERT INTO game_participants (id, game_id, "
+                    "INSERT INTO game_participants (id, game_id, finished_at, "
                     "display_name_snapshot, is_anonymous_snapshot, final_score, "
-                    "final_rank) VALUES (:id, :missing, 'Orphan', 1, 0, 1)"
+                    "final_rank) VALUES (:id, :missing, '2026-01-01 00:10:00', "
+                    "'Orphan', 1, 0, 1)"
                 ),
                 {"id": uuid.uuid4().hex, "missing": uuid.uuid4().hex},
             )
@@ -533,9 +535,10 @@ async def test_a_migrated_database_keeps_score_events_immutable(tmp_path):
             )
             await connection.execute(
                 text(
-                    "INSERT INTO game_participants (id, game_id, user_id, "
+                    "INSERT INTO game_participants (id, game_id, user_id, finished_at, "
                     "display_name_snapshot, is_anonymous_snapshot, final_score, "
-                    "final_rank) VALUES (:participant, :game, :user, 'Ledger', 1, 100, 1)"
+                    "final_rank) VALUES (:participant, :game, :user, "
+                    "'2026-01-01 00:10:00', 'Ledger', 1, 100, 1)"
                 ),
                 identifiers,
             )

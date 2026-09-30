@@ -127,6 +127,7 @@ async def run(games: int, reads: int) -> dict:
                 "id": generate_uuid(),
                 "game_id": game_id,
                 "user_id": user_id,
+                "finished_at": finished_at,
                 "display_name_snapshot": "Benchmark player",
                 "is_anonymous_snapshot": True,
                 "final_score": index % 301,

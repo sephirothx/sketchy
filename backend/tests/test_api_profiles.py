@@ -1865,3 +1865,22 @@ async def test_a_profile_shows_the_languages_its_account_plays_in(env):
         async with session.begin():
             session.add(UserSettings(user_id=UUID(guest.id), prompt_language="nl"))
     assert (await http.get(f"/api/users/{guest.id}/stats")).json()["playLanguages"] == []
+
+
+async def test_a_cursor_at_the_edge_of_the_calendar_is_the_first_page_not_a_500(env):
+    """A timestamp `fromisoformat` accepts can still overflow when it is
+    moved to UTC for the bind; the cursor is written by the caller, so that
+    has to be caught while decoding it (#1371 review)."""
+    import base64
+
+    http, users, history, _ = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    await record_game(history, users, winner=ann.id, loser=bob.id)
+
+    for instant in ("0001-01-01T00:00:00+01:00", "9999-12-31T23:59:59-01:00"):
+        token = json.dumps([ann.id, False, instant, str(UUID(int=1))]).encode()
+        cursor = base64.urlsafe_b64encode(token).decode().rstrip("=")
+        response = await http.get(f"/api/users/{ann.id}/games", params={"cursor": cursor})
+        assert response.status_code == 200, instant
+        assert response.json()["games"][0]["roomName"] == "Studio 0", instant

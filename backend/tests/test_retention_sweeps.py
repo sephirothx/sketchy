@@ -264,6 +264,7 @@ async def test_a_flood_of_unused_guests_cannot_starve_the_played_tier():
                             id=generate_uuid(),
                             game_id=game_id,
                             user_id=UUID(guest.id),
+                            finished_at=now - timedelta(days=400),
                             final_score=0,
                             final_rank=1,
                         )

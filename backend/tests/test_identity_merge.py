@@ -161,3 +161,65 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
         assert (await users.merge_guest_into_account(guest.id, account.id)).id == account.id
     finally:
         await engine.dispose()
+
+
+async def test_a_merged_account_pages_one_history_across_its_identities():
+    """A guest's seats keep the guest's id after a merge, so the history is
+    one index walk per identity, merged (#477). Paged one game at a time it
+    has to interleave the two, list a game both sat in once, and end."""
+    factory, engine = await create_test_db()
+    users = SqlAlchemyUserRepository(factory)
+    history = SqlAlchemyGameHistoryRepository(factory)
+    try:
+        account_guest = await users.create_anonymous("Account")
+        account = await users.claim_account(account_guest.id, "Account", "hash")
+        guest = await users.create_anonymous("RoadPlayer")
+        start = datetime(2026, 8, 1, tzinfo=timezone.utc)
+
+        async def play(index: int, *players: str) -> str:
+            finished = start + timedelta(minutes=10 * index)
+            return await history.save_game(
+                GameRecordInput(
+                    room_name=f"Walk {index}",
+                    scoring_mode="default",
+                    hint_mode="none",
+                    drawing_seconds=60,
+                    total_rounds=1,
+                    player_count=len(players),
+                    started_at=finished - timedelta(minutes=5),
+                    finished_at=finished,
+                    visibility="public",
+                ),
+                [
+                    GameParticipantInput(
+                        user_id=player,
+                        final_score=0,
+                        final_rank=1,
+                        seat_id=str(generate_uuid()),
+                        display_name="Seat",
+                    )
+                    for player in players
+                ],
+                [],
+            )
+
+        played = [
+            await play(index, account.id if index % 2 == 0 else guest.id)
+            for index in range(6)
+        ]
+        played.append(await play(6, account.id, guest.id))
+        await users.merge_guest_into_account(guest.id, account.id)
+
+        for viewer in (account.id, None):
+            paged, cursor = [], None
+            while True:
+                page = await history.get_user_games(
+                    account.id, limit=2, cursor=cursor, requesting_user_id=viewer
+                )
+                paged.extend(game.id for game in page.games)
+                cursor = page.next_cursor
+                if cursor is None:
+                    break
+            assert paged == played[::-1], viewer
+    finally:
+        await engine.dispose()

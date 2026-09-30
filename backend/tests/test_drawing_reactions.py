@@ -588,7 +588,11 @@ async def test_the_table_refuses_what_the_rules_forbid(tmp_path):
                 )
                 session.add_all([game_row(game_a), game_row(game_b)])
                 for gid, sid in ((game_a, drawer_a), (game_a, reactor_a), (game_b, seat_b)):
-                    session.add(GameParticipant(id=sid, game_id=gid, final_score=0, final_rank=1))
+                    session.add(
+                        GameParticipant(
+                            id=sid, game_id=gid, finished_at=now, final_score=0, final_rank=1
+                        )
+                    )
                 for gid, tid, drawer in ((game_a, turn_a, drawer_a), (game_b, turn_b, seat_b)):
                     session.add(
                         TurnRecord(

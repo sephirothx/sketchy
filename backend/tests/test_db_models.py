@@ -473,6 +473,7 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
         async with factory() as session:
             async with session.begin():
                 session.add(User(id=user_id, display_name="Cascade test"))
+                finished_at = datetime.now(timezone.utc)
                 session.add(
                     GameRecord(
                         id=game_id,
@@ -482,8 +483,8 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                         drawing_seconds=90,
                         total_rounds=1,
                         player_count=1,
-                        started_at=datetime.now(timezone.utc),
-                        finished_at=datetime.now(timezone.utc),
+                        started_at=finished_at,
+                        finished_at=finished_at,
                     )
                 )
                 seat_id = generate_uuid()
@@ -491,6 +492,7 @@ async def test_sqlite_engine_enforces_foreign_keys_and_uses_wal(tmp_path):
                     GameParticipant(
                         id=seat_id,
                         game_id=game_id,
+                        finished_at=finished_at,
                         user_id=user_id,
                         display_name_snapshot="Cascade test",
                         final_score=0,
@@ -589,6 +591,7 @@ async def test_game_record_cascade_and_relationships():
                     id=generate_uuid(),
                     game_id=game_id,
                     user_id=u1_id,
+                    finished_at=now,
                     final_score=500,
                     final_rank=1,
                 )
@@ -596,6 +599,7 @@ async def test_game_record_cascade_and_relationships():
                     id=generate_uuid(),
                     game_id=game_id,
                     user_id=u2_id,
+                    finished_at=now,
                     final_score=300,
                     final_rank=2,
                 )
@@ -666,6 +670,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                         GameParticipant(
                             id=drawer_seat_id,
                             game_id=game_id,
+                            finished_at=now,
                             user_id=drawer_id,
                             final_score=300,
                             final_rank=1,
@@ -673,6 +678,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
                         GameParticipant(
                             id=guesser_seat_id,
                             game_id=game_id,
+                            finished_at=now,
                             user_id=guesser_id,
                             final_score=200,
                             final_rank=2,
@@ -705,6 +711,7 @@ async def test_game_history_natural_keys_reject_duplicate_rows():
             GameParticipant(
                 id=generate_uuid(),
                 game_id=game_id,
+                finished_at=now,
                 user_id=drawer_id,
                 final_score=999,
                 final_rank=1,
@@ -794,6 +801,7 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
                         GameParticipant(
                             id=drawer_seat_id,
                             game_id=game_id,
+                            finished_at=now,
                             user_id=drawer_user_id,
                             final_score=100,
                             final_rank=1,
@@ -801,6 +809,7 @@ async def test_turn_participant_outcomes_enforce_identity_and_state_invariants()
                         GameParticipant(
                             id=guesser_seat_id,
                             game_id=game_id,
+                            finished_at=now,
                             user_id=guesser_user_id,
                             final_score=50,
                             final_rank=2,
@@ -879,6 +888,7 @@ def _ledger_game(game_id, user_id, seat_id, turn_id, *, room_name="Ledger"):
         GameParticipant(
             id=seat_id,
             game_id=game_id,
+            finished_at=now,
             user_id=user_id,
             final_score=100,
             final_rank=1,
@@ -1423,6 +1433,7 @@ async def test_history_bounds_reject_impossible_rows():
                     GameParticipant(
                         id=seat_id,
                         game_id=game_id,
+                        finished_at=now,
                         final_score=100,
                         # Null is the abandoned-game shape and must be legal.
                         final_rank=None,
@@ -1449,6 +1460,7 @@ async def test_history_bounds_reject_impossible_rows():
                         GameParticipant(
                             id=generate_uuid(),
                             game_id=game_id,
+                            finished_at=now,
                             final_score=0,
                             final_rank=0,
                         )
@@ -1498,7 +1510,7 @@ async def test_history_rows_cannot_reference_another_game(tmp_path):
                 ):
                     session.add(
                         GameParticipant(
-                            id=sid, game_id=gid, final_score=0, final_rank=1
+                            id=sid, game_id=gid, finished_at=now, final_score=0, final_rank=1
                         )
                     )
                     session.add(

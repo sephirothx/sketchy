@@ -226,12 +226,18 @@ async def test_games_finished_in_the_same_instant_page_without_repeats():
         assert cursor is None
         assert sorted(paged) == sorted(game.game_id for game in recorded)
         assert paged == sorted(paged, reverse=True), "newest id first within the instant"
-        listings = [s for s in _selects(statements) if "FROM game_records" in s]
-        assert "ORDER BY game_records.finished_at DESC, game_records.id DESC" in listings[0]
-        # A deep page is a seek from the cursor, not a walk past every earlier
-        # game (#477). SQLite renders `OFFSET ?` for any LIMIT, so the proof
-        # is the keyset in each later page's WHERE rather than a missing word.
-        assert len(listings) == 5
-        assert all("game_records.finished_at <" in listing for listing in listings[1:])
+        walks = [s for s in _selects(statements) if "FROM game_participants JOIN game_records" in s]
+        assert len(walks) == 5
+        assert all(
+            "ORDER BY game_participants.finished_at DESC, game_participants.game_id DESC" in walk
+            for walk in walks
+        )
+        # Each later page starts from the cursor rather than counting past
+        # the earlier ones (#477); that PostgreSQL walks the index to do it is
+        # tests/test_read_path_indexes.py's to prove.
+        assert all(
+            "(game_participants.finished_at, game_participants.game_id) <" in walk
+            for walk in walks[1:]
+        )
     finally:
         await engine.dispose()

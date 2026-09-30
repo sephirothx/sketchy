@@ -672,6 +672,7 @@ async def test_each_guest_tier_reports_its_own_lateness():
                         id=generate_uuid(),
                         game_id=game_id,
                         user_id=UUID(played.id),
+                        finished_at=now - timedelta(days=800),
                         final_score=0,
                         final_rank=1,
                     )

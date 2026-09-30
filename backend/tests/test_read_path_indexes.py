@@ -60,7 +60,7 @@ async def _plan_of(session, statement) -> str:
 async def _seed(factory, now: datetime) -> None:
     """Enough rows, skewed the way production is, for the planner to have a
     choice: an empty table is a trivial sort whatever the indexes say."""
-    from sqlalchemy import insert, text
+    from sqlalchemy import insert
 
     from app.db.models import EmailOutboxEntry, RoomMessage, User, UserBan, generate_uuid
 
@@ -123,21 +123,27 @@ async def _seed(factory, now: datetime) -> None:
                     for i in range(4_000)
                 ],
             )
-    # Statistics are the owner's to refresh (#896): as the application role
-    # ANALYZE skips each table with a warning, and the plans stay generic.
+    await _analyze(factory, ("room_messages", "email_outbox", "user_bans"))
+
+
+async def _analyze(factory, tables: tuple[str, ...]) -> None:
+    """Statistics are the owner's to refresh (#896): as the application role
+    ANALYZE skips each table with a warning, and the plans stay generic."""
+    from sqlalchemy import text
+
     owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
     if owner_url:
         owner = create_test_engine(owner_url)
         try:
             async with owner.connect() as connection:
-                for table in ("room_messages", "email_outbox", "user_bans"):
+                for table in tables:
                     await connection.execute(text(f"ANALYZE {table}"))
                 await connection.commit()
         finally:
             await owner.dispose()
     else:
         async with factory() as session:
-            for table in ("room_messages", "email_outbox", "user_bans"):
+            for table in tables:
                 await session.execute(text(f"ANALYZE {table}"))
             await session.commit()
 
@@ -190,5 +196,100 @@ async def test_the_lobby_restore_and_the_sent_purge_use_their_partial_indexes():
             )
             assert "ix_user_bans_unrevoked_newest" in await _plan_of(session, bans)
             assert func is not None
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="plans are PostgreSQL's")
+async def test_a_history_page_is_an_ordered_walk_of_the_players_seats():
+    """#477: a profile's page reads down `ix_game_participants_user_history`
+    and stops, rather than gathering every game the player sat in and sorting
+    them first - the first page and a deep one alike. Sequential scans are
+    switched off so the plan does not turn on how many rows a test can seed:
+    what is proven is that the index serves the order, so there is no Sort."""
+    from sqlalchemy import event, insert
+
+    from app.db.models import GameParticipant, GameRecord, User, generate_uuid
+    from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
+
+    factory, engine = await create_test_db()
+    try:
+        player, stranger = generate_uuid(), generate_uuid()
+        others = [generate_uuid() for _ in range(20)]
+        start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        games, seats = [], []
+        # The player sits in one game of every ten, so their seats are a
+        # slice of the table and the history is a few pages deep.
+        for index in range(2_000):
+            game_id, finished_at = generate_uuid(), start + timedelta(minutes=index)
+            games.append(
+                {
+                    "id": game_id,
+                    "payload_hash": f"walk-{index}",
+                    "room_name": "Walk",
+                    "scoring_mode": "default",
+                    "hint_mode": "none",
+                    "drawing_seconds": 60,
+                    "total_rounds": 1,
+                    "player_count": 1,
+                    "started_at": finished_at - timedelta(minutes=1),
+                    "finished_at": finished_at,
+                    "visibility": "public" if index % 3 else "private",
+                }
+            )
+            seats.append(
+                {
+                    "id": generate_uuid(),
+                    "game_id": game_id,
+                    "user_id": player if index % 10 == 0 else others[index % 20],
+                    "finished_at": finished_at,
+                    "final_score": 0,
+                    "final_rank": 1,
+                }
+            )
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [User(id=player, display_name="Walker"), User(id=stranger, display_name="Visitor")]
+                    + [User(id=other, display_name=f"Other {n}") for n, other in enumerate(others)]
+                )
+                await session.flush()
+                await session.execute(insert(GameRecord), games)
+                await session.execute(insert(GameParticipant), seats)
+        await _analyze(factory, ("game_records", "game_participants"))
+
+        captured: list[tuple[str, tuple]] = []
+
+        def before(conn, cursor, statement_text, parameters, context, executemany):
+            if "FROM game_participants JOIN game_records" in statement_text:
+                captured.append((statement_text, parameters))
+
+        history = SqlAlchemyGameHistoryRepository(factory)
+        event.listen(engine.sync_engine, "before_cursor_execute", before)
+        try:
+            for viewer in (player, stranger):
+                first = await history.get_user_games(
+                    str(player), limit=20, requesting_user_id=str(viewer)
+                )
+                await history.get_user_games(
+                    str(player), limit=20, cursor=first.next_cursor,
+                    requesting_user_id=str(viewer),
+                )
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", before)
+
+        assert len(captured) == 4
+        for statement_text, parameters in captured:
+            async with engine.connect() as connection:
+                await connection.exec_driver_sql("SET enable_seqscan = off")
+                plan = "\n".join(
+                    (
+                        await connection.exec_driver_sql(
+                            "EXPLAIN (FORMAT TEXT) " + statement_text, parameters
+                        )
+                    ).scalars().all()
+                )
+            assert "ix_game_participants_user_history" in plan, plan
+            assert "Sort" not in plan, plan
     finally:
         await engine.dispose()

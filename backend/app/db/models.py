@@ -2512,6 +2512,11 @@ class GameRecord(Base):
             "started_at <= finished_at", name="ck_game_records_time_order"
         ),
         Index("ix_game_records_outcome_finished_at", "outcome", "finished_at"),
+        # The target of each seat's copy of the finish time: the id alone is
+        # already unique, and this exists so `game_participants` can name the
+        # game *and* its finish, making a seat whose copy disagrees with its
+        # game a constraint violation rather than a history out of order.
+        UniqueConstraint("id", "finished_at", name="uq_game_records_id_finished_at"),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -2547,9 +2552,10 @@ class GameRecord(Base):
     total_rounds: Mapped[int] = mapped_column(Integer, nullable=False)
     player_count: Mapped[int] = mapped_column(Integer, nullable=False)
     started_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
-    # Indexed because every read of a player's history sorts on it: the page
-    # query filters to the games they took part in and takes the newest first,
-    # which without this orders the whole matching set on each request.
+    # Indexed for the reads that window or order games by it - the Gallery,
+    # its ranking rebuild, the stats projection. A player's history no longer
+    # does: it pages off the copy on each seat (`game_participants.finished_at`,
+    # #477).
     finished_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), nullable=False, index=True
     )
@@ -2580,9 +2586,12 @@ class GameRecord(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
 
+    # `game_id` alone: the seat's copy of `finished_at` is a second key onto
+    # this row, there to keep the copy true, not a second way to reach it.
     participants: Mapped[list[GameParticipant]] = relationship(
         back_populates="game",
         cascade="all, delete-orphan",
+        foreign_keys="GameParticipant.game_id",
     )
     turns: Mapped[list[TurnRecord]] = relationship(
         back_populates="game",
@@ -2803,6 +2812,24 @@ class GameParticipant(Base):
         # naming a seat from another game is a constraint violation instead of
         # a plausible-looking lie (see score_events, turn_records, outcomes).
         UniqueConstraint("game_id", "id", name="uq_game_participants_game_id_id"),
+        ForeignKeyConstraint(
+            ["game_id", "finished_at"],
+            ["game_records.id", "game_records.finished_at"],
+            ondelete="CASCADE",
+            name="fk_game_participants_game_finished_at",
+        ),
+        # A player's history, newest first, read as a walk down this index
+        # from where the last page stopped (#477): the page query is one
+        # seek per identity and stops after a page, however long the history.
+        # With `finished_at` only on the game, every page had to gather all of
+        # the player's games and sort them before it could take any. It leads
+        # with `user_id`, so it is also the index for every lookup by player.
+        Index(
+            "ix_game_participants_user_history",
+            "user_id",
+            "finished_at",
+            "game_id",
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -2817,8 +2844,11 @@ class GameParticipant(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
-        index=True,
     )
+    # The game's finish, copied onto the seat so a player's history can be
+    # paged off one index (`ix_game_participants_user_history`). A copy, so
+    # the composite key above ties it to the game's own value.
+    finished_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
     )
@@ -2840,7 +2870,9 @@ class GameParticipant(Base):
         UTCDateTime(), server_default=func.now(), nullable=False
     )
 
-    game: Mapped[GameRecord] = relationship(back_populates="participants")
+    game: Mapped[GameRecord] = relationship(
+        back_populates="participants", foreign_keys=[game_id]
+    )
     user: Mapped[User | None] = relationship()
 
 
