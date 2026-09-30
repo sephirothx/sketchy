@@ -1363,6 +1363,65 @@ async def test_an_account_that_scored_then_left_and_rejoined_is_saved_with_its_p
         await engine.dispose()
 
 
+@pytest.mark.parametrize("away_as", ["disconnected", "afk"])
+async def test_a_seat_away_when_the_game_started_plays_it_on_the_record(away_as):
+    """A seat inside its reconnect grace when the host starts is left out of
+    the rotation (`Room.active_players`). Back a moment later, it is frozen
+    into the next turn's guessers like any seat (R-GUESS-05) and scores; the
+    history mapped only the rotation's seats, so its award was dropped while
+    the drawer's bonus still counted it, and the writer refused the whole
+    game (#1338). It is enrolled as the drawing begins, draws in its turn,
+    and is recorded with its points."""
+    factory, engine, history, accounts = await _real_history()
+    try:
+        room_manager, room, players = build_room(rounds=1, accounts=accounts)
+        ctx = build_context(room_manager, history)
+        flow = ctx.game_flow
+        away = players["Cid"]
+        if away_as == "afk":
+            away.is_afk = True
+        else:
+            away.connected = False
+        await flow._start_fresh_game(room, room.active_players())
+        game = room.game
+        game_id = game.id
+        assert away.id not in game.turn_order
+
+        # Rebound inside its grace, or back from AFK.
+        away.connected = True
+        away.is_afk = False
+        game.force_prompt_choice()
+        await flow._begin_drawing(room)
+        assert away.id in game.turn_order, "enrolled before the guessers are frozen"
+        correct, points = game.submit_guess(away.id, game.prompt)
+        assert correct and points > 0
+        away.score += points
+        drawer = next(p for p in players.values() if p.id == game.current_drawer)
+
+        await flow._end_turn(room)
+        await _play_out(ctx, room)
+
+        assert room.last_game_history == "recorded"
+        scores = await _final_scores(factory, game_id)
+        assert scores["Cid"] == points
+        assert scores[drawer.nickname] == points
+        async with factory() as session:
+            from uuid import UUID
+
+            from sqlalchemy import select
+
+            from app.db.models import TurnRecord
+
+            drawers = set(
+                (await session.scalars(
+                    select(TurnRecord.drawer_display_name_snapshot).where(TurnRecord.game_id == UUID(game_id))
+                )).all()
+            )
+        assert "Cid" in drawers, "a seat back in the game takes its turn to draw"
+    finally:
+        await engine.dispose()
+
+
 async def test_a_game_abandoned_mid_turn_after_a_guess_is_saved():
     """Everybody walks out while somebody has already guessed: the points
     are on the seat, so the turn is closed as a fact before the record is
