@@ -33,19 +33,26 @@ result is recorded here so the target is a measurement rather than a sentence:
 
 | Signal | Measured | Threshold |
 | --- | --- | --- |
-| Acknowledgement latency p50 / p95 / p99 | 2.1 / 9.1 / 26.6 ms | p95 ≤ 100, p99 ≤ 250 ms |
-| Draw fan-out latency p50 / p95 | 1.1 / 2.9 ms over 156989 samples; 22719 frames accepted | p95 ≤ 150 ms; samples and accepted frames ≥ 1 |
-| Timer overrun p95 / max | 60.0 / 64.7 ms | p95 ≤ 250 ms |
-| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 10 / ≤ 25 ms | ≤ 100 / ≤ 250 ms |
-| Resident memory idle → after warm-up → peak | 198 → 353 → 402 MB (486 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 14.0 %) |
+| Acknowledgement latency p50 / p95 / p99 | 2.1 / 7.7 / 29.1 ms | p95 ≤ 100, p99 ≤ 250 ms |
+| Draw fan-out latency p50 / p95 | 1.4 / 5.2 ms over 156470 samples; 22638 frames accepted | p95 ≤ 150 ms; samples and accepted frames ≥ 1 |
+| Timer overrun p95 / max | 57.4 / 58.1 ms | p95 ≤ 250 ms |
+| Event-loop lag p99 / worst (histogram bucket bounds) | ≤ 100 / ≤ 100 ms | ≤ 100 / ≤ 250 ms |
+| Resident memory idle → after warm-up → peak | 199 → 350 → 391 MB (457 KB per seat above idle) | growth after warm-up ≤ 25 % (measured 11.4 %) |
 | Database query p99 (bucket bound) | ≤ 10 ms | ≤ 50 ms |
-| Unexpected disconnects / failed reconnects | 0 / 0 (of 498 reconnects) | 0 / 0 |
-| Outbound backlog high-water (bytes / oldest) and closures | 19287 B / 145 ms; closures none with 4 slow viewers | closures = slow viewers; budget 10 s / 4 MiB |
+| Unexpected disconnects / failed reconnects | 0 / 0 (of 511 reconnects) | 0 / 0 |
+| Outbound backlog high-water (bytes / oldest) and closures | 25987 B / 65 ms; closures none with 4 slow viewers | closures = slow viewers; budget 10 s / 4 MiB |
 | Packets rejected / fault notices (all notices by reason) | 0 / 0 (none) | 0 / 0 |
-| Games started / ended / histories written (abandoned) | 50 / 0 / 0 (0) | abandoned 0 |
-| Traffic | 57.6 MB out, 2.0 MB in; 22719 frames sent, 156989 received; 14792 guesses, 1052 chats | — |
-| On the wire (after permessage-deflate) | 6.7 MB out (11.7% of packet bytes), 1.4 MB in; sockets by compression deflate-15 × 922 | — |
+| Games started / ended / histories written (abandoned, unwritten) | 50 / 0 / 0 (0, 0) | abandoned 0 |
+| Traffic | 58.5 MB out, 2.0 MB in; 22638 frames sent, 156470 received; 14889 guesses, 934 chats | — |
+| On the wire (after permessage-deflate) | 6.8 MB out (11.7% of packet bytes), 1.4 MB in; sockets by compression deflate-15 × 935 | — |
 <!-- load-gate-result:end -->
+
+Recorded at the top of the #1230 stack. Loop lag reads ≤ 100 ms where the record before
+it read ≤ 10 ms, and this is not a regression: since #1253 lag is sampled every 50 ms, and
+the ~55–60 ms stalls that the timer-overrun row showed in both runs are now visible to it
+as well. The p99 now sits at its threshold with no margin; finding that stall is #1355.
+The same stack with `--finish-games` also passed: 199 games started, 149 ended and all 149
+written, none abandoned. The run before #1338 wrote 140 and abandoned 10.
 
 ---
 

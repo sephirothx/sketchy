@@ -1072,6 +1072,90 @@ async def test_save_game_persists_the_analytics_columns():
         await engine.dispose()
 
 
+async def test_save_game_writes_a_turns_mixed_outcomes_in_one_statement():
+    """A right guesser's row has a time and an award; a wrong one's has
+    neither. Left to itself the bulk insert drops a row's None values and
+    batches only neighbouring rows with the same columns, so a real game's
+    outcomes went in as ~1,600 statements instead of one (#1260 review)."""
+    from sqlalchemy import event
+
+    factory, engine = await create_test_db()
+    statements: list[str] = []
+
+    @event.listens_for(engine.sync_engine, "before_cursor_execute")
+    def _record(conn, cursor, statement, parameters, context, executemany):
+        if statement.lstrip().lower().startswith("insert into turn_participant_outcomes"):
+            statements.append(statement)
+
+    try:
+        user_repo = SqlAlchemyUserRepository(factory)
+        history_repo = SqlAlchemyGameHistoryRepository(factory)
+        users = [await user_repo.create_anonymous(f"Seat{index}") for index in range(5)]
+        seats = [str(generate_uuid()) for _ in users]
+        now = datetime.now(timezone.utc)
+
+        def outcome(index: int) -> TurnParticipantOutcomeInput:
+            right = index % 2 == 1
+            return TurnParticipantOutcomeInput(
+                seat_id=seats[index],
+                user_id=users[index].id,
+                eligible=True,
+                eligibility_reason="eligible",
+                outcome="correct" if right else "incorrect",
+                terminal_state="active",
+                correct_guess_time_seconds=10.0 if right else None,
+                wrong_guess_count=0 if right else 1,
+                points_awarded=100 if right else None,
+            )
+
+        game_id = await history_repo.save_game(
+            GameRecordInput(
+                room_name="Mixed Room",
+                scoring_mode="default",
+                hint_mode="none",
+                drawing_seconds=90,
+                total_rounds=1,
+                player_count=len(users),
+                started_at=now,
+                finished_at=now,
+            ),
+            [
+                GameParticipantInput(
+                    user_id=user.id, final_score=0, final_rank=index + 1,
+                    seat_id=seats[index], display_name=f"Seat{index}",
+                )
+                for index, user in enumerate(users)
+            ],
+            [
+                TurnRecordInput(
+                    id=str(generate_uuid()),
+                    round_number=1,
+                    turn_number=1,
+                    drawer_user_id=users[0].id,
+                    drawer_seat_id=seats[0],
+                    prompt="guitar",
+                    duration_seconds=30.0,
+                    guesser_count=4,
+                    wrong_guess_count=2,
+                    participant_outcomes=tuple(outcome(index) for index in range(1, 5)),
+                )
+            ],
+        )
+
+        assert len(statements) == 1, statements
+        async with factory() as session:
+            written = (
+                await session.scalars(
+                    select(TurnParticipantOutcome.outcome)
+                    .where(TurnParticipantOutcome.game_id == UUID(game_id))
+                    .order_by(TurnParticipantOutcome.outcome)
+                )
+            ).all()
+        assert written == ["correct", "correct", "incorrect", "incorrect"]
+    finally:
+        await engine.dispose()
+
+
 async def _seed_two_lists(repo):
     apple = str(generate_uuid())
     await repo.upsert_bundled(

@@ -16,7 +16,7 @@ import time
 from time import thread_time
 from uuid import UUID
 
-from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, case, delete, desc, exists, func, or_, select, update
+from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, case, delete, desc, exists, func, insert, or_, select, update
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -1925,6 +1925,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 outcome_inputs_by_key: dict[
                     tuple[UUID, UUID], TurnParticipantOutcomeInput
                 ] = {}
+                # Outcomes and score events are rows, not objects: a sixteen-
+                # seat, ten-round game has 2,400 of the one and 2,560 of the
+                # other, and each object the unit of work tracks and flushes
+                # costs the loop far more than a row in one bulk insert does
+                # (#1260). Nothing reads them back through the session.
+                outcome_rows: list[dict[str, object]] = []
+                score_event_rows: list[dict[str, object]] = []
                 for r in turns:
                     if r.prompt_source_kind not in PROMPT_SOURCE_KINDS:
                         raise ValueError(
@@ -2140,26 +2147,26 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 f"Turn '{r.id}' contains duplicate participant outcomes"
                             )
                         outcome_inputs_by_key[key] = outcome
-                        session.add(
-                            TurnParticipantOutcome(
-                                game_id=record_id,
-                                turn_id=rid,
-                                participant_id=participant_id,
-                                eligible=outcome.eligible,
-                                eligibility_reason=outcome.eligibility_reason,
-                                outcome=outcome.outcome,
-                                terminal_state=outcome.terminal_state,
-                                correct_guess_time_seconds=(
+                        outcome_rows.append(
+                            {
+                                "game_id": record_id,
+                                "turn_id": rid,
+                                "participant_id": participant_id,
+                                "eligible": outcome.eligible,
+                                "eligibility_reason": outcome.eligibility_reason,
+                                "outcome": outcome.outcome,
+                                "terminal_state": outcome.terminal_state,
+                                "correct_guess_time_seconds": (
                                     outcome.correct_guess_time_seconds
                                 ),
-                                wrong_guess_count=outcome.wrong_guess_count,
-                                near_miss_count=outcome.near_miss_count,
-                                hints_used=outcome.hints_used,
-                                points_spent_on_hints=(
+                                "wrong_guess_count": outcome.wrong_guess_count,
+                                "near_miss_count": outcome.near_miss_count,
+                                "hints_used": outcome.hints_used,
+                                "points_spent_on_hints": (
                                     outcome.points_spent_on_hints
                                 ),
-                                points_awarded=outcome.points_awarded,
-                            )
+                                "points_awarded": outcome.points_awarded,
+                            }
                         )
 
                 # Drawings ride in the same transaction as their turns: the
@@ -2352,16 +2359,16 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
 
                         event_inputs_by_order[event.event_order] = event
                         ledger_totals[participant_id] += event.points_delta
-                        session.add(
-                            ScoreEvent(
-                                game_id=record_id,
-                                participant_id=participant_id,
-                                turn_id=turn_id,
-                                event_order=event.event_order,
-                                event_type=event.event_type,
-                                points_delta=event.points_delta,
-                                corrects_event_order=correction_order,
-                            )
+                        score_event_rows.append(
+                            {
+                                "game_id": record_id,
+                                "participant_id": participant_id,
+                                "turn_id": turn_id,
+                                "event_order": event.event_order,
+                                "event_type": event.event_type,
+                                "points_delta": event.points_delta,
+                                "corrects_event_order": correction_order,
+                            }
                         )
 
                     expected_gameplay: defaultdict[
@@ -2402,6 +2409,25 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             raise ValueError(
                                 "Score event ledger does not reconcile to final participant scores"
                             )
+
+                # The turns and seats they point at go first, then the rows,
+                # in event order: a correction names an earlier event, which
+                # an earlier row wrote. `render_nulls` because a bulk insert
+                # otherwise leaves a row's None values out and batches only
+                # neighbouring rows with the same columns: a right guesser
+                # beside a wrong one - a time and an award beside none - split
+                # a real game's outcomes into ~1,600 statements (#1260 review).
+                await session.flush()
+                if outcome_rows:
+                    await session.execute(
+                        insert(TurnParticipantOutcome).execution_options(render_nulls=True),
+                        outcome_rows,
+                    )
+                if score_event_rows:
+                    await session.execute(
+                        insert(ScoreEvent).execution_options(render_nulls=True),
+                        score_event_rows,
+                    )
 
                 await increment_user_stats_projection(
                     session,
