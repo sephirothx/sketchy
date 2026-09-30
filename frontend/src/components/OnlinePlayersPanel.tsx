@@ -17,7 +17,7 @@ import { useFriendPresence } from "../hooks/useFriendPresence";
 import { useToast } from "../lib/toast";
 import { Avatar } from "./ui/Avatar";
 import { LobbyPlayerMenu } from "./LobbyPlayerMenu";
-import { ReportAccountDialog } from "./ReportAccountDialog";
+import { lazyOverlay } from "./LazyOverlay";
 import { Button } from "./ui/Button";
 import type { AckResponse } from "../types";
 import { ui } from "../content/ui/index.ts";
@@ -25,6 +25,14 @@ import { useLocaleRerender } from "../hooks/useLocaleRerender";
 import { refusalText } from "../lib/refusals.ts";
 import { useSettingsStore } from "../store/settingsStore";
 import { EmptyState } from "./ui/EmptyState";
+
+// Opened on demand, so fetched on demand: kept out of the first-load chunk,
+// which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
+// that fails to arrive is a notice, not the crash page - one that closes it.
+const ReportAccountDialog = lazyOverlay(
+  () => import("./ReportAccountDialog").then((module) => module.ReportAccountDialog),
+  (props) => props.onClose(),
+);
 
 /** Who else is here, beside the room list.
 

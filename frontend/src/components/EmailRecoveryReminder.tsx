@@ -1,7 +1,7 @@
 import { XIcon } from "./icons";
 import { useState } from "react";
 
-import { AddEmailDialog } from "./AddEmailDialog";
+import { lazyOverlay } from "./LazyOverlay";
 import {
   acknowledgeReminder,
   maskEmail,
@@ -11,6 +11,14 @@ import { useAuthStore } from "../store/authStore";
 import { useEmailStateStore } from "../store/emailStateStore";
 import { useGameStore } from "../store/gameStore";
 import { ui } from "../content/ui/index.ts";
+
+// Opened on demand, so fetched on demand: kept out of the first-load chunk,
+// which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
+// that fails to arrive is a notice, not the crash page - one that closes it.
+const AddEmailDialog = lazyOverlay(
+  () => import("./AddEmailDialog").then((module) => module.AddEmailDialog),
+  (props) => props.onClose(),
+);
 
 /** A standing note that this account cannot currently be recovered.
 

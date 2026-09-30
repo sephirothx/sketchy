@@ -13,11 +13,18 @@ notice if it does not, with the room underneath untouched.
 
 Its button reloads the page rather than importing again: a browser keeps a
 failed dynamic import for the life of the document, so a second `import()`
-of the same chunk fails at once however good the connection has become. The
-overlay's address is in the URL, so the reload opens it, and a room reconnects
-to its seat as it does after any reload. */
+of the same chunk fails at once however good the connection has become. An
+overlay whose address is in the URL opens again with the reload, and a room
+reconnects to its seat as it does after any reload.
+
+A dialog opened from inside a page has no address to come back to (#1257):
+the reload would not reopen it, and whatever opened it is still waiting for
+it to close - a menu holding it open, a step-up check that settles only when
+it is answered or cancelled. `dismiss` is how its notice closes it: it gets
+the props the dialog would have had, and calls the one that closes it. */
 export function lazyOverlay<P extends object>(
   load: () => Promise<ComponentType<P>>,
+  dismiss?: (props: P) => void,
 ): ComponentType<P> {
   let loaded: ComponentType<P> | null = null;
   return function LazyOverlay(props: P) {
@@ -54,6 +61,11 @@ export function lazyOverlay<P extends object>(
         >
           {ui.app.tryAgain}
         </button>
+        {dismiss && (
+          <button type="button" className="btn btn-secondary" onClick={() => dismiss(props)}>
+            {ui.dialog.close}
+          </button>
+        )}
       </div>
     );
   };

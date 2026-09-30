@@ -27,9 +27,9 @@ import {
   useEscapeLayer,
   useFocusTrap,
 } from "../hooks/useFocusTrap";
-import { BugReportDialog } from "./BugReportDialog";
 import { MIN_PASSWORD_LENGTH, passwordRule, passwordTooShort } from "../lib/passwordPolicy";
 import { ModalShell } from "./ui/ModalShell";
+import { lazyOverlay } from "./LazyOverlay";
 import {
   BarChartIcon,
   BugIcon,
@@ -51,6 +51,14 @@ import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 import { doodleNameOf } from "../lib/avatarDoodles";
 import { AvatarPicture } from "./ui/AvatarPicture";
+
+// Opened on demand, so fetched on demand: kept out of the first-load chunk,
+// which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
+// that fails to arrive is a notice, not the crash page - one that closes it.
+const BugReportDialog = lazyOverlay(
+  () => import("./BugReportDialog").then((module) => module.BugReportDialog),
+  (props) => props.onClose(),
+);
 
 function MenuItem({
   icon,

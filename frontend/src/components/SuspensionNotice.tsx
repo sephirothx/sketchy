@@ -5,8 +5,8 @@ import { apiRequest } from "../lib/api";
 import { fetchSuspensionDrawing, humanizeCategory } from "../lib/moderation";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { socket } from "../lib/socket";
-import { ReportedDrawing } from "./ReportedDrawing";
 import { ModalShell } from "./ui/ModalShell";
+import { LazyReportedDrawing } from "./LazyReportedDrawing";
 import {
   onSuspended,
   reportedDrawings,
@@ -146,7 +146,7 @@ export function SuspensionNotice() {
               moment. The bytes come through the one path a suspended
               account may still reach for them. */}
           {suspension.drawings.map((drawing) => (
-            <ReportedDrawing
+            <LazyReportedDrawing
               key={drawing.reportId}
               className="suspension-drawing"
               load={() => fetchSuspensionDrawing(drawing.reportId)}

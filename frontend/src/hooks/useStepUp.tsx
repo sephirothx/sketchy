@@ -3,7 +3,16 @@ import { useCallback, useState } from "react";
 import { StepUpRequiredError } from "../lib/api";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
-import { StepUpDialog } from "../components/StepUpDialog";
+import { lazyOverlay } from "../components/LazyOverlay";
+
+// Opened on demand, so fetched on demand: kept out of the first-load chunk,
+// which has a CI budget (#1257), and loaded through `lazyOverlay` so a chunk
+// that fails to arrive is a notice, not the crash page - one that closes it.
+const StepUpDialog = lazyOverlay(
+  () => import("../components/StepUpDialog").then((module) => module.StepUpDialog),
+  // Cancelled, so the guard waiting on it settles as a dismissal.
+  (props) => props.onCancel(),
+);
 
 /**
  * What `guard` resolves with when the person dismissed the prompt instead of

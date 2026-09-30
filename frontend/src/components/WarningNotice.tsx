@@ -12,8 +12,8 @@ import { asReportReason, humanizeCategory } from "../lib/moderation";
 import { ruleAnchorFor } from "../content/rules/anchors.ts";
 import { onConnectSpread, socket } from "../lib/socket";
 import { useAuthStore } from "../store/authStore";
-import { ReportedDrawing } from "./ReportedDrawing";
 import { ModalShell } from "./ui/ModalShell";
+import { LazyReportedDrawing } from "./LazyReportedDrawing";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
 
@@ -224,7 +224,7 @@ export function WarningNotice() {
               : ui.moderationNotice.theDrawingsThisWasAbout}
           </p>
           {warning.drawings.map((drawing) => (
-            <ReportedDrawing
+            <LazyReportedDrawing
               key={drawing.reportId}
               className="suspension-drawing"
               load={() => fetchWarningDrawing(warning.id, drawing.reportId)}
