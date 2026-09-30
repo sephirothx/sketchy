@@ -4770,11 +4770,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         content to work on, and publishing it is a separate act with its own
         gate (R-LIST-11). Independent from the moment it exists, too - hiding
         the source afterwards does not reach into the copy, which is why the
-        lineage may end up pointing at a revision that is no longer served.
+        lineage may end up naming a list that is no longer served.
 
-        The lineage names the exact source **revision**, not the list. Both
-        sides go on being edited, and a pointer at the list would stop meaning
-        anything after the first edit on either.
+        The lineage names the source **list**, on the copy's own row (#1361):
+        the credit reads it as it is now, so an edit on either side changes
+        nothing, and the pointer is cleared when the source is deleted.
         """
         forker_id = _optional_entity_id(user_id)
         source_id = _optional_entity_id(prompt_list_id)

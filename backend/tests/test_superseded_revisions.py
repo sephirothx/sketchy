@@ -89,7 +89,7 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
     factory, engine, owner_id, _ = await _database()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
-        list_id, (played_from, forked_from, hiding, plain, young, current) = await _saved(
+        list_id, (played_from, older, hiding, plain, young, current) = await _saved(
             repo, factory, owner_id, "Saved often", ["otter", "heron", "crane", "ibis", "swan", "lark"]
         )
         await _play_a_game_from(factory, owner_id, list_id)
@@ -115,7 +115,7 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
         now = datetime.now(timezone.utc)
         # Everything but the current save was superseded ten days ago; the
         # current one, which supersedes `young`, was saved just now.
-        await _age(factory, [played_from, forked_from, hiding, plain, young], LONG_AGO)
+        await _age(factory, [played_from, older, hiding, plain, young], LONG_AGO)
         assert await _answer_versions(factory, "ibis") == 1
 
         report = await reclaim_superseded_revisions(factory, now=now)

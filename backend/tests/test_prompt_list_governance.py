@@ -103,7 +103,7 @@ async def test_copy_provenance_and_tags_are_structured():
                 )
                 session.add(source_revision)
                 await session.flush()
-                fork.copied_from_list_id = source.id
+                fork.is_copy, fork.copied_from_list_id = True, source.id
                 fork_revision = PromptListRevision(
                     prompt_list_id=fork.id,
                     version=1,

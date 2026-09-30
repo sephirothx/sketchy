@@ -2204,7 +2204,8 @@ that was deleted" could only be said for the day before the sweep. `is_copy` is 
 `fork_published`, never cleared, and deliberately a boolean: it says a list was copied and
 nothing about what from — a name, an author or an id would be exactly what the deleted
 list's author asked to take away. `ck_prompt_lists_copy_is_player_owned` keeps it off the
-bundled catalogue.
+bundled catalogue, and `ck_prompt_lists_copied_from_is_copy` keeps the pointer off
+anything that is not a copy.
 
 That is deliberate, and it is why a copy's pointer holds nothing up. A copy is a live
 list somebody else owns and edits; if its pointer kept the original alive, an author who

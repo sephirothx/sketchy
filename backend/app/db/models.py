@@ -3885,6 +3885,11 @@ class PromptList(Base):
             "is_copy = false OR is_bundled = false",
             name="ck_prompt_lists_copy_is_player_owned",
         ),
+        # Only a copy names what it was copied from; a duplicate never does.
+        CheckConstraint(
+            "copied_from_list_id IS NULL OR is_copy = true",
+            name="ck_prompt_lists_copied_from_is_copy",
+        ),
         # The catalogue's whole question - published, still active, still
         # here - and the star counts join through it (#712).
         Index(

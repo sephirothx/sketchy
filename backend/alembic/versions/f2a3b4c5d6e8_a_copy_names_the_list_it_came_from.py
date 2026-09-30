@@ -35,6 +35,10 @@ def upgrade() -> None:
             ["id"],
             ondelete="SET NULL",
         )
+        batch.create_check_constraint(
+            "ck_prompt_lists_copied_from_is_copy",
+            "copied_from_list_id IS NULL OR is_copy = true",
+        )
     op.execute(
         "UPDATE prompt_lists SET copied_from_list_id = ("
         "SELECT source.prompt_list_id FROM prompt_list_revisions copy "
@@ -85,5 +89,6 @@ def downgrade() -> None:
     )
     op.drop_index("ix_prompt_lists_copied_from", table_name="prompt_lists")
     with op.batch_alter_table("prompt_lists") as batch:
+        batch.drop_constraint("ck_prompt_lists_copied_from_is_copy", type_="check")
         batch.drop_constraint("fk_prompt_lists_copied_from_list_id", type_="foreignkey")
         batch.drop_column("copied_from_list_id")
