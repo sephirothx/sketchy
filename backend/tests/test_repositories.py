@@ -278,9 +278,11 @@ async def test_game_history_repository():
         )
 
         # Check user games list with pagination clamping
-        u1_games = await history_repo.get_user_games(
-            u1.id, limit=999999, offset=-5, requesting_user_id=u1.id
+        u1_page = await history_repo.get_user_games(
+            u1.id, limit=999999, cursor="not a cursor", requesting_user_id=u1.id
         )
+        assert u1_page.next_cursor is None
+        u1_games = u1_page.games
         assert len(u1_games) == 1
         assert u1_games[0].id == game_id
         assert len(u1_games[0].participants) == 2

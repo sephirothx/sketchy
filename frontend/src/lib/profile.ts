@@ -188,14 +188,18 @@ export function fetchProfile(userId: string) {
   );
 }
 
+/** A page of a player's games, newest first. `cursor` is the `nextCursor`
+ * of the page before, `null` for the first; a `null` `nextCursor` back is
+ * the end of the list (#477). */
 export function fetchGames(
   userId: string,
-  offset: number,
+  cursor: string | null,
   includeAbandoned = false,
 ) {
-  return apiRequest<{ games: GameSummary[]; hasMore: boolean }>(
+  return apiRequest<{ games: GameSummary[]; nextCursor: string | null }>(
     `/api/users/${encodeURIComponent(userId)}/games`
-      + `?limit=${HISTORY_PAGE_SIZE}&offset=${offset}`
+      + `?limit=${HISTORY_PAGE_SIZE}`
+      + (cursor ? `&cursor=${encodeURIComponent(cursor)}` : "")
       + (includeAbandoned ? "&includeAbandoned=true" : ""),
   );
 }

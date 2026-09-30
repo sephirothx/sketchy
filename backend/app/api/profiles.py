@@ -447,10 +447,15 @@ def create_profile_router(
         user_id: str,
         request: Request,
         limit: int = Query(default=DEFAULT_PAGE_SIZE, ge=1, le=MAX_PAGE_SIZE),
-        offset: int = Query(default=0, ge=0),
+        cursor: str | None = Query(default=None, max_length=256),
         include_abandoned: bool = Query(default=False, alias="includeAbandoned"),
     ):
         """A page of games this player took part in, newest first.
+
+        Paged by the `nextCursor` of the page before rather than by an
+        offset (#477): a deep offset made the database skip every earlier
+        game on a route anyone may call, and a game finishing between two
+        reads shifted every offset by one.
 
         Games that stopped without ending are left out unless asked for: a
         history made mostly of rooms that collapsed is not what anyone came
@@ -462,19 +467,16 @@ def create_profile_router(
         only says who the caller is, and a visitor with no session is nobody.
         """
         throttle(request)
-        # One extra row answers "is there another page?" without a second COUNT
-        # query, and without the client inferring it from a full-looking page.
-        games = await game_history_repo.get_user_games(
+        page = await game_history_repo.get_user_games(
             user_id,
-            limit=limit + 1,
-            offset=offset,
+            limit=limit,
+            cursor=cursor,
             include_abandoned=include_abandoned,
             requesting_user_id=getattr(request.state, "user_id", None) or None,
         )
-        has_more = len(games) > limit
         return {
-            "games": [game_summary_payload(g) for g in games[:limit]],
-            "hasMore": has_more,
+            "games": [game_summary_payload(g) for g in page.games],
+            "nextCursor": page.next_cursor,
         }
 
     @router.get("/games/{game_id}")

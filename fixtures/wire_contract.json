@@ -1832,7 +1832,7 @@
    "displayName"
   ],
   "api.profiles:create_profile_router": [
-   "hasMore",
+   "nextCursor",
    "playLanguages"
   ],
   "api.profiles:pin_entry_payload": [
@@ -1858,7 +1858,7 @@
    "turnId"
   ],
   "api.profiles:user_games": [
-   "hasMore"
+   "nextCursor"
   ],
   "api.profiles:user_stats": [
    "playLanguages"

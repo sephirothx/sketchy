@@ -443,6 +443,14 @@ class GalleryEntry:
 
 
 @dataclass(frozen=True)
+class GameHistoryPage:
+    """One page of a player's game list, and the cursor for the next."""
+
+    games: tuple[GameSummary, ...]
+    next_cursor: str | None
+
+
+@dataclass(frozen=True)
 class GalleryPage:
     """One page of the Gallery, and the cursor for the next."""
 
@@ -1127,12 +1135,17 @@ class GameHistoryRepository(ABC):
         self,
         user_id: str,
         limit: int = 20,
-        offset: int = 0,
+        cursor: str | None = None,
         *,
         include_abandoned: bool = False,
         requesting_user_id: str | None = None,
-    ) -> list[GameSummary]:
-        """Fetch clamped paginated summary of games where a user participated.
+    ) -> GameHistoryPage:
+        """A clamped page of the games a user took part in, newest first.
+
+        `cursor` is the `next_cursor` of the page before, or `None` for the
+        first: where that page's last game stood, so the next one starts
+        after it with an index seek however deep it is (#477). A cursor made
+        for another player or the other filter reads as the first page.
 
         `requesting_user_id` is who is looking (#469): a game from a private
         room is on the page only when they sat in it too, a game from a

@@ -13,7 +13,7 @@ from app.repositories.interfaces import (
     GameHistoryRepository,
     GameParticipantInput,
     GameRecordInput,
-    GameSummary,
+    GameHistoryPage,
     RecentCoPlayer,
     ScoreEventInput,
     TurnDrawingDetail,
@@ -250,12 +250,12 @@ class FakeGameHistoryRepository(GameHistoryRepository):
         self,
         user_id: str,
         limit: int = 20,
-        offset: int = 0,
+        cursor: str | None = None,
         *,
         include_abandoned: bool = False,
         requesting_user_id: str | None = None,
-    ) -> list[GameSummary]:
-        return []
+    ) -> GameHistoryPage:
+        return GameHistoryPage(games=(), next_cursor=None)
 
     async def get_game_detail(
         self, game_id: str, requesting_user_id: str | None = None

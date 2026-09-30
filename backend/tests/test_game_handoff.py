@@ -296,7 +296,7 @@ async def test_a_staged_game_is_written_into_history_and_the_row_goes(env):
     # Timed, and its lateness measured against the game's end (#892).
     assert telemetry.history_write_seconds.count() == writes_before + 1
     assert telemetry.history_persist_lag.count() == lags_before + 1
-    games = await history.get_user_games(ann, requesting_user_id=ann)
+    games = (await history.get_user_games(ann, requesting_user_id=ann)).games
     assert [g.id for g in games] == [game_id]
     async with session_factory() as session:
         [drawing] = (await session.scalars(select(TurnDrawing))).all()
@@ -438,7 +438,7 @@ async def test_a_usage_conflict_fails_the_envelope_but_leaves_the_history_writte
     assert outcomes == [(game_id, "recorded")]
     [row] = await rows(session_factory)
     assert (row.history_state, row.usage_state) == ("done", "pending")
-    assert [g.id for g in await history.get_user_games(ann, requesting_user_id=ann)] == [game_id]
+    assert [g.id for g in (await history.get_user_games(ann, requesting_user_id=ann)).games] == [game_id]
 
 
 async def test_bytes_that_fail_their_checksum_or_their_version_are_given_up_on(env):

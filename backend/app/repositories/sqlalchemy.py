@@ -136,6 +136,7 @@ from app.repositories.interfaces import (
     DrawingReactionResult,
     GalleryEntry,
     GalleryPage,
+    GameHistoryPage,
     GameDetail,
     GameHistoryConflictError,
     PromptUsageConflictError,
@@ -302,6 +303,49 @@ def _decode_gallery_cursor(
         if finished.tzinfo is None:
             return None
         return (sort_key, finished, UUID(turn_id), max(0, int(served)))
+    except (ValueError, TypeError, AttributeError):
+        return None
+
+
+def _encode_history_cursor(
+    user_id: str, include_abandoned: bool, finished_at: datetime, game_id: str
+) -> str:
+    """Where the last game of a history page stood (#477).
+
+    Keyset rather than an offset: an offset made the database walk and throw
+    away every earlier game, so a public route answered a large one with work
+    proportional to the number, while a position is an index seek at any
+    depth. The subject and the filter ride along so that a cursor carried to
+    another profile, or across the abandoned toggle, reads as the first page
+    rather than as a position in a list it never came from.
+
+    Not signed, unlike the Gallery's: nothing is trusted from it. Any position
+    is a seek, so a forged one costs what a real one does, and it can only
+    move the start of a list the caller could page to anyway.
+    """
+    token = json.dumps(
+        [user_id, include_abandoned, finished_at.isoformat(), game_id],
+        separators=(",", ":"),
+    ).encode()
+    return base64.urlsafe_b64encode(token).decode().rstrip("=")
+
+
+def _decode_history_cursor(
+    cursor: str | None, *, user_id: str, include_abandoned: bool
+) -> tuple[datetime, UUID] | None:
+    """A malformed or foreign cursor reads as the first page, as the Gallery's
+    does - and a naive or unparseable time never reaches the driver."""
+    if not cursor:
+        return None
+    try:
+        raw = base64.urlsafe_b64decode((cursor + "=" * (-len(cursor) % 4)).encode())
+        subject, abandoned, finished_at, game_id = json.loads(raw.decode())
+        if subject != user_id or abandoned is not include_abandoned:
+            return None
+        finished = datetime.fromisoformat(finished_at)
+        if finished.tzinfo is None:
+            return None
+        return (finished, UUID(game_id))
     except (ValueError, TypeError, AttributeError):
         return None
 
@@ -3365,11 +3409,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         self,
         user_id: str,
         limit: int = DEFAULT_PAGINATION_LIMIT,
-        offset: int = 0,
+        cursor: str | None = None,
         *,
         include_abandoned: bool = False,
         requesting_user_id: str | None = None,
-    ) -> list[GameSummary]:
+    ) -> GameHistoryPage:
         """A page of the games `user_id` sat in, as `requesting_user_id` may see them.
 
         A game from a public room is on the page for anyone; one from a
@@ -3380,9 +3424,11 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
         """
         db_user_id = _optional_entity_id(user_id)
         if db_user_id is None:
-            return []
+            return GameHistoryPage(games=(), next_cursor=None)
         clamped_limit = max(1, min(limit, MAX_PAGINATION_LIMIT))
-        clamped_offset = max(0, offset)
+        after = _decode_history_cursor(
+            cursor, user_id=user_id, include_abandoned=include_abandoned
+        )
 
         async with self._session_factory() as session:
             identity_ids = await _identity_ids(session, db_user_id)
@@ -3430,14 +3476,34 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 # microsecond had no order between them, so a page boundary
                 # could repeat one and skip the other (#1077).
                 .order_by(GameRecord.finished_at.desc(), GameRecord.id.desc())
-                .limit(clamped_limit)
-                .offset(clamped_offset)
+                # One extra row answers "is there another page?" without a
+                # second COUNT query.
+                .limit(clamped_limit + 1)
             )
+            if after is not None:
+                # Strictly later in the order: an earlier finish, or the same
+                # finish and a smaller id - the tie-break the order uses.
+                after_finished, after_id = after
+                stmt = stmt.where(
+                    or_(
+                        GameRecord.finished_at < after_finished,
+                        and_(
+                            GameRecord.finished_at == after_finished,
+                            GameRecord.id < after_id,
+                        ),
+                    )
+                )
 
-            result = await session.execute(stmt)
-            games = result.scalars().all()
+            games = (await session.execute(stmt)).scalars().all()
 
-            return [_to_game_summary(g, with_rule_snapshot=False) for g in games]
+        page = [_to_game_summary(g, with_rule_snapshot=False) for g in games[:clamped_limit]]
+        next_cursor = None
+        if len(games) > clamped_limit:
+            last = page[-1]
+            next_cursor = _encode_history_cursor(
+                user_id, include_abandoned, last.finished_at, last.id
+            )
+        return GameHistoryPage(games=tuple(page), next_cursor=next_cursor)
 
     async def get_game_detail(
         self,

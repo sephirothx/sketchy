@@ -279,7 +279,7 @@ async def test_a_private_game_is_not_counted_toward_the_page_a_stranger_gets(env
     page = (await http.get(f"/api/users/{ann.id}/games?limit=2")).json()
 
     assert [game["roomName"] for game in page["games"]] == ["Studio 2", "Studio 0"]
-    assert page["hasMore"] is False
+    assert page["nextCursor"] is None
 
 
 async def test_stats_for_an_unknown_player_are_a_404_not_a_row_of_zeroes(env):
@@ -299,7 +299,7 @@ async def test_stats_are_readable_without_a_session(env):
     assert (await http.get(f"/api/users/{ann.id}/games")).status_code == 200
 
 
-async def test_history_pages_report_whether_more_remain(env):
+async def test_history_pages_follow_the_cursor_until_it_runs_out(env):
     http, users, history, _ = env
     ann = await users.create_anonymous(display_name="Ann")
     bob = await users.create_anonymous(display_name="Bob")
@@ -308,11 +308,15 @@ async def test_history_pages_report_whether_more_remain(env):
 
     first = (await http.get(f"/api/users/{ann.id}/games?limit=2")).json()
     assert len(first["games"]) == 2
-    assert first["hasMore"] is True
+    assert first["nextCursor"]
 
-    second = (await http.get(f"/api/users/{ann.id}/games?limit=2&offset=2")).json()
-    assert len(second["games"]) == 1
-    assert second["hasMore"] is False
+    second = (
+        await http.get(
+            f"/api/users/{ann.id}/games", params={"limit": 2, "cursor": first["nextCursor"]}
+        )
+    ).json()
+    assert [game["roomName"] for game in second["games"]] == ["Studio 0"]
+    assert second["nextCursor"] is None
 
     # Newest first, and each row carries the standings.
     assert first["games"][0]["roomName"] == "Studio 2"
@@ -344,7 +348,54 @@ async def test_history_page_size_is_bounded(env):
     http, users, _, _ = env
     ann = await users.create_anonymous(display_name="Ann")
     assert (await http.get(f"/api/users/{ann.id}/games?limit=500")).status_code == 422
-    assert (await http.get(f"/api/users/{ann.id}/games?offset=-1")).status_code == 422
+    assert (
+        await http.get(f"/api/users/{ann.id}/games", params={"cursor": "x" * 257})
+    ).status_code == 422
+
+
+async def test_a_game_finishing_between_two_pages_shifts_nothing(env):
+    """#477: an offset counted from the top, so a game recorded between two
+    reads pushed the row at the cut onto the next page as well. A cursor
+    names the row, and what finishes above it is not on the pages below."""
+    http, users, history, _ = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    for index in range(3):
+        await record_game(history, users, winner=ann.id, loser=bob.id, index=index)
+
+    first = (await http.get(f"/api/users/{ann.id}/games?limit=2")).json()
+    await record_game(history, users, winner=ann.id, loser=bob.id, index=3)
+    second = (
+        await http.get(
+            f"/api/users/{ann.id}/games", params={"limit": 2, "cursor": first["nextCursor"]}
+        )
+    ).json()
+
+    assert [game["roomName"] for game in first["games"] + second["games"]] == [
+        "Studio 2", "Studio 1", "Studio 0",
+    ]
+
+
+async def test_a_cursor_from_another_list_reads_as_the_first_page(env):
+    """A cursor is bound to the player and the filter it was made for:
+    carried to another profile or across the abandoned toggle it is not a
+    position in that list, and garbage is not an error on a shared link."""
+    http, users, history, _ = env
+    ann = await users.create_anonymous(display_name="Ann")
+    bob = await users.create_anonymous(display_name="Bob")
+    for index in range(3):
+        await record_game(history, users, winner=ann.id, loser=bob.id, index=index)
+    cursor = (await http.get(f"/api/users/{ann.id}/games?limit=1")).json()["nextCursor"]
+
+    for path, params in (
+        (f"/api/users/{bob.id}/games", {"cursor": cursor}),
+        (f"/api/users/{ann.id}/games", {"cursor": cursor, "includeAbandoned": "true"}),
+        (f"/api/users/{ann.id}/games", {"cursor": "not-a-cursor"}),
+        (f"/api/users/{ann.id}/games", {"cursor": "WyJ4IiwxXQ"}),
+    ):
+        response = await http.get(path, params={"limit": 1, **params})
+        assert response.status_code == 200, (path, params)
+        assert response.json()["games"][0]["roomName"] == "Studio 2", (path, params)
 
 
 async def test_participants_see_the_turn_by_turn_detail(env):

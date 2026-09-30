@@ -2676,7 +2676,10 @@ carries the room's public flag as `visibility`, because the room is gone by the
 time anyone asks. A game from a public room - one the lobby listed with its
 players' names - is on the player's profile for anyone; a game from a private
 room is listed only for the players who sat in it, and is tagged *private room*
-when they see it. A profile opened by id answers with what a seat already shows
+when they see it. The list pages by a cursor naming the last game shown rather
+than by an offset, so a deep page is an index seek however long the history
+grows, and a game finishing while someone reads does not repeat a row (#477). A
+profile opened by id answers with what a seat already shows
 (name, colour, picture, guest state, join date) and whether the player is online
 now or how long ago they last were - never the role or the username, which stay
 on the caller's own `/api/auth/me`. "Last seen" is `users.last_seen_at`, stamped

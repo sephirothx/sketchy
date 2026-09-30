@@ -181,7 +181,7 @@ async def test_a_stranger_asking_for_a_game_is_refused_after_one_statement():
         )
 
         statements.clear()
-        summaries = await history.get_user_games(player.id, requesting_user_id=player.id)
+        summaries = (await history.get_user_games(player.id, requesting_user_id=player.id)).games
         assert [s.id for s in summaries] == [game_id]
         assert summaries[0].rule_snapshot == {}
         list_selects = [s for s in _selects(statements) if "game_records" in s]
@@ -212,15 +212,26 @@ async def test_games_finished_in_the_same_instant_page_without_repeats():
         # Neither database happens to swap them in a test this size, so the
         # order itself is also read off the statement.
         statements = _capture(engine)
+        # Paged by cursor (#477), which in one instant is the id alone: a
+        # tie-break missing from the keyset would stop or loop here.
         paged = []
-        for offset in range(5):
-            [summary] = await history.get_user_games(
-                drawer.id, requesting_user_id=drawer.id, limit=1, offset=offset
+        cursor = None
+        for _ in range(5):
+            page = await history.get_user_games(
+                drawer.id, requesting_user_id=drawer.id, limit=1, cursor=cursor
             )
+            [summary] = page.games
             paged.append(summary.id)
+            cursor = page.next_cursor
+        assert cursor is None
         assert sorted(paged) == sorted(game.game_id for game in recorded)
         assert paged == sorted(paged, reverse=True), "newest id first within the instant"
-        listing = [s for s in _selects(statements) if "FROM game_records" in s][0]
-        assert "ORDER BY game_records.finished_at DESC, game_records.id DESC" in listing
+        listings = [s for s in _selects(statements) if "FROM game_records" in s]
+        assert "ORDER BY game_records.finished_at DESC, game_records.id DESC" in listings[0]
+        # A deep page is a seek from the cursor, not a walk past every earlier
+        # game (#477). SQLite renders `OFFSET ?` for any LIMIT, so the proof
+        # is the keyset in each later page's WHERE rather than a missing word.
+        assert len(listings) == 5
+        assert all("game_records.finished_at <" in listing for listing in listings[1:])
     finally:
         await engine.dispose()

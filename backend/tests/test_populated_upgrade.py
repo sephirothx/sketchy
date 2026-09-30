@@ -71,7 +71,7 @@ async def test_the_populated_baseline_upgrades_to_head_and_reads_back_whole():
         assert pinned_revisions == 1
 
         history = SqlAlchemyGameHistoryRepository(factory)
-        games = await history.get_user_games(drawer, requesting_user_id=drawer)
+        games = (await history.get_user_games(drawer, requesting_user_id=drawer)).games
         assert {game.id for game in games} >= {str(public_game)}
         detail = await history.get_game_detail(str(public_game), requesting_user_id=guesser)
         assert detail is not None

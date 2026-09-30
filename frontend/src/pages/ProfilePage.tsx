@@ -547,7 +547,8 @@ function ProfileView({ userId }: { userId: string }) {
   const [stats, setStats] = useState<ProfileStats | null>(null);
   const [playLanguages, setPlayLanguages] = useState<string[]>([]);
   const [games, setGames] = useState<GameSummary[]>([]);
-  const [hasMore, setHasMore] = useState(false);
+  // Where the next page starts; `null` once the list is whole.
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const [loadingMore, setLoadingMore] = useState(false);
   // Off by default: a history made mostly of rooms that collapsed is not what
   // anyone came looking for. Reachable, because a game somebody remembers
@@ -580,7 +581,7 @@ function ProfileView({ userId }: { userId: string }) {
   // Which list is current. Bumped when a reload starts and again when it
   // replaces the list, so a page fetched for the previous one - a "load
   // more" in flight while the viewer signed in or the abandoned filter
-  // flipped, or one started at the old offset while the reload was still
+  // flipped, or one started from the old cursor while the reload was still
   // out - is dropped rather than appended to a list it was never part of.
   const listGeneration = useRef(0);
 
@@ -591,7 +592,7 @@ function ProfileView({ userId }: { userId: string }) {
       try {
         const [profile, page] = await Promise.all([
           fetchProfile(userId),
-          fetchGames(userId, 0, includeAbandoned),
+          fetchGames(userId, null, includeAbandoned),
         ]);
         if (cancelled) return;
         listGeneration.current += 1;
@@ -599,7 +600,7 @@ function ProfileView({ userId }: { userId: string }) {
         setStats(profile.stats);
         setPlayLanguages(profile.playLanguages ?? []);
         setGames(page.games);
-        setHasMore(page.hasMore);
+        setNextCursor(page.nextCursor);
         // The shelf is a separate question with a separate answer: any
         // session may ask (R-PIN-06), nobody else, and a failure to load it
         // is not a failure to load the profile.
@@ -648,21 +649,21 @@ function ProfileView({ userId }: { userId: string }) {
   }, [isOwnProfile, myPinsLoaded, myTurnIds, userId]);
 
   const loadMore = useCallback(async () => {
-    if (loadingMore) return;
+    if (loadingMore || nextCursor === null) return;
     const generation = listGeneration.current;
     setLoadingMore(true);
     try {
-      const page = await fetchGames(userId, games.length, includeAbandoned);
+      const page = await fetchGames(userId, nextCursor, includeAbandoned);
       if (generation !== listGeneration.current) return;
       setGames((current) => [...current, ...page.games]);
-      setHasMore(page.hasMore);
+      setNextCursor(page.nextCursor);
     } catch {
       if (generation !== listGeneration.current) return;
       setError(ui.profilePage.couldNotLoadMoreGames);
     } finally {
       setLoadingMore(false);
     }
-  }, [userId, games.length, includeAbandoned, loadingMore]);
+  }, [userId, nextCursor, includeAbandoned, loadingMore]);
 
   const shownName = subject?.displayName ?? "";
   useDocumentTitle(shownName || null);
@@ -876,7 +877,7 @@ function ProfileView({ userId }: { userId: string }) {
                 ))}
               </ul>
             )}
-            {hasMore && (
+            {nextCursor !== null && (
               <button type="button" onClick={loadMore} disabled={loadingMore}>
                 {loadingMore ? ui.profilePage.loading : ui.profilePage.loadHistoryPageSizeMore({ HISTORY_PAGE_SIZE })}
               </button>
