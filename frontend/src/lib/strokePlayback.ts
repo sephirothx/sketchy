@@ -30,11 +30,10 @@ sends it on pointer-down, but the points that leave it wait for the next flush
 and are then played over the interval after that, so a start painted as it
 landed sat there alone until the first batch came, up to an interval, and
 every stroke began with a stall. Held, the dot shows as late as the rest of
-the stroke does. The first batch is then played over the time it took to
-arrive after the start, which is how long it took to draw - the flush timer
-runs free of the stroke, so that is anywhere up to an interval - rather than
-over a whole interval, which would put the rest of the stroke further behind
-than the dot by the difference.
+the stroke does. That rests on the drawer restarting its flush timer at
+pointer-down, so the first batch, like every other, covers one whole interval
+of drawing: played over one interval, it needs nothing inferred from when
+frames arrived, which a polling transport bunches and jitter moves.
 
 The queue is bounded: past `MAX_LAG_MS` of unplayed ink - a tab that was in the
 background, a burst after jitter - the schedule is compressed so the viewer
@@ -75,9 +74,6 @@ interface Barrier {
   /** Not before this: a path start is held an interval (#1369). Null for
   every other barrier, which runs as soon as the cursor reaches it. */
   due: number | null;
-  /** When a path start arrived; its first batch is played over the time
-  that batch took to follow it. */
-  arrived: number;
 }
 
 type Item = Segments | Barrier;
@@ -214,20 +210,13 @@ export function createStrokePlayback(options: {
     enqueueSegments(from, points, style, now, radii) {
       if (points.length === 0) return;
       const start = lastDueEnd(now);
-      const interval = options.intervalMs();
-      // A path's first batch took as long to draw as it took to follow the
-      // start; held behind the start, it is played over that (#1369).
-      const previous = queue.at(-1);
-      const duration = previous?.kind === "barrier" && previous.due !== null
-        ? Math.min(interval, Math.max(0, now - previous.arrived))
-        : interval;
       queue.push({
         kind: "segments",
         points: [from, ...points],
         style,
         radii: radii && radii.some((radius) => radius !== style.radius) ? radii : null,
         dueStart: start,
-        dueEnd: start + duration,
+        dueEnd: start + options.intervalMs(),
         painted: 0,
       });
       compress(now);
@@ -237,7 +226,7 @@ export function createStrokePlayback(options: {
         run();
         return;
       }
-      queue.push({ kind: "barrier", run, due: null, arrived: now });
+      queue.push({ kind: "barrier", run, due: null });
       compress(now);
     },
     enqueueStart(run, now) {
@@ -245,7 +234,6 @@ export function createStrokePlayback(options: {
         kind: "barrier",
         run,
         due: Math.max(lastDueEnd(now), now + options.intervalMs()),
-        arrived: now,
       });
       compress(now);
     },

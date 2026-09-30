@@ -174,6 +174,22 @@ test("the scratch pad never pays the polling cadence", async () => {
   assert.doesNotMatch(canvas, /currentTransport/, "and neither is its playback");
 });
 
+test("the drawer's flush timer restarts at every path start (#1369)", async () => {
+  // A viewer holds a start one interval and plays each batch over one, which
+  // keeps the dot as far behind the hand as its ink only if the first batch
+  // is a whole interval long too - not whatever was left of a free-running tick.
+  const { readFile } = await import("node:fs/promises");
+  const pointer = await readFile(
+    new URL("../src/hooks/useCanvasPointerInput.ts", import.meta.url), "utf8",
+  );
+  assert.match(
+    pointer,
+    /restartFlushTimerRef\.current\?\.\(\);\s*protocol\.beginDrawAction\(encodePathStart\(/,
+    "the path start restarts the timer",
+  );
+  assert.match(pointer, /restartFlushTimerRef\.current = \(\) => \{\s*clearInterval\(flushTimer\);/);
+});
+
 /** What `Canvas.tsx` hands the renderer: the seat's transport as the last turn
 named it, resolved against the cadences in force at the moment a batch is
 scheduled. */

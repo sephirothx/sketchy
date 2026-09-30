@@ -126,6 +126,8 @@ export function useCanvasPointerInput(
   // are encoded relative to (#559).
   const lastSentRef = useRef<StrokePoint | null>(null);
   const shapeStartRef = useRef<StrokePoint | null>(null);
+  // Set by the flush timer's effect while it is armed (#1369).
+  const restartFlushTimerRef = useRef<(() => void) | null>(null);
   const pointerPosRef = useRef<StrokePoint | null>(null);
   const inputActiveRef = useRef(false);
 
@@ -439,6 +441,7 @@ export function useCanvasPointerInput(
       thinnerRef.current = createPointThinner(point);
       lastSentRef.current = point;
       drawLocalSegment(point, point, startWidth);
+      restartFlushTimerRef.current?.();
       protocol.beginDrawAction(encodePathStart({
         x: point.x,
         y: point.y,
@@ -560,9 +563,16 @@ export function useCanvasPointerInput(
   // recreated anyway. Listing it tears the timer down and re-arms it, so an
   // administrator moving the value reaches a drawer who is drawing right now
   // — which is the only way anyone can judge whether the new value is right.
+  //
+  // Restarted at every path start (#1369), so a path's first batch covers a
+  // whole interval as every later one does: a viewer holds the start one
+  // interval and plays each batch over one, which puts the dot and the ink
+  // leaving it equally far behind the hand only if the batches are all that
+  // long. Left free-running, the first covered anywhere from nothing to an
+  // interval, and a viewer can only guess which from when frames arrive.
   useEffect(() => {
     if (!isDrawer) return;
-    const flushTimer = setInterval(() => {
+    const flush = () => {
       // The sample still pending in the thinner goes with this flush, so a
       // viewer watches a long straight stroke advance every flush rather
       // than only when it bends or ends (#560).
@@ -574,8 +584,16 @@ export function useCanvasPointerInput(
         repaintPreviewRef.current(pointerPosRef.current);
       }
       if (sendPendingPointsRef.current() === "refused") abandonStrokeRef.current();
-    }, flushIntervalMs);
-    return () => clearInterval(flushTimer);
+    };
+    let flushTimer = setInterval(flush, flushIntervalMs);
+    restartFlushTimerRef.current = () => {
+      clearInterval(flushTimer);
+      flushTimer = setInterval(flush, flushIntervalMs);
+    };
+    return () => {
+      clearInterval(flushTimer);
+      restartFlushTimerRef.current = null;
+    };
   }, [isDrawer, protocol, flushIntervalMs]);
 
   useEffect(() => () => {

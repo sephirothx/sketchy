@@ -1682,10 +1682,12 @@ anything is queued; only presentation is delayed. Everything that is not a run o
 fill always sees the complete raster before it. A path start is also held an interval
 past its arrival (#1369): the drawer sends it on pointer-down, but the points that leave
 it wait for the next flush and are then played over the interval after, so a start
-painted as it landed showed its dot alone until the first batch came, up to an interval. The first batch is
-played over the time it took to follow the start - how long it took to draw, since the
-flush timer runs free of the stroke - so the dot and every point after it show one
-interval behind the hand. Past `MAX_LAG_MS` (250) of unplayed
+painted as it landed showed its dot alone until the first batch came, up to an interval.
+The drawer restarts its flush timer at every path start, so the first batch covers a
+whole interval like every other, and the viewer plays each batch over one interval
+with nothing inferred from when frames arrived: the dot and the ink leaving it sit the
+same distance behind the hand, which is one interval plus however late the start
+arrived - a bunched or jittered delivery delays the stroke, never splits it. Past `MAX_LAG_MS` (250) of unplayed
 ink the schedule is compressed so the viewer catches up; a hidden tab drains at once;
 a replay or a clear discards the queue, since what follows repaints from history.
 

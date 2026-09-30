@@ -73,27 +73,29 @@ test("a barrier runs only once everything before it is painted, and at once when
 
 /** A drawer moving 1 px a millisecond from x = 0 at t = 0, a point every
 10 ms, sending the start at once and the points at each flush of a timer
-that runs free of the stroke - its first tick `phase` ms in, on the 10 ms
-grid, since playback is uniform per segment rather than per pixel. Returns, for the
-dot and for every stretch of ink painted, how long after it was drawn it
-showed. */
-function lagsOfAStroke(phase, interval = 80) {
+restarted at the start, as the drawer's is. `delays` says how late each
+message reaches the viewer: the start's first, then each batch's. Returns,
+for the dot and for every stretch of ink painted, how long after it was
+drawn it showed. */
+function lagsOfAStroke(delays, interval = 80) {
   const shown = [];
   let now = 0;
   const play = createStrokePlayback({
     intervalMs: () => interval,
     paint: (points) => shown.push(now - points.at(-1).x),
   });
-  play.enqueueStart(() => shown.push(now - 0), 0);
-  let sent = 0;
-  const flushes = [phase, phase + interval, phase + 2 * interval, phase + 3 * interval];
-  for (now = 0; now <= 500; now += 1) {
-    if (flushes.includes(now)) {
-      const points = [];
-      for (let x = sent + 10; x <= now; x += 10) points.push({ x, y: 0 });
-      play.enqueueSegments({ x: sent, y: 0 }, points, STYLE, now);
-      sent = now;
-    }
+  const arrivals = [{ at: delays[0], deliver: () => play.enqueueStart(() => shown.push(now - 0), now) }];
+  for (let batch = 1; batch < delays.length; batch += 1) {
+    const flushed = batch * interval;
+    const points = [];
+    for (let x = flushed - interval + 10; x <= flushed; x += 10) points.push({ x, y: 0 });
+    arrivals.push({
+      at: flushed + delays[batch],
+      deliver: () => play.enqueueSegments({ x: flushed - interval, y: 0 }, points, STYLE, now),
+    });
+  }
+  for (now = 0; now <= 800; now += 1) {
+    for (const arrival of arrivals) if (arrival.at === now) arrival.deliver();
     play.advance(now);
   }
   return shown;
@@ -103,13 +105,18 @@ test("a stroke's first point shows as far behind the hand as the rest of it (#13
   // The start is sent on pointer-down and the points that leave it at the
   // next flush, which are then played over the interval after that: a start
   // painted as it landed sat alone until they came.
-  for (const phase of [10, 30, 70, 80]) {
-    const lags = lagsOfAStroke(phase);
-    assert.equal(lags[0], 80, `the dot, flush phase ${phase}`);
-    // And no further behind than the dot: the first batch is played over the
-    // time it took to follow the start, not a whole interval.
-    for (const lag of lags) assert.ok(Math.abs(lag - 80) <= 1, `lag ${lag} at flush phase ${phase}`);
-  }
+  const lags = lagsOfAStroke([0, 0, 0, 0, 0]);
+  assert.equal(lags[0], 80, "the dot");
+  for (const lag of lags) assert.ok(Math.abs(lag - 80) <= 1, `lag ${lag}`);
+});
+
+test("a start and its first batch delivered together still play the batch over an interval", () => {
+  // A polling viewer gets both in one response when both were sent while no
+  // request was open. Timed from arrivals, the first batch took no time at
+  // all and was painted in one frame; paced by the interval, the stroke is
+  // later but as smooth, and the dot no earlier than its ink.
+  const lags = lagsOfAStroke([80, 0, 0, 0, 0]);
+  for (const lag of lags) assert.ok(Math.abs(lag - lags[0]) <= 1, `lag ${lag} against the dot's ${lags[0]}`);
 });
 
 test("a start behind unplayed ink waits for it, and an interval at least", () => {
