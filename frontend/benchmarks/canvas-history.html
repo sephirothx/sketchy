@@ -11,6 +11,7 @@
       import { decodeCanvasHistory } from "/src/lib/canvasHistory.ts";
       import { renderCanvasActions } from "/src/lib/canvasRenderer.ts";
       import { createCanvasSurface } from "/src/lib/canvasSurface.ts";
+      import { createProtocolRenderer } from "/src/lib/protocolRenderer.ts";
 
       const canvas = document.querySelector("#benchmark-canvas");
       // As the game's canvas is: the drawing in pixels it owns, never read back.
@@ -54,6 +55,70 @@
           replayMs,
           heapDeltaBytes:
             (performance.memory?.usedJSHeapSize ?? heapBefore) - heapBefore,
+        };
+      };
+
+      // A full sync as the game's canvas takes it (#1347): through the
+      // renderer, `live` as a viewer's is or immediate as the drawer's, with
+      // the page's long tasks, the worst lateness of a 10 ms timer - an
+      // input, a frame - and how long until the last piece is on the canvas.
+      window.runFullSyncBenchmark = async (encoded, live) => {
+        const actions = decodeCanvasHistory(bytesFromBase64(encoded));
+        if (!actions) throw new Error("browser rejected benchmark history");
+        const target = createCanvasSurface(canvas.getContext("2d"));
+        let lastCommit = 0;
+        let commits = 0;
+        const counted = {
+          pixels: target.pixels,
+          commit(x, y, width, height) {
+            commits += 1;
+            lastCommit = performance.now();
+            target.commit(x, y, width, height);
+          },
+        };
+        const renderer = createProtocolRenderer({ current: counted }, () => 80, null, undefined, {
+          live: () => live,
+        });
+        const longTasks = [];
+        const since = performance.now();
+        // A task counts if it ends after the benchmark began: the one that
+        // starts the replay begins before `started` is read.
+        const observer = new PerformanceObserver((list) => {
+          for (const entry of list.getEntries()) {
+            if (entry.startTime + entry.duration >= since) longTasks.push(entry.duration);
+          }
+        });
+        observer.observe({ type: "longtask", buffered: true });
+        let last = performance.now();
+        let worstGap = 0;
+        const timer = setInterval(() => {
+          const now = performance.now();
+          worstGap = Math.max(worstGap, now - last);
+          last = now;
+        }, 10);
+        // From a task of the page's own, as a socket message is: a long task
+        // inside Playwright's evaluate is not reported (#1368 review).
+        let started = 0;
+        await new Promise((resolve) => setTimeout(() => {
+          started = performance.now();
+          renderer.replay(actions);
+          resolve();
+        }, 0));
+        // Done once nothing more has been shown for a while.
+        while (performance.now() - Math.max(lastCommit, started) < 300) {
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        clearInterval(timer);
+        observer.disconnect();
+        renderer.dispose();
+        return {
+          live,
+          actions: actions.length,
+          untilShownMs: lastCommit - started,
+          commits,
+          longTasks: longTasks.length,
+          longestTaskMs: Math.max(0, ...longTasks),
+          worstTimerGapMs: worstGap,
         };
       };
     </script>

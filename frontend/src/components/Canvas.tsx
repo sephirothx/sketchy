@@ -82,6 +82,13 @@ function createCanvas(
     const previewContextRef = useRef<CanvasRenderingContext2D | null>(null);
     const brushCursor = useSettingsStore((state) => state.brushCursor);
     const penPressure = useSettingsStore((state) => state.penPressure);
+    // Read by the renderer, which is made once, to decide whether a replay
+    // may be played out live (#1347): the drawer's pointer paints straight
+    // onto the drawing, so only a viewer's may.
+    const isDrawerRef = useRef(isDrawer);
+    useEffect(() => {
+      isDrawerRef.current = isDrawer;
+    }, [isDrawer]);
 
     useEffect(() => {
       const canvas = canvasRef.current;
@@ -115,6 +122,8 @@ function createCanvas(
         senderIntervalMs,
         undefined,
         local ? undefined : () => noteHealth("playbackCompressions"),
+        // The scratch pad is only ever drawn on by its owner.
+        local ? undefined : { live: () => !isDrawerRef.current },
       ),
       [],
     );
