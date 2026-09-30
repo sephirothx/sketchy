@@ -107,7 +107,12 @@ async def test_a_read_already_on_its_way_does_not_take_a_pushed_warning_back():
             await asyncio.wait_for(
                 asyncio.gather(*(done.wait() for done in delivered)), timeout=10
             )
-            assert answers and all(answer["warning"] is None for answer in answers), answers
+            # The load's read was fetched before the warning existed, so it is
+            # the stale one this is about. The page reads again when its socket
+            # connects, and that read can land either side of the warning: one
+            # that found it says what the push said. Requiring every answer to
+            # be empty failed whenever the socket connected late (#1341, #1356).
+            assert answers and answers[0]["warning"] is None, answers
             # A delivered answer is applied on the page's next task.
             await target.wait_for_timeout(300)
             assert not await target.evaluate("window.__warningTakenBack")
