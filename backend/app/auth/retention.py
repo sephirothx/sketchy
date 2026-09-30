@@ -26,7 +26,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import AccountState
-from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+from app.services.prompt_reclaim import reclaim_retired_prompt_lists, reclaim_superseded_revisions
 from app.services.readiness import LoopHealth
 from app.services.sweeps import (
     SweepBudget,
@@ -430,6 +430,16 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             reclaim_retired_prompt_lists,
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt="revisions a finished game pins, and the tombstones holding them, for ever",
+        ),
+        Sweep(
+            "superseded_list_revisions",
+            reclaim_superseded_revisions,
+            sla_seconds=HEAVY_SLA_SECONDS,
+            exempt=(
+                "a live list's current revision, and any a finished game pins, a fork was "
+                "copied from, a copy records its origin in, or a hidden prompt is recorded "
+                "in, for ever; one holding a prompt a report waits on, until it is decided"
+            ),
         ),
         Sweep(
             "anonymous_accounts",
