@@ -24,6 +24,18 @@ Order is everything else. Only path points are spread over time; a path
 start, a path end, a shape, a fill and a clear are *barriers*, applied when
 the cursor reaches them, so a fill always sees the complete raster before it
 and a new stroke never starts before the previous one has finished playing.
+
+A path start is also *held*, one interval past its arrival (#1369). The drawer
+sends it on pointer-down, but the points that leave it wait for the next flush
+and are then played over the interval after that, so a start painted as it
+landed sat there alone until the first batch came, up to an interval, and
+every stroke began with a stall. Held, the dot shows as late as the rest of
+the stroke does. The first batch is then played over the time it took to
+arrive after the start, which is how long it took to draw - the flush timer
+runs free of the stroke, so that is anywhere up to an interval - rather than
+over a whole interval, which would put the rest of the stroke further behind
+than the dot by the difference.
+
 The queue is bounded: past `MAX_LAG_MS` of unplayed ink - a tab that was in the
 background, a burst after jitter - the schedule is compressed so the viewer
 catches up rather than drifting further behind, and a hidden tab drains
@@ -60,6 +72,12 @@ interface Segments {
 interface Barrier {
   kind: "barrier";
   run: () => void;
+  /** Not before this: a path start is held an interval (#1369). Null for
+  every other barrier, which runs as soon as the cursor reaches it. */
+  due: number | null;
+  /** When a path start arrived; its first batch is played over the time
+  that batch took to follow it. */
+  arrived: number;
 }
 
 type Item = Segments | Barrier;
@@ -71,6 +89,9 @@ export interface StrokePlayback {
   enqueueSegments(from: Point, points: Point[], style: SegmentStyle, now: number, radii?: number[]): void;
   /** Queue something that must run once everything before it is painted. */
   enqueueBarrier(run: () => void, now: number): void;
+  /** Queue a path start: a barrier held an interval past `now`, since the
+  points that leave it are that far behind it (#1369). */
+  enqueueStart(run: () => void, now: number): void;
   /** Paint what has come due by `now`. Returns whether anything is left. */
   advance(now: number): boolean;
   /** Paint everything queued, at once. */
@@ -109,6 +130,7 @@ export function createStrokePlayback(options: {
     for (let index = queue.length - 1; index >= 0; index -= 1) {
       const item = queue[index];
       if (item.kind === "segments") return Math.max(now, item.dueEnd);
+      if (item.due !== null) return Math.max(now, item.due);
     }
     return now;
   }
@@ -179,7 +201,10 @@ export function createStrokePlayback(options: {
       options.onCompress?.();
     }
     for (const item of queue) {
-      if (item.kind !== "segments") continue;
+      if (item.kind !== "segments") {
+        if (item.due !== null) item.due = Math.max(now, item.due - excess);
+        continue;
+      }
       item.dueStart = Math.max(now, item.dueStart - excess);
       item.dueEnd = Math.max(now, item.dueEnd - excess);
     }
@@ -189,13 +214,20 @@ export function createStrokePlayback(options: {
     enqueueSegments(from, points, style, now, radii) {
       if (points.length === 0) return;
       const start = lastDueEnd(now);
+      const interval = options.intervalMs();
+      // A path's first batch took as long to draw as it took to follow the
+      // start; held behind the start, it is played over that (#1369).
+      const previous = queue.at(-1);
+      const duration = previous?.kind === "barrier" && previous.due !== null
+        ? Math.min(interval, Math.max(0, now - previous.arrived))
+        : interval;
       queue.push({
         kind: "segments",
         points: [from, ...points],
         style,
         radii: radii && radii.some((radius) => radius !== style.radius) ? radii : null,
         dueStart: start,
-        dueEnd: start + options.intervalMs(),
+        dueEnd: start + duration,
         painted: 0,
       });
       compress(now);
@@ -205,13 +237,23 @@ export function createStrokePlayback(options: {
         run();
         return;
       }
-      queue.push({ kind: "barrier", run });
+      queue.push({ kind: "barrier", run, due: null, arrived: now });
+      compress(now);
+    },
+    enqueueStart(run, now) {
+      queue.push({
+        kind: "barrier",
+        run,
+        due: Math.max(lastDueEnd(now), now + options.intervalMs()),
+        arrived: now,
+      });
       compress(now);
     },
     advance(now) {
       while (queue.length > 0) {
         const item = queue[0];
         if (item.kind === "barrier") {
+          if (item.due !== null && now < item.due) return true;
           queue.shift();
           item.run();
           continue;
