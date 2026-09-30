@@ -74,7 +74,7 @@ async def test_seed_bundled_prompt_lists():
 
 async def test_every_supported_language_ships_a_standard_and_an_extended_list():
     """A room may only be opened in a language that has content (R-PROMPT-01),
-    so the seven supported languages and the bundled catalogue have to be the
+    so the eight supported languages and the bundled catalogue have to be the
     same set - and each language's two lists have to be playable together."""
     factory, engine = await create_test_db()
     try:

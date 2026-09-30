@@ -587,7 +587,7 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 `key_bindings` (JSON) ·
 `colorblind_safe_colors` · `prompt_language` (the supported set, `en` by default) ·
 `extra_prompt_languages` (JSON list, `[]` by default: the other languages the player
-plays in, in their order — never the default, never twice, at most six; #1209) ·
+plays in, in their order — never the default, never twice, at most seven; #1209) ·
 `locale` (the interface locales, `en` by default) ·
 `email_reminder_last_shown_at` · timestamps.
 

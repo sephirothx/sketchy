@@ -36,7 +36,7 @@
     {"conceptId":"01a02b7b-b467-7edc-9d1c-f25b22e55939","answer":"łódka","aliases":["łódź"]},
     {"conceptId":"01a02b7b-b46a-70a3-89f1-ae1bb695f5d6","answer":"bomba"},
     {"conceptId":"01a02b7b-b46b-7243-9533-ae583b6bc220","answer":"książka"},
-    {"conceptId":"01a02b7b-b46d-724f-9f59-5c059bee190e","answer":"kozaki"},
+    {"conceptId":"01a02b7b-b46d-724f-9f59-5c059bee190e","answer":"kozaki","aliases":["buty","botki"]},
     {"conceptId":"01a02b7b-b46e-7698-9596-ca75dae00f8b","answer":"butelka"},
     {"conceptId":"01a02b7b-b470-7aa4-a5d2-2e6fd30eb0ad","answer":"łuk i strzała"},
     {"conceptId":"01a02b7b-b473-7ef8-82ff-fdf3ea8da19d","answer":"muszka"},

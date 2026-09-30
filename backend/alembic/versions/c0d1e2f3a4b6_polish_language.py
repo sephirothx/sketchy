@@ -52,12 +52,18 @@ _CHECKS = (
 
 
 def _replace(languages: tuple[str, ...]) -> None:
-    for table, name, column, extra in _CHECKS:
+    # One batch per table: on SQLite each batch copies the whole table, and
+    # `user_settings` carries two of these checks.
+    tables = dict.fromkeys(table for table, *_ in _CHECKS)
+    for table in tables:
         with op.batch_alter_table(table) as batch:
-            batch.drop_constraint(name, type_="check")
-            batch.create_check_constraint(
-                name, sa.column(column).in_((*languages, *extra))
-            )
+            for owner, name, column, extra in _CHECKS:
+                if owner != table:
+                    continue
+                batch.drop_constraint(name, type_="check")
+                batch.create_check_constraint(
+                    name, sa.column(column).in_((*languages, *extra))
+                )
 
 
 def upgrade() -> None:

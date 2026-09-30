@@ -21,6 +21,7 @@ from app.domain_values import (
     AccountState,
     DEFAULT_BRUSH_SIZE,
     DEFAULT_USER_KEY_BINDINGS,
+    INTERFACE_LOCALES,
     PROMPT_LANGUAGES,
 )
 
@@ -58,7 +59,10 @@ def _validated_key_bindings(value: dict[str, list[str]] | None):
     return value
 
 
-PlayLanguage = Literal["en", "de", "es", "fr", "it", "nl", "pt", "pl"]
+# Read off the registries rather than restated, so a language added there is
+# accepted here without a second list to keep in step (#771).
+PlayLanguage = Literal[PROMPT_LANGUAGES]
+LocaleCode = Literal[INTERFACE_LOCALES]
 # Every language but the default: the list can hold the rest of them, no more.
 MAX_EXTRA_PROMPT_LANGUAGES = len(PROMPT_LANGUAGES) - 1
 EXTRA_PROMPT_LANGUAGES_FIELD = "extraPromptLanguages"
@@ -116,7 +120,7 @@ class UserSettingsSeed(ControlFreeModel):
     # registration like the one above, and separate from it for the reason
     # `InterfaceLocale` gives: playing in English and reading in Dutch is
     # ordinary (R-I18N-06).
-    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt", "pl"] = Field(default="en", alias="locale")
+    locale: LocaleCode = Field(default="en", alias="locale")
 
     @field_validator("key_bindings")
     @classmethod
@@ -185,7 +189,7 @@ class UserSettingsPatch(ControlFreeModel):
         alias="extraPromptLanguages",
         max_length=MAX_EXTRA_PROMPT_LANGUAGES,
     )
-    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt", "pl"] | None = Field(default=None, alias="locale")
+    locale: LocaleCode | None = Field(default=None, alias="locale")
 
     @field_validator("key_bindings")
     @classmethod

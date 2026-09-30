@@ -1,5 +1,6 @@
 import type { CommunityPromptListQuery } from "./promptLists";
 import type { PromptLanguage } from "../types";
+import { PROMPT_LANGUAGE_LABELS } from "./promptLanguages.ts";
 
 /** The catalogue's filters, carried in the URL so a filtered view is a link.
  *
@@ -20,7 +21,7 @@ export const DEFAULT_FILTERS: CatalogueFilters = {
   starred: false,
 };
 
-const LANGUAGES = new Set(["de", "en", "es", "fr", "it", "nl", "pl", "pt"]);
+const LANGUAGES = new Set(Object.keys(PROMPT_LANGUAGE_LABELS));
 
 export function filtersFromParams(params: URLSearchParams): CatalogueFilters {
   const language = params.get("language");
