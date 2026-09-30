@@ -374,6 +374,7 @@ telemetry.sources.sockets_connected = lambda: handler_context.room_capacity.open
 # the tunable ones the handlers read (#1232).
 sio.eio.admission = handler_context.room_capacity.transports
 telemetry.sources.socket_transports = lambda: socket_transports(sio)
+telemetry.sources.websocket_handlers = lambda: sio.eio.websocket_handlers
 telemetry.sources.drawing_cache_bytes = lambda: drawing_cache.bytes
 telemetry.sources.lobby_watchers = lambda: len(sio.manager.rooms.get("/", {}).get(LOBBY_CHANNEL, {}))
 # Built here rather than at import so it can reach the live policy objects the

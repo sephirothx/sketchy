@@ -91,7 +91,9 @@ async def test_a_polling_socket_that_upgrades_is_counted_once_and_the_gauge_says
     transports = {"p1": "polling", "p2": "websocket", "w1": "websocket"}
     store.sources.socket_transports = lambda: transports
 
+    store.sources.websocket_handlers = lambda: 2
     lines = store.prometheus_lines()
+    assert "sketchy_websocket_handlers_open 2" in lines
     assert 'sketchy_sockets_by_transport{transport="polling"} 1' in lines
     assert 'sketchy_sockets_by_transport{transport="websocket"} 2' in lines
     assert store.socket_upgrades.total() == 1

@@ -20,9 +20,17 @@ and watches the server's side of it:
    is measured here too, as the slack under the budget.)
 3. `/metrics` every two seconds: the backlog high-water in bytes and age, and
    the moment the server closes the socket for passing the budget.
-4. The spectator comes back, joins again, and takes a fresh sync, whose
-   history hash is checked against the header the server sent: recovery is a
-   full, verified canvas, never a partial stream.
+4. That the socket is *gone*, not only forgotten (#1235, #1249): the server's
+   count of WebSocket handlers still running - whose writer, blocked on the
+   peer, is what would hold the backlog - falls back to what it was before
+   the spectator came, and the spectator's own connection, reading again,
+   reaches its end within seconds. A closure counted, or the socket leaving
+   the registry, is not taken as proof of either.
+5. The spectator comes back under a new name (a guest's name is held for
+   30 s, #859), joins again, asks for the canvas as a browser does (nothing
+   is pushed on a join since #877) and takes a full sync, whose history hash
+   is checked against the header the server sent: recovery is a full,
+   verified canvas, never a partial stream.
 
 Usage:
   METRICS_TOKEN=x benchmarks/with_server.sh benchmarks/slow_viewer.py
@@ -44,6 +52,8 @@ ROOT_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 BACKEND_DIR = os.path.join(ROOT_DIR, "backend")
 if BACKEND_DIR not in sys.path:
     sys.path.insert(0, BACKEND_DIR)
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
 
 from app.canvas_history import (
     canvas_history_hash,
@@ -51,8 +61,13 @@ from app.canvas_history import (
 )
 from app.live_drawing import encode_live_drawing
 from app.protocol import PROTOCOL_VERSION
+from benchmarks.load import draw_identity
 
 COOKIE = "sketchy_session"
+HANDLERS = "sketchy_websocket_handlers_open"
+# How long the server has to finish a torn-down socket's handler, and the
+# spectator's connection to reach its end once it reads again.
+TEARDOWN_SECONDS = 5.0
 
 
 def session_cookie(cookies) -> str:
@@ -77,7 +92,7 @@ async def metrics(base: str, token: str) -> dict[str, float]:
             text = await response.text()
     out: dict[str, float] = {}
     for line in text.splitlines():
-        if line.startswith("sketchy_socket_backlog") or line.startswith("sketchy_sockets_connected"):
+        if line.startswith(("sketchy_socket_backlog", "sketchy_sockets_connected", HANDLERS)):
             name, _, value = line.rpartition(" ")
             out[name] = float(value)
     return out
@@ -91,7 +106,7 @@ async def client(base: str, name: str) -> socketio.AsyncClient:
 
 
 async def raw_spectator(base: str, name: str, code: str):
-    """A raw WebSocket spectator: session, socket, and the join sent."""
+    """A raw WebSocket spectator: session, socket, and the join sent (ack id 1)."""
     cookie = await provision(base, name)
     session = aiohttp.ClientSession()
     ws = await session.ws_connect(base.replace("http", "ws", 1) + "/socket.io/?EIO=4&transport=websocket", headers={"Cookie": cookie})
@@ -135,9 +150,10 @@ async def main() -> int:
 
     # A near-ceiling drawing, paced under the drawing budget (100 frames
     # per 2 s): 120 strokes of 200 points is 24 000 of the 25 000 allowed.
-    for stroke in range(120):
+    for _stroke in range(120):
         sequence += 1
-        await drawer.emit("draw", (encode_live_drawing("draw_start", {"x": 0.05, "y": 0.05, "color": "#000000", "width": 4}), [generation, sequence]))
+        opener = encode_live_drawing("draw_start", {"x": 0.05, "y": 0.05, "color": "#000000", "width": 4})
+        await drawer.emit("draw", (opener, draw_identity(generation, sequence)))
         points = [{"x": 0.05 + (index % 40) / 50, "y": 0.05 + (index // 40) / 8} for index in range(200)]
         await drawer.emit("draw", encode_live_drawing("draw_move", {"points": points}))
         await drawer.emit("draw", encode_live_drawing("draw_end"))
@@ -145,6 +161,12 @@ async def main() -> int:
     await asyncio.sleep(1.0)
     print(f"drawing staged: {sequence} actions on the canvas")
 
+    # The host's and the guest's: what the count returns to once the
+    # spectator's socket is really gone.
+    handlers_before = (await metrics(base, token)).get(HANDLERS)
+    if handlers_before is None:
+        print(f"FAILED: /metrics has no {HANDLERS}")
+        return 1
     session, ws = await raw_spectator(base, "Slowpoke", code)
     # Read the join's answers, then stop reading at the transport: from here
     # the socket accepts nothing, and everything sent to it backs up.
@@ -185,13 +207,27 @@ async def main() -> int:
                 closed_at = time.monotonic() - started
                 print(f"t={closed_at:5.1f}s closed for the budget: {closures}")
                 break
+
+    torn_down = False
+    if closed_at is not None:
+        torn_down = await confirm_teardown(base, token, ws, transport, handlers_before)
     await ws.close()
     await session.close()
 
-    # Recovery: come back, join again, take the sync, check its hash.
+    # Recovery: come back, join again, ask for the canvas, check its hash.
     verified = False
     if closed_at is not None:
-        session, ws = await raw_spectator(base, "Slowpoke", code)
+        session, ws = await raw_spectator(base, "Slowpoke2", code)
+        while True:
+            message = await asyncio.wait_for(ws.receive(), 10)
+            if message.type != aiohttp.WSMsgType.TEXT:
+                continue
+            if message.data.startswith("431"):
+                assert json.loads(message.data[3:])[0].get("ok"), message.data
+                break
+            if message.data == "2":
+                await ws.send_str("3")
+        await ws.send_str('422["request_sync_strokes",[2]]')
         header = None
         while True:
             message = await asyncio.wait_for(ws.receive(), 10)
@@ -213,11 +249,49 @@ async def main() -> int:
     if closed_at is None:
         print("FAILED: the slow viewer was never closed for its backlog")
         return 1
+    if not torn_down:
+        print("FAILED: the evicted socket was counted closed but its transport was not ended")
+        return 1
     if not verified:
         print("FAILED: the recovered canvas did not verify")
         return 1
     print("PASSED")
     return 0
+
+
+async def confirm_teardown(base: str, token: str, ws, transport, handlers_before: float) -> bool:
+    """That the evicted socket's transport ended, from both sides.
+
+    The server's: its WebSocket handler returned, which the library does only
+    after the writer holding the backlog has. The spectator's: reading again,
+    it drains what the kernel still held and reaches the end of the
+    connection, where a transport left open would go on being written to."""
+    deadline = time.monotonic() + TEARDOWN_SECONDS
+    handlers = None
+    while time.monotonic() < deadline:
+        handlers = (await metrics(base, token)).get(HANDLERS)
+        if handlers is not None and handlers <= handlers_before:
+            break
+        await asyncio.sleep(0.2)
+    server_side = handlers is not None and handlers <= handlers_before
+    print(f"server: {HANDLERS} {handlers:.0f} (before the spectator {handlers_before:.0f}) - "
+          f"{'handler and writer finished' if server_side else 'STILL RUNNING'}")
+
+    transport.resume_reading()
+    drained = 0
+    ended = False
+    while time.monotonic() < deadline + TEARDOWN_SECONDS:
+        try:
+            message = await asyncio.wait_for(ws.receive(), deadline + TEARDOWN_SECONDS - time.monotonic())
+        except (asyncio.TimeoutError, TimeoutError):
+            break
+        if message.type in (aiohttp.WSMsgType.CLOSE, aiohttp.WSMsgType.CLOSED, aiohttp.WSMsgType.ERROR):
+            ended = True
+            break
+        drained += len(message.data) if isinstance(message.data, (bytes, str)) else 0
+    print(f"client: drained {drained} bytes the kernel held, then "
+          f"{'the connection ended' if ended else 'it was STILL OPEN'}")
+    return server_side and ended
 
 
 if __name__ == "__main__":
