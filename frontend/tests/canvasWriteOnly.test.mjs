@@ -18,7 +18,9 @@ const DRAWING_CODE = [
   "src/hooks/useScratchPadProtocol.ts",
   // The replay benchmark paints with the real renderer, so it holds the drawing the same way.
   "benchmarks/canvas-history.html",
-  ...readdirSync("src/lib").filter((file) => /^(canvas(?!Readback)|strokePlayback|replay|pngEncode|pathWidths|penStroke)/.test(file)).map((file) => `src/lib/${file}`),
+  ...readdirSync("src/lib").filter((file) => /^(canvas(?!Readback)|strokePlayback|replay|pngEncode|pathWidths|penStroke|thumbnail)/.test(file)).map((file) => `src/lib/${file}`),
+  // Thumbnails are replayed and encoded on a worker (#1282): the same rule.
+  ...readdirSync("src/workers").map((file) => `src/workers/${file}`),
 ];
 
 test("nothing that paints or saves the drawing reads a canvas", () => {

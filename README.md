@@ -1797,6 +1797,7 @@ frontend/
                   format.ts holds the Intl formatters)
     store/        zustand global game state store
     hooks/        useGameSocketListeners - registers all socket listeners once
+    workers/      thumbnail.worker.ts - drawing thumbnails replayed off the page's thread (#1282)
     lib/socket.ts socket.io-client singleton + REST base URL
     lib/refusals.ts What a refusal says to the player: the sentence per `errorCode`
     lib/announcements.ts The room's own lines, rendered per reader from a code
@@ -2158,6 +2159,9 @@ backend/.venv/bin/python benchmarks/canvas_history.py --near-limit
 
 # Near-limit browser decode/replay on desktop and 4× CPU throttling
 ./benchmarks/run_canvas_history_browser.sh
+# What drawing thumbnails cost the page's main thread: on the page against the thumbnail worker,
+# for the costliest accepted history (fixtures/fill_replay_100.json), plus its full-sync replay (#1282)
+BENCHMARK=thumbnail_browser ./benchmarks/run_canvas_history_browser.sh --count 3
 
 # End-to-end canvas benchmarks (desktop + throttled mobile)
 ./benchmarks/run_canvas.sh
