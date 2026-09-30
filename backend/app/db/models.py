@@ -2512,11 +2512,14 @@ class GameRecord(Base):
             "started_at <= finished_at", name="ck_game_records_time_order"
         ),
         Index("ix_game_records_outcome_finished_at", "outcome", "finished_at"),
-        # The target of each seat's copy of the finish time: the id alone is
-        # already unique, and this exists so `game_participants` can name the
-        # game *and* its finish, making a seat whose copy disagrees with its
-        # game a constraint violation rather than a history out of order.
-        UniqueConstraint("id", "finished_at", name="uq_game_records_id_finished_at"),
+        # The target of each seat's copy of what a history page filters and
+        # orders on: the id alone is already unique, and this exists so
+        # `game_participants` can name the game *and* those values, making a
+        # seat whose copy disagrees with its game a constraint violation
+        # rather than a history out of order or a private game shown.
+        UniqueConstraint(
+            "id", "finished_at", "outcome", "visibility", name="uq_game_records_history_key"
+        ),
     )
 
     id: Mapped[uuid.UUID] = mapped_column(
@@ -2813,20 +2816,33 @@ class GameParticipant(Base):
         # a plausible-looking lie (see score_events, turn_records, outcomes).
         UniqueConstraint("game_id", "id", name="uq_game_participants_game_id_id"),
         ForeignKeyConstraint(
-            ["game_id", "finished_at"],
-            ["game_records.id", "game_records.finished_at"],
+            ["game_id", "finished_at", "outcome", "visibility"],
+            [
+                "game_records.id",
+                "game_records.finished_at",
+                "game_records.outcome",
+                "game_records.visibility",
+            ],
             ondelete="CASCADE",
-            name="fk_game_participants_game_finished_at",
+            # A game's values are written once, but an edit to one - an
+            # operator's, a fixture's - carries to the copies rather than
+            # being refused or leaving a history that disagrees with it.
+            onupdate="CASCADE",
+            name="fk_game_participants_game_history",
         ),
-        # A player's history, newest first, read as a walk down this index
-        # from where the last page stopped (#477): the page query is one
-        # seek per identity and stops after a page, however long the history.
-        # With `finished_at` only on the game, every page had to gather all of
-        # the player's games and sort them before it could take any. It leads
-        # with `user_id`, so it is also the index for every lookup by player.
+        # A player's history, newest first, read as walks down this index
+        # from where the last page stopped (#477): one per identity, outcome
+        # and visibility the page shows, each stopping after a page, however
+        # long the history. With these only on the game, every page gathered
+        # all of the player's games and sorted them, and a filter leading the
+        # index only as a probe made a stranger's page walk every private game
+        # to find public ones. It leads with `user_id`, so it is also the index
+        # for every lookup by player.
         Index(
             "ix_game_participants_user_history",
             "user_id",
+            "outcome",
+            "visibility",
             "finished_at",
             "game_id",
         ),
@@ -2845,10 +2861,24 @@ class GameParticipant(Base):
         ForeignKey("users.id", ondelete="SET NULL"),
         nullable=True,
     )
-    # The game's finish, copied onto the seat so a player's history can be
-    # paged off one index (`ix_game_participants_user_history`). A copy, so
-    # the composite key above ties it to the game's own value.
+    # The game's finish, outcome and visibility, copied onto the seat so a
+    # player's history can be paged off one index
+    # (`ix_game_participants_user_history`). Copies, so the composite key
+    # above ties them to the game's own values; the defaults are the game's,
+    # and a writer that gets one wrong is refused by that key.
     finished_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
+    outcome: Mapped[str] = mapped_column(
+        String(16),
+        default=GameOutcome.FINISHED.value,
+        server_default=text("'finished'"),
+        nullable=False,
+    )
+    visibility: Mapped[str] = mapped_column(
+        String(16),
+        default=GameVisibility.PRIVATE.value,
+        server_default=text("'private'"),
+        nullable=False,
+    )
     display_name_snapshot: Mapped[str] = mapped_column(
         String(32), default="Unknown", nullable=False
     )

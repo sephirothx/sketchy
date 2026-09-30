@@ -9,6 +9,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
 import os
+import re
 
 import pytest
 
@@ -204,9 +205,12 @@ async def test_the_lobby_restore_and_the_sent_purge_use_their_partial_indexes():
 async def test_a_history_page_is_an_ordered_walk_of_the_players_seats():
     """#477: a profile's page reads down `ix_game_participants_user_history`
     and stops, rather than gathering every game the player sat in and sorting
-    them first - the first page and a deep one alike. Sequential scans are
-    switched off so the plan does not turn on how many rows a test can seed:
-    what is proven is that the index serves the order, so there is no Sort."""
+    them first - the first page and a deep one alike, for the owner, a visitor
+    and a signed-in stranger, whose private-game filter is in the index rather
+    than probed per row. Sequential and bitmap scans are switched off, since
+    reading a whole slice and sorting it is the cheaper plan at the sizes a
+    test can seed and not at a real player's: what is proven is that the index
+    serves each run's order, so no Sort sits inside a run."""
     from sqlalchemy import event, insert
 
     from app.db.models import GameParticipant, GameRecord, User, generate_uuid
@@ -243,6 +247,7 @@ async def test_a_history_page_is_an_ordered_walk_of_the_players_seats():
                     "game_id": game_id,
                     "user_id": player if index % 10 == 0 else others[index % 20],
                     "finished_at": finished_at,
+                    "visibility": games[-1]["visibility"],
                     "final_score": 0,
                     "final_rank": 1,
                 }
@@ -261,27 +266,29 @@ async def test_a_history_page_is_an_ordered_walk_of_the_players_seats():
         captured: list[tuple[str, tuple]] = []
 
         def before(conn, cursor, statement_text, parameters, context, executemany):
-            if "FROM game_participants JOIN game_records" in statement_text:
+            if "game_participants.finished_at DESC" in statement_text:
                 captured.append((statement_text, parameters))
 
         history = SqlAlchemyGameHistoryRepository(factory)
         event.listen(engine.sync_engine, "before_cursor_execute", before)
         try:
-            for viewer in (player, stranger):
+            for viewer in (player, None, stranger):
+                viewer_id = None if viewer is None else str(viewer)
                 first = await history.get_user_games(
-                    str(player), limit=20, requesting_user_id=str(viewer)
+                    str(player), limit=20, requesting_user_id=viewer_id
                 )
                 await history.get_user_games(
                     str(player), limit=20, cursor=first.next_cursor,
-                    requesting_user_id=str(viewer),
+                    requesting_user_id=viewer_id,
                 )
         finally:
             event.remove(engine.sync_engine, "before_cursor_execute", before)
 
-        assert len(captured) == 4
+        assert len(captured) == 6
         for statement_text, parameters in captured:
             async with engine.connect() as connection:
                 await connection.exec_driver_sql("SET enable_seqscan = off")
+                await connection.exec_driver_sql("SET enable_bitmapscan = off")
                 plan = "\n".join(
                     (
                         await connection.exec_driver_sql(
@@ -290,6 +297,12 @@ async def test_a_history_page_is_an_ordered_walk_of_the_players_seats():
                     ).scalars().all()
                 )
             assert "ix_game_participants_user_history" in plan, plan
-            assert "Sort" not in plan, plan
+            assert "Seq Scan" not in plan, plan
+            # Anything under the Append is a run; a Sort node there would be
+            # one run sorting its whole slice of the table. Above it the runs
+            # are merged - a Merge Append, or a Sort over a page from each.
+            runs = plan.split("Append", 1)[1] if "Append" in plan else plan
+            assert not re.search(r"->\s+Sort\b", runs), plan
+            assert "Append" in plan or "Sort" not in plan, plan
     finally:
         await engine.dispose()

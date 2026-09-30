@@ -166,7 +166,10 @@ async def test_merge_preserves_distinct_historical_seats_and_combines_reads():
 async def test_a_merged_account_pages_one_history_across_its_identities():
     """A guest's seats keep the guest's id after a merge, so the history is
     one index walk per identity, merged (#477). Paged one game at a time it
-    has to interleave the two, list a game both sat in once, and end."""
+    has to interleave the two, list a game both sat in once, and end - and
+    show each viewer what #469 lets them see: the owner every game, a visitor
+    the public ones, a signed-in stranger those plus the private game they
+    sat in with the guest identity (walked down the stranger's own seats)."""
     factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
@@ -174,9 +177,10 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
         account_guest = await users.create_anonymous("Account")
         account = await users.claim_account(account_guest.id, "Account", "hash")
         guest = await users.create_anonymous("RoadPlayer")
+        stranger = await users.create_anonymous("Stranger")
         start = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
-        async def play(index: int, *players: str) -> str:
+        async def play(index: int, *players: str, visibility: str = "public") -> str:
             finished = start + timedelta(minutes=10 * index)
             return await history.save_game(
                 GameRecordInput(
@@ -188,7 +192,7 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
                     player_count=len(players),
                     started_at=finished - timedelta(minutes=5),
                     finished_at=finished,
-                    visibility="public",
+                    visibility=visibility,
                 ),
                 [
                     GameParticipantInput(
@@ -204,13 +208,27 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
             )
 
         played = [
-            await play(index, account.id if index % 2 == 0 else guest.id)
+            await play(
+                index,
+                account.id if index % 2 == 0 else guest.id,
+                visibility="private" if index % 3 == 0 else "public",
+            )
             for index in range(6)
         ]
         played.append(await play(6, account.id, guest.id))
+        shared = await play(7, guest.id, stranger.id, visibility="private")
+        played.append(shared)
+        # The stranger's own private game, without the subject: on nobody's
+        # view of this profile, though the stranger's walk passes it.
+        await play(8, stranger.id, visibility="private")
+        public = [played[index] for index in (1, 2, 4, 5, 6)]
         await users.merge_guest_into_account(guest.id, account.id)
 
-        for viewer in (account.id, None):
+        for viewer, expected in (
+            (account.id, played),
+            (None, public),
+            (stranger.id, [*public, shared]),
+        ):
             paged, cursor = [], None
             while True:
                 page = await history.get_user_games(
@@ -220,6 +238,6 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
                 cursor = page.next_cursor
                 if cursor is None:
                     break
-            assert paged == played[::-1], viewer
+            assert paged == expected[::-1], viewer
     finally:
         await engine.dispose()

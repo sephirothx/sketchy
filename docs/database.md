@@ -1446,7 +1446,7 @@ cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # repla
 | `scoring_version`, `score_ledger_version`, `rule_snapshot_version` | Legacy rows use `0` |
 | `rule_snapshot` (JSON) | The frozen exact rules — see below |
 | `prompt_source_mode` | `legacy_unknown \| curated \| custom \| mixed \| builtin_fallback` |
-| `started_at`, `finished_at` | Gameplay times. `finished_at` is copied onto every seat (`game_participants.finished_at`, #477); `uq_game_records_id_finished_at` exists only as the target of the key that holds each copy equal to it |
+| `started_at`, `finished_at` | Gameplay times. `finished_at`, `outcome` and `visibility` are copied onto every seat (#477); `uq_game_records_history_key` exists only as the target of the key that holds each copy equal to them |
 | `outcome` | `finished \| abandoned` (and shutdown-cut) |
 | `visibility` | `public \| private`, CHECK-enforced. The room's public flag, frozen when the game is saved (#469): a public room's game is listed on a profile for anyone, a private room's only for the players who sat in it (R-HIST-25). Defaults to `private` at both layers, so a writer that does not say discloses nothing |
 | `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
@@ -1473,24 +1473,29 @@ contributes those turns but **not** a game played, a game won, or a score.
 
 ### `game_participants`
 `id` (the **participant seat**) · `game_id` (CASCADE) · `user_id` (`SET NULL`) ·
-`finished_at` (the game's, copied) · `display_name_snapshot` · `name_color_snapshot` ·
-`is_anonymous_snapshot` · `final_score` · `final_rank` (nullable; null for abandoned
-games, `>= 1` otherwise) · `turns_played` · `created_at`, with
+`finished_at` · `outcome` · `visibility` (the game's, copied) · `display_name_snapshot` ·
+`name_color_snapshot` · `is_anonymous_snapshot` · `final_score` · `final_rank` (nullable;
+null for abandoned games, `>= 1` otherwise) · `turns_played` · `created_at`, with
 `uq_game_participants_game_user` and `ix_game_participants_user_history`
-(`user_id, finished_at, game_id`).
+(`user_id, outcome, visibility, finished_at, game_id`).
 
-- **A profile's history is a walk down `ix_game_participants_user_history`** (#477,
+- **A profile's history is walks down `ix_game_participants_user_history`** (#477,
   R-HIST-28). The page is newest first and paged by a cursor on `(finished_at,
-  game_id)`, so it reads one player's seats from where the last page stopped and stops
-  after a page. With the finish only on `game_records`, every page - the first
-  included - gathered all of the player's seats and sorted their games before taking
-  twenty. A merged guest's seats keep the guest's id, so an account's page is one walk
-  per identity, merged and deduplicated in the repository. The index leads with
-  `user_id` and replaced `ix_game_participants_user_id`.
-- **The copy cannot drift.** `fk_game_participants_game_finished_at` names
-  `(game_id, finished_at)` against `game_records (id, finished_at)`, so a seat whose
-  finish disagrees with its game's is refused rather than sorted into the wrong place
-  in somebody's history. Nothing updates a game's `finished_at` after it is written.
+  game_id)`; each walk is one run of the index - an identity, an outcome, a visibility
+  - read from where the last page stopped and stopped after a page, and the repository
+  merges the runs and drops a game two identities both sat in. The owner's runs are
+  every outcome shown and both visibilities; anyone else's are the public ones, plus,
+  for a signed-in caller, the private games they sat in with the subject, walked down
+  the **caller's** seats - so a stranger's page costs what the stranger's own history
+  does, never what the subject's private games do. With the three values only on
+  `game_records`, every page gathered all of the player's seats and sorted them, and
+  a filter probed per row made a stranger walk every private game to find public
+  ones. The index leads with `user_id` and replaced `ix_game_participants_user_id`.
+- **The copies cannot drift.** `fk_game_participants_game_history` names
+  `(game_id, finished_at, outcome, visibility)` against `game_records`, so a seat whose
+  copy disagrees with its game is refused rather than sorted into the wrong place or
+  shown to the wrong people. It is `ON UPDATE CASCADE`: nothing edits those values on a
+  game, and if something ever does the seats follow.
 
 - At most **one participant seat per linked account** per game; multiple accountless
   seats remain distinct.

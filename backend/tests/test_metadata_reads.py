@@ -226,7 +226,7 @@ async def test_games_finished_in_the_same_instant_page_without_repeats():
         assert cursor is None
         assert sorted(paged) == sorted(game.game_id for game in recorded)
         assert paged == sorted(paged, reverse=True), "newest id first within the instant"
-        walks = [s for s in _selects(statements) if "FROM game_participants JOIN game_records" in s]
+        walks = [s for s in _selects(statements) if "game_participants.finished_at DESC" in s]
         assert len(walks) == 5
         assert all(
             "ORDER BY game_participants.finished_at DESC, game_participants.game_id DESC" in walk

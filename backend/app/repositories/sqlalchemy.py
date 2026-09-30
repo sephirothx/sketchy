@@ -1978,6 +1978,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                             game_id=record_id,
                             user_id=participant_user_id,
                             finished_at=game_db.finished_at,
+                            outcome=game_db.outcome,
+                            visibility=game_db.visibility,
                             display_name_snapshot=display_name_snapshot,
                             name_color_snapshot=name_color_snapshot,
                             is_anonymous_snapshot=is_anonymous_snapshot,
@@ -3461,72 +3463,77 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 if requesting_user_id is None
                 else _optional_entity_id(requesting_user_id)
             )
-            conditions: list[ColumnElement[bool]] = []
-            if not include_abandoned:
-                conditions.append(GameRecord.outcome == GameOutcome.FINISHED.value)
-            # The subject sat in every game on their own list, so reading it
-            # themselves needs no visibility test at all.
-            if db_requesting_user_id not in identity_ids:
-                visible: ColumnElement[bool] = (
-                    GameRecord.visibility == GameVisibility.PUBLIC.value
+            outcomes = (
+                (GameOutcome.FINISHED.value, GameOutcome.ABANDONED.value)
+                if include_abandoned
+                else (GameOutcome.FINISHED.value,)
+            )
+            public, private = GameVisibility.PUBLIC.value, GameVisibility.PRIVATE.value
+
+            def walk(seat_user_id: UUID, outcome: str, visibility: str, *, shared_with=()):
+                """One run of `ix_game_participants_user_history` - a user, an
+                outcome, a visibility - newest first from the cursor, stopping
+                after a page (#477). The id breaks a tie: two games finished in
+                the same microsecond had no order between them, so a page
+                boundary could repeat one and skip the other (#1077)."""
+                stmt = select(GameParticipant.game_id, GameParticipant.finished_at).where(
+                    GameParticipant.user_id == seat_user_id,
+                    GameParticipant.outcome == outcome,
+                    GameParticipant.visibility == visibility,
                 )
-                if db_requesting_user_id is not None:
-                    requester_ids = await _identity_ids(session, db_requesting_user_id)
-                    # Correlated, so it is one probe of the (game, user)
-                    # index per candidate row rather than every game the
-                    # requester ever played gathered up front.
-                    requester_seat = aliased(GameParticipant)
-                    visible = or_(
-                        visible,
+                if after is not None:
+                    stmt = stmt.where(
+                        tuple_(GameParticipant.finished_at, GameParticipant.game_id) < after
+                    )
+                if shared_with:
+                    other_seat = aliased(GameParticipant)
+                    stmt = stmt.where(
                         exists().where(
-                            requester_seat.game_id == GameRecord.id,
-                            requester_seat.user_id.in_(requester_ids),
-                        ),
+                            other_seat.game_id == GameParticipant.game_id,
+                            other_seat.user_id.in_(shared_with),
+                        )
                     )
-                conditions.append(visible)
-            if after is not None:
-                # Strictly later in the order: an earlier finish, or the same
-                # finish and a smaller id - the tie-break the order uses.
-                conditions.append(
-                    tuple_(GameParticipant.finished_at, GameParticipant.game_id)
-                    < after
-                )
+                return stmt.order_by(
+                    GameParticipant.finished_at.desc(), GameParticipant.game_id.desc()
+                ).limit(clamped_limit + 1)  # the extra row says whether more remain
 
-            def seats_of(identity_id: UUID):
-                """One identity's next games, a walk down
-                `ix_game_participants_user_history` that stops after a page
-                (#477). The id breaks a tie: two games finished in the same
-                microsecond had no order between them, so a page boundary
-                could repeat one and skip the other (#1077)."""
-                return (
-                    select(GameParticipant.game_id, GameParticipant.finished_at)
-                    .join(GameRecord, GameRecord.id == GameParticipant.game_id)
-                    .where(GameParticipant.user_id == identity_id, *conditions)
-                    .order_by(
-                        GameParticipant.finished_at.desc(),
-                        GameParticipant.game_id.desc(),
-                    )
-                    # One extra row answers "is there another page?" without
-                    # a second COUNT query.
-                    .limit(clamped_limit + 1)
-                )
-
-            # A merged guest's seats keep the guest's id, so an account's
-            # history is one walk per identity, merged here. `IN` over the
-            # identities would read every seat of each and sort them - the
-            # cost this index exists to avoid. Each walk returns its first
-            # page and a game ranks no higher in its own walk than in the
-            # merge, so the merge's first page is among them.
-            if len(identity_ids) == 1:
-                listing = seats_of(identity_ids[0])
+            # Which runs make up the list (#469): the subject reading their own
+            # sees every game they sat in; anyone else sees the public ones,
+            # and a signed-in caller also the private games they sat in with
+            # the subject - walked down the *caller's* seats, so what a
+            # stranger's page costs is bounded by the stranger's own history,
+            # never by how many private games the subject has.
+            if db_requesting_user_id in identity_ids:
+                walks = [
+                    walk(identity, outcome, visibility)
+                    for identity in identity_ids
+                    for outcome in outcomes
+                    for visibility in (public, private)
+                ]
             else:
-                walks = union_all(
-                    *(select(walk.c) for walk in (seats_of(i).subquery() for i in identity_ids))
-                ).subquery()
-                listing = select(walks.c.game_id, walks.c.finished_at).order_by(
-                    walks.c.finished_at.desc(), walks.c.game_id.desc()
+                walks = [
+                    walk(identity, outcome, public)
+                    for identity in identity_ids
+                    for outcome in outcomes
+                ]
+                if db_requesting_user_id is not None:
+                    walks += [
+                        walk(caller, outcome, private, shared_with=identity_ids)
+                        for caller in await _identity_ids(session, db_requesting_user_id)
+                        for outcome in outcomes
+                    ]
+            # Merged here: each run returns its own first page, and a game
+            # ranks no higher in its run than in the merge, so the merge's
+            # first page is among them. A merged guest's seats keep the
+            # guest's id, which is why identities are runs of their own.
+            if len(walks) == 1:
+                listing = walks[0]
+            else:
+                runs = union_all(*(select(w.subquery().c) for w in walks)).subquery()
+                listing = select(runs.c.game_id, runs.c.finished_at).order_by(
+                    runs.c.finished_at.desc(), runs.c.game_id.desc()
                 )
-            # A game two of the identities both sat in is in two walks.
+            # A game two identities both sat in is in two runs.
             ordered = list(dict.fromkeys(row[0] for row in await session.execute(listing)))
             ordered = ordered[: clamped_limit + 1]
             games_by_id = {}
@@ -3541,7 +3548,9 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 )
                 games_by_id = {record.id: record for record in records}
 
-        games = [games_by_id[game_id] for game_id in ordered]
+        # Two statements, so a game deleted between them is dropped rather
+        # than a KeyError.
+        games = [games_by_id[game_id] for game_id in ordered if game_id in games_by_id]
         page = [_to_game_summary(g, with_rule_snapshot=False) for g in games[:clamped_limit]]
         next_cursor = None
         if len(games) > clamped_limit:
