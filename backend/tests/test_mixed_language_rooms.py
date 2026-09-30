@@ -562,3 +562,26 @@ async def test_a_mixed_draw_samples_among_playable_concepts_only(seeded):
         sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=1)
         assert [prompt.translations["en"].answer for prompt in sample.prompts] == ["dog"]
         assert sample.drawable == 1
+
+
+def test_the_false_friend_memo_holds_the_turn_in_play_and_no_other():
+    """Keyed by the turn's prompt, every entry was dead once its turn ended,
+    and a mixed room kept them all: 24 MB at 16 seats, 7 languages and 10
+    rounds (#1252). However many turns are played, it holds at most one set
+    per language in play."""
+    game = _game_drawn_by("en", rounds=3)
+    languages = set(game.seat_languages.values())
+    seats = ("english", "french", "italian")
+    for turn in range(6):
+        for seat in seats:
+            if seat != game.current_drawer:
+                game.submit_guess(seat, "not even close")
+        assert game._taken_keys, "the guard asked"
+        assert len(game._taken_keys) <= len(languages), (turn, sorted(game._taken_keys))
+        game.snapshot_turn_participants({seat: "eligible" for seat in seats})
+        game.end_turn(len(seats), terminal_states={seat: "active" for seat in seats})
+        game.start_next_turn(canvas_generation=turn + 2)
+        game.current_drawer = "drawer"
+        game.phase = Phase.CHOOSING_PROMPT
+        game.prompt_choices = ["c-fly" if turn % 2 == 0 else "c-bow"]
+        assert game.choose_prompt_option("drawer", 0)

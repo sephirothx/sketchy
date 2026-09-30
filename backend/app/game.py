@@ -865,6 +865,12 @@ class Game:
         self.letter_positions = []
         self.revealed_positions = set()
         self.revealed_by_spelling = {}
+        # Keyed by the turn's prompt, so every entry is dead once its turn
+        # ends: kept, a mixed room held up to seven sets of ~260 answers per
+        # turn for the whole game - 24 MB at 16 seats, 7 languages and 10
+        # rounds (#1252). Rebuilding one costs a millisecond or two, once per
+        # language per turn.
+        self._taken_keys = {}
         self.purchased_hints = {}
         self.purchased_letters = {}
         self.hint_spend = {}

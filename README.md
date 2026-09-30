@@ -2133,6 +2133,9 @@ TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/o
 # An account export when the owner saved a 500-prompt list 300 times: worst loop wait, build, memory (#1250)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/export_list_revisions.py --saves 300
 
+# What a mixed-language game's false-friend memo holds at its end: 16 seats, 7 languages, 10 rounds (#1252)
+backend/.venv/bin/python benchmarks/false_friend_memo.py
+
 # The integrity audit's worst loop wait: a games slice of 100 maximum-size games, a walk of 1,000 drawings (#1251)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/integrity_audit_stall.py --games 100 --drawings 1000
 
