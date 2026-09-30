@@ -20,7 +20,7 @@ export const DEFAULT_FILTERS: CatalogueFilters = {
   starred: false,
 };
 
-const LANGUAGES = new Set(["de", "en", "es", "fr", "it", "nl", "pt"]);
+const LANGUAGES = new Set(["de", "en", "es", "fr", "it", "nl", "pl", "pt"]);
 
 export function filtersFromParams(params: URLSearchParams): CatalogueFilters {
   const language = params.get("language");

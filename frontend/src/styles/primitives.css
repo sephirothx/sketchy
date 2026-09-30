@@ -857,8 +857,8 @@ input:focus-visible ~ .switch-track {
   flex-direction: column;
   gap: 2px;
   left: 0;
-  /* Seven rows fit; a language added later scrolls rather than running off
-     the bottom of a phone. */
+  /* Nine rows fit - Mixed or All, then the eight languages; a language added
+     later scrolls rather than running off the bottom of a phone. */
   max-height: min(360px, 60vh);
   min-width: 100%;
   overflow-y: auto;

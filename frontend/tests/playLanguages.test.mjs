@@ -15,10 +15,10 @@ test("the others are kept to the rules the server holds: known, once, never the 
   assert.deepEqual(normalizeExtraPromptLanguages(["en", "it", "en", "xx", 7, "de"], "it"), ["en", "de"]);
   assert.deepEqual(normalizeExtraPromptLanguages("en", "it"), []);
   assert.deepEqual(normalizeExtraPromptLanguages(null, "it"), []);
-  assert.equal(MAX_EXTRA_PROMPT_LANGUAGES, 6);
+  assert.equal(MAX_EXTRA_PROMPT_LANGUAGES, 7);
   assert.equal(
-    normalizeExtraPromptLanguages(["de", "en", "es", "fr", "it", "nl", "pt"], "pt").length,
-    6,
+    normalizeExtraPromptLanguages(["de", "en", "es", "fr", "it", "nl", "pl", "pt"], "pt").length,
+    7,
   );
 });
 

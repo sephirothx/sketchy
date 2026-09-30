@@ -45,7 +45,7 @@ import "../styles/lazy/prompt-lists.css";
 
 // Every room language, then none at all (#821): a list of names or brands is
 // played in whichever language the room declares.
-const LANGUAGES: PromptListLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt", "zxx"];
+const LANGUAGES: PromptListLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pl", "pt", "zxx"];
 /** A blank draft, in the player's default play language (#1272). */
 function emptyDraft(): PromptListDraft {
   return {

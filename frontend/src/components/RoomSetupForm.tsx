@@ -138,7 +138,7 @@ export function RoomSetupForm({
   const extraLanguages = useSettingsStore((state) => state.extraPromptLanguages);
   const playLanguage = seatLanguage ?? preferredLanguage;
   // Mixed first, where the form starts, then this player's languages in their
-  // order, then the rest (#1211): the likely choices at the top of seven.
+  // order, then the rest (#1211): the likely choices at the top of eight.
   const available = availablePromptLanguages(loadedLists, promptLanguage);
   const languageOptions: RoomLanguage[] = [
     ...available.filter((language) => language === MIXED_PROMPT_LANGUAGE),

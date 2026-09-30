@@ -50,6 +50,7 @@ const LOADERS = {
   fr: () => import("./fr.ts").then((module) => module.FR),
   it: () => import("./it.ts").then((module) => module.IT),
   nl: () => import("./nl.ts").then((module) => module.NL),
+  pl: () => import("./pl.ts").then((module) => module.PL),
   pt: () => import("./pt.ts").then((module) => module.PT),
 } satisfies Record<string, () => Promise<Catalogue>>;
 

@@ -4,6 +4,7 @@ import { RULES_ES } from "./es.ts";
 import { RULES_FR } from "./fr.ts";
 import { RULES_IT } from "./it.ts";
 import { RULES_NL } from "./nl.ts";
+import { RULES_PL } from "./pl.ts";
 import { RULES_PT } from "./pt.ts";
 import type { RulesDocument } from "./types.ts";
 
@@ -17,7 +18,7 @@ anybody reads whose language is not here yet. Adding a language is one module
 and one line - a content pull request, reviewed like the rest of the
 repository, which is also how the wiki this is modelled on does it.
 
-All seven interface locales are here (#765). They are kept **separate from
+All eight interface locales are here (#765, #771). They are kept **separate from
 `content/ui/`** on purpose, though both are catalogues and both are complete:
 the rules are read by somebody who has just been told they broke one, a
 mistranslated prohibition is a decision they cannot check, and that wants a
@@ -34,6 +35,7 @@ const DOCUMENTS: Record<string, RulesDocument> = {
   fr: RULES_FR,
   it: RULES_IT,
   nl: RULES_NL,
+  pl: RULES_PL,
   pt: RULES_PT,
 };
 

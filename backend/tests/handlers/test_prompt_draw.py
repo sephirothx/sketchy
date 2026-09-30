@@ -117,7 +117,12 @@ async def test_a_quick_prompt_shadows_the_curated_answer_of_the_same_name():
 
 @pytest.mark.parametrize(
     ("language", "quick", "listed"),
-    [("de", "Mueller", "Müller"), ("fr", "coeur", "Cœur"), ("nl", "ijs", "ĳs")],
+    [
+        ("de", "Mueller", "Müller"),
+        ("fr", "coeur", "Cœur"),
+        ("nl", "ijs", "ĳs"),
+        ("pl", "lodka", "łódka"),
+    ],
 )
 async def test_a_quick_prompt_shadows_its_twin_in_a_list_in_no_language(
     language, quick, listed

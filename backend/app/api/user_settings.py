@@ -58,7 +58,7 @@ def _validated_key_bindings(value: dict[str, list[str]] | None):
     return value
 
 
-PlayLanguage = Literal["en", "de", "es", "fr", "it", "nl", "pt"]
+PlayLanguage = Literal["en", "de", "es", "fr", "it", "nl", "pt", "pl"]
 # Every language but the default: the list can hold the rest of them, no more.
 MAX_EXTRA_PROMPT_LANGUAGES = len(PROMPT_LANGUAGES) - 1
 EXTRA_PROMPT_LANGUAGES_FIELD = "extraPromptLanguages"
@@ -116,7 +116,7 @@ class UserSettingsSeed(ControlFreeModel):
     # registration like the one above, and separate from it for the reason
     # `InterfaceLocale` gives: playing in English and reading in Dutch is
     # ordinary (R-I18N-06).
-    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt"] = Field(default="en", alias="locale")
+    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt", "pl"] = Field(default="en", alias="locale")
 
     @field_validator("key_bindings")
     @classmethod
@@ -135,7 +135,7 @@ class UserSettingsSeed(ControlFreeModel):
         them twice, is read as meaning each once and the default as the
         default: the seed is not the place to refuse a registration over it.
         Before the fields are checked, so the bound on how many is counted
-        after the repeats are gone rather than refusing a copy with all seven."""
+        after the repeats are gone rather than refusing a copy with all eight."""
         if not isinstance(data, dict):
             return data
         key = next(
@@ -185,7 +185,7 @@ class UserSettingsPatch(ControlFreeModel):
         alias="extraPromptLanguages",
         max_length=MAX_EXTRA_PROMPT_LANGUAGES,
     )
-    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt"] | None = Field(default=None, alias="locale")
+    locale: Literal["en", "de", "es", "fr", "it", "nl", "pt", "pl"] | None = Field(default=None, alias="locale")
 
     @field_validator("key_bindings")
     @classmethod

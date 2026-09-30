@@ -3696,7 +3696,7 @@ def _mixed_verdict(
 
     Each room language sees its own lists and the lists in no language. Each
     text is folded once per distinct transliteration rather than once per
-    room language (`prompt_match_keys`): seven languages, at most four keys.
+    room language (`prompt_match_keys`): eight languages, at most five keys.
     The rows arrive as the database returned them, so none of this - not even
     grouping the aliases - runs on the loop.
     """
@@ -5990,7 +5990,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             ]
             # Concepts first, then their forms: a random order over versions
             # would weigh a concept by how many languages spell it, and every
-            # Standard concept is spelled seven times against an agnostic
+            # Standard concept is spelled once per language against an agnostic
             # prompt's once.
             # Only concepts every seat can play, decided before the limit: a
             # concept a takedown left short of a language is not drawn, and

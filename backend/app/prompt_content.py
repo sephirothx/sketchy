@@ -340,6 +340,11 @@ _TRANSLITERATIONS: dict[str, dict[str, str]] = {
     # The Dutch digraph has a single-codepoint form that NFD leaves alone;
     # everyone types the two letters.
     "nl": {"ĳ": "ij"},
+    # The one Polish letter NFD leaves whole: "ł" is not "l" with a mark, so
+    # the shared rule keeps it, and "lodz" - how "łódź" is typed on a
+    # keyboard without Polish letters - would never meet the answer. Every
+    # other Polish diacritic (ą ć ę ń ó ś ź ż) decomposes and folds already.
+    "pl": {"ł": "l"},
 }
 
 
@@ -377,8 +382,8 @@ def prompt_match_keys(answer: str, languages: Iterable[str]) -> dict[str, str]:
 
     A language without a transliteration keys with the shared rule alone, so
     every such language shares one key: an agnostic list checked under every
-    room language used to fold each text seven times over for what is at most
-    four distinct keys (#1236).
+    room language used to fold each text once per language for what is at most
+    one key per transliteration and one shared (#1236).
     """
     collapsed = _collapsed(answer)
     shared: str | None = None

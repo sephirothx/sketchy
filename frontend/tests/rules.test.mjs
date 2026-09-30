@@ -32,12 +32,12 @@ test("a category's link points at its own rule", () => {
 
 test("a language nobody has written yet still reads the rules", () => {
   // Falling back to nothing would leave a player unable to read what they are
-  // held to. All seven interface locales are written now (#765), so the
+  // held to. All eight interface locales are written now (#765, #771), so the
   // fallback is for a language beyond them - and it is not a licence to leave
-  // one of the seven half finished, which the typed shape refuses anyway.
+  // one of the eight half finished, which the typed shape refuses anyway.
   const fallback = rulesFor(RULES_FALLBACK_LOCALE);
   assert.equal(rulesFor("ja").locale, fallback.locale);
-  assert.equal(rulesFor("pl-PL").locale, fallback.locale);
+  assert.equal(rulesFor("sv-SE").locale, fallback.locale);
   assert.equal(rulesFor(null).locale, fallback.locale);
   assert.equal(rulesFor(undefined).locale, fallback.locale);
   assert.equal(rulesFor("").locale, fallback.locale);
@@ -51,6 +51,7 @@ test("a regional tag reads its base language", () => {
   assert.equal(rulesFor("it-CH").locale, "it");
   assert.equal(rulesFor("de-AT").locale, "de");
   assert.equal(rulesFor("pt-BR").locale, "pt");
+  assert.equal(rulesFor("pl-PL").locale, "pl");
 });
 
 test("the rules exist in every language the interface does", () => {
