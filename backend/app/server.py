@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import gc
 import logging
 import os
 import signal
@@ -43,12 +44,43 @@ logger = logging.getLogger("sketchy.server")
 # still means "soon" without meaning "lose the last game".
 FORCED_EXIT_TEARDOWN_SECONDS = 20.0
 
+def freeze_startup_heap() -> int:
+    """Take everything startup built out of the collector's reach; how many.
+
+    The cyclic collector's full (generation-2) pass walks every tracked object,
+    and most of this process's heap is what startup built and keeps for good:
+    modules, the bundled prompt catalogues, translations, the app. Under the
+    release gate those passes held the one loop for 24-97 ms, a handful of
+    times in five minutes - the stalls the gate's loop-lag p99 was made of
+    (#1355). Frozen after a collection, that heap is never walked again, and
+    the same run's passes fell to 24-40 ms. What startup built and later
+    drops is still freed by reference counting; cyclic garbage among it would
+    leak for the life of the process, since nothing unfreezes. A review run
+    that played games and swept for 40 s found none (0 objects), but a
+    startup step that builds cycles it later discards would change that.
+
+    Not in the app's lifespan, which the test suite starts again and again:
+    each freeze would keep that run's objects out of collection for the rest
+    of the process.
+    """
+    gc.collect()
+    gc.freeze()
+    return gc.get_freeze_count()
+
+
 class DrainingServer(uvicorn.Server):
     """Stop listeners, drain existing games, then run normal Uvicorn shutdown."""
 
     def __init__(self, config: uvicorn.Config, *, coordinator=shutdown_coordinator):
         super().__init__(config)
         self.shutdown_coordinator = coordinator
+
+    async def startup(self, sockets: list[socket.socket] | None = None) -> None:
+        # Uvicorn exits the process on a startup that fails, so reaching the
+        # line below means the app is up and listening (#1355).
+        await super().startup(sockets=sockets)
+        frozen = freeze_startup_heap()
+        logger.info("Froze %d startup objects out of the cyclic collector's passes", frozen)
 
     def handle_exit(self, sig: int, frame) -> None:
         """Let a *second* termination signal cut the drain short, whichever it is.

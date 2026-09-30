@@ -514,7 +514,7 @@ no request in flight.
 
 ## 6. Lifecycle
 
-### Startup ([`backend/app/main.py:459`](../backend/app/main.py))
+### Startup ([`backend/app/main.py:776`](../backend/app/main.py))
 
 1. `configure_logging()`
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14
@@ -528,6 +528,11 @@ no request in flight.
 10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
 11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
 12. `mark_ready()` — `GET /api/ready` starts answering 200
+13. Under the production runner only (`app/server.py`), once Uvicorn is listening:
+    `freeze_startup_heap()` collects and then freezes everything startup built, so the
+    cyclic collector's full passes never walk it again. Those passes were the gate's
+    worst loop stalls, 24–97 ms, and fell to 24–40 ms (#1355). Not in the lifespan,
+    which the test suite runs once per app it builds.
 
 Any of steps 2–10 can refuse to start the process, and the cleanup in the lifespan's `finally` runs when one does. It stops only what was actually started: every loop handle is bound to `None` before the first step that can raise, and the finished-game drain is skipped when its worker never ran. A handle left unbound there raised an `UnboundLocalError` from the cleanup *after* the real error, and on a short terminal the cleanup's traceback is the only one the operator reads — which is the whole point of refusing with a direct instruction (R-PLAT-21).
 

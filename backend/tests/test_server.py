@@ -207,3 +207,48 @@ def test_a_websocket_message_is_capped_at_the_packet_ceiling():
 
     config = draining.call_args.args[0]
     assert config.ws_max_size == MAX_PACKET_BYTES
+
+
+async def test_startup_freezes_the_heap_it_built_once_the_app_is_up():
+    """The collector's full passes walked the startup heap on every run - the
+    gate's worst loop stalls (#1355). Frozen once the app is up: not before
+    uvicorn's own startup, which builds the app, and not in the lifespan,
+    which the test suite runs again and again."""
+    import gc
+
+    timeline = []
+    server_ = DrainingServer(uvicorn.Config("app.main:app"), coordinator=object())
+
+    async def uvicorn_startup(self, sockets=None):
+        timeline.append(("uvicorn", gc.get_freeze_count()))
+
+    try:
+        with patch.object(uvicorn.Server, "startup", uvicorn_startup):
+            await server_.startup()
+        assert timeline and timeline[0][0] == "uvicorn"
+        assert gc.get_freeze_count() > timeline[0][1], "frozen after uvicorn's startup"
+    finally:
+        # The rest of the suite runs in this process.
+        gc.unfreeze()
+
+
+def test_only_the_production_runner_freezes_the_heap():
+    """The lifespan runs once per app the tests build, and a freeze there - or
+    in anything it calls - would keep every earlier test's objects out of
+    collection for good. So nothing in `app` but the runner may freeze, under
+    any name: `gc.freeze`, `from gc import freeze`, or the runner's helper."""
+    import ast
+    from pathlib import Path
+
+    import app
+
+    found = []
+    for path in Path(app.__file__).parent.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+            if isinstance(node, ast.ImportFrom) and node.module == "gc":
+                found += [(path.name, "from gc import freeze") for alias in node.names if alias.name == "freeze"]
+            elif isinstance(node, ast.Attribute) and node.attr == "freeze" and getattr(node.value, "id", None) == "gc":
+                found.append((path.name, "gc.freeze"))
+            elif getattr(node, "id", None) == "freeze_startup_heap" or getattr(node, "attr", None) == "freeze_startup_heap":
+                found.append((path.name, "freeze_startup_heap"))
+    assert found and {name for name, _ in found} == {"server.py"}, found
