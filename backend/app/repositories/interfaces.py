@@ -112,7 +112,7 @@ class GameRecordInput:
     rule_snapshot_version: int = 0
     rule_snapshot: dict[str, object] = field(default_factory=dict)
     prompt_source_mode: str = "custom"
-    prompt_source_revision_ids: tuple[str, ...] = ()
+    prompt_source_list_ids: tuple[str, ...] = ()
     # How the game ended. Defaulted so every existing caller keeps meaning what
     # it meant: reaching the writer used to be proof a game had finished.
     outcome: str = "finished"
@@ -263,7 +263,7 @@ class PromptOfferInput:
     selected: bool
     source_kind: str
     prompt_version_id: str | None = None
-    source_revision_ids: tuple[str, ...] = ()
+    source_list_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -641,9 +641,12 @@ class ResolvedPromptSelection:
     language: str
     prompts: tuple[str, ...]
     revision_ids: tuple[str, ...] = ()
+    # The lists those revisions belong to, in the same order: what a game's
+    # provenance names (#1358).
+    list_ids: tuple[str, ...] = ()
     aliases: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_version_ids: Mapping[str, str] = field(default_factory=dict)
-    prompt_source_revision_ids: Mapping[str, tuple[str, ...]] = field(
+    prompt_source_list_ids: Mapping[str, tuple[str, ...]] = field(
         default_factory=dict
     )
 
@@ -663,6 +666,7 @@ class PinnedPromptSelection:
     slugs: tuple[str, ...]
     language: str
     revision_ids: tuple[str, ...] = ()
+    list_ids: tuple[str, ...] = ()
     prompt_count: int = 0
     letter_counts: Mapping[str, int] = field(default_factory=dict)
     letter_total: int = 0
@@ -682,7 +686,7 @@ class SampledPrompt:
     match_key: str
     aliases: tuple[str, ...] = ()
     prompt_version_id: str | None = None
-    source_revision_ids: tuple[str, ...] = ()
+    source_list_ids: tuple[str, ...] = ()
     # What is being drawn, independent of how this language spells it: the
     # key a game tracks the prompt by (#1181). `None` only where a caller has
     # no concept to give - a stand-in store - and the answer serves instead.
@@ -700,7 +704,7 @@ class PromptTranslation:
     answer: str
     aliases: tuple[str, ...] = ()
     prompt_version_id: str | None = None
-    source_revision_ids: tuple[str, ...] = ()
+    source_list_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -809,6 +813,9 @@ class PromptUsage:
 
     offers: Mapping[str, int]
     picks: Mapping[str, PromptPickTotals]
+    # The lists the draw found each version in (#1358): what the facts are
+    # credited to, now that no revision's membership is asked at the end.
+    sources: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     batch_id: str = field(default_factory=lambda: str(generate_uuid7()))
     occurred_at: datetime = field(
         default_factory=lambda: datetime.now(timezone.utc)
@@ -1417,10 +1424,10 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def record_prompt_usage(
         self,
-        prompt_list_revision_ids: Sequence[str],
+        prompt_list_ids: Sequence[str],
         usage: PromptUsage,
     ) -> None:
-        """Append one finished game's offers and picks to every pinned revision.
+        """Append one finished game's offers and picks to the lists it drew from.
 
         One call for the whole game rather than one per prompt per revision: this
         runs at the moment a game ends, and a transaction per turn is the

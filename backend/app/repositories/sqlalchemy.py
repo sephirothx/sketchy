@@ -835,10 +835,13 @@ async def apply_gallery_decision(
     return turn_id, drawer
 
 
-def _prompt_usage_hash(revision_ids: Sequence[UUID], usage: PromptUsage) -> str:
+def _prompt_usage_hash(list_ids: Sequence[UUID], usage: PromptUsage) -> str:
     """Canonical digest of one usage batch, to tell a retry from a conflict."""
     payload = {
-        "revision_ids": sorted(_public_id(revision_id) for revision_id in revision_ids),
+        "list_ids": sorted(_public_id(list_id) for list_id in list_ids),
+        "sources": sorted(
+            (key, sorted(lists)) for key, lists in usage.sources.items()
+        ),
         "offers": sorted((key, count) for key, count in usage.offers.items()),
         "picks": sorted(
             (key, totals.picks, totals.correct_guesses, totals.total_guessers)
@@ -1555,8 +1558,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 "rule_snapshot_version": game_record.rule_snapshot_version,
                 "rule_snapshot": game_record.rule_snapshot,
                 "prompt_source_mode": game_record.prompt_source_mode,
-                "prompt_source_revision_ids": sorted(
-                    game_record.prompt_source_revision_ids
+                "prompt_source_list_ids": sorted(
+                    game_record.prompt_source_list_ids
                 ),
                 "hint_mode": game_record.hint_mode,
                 "drawing_seconds": game_record.drawing_seconds,
@@ -1630,8 +1633,8 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 "selected": offer.selected,
                                 "source_kind": offer.source_kind,
                                 "prompt_version_id": offer.prompt_version_id,
-                                "source_revision_ids": sorted(
-                                    offer.source_revision_ids
+                                "source_list_ids": sorted(
+                                    offer.source_list_ids
                                 ),
                             }
                             for offer in sorted(
@@ -1703,8 +1706,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             _entity_id(game_record.id) if game_record.id else generate_uuid()
         )
         game_source_ids = {
-            _entity_id(revision_id)
-            for revision_id in game_record.prompt_source_revision_ids
+            _entity_id(list_id) for list_id in game_record.prompt_source_list_ids
         }
         if game_record.prompt_source_mode not in GAME_PROMPT_SOURCE_MODES:
             raise ValueError("Unknown game prompt source mode")
@@ -1848,12 +1850,28 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     visibility=game_record.visibility,
                 )
                 session.add(game_db)
-                session.add_all(
-                    GamePromptSource(
-                        game_id=record_id,
-                        prompt_list_revision_id=revision_id,
+                # The lists the game drew from that still exist: one deleted
+                # while the game ran - or before a retry of its write - leaves
+                # no provenance to point at, and the turns read the same
+                # without it (#1358). Held against deletion until commit, so
+                # the check cannot go stale before the rows land; a non-key
+                # update such as a save is not blocked by it.
+                present_sources = (
+                    set(
+                        (
+                            await session.scalars(
+                                select(PromptList.id)
+                                .where(PromptList.id.in_(game_source_ids))
+                                .with_for_update(read=True, key_share=True)
+                            )
+                        ).all()
                     )
-                    for revision_id in game_source_ids
+                    if game_source_ids
+                    else set()
+                )
+                session.add_all(
+                    GamePromptSource(game_id=record_id, prompt_list_id=list_id)
+                    for list_id in sorted(present_sources)
                 )
 
                 participant_inputs_by_id: dict[UUID, GameParticipantInput] = {}
@@ -2025,8 +2043,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 f"Turn '{r.id}' offer has an unknown source kind"
                             )
                         offer_source_ids = {
-                            _entity_id(revision_id)
-                            for revision_id in offer.source_revision_ids
+                            _entity_id(list_id) for list_id in offer.source_list_ids
                         }
                         if not offer_source_ids.issubset(game_source_ids):
                             raise ValueError(
@@ -2060,14 +2077,12 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 source_kind=offer.source_kind,
                             )
                         )
+                        kept_sources = sorted(offer_source_ids & present_sources)
                         session.add_all(
-                            TurnPromptOfferSource(
-                                offer_id=offer_id,
-                                prompt_list_revision_id=_entity_id(revision_id),
-                            )
-                            for revision_id in offer_source_ids
+                            TurnPromptOfferSource(offer_id=offer_id, prompt_list_id=list_id)
+                            for list_id in kept_sources
                         )
-                        sizing.offer_sources += len(offer_source_ids)
+                        sizing.offer_sources += len(kept_sources)
 
                     if r.participant_outcomes:
                         if r.guesser_count != sum(
@@ -3675,6 +3690,43 @@ class _SelectionVerdict:
 
     prompt_count: int
     ambiguous: bool
+
+
+async def _source_lists(
+    session: AsyncSession, pinned: Sequence[UUID], version_ids: Sequence[UUID]
+) -> defaultdict[UUID, tuple[str, ...]]:
+    """Which lists each drawn version came from, in the order they were pinned.
+
+    A version can sit in several selected lists - the bundled ones share
+    concepts - and a turn records every source it was legitimately offered
+    from. The revision is how the pin is held; the list is what provenance
+    names (#1358).
+    """
+    order = {revision_id: index for index, revision_id in enumerate(pinned)}
+    found: dict[UUID, list[tuple[int, UUID]]] = defaultdict(list)
+    if version_ids:
+        for version_id, revision_id, list_id in (
+            await session.execute(
+                select(
+                    PromptListRevisionItem.prompt_version_id,
+                    PromptListRevisionItem.revision_id,
+                    PromptListRevision.prompt_list_id,
+                )
+                .join(
+                    PromptListRevision,
+                    PromptListRevision.id == PromptListRevisionItem.revision_id,
+                )
+                .where(
+                    PromptListRevisionItem.revision_id.in_(list(pinned)),
+                    PromptListRevisionItem.prompt_version_id.in_(list(version_ids)),
+                )
+            )
+        ).all():
+            found[version_id].append((order[revision_id], list_id))
+    sources: defaultdict[UUID, tuple[str, ...]] = defaultdict(tuple)
+    for version_id, placed in found.items():
+        sources[version_id] = tuple(_public_id(list_id) for _, list_id in sorted(placed))
+    return sources
 
 
 def _single_language_verdict(rows: Sequence[Row], language: str) -> _SelectionVerdict:
@@ -5762,7 +5814,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             prompts: list[str] = []
             aliases: dict[str, tuple[str, ...]] = {}
             prompt_version_ids: dict[str, str] = {}
-            source_revisions_by_version: dict[UUID, list[str]] = defaultdict(list)
+            source_lists_by_version: dict[UUID, list[str]] = defaultdict(list)
             seen_versions: set[UUID] = set()
             seen_match_versions: dict[str, UUID] = {}
             for revision in revisions:
@@ -5773,8 +5825,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         != PromptContentModerationState.ACTIVE.value
                     ):
                         continue
-                    source_revisions_by_version[prompt_version.id].append(
-                        _public_id(revision.id)
+                    source_lists_by_version[prompt_version.id].append(
+                        _public_id(revision.prompt_list_id)
                     )
                     if prompt_version.id in seen_versions:
                         continue
@@ -5817,10 +5869,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 language=language,
                 prompts=tuple(prompts),
                 revision_ids=tuple(_public_id(revision.id) for revision in revisions),
+                list_ids=tuple(_public_id(revision.prompt_list_id) for revision in revisions),
                 aliases=aliases,
                 prompt_version_ids=prompt_version_ids,
-                prompt_source_revision_ids={
-                    answer: tuple(source_revisions_by_version[UUID(version_id)])
+                prompt_source_list_ids={
+                    answer: tuple(source_lists_by_version[UUID(version_id)])
                     for answer, version_id in prompt_version_ids.items()
                 },
             )
@@ -5868,6 +5921,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 slugs=tuple(slugs),
                 language=language,
                 revision_ids=tuple(_public_id(rid) for rid in revision_ids),
+                list_ids=tuple(_public_id(revision.prompt_list_id) for revision in revisions),
                 prompt_count=int(prompt_count),
                 letter_counts=dict(letter_counts),
                 letter_total=letter_total,
@@ -5984,7 +6038,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         if limit <= 0 or not revision_ids:
             return PromptSample()
         pinned = [_entity_id(revision_id) for revision_id in revision_ids]
-        order = {revision_id: index for index, revision_id in enumerate(pinned)}
         async with self._session_factory() as session:
             in_pinned = [
                 PromptVersion.id.in_(
@@ -6047,31 +6100,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
                 )
             ).all()
-            sources: dict[UUID, list[UUID]] = defaultdict(list)
-            for version_id, revision_id in (
-                await session.execute(
-                    select(
-                        PromptListRevisionItem.prompt_version_id,
-                        PromptListRevisionItem.revision_id,
-                    ).where(
-                        PromptListRevisionItem.revision_id.in_(pinned),
-                        PromptListRevisionItem.prompt_version_id.in_(
-                            [version.id for version in versions]
-                        ),
-                    )
-                )
-            ).all():
-                sources[version_id].append(revision_id)
+            sources = await _source_lists(session, pinned, [version.id for version in versions])
 
         def form(version: PromptVersion) -> PromptTranslation:
             return PromptTranslation(
                 answer=version.canonical_answer,
                 aliases=tuple(sorted(link.alias.answer for link in version.version_aliases)),
                 prompt_version_id=_public_id(version.id),
-                source_revision_ids=tuple(
-                    _public_id(revision_id)
-                    for revision_id in sorted(sources[version.id], key=lambda rid: order[rid])
-                ),
+                source_list_ids=sources[version.id],
             )
 
         forms: dict[UUID, dict[str, PromptTranslation]] = defaultdict(dict)
@@ -6098,7 +6134,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     match_key=match_keys[concept_id],
                     aliases=shown.aliases,
                     prompt_version_id=shown.prompt_version_id,
-                    source_revision_ids=shown.source_revision_ids,
+                    source_list_ids=shown.source_list_ids,
                     concept_id=_public_id(concept_id),
                     translations=translations,
                 )
@@ -6190,6 +6226,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             slugs=tuple(slugs),
             language=MIXED_PROMPT_LANGUAGE,
             revision_ids=tuple(_public_id(revision.id) for revision in revisions),
+            list_ids=tuple(_public_id(revision.prompt_list_id) for revision in revisions),
             prompt_count=verdict.prompt_count,
             letter_counts_by_language={
                 language: dict(tally) for language, tally in counts.items()
@@ -6275,21 +6312,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             # Which of the pinned revisions each drawn prompt came from: a
             # version can sit in several selected lists, and a turn records
             # every source it was legitimately offered from.
-            order = {revision_id: index for index, revision_id in enumerate(pinned)}
-            sources: dict[UUID, list[UUID]] = defaultdict(list)
-            source_rows = await session.execute(
-                select(
-                    PromptListRevisionItem.prompt_version_id,
-                    PromptListRevisionItem.revision_id,
-                ).where(
-                    PromptListRevisionItem.revision_id.in_(pinned),
-                    PromptListRevisionItem.prompt_version_id.in_(
-                        [version.id for version in versions]
-                    ),
-                )
-            )
-            for version_id, revision_id in source_rows:
-                sources[version_id].append(revision_id)
+            sources = await _source_lists(session, pinned, [version.id for version in versions])
 
             return PromptSample(
                 prompts=tuple(
@@ -6303,12 +6326,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                             )
                         ),
                         prompt_version_id=_public_id(version.id),
-                        source_revision_ids=tuple(
-                            _public_id(revision_id)
-                            for revision_id in sorted(
-                                sources[version.id], key=lambda rid: order[rid]
-                            )
-                        ),
+                        source_list_ids=sources[version.id],
                         concept_id=_public_id(version.concept_id),
                     )
                     for version in versions
@@ -6709,26 +6727,29 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
     @database_operation_of("prompt_usage")
     async def record_prompt_usage(
         self,
-        prompt_list_revision_ids: Sequence[str],
+        prompt_list_ids: Sequence[str],
         usage: PromptUsage,
     ) -> None:
-        """Append a game's ID-attributed facts to its pinned revisions.
+        """Append a game's ID-attributed facts to the lists it drew from.
 
-        Both the revision and prompt-version IDs came from the game's start
-        snapshot. Their intersection is checked again here so no display-text
-        collision—or malformed internal call—can credit unrelated content.
+        Each version is credited to the lists the draw found it in
+        (`usage.sources`), and only to lists the game pinned, so a malformed
+        internal call cannot credit a list the game never played. A list
+        deleted since keeps its facts with the list set to null, as the
+        `SET NULL` would have left them a moment after the write (#1358).
         """
-        revision_ids = [
-            revision_id
-            for raw in prompt_list_revision_ids
-            if (revision_id := _optional_entity_id(raw)) is not None
+        list_ids = [
+            list_id
+            for raw in prompt_list_ids
+            if (list_id := _optional_entity_id(raw)) is not None
         ]
         batch_id = _optional_entity_id(usage.batch_id)
-        if not revision_ids or not usage:
+        if not list_ids or not usage:
             return
         if batch_id is None:
             raise ValueError("Prompt usage batch ID must be a UUID.")
-        payload_hash = _prompt_usage_hash(revision_ids, usage)
+        payload_hash = _prompt_usage_hash(list_ids, usage)
+        pinned = set(list_ids)
         async with self._session_factory() as session:
             async with session.begin():
                 existing = await session.get(PromptUsageBatch, batch_id)
@@ -6742,59 +6763,50 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     raise PromptUsageConflictError(
                         f"Prompt usage batch '{batch_id}' was retried with different facts."
                     )
-                # Only the memberships the game actually touched: a pinned
-                # revision may hold five hundred prompts and the game offered
-                # a few dozen, so the SELECT is filtered by the offered and
-                # picked versions rather than by revision alone (#613). The
-                # revision predicate stays, so nothing outside the game's
-                # pinned sources can be credited.
-                touched_version_ids = [
-                    version_id
-                    for key in {*usage.offers, *usage.picks}
-                    if (version_id := _optional_entity_id(key)) is not None
-                ]
-                memberships: list[tuple[UUID, UUID]] = []
-                for start in range(0, len(touched_version_ids), 500):
-                    memberships.extend(
-                        (
-                            await session.execute(
-                                select(
-                                    PromptListRevisionItem.revision_id,
-                                    PromptListRevisionItem.prompt_version_id,
-                                ).where(
-                                    PromptListRevisionItem.revision_id.in_(revision_ids),
-                                    PromptListRevisionItem.prompt_version_id.in_(
-                                        touched_version_ids[start : start + 500]
-                                    ),
-                                )
-                            )
-                        ).all()
-                    )
+                # Held against deletion until commit, so a list found here
+                # cannot go before its facts land (the history write's rule).
+                present = set(
+                    (
+                        await session.scalars(
+                            select(PromptList.id)
+                            .where(PromptList.id.in_(list_ids))
+                            .with_for_update(read=True, key_share=True)
+                        )
+                    ).all()
+                )
                 facts: list[PromptUsageFact] = []
-                for revision_id, prompt_version_id in memberships:
-                    version_key = _public_id(prompt_version_id)
+                for version_key in sorted({*usage.offers, *usage.picks}):
+                    prompt_version_id = _optional_entity_id(version_key)
+                    if prompt_version_id is None:
+                        continue
                     offer_count = usage.offers.get(version_key, 0)
                     totals = usage.picks.get(version_key)
                     if offer_count <= 0 and totals is None:
                         continue
-                    facts.append(
-                        PromptUsageFact(
-                            batch_id=batch_id,
-                            prompt_list_revision_id=revision_id,
-                            prompt_version_id=prompt_version_id,
-                            occurred_at=usage.occurred_at,
-                            scoring_mode=usage.scoring_mode,
-                            hint_mode=usage.hint_mode,
-                            offer_count=offer_count,
-                            pick_count=totals.picks if totals else 0,
-                            correct_guess_count=(
-                                totals.correct_guesses if totals else 0
-                            ),
-                            total_guesser_count=(
-                                totals.total_guessers if totals else 0
-                            ),
+                    sources = {
+                        list_id
+                        for raw in usage.sources.get(version_key, ())
+                        if (list_id := _optional_entity_id(raw)) in pinned
+                    }
+                    for list_id in sorted(sources):
+                        facts.append(
+                            PromptUsageFact(
+                                batch_id=batch_id,
+                                prompt_list_id=list_id if list_id in present else None,
+                                prompt_version_id=prompt_version_id,
+                                occurred_at=usage.occurred_at,
+                                scoring_mode=usage.scoring_mode,
+                                hint_mode=usage.hint_mode,
+                                offer_count=offer_count,
+                                pick_count=totals.picks if totals else 0,
+                                correct_guess_count=(
+                                    totals.correct_guesses if totals else 0
+                                ),
+                                total_guesser_count=(
+                                    totals.total_guessers if totals else 0
+                                ),
+                            )
                         )
-                    )
                 # Written even when nothing matched - a batch of zero facts is
                 # a game that offered nothing from its pinned lists, which is
                 # not the same as a game whose usage was never written.
@@ -6835,9 +6847,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             ).all()
 
-            fact_filters = [
-                PromptListRevision.prompt_list_id == prompt_list.id,
-            ]
+            fact_filters = [PromptUsageFact.prompt_list_id == prompt_list.id]
             if from_time is not None:
                 fact_filters.append(PromptUsageFact.occurred_at >= from_time)
             if to_time is not None:
@@ -6860,11 +6870,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         .join(
                             PromptUsageFact,
                             PromptUsageFact.prompt_version_id == PromptVersion.id,
-                        )
-                        .join(
-                            PromptListRevision,
-                            PromptListRevision.id
-                            == PromptUsageFact.prompt_list_revision_id,
                         )
                         .where(*fact_filters)
                         .group_by(PromptVersion.concept_id)

@@ -1,27 +1,26 @@
 """Reclaiming prompt-list revisions nothing needs, without touching the games that played them.
 
-Deleting a list used to delete its revisions, and an account deletion its
-concepts too. A finished game pins the exact revision it drew from
+A finished game used to pin the exact revision it drew from
 (`game_prompt_sources`, `turn_prompt_offer_sources`, `prompt_usage_facts`,
-all RESTRICT or CASCADE onto facts), so for every owner who had ever played a
-saved list, both deletions rolled back whole (#605). The RESTRICTs are right:
-another player's history must not lose its provenance because its author
-tidied up (R-PRIV-05). What they were protecting against was the wrong
-deletion.
+RESTRICT), so deleting a list rolled back whole for every owner whose list a
+game had played (#605), and a list became a **retired** tombstone instead:
+`deleted_at` set, the visibility back to private, the current-display
+`prompts` rows gone. From that moment nothing lists, opens, resolves or forks
+it (R-LIST-01's "delete").
 
-So a list is **retired**, not deleted: `deleted_at` is set, the visibility
-falls back to private, and the current-display `prompts` rows go. From that moment nothing lists, opens, resolves or forks
-it (R-LIST-01's "delete"). The immutable revisions stay behind exactly as
-long as something pins them. `reclaim_retired_prompt_lists` runs from the
-hourly retention sweep and, for lists retired longer than
-`RETIRED_LIST_GRACE` ago, deletes the revisions nothing references, then the
-list row once it has none, then the prompt versions and concepts that no
-revision, list, turn, offer, usage fact or report names any more.
+Since #1358 those tables name the list, not a revision, and nothing pins a
+revision: the history reads the same without one, since each turn stores its
+prompt text and version. `reclaim_retired_prompt_lists` runs from the hourly
+retention sweep and, for lists retired longer than `RETIRED_LIST_GRACE` ago,
+deletes their revisions and the list row - the game sources going with it,
+the usage facts staying with the list set to null - then the prompt versions
+and concepts that no revision, list, turn, offer, usage fact, report or
+takedown record names any more.
 
-The grace is for the room that pinned a revision before the list was retired
-and is still playing (R-LIST-07): its finished-game write lands within the
-grace and lands intact, because the revision is still there to be
-referenced. A day is far longer than a game.
+The grace is for the room that drew from the list before it was retired and
+is still playing (R-LIST-07): its finished-game write references the prompt
+versions it drew, and they are still there within the grace. A day is far
+longer than a game.
 
 A live list's superseded revisions go the same way (#1258):
 `reclaim_superseded_revisions`, also hourly, deletes a revision a newer save
@@ -42,7 +41,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
 from app.db.models import (
-    GamePromptSource,
     Prompt,
     PromptConcept,
     PromptContentReport,
@@ -53,7 +51,6 @@ from app.db.models import (
     PromptUsageFact,
     PromptVersion,
     TurnPromptOffer,
-    TurnPromptOfferSource,
     TurnRecord,
 )
 from app.domain_values import (
@@ -65,8 +62,8 @@ logger = logging.getLogger(__name__)
 RETIRED_LIST_GRACE = timedelta(days=1)
 RECLAIM_BATCH_LISTS = 50
 # What a retired list's authored copy becomes when its owner is erased: the
-# list row has to stay while a game pins one of its revisions, and nothing
-# reads the name, so nothing is lost by not keeping it.
+# list row stays until the reclaim's grace passes, and nothing reads the name,
+# so nothing is lost by not keeping it.
 RETIRED_LIST_NAME = "Deleted list"
 
 
@@ -77,7 +74,7 @@ async def retire_prompt_list(
     now: datetime | None = None,
     erase_copy: bool = False,
 ) -> None:
-    """Take a list out of reach, keeping what played games pin.
+    """Take a list out of reach, leaving the rest to the reclaim.
 
     `erase_copy` is the account-erasure case: the name and description are
     the account's authored copy and go with it. An owner deleting their own
@@ -105,49 +102,16 @@ class ReclaimResult:
     backlog: int = 0
 
 
-def _revision_is_pinned(revision_id):
-    # A finished game's provenance, and nothing else. A revision holding a
-    # hidden word, or one a pending report names, used to be pinned as well,
-    # because an owner's saves searched revisions for their takedowns; they
-    # read `prompt_takedowns` now (#1357), and a reported version is kept by
-    # its report (`_version_is_referenced`) whatever happens to its revision.
-    return (
-        exists().where(GamePromptSource.prompt_list_revision_id == revision_id)
-        | exists().where(TurnPromptOfferSource.prompt_list_revision_id == revision_id)
-        | exists().where(PromptUsageFact.prompt_list_revision_id == revision_id)
-    )
-
-
-def _has_reclaimable_work(list_id):
-    """Whether this retired list still has anything for the reclaim to do.
-
-    A revision a finished game pins is permanent - the pin is that game's
-    provenance and never lapses - so a tombstone whose every remaining
-    revision is pinned has no work left, ever. Without this predicate such a
-    list is still selected: the batch takes the oldest retired lists, the
-    permanent ones are the oldest by construction, and once there are `limit`
-    of them they are the whole batch for every future run. Every list retired
-    afterwards then waits behind them indefinitely, while the sweep runs
-    hourly and reports success (#478).
-
-    Evaluated fresh each run rather than recorded, so a list becomes a
-    candidate again by itself if a pin ever went away.
-    """
-    revisions = select(PromptListRevision.id).where(
-        PromptListRevision.prompt_list_id == list_id
-    )
-    return ~revisions.exists() | revisions.where(
-        ~_revision_is_pinned(PromptListRevision.id)
-    ).exists()
-
-
 def _reclaimable(cutoff: datetime):
-    """A retired list past its grace that the sweep can still act on."""
-    return (
-        PromptList.deleted_at.is_not(None),
-        PromptList.deleted_at <= cutoff,
-        _has_reclaimable_work(PromptList.id),
-    )
+    """A retired list past its grace.
+
+    Nothing pins a revision any more: a finished game names its list, not a
+    revision, and goes on reading the same without it (#1358). So every
+    retired list past its grace is collected whole, and none lingers as a
+    tombstone - the ones a game pinned used to, for ever, and needed a
+    starvation guard to keep them out of the batch (#478).
+    """
+    return (PromptList.deleted_at.is_not(None), PromptList.deleted_at <= cutoff)
 
 
 def _version_is_referenced(version_id):
@@ -248,18 +212,11 @@ async def reclaim_retired_prompt_lists(
 
     One transaction per run, over at most `limit` lists retired before
     `now - grace` **that still have something to collect**, oldest first.
-    Each list's unpinned revisions go, then the list row if no revision is
-    left, then the versions and concepts those revisions were the last to
-    reference.
+    Each list's revisions go, then the list row, then the versions and
+    concepts those revisions were the last to reference.
 
-    A list whose every remaining revision is pinned stays as a
-    non-discoverable tombstone - for ever, for a game's pin - and is
-    not selected meanwhile: it is
-    exempt rather than pending, and selecting it would let a handful of
-    permanent tombstones fill the batch and starve every list retired after
-    them (`_has_reclaimable_work`). What the run leaves is measured over the
-    lists it could still collect, so the one sweep whose starvation would
-    otherwise be unbounded is held to its SLA like the rest (#478).
+    Nothing pins a revision since #1358, so a list past its grace is
+    collected whole: its revisions, then its row, then what only they named.
     """
     if budget is not None:
         limit = max(1, min(limit, budget.rows))
@@ -293,31 +250,26 @@ async def reclaim_retired_prompt_lists(
                     )
                 ).all()
             )
-            unpinned = delete(PromptListRevision).where(
-                PromptListRevision.prompt_list_id.in_(list_ids),
-                ~_revision_is_pinned(PromptListRevision.id),
-            )
-            revisions_deleted = int((await session.execute(unpinned)).rowcount or 0)
-
-            still_pinned = set(
+            revisions_deleted = int(
                 (
-                    await session.scalars(
-                        select(PromptListRevision.prompt_list_id.distinct()).where(
+                    await session.execute(
+                        delete(PromptListRevision).where(
                             PromptListRevision.prompt_list_id.in_(list_ids)
                         )
                     )
-                ).all()
+                ).rowcount
+                or 0
             )
-            gone = [list_id for list_id in list_ids if list_id not in still_pinned]
-            if gone:
-                lists_deleted = int(
-                    (
-                        await session.execute(
-                            delete(PromptList).where(PromptList.id.in_(gone))
-                        )
-                    ).rowcount
-                    or 0
-                )
+            # The list goes with them: a finished game's sources go with it,
+            # and its usage facts stay with the list set to null (#1358).
+            lists_deleted = int(
+                (
+                    await session.execute(
+                        delete(PromptList).where(PromptList.id.in_(list_ids))
+                    )
+                ).rowcount
+                or 0
+            )
 
             versions_deleted, concepts_deleted = await reclaim_orphans(
                 session, candidate_version_ids
@@ -378,7 +330,7 @@ def _superseded_reclaimable(cutoff: datetime):
     Replaced by a newer save more than the grace ago - the same day the
     retired-list reclaim waits, for the same room: one that pinned this
     revision when its game started and is still playing it - and kept for
-    good while anything needs it: a finished game's pin, a fork that says it
+    good while anything needs it: a fork that says it
     was copied from here (R-LIST-20's copy count reads that), a copy's own
     first revision (the one that says what it was copied from: the count, the
     credit and the lineage all read it, so editing a copy would otherwise
@@ -396,7 +348,6 @@ def _superseded_reclaimable(cutoff: datetime):
             newer.version > PromptListRevision.version,
             newer.created_at <= cutoff,
         ),
-        ~_revision_is_pinned(PromptListRevision.id),
         ~exists().where(fork.forked_from_revision_id == PromptListRevision.id),
         PromptListRevision.forked_from_revision_id.is_(None),
     )

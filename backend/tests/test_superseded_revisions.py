@@ -92,7 +92,7 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
         list_id, (pinned, forked_from, hiding, plain, young, current) = await _saved(
             repo, factory, owner_id, "Saved often", ["otter", "heron", "crane", "ibis", "swan", "lark"]
         )
-        await _pin_a_game_to(factory, owner_id, pinned)
+        await _pin_a_game_to(factory, owner_id, list_id)
         other_id, (fork,) = await _saved(repo, factory, owner_id, "Copied", ["heron"])
         async with factory() as session, session.begin():
             await session.execute(
@@ -118,8 +118,9 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
 
         report = await reclaim_superseded_revisions(factory, now=now)
 
-        assert int(report) == 2, "a hidden word is not a hold (#1357)"
-        assert await _revisions(factory, list_id) == [pinned, forked_from, young, current]
+        # Neither a hidden word (#1357) nor a finished game (#1358) is a hold.
+        assert int(report) == 3
+        assert await _revisions(factory, list_id) == [forked_from, young, current]
         assert await _answer_versions(factory, "ibis") == 0, "the content only it named went with it"
         assert await _revisions(factory, other_id) == [fork], "the fork itself is a current revision"
         assert report.backlog == 0 and report.oldest_overdue_seconds == 0

@@ -309,7 +309,7 @@ replays staged games by hand.
 Finished games also store a scoring-rules version and a versioned exact rule
 snapshot. The snapshot freezes the numeric default/pressure/hint parameters,
 drawer-bonus algorithm, drawing time, permitted tools and colors, prompt
-visibility/language, and pinned prompt-source revisions. Historical points can
+visibility/language, and the prompt lists the game drew from. Historical points can
 therefore be interpreted under the rules that produced them after defaults or
 algorithms change. Legacy rows use version `0` and an empty snapshot rather
 than claiming parameters that cannot be reconstructed. Participant-only game
@@ -417,7 +417,7 @@ Prompt-list counts are derived from prompt membership on read, so adding or
 removing a prompt cannot leave a cached total out of sync.
 Prompt usage is not stored as mutable totals on the current display row.
 Each finished game appends an idempotent **Prompt-usage fact** for every used
-prompt/version and pinned list revision, carrying the authoritative occurrence
+prompt version and list the draw found it in, carrying the authoritative occurrence
 time plus scoring and hint modes. Stats are derived by stable prompt concept,
 so a later wording revision keeps its history without matching on display text.
 The fact indexes support time-window and rule filters; the Prompt stats page
@@ -526,7 +526,7 @@ language-specific wording has an immutable `promptVersion`, and every bundled
 list version becomes a content-hashed immutable **Prompt-list revision** with
 ordered membership. Deploying different content under an already-seen list or
 prompt version is a startup-failing seed conflict, not an in-place rewrite.
-Rooms resolve and games pin the exact revision IDs at start. During the
+Rooms resolve and draw from the exact revision IDs at start; a finished game records the list. During the
 transition to rebuildable projections, the legacy counter row is linked by
 concept and updated in place when a new prompt version rewords it, preserving
 its existing statistics; old revisions keep referencing the old wording.
@@ -630,8 +630,8 @@ owner, reviewer, and internal-note identities. Account deletion removes the
 lists and their owned prompt concepts rather than leaving ownerless content.
 
 Runtime attribution observes the durable/live boundary: completed
-turns snapshot nullable prompt-version source IDs, and usage writes intersect
-those IDs with the game's pinned list revisions.
+turns snapshot nullable prompt-version source IDs, and usage writes credit
+those versions only to the lists the game played.
 An ephemeral prompt has a null source even when its display text equals a
 curated prompt, so neither its offers, picks, nor guess results can inflate the
 curated list's statistics (#330).
@@ -1077,10 +1077,10 @@ filing, after which the pixels are erased and the row reads `expired` rather
 than `erased` — nobody decided anything, and a reviewer opening the still
 pending report should be told which of the two happened. The report and every
 piece of screenshot metadata stay. The same hourly sweep reclaims deleted prompt lists:
-deleting a list takes it out of reach at once, but a revision a finished game
-pinned stays for that game's history, and the rest — unpinned revisions, the
-list row, prompts nothing names any more — is removed a day later, once any
-room that pinned it before the deletion has had time to finish. A word a moderator
+deleting a list takes it out of reach at once, and the rest — its revisions,
+the list row, prompts nothing names any more — is removed a day later, once any
+room that drew from it before the deletion has had time to finish. A finished
+game that played it names the list and reads the same once it is gone. A word a moderator
 hid is remembered for its owner in a record of its own, not in the deleted list, so
 it stays out of their next list either way:
 

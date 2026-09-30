@@ -182,14 +182,14 @@ def test_record_carries_the_settings_the_game_was_played_under():
     game.color_mode = "black_and_white"
     game.prompt_language = "de"
     game.hide_masked_prompt = True
-    game.prompt_source_revision_ids = ("revision-one", "revision-two")
+    game.prompt_source_list_ids = ("revision-one", "revision-two")
     game.prompt_pool = ["jackpot", "b", "c"]
     game.prompt_version_ids = {
         "jackpot": "version-jackpot",
         "b": "version-b",
         "c": "version-c",
     }
-    game.prompt_source_revision_ids_by_key = {
+    game.prompt_source_list_ids_by_key = {
         "jackpot": ("revision-one",),
         "b": ("revision-one", "revision-two"),
         "c": ("revision-two",),
@@ -221,10 +221,10 @@ def test_record_carries_the_settings_the_game_was_played_under():
     assert history.record.rule_snapshot["prompt"] == {
         "language": "de",
         "hideMaskedPrompt": True,
-        "sourceRevisionIds": ["revision-one", "revision-two"],
+        "sourceListIds": ["revision-one", "revision-two"],
     }
     assert history.record.prompt_source_mode == "curated"
-    assert history.record.prompt_source_revision_ids == (
+    assert history.record.prompt_source_list_ids == (
         "revision-one",
         "revision-two",
     )
@@ -240,7 +240,7 @@ def test_record_carries_the_settings_the_game_was_played_under():
     ]
     assert history.turns[0].prompt_version_id == "version-jackpot"
     assert history.turns[0].prompt_source_kind == "curated"
-    assert history.turns[0].prompt_offers[1].source_revision_ids == (
+    assert history.turns[0].prompt_offers[1].source_list_ids == (
         "revision-one",
         "revision-two",
     )
@@ -255,8 +255,8 @@ def test_actual_pool_distinguishes_custom_curated_and_fallback_offers():
     game.prompt_pool = ["jackpot", "b", "c"]
     game.custom_prompt_keys = frozenset({"jackpot"})
     game.prompt_version_ids = {"b": "version-b"}
-    game.prompt_source_revision_ids = ("revision-curated",)
-    game.prompt_source_revision_ids_by_key = {
+    game.prompt_source_list_ids = ("revision-curated",)
+    game.prompt_source_list_ids_by_key = {
         "b": ("revision-curated",)
     }
     game.completed_turns = [turn(players["Ann"].id)]
@@ -273,7 +273,7 @@ def test_actual_pool_distinguishes_custom_curated_and_fallback_offers():
     assert history.turns[0].prompt_version_id is None
     assert history.turns[0].prompt_source_kind == "custom"
     assert history.turns[0].prompt_offers[1].prompt_version_id == "version-b"
-    assert history.turns[0].prompt_offers[2].source_revision_ids == ()
+    assert history.turns[0].prompt_offers[2].source_list_ids == ()
 
 
 def test_turn_records_carry_the_analytics_the_ui_does_not_show_yet():

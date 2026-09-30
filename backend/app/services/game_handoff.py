@@ -104,7 +104,10 @@ logger = logging.getLogger("sketchy.services.game_handoff")
 # checksum and the frame's digest - rather than as base64 frames the replay
 # prepared again. No decoder is kept for 1: nothing has been deployed, so no
 # pending envelope of that shape exists anywhere (docs/database.md, Pre-v1).
-ENVELOPE_VERSION = 2
+# 3 since #1358: provenance names lists, not revisions (`prompt_source_list_ids`,
+# an offer's `source_list_ids`, `usage_list_ids`), and the usage batch carries
+# each version's `sources`, which is what its facts are credited to now.
+ENVELOPE_VERSION = 3
 
 # The one write a room waits on after a game ends: the staging insert. Ten
 # seconds, the same bound the direct write had, and the same one the entry
@@ -170,7 +173,7 @@ class FinishedGameEnvelope:
     # None when the game had no pinned prompt-list sources or offered nothing
     # from them: there is no usage to write, which is a fact, not a gap.
     usage: PromptUsage | None = None
-    usage_revision_ids: tuple[str, ...] = ()
+    usage_list_ids: tuple[str, ...] = ()
 
     @property
     def game_id(self) -> str:
@@ -217,7 +220,7 @@ def _offer_out(offer: PromptOfferInput) -> dict:
         "selected": offer.selected,
         "source_kind": offer.source_kind,
         "prompt_version_id": offer.prompt_version_id,
-        "source_revision_ids": list(offer.source_revision_ids),
+        "source_list_ids": list(offer.source_list_ids),
     }
 
 
@@ -228,7 +231,7 @@ def _offer_in(value: dict) -> PromptOfferInput:
         selected=value["selected"],
         source_kind=value["source_kind"],
         prompt_version_id=value.get("prompt_version_id"),
-        source_revision_ids=tuple(value.get("source_revision_ids", ())),
+        source_list_ids=tuple(value.get("source_list_ids", ())),
     )
 
 
@@ -317,7 +320,7 @@ def _record_out(record: GameRecordInput) -> dict:
         "rule_snapshot_version": record.rule_snapshot_version,
         "rule_snapshot": record.rule_snapshot,
         "prompt_source_mode": record.prompt_source_mode,
-        "prompt_source_revision_ids": list(record.prompt_source_revision_ids),
+        "prompt_source_list_ids": list(record.prompt_source_list_ids),
         "outcome": record.outcome,
         "visibility": record.visibility,
     }
@@ -339,7 +342,7 @@ def _record_in(value: dict) -> GameRecordInput:
         rule_snapshot_version=value["rule_snapshot_version"],
         rule_snapshot=value["rule_snapshot"],
         prompt_source_mode=value["prompt_source_mode"],
-        prompt_source_revision_ids=tuple(value["prompt_source_revision_ids"]),
+        prompt_source_list_ids=tuple(value["prompt_source_list_ids"]),
         outcome=value["outcome"],
         visibility=value["visibility"],
     )
@@ -457,6 +460,7 @@ def _usage_out(usage: PromptUsage | None) -> dict | None:
         "scoring_mode": usage.scoring_mode,
         "hint_mode": usage.hint_mode,
         "offers": dict(usage.offers),
+        "sources": {key: list(lists) for key, lists in usage.sources.items()},
         "picks": {
             key: [totals.picks, totals.correct_guesses, totals.total_guessers]
             for key, totals in usage.picks.items()
@@ -469,6 +473,7 @@ def _usage_in(value: dict | None) -> PromptUsage | None:
         return None
     return PromptUsage(
         offers=dict(value["offers"]),
+        sources={key: tuple(lists) for key, lists in value["sources"].items()},
         picks={
             key: PromptPickTotals(*totals) for key, totals in value["picks"].items()
         },
@@ -506,7 +511,7 @@ def _encoded(envelope: FinishedGameEnvelope) -> tuple[bytes, list[tuple[str, flo
         "drawings": drawings,
         "reactions": [_reaction_out(reaction) for reaction in history.reactions],
         "usage": _usage_out(envelope.usage),
-        "usage_revision_ids": list(envelope.usage_revision_ids),
+        "usage_list_ids": list(envelope.usage_list_ids),
     }
     return zlib.compress(json.dumps(document, separators=(",", ":")).encode(), 6), encodes
 
@@ -532,7 +537,7 @@ def decode_envelope(payload: bytes, version: int) -> FinishedGameEnvelope:
         return FinishedGameEnvelope(
             history=history,
             usage=_usage_in(document.get("usage")),
-            usage_revision_ids=tuple(document.get("usage_revision_ids", ())),
+            usage_list_ids=tuple(document.get("usage_list_ids", ())),
         )
     except (zlib.error, ValueError, KeyError, TypeError) as error:
         raise EnvelopeUnreadable(f"envelope could not be decoded: {error}") from error
@@ -1010,7 +1015,7 @@ async def replay_claim(
                 try:
                     await asyncio.wait_for(
                         prompt_list_repo.record_prompt_usage(
-                            envelope.usage_revision_ids, envelope.usage
+                            envelope.usage_list_ids, envelope.usage
                         ),
                         timeout=write_timeout,
                     )

@@ -1552,7 +1552,7 @@ def test_a_list_prompt_is_tracked_by_its_key_and_shown_by_its_answer():
         prompt_answers={concept: "Mädchen"},
         prompt_aliases={concept: ("das Mädchen",)},
         prompt_version_ids={concept: "version-de"},
-        prompt_source_revision_ids_by_key={concept: ("revision-de",)},
+        prompt_source_list_ids_by_key={concept: ("revision-de",)},
         prompt_language="de",
     )
     game.start_next_turn(canvas_generation=1)
@@ -1580,7 +1580,7 @@ def test_a_list_prompt_is_tracked_by_its_key_and_shown_by_its_answer():
     assert turn.chosen_prompt == "Mädchen"
     assert turn.chosen_prompt_version_id == "version-de"
     assert turn.offered_prompt_version_ids == ("version-de",)
-    assert turn.offered_prompt_source_revision_ids == (("revision-de",),)
+    assert turn.offered_prompt_source_list_ids == (("revision-de",),)
     assert game.key_for("Mädchen") == concept
     # A turn ended before anything was chosen records no provenance - not the
     # previous turn's.

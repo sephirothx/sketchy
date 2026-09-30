@@ -430,8 +430,8 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             reclaim_retired_prompt_lists,
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt=(
-                "revisions a finished game pins, and the tombstones holding them, for ever; "
-                "a hidden word is kept by its owner's takedown record, not by a revision"
+                "nothing past the grace: a finished game names the list, not a revision, and "
+                "reads the same without it; a hidden word is kept by its owner's takedown record"
             ),
         ),
         Sweep(
@@ -439,8 +439,8 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             reclaim_superseded_revisions,
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt=(
-                "a live list's current revision, and any a finished game pins, a fork was "
-                "copied from, or a copy records its origin in, for ever"
+                "a live list's current revision, and any a fork was copied from or a copy "
+                "records its origin in, for ever"
             ),
         ),
         Sweep(

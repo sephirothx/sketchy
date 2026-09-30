@@ -31,6 +31,8 @@ def attach_curated_sources(room, *revision_ids: str) -> None:
     with the built-in prompts and a stable version ID for each.
     """
     room.prompt_list_revision_ids = list(revision_ids or ("revision-standard",))
+    # The stub's lists share their revisions' ids (#1358).
+    room.prompt_list_ids = list(room.prompt_list_revision_ids)
     room.prompt_list_slugs = room.prompt_list_slugs or ["english_standard"]
     room.prompt_pool_size = len(PROMPTS)
 
@@ -657,11 +659,11 @@ class FakeWordListRepository(StubPromptListRepo):
         self._timeline = timeline if timeline is not None else []
         self._hang = hang
 
-    async def record_prompt_usage(self, prompt_list_revision_ids, usage):
+    async def record_prompt_usage(self, prompt_list_ids, usage):
         if self._hang:
             await asyncio.sleep(3600)
-        self.calls.append((tuple(prompt_list_revision_ids), usage))
-        self._timeline.append(("prompt", tuple(prompt_list_revision_ids)))
+        self.calls.append((tuple(prompt_list_ids), usage))
+        self._timeline.append(("prompt", tuple(prompt_list_ids)))
 
 
 def emitted_payload(ctx, event: str):

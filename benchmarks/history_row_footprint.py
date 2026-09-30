@@ -78,7 +78,7 @@ async def _seed_game(history, players, sources, versions, started):
         offers = tuple(
             PromptOfferInput(position, f"prompt {index}-{position}", position == 0, "curated",
                              prompt_version_id=versions[(index * 3 + position) % len(versions)],
-                             source_revision_ids=tuple(sources))
+                             source_list_ids=tuple(sources))
             for position in range(3)
         )
         turns.append(TurnRecordInput(id=turn_id, round_number=index // SEATS + 1, turn_number=index + 1,
@@ -94,7 +94,7 @@ async def _seed_game(history, players, sources, versions, started):
     return await history.save_game(
         GameRecordInput(room_name="Footprint", scoring_mode="default", hint_mode="none", drawing_seconds=60,
                         total_rounds=3, player_count=SEATS, started_at=started, finished_at=started + timedelta(minutes=20),
-                        prompt_source_mode="curated", prompt_source_revision_ids=tuple(sources)),
+                        prompt_source_mode="curated", prompt_source_list_ids=tuple(sources)),
         participants, turns, *([guesses] if TurnGuessInput else []))
 
 
@@ -115,7 +115,7 @@ async def run(games: int) -> dict:
         created = await lists.create_owned(players[0], name=f"Source {n}", description="", language="en",
                                            prompts=tuple(PromptListEntryInput(answer=f"answer {n}-{k}") for k in range(80)))
         pinned = await lists.authorize_selection([created.slug], requesting_user_id=players[0])
-        revisions.extend(pinned.revision_ids)
+        revisions.extend(pinned.list_ids)
         versions.extend(e.prompt_version_id for e in created.prompts)
     started = datetime(2026, 8, 1, tzinfo=timezone.utc)
     for g in range(games):
@@ -136,23 +136,25 @@ async def run(games: int) -> dict:
                             "total_bytes_per_game": (heap + idx) / games}
         derived = (await conn.execute(text(
             "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
-            "SELECT o.id, i.revision_id FROM turn_prompt_offers o "
+            "SELECT o.id, r.prompt_list_id FROM turn_prompt_offers o "
             "JOIN turn_records t ON t.id = o.turn_id "
             "JOIN game_prompt_sources s ON s.game_id = t.game_id "
-            "JOIN prompt_list_revision_items i ON i.revision_id = s.prompt_list_revision_id AND i.prompt_version_id = o.prompt_version_id "
+            "JOIN prompt_list_revisions r ON r.prompt_list_id = s.prompt_list_id "
+            "JOIN prompt_list_revision_items i ON i.revision_id = r.id AND i.prompt_version_id = o.prompt_version_id "
             "WHERE t.game_id = (SELECT id FROM game_records LIMIT 1)"))).scalar_one()
         stored = (await conn.execute(text(
             "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
-            "SELECT o.id, os.prompt_list_revision_id FROM turn_prompt_offers o "
+            "SELECT o.id, os.prompt_list_id FROM turn_prompt_offers o "
             "JOIN turn_records t ON t.id = o.turn_id "
             "JOIN turn_prompt_offer_sources os ON os.offer_id = o.id "
             "WHERE t.game_id = (SELECT id FROM game_records LIMIT 1)"))).scalar_one()
         equal = await conn.scalar(text(
             "SELECT count(*) FROM ("
-            "SELECT o.id, i.revision_id FROM turn_prompt_offers o JOIN turn_records t ON t.id = o.turn_id "
+            "SELECT o.id, r.prompt_list_id FROM turn_prompt_offers o JOIN turn_records t ON t.id = o.turn_id "
             "JOIN game_prompt_sources s ON s.game_id = t.game_id "
-            "JOIN prompt_list_revision_items i ON i.revision_id = s.prompt_list_revision_id AND i.prompt_version_id = o.prompt_version_id "
-            "EXCEPT SELECT offer_id, prompt_list_revision_id FROM turn_prompt_offer_sources) d"))
+            "JOIN prompt_list_revisions r ON r.prompt_list_id = s.prompt_list_id "
+            "JOIN prompt_list_revision_items i ON i.revision_id = r.id AND i.prompt_version_id = o.prompt_version_id "
+            "EXCEPT SELECT offer_id, prompt_list_id FROM turn_prompt_offer_sources) d"))
     await engine.dispose()
     def plan(p):
         node = (p[0] if isinstance(p, list) else json.loads(p)[0])

@@ -403,10 +403,10 @@ def build_game_history(
                     if position < len(turn.offered_prompt_version_ids)
                     else game.prompt_version_ids.get(game.key_for(prompt))
                 ),
-                source_revision_ids=(
-                    turn.offered_prompt_source_revision_ids[position]
-                    if position < len(turn.offered_prompt_source_revision_ids)
-                    else game.prompt_source_revision_ids_by_key.get(game.key_for(prompt), ())
+                source_list_ids=(
+                    turn.offered_prompt_source_list_ids[position]
+                    if position < len(turn.offered_prompt_source_list_ids)
+                    else game.prompt_source_list_ids_by_key.get(game.key_for(prompt), ())
                 ),
             )
             for position, prompt in enumerate(turn.offered_prompts)
@@ -507,7 +507,7 @@ def build_game_history(
             rule_snapshot_version=int(rule_snapshot["schemaVersion"]),
             rule_snapshot=rule_snapshot,
             prompt_source_mode=game.prompt_source_mode(),
-            prompt_source_revision_ids=game.prompt_source_revision_ids,
+            prompt_source_list_ids=game.prompt_source_list_ids,
             outcome=outcome,
             visibility=(
                 GameVisibility.PUBLIC.value

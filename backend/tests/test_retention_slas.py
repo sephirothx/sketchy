@@ -510,7 +510,7 @@ async def test_the_scrape_reads_the_sweeps_off_whichever_loop_reported_them():
 
 
 async def _retired_list(factory, *, retired_at: datetime, pinned: bool, name: str):
-    """A retired list with one revision, optionally pinned by a finished game."""
+    """A retired list with one revision, optionally played by a finished game."""
     list_id, revision_id = generate_uuid(), generate_uuid()
     async with factory() as session:
         async with session.begin():
@@ -550,21 +550,18 @@ async def _retired_list(factory, *, retired_at: datetime, pinned: bool, name: st
                     )
                 )
                 await session.flush()
-                session.add(
-                    GamePromptSource(
-                        game_id=game_id, prompt_list_revision_id=revision_id
-                    )
-                )
+                session.add(GamePromptSource(game_id=game_id, prompt_list_id=list_id))
     return list_id
 
 
-async def test_pinned_tombstones_cannot_monopolise_the_reclaim_batch():
-    """A pin is a finished game's provenance, so it never lapses: the
-    tombstone holding it is permanent. Selecting the oldest retired lists
-    without excluding them means that once there are `limit` of them they are
-    the oldest `limit` for ever, and no list retired afterwards is ever
-    reached - the reclaim runs every hour, reports success, and collects
-    nothing again."""
+async def test_a_list_a_game_played_is_collected_like_any_other():
+    """A finished game used to pin its list's revision for ever, leaving a
+    permanent tombstone the batch had to be kept from filling up with (#478).
+    It names the list now, and goes on reading the same without it (#1358):
+    the oldest retired lists are collected first, played or not, and the
+    games that played them stay."""
+    from app.db.models import GameRecord
+
     factory, engine = await create_test_db()
     try:
         now = datetime(2026, 9, 9, tzinfo=timezone.utc)
@@ -574,7 +571,7 @@ async def test_pinned_tombstones_cannot_monopolise_the_reclaim_batch():
                 factory,
                 retired_at=now - timedelta(days=100 + index),
                 pinned=True,
-                name=f"pinned-{index}",
+                name=f"played-{index}",
             )
         newer = await _retired_list(
             factory, retired_at=now - timedelta(days=10), pinned=False, name="collectable"
@@ -582,30 +579,23 @@ async def test_pinned_tombstones_cannot_monopolise_the_reclaim_batch():
 
         result = await reclaim_retired_prompt_lists(factory, now=now, limit=limit)
 
-        assert result.lists_deleted == 1, "the reclaimable list behind them is reached"
+        assert result.lists_deleted == limit and result.backlog == 1
         async with factory() as session:
-            assert await session.get(PromptList, newer) is None
-            # The pinned tombstones are untouched: exempt, not collected.
-            assert (
-                await session.scalar(select(func.count(PromptList.id)))
-                == limit
-            )
+            assert await session.get(PromptList, newer) is not None, "next in line"
+            assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 0
+            assert await session.scalar(select(func.count(GameRecord.id))) == limit
     finally:
         await engine.dispose()
 
 
 async def test_the_reclaim_measures_the_lists_it_could_still_collect():
-    """Its backlog is over reclaimable lists only. Counting permanent
-    tombstones would climb for ever with nothing wrong, and counting nothing
-    at all leaves the one sweep whose starvation is unbounded unwatched."""
+    """Its backlog is over the retired lists past their grace, and the age is
+    measured past the grace rather than from the retirement."""
     factory, engine = await create_test_db()
     try:
         now = datetime(2026, 9, 9, tzinfo=timezone.utc)
         await _retired_list(
-            factory, retired_at=now - timedelta(days=400), pinned=True, name="forever"
-        )
-        await _retired_list(
-            factory, retired_at=now - timedelta(days=9), pinned=False, name="waiting"
+            factory, retired_at=now - timedelta(days=9), pinned=True, name="waiting"
         )
 
         result = await reclaim_retired_prompt_lists(
@@ -615,9 +605,6 @@ async def test_the_reclaim_measures_the_lists_it_could_still_collect():
         assert described["backlog"] == 0, "what it collected is no longer a backlog"
         assert described["oldest_overdue_seconds"] == 0.0
 
-        # With the reclaimable one still waiting, the age is measured past the
-        # grace it is already over - and the permanent tombstone is in neither
-        # number.
         await _retired_list(
             factory, retired_at=now - timedelta(days=9), pinned=False, name="waiting-2"
         )
