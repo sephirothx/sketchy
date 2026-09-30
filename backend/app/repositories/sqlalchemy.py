@@ -63,7 +63,12 @@ from app.db.models import (
     generate_uuid,
 )
 from app.canvas_history import binary_action_count
-from app.canvas_storage import prepare_stored_drawing
+from app.canvas_storage import (
+    CorruptStoredDrawingError,
+    prepare_stored_drawing,
+    stored_drawing_checksum,
+    stored_drawing_format,
+)
 from app.services.gallery_ranking import (
     HOT_HORIZON,
     MAX_GALLERY_OFFSET,
@@ -117,6 +122,7 @@ from app.services.user_stats_projection import (
 )
 from app.services.friends import friendship_key, other_of
 from app.repositories.interfaces import (
+    StoredDrawingInput,
     AuditStamp,
     CommunityPromptList,
     CommunityPromptListDetail,
@@ -356,7 +362,7 @@ class _GameSizing:
     reported only once the transaction has committed, so a retried or
     refused write is never counted."""
 
-    drawings: list[tuple[str, int, int, int, float]] = field(default_factory=list)
+    drawings: list[tuple[str, int, int, int, float | None]] = field(default_factory=list)
     offer_sources: int = 0
 
     def record(
@@ -403,7 +409,8 @@ class _PreparedDrawing:
     checksum: str
     wire_bytes: int
     action_count: int
-    seconds: float
+    # None for a drawing prepared at staging: its encode was recorded there.
+    seconds: float | None
 
 
 @dataclass(frozen=True)
@@ -431,16 +438,45 @@ def _prepare_drawing(payload: bytes) -> _PreparedDrawing:
     )
 
 
+def _verified_stored_drawing(stored: StoredDrawingInput) -> _PreparedDrawing:
+    """A drawing the envelope carried already prepared (#1259), written as it
+    is once its bytes are proved to be the ones it was prepared as.
+
+    What travels beside the blob is checked too, as far as the blob can say:
+    a row whose format disagrees with its own header is one the integrity
+    audit would later call mismatched (#1259 review). Its encode was timed
+    where it happened, at staging."""
+    if stored_drawing_checksum(stored.blob) != stored.checksum:
+        raise CorruptStoredDrawingError("a staged drawing failed its checksum")
+    magic = stored.magic.encode("ascii")
+    if stored_drawing_format(stored.blob) != (magic, stored.version):
+        raise CorruptStoredDrawingError("a staged drawing's format disagrees with its header")
+    if stored.action_count < 0 or stored.wire_bytes < 0:
+        raise CorruptStoredDrawingError("a staged drawing carries a negative count")
+    return _PreparedDrawing(
+        blob=stored.blob,
+        magic=magic,
+        version=stored.version,
+        checksum=stored.checksum,
+        wire_bytes=stored.wire_bytes,
+        action_count=stored.action_count,
+        seconds=None,
+    )
+
+
 def _prepare_drawings(
     drawings: list[TurnDrawingInput] | None,
 ) -> list[_PreparedDrawing | _UnpreparedDrawing | None]:
     prepared: list[_PreparedDrawing | _UnpreparedDrawing | None] = []
     for drawing in drawings or []:
-        if drawing.payload is None:
+        if not drawing.is_kept:
             prepared.append(None)
             continue
         try:
-            prepared.append(_prepare_drawing(drawing.payload))
+            if drawing.stored is not None:
+                prepared.append(_verified_stored_drawing(drawing.stored))
+            else:
+                prepared.append(_prepare_drawing(drawing.payload))
         except Exception as error:  # noqa: BLE001 - re-raised if the row is written
             prepared.append(_UnpreparedDrawing(error))
     return prepared
@@ -462,7 +498,7 @@ def _turn_drawing(
     implying the turn was never drawn.
     """
 
-    if drawing.payload is None:
+    if not drawing.is_kept:
         return TurnDrawing(
             turn_id=turn_id,
             game_id=game_id,
@@ -1536,8 +1572,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     {
                         "turn_id": item.turn_id,
                         "unavailable_reason": item.unavailable_reason,
+                        # The frame's digest either way: an envelope carries
+                        # the drawing prepared, with the digest of the frame
+                        # it came from (#1259).
                         "payload_sha256": (
-                            None
+                            item.stored.wire_sha256
+                            if item.stored is not None
+                            else None
                             if item.payload is None
                             else hashlib.sha256(item.payload).hexdigest()
                         ),

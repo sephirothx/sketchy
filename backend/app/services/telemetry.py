@@ -1086,7 +1086,7 @@ class Telemetry:
         )
         self.drawing_encode_seconds = Histogram(
             "sketchy_drawing_encode_seconds",
-            "Validating and encoding one drawing for storage, by format: CPU time on the encoding thread, not wall time (#976).",
+            "Validating and encoding one drawing for storage, by format: CPU time on the encoding thread, not wall time (#976), observed at staging for a finished game (#1259).",
             ENCODE_BUCKETS,
             ("format",),
         )
@@ -1353,15 +1353,23 @@ class Telemetry:
         self.db_retries.inc((operation if operation in DB_OPERATIONS else "other", outcome))
 
     def drawing_stored(
-        self, magic: str, *, raw_bytes: int, stored_bytes: int, actions: int, seconds: float
+        self, magic: str, *, raw_bytes: int, stored_bytes: int, actions: int, seconds: float | None
     ) -> None:
-        """One drawing written into history, as it traveled and as it is kept."""
+        """One drawing written into history, as it traveled and as it is kept.
+
+        `seconds` is None when it was encoded at staging, which recorded it
+        (`drawing_encoded`, #1259)."""
         now = self._clock()
         labels = (magic,)
         self.drawing_raw_bytes.observe(raw_bytes, labels, now=now)
         self.drawing_stored_bytes.observe(stored_bytes, labels, now=now)
         self.drawing_actions.observe(actions, labels, now=now)
-        self.drawing_encode_seconds.observe(seconds, labels, now=now)
+        if seconds is not None:
+            self.drawing_encode_seconds.observe(seconds, labels, now=now)
+
+    def drawing_encoded(self, magic: str, seconds: float) -> None:
+        """One drawing encoded for storage when its game's envelope was staged."""
+        self.drawing_encode_seconds.observe(seconds, (magic,), now=self._clock())
 
     def game_rows_written(self, rows_by_table: dict[str, int]) -> None:
         now = self._clock()

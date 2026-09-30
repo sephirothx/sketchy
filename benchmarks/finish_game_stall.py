@@ -8,7 +8,10 @@ writing it. On the loop, that work stalls every room's strokes and timers for
 as long as it runs. This stages and replays games of eight drawn turns through
 the real worker and repositories, with a 1 ms ticker on the loop, and reports
 the longest the ticker was kept waiting - for an ordinary drawing and for a
-stroke-heavy one, the two shapes the issue measured.
+stroke-heavy one, the two shapes the issue measured. Per shape it also reports
+the envelope as staged, the envelope encode's time, and on PostgreSQL the WAL a
+whole finished game writes - staging, replay and the envelope's deletion -
+which is what WAL archiving and backups have to be sized on (#1259).
 
     TEST_DATABASE_URL=postgresql+asyncpg://sketchy:sketchy@127.0.0.1:5433/sketchy_test \\
         backend/.venv/bin/python benchmarks/finish_game_stall.py --games 4
@@ -23,6 +26,7 @@ import statistics
 import sys
 from datetime import datetime, timedelta, timezone
 from time import perf_counter
+from uuid import UUID
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, os.path.join(ROOT, "backend"))
@@ -41,10 +45,14 @@ from app.repositories.sqlalchemy import (  # noqa: E402
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
 )
+from sqlalchemy import select, text  # noqa: E402
+
+from app.db.models import FinishedGameEnvelope as EnvelopeRow  # noqa: E402
 from app.services.game_handoff import (  # noqa: E402
     FinishedGameEnvelope,
     FinishedGameHandoffWorker,
     SqlEnvelopeStore,
+    encode_envelope,
 )
 from app.services.game_history import GameHistoryWrite  # noqa: E402
 from tests.dbfixtures import create_test_db  # noqa: E402
@@ -53,7 +61,37 @@ TURNS = 8
 SEATS = 4
 
 
-def _game(players: list[str], frame: bytes) -> GameHistoryWrite:
+def _realistic(turn: int) -> bytes:
+    """`canvas_history.realistic_history`, drawn differently for each turn.
+
+    A game repeating one drawing would flatter the envelope: identical stored
+    drawings deduplicate inside its deflate window, which no real game gets
+    to do (#1259). The same strokes, shapes and fills, at other places and in
+    other colours.
+    """
+    from app.canvas_history import PackedCanvasHistory
+
+    history = PackedCanvasHistory()
+    bench._append_grid(history, 200)
+    for index in range(600):
+        x = ((index * 37 + turn * 211) % 780) / 800
+        y = ((index * 53 + turn * 97) % 580) / 600
+        points = [(x, y)]
+        for step in range(1, 12):
+            points.append((
+                min(0.99, x + ((index + step * 7 + turn) % 13) / 800),
+                min(0.99, y + ((index + step * 5 + turn) % 11) / 600),
+            ))
+        history.append_path(points, color=(index * 977 + turn * 7919) & 0xFFFFFF, width=(index + turn) % 8 + 2)
+    for index in range(12):
+        history.append_fill(
+            x=(index % 4) * 200 + 100, y=(index // 4) * 200 + 100, color=(index * 654_319 + turn) & 0xFFFFFF,
+        )
+    return history.binary_payload()
+
+
+def _game(players: list[str], frame: bytes | None) -> GameHistoryWrite:
+    """`frame` for every turn, or None for a realistic drawing of each turn's own."""
     now = datetime.now(timezone.utc)
     seats = [str(generate_uuid()) for _ in players]
     turns, drawings = [], []
@@ -76,7 +114,7 @@ def _game(players: list[str], frame: bytes) -> GameHistoryWrite:
                 ),
             )
         )
-        drawings.append(TurnDrawingInput(turn_id=turn_id, payload=frame))
+        drawings.append(TurnDrawingInput(turn_id=turn_id, payload=frame if frame is not None else _realistic(index)))
     return GameHistoryWrite(
         record=GameRecordInput(
             id=str(generate_uuid()), room_name="Bench", scoring_mode="default", scoring_version=1,
@@ -92,6 +130,24 @@ def _game(players: list[str], frame: bytes) -> GameHistoryWrite:
         ],
         turns=turns, score_events=[], drawings=drawings, reactions=[],
     )
+
+
+def _lsn_bytes(lsn: str) -> int:
+    high, low = lsn.split("/")
+    return (int(high, 16) << 32) + int(low, 16)
+
+
+async def _wal_lsn(factory) -> int | None:
+    async with factory() as session:
+        if session.bind.dialect.name != "postgresql":
+            return None
+        return _lsn_bytes(await session.scalar(text("SELECT pg_current_wal_insert_lsn()::text")))
+
+
+async def _wal_since(factory, lsn: int | None) -> int | None:
+    if lsn is None:
+        return None
+    return (await _wal_lsn(factory)) - lsn
 
 
 async def _finish(worker, players, frame) -> tuple[float, float]:
@@ -129,13 +185,30 @@ async def run(games: int) -> dict:
             prompt_list_repo=None,
         )
         result = {}
-        for name, history in (("realistic", bench.realistic_history), ("stroke_heavy", bench.mixed_history)):
-            frame = history().binary_payload()
+        # Realistic drawings differ turn to turn; the stroke-heavy frame is
+        # far past the deflate window, so repeating it flatters nothing.
+        for name, frame in (("realistic", None), ("stroke_heavy", bench.mixed_history().binary_payload())):
             samples = [await _finish(worker, players, frame) for _ in range(games)]
+            # One more, staged alone first to read its envelope, then replayed.
+            game = _game(players, frame)
+            encode_started = perf_counter()
+            encode_envelope(FinishedGameEnvelope(game))
+            encode_ms = (perf_counter() - encode_started) * 1000
+            lsn = await _wal_lsn(factory)
+            await worker.stage(FinishedGameEnvelope(game))
+            async with factory() as session:
+                envelope_bytes = await session.scalar(
+                    select(EnvelopeRow.byte_size).where(EnvelopeRow.game_id == UUID(game.record.id))
+                )
+            await worker.drain()
+            wal = await _wal_since(factory, lsn)
             result[name] = {
-                "frameBytes": len(frame),
+                "frameBytes": len(frame if frame is not None else _realistic(0)),
                 "worstLoopStallMsMedian": round(statistics.median(s[0] for s in samples), 1),
                 "stageAndReplayMsMedian": round(statistics.median(s[1] for s in samples), 1),
+                "envelopeKB": round((envelope_bytes or 0) / 1024, 1),
+                "envelopeEncodeMs": round(encode_ms, 1),
+                "walKBPerGame": None if wal is None else round(wal / 1024, 1),
             }
         return result
     finally:

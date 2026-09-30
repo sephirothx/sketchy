@@ -50,6 +50,7 @@ import logging
 import os
 import time
 import zlib
+from time import thread_time
 from concurrent.futures import ThreadPoolExecutor
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -63,6 +64,8 @@ from sqlalchemy import delete, or_, select, update
 from sqlalchemy.exc import DataError, DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
+from app.canvas_history import binary_action_count
+from app.canvas_storage import prepare_stored_drawing
 from app.deployment import history_encode_workers
 from app.db.models import FinishedGameEnvelope as EnvelopeRow
 from app.db.models import generate_uuid
@@ -83,6 +86,7 @@ from app.repositories.interfaces import (
     PromptUsage,
     PromptUsageConflictError,
     ScoreEventInput,
+    StoredDrawingInput,
     TurnDrawingInput,
     TurnDrawingReactionInput,
     TurnParticipantOutcomeInput,
@@ -96,7 +100,11 @@ from app.services.telemetry import telemetry
 
 logger = logging.getLogger("sketchy.services.game_handoff")
 
-ENVELOPE_VERSION = 1
+# 2 since #1259: drawings travel prepared - the stored SKCD blob, its
+# checksum and the frame's digest - rather than as base64 frames the replay
+# prepared again. No decoder is kept for 1: nothing has been deployed, so no
+# pending envelope of that shape exists anywhere (docs/database.md, Pre-v1).
+ENVELOPE_VERSION = 2
 
 # The one write a room waits on after a game ends: the staging insert. Ten
 # seconds, the same bound the direct write had, and the same one the entry
@@ -362,19 +370,71 @@ def _score_event_out(event: ScoreEventInput) -> dict:
     }
 
 
-def _drawing_out(drawing: TurnDrawingInput) -> dict:
-    return {
+def _stored_form(drawing: TurnDrawingInput) -> tuple[StoredDrawingInput | None, float]:
+    """The drawing as the row will store it, prepared here, at staging, and
+    the thread time preparing it took (0 when nothing was prepared here).
+
+    The envelope used to carry each frame as base64 and the replay prepared it
+    again: the envelope row - written and deleted within seconds - was 64% of
+    the WAL a finished game wrote, more than the history itself, and every
+    drawing was deflated twice (#1259). A frame that cannot be prepared
+    travels as it is, so the replay refuses it exactly where it always did:
+    only if its row is written (#976 review)."""
+    if drawing.stored is not None or drawing.payload is None:
+        return drawing.stored, 0.0
+    started = thread_time()
+    try:
+        blob, magic, version, checksum = prepare_stored_drawing(drawing.payload)
+    except Exception:  # noqa: BLE001 - left for the replay to refuse
+        return None, 0.0
+    stored = StoredDrawingInput(
+        blob=blob,
+        magic=magic.decode("ascii"),
+        version=version,
+        checksum=checksum,
+        wire_sha256=hashlib.sha256(drawing.payload).hexdigest(),
+        wire_bytes=len(drawing.payload),
+        action_count=binary_action_count(drawing.payload),
+    )
+    return stored, thread_time() - started
+
+
+def _drawing_out(drawing: TurnDrawingInput) -> tuple[dict, tuple[str, float] | None]:
+    """The drawing's place in the document, and - when it was prepared here -
+    its format and what preparing it cost, for `sketchy_drawing_encode_seconds`."""
+    stored, seconds = _stored_form(drawing)
+    document = {
         "turn_id": drawing.turn_id,
-        "payload": _bytes_out(drawing.payload),
+        "payload": None if stored is not None else _bytes_out(drawing.payload),
+        "stored": None if stored is None else {
+            "blob": _bytes_out(stored.blob),
+            "magic": stored.magic,
+            "version": stored.version,
+            "checksum": stored.checksum,
+            "wire_sha256": stored.wire_sha256,
+            "wire_bytes": stored.wire_bytes,
+            "action_count": stored.action_count,
+        },
         "unavailable_reason": drawing.unavailable_reason,
     }
+    return document, (stored.magic, seconds) if stored is not None and seconds else None
 
 
 def _drawing_in(value: dict) -> TurnDrawingInput:
+    stored = value.get("stored")
     return TurnDrawingInput(
         turn_id=value["turn_id"],
         payload=_bytes_in(value.get("payload")),
         unavailable_reason=value.get("unavailable_reason"),
+        stored=None if stored is None else StoredDrawingInput(
+            blob=_bytes_in(stored["blob"]),
+            magic=stored["magic"],
+            version=int(stored["version"]),
+            checksum=stored["checksum"],
+            wire_sha256=stored["wire_sha256"],
+            wire_bytes=int(stored["wire_bytes"]),
+            action_count=int(stored["action_count"]),
+        ),
     )
 
 
@@ -420,20 +480,35 @@ def _usage_in(value: dict | None) -> PromptUsage | None:
 
 
 def encode_envelope(envelope: FinishedGameEnvelope) -> bytes:
-    """One deflated JSON document. Drawings ride as base64 and are the bulk."""
+    """One deflated JSON document. Drawings ride prepared - their stored,
+    already deflated form, base64 - and are still the bulk (#1259)."""
+    return _encoded(envelope)[0]
+
+
+def _encoded(envelope: FinishedGameEnvelope) -> tuple[bytes, list[tuple[str, float]]]:
+    """The envelope's bytes, and each drawing's encode prepared for them.
+
+    The timings stay out of the document: staging is idempotent by content,
+    so the same game has to encode to the same bytes every time."""
     history = envelope.history
+    drawings, encodes = [], []
+    for drawing in history.drawings:
+        document, encoded = _drawing_out(drawing)
+        drawings.append(document)
+        if encoded is not None:
+            encodes.append(encoded)
     document = {
         "version": ENVELOPE_VERSION,
         "record": _record_out(history.record),
         "participants": [_participant_out(seat) for seat in history.participants],
         "turns": [_turn_out(turn) for turn in history.turns],
         "score_events": [_score_event_out(event) for event in history.score_events],
-        "drawings": [_drawing_out(drawing) for drawing in history.drawings],
+        "drawings": drawings,
         "reactions": [_reaction_out(reaction) for reaction in history.reactions],
         "usage": _usage_out(envelope.usage),
         "usage_revision_ids": list(envelope.usage_revision_ids),
     }
-    return zlib.compress(json.dumps(document, separators=(",", ":")).encode(), 6)
+    return zlib.compress(json.dumps(document, separators=(",", ":")).encode(), 6), encodes
 
 
 def decode_envelope(payload: bytes, version: int) -> FinishedGameEnvelope:
@@ -472,10 +547,11 @@ def envelope_checksum(payload: bytes) -> str:
 # one startup has validated.
 #
 # The queue in front of them is what a synchronised burst of endings waits in:
-# one stroke-heavy envelope measures ~143 ms, so the documented ceiling of 50
-# rooms ending in the same instant is ~7.4 s of encode at 1 thread, ~3.7 s at
-# the default 2 and ~2.1 s at 4 - on this machine, and longer on a smaller
-# host. Staging no longer waits inside the ten-second bound for that queue
+# one stroke-heavy envelope measures ~240 ms - it prepares each drawing's
+# stored form since #1259, work the replay no longer does - so the documented
+# ceiling of 50 rooms ending in the same instant is ~12 s of encode at 1
+# thread, ~6 s at the default 2 and ~3 s at 4 - on this machine, and longer on
+# a smaller host. Staging no longer waits inside the ten-second bound for that queue
 # (`game_flow` bounds the insert, not the encode), so a burst costs latency
 # rather than games; raise the setting on a host that ends more at once.
 _ENVELOPE_POOL: ThreadPoolExecutor | None = None
@@ -490,9 +566,11 @@ def _envelope_pool() -> ThreadPoolExecutor:
     return _ENVELOPE_POOL
 
 
-def _encode_with_checksum(envelope: FinishedGameEnvelope) -> tuple[bytes, str]:
-    payload = encode_envelope(envelope)
-    return payload, envelope_checksum(payload)
+def _encode_with_checksum(
+    envelope: FinishedGameEnvelope,
+) -> tuple[bytes, str, list[tuple[str, float]]]:
+    payload, encodes = _encoded(envelope)
+    return payload, envelope_checksum(payload), encodes
 
 
 def _verified_decode(payload: bytes, version: int, checksum: str) -> FinishedGameEnvelope | None:
@@ -1030,9 +1108,13 @@ class FinishedGameHandoffWorker:
         in a queue of encodes - 50 rooms ending together is seconds of pure
         CPU - would lose games to a burst rather than to an outage.
         """
-        payload, checksum = await asyncio.get_running_loop().run_in_executor(
+        payload, checksum, encodes = await asyncio.get_running_loop().run_in_executor(
             _envelope_pool(), _encode_with_checksum, envelope
         )
+        # Recorded here, where the drawings are encoded, not by the replay,
+        # which only checks them (#1259 review); on the loop, not the thread.
+        for magic, seconds in encodes:
+            telemetry.drawing_encoded(magic, seconds)
         if len(payload) > self._max_bytes:
             raise EnvelopeTooLarge(len(payload), self._max_bytes)
         return StagedEnvelope(

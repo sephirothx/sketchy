@@ -1334,8 +1334,10 @@ loop once the game is in history — so a table with no rows is the healthy stat
 row is a game that is on its way or that was lost.
 
 `game_id` **PK** (the game's own UUIDv7, R-HIST-01) · `envelope_version` ·
-`payload` (deflated JSON: the history rows, the drawings as base64, the prompt-usage
-batch; nullable, **null on a failed row**) · `byte_size` · `checksum_sha256` ·
+`payload` (deflated JSON: the history rows, the drawings **already prepared** - each
+one's stored `SKCD` blob as base64 with its checksum, format and the digest of the frame
+it came from - and the prompt-usage batch; nullable, **null on a failed row**) ·
+`byte_size` · `checksum_sha256` ·
 `state` (`pending \| processing \| failed`) · `history_state`, `usage_state`
 (`pending \| done \| none` — the two parts under one manifest, so a crash between them
 resumes only the missing one; `none` is decided at staging when the game had no usage
@@ -1344,6 +1346,17 @@ to write, which is a fact, not a gap) · `attempts` · `next_attempt_at` · `cla
 `failure_code` (`conflict \| exhausted \| unreadable \| invalid`) · `last_error` · `created_at` ·
 `failed_at`. `ix_finished_game_envelopes_due` on `(state, next_attempt_at)` is the
 loop's queue scan.
+
+Since `envelope_version` 2 (#1259) a drawing is prepared once, at staging on the
+envelope's threads, and the replay writes that blob as it is after verifying its
+checksum. Version 1 carried each wire frame as base64 and the replay prepared it again:
+the row, written and deleted within seconds, was the larger part of the WAL a finished
+game wrote. Measured on PostgreSQL 17 (`benchmarks/finish_game_stall.py`, 4 seats ×
+8 turns, a distinct realistic drawing each turn): envelope 227.8 → 59.4 KB, whole-game
+WAL 336.8 → 152.0 KB; a stroke-heavy game's WAL 3.68 → 2.73 MB. A frame that cannot be
+prepared travels as it is, so the replay refuses it exactly where it always did. The
+game's content hash names each frame's digest either way, so a game written directly and
+the same game replayed from its envelope are one game.
 
 The checks keep a row honest: a `failed` row has a code and a time and **no payload**;
 any other row has a payload; a `processing` row has both halves of its claim.
@@ -1382,23 +1395,28 @@ erased account authored (#606) sits here longer than the retry window — and th
 itself runs through the same erasure barrier as every writer (R-PRIV-15), so content
 erased while an envelope waited is tombstoned on the way in, never restored.
 
-**Nothing is encoded on the event loop** (#976). The envelope's JSON and deflate at
-staging, its checksum and decode at replay, and in `save_game` the game's content digest
-and each drawing's stored form all run on small thread pools of their own — not the
-default pool, which blocking SMTP can hold while a staging waits for its insert. Each
-pool is `HISTORY_ENCODE_WORKERS` threads wide (2 by default, 1-16, refused at startup if
-it is neither), which is how many endings encode at once before the rest queue: one
-stroke-heavy envelope measures ~143 ms, so 50 rooms ending in the same instant is ~3.7 s
-of encode at the default. `save_game` answers a replay of a game already written with one read before
-encoding anything, and prepares the drawings *before* the transaction that holds every
-player's `users` row; a drawing that cannot be prepared fails the write only if it would
-be written, so an erased drawer's is still a tombstone. The stored bytes are unchanged.
+**Nothing is encoded on the event loop** (#976). Each drawing's stored form and the
+envelope's JSON and deflate at staging, its checksum and decode at replay, and in
+`save_game` the game's content digest and each staged drawing's checksum all run on
+small thread pools of their own — not the default pool, which blocking SMTP can hold
+while a staging waits for its insert. Each pool is `HISTORY_ENCODE_WORKERS` threads wide
+(2 by default, 1-16, refused at startup if it is neither), which is how many endings
+encode at once before the rest queue: one stroke-heavy envelope measures ~240 ms since it
+prepares the drawings (#1259; ~143 ms before), so 50 rooms ending in the same instant is
+~6 s of encode at the default, and the planned shutdown's drain allows
+`ENVELOPE_ENCODE_SECONDS` (0.25 s) a room. `save_game` answers a replay of a game already
+written with one read before checking anything, and checks each staged drawing — its
+checksum, and its header against the format it travelled with — *before* the transaction
+that holds every player's `users` row (a frame written directly is prepared there
+instead); a drawing that fails fails the write only if it would be written, so an erased
+drawer's is still a tombstone. The stored bytes are unchanged.
 `benchmarks/finish_game_stall.py`, 8 turns, one idle 1 ms ticker on the loop: its
 longest wait while a game is staged and replayed fell 16 → 1.5 ms for ordinary drawings
 and ~200 → 12.7 ms for stroke-heavy ones. The encode still takes the same CPU and shares
 the GIL with the loop while it runs, so the loop runs at reduced throughput for those
-few hundred milliseconds rather than stopping for them; `sizing` records the encode's
-thread time.
+few hundred milliseconds rather than stopping for them. The encode's thread time is
+recorded where the encode runs: at staging for a finished game's drawings, by `sizing`
+for one written directly.
 
 ```bash
 cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # replay by hand
@@ -1566,7 +1584,8 @@ object store. Measured on PostgreSQL 17 over 200 games seeded through the real w
 | One stored drawing | 7,638 B (`SKCD` v2; 34.6 KB on the wire) |
 | `turn_drawings` per finished game | 67.2 KB — heap 1.6, TOAST 64.8, index 0.8 |
 | Every other history table per game | 13.2 KB |
-| WAL per game | 86.2 KB |
+| WAL per game, `turn_drawings` alone | 86.2 KB |
+| WAL per finished game, whole (staging, replay, the envelope's deletion) | 152 KB (#1259; 337 KB before the envelope carried prepared drawings) |
 | Reading one drawing back, checksum verified and decoded | 1.4 ms p95 |
 
 So a drawing is about **five sixths of what a finished game adds to the database**, and
@@ -2326,7 +2345,7 @@ visible before it crosses it.
 What the storage reviews of #471, #545, #549 and #558 had to guess from seeded shapes is
 recorded as it is written (#895), each after its write has committed and none carrying a
 user identifier: `sketchy_drawing_raw_bytes`, `sketchy_drawing_stored_bytes`,
-`sketchy_drawing_actions` and `sketchy_drawing_encode_seconds` (the encoding thread's own CPU time since #976, not wall time, which on a worker thread also counts the turns the event loop takes), labelled by the format
+`sketchy_drawing_actions` and `sketchy_drawing_encode_seconds` (the encoding thread's own CPU time since #976, not wall time, which on a worker thread also counts the turns the event loop takes; observed when the envelope is staged, where a finished game's drawings are encoded since #1259), labelled by the format
 stored (`SKCD` encoded, `SKCH` verbatim); `sketchy_history_rows_per_game{table}` for
 every table a finished game writes; `sketchy_handoff_envelope_bytes`;
 `sketchy_messages_retained_total{kind,audience}` with `sketchy_message_recipients{audience}`
