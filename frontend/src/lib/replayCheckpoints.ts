@@ -53,6 +53,14 @@ export interface ReplayCheckpoints {
       from the newest copy still true of them. Returns how many actions it
       applied. */
   replayInto(pixels: Uint8ClampedArray, actions: readonly DecodedCanvasAction[]): number;
+  /** The first half of `replayInto`, for a replay that pauses between
+      actions (#1347): put the newest copy still true of `actions` into
+      `pixels`, or white, and return the index to apply from. */
+  begin(pixels: Uint8ClampedArray, actions: readonly DecodedCanvasAction[]): number;
+  /** Apply `actions[index]` onto `pixels`, which hold its first `index`
+      actions, and keep a copy where `replayInto` would. The history may have
+      grown since `begin`; what may be copied is judged against it as it is. */
+  step(pixels: Uint8ClampedArray, actions: readonly DecodedCanvasAction[], index: number): void;
   /** Forget every copy - a new canvas, or a renderer going away. */
   clear(): void;
 }
@@ -66,38 +74,48 @@ export function createReplayCheckpoints(): ReplayCheckpoints {
     && actions[checkpoint.length - 1] === checkpoint.last
     && pointCount(checkpoint.last) === checkpoint.lastPoints;
 
+  const begin = (pixels: Uint8ClampedArray, actions: readonly DecodedCanvasAction[]): number => {
+    kept = kept.filter((checkpoint) => stillTrue(checkpoint, actions));
+    const from = kept.at(-1);
+    if (from) {
+      pixels.set(from.pixels);
+      return from.length;
+    }
+    fillWhitePixels(pixels);
+    return 0;
+  };
+
+  const step = (
+    pixels: Uint8ClampedArray,
+    actions: readonly DecodedCanvasAction[],
+    index: number,
+  ): void => {
+    applyCanvasAction(pixels, actions[index] as DecodedCanvasAction);
+    const length = index + 1;
+    // The last action may still grow (an open path), so no copy includes it.
+    if (
+      length <= actions.length - 1
+      && length >= MIN_CHECKPOINT_LENGTH
+      && length % CHECKPOINT_EVERY === 0
+      && (kept.at(-1)?.length ?? 0) < length
+    ) {
+      const buffer = kept.length >= MAX_CHECKPOINTS
+        ? kept.shift()!.pixels
+        : new Uint8ClampedArray(pixels.length);
+      buffer.set(pixels);
+      const last = actions[index] as DecodedCanvasAction;
+      kept.push({ length, last, lastPoints: pointCount(last), pixels: buffer });
+    }
+  };
+
   return {
     replayInto(pixels, actions) {
-      kept = kept.filter((checkpoint) => stillTrue(checkpoint, actions));
-      const from = kept.at(-1);
-      let start = 0;
-      if (from) {
-        pixels.set(from.pixels);
-        start = from.length;
-      } else {
-        fillWhitePixels(pixels);
-      }
-      // The last action may still grow (an open path), so no copy includes it.
-      const closed = actions.length - 1;
-      for (let index = start; index < actions.length; index++) {
-        applyCanvasAction(pixels, actions[index] as DecodedCanvasAction);
-        const length = index + 1;
-        if (
-          length <= closed
-          && length >= MIN_CHECKPOINT_LENGTH
-          && length % CHECKPOINT_EVERY === 0
-          && (kept.at(-1)?.length ?? 0) < length
-        ) {
-          const buffer = kept.length >= MAX_CHECKPOINTS
-            ? kept.shift()!.pixels
-            : new Uint8ClampedArray(pixels.length);
-          buffer.set(pixels);
-          const last = actions[index] as DecodedCanvasAction;
-          kept.push({ length, last, lastPoints: pointCount(last), pixels: buffer });
-        }
-      }
+      const start = begin(pixels, actions);
+      for (let index = start; index < actions.length; index++) step(pixels, actions, index);
       return actions.length - start;
     },
+    begin,
+    step,
     clear() {
       kept = [];
     },

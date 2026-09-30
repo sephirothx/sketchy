@@ -25,6 +25,36 @@ import { finalWidth, rampedBatch } from "./pathWidths.ts";
 import { createStrokePlayback } from "./strokePlayback.ts";
 import { commitAll, type CanvasSurface } from "./canvasSurface.ts";
 
+/** How long one piece of a live replay may hold the page (#1347). A fill
+    costs ~3 ms on a desktop and ~11 ms at 4x CPU, so a piece is a few fills,
+    and the page draws a frame and takes input between pieces. */
+export const LIVE_REPLAY_SLICE_MS = 16;
+
+export interface LiveReplayOptions {
+  /** Whether a replay may be played out over several tasks: only where
+      nothing else paints the canvas meanwhile. The drawer's own pointer
+      paints straight onto it, so the drawer - and the scratch pad - replay at
+      once, as before. */
+  live: () => boolean;
+  sliceMs?: number;
+  /** Run `task` after the page has had a turn. A test passes its own. */
+  nextTask?: (task: () => void) => void;
+  now?: () => number;
+}
+
+/** A macrotask without `setTimeout`'s clamping: nested timeouts wait at
+    least 4 ms each, which over a hundred pieces is most of a second. */
+function messageChannelTask(): (task: () => void) => void {
+  if (typeof MessageChannel === "undefined") return (task) => setTimeout(task, 0);
+  const queue: Array<() => void> = [];
+  const channel = new MessageChannel();
+  channel.port1.onmessage = () => queue.shift()?.();
+  return (task) => {
+    queue.push(task);
+    channel.port2.postMessage(null);
+  };
+}
+
 export function createProtocolRenderer(
   surfaceRef: RefObject<CanvasSurface | null>,
   // The cadence the *sender* of these frames is flushing at. Required, and
@@ -43,6 +73,9 @@ export function createProtocolRenderer(
   // Absent for a canvas whose frames never crossed a network - the scratch
   // pad - where a compression would say nothing about a connection.
   onCompress?: () => void,
+  // A viewer's replay played out live rather than all at once (#1347).
+  // Absent, every replay is immediate.
+  liveReplay?: LiveReplayOptions,
 ): CanvasProtocolRenderer {
   // Where the open path ends *as queued*, in canvas pixels, and the style
   // it is drawn in. Updated the moment a frame is queued, never inside a
@@ -113,7 +146,72 @@ export function createProtocolRenderer(
 
   const checkpoints = createReplayCheckpoints();
 
+  // A replay being played out (#1347). A player joining a turn of a hundred
+  // full-canvas fills used to replay it in one task - 271 ms on a desktop,
+  // 1.1 s at 4x CPU - with the page taking no input and drawing no frame for
+  // that long. A viewer's replay now runs a piece at a time straight into
+  // the drawing, shown after each piece, so they watch it redraw quickly.
+  // It reads the protocol's history array as it goes: frames that land
+  // meanwhile are already in it (the protocol applies a frame to the history
+  // before `apply`), so the replay paints them in their place and `apply`
+  // leaves them alone - painted early, a stroke would sit under a fill the
+  // replay has yet to reach. The history's last action may be an open path
+  // still growing, so it is painted only at the very end, in the same task
+  // that hands the canvas back to live playback. Same actions, same order,
+  // same snapshots: the pixels are the ones an immediate replay gives.
+  let live: { actions: DecodedCanvasAction[]; next: number } | null = null;
+  const sliceMs = liveReplay?.sliceMs ?? LIVE_REPLAY_SLICE_MS;
+  const now = liveReplay?.now ?? (() => performance.now());
+  const nextTask = liveReplay ? (liveReplay.nextTask ?? messageChannelTask()) : null;
+
+  // Where live playback resumes once a history is on the canvas: a history
+  // that ends on a path may have landed mid-stroke, and the live batches
+  // that follow join that path's last point. If the path was in fact
+  // closed, the next frame is a start and resets this anyway.
+  const resumeAfter = (actions: DecodedCanvasAction[]) => {
+    const last = actions.at(-1);
+    const end = last?.kind === "path" ? last.points.at(-1) : undefined;
+    if (last?.kind === "path" && end) {
+      queued.last = { x: end.x, y: end.y };
+      queued.color = last.color;
+      queued.width = finalWidth(last.width, last.widths);
+    } else {
+      queued.last = null;
+    }
+  };
+
+  const playOut = () => {
+    const job = live;
+    const surface = surfaceRef.current;
+    if (!job || !surface) {
+      live = null;
+      return;
+    }
+    const { actions } = job;
+    // Taken back since it began - an undo the protocol has not yet asked
+    // to repaint, which it does in the same task - so start over.
+    if (job.next > actions.length) job.next = checkpoints.begin(surface.pixels, actions);
+    const started = now();
+    const hurry = !liveReplay!.live();
+    while (job.next < actions.length - 1) {
+      checkpoints.step(surface.pixels, actions, job.next++);
+      if (!hurry && now() - started >= sliceMs) break;
+    }
+    if (job.next >= actions.length - 1) {
+      if (job.next < actions.length) checkpoints.step(surface.pixels, actions, job.next++);
+      live = null;
+      commitAll(surface);
+      resumeAfter(actions);
+      return;
+    }
+    commitAll(surface);
+    nextTask!(() => {
+      if (live === job) playOut();
+    });
+  };
+
   const clear = () => {
+    live = null;
     playback.cancel();
     stopTicking();
     const surface = surfaceRef.current;
@@ -124,6 +222,11 @@ export function createProtocolRenderer(
   const apply = (packet: LiveDrawingPacket) => {
     const context = surfaceRef.current;
     if (!context) return;
+    if (live) {
+      // In the history already, and painted there in its place.
+      if (packet.event === "clear_canvas") clear();
+      return;
+    }
     const now = performance.now();
     if (packet.event === "draw_start") {
       const { x, y, color, width } = packet.payload;
@@ -185,33 +288,34 @@ export function createProtocolRenderer(
 
   const replay = (actions: DecodedCanvasAction[]) => {
     // What was queued is inside the history being repainted, or superseded
-    // by it; either way it must not land on top afterwards.
+    // by it; either way it must not land on top afterwards. So is a replay
+    // still being played out.
+    live = null;
     playback.cancel();
     stopTicking();
-    // Straight into the drawing, shown once at the end: it overwrites every
-    // pixel, so nothing stale carries over, and it never reads the canvas.
-    // From the newest snapshot still true of this history rather than from
-    // white (#989): an undo repaints only what followed it.
+    // Straight into the drawing: it overwrites every pixel, so nothing stale
+    // carries over, and it never reads the canvas. From the newest snapshot
+    // still true of this history rather than from white (#989): an undo
+    // repaints only what followed it.
     const surface = surfaceRef.current;
-    if (surface) {
-      checkpoints.replayInto(surface.pixels, actions);
-      commitAll(surface);
+    if (!surface) {
+      resumeAfter(actions);
+      return;
     }
-    // A replay that ends on a path may have landed mid-stroke: the live
-    // batches that follow join that path's last point. If the path was in
-    // fact closed, the next frame is a start and resets this anyway.
-    const last = actions.at(-1);
-    const end = last?.kind === "path" ? last.points.at(-1) : undefined;
-    if (last?.kind === "path" && end) {
-      queued.last = { x: end.x, y: end.y };
-      queued.color = last.color;
-      queued.width = finalWidth(last.width, last.widths);
-    } else {
-      queued.last = null;
+    if (liveReplay?.live()) {
+      // The first piece now, so a short history is on the canvas before
+      // this returns, exactly as it was.
+      live = { actions, next: checkpoints.begin(surface.pixels, actions) };
+      playOut();
+      return;
     }
+    checkpoints.replayInto(surface.pixels, actions);
+    commitAll(surface);
+    resumeAfter(actions);
   };
 
   const dispose = () => {
+    live = null;
     playback.cancel();
     stopTicking();
     checkpoints.clear();

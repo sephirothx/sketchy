@@ -7,7 +7,9 @@ drawn the way `DrawingThumbnail` did before #1282 (on the page) and the way it
 does now (on the thumbnail worker), and reports the main thread's long tasks
 and the worst lateness of a 10 ms timer meanwhile. The same fixture is also
 replayed onto a live canvas surface (`canvas-history.html`), which is what a
-full canvas sync costs a player who joins such a turn.
+full canvas sync costs a player who joins such a turn, and through the canvas's
+renderer both ways it replays: at once, as the drawer's does, and played out
+live, as a viewer's does since #1347.
 
 Desktop, then a 4x CPU-throttled profile standing in for a phone. Run through
 `benchmarks/run_canvas_history_browser.sh`, which serves the pages:
@@ -52,6 +54,12 @@ async def run(args) -> dict:
                 row["fullSync"] = await page.evaluate(
                     "(payload) => window.runCanvasHistoryBenchmark(payload)", encoded
                 )
+                # The same sync through the canvas's renderer: all at once, as
+                # the drawer's is, and played out live, as a viewer's is (#1347).
+                for mode, live in (("fullSyncImmediate", False), ("fullSyncLive", True)):
+                    row[mode] = await page.evaluate(
+                        "([payload, live]) => window.runFullSyncBenchmark(payload, live)", [encoded, live]
+                    )
                 results[profile] = row
                 await context.close()
         finally:

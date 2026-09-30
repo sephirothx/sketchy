@@ -2165,6 +2165,7 @@ backend/.venv/bin/python benchmarks/canvas_history.py --near-limit
 ./benchmarks/run_canvas_history_browser.sh
 # What drawing thumbnails cost the page's main thread: on the page against the thumbnail worker,
 # for the costliest accepted history (fixtures/fill_replay_100.json), plus its full-sync replay (#1282)
+# at once, as the drawer's canvas takes it, and played out live, as a viewer's does (#1347)
 BENCHMARK=thumbnail_browser ./benchmarks/run_canvas_history_browser.sh --count 3
 
 # End-to-end canvas benchmarks (desktop + throttled mobile)
