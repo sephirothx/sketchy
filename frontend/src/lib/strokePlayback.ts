@@ -24,6 +24,17 @@ Order is everything else. Only path points are spread over time; a path
 start, a path end, a shape, a fill and a clear are *barriers*, applied when
 the cursor reaches them, so a fill always sees the complete raster before it
 and a new stroke never starts before the previous one has finished playing.
+
+A path start is also *held*, one interval past its arrival (#1369). The drawer
+sends it on pointer-down, but the points that leave it wait for the next flush
+and are then played over the interval after that, so a start painted as it
+landed sat there alone until the first batch came, up to an interval, and
+every stroke began with a stall. Held, the dot shows as late as the rest of
+the stroke does. That rests on the drawer restarting its flush timer at
+pointer-down, so the first batch, like every other, covers one whole interval
+of drawing: played over one interval, it needs nothing inferred from when
+frames arrived, which a polling transport bunches and jitter moves.
+
 The queue is bounded: past `MAX_LAG_MS` of unplayed ink - a tab that was in the
 background, a burst after jitter - the schedule is compressed so the viewer
 catches up rather than drifting further behind, and a hidden tab drains
@@ -60,6 +71,9 @@ interface Segments {
 interface Barrier {
   kind: "barrier";
   run: () => void;
+  /** Not before this: a path start is held an interval (#1369). Null for
+  every other barrier, which runs as soon as the cursor reaches it. */
+  due: number | null;
 }
 
 type Item = Segments | Barrier;
@@ -71,6 +85,9 @@ export interface StrokePlayback {
   enqueueSegments(from: Point, points: Point[], style: SegmentStyle, now: number, radii?: number[]): void;
   /** Queue something that must run once everything before it is painted. */
   enqueueBarrier(run: () => void, now: number): void;
+  /** Queue a path start: a barrier held an interval past `now`, since the
+  points that leave it are that far behind it (#1369). */
+  enqueueStart(run: () => void, now: number): void;
   /** Paint what has come due by `now`. Returns whether anything is left. */
   advance(now: number): boolean;
   /** Paint everything queued, at once. */
@@ -109,6 +126,7 @@ export function createStrokePlayback(options: {
     for (let index = queue.length - 1; index >= 0; index -= 1) {
       const item = queue[index];
       if (item.kind === "segments") return Math.max(now, item.dueEnd);
+      if (item.due !== null) return Math.max(now, item.due);
     }
     return now;
   }
@@ -179,7 +197,10 @@ export function createStrokePlayback(options: {
       options.onCompress?.();
     }
     for (const item of queue) {
-      if (item.kind !== "segments") continue;
+      if (item.kind !== "segments") {
+        if (item.due !== null) item.due = Math.max(now, item.due - excess);
+        continue;
+      }
       item.dueStart = Math.max(now, item.dueStart - excess);
       item.dueEnd = Math.max(now, item.dueEnd - excess);
     }
@@ -205,13 +226,22 @@ export function createStrokePlayback(options: {
         run();
         return;
       }
-      queue.push({ kind: "barrier", run });
+      queue.push({ kind: "barrier", run, due: null });
+      compress(now);
+    },
+    enqueueStart(run, now) {
+      queue.push({
+        kind: "barrier",
+        run,
+        due: Math.max(lastDueEnd(now), now + options.intervalMs()),
+      });
       compress(now);
     },
     advance(now) {
       while (queue.length > 0) {
         const item = queue[0];
         if (item.kind === "barrier") {
+          if (item.due !== null && now < item.due) return true;
           queue.shift();
           item.run();
           continue;

@@ -258,7 +258,9 @@ export function createProtocolRenderer(
       queued.last = point;
       queued.color = color;
       queued.width = width;
-      playback.enqueueBarrier(() => {
+      // Held an interval, as the points that leave it are, or the dot shows
+      // that long before any ink leaves it (#1369).
+      playback.enqueueStart(() => {
         rasterizePolyline(context, [point, point], width / 2, hexToRgba(color));
       }, now);
     } else if (packet.event === "draw_move") {
