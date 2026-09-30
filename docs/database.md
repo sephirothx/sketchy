@@ -2192,7 +2192,7 @@ exact revision a copy was taken from, which is what keeps it meaningful: both li
 on being edited, so a pointer at the *list* would stop saying anything after the first
 edit on either side. It may end up naming a revision nothing serves — the source was hidden, and revisions are
 immutable, so the id stays true while the content is out of play. When the source is
-**retired**, the pointer goes: the reclaim sweep deletes unpinned revisions and the
+**retired**, the pointer goes: the reclaim sweep deletes the list's revisions and the
 `SET NULL` clears it.
 
 **`is_copy` is what survives it** (R-LIST-21). A copy credits the list it came from, and once the
@@ -2203,12 +2203,9 @@ nothing about what from — a name, an author or an id would be exactly what the
 list's author asked to take away. `ck_prompt_lists_copy_is_player_owned` keeps it off the
 bundled catalogue.
 
-That is deliberate, and it is why a fork reference is **not** a pin. Pins exist so a
-finished game's provenance survives its content's author tidying up (R-PRIV-05); a fork
-is not a finished game, it is a live list somebody else owns and edits. Counting one as a
-pin would mean an author who deletes their list can never actually remove it once a
-stranger has copied it — the revision would be kept alive for as long as the copy exists,
-which is indefinitely. The copy keeps every prompt it took; it forgets only where they
+That is deliberate, and it is why a fork reference holds nothing up. A fork is a live
+list somebody else owns and edits; if its pointer kept the original alive, an author who
+deletes their list could never actually remove it once a stranger had copied it. The copy keeps every prompt it took; it forgets only where they
 came from, because the person they came from asked for the list to go. A fork gets **new prompt concepts and versions** rather than references
 to the source's, so one owner's edit cannot rewrite what the other's list means, and
 hidden versions are left out of the copy entirely.
@@ -2487,7 +2484,7 @@ age of the oldest non-exempt row still eligible, and how many there are, counted
 `BACKLOG_CAP` (10,000) because "more than ten thousand overdue" and "eight hundred
 thousand" call for the same action and only one of them costs a sequential scan an hour.
 Both are measured over the sweep's own eligibility predicate, so a suspended account's
-sessions, a pinned prompt revision, a persistent room code and pending mail are absent
+sessions, a list still inside its grace, a persistent room code and pending mail are absent
 from the backlog exactly as they are absent from the candidates. A table that owes
 nothing reports **zero rather than nothing**: an absent Prometheus series does not
 compare greater than its allowance, so a rule written on a metric that appears only

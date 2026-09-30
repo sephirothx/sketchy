@@ -2490,7 +2490,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 score_events=len(score_events),
                 drawings=len(drawings or ()),
                 reactions=len(reactions),
-                prompt_sources=len(game_source_ids),
+                prompt_sources=len(present_sources),
             )
         except IntegrityError as error:
             # A concurrent writer may have committed the same stable ID after
@@ -5094,9 +5094,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             return result
 
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
-        """Retire the list: gone from the owner's view and from every room now;
-        its pinned revisions stay for the games that played them, and the
-        sweep reclaims the rest (`services.prompt_reclaim`, #605)."""
+        """Retire the list: gone from the owner's view and from every room now,
+        and collected whole by the sweep after a grace (`services.prompt_reclaim`,
+        #605); the games that played it name the list and read the same without
+        it (#1358)."""
         owner_id = _optional_entity_id(owner_user_id)
         list_id = _optional_entity_id(prompt_list_id)
         if owner_id is None or list_id is None:

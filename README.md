@@ -1064,7 +1064,7 @@ machinery rather than on the policy — six hours for the ordinary tables, a day
 for guests and retired lists. Every sweep measures what it left, on every run:
 the age of the oldest non-exempt row it should already have removed, and how
 many are waiting. Both are counted over the sweep's own eligibility predicate,
-so a suspended account's sessions, a pinned prompt revision, a persistent room
+so a suspended account's sessions, a list still inside its grace, a persistent room
 code and pending mail are never counted as lateness, and a table that owes
 nothing reports a zero rather than nothing at all. A table past its SLA, one
 whose sweep is failing, and one spending its whole budget every pass each raise

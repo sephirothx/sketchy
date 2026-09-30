@@ -750,6 +750,10 @@ async def test_every_turn_and_list_is_folded_into_a_single_write():
     assert sum(usage.offers.values()) == 12
     assert sum(totals.picks for totals in usage.picks.values()) == 4
     assert all(prompt.startswith("version-") for prompt in usage.offers)
+    # Each version is credited to the lists the draw found it in (#1358):
+    # without them the batch writes no facts at all.
+    assert set(usage.sources) == set(usage.offers) | set(usage.picks)
+    assert set(usage.sources.values()) == {("revision-standard", "revision-extended")}
 
 
 async def test_custom_only_game_never_writes_curated_usage_on_text_collision():

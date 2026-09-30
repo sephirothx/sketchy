@@ -363,7 +363,7 @@ async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says()
         await engine.dispose()
 
 
-async def _pin_a_game_to(factory, owner_id: str, list_id: str) -> None:
+async def _play_a_game_from(factory, owner_id: str, list_id: str) -> None:
     """A finished game that names the list as a prompt source (#1358)."""
     from datetime import datetime, timedelta, timezone
 
@@ -424,7 +424,7 @@ async def _current_revision_id(factory, list_id: str) -> str:
     return str(revision.id)
 
 
-async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance():
+async def test_deleting_a_list_a_finished_game_played_succeeds():
     """R-LIST-01 lets an owner delete a list; R-PRIV-05 keeps the game intact.
 
     Found by #612: with foreign keys enforced, deleting a used list rolled the
@@ -442,7 +442,7 @@ async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance(
             language="en",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
-        await _pin_a_game_to(factory, owner_id, created.id)
+        await _play_a_game_from(factory, owner_id, created.id)
 
         assert await repo.delete_owned(owner_id, created.id) is True
 
@@ -466,7 +466,7 @@ async def test_erasing_the_owner_of_a_used_list_succeeds():
             language="en",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
-        await _pin_a_game_to(factory, owner_id, created.id)
+        await _play_a_game_from(factory, owner_id, created.id)
 
         await anonymize_account(factory, user_id=owner_id)
 
@@ -525,7 +525,7 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_collected_after_the_gr
             language="en",
             prompts=(PromptListEntryInput(answer="otter", aliases=("sea otter",)),),
         )
-        await _pin_a_game_to(factory, owner_id, created.id)
+        await _play_a_game_from(factory, owner_id, created.id)
         async with factory() as session:
             assert await session.scalar(select(GamePromptSource.game_id)) is not None
 
@@ -585,14 +585,14 @@ async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_
         assert await repo.delete_owned(owner_id, created.id) is True
         # Within the grace, the sweep leaves the list for the running game.
         await reclaim_retired_prompt_lists(factory)
-        await _pin_a_game_to(factory, owner_id, list_id)
+        await _play_a_game_from(factory, owner_id, list_id)
         async with factory() as session:
             assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 1
 
         later = datetime.now(timezone.utc) + timedelta(days=2)
         await reclaim_retired_prompt_lists(factory, now=later)
         # A game written after the list went names no list, and is written.
-        await _pin_a_game_to(factory, owner_id, list_id)
+        await _play_a_game_from(factory, owner_id, list_id)
         async with factory() as session:
             assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 0
     finally:

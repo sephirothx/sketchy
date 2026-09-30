@@ -47,10 +47,22 @@ def _set_aside(table: str, indexes: Sequence[str]) -> str:
         op.drop_index(index, table_name=table)
     old = f"{table}_old"
     op.rename_table(table, old)
-    if op.get_bind().dialect.name == "postgresql":
+    bind = op.get_bind()
+    if bind.dialect.name == "postgresql":
         # The key's index keeps its name through a rename, and index names
-        # are schema-wide: the new table's key would collide with it.
+        # are schema-wide: the new table's key would collide with it. The
+        # foreign keys keep theirs too, and the new table's unnamed ones would
+        # be named around them (`..._fkey1`), drifting from a database built
+        # from the models; the copy needs none of them.
         op.execute(f"ALTER TABLE {old} DROP CONSTRAINT {table}_pkey")
+        for (name,) in bind.execute(
+            sa.text(
+                "SELECT conname FROM pg_constraint "
+                "WHERE conrelid = CAST(:old AS regclass) AND contype = 'f'"
+            ),
+            {"old": old},
+        ).all():
+            op.execute(f'ALTER TABLE {old} DROP CONSTRAINT "{name}"')
     return old
 
 

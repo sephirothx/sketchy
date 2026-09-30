@@ -35,7 +35,7 @@ retention loop that runs every hour and never fails is not evidence that anythin
 deleted on time: it is evidence that something ran. What is measured instead is what
 each sweep *left* — the age of the oldest row it should already have removed, over the
 sweep's own eligibility predicate so that rows a policy exempts (a suspended account's
-sessions, a pinned prompt revision, protected report evidence) are never counted as
+sessions, a list still inside its grace, protected report evidence) are never counted as
 lateness. Because a clean table reports a zero rather than nothing, "no series" is a
 broken exporter and not a compliant table.
 

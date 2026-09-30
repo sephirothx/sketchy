@@ -71,7 +71,7 @@ async def seed(factory: async_sessionmaker[AsyncSession]) -> Seeded:
     from app.services.friends import FriendService
     from app.services.message_retention import MessageRetentionService
     from tests.test_drawing_reactions import record_game, registered
-    from tests.test_owned_prompt_lists import _current_revision_id, _pin_a_game_to
+    from tests.test_owned_prompt_lists import _current_revision_id, _play_a_game_from
 
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
@@ -97,7 +97,7 @@ async def seed(factory: async_sessionmaker[AsyncSession]) -> Seeded:
     )
     await lists.set_owned_publication(drawer.id, owned.id, published=True)
     await lists.set_star(guesser.id, owned.id, starred=True)
-    await _pin_a_game_to(factory, drawer.id, await _current_revision_id(factory, owned.id))
+    await _play_a_game_from(factory, drawer.id, await _current_revision_id(factory, owned.id))
     from sqlalchemy import select
 
     from app.db.models import GamePromptSource

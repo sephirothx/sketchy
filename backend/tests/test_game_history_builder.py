@@ -6,7 +6,13 @@ from datetime import datetime, timedelta, timezone
 from uuid import UUID
 
 from app.domain_values import DRAWING_UNAVAILABLE_RECAP_BUDGET, GameOutcome
-from app.game import CompletedTurnStats, Game, TurnGuessRecord, TurnParticipantOutcomeRecord
+from app.game import (
+    GAME_RULE_SNAPSHOT_VERSION,
+    CompletedTurnStats,
+    Game,
+    TurnGuessRecord,
+    TurnParticipantOutcomeRecord,
+)
 from app.identifiers import generate_uuid7
 from app.rooms import DepartedSeat, DrawingRecapEntry, RoomManager
 from app.services.game_history import build_game_history
@@ -203,7 +209,7 @@ def test_record_carries_the_settings_the_game_was_played_under():
     assert history.record.started_at == game.started_at
     assert history.record.finished_at == FINISHED_AT
     assert history.record.scoring_version == 1
-    assert history.record.rule_snapshot_version == 1
+    assert history.record.rule_snapshot_version == GAME_RULE_SNAPSHOT_VERSION
     assert history.record.rule_snapshot["scoring"]["mode"] == "pressure"
     assert history.record.rule_snapshot["scoring"]["pressure"] == {
         "maximumGuessPoints": 300,

@@ -509,7 +509,7 @@ async def test_the_scrape_reads_the_sweeps_off_whichever_loop_reported_them():
 # --- the reclaim's own starvation -----------------------------------------
 
 
-async def _retired_list(factory, *, retired_at: datetime, pinned: bool, name: str):
+async def _retired_list(factory, *, retired_at: datetime, played: bool, name: str):
     """A retired list with one revision, optionally played by a finished game."""
     list_id, revision_id = generate_uuid(), generate_uuid()
     async with factory() as session:
@@ -534,7 +534,7 @@ async def _retired_list(factory, *, retired_at: datetime, pinned: bool, name: st
                     content_hash=f"hash-{name}",
                 )
             )
-            if pinned:
+            if played:
                 game_id = generate_uuid()
                 session.add(
                     GameRecord(
@@ -570,11 +570,11 @@ async def test_a_list_a_game_played_is_collected_like_any_other():
             await _retired_list(
                 factory,
                 retired_at=now - timedelta(days=100 + index),
-                pinned=True,
+                played=True,
                 name=f"played-{index}",
             )
         newer = await _retired_list(
-            factory, retired_at=now - timedelta(days=10), pinned=False, name="collectable"
+            factory, retired_at=now - timedelta(days=10), played=False, name="collectable"
         )
 
         result = await reclaim_retired_prompt_lists(factory, now=now, limit=limit)
@@ -588,14 +588,40 @@ async def test_a_list_a_game_played_is_collected_like_any_other():
         await engine.dispose()
 
 
-async def test_the_reclaim_measures_the_lists_it_could_still_collect():
+async def test_a_budgeted_run_stops_at_the_play_history_it_can_afford():
+    """Deleting a list removes its games' source rows and nulls its usage
+    facts, work that grows with how much it was played (#1358 review). A run
+    takes lists until their history would pass its rows - always one."""
+    factory, engine = await create_test_db()
+    try:
+        now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+        for index in range(3):
+            await _retired_list(
+                factory, retired_at=now - timedelta(days=30 - index), played=True,
+                name=f"played-{index}",
+            )
+
+        result = await reclaim_retired_prompt_lists(
+            factory, now=now, budget=SweepBudget(rows=1, batch=1, seconds=30)
+        )
+        assert result.lists_deleted == 1 and result.backlog == 2
+
+        roomy = await reclaim_retired_prompt_lists(
+            factory, now=now, budget=SweepBudget(rows=10, batch=10, seconds=30)
+        )
+        assert roomy.lists_deleted == 2 and roomy.backlog == 0
+    finally:
+        await engine.dispose()
+
+
+async def test_the_reclaim_measures_its_backlog_past_the_grace():
     """Its backlog is over the retired lists past their grace, and the age is
     measured past the grace rather than from the retirement."""
     factory, engine = await create_test_db()
     try:
         now = datetime(2026, 9, 9, tzinfo=timezone.utc)
         await _retired_list(
-            factory, retired_at=now - timedelta(days=9), pinned=True, name="waiting"
+            factory, retired_at=now - timedelta(days=9), played=True, name="waiting"
         )
 
         result = await reclaim_retired_prompt_lists(
@@ -606,10 +632,10 @@ async def test_the_reclaim_measures_the_lists_it_could_still_collect():
         assert described["oldest_overdue_seconds"] == 0.0
 
         await _retired_list(
-            factory, retired_at=now - timedelta(days=9), pinned=False, name="waiting-2"
+            factory, retired_at=now - timedelta(days=9), played=False, name="waiting-2"
         )
         await _retired_list(
-            factory, retired_at=now - timedelta(days=3), pinned=False, name="waiting-3"
+            factory, retired_at=now - timedelta(days=3), played=False, name="waiting-3"
         )
         starved = await reclaim_retired_prompt_lists(
             factory, now=now, limit=1, budget=SweepBudget(rows=1, batch=1, seconds=30)

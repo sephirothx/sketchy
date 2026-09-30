@@ -41,6 +41,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased
 
 from app.db.models import (
+    GamePromptSource,
     Prompt,
     PromptConcept,
     PromptContentReport,
@@ -51,6 +52,7 @@ from app.db.models import (
     PromptUsageFact,
     PromptVersion,
     TurnPromptOffer,
+    TurnPromptOfferSource,
     TurnRecord,
 )
 from app.domain_values import (
@@ -112,6 +114,45 @@ def _reclaimable(cutoff: datetime):
     starvation guard to keep them out of the batch (#478).
     """
     return (PromptList.deleted_at.is_not(None), PromptList.deleted_at <= cutoff)
+
+
+async def _within_history_budget(
+    session: AsyncSession, list_ids: list[UUID], rows: int
+) -> list[UUID]:
+    """The oldest of `list_ids` whose play history fits in `rows`, at least one."""
+    history = (
+        select(func.count())
+        .select_from(GamePromptSource)
+        .where(GamePromptSource.prompt_list_id == PromptList.id)
+        .correlate(PromptList)
+        .scalar_subquery()
+        + select(func.count())
+        .select_from(TurnPromptOfferSource)
+        .where(TurnPromptOfferSource.prompt_list_id == PromptList.id)
+        .correlate(PromptList)
+        .scalar_subquery()
+        + select(func.count())
+        .select_from(PromptUsageFact)
+        .where(PromptUsageFact.prompt_list_id == PromptList.id)
+        .correlate(PromptList)
+        .scalar_subquery()
+    )
+    sizes = dict(
+        (
+            await session.execute(
+                select(PromptList.id, history).where(PromptList.id.in_(list_ids))
+            )
+        ).all()
+    )
+    kept: list[UUID] = []
+    spent = 0
+    for list_id in list_ids:
+        size = int(sizes.get(list_id) or 0)
+        if kept and spent + size > rows:
+            break
+        kept.append(list_id)
+        spent += size
+    return kept
 
 
 def _version_is_referenced(version_id):
@@ -208,12 +249,16 @@ async def reclaim_retired_prompt_lists(
     """Physically remove what retired lists no longer need, a bounded batch at a time.
 
     Scheduled by the retention loop, which hands every sweep its budget; a
-    run under one takes no more lists than the budget has rows.
+    run under one takes no more lists than the budget has rows, and no more
+    play history than that either.
 
     One transaction per run, over at most `limit` lists retired before
-    `now - grace` **that still have something to collect**, oldest first.
-    Each list's revisions go, then the list row, then the versions and
-    concepts those revisions were the last to reference.
+    `now - grace`, oldest first. Each list's revisions go, then the list row,
+    then the versions and concepts those revisions were the last to reference.
+    Deleting a list row also removes its games' source rows and sets its usage
+    facts' list to null (#1358) - work that grows with how much the list was
+    played rather than with the list - so a budgeted run stops adding lists
+    once their history would pass its rows, always taking at least one.
 
     Nothing pins a revision since #1358, so a list past its grace is
     collected whole: its revisions, then its row, then what only they named.
@@ -235,6 +280,8 @@ async def reclaim_retired_prompt_lists(
             if not retired:
                 return ReclaimResult(0, 0, 0, 0, 0)
             list_ids = [row.id for row in retired]
+            if budget is not None and len(list_ids) > 1:
+                list_ids = await _within_history_budget(session, list_ids, budget.rows)
 
             # Every version the doomed revisions name: the candidates for
             # orphan reclaim once the memberships are gone.

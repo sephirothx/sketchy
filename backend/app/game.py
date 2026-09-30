@@ -45,8 +45,9 @@ MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
 # Bump this whenever any parameter or algorithm that can change a score changes.
 SCORING_RULES_VERSION = 1
-# Bump this only when the stored rule-snapshot JSON contract changes.
-GAME_RULE_SNAPSHOT_VERSION = 1
+# Bump this only when the stored rule-snapshot JSON contract changes. 2 since
+# #1358: `prompt.sourceRevisionIds` became `prompt.sourceListIds`.
+GAME_RULE_SNAPSHOT_VERSION = 2
 
 
 def competition_ranks(sorted_scores: Sequence[int]) -> list[int]:
