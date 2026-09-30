@@ -2120,11 +2120,17 @@
 
 .timer-bar-fill {
   display: block;
+  width: 100%;
   height: 100%;
   border-radius: var(--radius-pill);
-  /* The width is recomputed every 250ms (Timer.tsx), and the transition only
-     joins those steps: it follows the clock's cadence, not the motion scale. */
-  transition: width 250ms linear, background-color var(--dur) ease;
+  /* Full width, slid left by what has run out (Timer.tsx, every 250ms), so
+     the track's overflow hides it and the pill keeps its rounded end.
+     `transform` rather than `width`, which the compositor cannot run: every
+     frame of a width transition was a style recalc, a layout and a paint on
+     the main thread, for most of a phone guesser's turn - more than the live
+     drawing under it on a slow phone (#1256). The transition only joins the
+     clock's steps: it follows that cadence, not the motion scale. */
+  transition: transform 250ms linear, background-color var(--dur) ease;
 }
 
 @media (prefers-reduced-motion: reduce) {

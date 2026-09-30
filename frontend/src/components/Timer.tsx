@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { barTransform } from "../lib/countdownBar";
 import { playTimerTickSound } from "../lib/sound";
 import { TimerRing } from "./icons";
 import { ui } from "../content/ui/index.ts";
@@ -73,7 +74,7 @@ export function Timer({ totalSeconds, startedAt, durationSeconds, variant = "rin
         <span className="timer-bar-track" aria-hidden="true">
           <span
             className="timer-bar-fill"
-            style={{ width: `${Math.max(0, Math.min(1, fraction)) * 100}%`, background: color }}
+            style={{ transform: barTransform(fraction), background: color }}
           />
         </span>
       ) : (

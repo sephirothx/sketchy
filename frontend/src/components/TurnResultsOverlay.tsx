@@ -11,6 +11,7 @@ import {
   waitsAtOldPlace,
 } from "../lib/standings";
 import { useMediaQuery } from "../hooks/useMediaQuery";
+import { barTransform } from "../lib/countdownBar";
 import { formatGuessTime } from "../lib/guessTime";
 import { ui } from "../content/ui/index.ts";
 import "../styles/lazy/reactions.css";
@@ -237,7 +238,7 @@ export function TurnResultsOverlay({
               <span>{ui.turnResultsOverlay.nextTurn}</span>
             </div>
             <div className="turn-results-progress-track" aria-hidden="true">
-              <span style={{ width: `${progressFraction * 100}%` }} />
+              <span style={{ transform: barTransform(progressFraction) }} />
             </div>
           </div>
         )}
