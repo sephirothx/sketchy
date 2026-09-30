@@ -1671,10 +1671,14 @@ async def test_a_takedown_outlives_its_deleted_list(env):
 
 
 
-async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
+@pytest.mark.parametrize("gone", ["deleted", "purged"])
+async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env, gone):
     """The takedown pins its revision only while the list has an owner whose
     saves look there; an erased account's retired list is reclaimed as any
-    other, rather than keeping its hidden text for good."""
+    other, rather than keeping its hidden text for good. Deleting an account
+    keeps its row as a tombstone and its lists pointing at it, so the real
+    route is the one to check: faking the erasure with no owner at all passed
+    while the real one kept the text (#1354 review)."""
     from datetime import datetime, timedelta, timezone
 
     from app.db.models import PromptListRevision
@@ -1691,10 +1695,15 @@ async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
         async with session.begin():
             row = await session.get(PromptVersion, UUID(doomed.prompts[0].prompt_version_id))
             row.moderation_state = "hidden"
-    assert await prompts.delete_owned(owner["id"], doomed.id)
-    async with factory() as session:
-        async with session.begin():
-            (await session.get(PromptList, UUID(doomed.id))).owner_user_id = None
+    if gone == "deleted":
+        deleted = await owner_http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
+        assert deleted.status_code == 200, deleted.text
+    else:
+        # A purged account's row is gone and its lists' owner set null.
+        assert await prompts.delete_owned(owner["id"], doomed.id)
+        async with factory() as session:
+            async with session.begin():
+                (await session.get(PromptList, UUID(doomed.id))).owner_user_id = None
     await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
     async with factory() as session:
         left = await session.scalar(

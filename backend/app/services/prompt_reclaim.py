@@ -128,31 +128,36 @@ def _revision_is_pinned(revision_id):
         # takedown: an owner's save looks there for hidden words, so reclaiming
         # it would let the word be typed into a new list a day after its list
         # was deleted (#1091 review).
-        # Only while the list has an owner: an erased account's lists are
-        # looked up by nobody's saves, so there it would keep the text alone.
         | exists().where(
             item.revision_id == revision_id,
             item.prompt_version_id == version.id,
             version.moderation_state == PromptContentModerationState.HIDDEN.value,
-            revision.id == revision_id,
-            owner_list.id == revision.prompt_list_id,
-            owner_list.owner_user_id.is_not(None),
+            *_owner_still_saves(revision_id, revision, owner_list, owner),
         )
         # And one holding a word a report still waits on, until it is decided:
         # a report outlives the grace easily, and a word hidden after the only
         # revisions tying it to its owner were reclaimed is hidden from none of
         # their next lists (#1258 review, #1354). Decided hidden, the revision
-        # is kept above; dismissed, it goes. Not for an account that was
-        # deleted, which saves no next list.
+        # is kept above; dismissed or left active, it goes.
         | exists().where(
             item.revision_id == revision_id,
             report.prompt_version_id == item.prompt_version_id,
             report.status == ReportStatus.PENDING.value,
-            revision.id == revision_id,
-            owner_list.id == revision.prompt_list_id,
-            owner.id == owner_list.owner_user_id,
-            owner.state != AccountState.DELETED.value,
+            *_owner_still_saves(revision_id, revision, owner_list, owner),
         )
+    )
+
+
+def _owner_still_saves(revision_id, revision, owner_list, owner):
+    """The revision's list has an owner who can still save a list: the only one
+    both holds above are for. A deleted account keeps its row, as a tombstone,
+    and its lists keep pointing at it, so "has an owner" alone kept an erased
+    account's hidden text for good (#1354 review); a purged one has none."""
+    return (
+        revision.id == revision_id,
+        owner_list.id == revision.prompt_list_id,
+        owner.id == owner_list.owner_user_id,
+        owner.state != AccountState.DELETED.value,
     )
 
 
@@ -169,7 +174,8 @@ def _has_reclaimable_work(list_id):
     hourly and reports success (#478).
 
     Evaluated fresh each run rather than recorded, so a list becomes a
-    candidate again by itself if a pin ever does go away.
+    candidate again by itself when a hold lapses - a pending report decided,
+    an owner's account deleted - as well as if a pin ever went away.
     """
     revisions = select(PromptListRevision.id).where(
         PromptListRevision.prompt_list_id == list_id
@@ -284,7 +290,9 @@ async def reclaim_retired_prompt_lists(
     reference.
 
     A list whose every remaining revision is pinned stays as a
-    non-discoverable tombstone for ever, and is not selected at all: it is
+    non-discoverable tombstone - for ever, for a game's pin; until the report
+    is decided or the owner's account deleted, for the other holds - and is
+    not selected meanwhile: it is
     exempt rather than pending, and selecting it would let a handful of
     permanent tombstones fill the batch and starve every list retired after
     them (`_has_reclaimable_work`). What the run leaves is measured over the

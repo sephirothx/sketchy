@@ -1079,7 +1079,10 @@ piece of screenshot metadata stay. The same hourly sweep reclaims deleted prompt
 deleting a list takes it out of reach at once, but a revision a finished game
 pinned stays for that game's history, and the rest — unpinned revisions, the
 list row, prompts nothing names any more — is removed a day later, once any
-room that pinned it before the deletion has had time to finish:
+room that pinned it before the deletion has had time to finish. While the owner's
+account lives, a revision holding a word a moderator hid stays too, and one holding
+a word a report still waits on stays until the report is decided, so a takedown
+reaches the owner's next list:
 
 ```bash
 cd backend

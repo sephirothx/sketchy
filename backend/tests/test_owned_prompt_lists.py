@@ -704,6 +704,9 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
         # the word among its owner's lists (#1354).
         held = await reclaim_retired_prompt_lists(factory, now=later)
         assert held.lists_deleted == 0 and held.revisions_deleted == 0
+        # Exempt while held, not overdue: a held list is not selected, so held
+        # lists cannot fill the batch and starve those behind them (#478).
+        assert held.lists_examined == 0 and held.backlog == 0
         async with factory() as session, session.begin():
             await session.execute(
                 update(PromptContentReport).values(
