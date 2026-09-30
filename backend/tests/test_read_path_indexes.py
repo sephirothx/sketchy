@@ -306,3 +306,115 @@ async def test_a_history_page_is_an_ordered_walk_of_the_players_seats():
             assert "Append" in plan or "Sort" not in plan, plan
     finally:
         await engine.dispose()
+
+
+def _rows_read(node: dict) -> int:
+    """Rows every index scan under `node` read, summed over its loops - the
+    ones it produced and the ones a filter on it threw away, which is where a
+    per-row probe that finds nothing hides its cost."""
+    own = (
+        sum(
+            node.get(key, 0)
+            for key in ("Actual Rows", "Rows Removed by Filter", "Rows Removed by Index Recheck")
+        )
+        * node.get("Actual Loops", 1)
+        if "Index" in node.get("Node Type", "")
+        else 0
+    )
+    return own + sum(_rows_read(child) for child in node.get("Plans", ()))
+
+
+@pytest.mark.skipif(not ON_POSTGRESQL, reason="plans are PostgreSQL's")
+async def test_shared_private_games_cost_the_smaller_private_history():
+    """#1371 review: the private games a signed-in viewer shared with the
+    subject are a semi-join of two private runs, and the planner has to lead
+    with the shorter. Pinned to one side - a probe PostgreSQL cannot reorder -
+    a prolific private-room player would pay their whole private history to
+    open any stranger's profile, or a stranger the subject's. Either way
+    round, with nothing shared, a page here reads a handful of rows, not the
+    thousands one side holds; a probe fenced with `OFFSET 0` fails it."""
+    import json
+
+    from sqlalchemy import event, insert
+
+    from app.db.models import GameParticipant, GameRecord, User, generate_uuid
+    from app.repositories.sqlalchemy import SqlAlchemyGameHistoryRepository
+
+    factory, engine = await create_test_db()
+    try:
+        heavy, light, friend = generate_uuid(), generate_uuid(), generate_uuid()
+        start = datetime(2026, 6, 1, tzinfo=timezone.utc)
+        games, seats = [], []
+        # 3,000 private games the heavy player shared with a friend, five the
+        # light player did: heavy and light never met.
+        for index in range(3_005):
+            game_id, finished_at = generate_uuid(), start + timedelta(minutes=index)
+            player = light if index % 601 == 0 else heavy
+            games.append(
+                {
+                    "id": game_id,
+                    "payload_hash": f"shared-{index}",
+                    "room_name": "Private",
+                    "scoring_mode": "default",
+                    "hint_mode": "none",
+                    "drawing_seconds": 60,
+                    "total_rounds": 1,
+                    "player_count": 2,
+                    "started_at": finished_at - timedelta(minutes=1),
+                    "finished_at": finished_at,
+                    "visibility": "private",
+                }
+            )
+            for user_id in (player, friend):
+                seats.append(
+                    {
+                        "id": generate_uuid(),
+                        "game_id": game_id,
+                        "user_id": user_id,
+                        "finished_at": finished_at,
+                        "visibility": "private",
+                        "final_score": 0,
+                        "final_rank": 1,
+                    }
+                )
+        async with factory() as session:
+            async with session.begin():
+                session.add_all(
+                    [
+                        User(id=heavy, display_name="Heavy"),
+                        User(id=light, display_name="Light"),
+                        User(id=friend, display_name="Friend"),
+                    ]
+                )
+                await session.flush()
+                await session.execute(insert(GameRecord), games)
+                await session.execute(insert(GameParticipant), seats)
+        await _analyze(factory, ("game_records", "game_participants", "users"))
+
+        captured: list[tuple[str, tuple]] = []
+
+        def before(conn, cursor, statement_text, parameters, context, executemany):
+            if "game_participants.finished_at DESC" in statement_text:
+                captured.append((statement_text, parameters))
+
+        history = SqlAlchemyGameHistoryRepository(factory)
+        event.listen(engine.sync_engine, "before_cursor_execute", before)
+        try:
+            for viewer, subject in ((heavy, light), (light, heavy)):
+                page = await history.get_user_games(str(subject), requesting_user_id=str(viewer))
+                assert page.games == ()
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", before)
+
+        assert len(captured) == 2
+        for statement_text, parameters in captured:
+            async with engine.connect() as connection:
+                [raw] = (
+                    await connection.exec_driver_sql(
+                        "EXPLAIN (ANALYZE, FORMAT JSON) " + statement_text, parameters
+                    )
+                ).scalars().all()
+            plan = (json.loads(raw) if isinstance(raw, str) else raw)[0]["Plan"]
+            assert _rows_read(plan) < 100, json.dumps(plan, indent=1)
+    finally:
+        await engine.dispose()

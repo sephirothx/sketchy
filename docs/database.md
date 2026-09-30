@@ -1485,9 +1485,11 @@ null for abandoned games, `>= 1` otherwise) · `turns_played` · `created_at`, w
   - read from where the last page stopped and stopped after a page, and the repository
   merges the runs and drops a game two identities both sat in. The owner's runs are
   every outcome shown and both visibilities; anyone else's are the public ones, plus,
-  for a signed-in caller, the private games they sat in with the subject, walked down
-  the **caller's** seats - so a stranger's page costs what the stranger's own history
-  does, never what the subject's private games do. With the three values only on
+  for a signed-in caller, the private games they sat in with the subject - the
+  caller's private run semi-joined to the subject's seats, which PostgreSQL drives from
+  whichever of the two private histories is shorter. Identities that never sat
+  anywhere are left out of the union first, one index probe each, so an account's
+  stack of merged guests costs only the ones that played. With the three values only on
   `game_records`, every page gathered all of the player's seats and sorted them, and
   a filter probed per row made a stranger walk every private game to find public
   ones. The index leads with `user_id` and replaced `ix_game_participants_user_id`.

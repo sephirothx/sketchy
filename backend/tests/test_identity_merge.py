@@ -169,7 +169,8 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
     has to interleave the two, list a game both sat in once, and end - and
     show each viewer what #469 lets them see: the owner every game, a visitor
     the public ones, a signed-in stranger those plus the private game they
-    sat in with the guest identity (walked down the stranger's own seats)."""
+    sat in with the guest identity - and with abandoned games asked for,
+    the abandoned ones of each kind as well."""
     factory, engine = await create_test_db()
     users = SqlAlchemyUserRepository(factory)
     history = SqlAlchemyGameHistoryRepository(factory)
@@ -180,7 +181,9 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
         stranger = await users.create_anonymous("Stranger")
         start = datetime(2026, 8, 1, tzinfo=timezone.utc)
 
-        async def play(index: int, *players: str, visibility: str = "public") -> str:
+        async def play(
+            index: int, *players: str, visibility: str = "public", outcome: str = "finished"
+        ) -> str:
             finished = start + timedelta(minutes=10 * index)
             return await history.save_game(
                 GameRecordInput(
@@ -193,12 +196,14 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
                     started_at=finished - timedelta(minutes=5),
                     finished_at=finished,
                     visibility=visibility,
+                    outcome=outcome,
                 ),
                 [
                     GameParticipantInput(
                         user_id=player,
                         final_score=0,
-                        final_rank=1,
+                        # An abandoned game carries no placing (R-HIST-06).
+                        final_rank=1 if outcome == "finished" else None,
                         seat_id=str(generate_uuid()),
                         display_name="Seat",
                     )
@@ -222,22 +227,41 @@ async def test_a_merged_account_pages_one_history_across_its_identities():
         # view of this profile, though the stranger's walk passes it.
         await play(8, stranger.id, visibility="private")
         public = [played[index] for index in (1, 2, 4, 5, 6)]
+        # Abandoned: one public on the guest identity, one private shared
+        # with the stranger on the account's, one private the stranger was
+        # not in. Only an `include_abandoned` list shows any of them.
+        abandoned_public = await play(9, guest.id, outcome="abandoned")
+        abandoned_shared = await play(
+            10, account.id, stranger.id, visibility="private", outcome="abandoned"
+        )
+        abandoned_own = await play(11, account.id, visibility="private", outcome="abandoned")
         await users.merge_guest_into_account(guest.id, account.id)
 
-        for viewer, expected in (
-            (account.id, played),
-            (None, public),
-            (stranger.id, [*public, shared]),
+        for viewer, include_abandoned, expected in (
+            (account.id, False, played),
+            (None, False, public),
+            (stranger.id, False, [*public, shared]),
+            (
+                account.id,
+                True,
+                [*played, abandoned_public, abandoned_shared, abandoned_own],
+            ),
+            (None, True, [*public, abandoned_public]),
+            (stranger.id, True, [*public, shared, abandoned_public, abandoned_shared]),
         ):
             paged, cursor = [], None
             while True:
                 page = await history.get_user_games(
-                    account.id, limit=2, cursor=cursor, requesting_user_id=viewer
+                    account.id,
+                    limit=2,
+                    cursor=cursor,
+                    include_abandoned=include_abandoned,
+                    requesting_user_id=viewer,
                 )
                 paged.extend(game.id for game in page.games)
                 cursor = page.next_cursor
                 if cursor is None:
                     break
-            assert paged == expected[::-1], viewer
+            assert paged == expected[::-1], (viewer, include_abandoned)
     finally:
         await engine.dispose()

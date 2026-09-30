@@ -338,17 +338,17 @@ def _encode_history_cursor(
 ) -> str:
     """Where the last game of a history page stood (#477).
 
-    Keyset rather than an offset: the page walks down
-    `ix_game_participants_user_history` from this position and stops after a
-    page, so any page costs what the first does; an offset has to be counted
+    Keyset rather than an offset: the page's walks down
+    `ix_game_participants_user_history` start from this position and stop
+    after a page, so any page costs what the first does; an offset has to be counted
     off from the top, and a game finishing between two reads shifted it by
     one. The subject and the filter ride along so that a cursor carried to
     another profile, or across the abandoned toggle, reads as the first page
     rather than as a position in a list it never came from.
 
-    Not signed, unlike the Gallery's: nothing is trusted from it. Any position
-    is one seek, so a forged one costs what a real one does, and it can only
-    move the start of a list the caller could page to anyway.
+    Not signed, unlike the Gallery's: nothing is trusted from it. A forged
+    position costs what a real one does - the same walks, started elsewhere -
+    and it can only move the start of a list the caller could page to anyway.
     """
     token = json.dumps(
         [user_id, include_abandoned, finished_at.isoformat(), game_id],
@@ -3463,6 +3463,26 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 if requesting_user_id is None
                 else _optional_entity_id(requesting_user_id)
             )
+            is_owner = db_requesting_user_id in identity_ids
+            caller_ids = (
+                await _identity_ids(session, db_requesting_user_id)
+                if db_requesting_user_id is not None and not is_owner
+                else ()
+            )
+            # Every browser a guest played in before signing in is one more
+            # identity, and each is a run per outcome and visibility below:
+            # only those that ever sat anywhere make the union, one index
+            # probe each to find out.
+            seated = set(
+                await session.scalars(
+                    select(User.id).where(
+                        User.id.in_((*identity_ids, *caller_ids)),
+                        exists().where(GameParticipant.user_id == User.id),
+                    )
+                )
+            )
+            identity_ids = tuple(i for i in identity_ids if i in seated)
+            caller_ids = tuple(i for i in caller_ids if i in seated)
             outcomes = (
                 (GameOutcome.FINISHED.value, GameOutcome.ABANDONED.value)
                 if include_abandoned
@@ -3470,40 +3490,57 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
             )
             public, private = GameVisibility.PUBLIC.value, GameVisibility.PRIVATE.value
 
-            def walk(seat_user_id: UUID, outcome: str, visibility: str, *, shared_with=()):
-                """One run of `ix_game_participants_user_history` - a user, an
-                outcome, a visibility - newest first from the cursor, stopping
-                after a page (#477). The id breaks a tie: two games finished in
-                the same microsecond had no order between them, so a page
-                boundary could repeat one and skip the other (#1077)."""
-                stmt = select(GameParticipant.game_id, GameParticipant.finished_at).where(
-                    GameParticipant.user_id == seat_user_id,
-                    GameParticipant.outcome == outcome,
-                    GameParticipant.visibility == visibility,
-                )
+            def run(seat, user_id: UUID, outcome: str, visibility: str):
+                """The conditions that pin `seat` to one run of
+                `ix_game_participants_user_history` - a user, an outcome, a
+                visibility - from the cursor on (#477)."""
+                conditions = [
+                    seat.user_id == user_id,
+                    seat.outcome == outcome,
+                    seat.visibility == visibility,
+                ]
                 if after is not None:
-                    stmt = stmt.where(
-                        tuple_(GameParticipant.finished_at, GameParticipant.game_id) < after
-                    )
-                if shared_with:
-                    other_seat = aliased(GameParticipant)
-                    stmt = stmt.where(
-                        exists().where(
-                            other_seat.game_id == GameParticipant.game_id,
-                            other_seat.user_id.in_(shared_with),
-                        )
-                    )
+                    conditions.append(tuple_(seat.finished_at, seat.game_id) < after)
+                return conditions
+
+            def page_of(stmt):
+                """Newest first, stopping after a page. The id breaks a tie:
+                two games finished in the same microsecond had no order
+                between them, so a page boundary could repeat one and skip
+                the other (#1077)."""
                 return stmt.order_by(
                     GameParticipant.finished_at.desc(), GameParticipant.game_id.desc()
                 ).limit(clamped_limit + 1)  # the extra row says whether more remain
 
+            def walk(user_id: UUID, outcome: str, visibility: str):
+                return page_of(
+                    select(GameParticipant.game_id, GameParticipant.finished_at).where(
+                        *run(GameParticipant, user_id, outcome, visibility)
+                    )
+                )
+
+            def shared(caller_id: UUID, subject_id: UUID, outcome: str):
+                """The private games two players both sat in: the caller's
+                private run, semi-joined to the subject's seats. PostgreSQL
+                drives a semi-join from either side, so it leads with the
+                shorter private history - which is what a page costs, and what
+                `tests/test_read_path_indexes.py` holds it to."""
+                theirs = aliased(GameParticipant)
+                return page_of(
+                    select(GameParticipant.game_id, GameParticipant.finished_at).where(
+                        *run(GameParticipant, caller_id, outcome, private),
+                        exists().where(
+                            theirs.game_id == GameParticipant.game_id,
+                            theirs.user_id == subject_id,
+                        ),
+                    )
+                )
+
             # Which runs make up the list (#469): the subject reading their own
             # sees every game they sat in; anyone else sees the public ones,
             # and a signed-in caller also the private games they sat in with
-            # the subject - walked down the *caller's* seats, so what a
-            # stranger's page costs is bounded by the stranger's own history,
-            # never by how many private games the subject has.
-            if db_requesting_user_id in identity_ids:
+            # the subject.
+            if is_owner:
                 walks = [
                     walk(identity, outcome, visibility)
                     for identity in identity_ids
@@ -3515,17 +3552,18 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     walk(identity, outcome, public)
                     for identity in identity_ids
                     for outcome in outcomes
+                ] + [
+                    shared(caller, identity, outcome)
+                    for caller in caller_ids
+                    for identity in identity_ids
+                    for outcome in outcomes
                 ]
-                if db_requesting_user_id is not None:
-                    walks += [
-                        walk(caller, outcome, private, shared_with=identity_ids)
-                        for caller in await _identity_ids(session, db_requesting_user_id)
-                        for outcome in outcomes
-                    ]
             # Merged here: each run returns its own first page, and a game
             # ranks no higher in its run than in the merge, so the merge's
             # first page is among them. A merged guest's seats keep the
             # guest's id, which is why identities are runs of their own.
+            if not walks:
+                return GameHistoryPage(games=(), next_cursor=None)
             if len(walks) == 1:
                 listing = walks[0]
             else:
@@ -3534,13 +3572,15 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     runs.c.finished_at.desc(), runs.c.game_id.desc()
                 )
             # A game two identities both sat in is in two runs.
-            ordered = list(dict.fromkeys(row[0] for row in await session.execute(listing)))
-            ordered = ordered[: clamped_limit + 1]
+            positions = list(
+                dict.fromkeys((row[0], row[1]) for row in await session.execute(listing))
+            )[: clamped_limit + 1]
+            shown = [game_id for game_id, _ in positions[:clamped_limit]]
             games_by_id = {}
-            if ordered:
+            if shown:
                 records = await session.scalars(
                     select(GameRecord)
-                    .where(GameRecord.id.in_(ordered))
+                    .where(GameRecord.id.in_(shown))
                     .options(
                         selectinload(GameRecord.participants),
                         defer(GameRecord.rule_snapshot, raiseload=True),
@@ -3548,15 +3588,20 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 )
                 games_by_id = {record.id: record for record in records}
 
-        # Two statements, so a game deleted between them is dropped rather
-        # than a KeyError.
-        games = [games_by_id[game_id] for game_id in ordered if game_id in games_by_id]
-        page = [_to_game_summary(g, with_rule_snapshot=False) for g in games[:clamped_limit]]
+        # Two statements, so a game deleted between them is left off the page
+        # rather than a KeyError - and whether more remain, and where the next
+        # page starts, are read off the positions the walk returned, not off
+        # what survived to be loaded.
+        page = [
+            _to_game_summary(games_by_id[game_id], with_rule_snapshot=False)
+            for game_id in shown
+            if game_id in games_by_id
+        ]
         next_cursor = None
-        if len(games) > clamped_limit:
-            last = page[-1]
+        if len(positions) > clamped_limit:
+            last_id, last_finished = positions[clamped_limit - 1]
             next_cursor = _encode_history_cursor(
-                user_id, include_abandoned, last.finished_at, last.id
+                user_id, include_abandoned, last_finished, str(last_id)
             )
         return GameHistoryPage(games=tuple(page), next_cursor=next_cursor)
 
