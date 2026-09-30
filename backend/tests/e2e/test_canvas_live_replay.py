@@ -5,7 +5,7 @@ Entering mid-turn replays the whole history onto the canvas. At 4x CPU a turn
 of full-canvas fills used to take over a second in one task, the page taking no
 input and drawing no frame for as long. A viewer's replay is now played out a
 piece at a time. This fills a turn, joins it at 4x, and holds the joining page
-to no task over 100 ms from the moment its canvas arrives - and its canvas to
+to no replay-sized task from the moment its canvas arrives - and its canvas to
 the drawer's pixels, with a fill drawn while its replay may still be running.
 """
 import asyncio
@@ -15,11 +15,16 @@ from playwright.async_api import async_playwright
 from tests.e2e.lobby_helpers import BASE_URL, join_by_code, open_create_room, room_code, use_guest_name
 
 CANVAS_PNG = "() => document.querySelector('canvas.drawing-canvas').toDataURL()"
-# Each a full-canvas flood: at 4x a fill replays in ~11 ms, so forty are
-# ~450 ms in one task the old way, and a few dozen pieces now.
-FILLS = 40
+# Each a full-canvas flood: at 4x a fill replays in ~11 ms on a laptop, so
+# sixty are well over half a second in one task the old way (forty measured
+# 353 ms), and a few dozen short pieces now.
+FILLS = 60
 CPU_THROTTLE = 4
-LONGEST_TASK_BUDGET_MS = 100
+# A guard against the one-task replay, not the acceptance measurement: #1347's
+# 100 ms at 4x is the reference machine's (`BENCHMARK=thumbnail_browser`,
+# 43 ms), and a CI runner at 4x is slower still - it saw a 113 ms task where
+# a laptop saw none. The old replay is several times this on either.
+LONGEST_TASK_BUDGET_MS = 200
 
 # Long tasks from the moment the canvas history arrives. The page has its own
 # long tasks while it loads at 4x; the one that handles the history contains

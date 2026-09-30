@@ -3,7 +3,14 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-import { CANVAS_HEIGHT, CANVAS_WIDTH, decodeCanvasHistory } from "../src/lib/canvasHistory.ts";
+import {
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  ClientCanvasHistory,
+  calculateCanvasHistoryHash,
+  decodeCanvasHistory,
+} from "../src/lib/canvasHistory.ts";
+import { decodeLiveDrawing, encodeFill } from "../src/lib/liveDrawing.ts";
 import { createProtocolRenderer } from "../src/lib/protocolRenderer.ts";
 
 // The accepted 100-fill turn (#1282): the costliest history a turn may hold.
@@ -163,4 +170,23 @@ test("a viewer who becomes the drawer mid-replay gets the rest at once", () => {
   tasks.shift()();
   assert.equal(tasks.length, 0, "finished in that task, before the drawer's pointer can paint");
   assert.equal(digest(target.pixels), immediately(actions));
+});
+
+test("a drawing started after a synced Clear is painted, though it begins a new history (#1368 review)", () => {
+  // Starting an action after a Clear discards the pre-clear history in a
+  // new array, which a replay reading the old one would never see.
+  const history = new ClientCanvasHistory();
+  const synced = [...fills(), { kind: "clear" }];
+  assert.ok(history.replace(synced, 1, 1, synced.length, calculateCanvasHistoryHash(synced)));
+  const { target, renderer, tasks, drain } = viewer();
+  renderer.replay(history.actions);
+  assert.ok(tasks.length > 0, "still playing out when the next frame lands");
+
+  const packet = decodeLiveDrawing(encodeFill({ x: 0.25, y: 0.25, color: "#123456" }));
+  assert.ok(history.apply(packet));
+  assert.notEqual(history.actions, synced, "the history moved to a new array");
+  renderer.apply(packet);
+  drain();
+
+  assert.equal(digest(target.pixels), immediately(history.actions));
 });

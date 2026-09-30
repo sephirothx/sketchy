@@ -43,15 +43,29 @@ export interface LiveReplayOptions {
 }
 
 /** A macrotask without `setTimeout`'s clamping: nested timeouts wait at
-    least 4 ms each, which over a hundred pieces is most of a second. */
-function messageChannelTask(): (task: () => void) => void {
-  if (typeof MessageChannel === "undefined") return (task) => setTimeout(task, 0);
+    least 4 ms each, which over a hundred pieces is most of a second. The
+    channel is opened on first use and closed by `close`: a started port is
+    kept alive, and a renderer is made on every room entry (#1368 review). */
+function messageChannelTask(): { run: (task: () => void) => void; close: () => void } {
+  if (typeof MessageChannel === "undefined") {
+    return { run: (task) => void setTimeout(task, 0), close: () => undefined };
+  }
   const queue: Array<() => void> = [];
-  const channel = new MessageChannel();
-  channel.port1.onmessage = () => queue.shift()?.();
-  return (task) => {
-    queue.push(task);
-    channel.port2.postMessage(null);
+  let channel: MessageChannel | null = null;
+  return {
+    run(task) {
+      if (!channel) {
+        channel = new MessageChannel();
+        channel.port1.onmessage = () => queue.shift()?.();
+      }
+      queue.push(task);
+      channel.port2.postMessage(null);
+    },
+    close() {
+      channel?.port1.close();
+      channel = null;
+      queue.length = 0;
+    },
   };
 }
 
@@ -162,7 +176,8 @@ export function createProtocolRenderer(
   let live: { actions: DecodedCanvasAction[]; next: number } | null = null;
   const sliceMs = liveReplay?.sliceMs ?? LIVE_REPLAY_SLICE_MS;
   const now = liveReplay?.now ?? (() => performance.now());
-  const nextTask = liveReplay ? (liveReplay.nextTask ?? messageChannelTask()) : null;
+  const channel = liveReplay && !liveReplay.nextTask ? messageChannelTask() : null;
+  const nextTask = liveReplay ? (liveReplay.nextTask ?? channel!.run) : null;
 
   // Where live playback resumes once a history is on the canvas: a history
   // that ends on a path may have landed mid-stroke, and the live batches
@@ -223,9 +238,18 @@ export function createProtocolRenderer(
     const context = surfaceRef.current;
     if (!context) return;
     if (live) {
-      // In the history already, and painted there in its place.
-      if (packet.event === "clear_canvas") clear();
-      return;
+      // A drawing started after a Clear begins a new history array - the
+      // protocol's history discards everything before the Clear - so the
+      // replay would never see it (#1368 review). Nothing before a Clear
+      // shows, so the replay has nothing left to give: white, and this frame
+      // painted as any other.
+      if (packet.event === "clear_canvas" || live.actions.at(-1)?.kind === "clear") {
+        clear();
+        if (packet.event === "clear_canvas") return;
+      } else {
+        // In the history already, and painted there in its place.
+        return;
+      }
     }
     const now = performance.now();
     if (packet.event === "draw_start") {
@@ -316,6 +340,7 @@ export function createProtocolRenderer(
 
   const dispose = () => {
     live = null;
+    channel?.close();
     playback.cancel();
     stopTicking();
     checkpoints.clear();

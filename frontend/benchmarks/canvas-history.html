@@ -81,9 +81,11 @@
         });
         const longTasks = [];
         const since = performance.now();
+        // A task counts if it ends after the benchmark began: the one that
+        // starts the replay begins before `started` is read.
         const observer = new PerformanceObserver((list) => {
           for (const entry of list.getEntries()) {
-            if (entry.startTime >= since) longTasks.push(entry.duration);
+            if (entry.startTime + entry.duration >= since) longTasks.push(entry.duration);
           }
         });
         observer.observe({ type: "longtask", buffered: true });
@@ -94,8 +96,14 @@
           worstGap = Math.max(worstGap, now - last);
           last = now;
         }, 10);
-        const started = performance.now();
-        renderer.replay(actions);
+        // From a task of the page's own, as a socket message is: a long task
+        // inside Playwright's evaluate is not reported (#1368 review).
+        let started = 0;
+        await new Promise((resolve) => setTimeout(() => {
+          started = performance.now();
+          renderer.replay(actions);
+          resolve();
+        }, 0));
         // Done once nothing more has been shown for a while.
         while (performance.now() - Math.max(lastCommit, started) < 300) {
           await new Promise((resolve) => setTimeout(resolve, 50));
