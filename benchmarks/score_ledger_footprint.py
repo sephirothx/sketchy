@@ -4,7 +4,8 @@ Seeds finished, fully scored games of one shape (8 seats, 24 turns, every
 guesser correct: 7 awards and 1 drawer bonus per turn, 192 events per game)
 through the real history writer into a disposable PostgreSQL database, then
 reports score_events heap and index bytes per game, the writer's wall time
-per game, and the detail read's ledger fetch explained. Runs unchanged on
+per game, and a game's ledger read explained - the export's read since the
+game-detail route stopped carrying the ledger (#1254). Runs unchanged on
 the UUID-keyed and the order-keyed ledger, so the two can be compared.
 
     TEST_DATABASE_URL=postgresql+asyncpg://... backend/.venv/bin/python benchmarks/score_ledger_footprint.py --games 200
@@ -22,7 +23,7 @@ from datetime import datetime, timedelta, timezone
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "backend"))
 
-from app.db.models import Base, generate_uuid
+from app.db.models import Base, ScoreEvent, generate_uuid
 from app.repositories.interfaces import (
     GameParticipantInput,
     GameRecordInput,
@@ -34,7 +35,9 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyGameHistoryRepository,
     SqlAlchemyUserRepository,
 )
-from sqlalchemy import text
+from uuid import UUID
+
+from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 SEATS, TURNS, AWARD = 8, 24, 100
@@ -106,8 +109,13 @@ async def run(games: int) -> dict:
         write_seconds += time.perf_counter() - began
     read_began = time.perf_counter()
     for game_id in game_ids[:50]:
-        detail = await history.get_game_detail(game_id, players[0])
-        assert detail is not None and len(detail.score_events) == TURNS * SEATS
+        async with factory() as session:
+            ledger = (
+                await session.scalars(
+                    select(ScoreEvent).where(ScoreEvent.game_id == UUID(game_id)).order_by(ScoreEvent.event_order)
+                )
+            ).all()
+        assert len(ledger) == TURNS * SEATS
     read_seconds = time.perf_counter() - read_began
     async with engine.connect() as conn:
         await conn.execution_options(isolation_level="AUTOCOMMIT")
@@ -135,7 +143,7 @@ async def run(games: int) -> dict:
         "total_bytes_per_game": (heap + idx) / games,
         "indexes_bytes_per_game": {name: size / games for name, size in indexes},
         "save_game_ms_per_game": write_seconds / games * 1000,
-        "get_game_detail_ms": read_seconds / min(games, 50) * 1000,
+        "ledger_read_ms": read_seconds / min(games, 50) * 1000,
         "ledger_fetch_plan": {"node": node["Plan"]["Node Type"], "execution_ms": node.get("Execution Time"),
                               "buffers": node["Plan"].get("Shared Hit Blocks")},
     }

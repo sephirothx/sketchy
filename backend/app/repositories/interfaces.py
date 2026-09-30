@@ -326,21 +326,6 @@ class TurnParticipantOutcomeDetail:
 
 
 @dataclass(frozen=True)
-class ScoreEventDetail:
-    """Participant-visible auditable score change, keyed by its order."""
-
-    participant_seat_id: str
-    participant_user_id: str | None
-    event_order: int
-    event_type: str
-    points_delta: int
-    scoring_version: int
-    rule_snapshot_version: int
-    turn_id: str | None
-    corrects_event_order: int | None
-
-
-@dataclass(frozen=True)
 class TurnDetail:
     """Detailed view of a single turn in a past game."""
 
@@ -362,23 +347,12 @@ class TurnDetail:
     # None when no drawing row exists at all, which is every turn played
     # before drawings were persisted.
     drawing_status: str | None = None
-    prompt_offers: list[PromptOfferDetail] = field(default_factory=list)
     participant_outcomes: list[TurnParticipantOutcomeDetail] = field(
         default_factory=list
     )
     reactions: list[TurnDrawingReactionDetail] = field(default_factory=list)
     # Every reaction, the seatless ones included, by code (R-REACT-05).
     reaction_counts: Mapping[str, int] = field(default_factory=dict)
-
-
-@dataclass(frozen=True)
-class PromptOfferDetail:
-    position: int
-    prompt: str
-    selected: bool
-    source_kind: str
-    prompt_version_id: str | None
-    source_revision_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -464,7 +438,6 @@ class GameDetail:
 
     summary: GameSummary
     turns: list[TurnDetail] = field(default_factory=list)
-    score_events: list[ScoreEventDetail] = field(default_factory=list)
     # The requester's own seat in this game. The client cannot work it out
     # from `participants`: a seat kept by a merged guest identity carries that
     # identity's id, not the account the requester is signed in as.

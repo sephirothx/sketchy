@@ -93,18 +93,6 @@ export interface TurnParticipantOutcome {
   pointsAwarded: number | null;
 }
 
-export interface ScoreEvent {
-  participantSeatId: string;
-  participantUserId: string | null;
-  turnId: string | null;
-  eventOrder: number;
-  eventType: "guess_award" | "hint_charge" | "drawer_bonus" | "correction";
-  pointsDelta: number;
-  scoringVersion: number;
-  ruleSnapshotVersion: number;
-  correctsEventOrder: number | null;
-}
-
 export interface GameTurn {
   id: string;
   roundNumber: number;
@@ -121,21 +109,11 @@ export interface GameTurn {
   strokeCount: number;
   /** Absent for turns played before drawings were kept. */
   drawingStatus: "ready" | "unavailable" | "deleted" | "pending" | "failed" | null;
-  promptOffers: PromptOffer[];
   participantOutcomes: TurnParticipantOutcome[];
   /** The reactions given by a seat, named; the ones from outside the room are only in the counts. */
   reactions: HistoryReaction[];
   /** Every reaction by code, the seatless ones included (R-REACT-05). */
   reactionCounts: ReactionTally;
-}
-
-export interface PromptOffer {
-  position: number;
-  prompt: string;
-  selected: boolean;
-  sourceKind: "curated" | "custom" | "builtin_fallback";
-  promptVersionId: string | null;
-  sourceRevisionIds: string[];
 }
 
 export interface GameRuleSnapshot {
@@ -188,7 +166,6 @@ export type GameDetail = GameSummary & {
   /** The signed-in viewer's own seat in this game; how "my reaction" is found. */
   mySeatId: string | null;
   turns: GameTurn[];
-  scoreEvents: ScoreEvent[];
 };
 
 export interface HistoryReactionResult {

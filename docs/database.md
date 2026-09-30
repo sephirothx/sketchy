@@ -1758,8 +1758,8 @@ the order consecutive from one and every reader sorts by it, so a surrogate UUID
 it bought two index structures - its own key and a `(game_id, id)` pair for the
 same-game correction key - and a 16-byte correction reference, for an identity nothing
 outside the row ever used. Rule versions (`scoring_version`, `rule_snapshot_version`)
-are the game's: every event of a game was scored under them, so the detail and export
-views read them from `game_records` rather than from a copy on each row.
+are the game's: every event of a game was scored under them, so the export reads them
+from `game_records` rather than from a copy on each row.
 
 `event_type` ∈ `guess_award \| hint_charge \| drawer_bonus \| correction`, with
 `CHECK`s that pin the sign of each: awards and bonuses positive, hint charges negative,
@@ -1811,7 +1811,8 @@ so a text collision cannot inflate curated statistics or make a bad prompt untra
 The turn row's selected offer, text, source kind, and version are kept identical by both
 database checks and the history writer.
 
-Exact offers are **participant-only** history and private export data.
+Exact offers are **private export data** - in the drawer's own export, for the turns
+they drew - and are shown on no history page (#1254).
 
 ### `turn_prompt_offer_sources`
 `offer_id` + `prompt_list_revision_id` composite **PK**. Every list revision that
