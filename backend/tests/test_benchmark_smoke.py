@@ -27,6 +27,7 @@ SMOKE_ARGS: dict[str, tuple[str, ...]] = {
     "authorize_selection": ("--lists", "2", "--prompts", "5", "--aliases", "2"),
     "catalogue_star_page": ("--lists", "50", "--owners", "5", "--stars", "200", "--samples", "3"),
     "drawing_store_footprint": ("--games", "2"),
+    "export_list_revisions": ("--prompts", "20", "--aliases", "2", "--saves", "3"),
     "finish_game_stall": ("--games", "1"),
     "fk_delete_paths": ("--rows", "200"),
     "guest_name_check": ("--online", "20", "--samples", "3"),

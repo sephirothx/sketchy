@@ -26,7 +26,7 @@ from datetime import datetime, timedelta, timezone
 import logging
 from uuid import UUID
 
-from sqlalchemy import and_, delete, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
@@ -49,6 +49,7 @@ from app.db.models import (
     PlayerReport,
     PlayerReportMessageEvidence,
     RoomPreset,
+    PromptAlias,
     PromptContentReport,
     PromptList,
     PromptListRevision,
@@ -139,6 +140,19 @@ DEFAULT_EXPORT_BATCH_SIZE = 25
 # list section, so this - not the size of the account's history - is what one
 # build holds in memory besides its compressed output.
 EXPORT_PAGE_SIZE = 500
+# A list revision's prompts are written in smaller pieces than that: at the
+# ceiling (500 prompts of 20 aliases) encoding them as one page held the loop
+# ~30 ms, once per revision (#1250 review).
+REVISION_PROMPT_PAGE = 100
+# Joins one prompt's aliases in the database. No stored alias can hold it:
+# alias text is whitespace-collapsed before it is kept (`clean_prompt_aliases`)
+# and U+001F is whitespace to `str.split`.
+ALIAS_SEPARATOR = "\x1f"
+
+
+async def _yield_to_rooms() -> None:
+    """Give the one worker's loop back between pieces of a build (N-01)."""
+    await asyncio.sleep(0)
 # The ceiling on one document, in JSON bytes before compression (R-PRIV-13).
 # One worker (N-01) means a build's working set is every player's latency, so
 # a document is refused past the ceiling rather than built at any size; an
@@ -470,7 +484,11 @@ class _ExportWriter:
 
     def __init__(self, *, max_bytes: int):
         self._buffer = io.BytesIO()
-        self._gzip = gzip.GzipFile(fileobj=self._buffer, mode="wb")
+        # Level 6, not gzip's default 9: nine spent ~9x the CPU for output
+        # 0.6% smaller, and `GzipFile` compresses its 128 KB write buffer in
+        # one call - ~40 ms of the loop at a time on a list's repetitive
+        # aliases, the export's longest stall (#1250 review).
+        self._gzip = gzip.GzipFile(fileobj=self._buffer, mode="wb", compresslevel=6)
         self._max_bytes = max_bytes
         # One flag per open container: whether its next member is the first.
         self._first: list[bool] = []
@@ -561,7 +579,8 @@ async def _write_rows(
     writer.end_array()
 
 
-def _prompt_list_document(prompt_list: PromptList) -> dict:
+def _prompt_list_fields(prompt_list: PromptList) -> dict:
+    """A list's own fields, in document order; its revisions follow them."""
     return {
         "id": str(prompt_list.id),
         "slug": prompt_list.slug,
@@ -576,31 +595,132 @@ def _prompt_list_document(prompt_list: PromptList) -> dict:
         "version": prompt_list.version,
         "createdAt": _timestamp(prompt_list.created_at),
         "updatedAt": _timestamp(prompt_list.updated_at),
-        "revisions": [
-            {
-                "id": str(revision.id),
-                "version": revision.version,
-                "language": revision.language,
-                "contentHash": revision.content_hash,
-                "createdAt": _timestamp(revision.created_at),
-                "prompts": [
-                    {
-                        "conceptId": str(item.prompt_version.concept_id),
-                        "promptVersionId": str(item.prompt_version.id),
-                        "promptVersion": item.prompt_version.version,
-                        "prompt": item.prompt_version.canonical_answer,
-                        "aliases": sorted(
-                            link.alias.answer
-                            for link in item.prompt_version.version_aliases
-                        ),
-                        "position": item.position,
-                    }
-                    for item in revision.items
-                ],
-            }
-            for revision in sorted(prompt_list.revisions, key=lambda item: item.version)
-        ],
     }
+
+
+async def _write_prompt_lists(
+    writer: _ExportWriter, session: AsyncSession, identity_ids: list[UUID]
+) -> None:
+    """The owner's lists, each revision's prompts read and written a page at a time.
+
+    Every content save writes the whole list again as a new revision, so what
+    this section holds grows with how often the owner saved, not with how long
+    a list is: 801 saves of a 500-prompt list are 400,500 prompts. Loaded as
+    one graph and encoded as one value per list, that stalled the loop every
+    room shares for ~3 s and took ~1 GB, and a refused build does not count
+    against the week (R-PRIV-12), so it could be asked for again at once
+    (#1250). Here a list's revisions are read as metadata, then each
+    revision's aliases and its prompts, one revision at a time, and the loop
+    is given back between them: a build holds one revision's prompts and
+    aliases, and each list's revision metadata - a row per save - rather
+    than every revision's content. The document is the one the graph made.
+    """
+    writer.begin_array()
+    lists = (
+        await session.scalars(
+            select(PromptList)
+            .where(
+                PromptList.owner_user_id.in_(identity_ids),
+                PromptList.deleted_at.is_(None),
+            )
+            .order_by(PromptList.created_at, PromptList.id)
+        )
+    ).all()
+    for prompt_list in lists:
+        writer.begin_object()
+        for name, item in _prompt_list_fields(prompt_list).items():
+            writer.field(name, item)
+        writer.key("revisions")
+        writer.begin_array()
+        revisions = (
+            await session.execute(
+                select(
+                    PromptListRevision.id,
+                    PromptListRevision.version,
+                    PromptListRevision.language,
+                    PromptListRevision.content_hash,
+                    PromptListRevision.created_at,
+                )
+                .where(PromptListRevision.prompt_list_id == prompt_list.id)
+                .order_by(PromptListRevision.version)
+            )
+        ).all()
+        for revision in revisions:
+            writer.begin_object()
+            writer.field("id", str(revision.id))
+            writer.field("version", revision.version)
+            writer.field("language", revision.language)
+            writer.field("contentHash", revision.content_hash)
+            writer.field("createdAt", _timestamp(revision.created_at))
+            writer.key("prompts")
+            await _write_revision_prompts(writer, session, revision.id)
+            writer.end_object()
+            await asyncio.sleep(0)
+        writer.end_array()
+        writer.end_object()
+    writer.end_array()
+
+
+async def _write_revision_prompts(
+    writer: _ExportWriter, session: AsyncSession, revision_id: UUID
+) -> None:
+    """One revision's prompts in position order.
+
+    Read whole, not through a server-side cursor: a revision holds at most
+    `MAX_PROMPTS_PER_OWNED_LIST` prompts, so a cursor saves nothing, and on
+    PostgreSQL each one stayed open as a portal until the build's
+    transaction ended - one per revision, ~350 MB of the database's memory
+    for a list saved 800 times (#1250 review). The prompts are then written
+    a page of `REVISION_PROMPT_PAGE` at a time."""
+    # One row per prompt, its aliases joined in the database. At the ceiling
+    # that is 500 rows rather than 10,000, and `AsyncSession.execute` builds
+    # every row it returns before it gives the loop back: ~40 ms of it for
+    # one revision's alias rows, which no paging afterwards could split
+    # (#1250 review).
+    alias_rows = await session.execute(
+        select(
+            PromptVersionAlias.prompt_version_id,
+            func.aggregate_strings(PromptAlias.answer, ALIAS_SEPARATOR),
+        )
+        .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+        .join(
+            PromptListRevisionItem,
+            PromptListRevisionItem.prompt_version_id
+            == PromptVersionAlias.prompt_version_id,
+        )
+        .where(PromptListRevisionItem.revision_id == revision_id)
+        .group_by(PromptVersionAlias.prompt_version_id)
+    )
+    aliases = {version_id: joined.split(ALIAS_SEPARATOR) for version_id, joined in alias_rows}
+    await _yield_to_rooms()
+    writer.begin_array()
+    result = await session.execute(
+        select(
+            PromptVersion.concept_id,
+            PromptVersion.id,
+            PromptVersion.version,
+            PromptVersion.canonical_answer,
+            PromptListRevisionItem.position,
+        )
+        .select_from(PromptListRevisionItem)
+        .join(PromptVersion, PromptVersion.id == PromptListRevisionItem.prompt_version_id)
+        .where(PromptListRevisionItem.revision_id == revision_id)
+        .order_by(PromptListRevisionItem.position)
+    )
+    for page in result.partitions(REVISION_PROMPT_PAGE):
+        for concept_id, version_id, version, answer, position in page:
+            writer.value(
+                {
+                    "conceptId": str(concept_id),
+                    "promptVersionId": str(version_id),
+                    "promptVersion": version,
+                    "prompt": answer,
+                    "aliases": sorted(aliases.get(version_id, ())),
+                    "position": position,
+                }
+            )
+        await _yield_to_rooms()
+    writer.end_array()
 
 
 def _room_preset_document(preset: RoomPreset) -> dict:
@@ -963,21 +1083,7 @@ async def _write_export_artifact(
         else None,
     )
     writer.key("promptLists")
-    await _write_rows(
-        writer,
-        session,
-        select(PromptList)
-        .where(PromptList.owner_user_id.in_(identity_ids), PromptList.deleted_at.is_(None))
-        .options(
-            selectinload(PromptList.revisions)
-            .selectinload(PromptListRevision.items)
-            .selectinload(PromptListRevisionItem.prompt_version)
-            .selectinload(PromptVersion.version_aliases)
-            .selectinload(PromptVersionAlias.alias)
-        )
-        .order_by(PromptList.created_at, PromptList.id),
-        _prompt_list_document,
-    )
+    await _write_prompt_lists(writer, session, identity_ids)
     # Which published lists this account starred, and when. The list's name
     # travels with it so the document reads without a lookup, but its owner's
     # account id does not: a star says something about the reader, not about

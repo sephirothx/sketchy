@@ -2146,13 +2146,9 @@
    "promptVersionId",
    "targetType"
   ],
-  "auth.account_data:_prompt_list_document": [
-   "conceptId",
-   "contentHash",
+  "auth.account_data:_prompt_list_fields": [
    "createdAt",
    "moderationState",
-   "promptVersion",
-   "promptVersionId",
    "publishedAt",
    "updatedAt"
   ],
@@ -2254,6 +2250,11 @@
    "timeFormat",
    "updatedAt",
    "userId"
+  ],
+  "auth.account_data:_write_revision_prompts": [
+   "conceptId",
+   "promptVersion",
+   "promptVersionId"
   ],
   "auth.account_data:export_status_payload": [
    "completedAt",
