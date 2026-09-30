@@ -1172,8 +1172,10 @@ byte that crosses `EXPORT_MAX_BYTES`, failing the job as `too_large` with nothin
 (R-PRIV-13). The bytes are exactly the compact `json.dumps` of the same document, so
 nothing that reads a stored export can tell it was paged. Encoding and gzip run on the
 event loop in page-sized slices with a database `await` between them — the accepted
-cost, and the loop-lag sampler is where it would show. The gzip level is 6: at the
-default 9 one 128 KB compress step of repetitive list aliases held the loop ~40 ms. However a build ends it releases
+cost, and the loop-lag sampler is where it would show: it wakes every 50 ms, so a
+stall of any length that matters is seen, as at least its length less one tick (#1253).
+The gzip level is 6: at the default 9 one 128 KB compress step of repetitive list
+aliases held the loop ~40 ms. However a build ends it releases
 its compressor, in a `finally` around the whole build rather than at each way out: the
 bound above is on what one build holds, and a build cancelled part-written by a planned
 shutdown is the case that holds the most.
@@ -1507,8 +1509,8 @@ outside. So every HTTP request is counted and timed at the outermost middleware
 after gzip so the number is what a client actually waited), every client command is
 timed at `HandlerContext.on`, the one door they all use (outcome `ok`, `refused` for a
 handler's own `ok: False`, `error` for an exception, counted before it propagates, or
-`throttled`), a supervised sampler measures how late a one-second timer fires (event-loop
-lag) and reads CPU and resident memory, two cursor listeners time every statement and the
+`throttled`), a supervised sampler measures how late a 50 ms timer fires and records the
+worst of each second (event-loop lag, #1253) and reads CPU and resident memory, two cursor listeners time every statement and the
 pool is asked for its occupancy, and the two durable queues (mail outbox, account
 exports) report their depth and oldest age. Bytes cross the socket in three places
 ([`backend/app/handlers/socket_wire.py`](../backend/app/handlers/socket_wire.py)): every

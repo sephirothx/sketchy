@@ -138,6 +138,17 @@ shipping features and look at what spent it.
 - Percentiles are `histogram_quantile` estimates over fixed buckets
   (`backend/app/services/telemetry.py`), so a p95 reads as "at most the bucket bound
   it fell in". The buckets are dense where the thresholds sit.
+- Loop lag (SLO-5) is, for each second, how late the worst of that second's twenty 50 ms
+  wake-ups fired: one observation a second, so the p95 reads "in 95% of seconds the loop
+  was never held longer than this". A sample of the loop, not a trace of it, but one
+  that sees every stall, as at least its length less one tick. Until #1253 it was one
+  wake-up a second, which saw a 100 ms stall about one time in ten - the 59-97 ms
+  garbage-collection pauses the load gate provokes read as "at most 5 ms". Recording
+  every tick instead would have made each stall a twentieth of the histogram and left
+  the p95 unmoved by anything short of a stall every second. A stall longer than a
+  second counts in every second it covered, each as long as a wake-up due at that
+  second's start waited: recorded once, a 20 s stall was one bad second of the window's
+  three hundred, and the p95 never saw it.
 - `sketchy_probe_*` come from the probe's textfile, not from the server, so they
   survive the server being down - which is when they matter. The other side of that:
   a textfile says whatever the last run wrote until something overwrites it, so

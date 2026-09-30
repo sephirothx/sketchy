@@ -274,7 +274,7 @@ async def test_the_sampler_measures_a_blocked_loop():
     telemetry = Telemetry()
     health = LoopHealth("loop_lag")
     task = asyncio.create_task(
-        run_lag_sampler(telemetry, interval_seconds=0.01, health=health)
+        run_lag_sampler(telemetry, tick_seconds=0.01, interval_seconds=0.01, health=health)
     )
     try:
         await asyncio.sleep(0.03)
@@ -292,6 +292,117 @@ async def test_the_sampler_measures_a_blocked_loop():
     ) >= 0.05
 
 
+async def test_a_stall_is_seen_wherever_in_the_tick_it_starts():
+    """At one wake-up a second a 100 ms stall was seen about one time in ten
+    (#1253). At the default tick a stall is always seen, as at least its
+    length less one tick - here 150 ms, so at least ~100 ms - wherever in the
+    tick it begins. Lateness only ever adds to that, so the bound holds
+    however late this host's scheduler runs."""
+    from app.services.telemetry import DEFAULT_LAG_TICK_SECONDS
+
+    telemetry = Telemetry()
+    lags: list[float] = []
+    ticked = asyncio.Event()
+    record = telemetry.record_loop_lag
+
+    def recording(seconds: float) -> None:
+        lags.append(seconds)
+        ticked.set()
+        record(seconds)
+
+    telemetry.record_loop_lag = recording
+    # The default tick; a short record interval, so the test does not wait
+    # out a second per offset. What is recorded is the interval's worst.
+    task = asyncio.create_task(run_lag_sampler(telemetry, interval_seconds=0.2))
+    try:
+        for fraction in (0.0, 0.25, 0.5, 0.75):
+            ticked.clear()
+            await asyncio.wait_for(ticked.wait(), 5)  # just after a tick
+            await asyncio.sleep(fraction * DEFAULT_LAG_TICK_SECONDS)
+            seen = len(lags)
+            time.sleep(0.15)  # noqa: ASYNC251 - blocking the loop is the point
+            ticked.clear()
+            await asyncio.wait_for(ticked.wait(), 5)
+            # 150 ms less a 50 ms tick, less 5 ms of clock arithmetic.
+            assert max(lags[seen:]) >= 0.095, (fraction, lags[seen:])
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+
+async def test_a_stall_across_several_intervals_is_recorded_in_each():
+    """Every interval a stall covered was blocked. Recorded once, a 20 s stall
+    was one bad second of three hundred in SLO-5's window, and its p95 stayed
+    under the page (#1253 review). Each covered interval records how long a
+    timer due at its start waited."""
+    telemetry = Telemetry()
+    lags: list[float] = []
+    record = telemetry.record_loop_lag
+
+    def recording(seconds: float) -> None:
+        lags.append(seconds)
+        record(seconds)
+
+    telemetry.record_loop_lag = recording
+    task = asyncio.create_task(run_lag_sampler(telemetry, tick_seconds=0.01, interval_seconds=0.05))
+    try:
+        await asyncio.sleep(0.12)
+        before = len(lags)
+        time.sleep(0.3)  # noqa: ASYNC251 - blocking the loop is the point
+        await asyncio.sleep(0.06)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    stalled = [lag for lag in lags[before:] if lag >= 0.04]
+    # 300 ms over 50 ms intervals: five or six of them blocked, each for at
+    # least most of an interval, and the first for nearly all of the stall.
+    assert len(stalled) >= 5, lags[before:]
+    assert max(stalled) >= 0.25, lags[before:]
+
+
+async def test_the_process_is_still_sampled_once_an_interval(monkeypatch):
+    """Twenty lag ticks a second, not twenty CPU and memory reads - and one
+    lag observation an interval, the worst of its ticks: one a tick would
+    have made every stall a twentieth of what SLO-5's p95 reads (#1253)."""
+    telemetry = Telemetry()
+    samples = []
+    monkeypatch.setattr(telemetry, "sample_process", lambda: samples.append(time.monotonic()))
+    task = asyncio.create_task(run_lag_sampler(telemetry, tick_seconds=0.01, interval_seconds=0.1))
+    try:
+        await asyncio.sleep(0.35)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert 2 <= len(samples) <= 4
+    assert telemetry.loop_lag.count() == len(samples)
+
+
+async def test_a_process_sample_that_keeps_failing_is_counted(monkeypatch):
+    """Health is recorded with the process sample, so a sample failing every
+    time is a loop failing every time - not hidden by the ticks between."""
+    telemetry = Telemetry()
+    health = LoopHealth("loop_lag")
+
+    def broken() -> None:
+        raise OSError("no /proc")
+
+    monkeypatch.setattr(telemetry, "sample_process", broken)
+    task = asyncio.create_task(
+        run_lag_sampler(telemetry, tick_seconds=0.005, interval_seconds=0.02, health=health)
+    )
+    try:
+        await asyncio.sleep(0.15)
+    finally:
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+    assert health.consecutive_failures >= 3
+    assert health.last_success is None
+
+
 async def test_a_blocked_loop_says_so_in_the_log(caplog):
     """#735: a histogram nobody is scraping records a stall for nobody.
 
@@ -301,7 +412,7 @@ async def test_a_blocked_loop_says_so_in_the_log(caplog):
     """
     telemetry = Telemetry()
     task = asyncio.create_task(
-        run_lag_sampler(telemetry, interval_seconds=0.01, warn_after_seconds=0.05)
+        run_lag_sampler(telemetry, tick_seconds=0.01, interval_seconds=0.01, warn_after_seconds=0.05)
     )
     try:
         with caplog.at_level(logging.WARNING, logger="app.services.telemetry"):
@@ -322,7 +433,7 @@ async def test_an_unblocked_loop_stays_quiet(caplog):
     """Or the line means nothing: every run of every suite would carry it."""
     telemetry = Telemetry()
     task = asyncio.create_task(
-        run_lag_sampler(telemetry, interval_seconds=0.01, warn_after_seconds=5.0)
+        run_lag_sampler(telemetry, tick_seconds=0.01, interval_seconds=0.01, warn_after_seconds=5.0)
     )
     try:
         with caplog.at_level(logging.WARNING, logger="app.services.telemetry"):
