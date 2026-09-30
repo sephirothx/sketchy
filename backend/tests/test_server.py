@@ -207,3 +207,36 @@ def test_a_websocket_message_is_capped_at_the_packet_ceiling():
 
     config = draining.call_args.args[0]
     assert config.ws_max_size == MAX_PACKET_BYTES
+
+
+async def test_startup_freezes_the_heap_it_built_once_the_app_is_up():
+    """The collector's full passes walked the startup heap on every run - the
+    gate's worst loop stalls (#1355). Frozen once the app is up: not before
+    uvicorn's own startup, which builds the app, and not in the lifespan,
+    which the test suite runs again and again."""
+    import gc
+
+    timeline = []
+    server_ = DrainingServer(uvicorn.Config("app.main:app"), coordinator=object())
+
+    async def uvicorn_startup(self, sockets=None):
+        timeline.append(("uvicorn", gc.get_freeze_count()))
+
+    try:
+        with patch.object(uvicorn.Server, "startup", uvicorn_startup):
+            await server_.startup()
+        assert timeline and timeline[0][0] == "uvicorn"
+        assert gc.get_freeze_count() > timeline[0][1], "frozen after uvicorn's startup"
+    finally:
+        # The rest of the suite runs in this process.
+        gc.unfreeze()
+
+
+def test_the_app_lifespan_does_not_freeze_the_heap():
+    """The lifespan runs once per app the tests build; a freeze there would
+    keep every earlier test's objects out of collection for good."""
+    import inspect
+
+    from app import main
+
+    assert "gc.freeze" not in inspect.getsource(main)

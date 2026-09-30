@@ -143,7 +143,9 @@ shipping features and look at what spent it.
   was never held longer than this". A sample of the loop, not a trace of it, but one
   that sees every stall, as at least its length less one tick. Until #1253 it was one
   wake-up a second, which saw a 100 ms stall about one time in ten - the 59-97 ms
-  garbage-collection pauses the load gate provokes read as "at most 5 ms". Recording
+  garbage-collection pauses the load gate provokes read as "at most 5 ms". (Those
+  pauses are the collector's full passes over the startup heap, which the production
+  runner now freezes; they fell to 24-40 ms, #1355.) Recording
   every tick instead would have made each stall a twentieth of the histogram and left
   the p95 unmoved by anything short of a stall every second. A stall longer than a
   second counts in every second it covered, each as long as a wake-up due at that
