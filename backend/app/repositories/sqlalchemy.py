@@ -110,6 +110,7 @@ from app.auth.avatar_doodles import random_doodle_key
 from app.auth.avatars import validate_avatar_key
 from app.auth.pending_role import pending_offer
 from app.services.prompt_reclaim import retire_prompt_list
+from app.services.prompt_takedowns import record_takedowns
 from app.auth.erasure import (
     LockSetChangedError,
     TOMBSTONE_SNAPSHOT,
@@ -5377,21 +5378,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             for prompt_version, alias in pending_links
         )
         if carried_to:
-            recorded = set(
-                (
-                    await session.scalars(
-                        select(PromptTakedown.concept_id).where(
-                            PromptTakedown.owner_user_id == prompt_list.owner_user_id,
-                            PromptTakedown.concept_id.in_(carried_to),
-                        )
-                    )
-                ).all()
-            )
-            session.add_all(
-                PromptTakedown(
-                    owner_user_id=prompt_list.owner_user_id, concept_id=concept_id
-                )
-                for concept_id in sorted(carried_to - recorded)
+            await record_takedowns(
+                session,
+                ((prompt_list.owner_user_id, concept_id) for concept_id in carried_to),
             )
 
         content_payload = {

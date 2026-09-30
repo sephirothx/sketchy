@@ -192,3 +192,64 @@ async def test_a_save_costs_the_same_however_many_words_were_taken_down(site):
     lots = await statements_of_a_save()
     assert len(await _records(factory)) == 21
     assert few == lots
+
+
+async def test_a_released_takedown_takes_the_spellings_it_kept(site):
+    """A row keeps its word's versions from the orphan collection, and the
+    sweep only looks at versions the revisions it deletes named. A version kept
+    by a row after its revisions went is a candidate nowhere else, so erasing
+    the account used to leave the hidden text for good (#1357 review)."""
+    from datetime import datetime, timedelta, timezone
+
+    from sqlalchemy import func
+
+    from app.db.models import PromptVersion
+    from app.services.prompt_reclaim import (
+        reclaim_retired_prompt_lists,
+        reclaim_superseded_revisions,
+    )
+    from tests.test_prompt_content_moderation import PASSWORD
+    from tests.test_superseded_revisions import LONG_AGO, _age, _revisions
+
+    new_client, factory, _, prompts = site
+    owner_http = new_client()
+    owner = await register(owner_http, "Respeller")
+    listed = await prompts.create_owned(
+        owner["id"], name="Respelled", description="", language="en",
+        prompts=(PromptListEntryInput(answer="offensive prompt"), PromptListEntryInput(answer="fine")),
+    )
+    word = next(p for p in listed.prompts if p.answer == "offensive prompt")
+    fine = next(p for p in listed.prompts if p.answer == "fine")
+    async with factory() as session, session.begin():
+        from tests.test_prompt_content_moderation import taken_down
+
+        await taken_down(session, await session.get(PromptVersion, UUID(word.prompt_version_id)))
+    current = listed
+    for spelling in ("offensive prompt!", "offensive  prompt?"):
+        current = await prompts.update_owned(
+            owner["id"], listed.id, expected_version=current.version, name="Respelled",
+            description="",
+            prompts=(
+                PromptListEntryInput(answer=spelling, concept_id=word.concept_id),
+                PromptListEntryInput(answer="fine", concept_id=fine.concept_id),
+            ),
+        )
+    await _age(factory, (await _revisions(factory, listed.id))[:-1], LONG_AGO)
+    await reclaim_superseded_revisions(factory)
+
+    async def spellings() -> int:
+        async with factory() as session:
+            return int(
+                await session.scalar(
+                    select(func.count(PromptVersion.id)).where(
+                        PromptVersion.concept_id == UUID(word.concept_id)
+                    )
+                )
+            )
+
+    assert await spellings() == 3, "the row keeps every spelling the save compares against"
+
+    deleted = await owner_http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
+    assert deleted.status_code == 200, deleted.text
+    await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+    assert await spellings() == 0

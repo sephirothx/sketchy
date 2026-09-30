@@ -167,7 +167,7 @@ def _concept_is_taken_down(concept_id):
     return exists().where(PromptTakedown.concept_id == concept_id)
 
 
-async def _reclaim_orphans(
+async def reclaim_orphans(
     session: AsyncSession, candidate_version_ids: set[UUID]
 ) -> tuple[int, int]:
     """Delete the candidate versions nothing names any more, then the
@@ -319,7 +319,7 @@ async def reclaim_retired_prompt_lists(
                     or 0
                 )
 
-            versions_deleted, concepts_deleted = await _reclaim_orphans(
+            versions_deleted, concepts_deleted = await reclaim_orphans(
                 session, candidate_version_ids
             )
     overdue_seconds, backlog = await _remaining(session_factory, cutoff)
@@ -475,7 +475,7 @@ async def reclaim_superseded_revisions(
                     ).rowcount
                     or 0
                 )
-                versions_deleted, concepts_deleted = await _reclaim_orphans(
+                versions_deleted, concepts_deleted = await reclaim_orphans(
                     session, candidate_version_ids
                 )
     probe = overdue_probe(_superseded_since(), *_superseded_reclaimable(cutoff))

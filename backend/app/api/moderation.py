@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import ConfigDict, Field, field_validator
 from app.request_text import ControlFreeModel
-from sqlalchemy import and_, delete, func, or_, select, update
+from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
@@ -39,6 +39,7 @@ from app.api.profiles import serve_drawing
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
 from app.repositories.sqlalchemy import apply_gallery_decision
 from app.services.gallery_shelf import read_shelf_review
+from app.services.prompt_takedowns import record_takedowns, release_takedowns
 from app.services.player_reports import (
     canonical_user_id,
     context_around,
@@ -1126,11 +1127,10 @@ async def _carry_decision_to_copies(
         .execution_options(synchronize_session=False)
     )
     if decision != PromptContentModerationState.HIDDEN.value:
-        await session.execute(
-            delete(PromptTakedown).where(
-                PromptTakedown.owner_user_id == owner_user_id,
-                PromptTakedown.concept_id.in_(concept_ids),
-            )
+        await release_takedowns(
+            session,
+            PromptTakedown.owner_user_id == owner_user_id,
+            PromptTakedown.concept_id.in_(concept_ids),
         )
 
 
@@ -1150,9 +1150,7 @@ async def _record_takedown(
     other decision is the word's too, so it removes every row naming it.
     """
     if decision != PromptContentModerationState.HIDDEN.value:
-        await session.execute(
-            delete(PromptTakedown).where(PromptTakedown.concept_id == concept_id)
-        )
+        await release_takedowns(session, PromptTakedown.concept_id == concept_id)
         return
     holders = select(PromptList.owner_user_id).join(
         Prompt, Prompt.prompt_list_id == PromptList.id
@@ -1169,22 +1167,9 @@ async def _record_takedown(
             )
         ).all()
     )
-    if not owners:
-        return
-    recorded = set(
-        (
-            await session.scalars(
-                select(PromptTakedown.owner_user_id).where(
-                    PromptTakedown.concept_id == concept_id,
-                    PromptTakedown.owner_user_id.in_(owners),
-                )
-            )
-        ).all()
-    )
-    session.add_all(
-        PromptTakedown(owner_user_id=owner_id, concept_id=concept_id)
-        for owner_id in sorted(owners - recorded)
-    )
+    # Idempotent: two decisions on one concept - two reports of different
+    # versions are two incidents - can both find no row here.
+    await record_takedowns(session, ((owner_id, concept_id) for owner_id in owners))
 
 
 def _is_about_themselves(reviewer: User, subject_user_id: UUID | None) -> bool:

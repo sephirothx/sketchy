@@ -1162,7 +1162,13 @@ with the decision's byline. That entry's concept is recorded too, so the word fo
 into a list only it shares words with, and a later decision on the original finds it by
 its byline. A decision that leaves the word up deletes the rows naming it, and the
 account's deletion deletes its rows explicitly — the CASCADE never fires, since deletion
-tombstones the user row.
+tombstones the user row. Both writers live in
+[`services/prompt_takedowns.py`](../backend/app/services/prompt_takedowns.py): the insert
+ignores a row already there, since two decisions on one concept (two reports of different
+versions are two incidents) can both find none, and removing a row offers its concept's
+versions to the orphan collection at once — the sweep only looks at versions a revision it
+deletes named, so a spelling kept by a row after its revisions went is a candidate nowhere
+else, and the hidden text would outlive the account.
 
 The row names the concept, not a spelling: the decision is the concept's (#1020), and its
 versions carry the text, the aliases and the byline the save compares against, so the

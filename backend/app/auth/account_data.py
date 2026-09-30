@@ -79,6 +79,7 @@ from app.db.models import (
 )
 from app.services.avatars import delete_avatars_for
 from app.services.prompt_reclaim import retire_owned_lists
+from app.services.prompt_takedowns import release_takedowns
 from app.domain_values import (
     DataExportArtifactEncoding,
     AccountState,
@@ -1776,11 +1777,10 @@ async def anonymize_account(
             )
             # The account's takedown records: they exist to stop it typing a
             # hidden word back into a list, and it will save no more lists.
-            # Kept, they would keep the hidden text too (#1357, #1354 review).
-            await session.execute(
-                delete(PromptTakedown).where(
-                    PromptTakedown.owner_user_id.in_(identity_ids)
-                )
+            # Each keeps its word's spellings, so they go with the rows, or
+            # the hidden text would outlive the account (#1357, #1354 review).
+            await release_takedowns(
+                session, PromptTakedown.owner_user_id.in_(identity_ids)
             )
             await session.execute(
                 delete(UserBlock).where(
