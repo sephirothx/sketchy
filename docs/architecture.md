@@ -514,7 +514,7 @@ no request in flight.
 
 ## 6. Lifecycle
 
-### Startup ([`backend/app/main.py:459`](../backend/app/main.py))
+### Startup ([`backend/app/main.py:776`](../backend/app/main.py))
 
 1. `configure_logging()`
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14

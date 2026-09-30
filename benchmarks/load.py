@@ -48,8 +48,11 @@ What is measured, client-side with one clock for every seat:
   no frame the server accepted, fails: from #1102 to #1249 every stroke was
   refused for a missing nonce and the empty percentile read 0.0, a pass.
 - **Timer overrun**: a turn that ran its full length ends `seconds` after
-  `turn_started`; how late `turn_ended` arrives is how far behind the server's
-  timers are, which is the number that fails a game before CPU looks busy.
+  `turn_started`; how late `turn_ended` arrives. The server starts the turn's
+  timer only once every seat has been sent `turn_started`, so this includes that
+  fan-out, which grows with how busy the loop is, as well as the timer's own
+  lateness (`sketchy_phase_timer_lateness_seconds` on the server, #1355). It is
+  still what a player waits past the countdown, which is why it has a threshold.
 - **Disconnects** nobody asked for, and reconnects that did not get the seat back.
 
 And server-side, scraped from `/metrics` before, during and after: event-loop

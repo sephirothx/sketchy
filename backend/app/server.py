@@ -54,8 +54,10 @@ def freeze_startup_heap() -> int:
     times in five minutes - the stalls the gate's loop-lag p99 was made of
     (#1355). Frozen after a collection, that heap is never walked again, and
     the same run's passes fell to 24-40 ms. What startup built and later
-    drops is still freed by reference counting; only cyclic garbage among it
-    would wait, and startup makes none worth the name.
+    drops is still freed by reference counting; cyclic garbage among it would
+    leak for the life of the process, since nothing unfreezes. A review run
+    that played games and swept for 40 s found none (0 objects), but a
+    startup step that builds cycles it later discards would change that.
 
     Not in the app's lifespan, which the test suite starts again and again:
     each freeze would keep that run's objects out of collection for the rest

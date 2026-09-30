@@ -232,11 +232,23 @@ async def test_startup_freezes_the_heap_it_built_once_the_app_is_up():
         gc.unfreeze()
 
 
-def test_the_app_lifespan_does_not_freeze_the_heap():
-    """The lifespan runs once per app the tests build; a freeze there would
-    keep every earlier test's objects out of collection for good."""
-    import inspect
+def test_only_the_production_runner_freezes_the_heap():
+    """The lifespan runs once per app the tests build, and a freeze there - or
+    in anything it calls - would keep every earlier test's objects out of
+    collection for good. So nothing in `app` but the runner may freeze, under
+    any name: `gc.freeze`, `from gc import freeze`, or the runner's helper."""
+    import ast
+    from pathlib import Path
 
-    from app import main
+    import app
 
-    assert "gc.freeze" not in inspect.getsource(main)
+    found = []
+    for path in Path(app.__file__).parent.rglob("*.py"):
+        for node in ast.walk(ast.parse(path.read_text(), filename=str(path))):
+            if isinstance(node, ast.ImportFrom) and node.module == "gc":
+                found += [(path.name, "from gc import freeze") for alias in node.names if alias.name == "freeze"]
+            elif isinstance(node, ast.Attribute) and node.attr == "freeze" and getattr(node.value, "id", None) == "gc":
+                found.append((path.name, "gc.freeze"))
+            elif getattr(node, "id", None) == "freeze_startup_heap" or getattr(node, "attr", None) == "freeze_startup_heap":
+                found.append((path.name, "freeze_startup_heap"))
+    assert found and {name for name, _ in found} == {"server.py"}, found

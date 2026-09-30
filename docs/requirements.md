@@ -55,8 +55,10 @@ window reads. Nothing else held the loop past ~30 ms. The production runner now 
 that heap once it is up, the passes fell to 24–40 ms, and lag reads ≤ 25 / ≤ 50 ms, with
 `--finish-games` too (150 of 150 ended games written). The timer-overrun row is measured by
 the client, from receiving `turn_started` to receiving `turn_ended`. The server starts the
-turn's timer only once every seat has been sent `turn_started`, so that row carries a
-steady offset of that length; it is not loop lateness, and it did not move with the freeze.
+turn's timer only once every seat has been sent `turn_started`, one awaited emit after
+another, so the row carries that fan-out: a length that grows with how busy the loop is,
+not the lateness of the timer itself, which `sketchy_phase_timer_lateness_seconds` reports.
+It did not move with the freeze.
 
 ---
 
