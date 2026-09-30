@@ -30,7 +30,7 @@ import {
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
 import { useSettingsStore } from "../store/settingsStore";
-import { PROMPT_LANGUAGE_LABELS } from "../lib/promptLanguages";
+import { AGNOSTIC_PROMPT_LANGUAGE, PROMPT_LANGUAGE_LABELS } from "../lib/promptLanguages";
 import { maskEmail } from "../lib/accountRecovery";
 import { authSubmitter, type AuthMode } from "../lib/authSubmit";
 import { useToast } from "../lib/toast";
@@ -45,7 +45,10 @@ import "../styles/lazy/prompt-lists.css";
 
 // Every room language, then none at all (#821): a list of names or brands is
 // played in whichever language the room declares.
-const LANGUAGES: PromptListLanguage[] = ["de", "en", "es", "fr", "it", "nl", "pt", "zxx"];
+const LANGUAGES: PromptListLanguage[] = [
+  ...(Object.keys(PROMPT_LANGUAGE_LABELS) as PromptListLanguage[]).sort(),
+  AGNOSTIC_PROMPT_LANGUAGE,
+];
 /** A blank draft, in the player's default play language (#1272). */
 function emptyDraft(): PromptListDraft {
   return {

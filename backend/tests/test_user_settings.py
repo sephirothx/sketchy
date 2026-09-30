@@ -402,7 +402,7 @@ async def test_a_browser_copy_naming_its_default_twice_still_registers(env):
     loaded = (await http.get("/api/users/me/settings")).json()
     assert (loaded["promptLanguage"], loaded["extraPromptLanguages"]) == ("pt", ["es"])
 
-    # Every language, the default among them: six others once it is dropped,
+    # Every language, the default among them: seven others once it is dropped,
     # which is the bound - counted after, not before.
     await http.post("/api/auth/logout")
     await _register(
@@ -410,11 +410,11 @@ async def test_a_browser_copy_naming_its_default_twice_still_registers(env):
         "SeedEvery",
         {
             "promptLanguage": "pt",
-            "extraPromptLanguages": ["en", "de", "pt", "es", "fr", "it", "nl"],
+            "extraPromptLanguages": ["en", "de", "pt", "es", "fr", "it", "nl", "pl"],
         },
     )
     loaded = (await http.get("/api/users/me/settings")).json()
-    assert loaded["extraPromptLanguages"] == ["en", "de", "es", "fr", "it", "nl"]
+    assert loaded["extraPromptLanguages"] == ["en", "de", "es", "fr", "it", "nl", "pl"]
 
 
 async def test_two_devices_at_once_never_list_the_default_twice(env):

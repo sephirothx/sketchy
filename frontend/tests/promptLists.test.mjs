@@ -74,6 +74,7 @@ test("the language options offered are the ones with content, plus the room's ow
 test("the browser says which language a visitor plays in, English if it cannot", () => {
   assert.equal(preferredPromptLanguage(["de-CH", "de", "en"]), "de");
   assert.equal(preferredPromptLanguage(["pt-BR"]), "pt");
+  assert.equal(preferredPromptLanguage(["pl-PL"]), "pl");
   assert.equal(preferredPromptLanguage(["ja", "zh-CN", "fr"]), "fr");
   assert.equal(preferredPromptLanguage(["ja", "zh-CN"]), "en");
   assert.equal(preferredPromptLanguage([]), "en");
@@ -154,9 +155,9 @@ test("a list in no language is played in every room and follows it across a swit
 });
 
 test("a mixed room plays Standard, once, and lists in no language", () => {
-  const languages = ["de", "en", "es", "fr", "it", "nl", "pt"];
+  const languages = ["de", "en", "es", "fr", "it", "nl", "pl", "pt"];
   const standard = languages.map((language) => ({
-    slug: `${{ de: "german", en: "english", es: "spanish", fr: "french", it: "italian", nl: "dutch", pt: "portuguese" }[language]}_standard`,
+    slug: `${{ de: "german", en: "english", es: "spanish", fr: "french", it: "italian", nl: "dutch", pl: "polish", pt: "portuguese" }[language]}_standard`,
     language,
     isBundled: true,
   }));
@@ -268,11 +269,11 @@ test("then the other languages you play in, in your order, then the rest (#1211)
   );
 });
 
-test("a picker lists your languages first, in your order, and all seven", () => {
+test("a picker lists your languages first, in your order, and all eight", () => {
   const ranked = rankedPromptLanguages("it", ["nl", "es"]);
   assert.deepEqual(ranked.slice(0, 3), ["it", "nl", "es"]);
-  assert.equal(ranked.length, 7);
-  assert.equal(new Set(ranked).size, 7);
+  assert.equal(ranked.length, 8);
+  assert.equal(new Set(ranked).size, 8);
   // Within what a form can offer: a language it cannot is left out, not added.
   assert.deepEqual(rankedPromptLanguages("it", ["nl"], ["en", "nl"]), ["nl", "en"]);
 });

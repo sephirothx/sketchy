@@ -507,7 +507,7 @@ class UserStatsDaily(Base):
     )
 
 
-# Six two-letter languages as JSONB writes them, `["de", "en", ...]`: 36
+# Seven two-letter languages as JSONB writes them, `["de", "en", ...]`: 42
 # characters. Room for the brackets and separators of either engine's text
 # form, and not for anything a settings route would never write.
 EXTRA_PROMPT_LANGUAGES_TEXT_MAX = 48
@@ -538,7 +538,7 @@ class UserSettings(Base):
         # The other play languages (#1209), bounded where a JSON column can be
         # on both engines: read as its text, it is a list no longer than every
         # other language needs, and it never names the default. The routes
-        # hold the rest (each of the seven, once); these two hold even against
+        # hold the rest (each of the eight, once); these two hold even against
         # two PATCHes that each passed the routes' check against the same row.
         CheckConstraint(
             "CAST(extra_prompt_languages AS TEXT) LIKE '[%' "

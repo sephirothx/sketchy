@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`b9c0d1e2f3a5_session_anomaly_audited_at.py` (#1299 review). Both this line and the table
+`c0d1e2f3a4b6_polish_language.py` (#771). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -587,7 +587,7 @@ Cross-device Player settings for a registered account. `user_id` **PK** (CASCADE
 `key_bindings` (JSON) ·
 `colorblind_safe_colors` · `prompt_language` (the supported set, `en` by default) ·
 `extra_prompt_languages` (JSON list, `[]` by default: the other languages the player
-plays in, in their order — never the default, never twice, at most six; #1209) ·
+plays in, in their order — never the default, never twice, at most seven; #1209) ·
 `locale` (the interface locales, `en` by default) ·
 `email_reminder_last_shown_at` · timestamps.
 
@@ -609,10 +609,10 @@ a mixed room gives them, and where Quick play opens a room.
 `extra_prompt_languages` are the others they play in, ranked: a list on the row
 rather than a table of its own, so `/api/auth/me` still reads settings in one
 statement (R-PLAT-17). The settings routes check the pair in one write under the
-row's lock — only the seven, each once, the default never among them — and promoting
+row's lock — only the eight, each once, the default never among them — and promoting
 one of them to the default swaps the old default into its place (#1209). Two CHECKs
 hold what a JSON column can be held to on both engines, read as its text: a list
-(`ck_user_settings_extra_prompt_languages_list`, at most 48 characters, which six
+(`ck_user_settings_extra_prompt_languages_list`, at most 48 characters, which seven
 languages fit), and never naming the default (`ck_user_settings_default_not_extra`).
 The second is what stops two devices' PATCHes, each checked against the same row,
 from storing the default twice where the lock is not one (SQLite); the loser gets the
@@ -627,7 +627,7 @@ draws between its content language and its localized catalogue copy.
 The registries behind them are separate too, and bound by different things: a prompt
 language needs matching semantics before it can exist at all (N-09, R-PROMPT-09),
 while an interface locale needs only somebody to have written the words. They hold
-the same seven values today and are free to diverge.
+the same eight values today and are free to diverge.
 
 Both are stored rather than resolved from the browser every time, because a browser
 describes the device, and a player who chose a language on their laptop should not
@@ -1883,8 +1883,8 @@ born with them — so a hidden word stays hidden (#1020). A concept belongs to
 one list; copies mint their own. Bundled seed versions are the operator's own editions and
 start `active`.
 
-Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt` — the initial Latin
-registry, which case-folds, collapses whitespace, folds canonically decomposable
+Supported languages: `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, `pl` — the Latin
+registry (Polish joined it in #771), which case-folds, collapses whitespace, folds canonically decomposable
 accents, and reads every apostrophe a keyboard writes as the plain one (#1011; the
 bundled lists are written with the plain one, so no stored key changed)
 ([`backend/app/prompt_content.py`](../backend/app/prompt_content.py)). Other

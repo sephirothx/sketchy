@@ -29,6 +29,7 @@ import { ES } from "../src/content/ui/es.ts";
 import { FR } from "../src/content/ui/fr.ts";
 import { IT } from "../src/content/ui/it.ts";
 import { NL } from "../src/content/ui/nl.ts";
+import { PL } from "../src/content/ui/pl.ts";
 import { PT } from "../src/content/ui/pt.ts";
 
 const ROOT = "src";
@@ -542,10 +543,10 @@ test("an error is a sentence, and ends like one", () => {
 
 test("an announcement is a sentence, and ends like one, in every language", () => {
   // Said in the feed, among lines that end in a full stop: "Some words are
-  // correct" stopped short of one in all seven (#1279). Every language ends a
+  // correct" stopped short of one in all seven then (#1279). Every language ends a
   // sentence with one of these, so the check need not know which it reads.
   const params = { letter: "A", cost: 35, count: 2, text: "tree", nickname: "Ana", reason: "timeout", seconds: 3 };
-  const unfinished = Object.entries({ en: EN, de: DE, es: ES, fr: FR, it: IT, nl: NL, pt: PT }).flatMap(([lang, catalogue]) =>
+  const unfinished = Object.entries({ en: EN, de: DE, es: ES, fr: FR, it: IT, nl: NL, pl: PL, pt: PT }).flatMap(([lang, catalogue]) =>
     Object.entries(catalogue.announcements)
       .map(([code, line]) => [code, typeof line === "function" ? line(params) : line])
       .filter(([, line]) => !/[.!?…]$/.test(line))

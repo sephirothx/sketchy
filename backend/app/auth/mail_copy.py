@@ -7,7 +7,7 @@ carries it; this module turns it into words.
 
 Still no template engine, for the reason `mail.py` gave when there was one
 language: five messages, four lines each. What has changed is that there are
-now seven of them, so the shape is a table rather than a function - the
+now eight of them, so the shape is a table rather than a function - the
 assembly lives once, in `render()`, and each language supplies only words.
 That also keeps the suspension message honest: its *"It lifts on …"* and
 *"recorded as …"* clauses are built inside the locale, not handed to it as
@@ -40,7 +40,7 @@ class MailCopy:
 
     # `Hi {name},` - and the whole greeting for somebody whose name is not
     # known, because "Hola ," is not a sentence and patching one up in the
-    # renderer would be English grammar applied to six other languages.
+    # renderer would be English grammar applied to seven other languages.
     greeting: str
     greeting_unnamed: str
 
@@ -402,6 +402,53 @@ PT = MailCopy(
     },
 )
 
+PL = MailCopy(
+    greeting="Cześć, {name}!",
+    greeting_unnamed="Cześć!",
+    verify_subject="Potwierdź swój adres e-mail w Sketchy",
+    verify_body=(
+        "Potwierdź ten adres, aby móc odzyskać konto, jeśli kiedyś zapomnisz "
+        "do niego hasła:\n\n{link}\n\n"
+        "Link jest ważny przez jeden dzień. Jeśli ta prośba nie pochodzi od "
+        "Ciebie, nic się nie zmieniło i możesz zignorować tę wiadomość."
+    ),
+    reset_subject="Zresetuj hasło do konta Sketchy",
+    reset_body=(
+        "Ustaw nowe hasło tutaj:\n\n{link}\n\n"
+        "Link jest ważny przez godzinę i można go użyć tylko raz. Jeśli ta "
+        "prośba nie pochodzi od Ciebie, Twoje hasło się nie zmieniło i możesz "
+        "zignorować tę wiadomość."
+    ),
+    changed_subject="Hasło do Twojego konta Sketchy zostało zmienione",
+    changed_body=(
+        "Hasło do Twojego konta zostało właśnie zmienione, a wszystkie "
+        "zalogowane urządzenia zostały wylogowane.\n\n"
+        "Jeśli to nie Ty, natychmiast zresetuj hasło pod adresem {link}."
+    ),
+    banned_subject="Twoje konto w Sketchy zostało zawieszone",
+    banned_body=(
+        "Twoje konto zostało zawieszone. Powód: {reason}.{about}\n{when}\n\n"
+        "Po zalogowaniu zobaczysz, czego dotyczyła ta decyzja."
+    ),
+    banned_default_reason="naruszenie zasad",
+    banned_about=" Kategoria naruszenia: {category}.",
+    banned_until="Zawieszenie wygaśnie {date}.",
+    banned_forever="To zawieszenie nie wygaśnie samo.",
+    hidden_subject="Ukryto część Twoich treści",
+    hidden_body="Po weryfikacji przez moderatora ukryto {what}.",
+    hidden_default_what="część udostępnionych przez Ciebie treści",
+    hidden_prompt="udostępnione przez Ciebie hasło",
+    hidden_prompt_list="udostępnioną przez Ciebie listę haseł",
+    categories={
+        "harassment": "nękanie",
+        "offensive_drawing": "obraźliwy rysunek",
+        "inappropriate_name": "niestosowna nazwa",
+        "cheating": "oszukiwanie",
+        "spam": "spam",
+        "inappropriate_avatar": "niestosowne zdjęcie",
+    },
+)
+
 COPY: dict[str, MailCopy] = {
     "en": EN,
     "de": DE,
@@ -410,6 +457,7 @@ COPY: dict[str, MailCopy] = {
     "it": IT,
     "nl": NL,
     "pt": PT,
+    "pl": PL,
 }
 
 

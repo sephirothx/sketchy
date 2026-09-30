@@ -182,7 +182,7 @@ export function AppHeader({
  * frame before a decision lands never paints names over the flag.
  *
  * Two names have header-only keys (`communityLink`, `promptStatsLink`): at the
- * page titles' length Spanish, French, Italian, Portuguese and Dutch did not
+ * page titles' length Spanish, French, Italian, Portuguese, Dutch and Polish did not
  * fit beside a crumb, the flag and a long name at 1200px, so those languages
  * name the pages more briefly here.
  */

@@ -95,12 +95,13 @@ class PromptLanguage(StrEnum):
     ITALIAN = "it"
     DUTCH = "nl"
     PORTUGUESE = "pt"
+    POLISH = "pl"
 
 
 # A prompt list that is in no language at all: Pokémon, brands, places (#821).
 # BCP-47's `zxx` is exactly this - "no linguistic content" - so the tag is a
 # real one rather than an invented sentinel. It is a *list* language only: a
-# room still declares one of the seven (R-PROMPT-02), and an agnostic list is
+# room still declares one of the eight (R-PROMPT-02), and an agnostic list is
 # matched under whichever language the room plays in, the way a room's quick
 # custom prompts are (R-GUESS-01). It has no transliteration table, because
 # its stored key is an identity and must not depend on the room it is played in.
@@ -119,7 +120,7 @@ class InterfaceLocale(StrEnum):
     """The languages the interface itself is written in.
 
     Deliberately its own registry rather than a reuse of `PromptLanguage`,
-    even though the members are the same seven today. The two answer
+    even though the members are the same eight today. The two answer
     different questions and are bound by different things: a **prompt
     language** needs matching semantics before it can be added at all (N-09,
     R-PROMPT-09), while an **interface locale** needs only somebody to have
@@ -136,6 +137,7 @@ class InterfaceLocale(StrEnum):
     ITALIAN = "it"
     DUTCH = "nl"
     PORTUGUESE = "pt"
+    POLISH = "pl"
 
 
 class PromptEditorialDifficulty(StrEnum):

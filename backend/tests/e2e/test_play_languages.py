@@ -226,7 +226,7 @@ async def test_a_drag_forward_and_off_the_end_lands_and_escape_puts_one_back():
             assert await _extras(page) == ["fr", "es", "nl"]
 
             # Adding the last language keeps the keyboard in the row.
-            for name in ("English", "italiano"):
+            for name in ("English", "italiano", "polski"):
                 await _add(dialog, name)
             await _add(dialog, "português")
             assert await dialog.get_by_role("button", name="Add a language you play in").count() == 0
@@ -367,7 +367,7 @@ async def test_discovery_asks_for_the_ranked_languages():
                 "rows => rows.map(row => row.dataset.language)"
             )
             assert options[:4] == ["mul", "fr", "nl", "it"], options
-            assert len(options) == 8
+            assert len(options) == 9
             await page.keyboard.press("Escape")
             await page.goto(BASE_URL)
 

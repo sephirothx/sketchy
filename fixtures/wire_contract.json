@@ -702,7 +702,7 @@
       "items": {
        "type": "string"
       },
-      "maxItems": 6,
+      "maxItems": 7,
       "title": "Extrapromptlanguages",
       "type": "array"
      },
@@ -2843,7 +2843,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 51,
+ "protocolVersion": 52,
  "refusal": {
   "codes": [
    "invalid_payload",

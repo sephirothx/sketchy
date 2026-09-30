@@ -12,7 +12,7 @@ import { interfaceLocale, ui } from "../content/ui/index.ts";
  *
  * One picture with one name, not a row of images: a screen reader hears
  * "Plays in Italian; also English and Spanish" once, in the reader's own
- * language, where seven flags would be seven announcements of nothing. The
+ * language, where eight flags would be eight announcements of nothing. The
  * same sentence is the tooltip, for a flag nobody recognises.
  */
 export function PlayLanguageFlags({ languages }: { languages: readonly string[] }) {
