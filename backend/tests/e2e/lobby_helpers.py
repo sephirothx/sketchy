@@ -150,7 +150,7 @@ WAITING_ROOM = '[data-testid="waiting-room"]'
 # The page's play language, as the settings store reads it: the stored choice,
 # else the browser's first supported language, else English.
 PLAY_LANGUAGE_SCRIPT = """() => {
-  const known = ["en", "de", "es", "fr", "it", "nl", "pt"];
+  const known = ["en", "de", "es", "fr", "it", "nl", "pt", "pl"];
   const stored = localStorage.getItem("sketchy_promptlanguage");
   if (known.includes(stored)) return stored;
   for (const tag of navigator.languages) {

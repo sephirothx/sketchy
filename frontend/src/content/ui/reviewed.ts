@@ -28,5 +28,6 @@ export const REVIEWED: Record<Locale, ReadonlySet<string>> = {
   fr: new Set(),
   it: new Set(),
   nl: new Set(),
+  pl: new Set(),
   pt: new Set(),
 };

@@ -17,6 +17,7 @@ export const PROMPT_LANGUAGE_LABELS: Record<PromptLanguage, string> = {
   it: "Italian",
   nl: "Dutch",
   pt: "Portuguese",
+  pl: "Polish",
 };
 
 /**
@@ -39,6 +40,7 @@ export const PROMPT_LANGUAGE_ENDONYMS: Record<PromptLanguage, string> = {
   it: "italiano",
   nl: "Nederlands",
   pt: "português",
+  pl: "polski",
 };
 
 /** BCP-47 "no linguistic content": a list in no language at all (#821), such
@@ -266,7 +268,7 @@ export function sortRoomsByLanguage<T extends { promptLanguage: string }>(
 }
 
 /**
- * The seven, in the order this player ranks them: their default, the others
+ * Every language, in the order this player ranks them: their default, the others
  * they play in, then the rest in the usual order - how every picker of a
  * language to play lists them (#1211), so the ones they would choose are at
  * the top without anything being left out.

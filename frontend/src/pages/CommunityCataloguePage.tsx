@@ -368,7 +368,7 @@ export function CommunityCataloguePage() {
           compact
           onChange={(choice) => applyFilters({
             ...filters,
-            // The options are the seven room languages: a list in no language
+            // The options are the eight room languages: a list in no language
             // is shown under every one of them (#821), so it needs no filter.
             language: choice === ANY_LANGUAGE ? null : (choice as PromptLanguage),
           })}

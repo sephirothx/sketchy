@@ -143,7 +143,7 @@ export function LanguagePicker({
   }, [open, addLabel]);
 
   // The chosen row takes focus on open, so the list starts where the reader
-  // already is rather than at the top of seven.
+  // already is rather than at the top of eight.
   useEffect(() => {
     if (!open || !listRef.current) return;
     const selected = listRef.current.querySelector<HTMLElement>('[aria-selected="true"]');

@@ -14,7 +14,7 @@ A Dutch speaker playing an English room is ordinary, and a single preference
 could not describe them (R-I18N-06). The two registries are also bound by
 different things - a prompt language needs matching semantics to exist at all
 (N-09), an interface locale needs only somebody to have written the words - so
-they are free to diverge even though they hold the same seven today.
+they are free to diverge even though they hold the same eight today.
 
 Resolved before the first paint. A page that renders in English and then
 switches has already shown the wrong language to the person who reads slowest.

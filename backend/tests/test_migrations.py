@@ -287,6 +287,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
         "d4e5f6a7b8c0",
+        "c0d1e2f3a4b6",
         "b9c0d1e2f3a5",
         "c1d2e3f4a5b7",
         "e8f9a0b1c2d4",

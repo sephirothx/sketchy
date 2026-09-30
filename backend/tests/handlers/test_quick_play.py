@@ -293,7 +293,7 @@ async def test_the_other_languages_are_canonical_once_and_never_the_default():
     )
     assert answer["roomId"] == dutch.id
 
-    for junk in (["kl"], ["mul"], "nl", ["nl"] * 7):
+    for junk in (["kl"], ["mul"], "nl", ["nl"] * 8):
         refused = await press(sio, sid="other", promptLanguage="it", extraPromptLanguages=junk)
         assert refused["ok"] is False, junk
 

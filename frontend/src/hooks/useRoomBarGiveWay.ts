@@ -114,7 +114,7 @@ function insideClock(node: Node): boolean {
  * it: a notice arriving or ending, *AFK*, a new round, the countdown's digits.
  *
  * Measured rather than set at breakpoints, because what the bar holds changes
- * while a game runs and its words are seven languages long. Every measure
+ * while a game runs and its words are eight languages long. Every measure
  * starts again from nothing given up (`chooseGiveWay`), so the answer depends
  * only on what is on the bar and never on the last answer - it cannot flip
  * back and forth. The steps are tried synchronously, inside one observer

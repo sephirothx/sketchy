@@ -238,6 +238,7 @@ const FLAG = {
   ptGreen: "#287927",
   ptRed: "#F84B4A",
   ptYellow: "#F9F85A",
+  plRed: "#DC4A5C",
   earthBlue: "#013BA6",
   /* Warm rather than pure, so a white stripe still shows on a white panel. */
   white: "#FDFBF6",
@@ -302,6 +303,12 @@ const FLAG_SHAPES: Record<string, ReactNode> = {
       <circle cx="7.82" cy="4.45" r="2.37" />
       <circle cx="10.18" cy="4.45" r="2.37" />
       </g>
+    </>
+  ),
+  pl: (
+    <>
+      <rect width="18" height="6.5" fill={FLAG.white} />
+      <rect y="6.5" width="18" height="6.5" fill={FLAG.plRed} />
     </>
   ),
   pt: (

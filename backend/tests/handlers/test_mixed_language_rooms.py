@@ -28,8 +28,8 @@ def _standard_stub():
         ["dog", "cat"],
         concept_ids={"dog": "c-dog", "cat": "c-cat"},
         translations={
-            "dog": {"en": "dog", "de": "Hund", "fr": "chien", "es": "perro", "it": "cane", "nl": "hond", "pt": "cão"},
-            "cat": {"en": "cat", "de": "Katze", "fr": "chat", "es": "gato", "it": "gatto", "nl": "kat", "pt": "gato"},
+            "dog": {"en": "dog", "de": "Hund", "fr": "chien", "es": "perro", "it": "cane", "nl": "hond", "pt": "cão", "pl": "pies"},
+            "cat": {"en": "cat", "de": "Katze", "fr": "chat", "es": "gato", "it": "gatto", "nl": "kat", "pt": "gato", "pl": "kot"},
         },
         revision_ids=("revision-standard",),
         prompt_version_ids={"dog": "v-dog", "cat": "v-cat"},

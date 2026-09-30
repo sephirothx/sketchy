@@ -878,12 +878,12 @@ mirrors it with every field optional (absent means *unchanged*).
 | `hideMaskedPrompt` | boolean | `false` | forces hints off |
 | `allowedTools` | string[] | `["brush","fill","shapes"]` | at least one of `brush`/`shapes` must remain |
 | `colorMode` | string | `"all"` | `all \| palette \| colorblind_safe \| black_and_white` |
-| `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, or `mul` for a mixed-language room (#1182). **Create only** — see below |
+| `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, `pl`, or `mul` for a mixed-language room (#1182). **Create only** — see below |
 | `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard - and empty ⇒ Standard in every language (R-PROMPT-13) |
 
 `create_room` adds `nickname`, `nameColor`
 (`#rrggbb`), `colorblindSafeColors`, and `seatLanguage` - the language the creator plays
-in, one of the seven, read only when `promptLanguage` is `mul`.
+in, one of the eight, read only when `promptLanguage` is `mul`.
 
 **`promptLanguage` is declared, not derived, and only at creation** (R-PROMPT-02).
 The room says what language it is in and its lists answer to that; selecting a list
@@ -929,7 +929,7 @@ join admits a game in progress; Quick play, below, does not.
 colorblindSafeColors, promptLanguage, extraPromptLanguages}` in, a seat out — the ordinary
 join acknowledgement plus `created`, which says whether the room was opened for it.
 `promptLanguage` is the player's default play language; `extraPromptLanguages` (#1211,
-protocol 47) the others they play in, in their order — at most six of the seven,
+protocol 47; the cap rose with Polish, protocol 52) the others they play in, in their order — at most seven of the eight,
 canonicalised, each once, the default dropped from them, an unknown tag refused like the
 default's. The server picks, fullest first within each tier, a **public** room that is
 **waiting with no game running** with a seat free: in the default language; then a
@@ -1679,7 +1679,15 @@ width off a diagonal moved an edge pixel in about one segment in five hundred, #
 The history and the commit on the frame are still applied synchronously, before
 anything is queued; only presentation is delayed. Everything that is not a run of points
 — a path start or end, a shape, a fill, a clear — is a barrier in the same queue, so a
-fill always sees the complete raster before it. Past `MAX_LAG_MS` (250) of unplayed
+fill always sees the complete raster before it. A path start is also held an interval
+past its arrival (#1369): the drawer sends it on pointer-down, but the points that leave
+it wait for the next flush and are then played over the interval after, so a start
+painted as it landed showed its dot alone until the first batch came, up to an interval.
+The drawer restarts its flush timer at every path start, so the first batch covers a
+whole interval like every other, and the viewer plays each batch over one interval
+with nothing inferred from when frames arrived: the dot and the ink leaving it sit the
+same distance behind the hand, which is one interval plus however late the start
+arrived - a bunched or jittered delivery delays the stroke, never splits it. Past `MAX_LAG_MS` (250) of unplayed
 ink the schedule is compressed so the viewer catches up; a hidden tab drains at once;
 a replay or a clear discards the queue, since what follows repaints from history.
 
@@ -2531,7 +2539,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (51) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (52) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |

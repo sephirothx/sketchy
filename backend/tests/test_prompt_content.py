@@ -70,6 +70,13 @@ def test_a_language_folds_the_way_it_is_written_rather_than_the_way_english_is()
     assert prompt_match_variants("coeur", "fr") == {"coeur"}
     # The Dutch digraph's single codepoint is the two letters everyone types.
     assert prompt_match_key("ĳsbeer", "nl") == "ijsbeer"
+    # Polish "ł" is a letter of its own, not "l" with a mark, so NFD leaves it;
+    # "lodz" is how "Łódź" is typed without Polish letters (#771). The rest
+    # of the Polish diacritics decompose and fold the shared way.
+    assert prompt_match_key("Łódź", "pl") == "lodz"
+    assert prompt_match_variants("Łódź", "pl") == {"lodz", "łodz"}
+    assert prompt_match_key("źdźbło", "pl") == "zdzblo"
+    assert prompt_match_key("Łódź", "en") == "łodz"
 
     # The other five are unchanged: one canonical spelling, accents folded.
     for language, written, folded in (

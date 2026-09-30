@@ -1,7 +1,7 @@
 """page a player's history off one index
 
 Revision ID: d4e5f6a7b8c0
-Revises: b9c0d1e2f3a5
+Revises: c0d1e2f3a4b6
 Create Date: 2026-09-30 12:00:00.000000
 
 A profile's game list is newest first, and `finished_at` lived only on the
@@ -30,7 +30,7 @@ from alembic import op
 
 
 revision: str = "d4e5f6a7b8c0"
-down_revision: str | Sequence[str] | None = "b9c0d1e2f3a5"
+down_revision: str | Sequence[str] | None = "c0d1e2f3a4b6"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
