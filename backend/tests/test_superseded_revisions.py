@@ -95,10 +95,12 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
         await _play_a_game_from(factory, owner_id, list_id)
         other_id, (fork,) = await _saved(repo, factory, owner_id, "Copied", ["heron"])
         async with factory() as session, session.begin():
+            # A copy of the list, which names the list rather than a revision
+            # of it (#1361) and so holds none.
             await session.execute(
-                update(PromptListRevision)
-                .where(PromptListRevision.id == UUID(fork))
-                .values(forked_from_revision_id=UUID(forked_from))
+                update(PromptList)
+                .where(PromptList.id == UUID(other_id))
+                .values(is_copy=True, copied_from_list_id=UUID(list_id))
             )
             crane = await session.scalar(
                 select(PromptListRevisionItem.prompt_version_id).where(
@@ -118,9 +120,10 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
 
         report = await reclaim_superseded_revisions(factory, now=now)
 
-        # Neither a hidden word (#1357) nor a finished game (#1358) is a hold.
-        assert int(report) == 3
-        assert await _revisions(factory, list_id) == [forked_from, young, current]
+        # Neither a hidden word (#1357), a finished game (#1358) nor a copy
+        # (#1361) is a hold: what the grace keeps is all that stays.
+        assert int(report) == 4
+        assert await _revisions(factory, list_id) == [young, current]
         assert await _answer_versions(factory, "ibis") == 0, "the content only it named went with it"
         assert await _revisions(factory, other_id) == [fork], "the fork itself is a current revision"
         assert report.backlog == 0 and report.oldest_overdue_seconds == 0
@@ -230,9 +233,11 @@ async def test_a_takedown_outlives_the_revisions_it_was_found_in():
 
 
 async def test_an_edited_copy_keeps_what_it_was_copied_from():
-    """A copy's first revision says what it was copied from; the copy count,
-    the credit and the lineage all read it there. Editing the copy supersedes
-    it, and reclaiming it erased all three (#1258 review)."""
+    """A copy's first revision used to say what it was copied from, and the
+    copy count, the credit and the lineage all read it there: editing the copy
+    superseded it, and reclaiming it erased all three (#1258 review). The copy
+    names its origin on the list now (#1361), so the revision goes and none of
+    the three moves."""
     factory, engine, owner_id, other_id = await _database()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
@@ -242,19 +247,18 @@ async def test_an_edited_copy_keeps_what_it_was_copied_from():
         )
         await published(factory, original.id)
         copy = await repo.fork_published(other_id, original.id)
-        lineage = (await repo.get_owned(other_id, copy.id)).forked_from_revision_id
         await repo.update_owned(
             other_id, copy.id, expected_version=copy.version, name=copy.name, description="",
             prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="crane")),
         )
         await _age(factory, await _revisions(factory, copy.id), LONG_AGO)
 
-        assert int(await reclaim_superseded_revisions(factory)) == 0
+        assert int(await reclaim_superseded_revisions(factory)) == 1
 
         assert (await repo.get_owned(owner_id, original.id)).copy_count == 1
         edited = await repo.get_owned(other_id, copy.id)
         assert edited.copied_from.status == "published"
-        assert edited.forked_from_revision_id == lineage is not None
+        assert edited.copied_from.list_id == original.id
     finally:
         await engine.dispose()
 

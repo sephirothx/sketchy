@@ -3856,6 +3856,9 @@ class PromptList(Base):
     __tablename__ = "prompt_lists"
     __table_args__ = (
         _actor_index("ix_prompt_lists_moderated_by", "moderated_by_user_id"),
+        # The copy count asks it of every catalogue row (R-LIST-20), and the
+        # `SET NULL` walks it when an original is deleted.
+        _actor_index("ix_prompt_lists_copied_from", "copied_from_list_id"),
         _values_check("language", PROMPT_LIST_LANGUAGES, "ck_prompt_lists_language"),
         _values_check(
             "visibility", PROMPT_LIST_VISIBILITIES, "ck_prompt_lists_visibility"
@@ -3922,11 +3925,21 @@ class PromptList(Base):
         Boolean, default=True, server_default=true(), nullable=False
     )
     # That this list was copied from another - and nothing about what from.
-    # `forked_from_revision_id` names the original, and is cleared when its
+    # `copied_from_list_id` names the original, and is cleared when its
     # author deletes it (R-LIST-17); this is what still lets the copy say it
     # was one, without keeping what that author asked to take away (R-LIST-21).
     is_copy: Mapped[bool] = mapped_column(
         Boolean, default=False, server_default=false(), nullable=False
+    )
+    # The list this one was copied from (R-LIST-17, #1361). On the list rather
+    # than on the copy's first revision, where it lived until #1361: editing
+    # the copy superseded that revision, and a sweep that reclaimed it took the
+    # copy count, the credit and the lineage with it. The original is read as
+    # it is now (R-LIST-21), so the list is all the pointer has to name.
+    copied_from_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="SET NULL"),
+        nullable=True,
     )
     visibility: Mapped[str] = mapped_column(
         String(16),
@@ -4009,12 +4022,6 @@ class PromptListRevision(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         nullable=False,
-    )
-    forked_from_revision_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_list_revisions.id", ondelete="SET NULL"),
-        nullable=True,
-        index=True,
     )
     version: Mapped[int] = mapped_column(Integer, nullable=False)
     language: Mapped[str] = mapped_column(String(16), nullable=False)

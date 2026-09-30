@@ -262,10 +262,6 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
         "starCount": prompt_list.star_count,
         "copyCount": prompt_list.copy_count,
         "copiedFrom": copied_from_payload(prompt_list.copied_from),
-        # Where this list was copied from, when it was (R-LIST-17). It may
-        # name a revision nothing serves any more; that is the point of
-        # recording the revision rather than the list.
-        "forkedFromRevisionId": prompt_list.forked_from_revision_id,
         "createdAt": _timestamp(prompt_list.created_at),
         "updatedAt": _timestamp(prompt_list.updated_at),
         "prompts": [

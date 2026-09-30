@@ -9,7 +9,8 @@ not named at all.
 
 Deleted is the case the schema has to carry on its own. When an author deletes
 a list, its copies deliberately forget where they came from (R-LIST-17): the
-reclaim sweep clears `forked_from_revision_id`, and a copy then looks exactly
+reclaim sweep deletes the list and `copied_from_list_id` is set null, and a
+copy then looks exactly
 like a list nobody copied. `prompt_lists.is_copy` is what still knows it was
 one - that it was copied, never what from.
 """

@@ -1,9 +1,8 @@
 """How many copies of a published list exist (R-LIST-20).
 
 Derived from rows, the way a star count is, and never kept as a number: every
-copy's first revision already records the revision it was taken from
-(`forked_from_revision_id`, R-LIST-17), so the count is a question asked of
-facts that are there anyway. What it counts is the copies that **still exist** -
+copy records the list it was taken from (`copied_from_list_id`, R-LIST-17,
+#1361), so the count is a question asked of facts that are there anyway. What it counts is the copies that **still exist** -
 a copy its owner deletes stops counting at once, as a removed star does - and
 only **direct** copies: a copy of a copy counts toward the list it was taken
 from, not toward that list's own source.
@@ -152,8 +151,8 @@ async def test_a_copy_of_a_copy_counts_toward_what_it_was_copied_from(env):
 
 
 async def test_a_copy_still_counts_after_its_source_is_edited(env):
-    # Provenance names the revision a copy was taken from, so an edit that
-    # moves the source to a new revision must not lose the copies of the old.
+    # Provenance names the list a copy was taken from (#1361), so an edit
+    # on the source cannot lose its copies.
     http, users, prompts, factory = env
     author = await account(users, "Author")
     source = await a_published_list(prompts, factory, author.id)
@@ -171,6 +170,37 @@ async def test_a_copy_still_counts_after_its_source_is_edited(env):
     )
 
     assert (await counts(http, factory, author.id, source.id))["detail"] == 1
+
+
+async def test_editing_or_republishing_either_side_moves_neither_count_nor_credit(env):
+    """#1361: the count and the credit read the copy's list row, not the
+    revision the copy started as, which an edit of the copy superseded."""
+    http, users, prompts, factory = env
+    author = await account(users, "Author")
+    source = await a_published_list(prompts, factory, author.id)
+    reader = await account(users, "Reader")
+    copy_id = await copy_as(http, factory, reader.id, source.id)
+
+    copied = await prompts.get_owned(reader.id, copy_id)
+    await prompts.update_owned(
+        reader.id, copy_id, expected_version=copied.version, name="Mine now",
+        description="", prompts=(PromptListEntryInput(answer="heron"),),
+    )
+    await prompts.update_owned(
+        author.id, source.id, expected_version=source.version, name="Source",
+        description="Worth copying",
+        prompts=(PromptListEntryInput(answer="otter"), PromptListEntryInput(answer="weasel")),
+        tags=("animals",),
+    )
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptList, UUID(source.id))
+            row.visibility, row.published_at = "private", None
+    await publish(factory, source.id)
+
+    assert (await counts(http, factory, author.id, source.id))["detail"] == 1
+    credit = (await prompts.get_owned(reader.id, copy_id)).copied_from
+    assert credit.status == "published" and credit.list_id == source.id
 
 
 async def test_a_list_nobody_copied_says_zero_rather_than_nothing(env):

@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`e1f2a3b4c5d7_game_provenance_names_the_list.py` (#1358). Both this line and the table
+`f2a3b4c5d6e8_a_copy_names_the_list_it_came_from.py` (#1361). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1963,7 +1963,8 @@ Deliberately relational rather than a JSON tag blob.
 
 ### `prompt_lists`
 `id` · `owner_user_id` (`SET NULL`) · `slug` **unique** · `name` · `description` ·
-`language` · `is_bundled` · `is_copy` · `visibility` (`private \| public`) ·
+`language` · `is_bundled` · `is_copy` · `copied_from_list_id` (`SET NULL`) ·
+`visibility` (`private \| public`) ·
 `moderation_state` · `moderated_by_user_id` ·
 `moderated_at` · `version` · `published_at` (nullable) · `deleted_at` (indexed,
 nullable) · timestamps.
@@ -2143,8 +2144,8 @@ an account that no longer exists. They are also exported (`stars[]`, schema vers
 naming the list and never its owner's account id.
 
 ### `prompt_list_revisions` / `_items` / `_tags`
-`prompt_list_revisions`: `id` · `prompt_list_id` (CASCADE) · `forked_from_revision_id`
-(self-FK, `SET NULL`) · `version` · `language` · `content_hash` · `letter_counts` ·
+`prompt_list_revisions`: `id` · `prompt_list_id` (CASCADE) · `version` · `language` ·
+`content_hash` · `letter_counts` ·
 `letter_total` · `created_at`, unique on `(prompt_list_id, version)`.
 
 `letter_counts` (JSON) and `letter_total` are a **letter histogram** over every
@@ -2173,11 +2174,9 @@ rows allow, counting each revision's items - 5,000 by default, nine revisions of
 owned list once the save that superseded it is older than `RETIRED_LIST_GRACE` - counted
 from the superseding save, not from the revision's own creation, because a room that
 pinned it when its game started plays it to the end - unless it is the current revision
-(never superseded), or a fork was copied from it (the copy
-count reads `forked_from_revision_id`), it is a copy's first revision (the one carrying
-that pointer, which the count, the credit and the lineage all read). A hidden prompt, or
-one a pending report names, is not a hold since #1357: the owner's takedown record keeps
-the word. Versions and concepts only the deleted
+(never superseded). A copy is no hold since #1361 — it names its original's list, not a
+revision — and a hidden prompt, or one a pending report names, is none since #1357: the
+owner's takedown record keeps the word. Versions and concepts only the deleted
 revisions named go with them, as in the retired-list reclaim.
 
 `prompt_list_revision_items`: `revision_id` + `prompt_version_id` composite **PK** ·
@@ -2187,16 +2186,17 @@ is what stops a prompt version being deleted out from under a revision a game pi
 `prompt_list_revision_tags`: `revision_id` + `tag_id` composite **PK**, indexed on
 `tag_id` for the direction the community catalogue reads (*which lists carry this tag*).
 
-`forked_from_revision_id` is written by `fork_published` and nothing else, on a copy's
-**first** revision. It is also what a list's copy count is read from (R-LIST-20): the
-lists whose revision one points at any revision of it, not deleted — so the count is a
-question asked of this column, and there is no counter to keep in step. It names the
-exact revision a copy was taken from, which is what keeps it meaningful: both lists go
-on being edited, so a pointer at the *list* would stop saying anything after the first
-edit on either side. It may end up naming a revision nothing serves — the source was hidden, and revisions are
-immutable, so the id stays true while the content is out of play. When the source is
-**retired**, the pointer goes: the reclaim sweep deletes the list's revisions and the
-`SET NULL` clears it.
+**A copy names the list it came from, on its own row** (`prompt_lists.copied_from_list_id`,
+`SET NULL`, #1361). `fork_published` writes it and nothing else does, and a list's copy
+count is read from it (R-LIST-20): the lists that point at it, not deleted — so the count is
+a question asked of this column, served by the partial `ix_prompt_lists_copied_from`, and
+there is no counter to keep in step. Until #1361 the pointer was `forked_from_revision_id`
+on the copy's **first revision**, naming the exact revision it was taken from; editing the
+copy superseded that revision, and a sweep that reclaimed it took the count, the credit and
+the lineage with it (#1351). The credit reads the original as it is now (R-LIST-21), so the
+list is all the pointer has to name; editions (#1360) will say which content. When the
+source is **deleted**, the pointer goes: the reclaim deletes the list row and the `SET NULL`
+clears it.
 
 **`is_copy` is what survives it** (R-LIST-21). A copy credits the list it came from, and once the
 pointer is cleared a copy looked exactly like a list nobody copied, so "copied from a list
@@ -2206,7 +2206,7 @@ nothing about what from — a name, an author or an id would be exactly what the
 list's author asked to take away. `ck_prompt_lists_copy_is_player_owned` keeps it off the
 bundled catalogue.
 
-That is deliberate, and it is why a fork reference holds nothing up. A fork is a live
+That is deliberate, and it is why a copy's pointer holds nothing up. A copy is a live
 list somebody else owns and edits; if its pointer kept the original alive, an author who
 deletes their list could never actually remove it once a stranger had copied it. The copy keeps every prompt it took; it forgets only where they
 came from, because the person they came from asked for the list to go. A fork gets **new prompt concepts and versions** rather than references

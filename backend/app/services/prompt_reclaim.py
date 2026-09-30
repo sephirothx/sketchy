@@ -449,17 +449,14 @@ def _superseded_reclaimable(cutoff: datetime):
     """A revision of a live, owned list the sweep may delete.
 
     Replaced by a newer save more than the grace ago - the same day the
-    retired-list reclaim waits, for the same room: one that pinned this
-    revision when its game started and is still playing it - and kept for
-    good while anything needs it: a fork that says it
-    was copied from here (R-LIST-20's copy count reads that), a copy's own
-    first revision (the one that says what it was copied from: the count, the
-    credit and the lineage all read it, so editing a copy would otherwise
-    erase all three a day later). A hidden word is not a hold: the owner's
-    takedown record keeps it (#1357). The current revision is never superseded, so never a candidate.
+    retired-list reclaim waits, for the same room: one that drew from it when
+    its game started and is still playing. Nothing else holds one: a finished
+    game names its list (#1358), a copy records the list it came from rather
+    than a revision (#1361), and a hidden word is kept by its owner's takedown
+    record (#1357). The current revision is never superseded, so never a
+    candidate.
     """
     newer = _successor()
-    fork = aliased(PromptListRevision)
     return (
         PromptList.id == PromptListRevision.prompt_list_id,
         PromptList.deleted_at.is_(None),
@@ -469,8 +466,6 @@ def _superseded_reclaimable(cutoff: datetime):
             newer.version > PromptListRevision.version,
             newer.created_at <= cutoff,
         ),
-        ~exists().where(fork.forked_from_revision_id == PromptListRevision.id),
-        PromptListRevision.forked_from_revision_id.is_(None),
     )
 
 

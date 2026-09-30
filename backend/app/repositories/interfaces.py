@@ -611,10 +611,6 @@ class OwnedPromptList:
     copy_count: int = 0
     # The list this one was copied from, if it was one (R-LIST-21).
     copied_from: CopiedFrom | None = None
-    # The exact revision this list was forked from, when it was (R-LIST-17).
-    # A revision rather than a list, because both go on being edited and a
-    # pointer at the list would stop meaning anything after the first edit.
-    forked_from_revision_id: str | None = None
 
 
 @dataclass(frozen=True)

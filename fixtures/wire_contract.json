@@ -1982,7 +1982,6 @@
    "copiedFrom",
    "copyCount",
    "createdAt",
-   "forkedFromRevisionId",
    "isBundled",
    "moderationState",
    "promptCount",
@@ -2843,7 +2842,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 53,
+ "protocolVersion": 54,
  "refusal": {
   "codes": [
    "invalid_payload",

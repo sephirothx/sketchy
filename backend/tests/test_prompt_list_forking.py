@@ -1,12 +1,10 @@
 """Copying a published list into one of your own (R-LIST-17).
 
-`prompt_list_revisions.forked_from_revision_id` has existed since #318 with no
-writer anywhere in application code — lineage modelled and never recorded.
-This is what records it.
-
-The lineage names a **revision** rather than a list, and that is the whole
-reason it survives being useful: both sides go on being edited, so a pointer at
-the list would stop meaning anything after the first edit on either.
+A copy records the list it was taken from on its own row
+(`prompt_lists.copied_from_list_id`, #1361). It used to name the exact revision,
+on the copy's first revision - which the copy's first edit superseded, so a
+sweep of superseded revisions could take the lineage, the count and the credit
+with it. The credit reads the original as it is now, so the list is enough.
 """
 from __future__ import annotations
 
@@ -24,7 +22,6 @@ from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
 from app.db.models import (
     PromptList,
-    PromptListRevision,
     PromptVersion,
     generate_uuid,
 )
@@ -95,7 +92,12 @@ async def a_published_list(prompts, factory, owner_id: str, **kwargs):
     return created
 
 
-async def test_a_fork_is_private_and_names_the_revision_it_came_from(env):
+async def _copied_from_list_id(factory, list_id: str):
+    async with factory() as session:
+        return (await session.get(PromptList, UUID(list_id))).copied_from_list_id
+
+
+async def test_a_fork_is_private_and_names_the_list_it_came_from(env):
     http, users, prompts, factory = env
     author = await account(users, "Author")
     source = await a_published_list(prompts, factory, author.id)
@@ -112,19 +114,9 @@ async def test_a_fork_is_private_and_names_the_revision_it_came_from(env):
     assert body["prompts"][0]["aliases"] == ["river otter"]
     assert body["tags"] == ["animals", "nature"]
 
-    async with factory() as session:
-        origin = await session.scalar(
-            select(PromptListRevision).where(
-                PromptListRevision.prompt_list_id == UUID(source.id)
-            )
-        )
-        forked = await session.scalar(
-            select(PromptListRevision).where(
-                PromptListRevision.prompt_list_id == UUID(body["id"])
-            )
-        )
-    assert forked.forked_from_revision_id == origin.id
-    assert body["forkedFromRevisionId"] == str(origin.id)
+    # On the list, not on a revision of the copy (#1361).
+    assert await _copied_from_list_id(factory, body["id"]) == UUID(source.id)
+    assert body["copiedFrom"]["listId"] == source.id
 
 
 async def test_a_fork_is_independent_content_from_the_moment_it_exists(env):
@@ -145,10 +137,9 @@ async def test_a_fork_is_independent_content_from_the_moment_it_exists(env):
 
     assert still_there.status_code == 200
     assert still_there.json()["moderationState"] == "active"
-    # The lineage may now point at a revision nothing serves. That is correct:
-    # revisions are immutable, and the pointer records where the copy came
-    # from rather than promising it is still reachable.
-    assert still_there.json()["forkedFromRevisionId"] is not None
+    # The lineage still names a list nothing serves: the pointer records
+    # where the copy came from rather than promising it is still reachable.
+    assert await _copied_from_list_id(factory, forked["id"]) == UUID(source.id)
 
 
 async def test_a_fork_gets_its_own_prompt_versions_not_the_source_s(env):
@@ -259,12 +250,11 @@ async def test_a_guest_cannot_fork(env):
 
 
 async def test_provenance_survives_the_fork_being_edited(env):
-    """It is the list's origin, so it cannot live on the current revision.
+    """It is the list's origin, so it lives on the list (#1361).
 
-    `forked_from_revision_id` is a fact about one revision - where *that*
-    revision was derived from - and only the revision a fork starts life as
-    was derived from anywhere else. Reading the current one answered correctly
-    until the fork's owner made their first edit, and null from then on.
+    It used to live on the copy's first revision, which an edit supersedes;
+    reading the current one answered correctly until the fork's owner made
+    their first edit, and a sweep of superseded revisions could take it.
     """
     http, users, prompts, factory = env
     author = await account(users, "Author")
@@ -272,8 +262,8 @@ async def test_provenance_survives_the_fork_being_edited(env):
     forker = await account(users, "Forker")
     await sign_in(http, factory, forker.id)
     forked = (await http.post(f"/api/prompt-lists/{source.id}/fork")).json()
-    origin = forked["forkedFromRevisionId"]
-    assert origin is not None
+    origin = forked["copiedFrom"]
+    assert origin is not None and origin["listId"] == source.id
 
     edited = await http.put(
         f"/api/prompt-lists/mine/{forked['id']}",
@@ -290,9 +280,10 @@ async def test_provenance_survives_the_fork_being_edited(env):
 
     assert edited.status_code == 200
     assert edited.json()["version"] > forked["version"]
-    assert edited.json()["forkedFromRevisionId"] == origin
+    assert edited.json()["copiedFrom"] == origin
     reopened = await http.get(f"/api/prompt-lists/mine/{forked['id']}")
-    assert reopened.json()["forkedFromRevisionId"] == origin
+    assert reopened.json()["copiedFrom"] == origin
+    assert await _copied_from_list_id(factory, forked["id"]) == UUID(source.id)
 
 
 async def test_an_official_bundled_list_cannot_be_forked(env):
@@ -353,7 +344,7 @@ async def test_reclaiming_a_deleted_source_forgets_where_the_fork_came_from(env)
     forker = await account(users, "Forker")
     await sign_in(http, factory, forker.id)
     forked = (await http.post(f"/api/prompt-lists/{source.id}/fork")).json()
-    assert forked["forkedFromRevisionId"] is not None
+    assert await _copied_from_list_id(factory, forked["id"]) == UUID(source.id)
 
     assert await prompts.delete_owned(author.id, source.id)
     await reclaim_retired_prompt_lists(
@@ -366,10 +357,11 @@ async def test_reclaiming_a_deleted_source_forgets_where_the_fork_came_from(env)
         "otter",
         "badger",
     ], "the copy keeps every prompt it copied"
-    assert kept.json()["forkedFromRevisionId"] is None, (
+    assert await _copied_from_list_id(factory, forked["id"]) is None, (
         "only the pointer goes, and it goes because the author asked for the "
         "list to go"
     )
+    assert kept.json()["copiedFrom"]["status"] == "deleted"
 
 
 async def test_an_author_cannot_copy_their_own_list(env):
