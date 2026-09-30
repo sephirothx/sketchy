@@ -20,16 +20,15 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.logging_config import configure_logging
 from app.auth.mail import (
+    DEFAULT_BATCH_SIZE,
     DeliveryResult,
     deliver_pending,
-    purge_expired_outbox_entries,
+    on_queued,
 )
 from app.services.readiness import LoopHealth
 
 
 logger = logging.getLogger(__name__)
-
-PURGE_INTERVAL_SECONDS = 3600.0
 
 DEFAULT_INTERVAL_SECONDS = 30.0
 
@@ -52,40 +51,57 @@ async def run_delivery_loop(
     interval_seconds: float | None = None,
     health: LoopHealth | None = None,
 ) -> None:
-    """Deliver due messages for ever, surviving every failure but cancellation."""
+    """Deliver due messages for ever, surviving every failure but cancellation.
+
+    Woken by every commit that queues a message (`on_queued`), and by the
+    interval for what nothing woke it for - a retry coming due, a message
+    queued by another process. A sweep that came back full sweeps again at
+    once: the rest of a burst is due now, not in `interval` (#1255).
+    """
     interval = interval_seconds or sweep_interval_seconds()
-    since_purge = 0.0
-    while True:
-        try:
-            result = await deliver_pending(session_factory)
-            # Hourly, not per sweep: retention has day-scale precision and the
-            # sweep runs every half minute. Rides the delivery loop so nobody
-            # has to remember to start a second one.
-            since_purge += interval
-            if since_purge >= PURGE_INTERVAL_SECONDS:
-                since_purge = 0.0
-                removed = await purge_expired_outbox_entries(session_factory)
-                if removed:
-                    logger.info("email sweep: purged %d expired rows", removed)
-            if health is not None:
-                health.record_success()
-            if result.attempted:
-                logger.info(
-                    "email sweep: %d sent, %d deferred, %d given up on",
-                    result.sent,
-                    result.deferred,
-                    result.failed,
-                )
-        except asyncio.CancelledError:
-            raise
-        except Exception:
-            # A sweep that raises must not take the loop down with it, or one
-            # bad row stops every later message. Counted rather than only
-            # logged, so a sweep failing every time is visible from outside.
-            if health is not None:
-                health.record_failure()
-            logger.exception("email sweep failed")
-        await asyncio.sleep(interval)
+    wake = asyncio.Event()
+    stop_listening = on_queued(wake.set)
+    try:
+        while True:
+            # Cleared before the sweep rather than after, so a message queued
+            # while this one sends is not left for the interval.
+            wake.clear()
+            full = await _sweep(session_factory, health)
+            if full:
+                await asyncio.sleep(0)
+                continue
+            with contextlib.suppress(TimeoutError):
+                await asyncio.wait_for(wake.wait(), timeout=interval)
+    finally:
+        stop_listening()
+
+
+async def _sweep(
+    session_factory: async_sessionmaker[AsyncSession], health: LoopHealth | None
+) -> bool:
+    """One delivery sweep; whether it took a whole batch."""
+    try:
+        result = await deliver_pending(session_factory)
+        if health is not None:
+            health.record_success()
+        if result.attempted:
+            logger.info(
+                "email sweep: %d sent, %d deferred, %d given up on",
+                result.sent,
+                result.deferred,
+                result.failed,
+            )
+        return result.attempted >= DEFAULT_BATCH_SIZE
+    except asyncio.CancelledError:
+        raise
+    except Exception:
+        # A sweep that raises must not take the loop down with it, or one
+        # bad row stops every later message. Counted rather than only
+        # logged, so a sweep failing every time is visible from outside.
+        if health is not None:
+            health.record_failure()
+        logger.exception("email sweep failed")
+        return False
 
 
 def start_delivery_loop(

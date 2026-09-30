@@ -898,3 +898,128 @@ async def test_a_relay_whose_certificate_does_not_verify_is_recorded_and_logged(
         assert "CERTIFICATE_VERIFY_FAILED" in caplog.text
     finally:
         await engine.dispose()
+
+
+async def _sent_within(transport, count: int, seconds: float) -> bool:
+    for _ in range(int(seconds / 0.02)):
+        if len(transport.sent) >= count:
+            return True
+        await asyncio.sleep(0.02)
+    return len(transport.sent) >= count
+
+
+async def test_a_queued_message_leaves_without_waiting_out_the_interval(tmp_path, monkeypatch):
+    """The loop slept a fixed 30 s after every sweep, so a verification or a
+    reset mail left 0-30 s after it was asked for - long enough to press
+    *Send again* and retire the first mail's token (#1255). A commit that
+    queued a message wakes it; one that rolled back does not."""
+    from app.auth.mail import MemoryTransport
+    from app.services import mail_delivery
+
+    engine, factory = await outbox(tmp_path, count=0)
+    transport = MemoryTransport()
+    sweeps = []
+
+    async def delivering(session_factory, **kwargs):
+        sweeps.append(1)
+        return await deliver_pending(session_factory, transport=transport, **kwargs)
+
+    monkeypatch.setattr(mail_delivery, "deliver_pending", delivering)
+    loop = asyncio.create_task(mail_delivery.run_delivery_loop(factory, interval_seconds=60))
+    try:
+        await asyncio.sleep(0.1)
+        assert sweeps == [1], "the first sweep, then the interval"
+        async with factory() as session:
+            async with session.begin():
+                queue_email(session, to_address="late@example.test", template=EmailTemplate.VERIFY_EMAIL,
+                            payload={"displayName": "Late", "token": "t"})
+        assert await _sent_within(transport, 1, 2.0), "woken by the commit, not the 60 s interval"
+
+        swept = len(sweeps)
+        async with factory() as session:
+            transaction = await session.begin()
+            queue_email(session, to_address="never@example.test", template=EmailTemplate.VERIFY_EMAIL,
+                        payload={"displayName": "Never", "token": "t"})
+            await transaction.rollback()
+        await asyncio.sleep(0.2)
+        assert len(sweeps) == swept, "a rolled-back message wakes nobody"
+    finally:
+        loop.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await loop
+        await engine.dispose()
+
+
+async def test_a_full_batch_is_followed_by_another_sweep_at_once(tmp_path, monkeypatch):
+    """A sign-up burst drained at a batch per interval - 50 every 30 s. A
+    sweep that came back full sweeps again straight away (#1255)."""
+    from app.auth.mail import DEFAULT_BATCH_SIZE, MemoryTransport
+    from app.services import mail_delivery
+
+    engine, factory = await outbox(tmp_path, count=DEFAULT_BATCH_SIZE + 5)
+    transport = MemoryTransport()
+
+    async def delivering(session_factory, **kwargs):
+        return await deliver_pending(session_factory, transport=transport, **kwargs)
+
+    monkeypatch.setattr(mail_delivery, "deliver_pending", delivering)
+    loop = asyncio.create_task(mail_delivery.run_delivery_loop(factory, interval_seconds=60))
+    try:
+        assert await _sent_within(transport, DEFAULT_BATCH_SIZE + 5, 5.0), len(transport.sent)
+    finally:
+        loop.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await loop
+        await engine.dispose()
+
+
+async def test_every_committed_transaction_that_queued_mail_wakes_the_sender(tmp_path):
+    """One session, several transactions: each wakes the sender once, a
+    savepoint's release is not the commit, a rolled-back message is
+    forgotten, and a callback that raises does not fail the commit
+    (#1255 review)."""
+    from app.auth.mail import on_queued
+
+    engine, factory = await outbox(tmp_path, count=0)
+    wakes: list[int] = []
+    stop = on_queued(lambda: wakes.append(1))
+
+    def queue(session, name: str) -> None:
+        queue_email(session, to_address=f"{name}@example.test", template=EmailTemplate.VERIFY_EMAIL,
+                    payload={"displayName": name, "token": "t"})
+
+    try:
+        async with factory() as session:
+            for index in range(3):
+                async with session.begin():
+                    queue(session, f"reused{index}")
+            assert len(wakes) == 3, "a reused session wakes the sender for every transaction"
+
+            async with session.begin():
+                queue(session, "saved")
+                async with session.begin_nested():
+                    pass
+                assert len(wakes) == 3, "a savepoint released is not the transaction committed"
+            assert len(wakes) == 4
+
+            transaction = await session.begin()
+            queue(session, "rolledback")
+            await transaction.rollback()
+            async with session.begin():
+                pass
+            assert len(wakes) == 4, "nothing pending after a rollback"
+
+        def broken() -> None:
+            raise RuntimeError("listener broke")
+
+        stop_broken = on_queued(broken)
+        try:
+            async with factory() as session:
+                async with session.begin():
+                    queue(session, "still")
+            assert len(wakes) == 5, "the other listeners still heard it, and the commit stood"
+        finally:
+            stop_broken()
+    finally:
+        stop()
+        await engine.dispose()

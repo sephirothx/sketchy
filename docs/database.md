@@ -824,7 +824,9 @@ Templates: `verify_email`, `reset_password`, `password_changed`, `account_banned
 `content_hidden`. **Nothing else is ever sent to a player's address.**
 
 **Flow.** Mail is queued in the **same transaction** as the action that causes it, and
-delivered by a sweeper (`EMAIL_SWEEP_SECONDS`, default 30). A suspension is therefore
+delivered by a sweeper woken by that transaction's commit, which sweeps again at once
+after a full batch and otherwise every `EMAIL_SWEEP_SECONDS` (default 30) for retries
+coming due (#1255). A suspension is therefore
 never undone by an unreachable relay, and a reset message is retried with backoff and
 then recorded as failed rather than disappearing. With no `SMTP_HOST` the messages are
 **logged instead of sent**, which is the only way the confirmation and reset flows can

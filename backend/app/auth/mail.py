@@ -41,7 +41,7 @@ from enum import StrEnum
 from typing import Protocol
 from uuid import UUID
 
-from sqlalchemy import delete, literal, select, update
+from sqlalchemy import delete, event, literal, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.deployment import is_production, public_base_url
@@ -393,6 +393,56 @@ async def recipient_locale(session: AsyncSession, user_id: UUID | None) -> str:
     return locale or InterfaceLocale.ENGLISH.value
 
 
+# Who hears that a message was queued, once the transaction holding it
+# commits (#1255): the delivery loop, while it runs, so a verification or a
+# reset mail leaves now rather than at the next sweep - up to
+# `EMAIL_SWEEP_SECONDS` later, long enough for a player to press *Send again*
+# and retire the token in the mail still waiting (R-AUTH-11a). On commit and
+# not on `queue_email`, so the sweep never runs ahead of the row it is for,
+# and a transaction that rolls back wakes nobody for nothing.
+#
+# The listeners are installed once per session and stay, and each
+# transaction marks itself pending: a `once` listener re-registered on a
+# reused session was dropped as a duplicate of its spent self, so the second
+# transaction woke nobody, and the release of a savepoint - which SQLAlchemy
+# also reports as `after_commit` - spent it before the real commit
+# (#1255 review).
+_queued_listeners: list[Callable[[], None]] = []
+_LISTENING = "mail.wake_listening"
+_PENDING = "mail.wake_pending"
+
+
+def on_queued(callback: Callable[[], None]) -> Callable[[], None]:
+    """Call `callback` after every commit that queued a message; returns the
+    way to stop. Runs on the event loop's thread, inside the commit."""
+    _queued_listeners.append(callback)
+
+    def stop() -> None:
+        if callback in _queued_listeners:
+            _queued_listeners.remove(callback)
+
+    return stop
+
+
+def _queued_and_committed(session) -> None:
+    if session.in_nested_transaction():
+        return  # a savepoint released; the transaction itself has not committed
+    if not session.info.pop(_PENDING, False):
+        return
+    for callback in list(_queued_listeners):
+        # Inside `commit()`, after the row is committed: a callback that
+        # raised would turn a ban or a reset that happened into an error.
+        try:
+            callback()
+        except Exception:  # noqa: BLE001 - logged, never the committer's problem
+            logger.exception("waking the mail sender failed")
+
+
+def _queued_and_rolled_back(session, previous_transaction) -> None:
+    if previous_transaction.parent is None:
+        session.info.pop(_PENDING, None)
+
+
 def queue_email(
     session: AsyncSession,
     *,
@@ -422,6 +472,13 @@ def queue_email(
         next_attempt_at=now or datetime.now(timezone.utc),
     )
     session.add(entry)
+    sync_session = getattr(session, "sync_session", None)
+    if sync_session is not None:
+        sync_session.info[_PENDING] = True
+        if not sync_session.info.get(_LISTENING):
+            sync_session.info[_LISTENING] = True
+            event.listen(sync_session, "after_commit", _queued_and_committed)
+            event.listen(sync_session, "after_soft_rollback", _queued_and_rolled_back)
     return entry
 
 
