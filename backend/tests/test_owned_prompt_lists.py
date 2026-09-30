@@ -4,7 +4,7 @@ from __future__ import annotations
 from uuid import UUID
 
 import pytest
-from sqlalchemy import func, select
+from sqlalchemy import func, select, update
 
 from app.db.models import (
     PromptListRevision,
@@ -700,6 +700,19 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
         assert await repo.delete_owned(owner_id, created.id) is True
 
         later = datetime.now(timezone.utc) + timedelta(days=2)
+        # Held while the report waits: a takedown decided later has to find
+        # the word among its owner's lists (#1354).
+        held = await reclaim_retired_prompt_lists(factory, now=later)
+        assert held.lists_deleted == 0 and held.revisions_deleted == 0
+        # Exempt while held, not overdue: a held list is not selected, so held
+        # lists cannot fill the batch and starve those behind them (#478).
+        assert held.lists_examined == 0 and held.backlog == 0
+        async with factory() as session, session.begin():
+            await session.execute(
+                update(PromptContentReport).values(
+                    status="dismissed", reviewed_at=later, decision_group_id=generate_uuid()
+                )
+            )
         result = await reclaim_retired_prompt_lists(factory, now=later)
         assert result.lists_deleted == 1 and result.revisions_deleted == 1
         assert result.versions_deleted == 1 and result.concepts_deleted == 1
