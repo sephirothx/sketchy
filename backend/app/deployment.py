@@ -274,9 +274,10 @@ def validate_worker_topology(environ: Mapping[str, str] | None = None) -> None:
             )
 
 
-#: Threads each of the history write's two encode pools gets (#976). Two by
-#: default: the work is pure Python sharing the GIL, so more threads buy
-#: overlap with the database rather than parallelism.
+#: Threads each of the history write's two encode pools gets (#976); the
+#: drawings' pool (`encode_pool.py`) also runs the integrity audit's drawing
+#: checks (#1251). Two by default: the work is pure Python sharing the GIL,
+#: so more threads buy overlap with the database rather than parallelism.
 HISTORY_ENCODE_WORKERS = 2
 
 

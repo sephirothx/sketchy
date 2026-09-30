@@ -33,6 +33,7 @@ SMOKE_ARGS: dict[str, tuple[str, ...]] = {
     "guest_name_check": ("--online", "20", "--samples", "3"),
     "history_row_footprint": ("--games", "2"),
     "index_plans": ("--scale", "0.01"),
+    "integrity_audit_stall": ("--games", "2", "--seats", "3", "--rounds", "1", "--drawings", "8"),
     "index_write_cost": ("--sessions", "200", "--messages", "500"),
     "owned_list_io": ("--prompts", "20", "--aliases", "2", "--burst", "2"),
     "pool_checkout_ping": ("--sessions", "20"),

@@ -24,6 +24,13 @@ bad one:
   turn's `guesser_count` against its eligible outcome rows;
 - `alias_chains` - no merged identity points at another merged identity.
 
+Off the request path is not off the loop: the audit runs in the process
+every room shares, so what scales with the rows it reads is kept off the loop
+too (#1251). A stored drawing's hash and decodes run on the history encode
+pool (`app/encode_pool.py`), and the games check's ledger sums and guesser
+counts are compared by the database, which hands back only the rows that
+disagree rather than every outcome of a hundred games.
+
 A check reports and does not repair: a mismatch is counted, logged, and
 written as one `audit_events` row naming the check and the row id - never its
 content - for an operator to read and act on with the rebuild commands.
@@ -42,7 +49,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-from collections import defaultdict
 import contextlib
 from dataclasses import dataclass, field
 import json
@@ -361,52 +367,54 @@ async def _games_slice(session: AsyncSession, cursor: str | None) -> SliceResult
     game_ids = [game.id for game in games]
     result = SliceResult(rows=len(games), cursor=str(game_ids[-1]), complete=len(games) < GAME_SLICE_ROWS)
 
+    # Both comparisons are made by the database, which returns only the rows
+    # that disagree. Pulled into Python, a slice of maximum-size games (16
+    # seats, 10 rounds) was 240,000 outcome rows and a 514 ms stall of the
+    # loop every room shares (#1251).
+
     # The ledger: every participant's events sum to their final score. Games
     # recorded before the ledger existed (version 0) carry no events to sum.
     ledgered = [game.id for game in games if game.score_ledger_version >= 1]
     if ledgered:
-        sums = dict(
-            (
-                await session.execute(
-                    select(ScoreEvent.participant_id, func.sum(ScoreEvent.points_delta))
-                    .where(ScoreEvent.game_id.in_(ledgered))
-                    .group_by(ScoreEvent.participant_id)
-                )
-            ).all()
+        sums = (
+            select(ScoreEvent.participant_id, func.sum(ScoreEvent.points_delta).label("total"))
+            .where(ScoreEvent.game_id.in_(ledgered))
+            .group_by(ScoreEvent.participant_id)
+            .subquery()
         )
-        for seat_id, game_id, final_score in (
+        for (game_id,) in (
             await session.execute(
-                select(GameParticipant.id, GameParticipant.game_id, GameParticipant.final_score).where(
-                    GameParticipant.game_id.in_(ledgered)
+                select(GameParticipant.game_id)
+                .outerjoin(sums, sums.c.participant_id == GameParticipant.id)
+                .where(
+                    GameParticipant.game_id.in_(ledgered),
+                    func.coalesce(sums.c.total, 0) != GameParticipant.final_score,
                 )
             )
         ).all():
-            if int(sums.get(seat_id) or 0) != final_score:
-                result.mismatches.append(Mismatch("games", str(game_id), "ledger_sum"))
+            result.mismatches.append(Mismatch("games", str(game_id), "ledger_sum"))
 
     # Guesser counts: a turn's count equals its eligible outcome rows,
-    # wherever it has outcome rows at all (the writer's own rule).
-    outcome_counts: dict[UUID, list[int]] = defaultdict(lambda: [0, 0])
-    for turn_id, is_eligible in (
+    # wherever it has outcome rows at all (the writer's own rule) - which the
+    # inner join below is: a turn with none has no group to compare.
+    eligible = (
+        select(
+            TurnParticipantOutcome.turn_id,
+            func.count().filter(TurnParticipantOutcome.eligible).label("eligible"),
+        )
+        .join(TurnRecord, TurnRecord.id == TurnParticipantOutcome.turn_id)
+        .where(TurnRecord.game_id.in_(game_ids))
+        .group_by(TurnParticipantOutcome.turn_id)
+        .subquery()
+    )
+    for (game_id,) in (
         await session.execute(
-            select(TurnParticipantOutcome.turn_id, TurnParticipantOutcome.eligible)
-            .join(TurnRecord, TurnRecord.id == TurnParticipantOutcome.turn_id)
-            .where(TurnRecord.game_id.in_(game_ids))
+            select(TurnRecord.game_id)
+            .join(eligible, eligible.c.turn_id == TurnRecord.id)
+            .where(eligible.c.eligible != TurnRecord.guesser_count)
         )
     ).all():
-        counts = outcome_counts[turn_id]
-        counts[0] += 1
-        counts[1] += 1 if is_eligible else 0
-    for turn_id, game_id, guesser_count in (
-        await session.execute(
-            select(TurnRecord.id, TurnRecord.game_id, TurnRecord.guesser_count).where(
-                TurnRecord.game_id.in_(game_ids)
-            )
-        )
-    ).all():
-        counts = outcome_counts.get(turn_id)
-        if counts is not None and counts[0] and counts[1] != guesser_count:
-            result.mismatches.append(Mismatch("games", str(game_id), "guesser_count"))
+        result.mismatches.append(Mismatch("games", str(game_id), "guesser_count"))
     return result
 
 

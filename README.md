@@ -803,7 +803,7 @@ process. These deployment settings can be tuned without code changes:
 | `EXPORT_MAX_BYTES` | `67108864` | Ceiling on one export document, in JSON bytes before compression; past it the job fails as `too_large` |
 | `HISTORY_HANDOFF_SWEEP_SECONDS` | `60` | How often the finished-game handoff loop looks for staged games nobody woke it for, retries the ones that are due, and reclaims a claim a crash left behind |
 | `HISTORY_HANDOFF_MAX_BYTES` | `16777216` | Ceiling on one staged finished game (deflated); past it the game is lost and counted as `too_large` |
-| `HISTORY_ENCODE_WORKERS` | `2` | Threads that encode a finished game, in each of the two pools that do it (the envelope's and the drawings'), 1-16. The encode is CPU off the event loop, so this is how many endings can be encoded at once before the rest queue; a host that ends many games at once can widen it, and a wrong value is refused at startup rather than served as the default |
+| `HISTORY_ENCODE_WORKERS` | `2` | Threads that encode a finished game, in each of the two pools that do it (the envelope's and the drawings'), 1-16. The drawings' pool also runs the integrity audit's stored-drawing checks, 16 drawings a job (#1251). The encode is CPU off the event loop, so this is how many endings can be encoded at once before the rest queue; a host that ends many games at once can widen it, and a wrong value is refused at startup rather than served as the default |
 | `ROOM_GLOBAL_LIMIT` | `200` | Live rooms this process will hold at once |
 | `ROOM_PER_ACCOUNT_LIMIT` | `3` | Live rooms one account may have open |
 | `ROOM_PER_ADDRESS_LIMIT` | `6` | Live rooms opened from one address (an IPv4 address or an IPv6 /64) that may be open at once (#1232) |
@@ -2132,6 +2132,9 @@ TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/o
 
 # An account export when the owner saved a 500-prompt list 300 times: worst loop wait, build, memory (#1250)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/export_list_revisions.py --saves 300
+
+# The integrity audit's worst loop wait: a games slice of 100 maximum-size games, a walk of 1,000 drawings (#1251)
+TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/integrity_audit_stall.py --games 100 --drawings 1000
 
 # Authorizing a room's lists, cold and again unchanged: 20 agnostic lists in a mixed room (#1237)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/authorize_selection.py --language zxx --room mixed
