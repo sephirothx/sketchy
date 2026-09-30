@@ -11,7 +11,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
-from app.api.moderation import create_moderation_router
+from app.api.moderation import _record_takedown, create_moderation_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import (
@@ -71,6 +71,18 @@ async def register(client: AsyncClient, username: str) -> dict:
     )
     assert response.status_code == 200
     return response.json()
+
+
+async def taken_down(session, version: PromptVersion) -> None:
+    """Hide a word the way a moderator's decision does: its state, and the
+    takedown record its owner's saves read (#1357)."""
+    version.moderation_state = "hidden"
+    await _record_takedown(
+        session,
+        concept_id=version.concept_id,
+        decision="hidden",
+        reported_owner_user_id=None,
+    )
 
 
 async def published(factory, prompt_list_id: str) -> None:
@@ -316,7 +328,8 @@ async def test_a_takedown_decided_after_its_list_was_deleted_still_reaches_the_o
     """The owner deletes a list while a report on one of its words waits. A
     report outlives the reclaim's day easily; reclaiming the list's revisions
     then left the word tied to none of the owner's lists, and a takedown
-    decided afterwards let them type it into the next one as active (#1354)."""
+    decided afterwards let them type it into the next one as active (#1354).
+    The decision records the takedown for the owner the report names (#1357)."""
     new_client, factory, prompts = env
     owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
     owner = await register(owner_http, "RetiredOwner")
@@ -338,8 +351,10 @@ async def test_a_takedown_decided_after_its_list_was_deleted_still_reaches_the_o
     assert await prompts.delete_owned(owner["id"], reported.id) is True
     later = datetime.now(timezone.utc) + timedelta(days=2)
 
-    waiting = await reclaim_retired_prompt_lists(factory, now=later)
-    assert waiting.lists_deleted == 0 and waiting.revisions_deleted == 0, "the report still waits"
+    # The report is no hold on the list any more (#1357): the decision below
+    # records the takedown against the owner the report names.
+    reclaimed = await reclaim_retired_prompt_lists(factory, now=later)
+    assert reclaimed.lists_deleted == 1
 
     decided = await moderator_http.patch(
         f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
@@ -351,9 +366,6 @@ async def test_a_takedown_decided_after_its_list_was_deleted_still_reaches_the_o
         prompts=(PromptListEntryInput(answer="borderline word"),),
     )
     assert again.prompts[0].moderation_state == PromptContentModerationState.HIDDEN.value
-    # Decided hidden, the revision is the takedown's record, kept as before.
-    kept = await reclaim_retired_prompt_lists(factory, now=later)
-    assert kept.revisions_deleted == 0
 
 
 async def test_the_same_content_cannot_be_reported_twice_while_it_waits(env):
@@ -1052,7 +1064,7 @@ async def test_editing_a_hidden_prompt_does_not_bring_it_back(env, edit):
     async with factory() as session:
         async with session.begin():
             version = await session.get(PromptVersion, UUID(hidden_entry.prompt_version_id))
-            version.moderation_state = "hidden"
+            await taken_down(session, version)
             version.moderated_by_user_id = UUID(moderator["id"])
             version.moderated_at = hidden_at
 
@@ -1171,7 +1183,7 @@ async def _list_with_a_hidden_word(env, owner_name: str):
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(hidden.prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
     return owner, prompts, created, safe, third
 
 
@@ -1235,7 +1247,7 @@ async def test_restoring_a_reported_prompt_restores_every_version(env):
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(word.prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
     edited = await prompts.update_owned(
         owner["id"], created.id, expected_version=created.version, name=created.name,
         description="",
@@ -1368,7 +1380,7 @@ async def test_a_word_hidden_in_one_list_is_hidden_in_the_owners_others(env):
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(first.prompts[0].prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
 
     fresh = await prompts.create_owned(
         owner["id"], name="Fresh", description="", language="en",
@@ -1426,7 +1438,7 @@ async def test_a_hidden_word_follows_the_owner_into_lists_in_no_language(env):
                 english.prompts[0].prompt_version_id,
                 agnostic.prompts[0].prompt_version_id,
             ):
-                (await session.get(PromptVersion, UUID(version_id))).moderation_state = "hidden"
+                await taken_down(session, await session.get(PromptVersion, UUID(version_id)))
 
     into_agnostic = await prompts.create_owned(
         owner["id"], name="Pokémon", description="", language="zxx",
@@ -1462,7 +1474,7 @@ async def test_an_agnostic_list_meets_a_hidden_word_in_that_word_s_own_fold(env)
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(german.prompts[0].prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
 
     agnostic = await prompts.create_owned(
         owner["id"], name="Mixed", description="", language="zxx",
@@ -1488,7 +1500,7 @@ async def test_a_hidden_word_typed_as_written_into_an_agnostic_list_stays_hidden
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(german.prompts[0].prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
 
     as_written = await prompts.create_owned(
         owner["id"], name="Written", description="", language="zxx",
@@ -1515,7 +1527,7 @@ async def test_a_hidden_agnostic_word_meets_its_spellings_in_every_room_s_fold(e
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(first.prompts[0].prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
 
     second = await prompts.create_owned(
         owner["id"], name="More", description="", language="zxx",
@@ -1536,7 +1548,7 @@ async def test_a_hidden_agnostic_word_meets_its_spellings_in_every_room_s_fold(e
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(third.prompts[0].prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
     fourth = await prompts.create_owned(
         owner["id"], name="More hearts", description="", language="zxx",
         prompts=(PromptListEntryInput(answer="coeur"),),
@@ -1641,9 +1653,10 @@ async def test_restoring_a_word_restores_the_copies_its_takedown_was_carried_to(
 
 
 async def test_a_takedown_outlives_its_deleted_list(env):
-    """#1091 review: the lookup reaches hidden words through list revisions,
+    """#1091 review: the lookup reached hidden words through list revisions,
     and reclaiming a deleted list's unpinned revisions a day later let the word
-    be typed into a new list active. A revision holding a takedown is kept."""
+    be typed into a new list active. The takedown is its own record now
+    (#1357), so the revisions go and the word stays hidden."""
     from datetime import datetime, timedelta, timezone
 
     from app.services.prompt_reclaim import reclaim_retired_prompt_lists
@@ -1658,7 +1671,7 @@ async def test_a_takedown_outlives_its_deleted_list(env):
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(doomed.prompts[0].prompt_version_id))
-            row.moderation_state = "hidden"
+            await taken_down(session, row)
             row.moderated_at = datetime.now(timezone.utc)
     assert await prompts.delete_owned(owner["id"], doomed.id)
     await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
@@ -1671,17 +1684,15 @@ async def test_a_takedown_outlives_its_deleted_list(env):
 
 
 
-@pytest.mark.parametrize("gone", ["deleted", "purged"])
-async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env, gone):
-    """The takedown pins its revision only while the list has an owner whose
-    saves look there; an erased account's retired list is reclaimed as any
-    other, rather than keeping its hidden text for good. Deleting an account
-    keeps its row as a tombstone and its lists pointing at it, so the real
-    route is the one to check: faking the erasure with no owner at all passed
-    while the real one kept the text (#1354 review)."""
+async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
+    """A takedown record exists to stop its owner typing the word back in; an
+    erased account saves nothing, so the record goes with it and the hidden
+    text is reclaimed with the list rather than kept for good (#1354 review,
+    #1357). Deleting an account keeps its row as a tombstone, so the real
+    route is the one to check."""
     from datetime import datetime, timedelta, timezone
 
-    from app.db.models import PromptListRevision
+    from app.db.models import PromptListRevision, PromptTakedown
     from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 
     new_client, factory, prompts = env
@@ -1694,21 +1705,21 @@ async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env, gone):
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptVersion, UUID(doomed.prompts[0].prompt_version_id))
-            row.moderation_state = "hidden"
-    if gone == "deleted":
-        deleted = await owner_http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
-        assert deleted.status_code == 200, deleted.text
-    else:
-        # A purged account's row is gone and its lists' owner set null.
-        assert await prompts.delete_owned(owner["id"], doomed.id)
-        async with factory() as session:
-            async with session.begin():
-                (await session.get(PromptList, UUID(doomed.id))).owner_user_id = None
+            await taken_down(session, row)
+    deleted = await owner_http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
+    assert deleted.status_code == 200, deleted.text
     await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
     async with factory() as session:
+        assert await session.scalar(select(func.count()).select_from(PromptTakedown)) == 0
         left = await session.scalar(
             select(func.count(PromptListRevision.id)).where(
                 PromptListRevision.prompt_list_id == UUID(doomed.id)
             )
         )
+        text_left = await session.scalar(
+            select(func.count(PromptVersion.id)).where(
+                PromptVersion.canonical_answer == "offensive prompt"
+            )
+        )
     assert left == 0
+    assert text_left == 0

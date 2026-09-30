@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c0d1e2f3a4b6_polish_language.py` (#771). Both this line and the table
+`d0e1f2a3b4c9_prompt_takedown_records.py` (#1357). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-61 tables in eight domains.
+62 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -141,7 +141,7 @@ erDiagram
 | --- | --- |
 | **Server & rooms** | `app_config`, `room_code_reservations`, `room_presets`, `planned_shutdown_abandonments` |
 | **Accounts** | `users`, `auth_sessions`, `auth_tokens`, `auth_rate_limit_buckets`, `auth_login_lockouts`, `user_second_factors`, `user_recovery_codes`, `friendships`, `identity_aliases`, `user_settings`, `user_stats_daily`, `data_exports`, `external_identities`, `uploaded_avatar_assets`, `email_outbox`, `user_passkeys`, `webauthn_challenges` |
-| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
+| **Moderation** | `audit_events`, `player_reports`, `player_report_message_evidence`, `player_report_drawing_evidence`, `prompt_content_reports`, `prompt_takedowns`, `user_bans`, `user_warnings`, `role_change_notices`, `user_blocks` |
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
@@ -1149,6 +1149,30 @@ or Hidden, with actor/time provenance and an append-only audit event. A dismissa
 cannot mutate content. Snapshots survive list and account deletion even after the target
 foreign keys are cleared.
 
+### `prompt_takedowns`
+`owner_user_id` (CASCADE) · `concept_id` (CASCADE) · `created_at`. Composite primary key
+on `(owner_user_id, concept_id)`, plus `ix_prompt_takedowns_concept`.
+
+**Which words an owner may not type back in** (R-MOD-11, #1357). A moderator hiding a
+prompt writes one row for the owner the report names — whose list may have been deleted
+since — and one for every owner whose lists hold the concept now. A save reads the rows for
+its owner, joined to the hidden versions of those concepts in the languages that share
+words with the list (#821), and a new entry matching one of their spellings is born hidden
+with the decision's byline. That entry's concept is recorded too, so the word follows it
+into a list only it shares words with, and a later decision on the original finds it by
+its byline. A decision that leaves the word up deletes the rows naming it, and the
+account's deletion deletes its rows explicitly — the CASCADE never fires, since deletion
+tombstones the user row.
+
+The row names the concept, not a spelling: the decision is the concept's (#1020), and its
+versions carry the text, the aliases and the byline the save compares against, so the
+orphan collection keeps a concept a row names. Until this table the record was implicit:
+the save searched every revision of every list the owner had ever held, so revisions had to
+outlive their lists as long as a takedown did, and the reclaim carried holds for hidden
+words and pending reports (#1091, #1354) that produced three review bugs in one epic.
+
+No retention of its own: a row lives as long as the takedown and the account.
+
 ### `bug_reports`
 A player's report that the app itself is broken. **Not a moderation row**: it is about
 the software rather than a person, carries build and diagnostic data rather than safety
@@ -1876,10 +1900,12 @@ An immutable, language-specific wording.
 A moderator's decision is the concept's, not one wording's: resolving a report sets
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
 concept, an owner's edit that writes a new version (an alias added, an answer respelled)
-carries them to it, and a new version whose answer or alias matches any prompt that is hidden in
-any list its owner has ever held, in the same language or in no language (`zxx`, which shares its words with every language, #821) — the same word when a room that plays both keys them as one word (its canonical key, not the spellings a guess is accepted under), so a hidden German **Bär** stops an agnostic **Bär** but not **Bar**, and between two agnostic lists, played in every room, any room's fold counts (#1091) — a word typed back in, into
+carries them to it, and a new version whose answer or alias matches any prompt its owner has a
+takedown record for (`prompt_takedowns`, §5), in the same language or in no language (`zxx`, which shares its words with every language, #821) — the same word when a room that plays both keys them as one word (its canonical key, not the spellings a guess is accepted under), so a hidden German **Bär** stops an agnostic **Bär** but not **Bar**, and between two agnostic lists, played in every room, any room's fold counts (#1091) — a word typed back in, into
 this list or another, or another entry respelled into it — is
-born with them — so a hidden word stays hidden (#1020). A concept belongs to
+born with them — so a hidden word stays hidden (#1020). A concept born hidden that way is
+recorded as the owner's takedown too, so the word reaches a list only it shares words with,
+and a restore finds it. A concept belongs to
 one list; copies mint their own. Bundled seed versions are the operator's own editions and
 start `active`.
 
@@ -1941,14 +1967,11 @@ revision before the deletion to finish and write its game (R-LIST-07): the unpin
 revisions and their items, then the list row itself once no revision is left, then the
 prompt versions and concepts that no revision, list, turn, offer, usage fact or content
 report names any more, aliases cascading with them. A list a game pinned stays as a
-non-discoverable, private tombstone (`deleted_at` set). A revision holding a prompt a moderator hid counts as
-pinned too, while its list has an owner: it is where an owner's saves look for the takedown, so reclaiming it would
-let the word into a new list a day after its list was deleted (#1091). So does one holding a prompt a report still
-waits on, until the report is decided: a report outlives the grace easily, and a takedown decided after the reclaim
-reached none of the owner's next lists (#1354). Decided hidden, the revision is then kept as the takedown's record;
-dismissed or left active, it goes on the next pass. Both holds are for an owner who can still save a list, so neither
-applies once the owner's account is deleted — its row stays as a tombstone and its lists keep pointing at it, which
-until #1354's review kept an erased account's hidden text for good.
+non-discoverable, private tombstone (`deleted_at` set). A hidden word is no hold: until
+#1357 an owner's saves looked for takedowns in their revisions, so a revision holding a
+hidden word, or one a pending report named, was kept too (#1091, #1354) — and those holds
+produced three review bugs. The takedown is its own record now (`prompt_takedowns`), and a
+reported version is kept by its report.
 
 That tombstone is **permanent, and the sweep no longer selects it**. A pin is a finished
 game's provenance and never lapses, so a list whose every remaining revision is pinned
@@ -1960,8 +1983,7 @@ The candidate predicate now requires a list to have at least one unpinned revisi
 none at all, and the sweep's backlog is measured over that same set — so a permanent
 tombstone is exempt rather than overdue, and the lists behind one are late like any
 other row. It is re-evaluated on every run rather than recorded, so a list becomes a
-candidate again by itself when a hold lapses: a pending report decided, or the owner's
-account deleted.
+candidate again by itself if a pin ever lapses.
 
 Account erasure retires the account's lists the same way, with the name and description
 erased as authored copy.
@@ -2146,9 +2168,9 @@ from the superseding save, not from the revision's own creation, because a room 
 pinned it when its game started plays it to the end - unless it is the current revision
 (never superseded), or a finished game pins it, a fork was copied from it (the copy
 count reads `forked_from_revision_id`), it is a copy's first revision (the one carrying
-that pointer, which the count, the credit and the lineage all read), or it holds a hidden
-prompt (the takedown record, #1091) or one a pending report names (so a takedown decided
-later still reaches the owner's next list; the same hold as the retired-list reclaim's, #1354). Versions and concepts only the deleted
+that pointer, which the count, the credit and the lineage all read). A hidden prompt, or
+one a pending report names, is not a hold since #1357: the owner's takedown record keeps
+the word. Versions and concepts only the deleted
 revisions named go with them, as in the retired-list reclaim.
 
 `prompt_list_revision_items`: `revision_id` + `prompt_version_id` composite **PK** ·
@@ -2426,8 +2448,8 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
-| Superseded revisions of live prompt lists | Until the save that superseded one is a day old (`RETIRED_LIST_GRACE`); each hourly pass deletes as many as the row budget allows, items counted | 24 h | A live list's current revision, and any a finished game pins, a fork was copied from, a copy records its origin in, or a hidden prompt is recorded in, for ever; one holding a prompt a report waits on, until it is decided | `services.prompt_reclaim.reclaim_superseded_revisions`; the overdue age is measured from the superseding save (#1258) | `superseded_list_revisions` |
-| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever; while the owner's account lives, one a hidden prompt is recorded in, and one holding a prompt a report waits on until it is decided | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set | `retired_prompt_lists` |
+| Superseded revisions of live prompt lists | Until the save that superseded one is a day old (`RETIRED_LIST_GRACE`); each hourly pass deletes as many as the row budget allows, items counted | 24 h | A live list's current revision, and any a finished game pins, a fork was copied from, or a copy records its origin in, for ever | `services.prompt_reclaim.reclaim_superseded_revisions`; the overdue age is measured from the superseding save (#1258) | `superseded_list_revisions` |
+| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever. A hidden word is kept by its owner's takedown record (`prompt_takedowns`), not by a revision | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set | `retired_prompt_lists` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep

@@ -12,7 +12,7 @@ from uuid import UUID
 from fastapi import APIRouter, HTTPException, Query, Request, Response
 from pydantic import ConfigDict, Field, field_validator
 from app.request_text import ControlFreeModel
-from sqlalchemy import and_, func, or_, select, update
+from sqlalchemy import and_, delete, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import defer, selectinload
@@ -67,6 +67,7 @@ from app.db.models import (
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
+    PromptTakedown,
     PromptVersion,
     PromptVersionAlias,
     RoomMessage,
@@ -1080,37 +1081,109 @@ async def _carry_decision_to_copies(
         or owner_user_id is None
     ):
         return
+    # The copies are the owner's own takedown records (#1357): a save that
+    # carries a hidden word onto a new concept records that concept too, so a
+    # copy is found whether or not a list still holds it.
+    carried = (
+        PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
+        # Not narrowed by language: the byline - this decision's own
+        # instant and moderator - is what marks a copy it was carried to,
+        # and a carry can cross languages through a list in no language
+        # (#821): French "pain" hidden, typed into an Any-language list,
+        # and from there into English. A restore that stopped at the
+        # original's language left that copy hidden with nobody to decide it.
+        PromptVersion.moderated_at == decided_at,
+        (
+            PromptVersion.moderated_by_user_id == decided_by
+            if decided_by is not None
+            else PromptVersion.moderated_by_user_id.is_(None)
+        ),
+    )
+    concept_ids = set(
+        (
+            await session.scalars(
+                select(PromptVersion.concept_id.distinct()).where(
+                    *carried,
+                    PromptVersion.concept_id.in_(
+                        select(PromptTakedown.concept_id).where(
+                            PromptTakedown.owner_user_id == owner_user_id
+                        )
+                    ),
+                )
+            )
+        ).all()
+    )
+    if not concept_ids:
+        return
     await session.execute(
         update(PromptVersion)
-        .where(
-            PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
-            # Not narrowed by language: the byline - this decision's own
-            # instant and moderator - is what marks a copy it was carried to,
-            # and a carry can cross languages through a list in no language
-            # (#821): French "pain" hidden, typed into an Any-language list,
-            # and from there into English. A restore that stopped at the
-            # original's language left that copy hidden with nobody to decide it.
-            PromptVersion.moderated_at == decided_at,
-            (
-                PromptVersion.moderated_by_user_id == decided_by
-                if decided_by is not None
-                else PromptVersion.moderated_by_user_id.is_(None)
-            ),
-            select(PromptListRevisionItem.revision_id)
-            .join(PromptListRevision, PromptListRevision.id == PromptListRevisionItem.revision_id)
-            .join(PromptList, PromptList.id == PromptListRevision.prompt_list_id)
-            .where(
-                PromptListRevisionItem.prompt_version_id == PromptVersion.id,
-                PromptList.owner_user_id == owner_user_id,
-            )
-            .exists(),
-        )
+        .where(*carried, PromptVersion.concept_id.in_(concept_ids))
         .values(
             moderation_state=decision,
             moderated_by_user_id=reviewer_id,
             moderated_at=now,
         )
         .execution_options(synchronize_session=False)
+    )
+    if decision != PromptContentModerationState.HIDDEN.value:
+        await session.execute(
+            delete(PromptTakedown).where(
+                PromptTakedown.owner_user_id == owner_user_id,
+                PromptTakedown.concept_id.in_(concept_ids),
+            )
+        )
+
+
+async def _record_takedown(
+    session: AsyncSession,
+    *,
+    concept_id: UUID,
+    decision: str,
+    reported_owner_user_id: UUID | None,
+) -> None:
+    """Record who may not type a hidden word back in, or forget it once it is
+    left up (R-MOD-11, #1357).
+
+    A hidden word gets one row for the owner it was reported against - whose
+    list may have been deleted since - and for every owner whose lists hold
+    the concept now; an erased account saves nothing, so it gets none. Any
+    other decision is the word's too, so it removes every row naming it.
+    """
+    if decision != PromptContentModerationState.HIDDEN.value:
+        await session.execute(
+            delete(PromptTakedown).where(PromptTakedown.concept_id == concept_id)
+        )
+        return
+    holders = select(PromptList.owner_user_id).join(
+        Prompt, Prompt.prompt_list_id == PromptList.id
+    ).where(Prompt.concept_id == concept_id, PromptList.owner_user_id.is_not(None))
+    owners = set(
+        (
+            await session.scalars(
+                select(User.id).where(
+                    or_(User.id == reported_owner_user_id, User.id.in_(holders))
+                    if reported_owner_user_id is not None
+                    else User.id.in_(holders),
+                    User.state != AccountState.DELETED.value,
+                )
+            )
+        ).all()
+    )
+    if not owners:
+        return
+    recorded = set(
+        (
+            await session.scalars(
+                select(PromptTakedown.owner_user_id).where(
+                    PromptTakedown.concept_id == concept_id,
+                    PromptTakedown.owner_user_id.in_(owners),
+                )
+            )
+        ).all()
+    )
+    session.add_all(
+        PromptTakedown(owner_user_id=owner_id, concept_id=concept_id)
+        for owner_id in sorted(owners - recorded)
     )
 
 
@@ -2352,6 +2425,12 @@ def create_moderation_router(
                                 moderated_by_user_id=reviewer.id,
                                 moderated_at=now,
                             )
+                        )
+                        await _record_takedown(
+                            session,
+                            concept_id=target.concept_id,
+                            decision=body.moderation_state,
+                            reported_owner_user_id=report.reported_owner_user_id,
                         )
                         await _carry_decision_to_copies(
                             session,

@@ -42,6 +42,7 @@ from app.db.models import (
     PromptListRevisionItem,
     PromptListRevisionTag,
     PromptListStar,
+    PromptTakedown,
     PromptTag,
     PromptUsageBatch,
     PromptUsageFact,
@@ -5163,53 +5164,46 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # ceiling was ~21,000 objects on every save (#1236).
         previous = await _revision_versions(session, prompt_list.id, prompt_list.version)
         current_by_concept = {version.concept_id: version for version in previous}
-        # Every key a prompt this list has ever held answers to, if a
-        # moderator hid it: a word deleted and typed in again - now, or a save
-        # later - is a new concept, and one existing entry respelled into it
-        # is a new version of another; either way, born with that entry's
-        # `active` it undid the takedown in a couple of clicks (#1020 review).
-        # A decision covers every version of its concept, so any one says it.
-        # And not this list's alone: a word hidden in one of the owner's lists
-        # typed into another of theirs - or a new one - is the same word
-        # (#1091), so every list the owner has ever held is asked, in the
-        # languages where the word means the same thing - this list's own, and
-        # no language at all (#821, `languages_sharing_words`). Anchored on
-        # the hidden side - rare, and indexed - with the histories asked only
-        # about those, so a save costs the number of hidden versions rather
-        # than every item of every revision.
-        in_scope = (
-            PromptList.owner_user_id == prompt_list.owner_user_id
-            if prompt_list.owner_user_id is not None
-            else PromptList.id == prompt_list.id
-        )
+        # Every word the owner may not type back in: a word deleted and typed
+        # in again - now, or a save later - is a new concept, and one existing
+        # entry respelled into it is a new version of another; either way,
+        # born with that entry's `active` it undid the takedown in a couple of
+        # clicks (#1020 review). And not this list's alone: a word hidden in
+        # one of the owner's lists typed into another of theirs - or a new
+        # one - is the same word (#1091), in the languages where the word
+        # means the same thing - this list's own, and no language at all
+        # (#821, `languages_sharing_words`). The owner's takedown records say
+        # which concepts those are (#1357); until they existed every revision
+        # of every list the owner had ever held was searched, and revisions
+        # had to outlive their lists to be found. A decision covers every
+        # version of its concept, so each one's spellings are asked.
         hidden_versions = (
-            await session.scalars(
-                select(PromptVersion)
-                .where(
-                    PromptVersion.moderation_state
-                    == PromptContentModerationState.HIDDEN.value,
-                    PromptVersion.language.in_(
-                        languages_sharing_words(prompt_list.language)
-                    ),
-                    select(PromptListRevisionItem.revision_id)
-                    .join(
-                        PromptListRevision,
-                        PromptListRevision.id == PromptListRevisionItem.revision_id,
-                    )
-                    .join(PromptList, PromptList.id == PromptListRevision.prompt_list_id)
+            (
+                await session.scalars(
+                    select(PromptVersion)
                     .where(
-                        PromptListRevisionItem.prompt_version_id == PromptVersion.id,
-                        in_scope,
+                        PromptVersion.moderation_state
+                        == PromptContentModerationState.HIDDEN.value,
+                        PromptVersion.language.in_(
+                            languages_sharing_words(prompt_list.language)
+                        ),
+                        PromptVersion.concept_id.in_(
+                            select(PromptTakedown.concept_id).where(
+                                PromptTakedown.owner_user_id
+                                == prompt_list.owner_user_id
+                            )
+                        ),
                     )
-                    .exists(),
-                )
-                .options(
-                    selectinload(PromptVersion.version_aliases).selectinload(
-                        PromptVersionAlias.alias
+                    .options(
+                        selectinload(PromptVersion.version_aliases).selectinload(
+                            PromptVersionAlias.alias
+                        )
                     )
                 )
-            )
-        ).unique().all()
+            ).unique().all()
+            if prompt_list.owner_user_id is not None
+            else ()
+        )
         # A hidden word and an entry are the same word when a room that plays
         # both keys them as one word - its canonical key, not the wider set a
         # guess is accepted under (#821 review) - so each pair is
@@ -5277,6 +5271,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
 
         resolved: list[tuple[UUID, PromptVersion, PromptListEntryInput]] = []
         pending_links: list[tuple[PromptVersion, PromptAlias]] = []
+        carried_to: set[UUID] = set()
         for entry in entries:
             concept_id = UUID(entry.concept_id) if entry.concept_id else generate_uuid()
             existing = current_by_concept.get(concept_id)
@@ -5352,6 +5347,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 prompt_version.moderation_state = decided_by.moderation_state
                 prompt_version.moderated_by_user_id = decided_by.moderated_by_user_id
                 prompt_version.moderated_at = decided_by.moderated_at
+                if decided_by is not existing:
+                    # Carried from another of the owner's words: this concept
+                    # is that takedown's too, so it is recorded - the next
+                    # list, in a language only this one shares words with,
+                    # finds it, and a restore finds it by its byline (#1357).
+                    carried_to.add(concept_id)
             session.add(prompt_version)
             for alias_answer in entry.aliases:
                 alias_key = normalize_prompt_answer(alias_answer, prompt_list.language)
@@ -5375,6 +5376,23 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
             for prompt_version, alias in pending_links
         )
+        if carried_to:
+            recorded = set(
+                (
+                    await session.scalars(
+                        select(PromptTakedown.concept_id).where(
+                            PromptTakedown.owner_user_id == prompt_list.owner_user_id,
+                            PromptTakedown.concept_id.in_(carried_to),
+                        )
+                    )
+                ).all()
+            )
+            session.add_all(
+                PromptTakedown(
+                    owner_user_id=prompt_list.owner_user_id, concept_id=concept_id
+                )
+                for concept_id in sorted(carried_to - recorded)
+            )
 
         content_payload = {
             "language": prompt_list.language,

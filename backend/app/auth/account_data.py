@@ -55,6 +55,7 @@ from app.db.models import (
     PromptListRevision,
     PromptListRevisionItem,
     PromptListStar,
+    PromptTakedown,
     PromptVersion,
     PromptVersionAlias,
     RoomMessage,
@@ -1771,6 +1772,14 @@ async def anonymize_account(
             await session.execute(
                 delete(PromptListStar).where(
                     PromptListStar.user_id.in_(identity_ids)
+                )
+            )
+            # The account's takedown records: they exist to stop it typing a
+            # hidden word back into a list, and it will save no more lists.
+            # Kept, they would keep the hidden text too (#1357, #1354 review).
+            await session.execute(
+                delete(PromptTakedown).where(
+                    PromptTakedown.owner_user_id.in_(identity_ids)
                 )
             )
             await session.execute(
