@@ -1379,10 +1379,9 @@ class Game:
             if other == language:
                 continue
             for answer in (form.answer, *form.aliases):
-                accepted = _accepted_spellings(answer, other)
-                if not accepted.isdisjoint(taken):
-                    continue
-                spellings = spellings | accepted
+                # Only the spellings that are not another concept's word to
+                # this seat: German "Lüge" is "luge" too, the French sled.
+                spellings = spellings | (_accepted_spellings(answer, other) - taken)
         return spellings
 
     def _spells_the_prompt_elsewhere(self, guessed: frozenset[str]) -> bool:

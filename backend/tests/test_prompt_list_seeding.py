@@ -533,8 +533,6 @@ async def test_seeding_analyzes_what_it_wrote():
     Counted rather than read off the estimates: the suite empties tables with
     DELETE, so an estimate from an earlier test survives into this one.
     """
-    import asyncio
-
     from sqlalchemy import text
 
     factory, engine = await create_test_db()
@@ -554,12 +552,6 @@ async def test_seeding_analyzes_what_it_wrote():
 
         before = await analyzed()
         await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
-        # Statistics are published when the analyzing backend next goes idle,
-        # within about a second.
-        for _ in range(50):
-            if await analyzed() > before:
-                break
-            await asyncio.sleep(0.1)
         assert await analyzed() > before
     finally:
         await engine.dispose()

@@ -756,8 +756,10 @@ The same script creates three roles (#896). `sketchy_owner` owns the schema and
 is used only by `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`);
 `sketchy_app` is `DATABASE_URL` - the web process and every operator command -
 and may read and write rows and nothing more, and only add to `audit_events`
-and `score_events`; `sketchy_monitor` is postgres_exporter's. The migration
-command grants the application role its privileges after every upgrade, and a
+and `score_events` - and `ANALYZE` the prompt tables it seeds at startup;
+`sketchy_monitor` is postgres_exporter's. The migration command grants the
+application role its privileges after every upgrade - `MAINTAIN` among them, so
+the server is **PostgreSQL 17 or later** (#1367) - and a
 production start refuses a web connection that owns the tables, may create in
 the schema, or is a superuser.
 

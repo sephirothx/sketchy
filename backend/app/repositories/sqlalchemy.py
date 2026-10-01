@@ -12,6 +12,7 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import logging
 import time
 from time import thread_time
 from uuid import UUID
@@ -19,7 +20,7 @@ from uuid import UUID
 from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, case, delete, desc, exists, func, insert, or_, select, update
 from sqlalchemy import text as sql_text
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
 
@@ -200,6 +201,8 @@ from app.refusals import ErrorCode
 
 # How many times a pin write restarts when a merge lands inside the barrier's
 # window between its alias read and its lock (app.auth.erasure).
+logger = logging.getLogger(__name__)
+
 PIN_WRITE_LOCK_RETRIES = 3
 
 LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
@@ -3795,15 +3798,21 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         the 30-second statement timeout on a busy CI runner (#1367).
         Autovacuum would get there, a minute later; startup should not wait
         on it. The application role is granted MAINTAIN on these tables for
-        it (`app.db.roles.SEEDED_TABLES`); a role without it is warned and
-        skipped, never refused, so this cannot stop a server from starting.
+        it (`app.db.roles.SEEDED_TABLES`). Never a reason not to start: a
+        role without the grant is warned and skipped by PostgreSQL itself, a
+        table a VACUUM or a migration is holding is skipped rather than
+        waited for, and anything else is logged - autovacuum is the fallback.
         """
         async with self._session_factory() as session:
             if session.get_bind().dialect.name != "postgresql":
                 return
-            for table in SEEDED_TABLES:
-                await session.execute(sql_text(f"ANALYZE {table}"))
-            await session.commit()
+            try:
+                await session.execute(
+                    sql_text(f"ANALYZE (SKIP_LOCKED) {', '.join(SEEDED_TABLES)}")
+                )
+                await session.commit()
+            except DBAPIError:
+                logger.warning("Could not analyze the seeded prompt tables", exc_info=True)
 
     @staticmethod
     def _star_count():
