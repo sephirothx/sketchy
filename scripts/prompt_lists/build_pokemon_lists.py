@@ -72,7 +72,12 @@ def variants(text: str) -> list[str]:
     out.add(base)
     joined = " ".join(re.sub(r"[-:]", "", base).split())
     out.add(joined)
-    spaced = re.sub(r"(\w{2,})[-:]\s*([A-Z0-9]\w*|\w{2,})", r"\1 \2", base)
+    # Until nothing changes: one pass consumes the word after each hyphen, so
+    # "Roc-de-Fer" would stop at "Roc de-Fer".
+    spaced, previous = base, None
+    while spaced != previous:
+        previous = spaced
+        spaced = re.sub(r"(\w{2,})[-:]\s*([A-Z0-9]\w*|\w{2,})", r"\1 \2", spaced)
     out.add(" ".join(spaced.split()))
     out.add(re.sub(r"([A-Za-z])(\d)", r"\1 \2", base))
     return sorted(v for v in out if v and v.lower() != text.lower())
@@ -97,6 +102,13 @@ def main() -> None:
     for path in OUT.glob("english_pokemon_gen*.json"):
         for entry in json.loads(path.read_text(encoding="utf-8"))["prompts"]:
             known[entry["answer"]] = entry["conceptId"]
+    # A promptVersion raised by hand stays raised, per language and concept.
+    versions: dict[tuple[str, str], int] = {}
+    for path in OUT.glob("*_pokemon_gen*.json"):
+        body = json.loads(path.read_text(encoding="utf-8"))
+        for entry in body["prompts"]:
+            if "promptVersion" in entry:
+                versions[(body["language"], entry["conceptId"])] = entry["promptVersion"]
     concept = {species: known.get(names[species]["en"]) or str(generate_uuid7()) for species in generation}
 
     for n in range(1, 10):
@@ -115,6 +127,8 @@ def main() -> None:
                 entry = {"conceptId": concept[species], "answer": answer}
                 if aliases:
                     entry["aliases"] = aliases
+                if (language, concept[species]) in versions:
+                    entry["promptVersion"] = versions[(language, concept[species])]
                 prompts.append(entry)
             body = {
                 "slug": f"{STEM[language]}_pokemon_gen{n}",
