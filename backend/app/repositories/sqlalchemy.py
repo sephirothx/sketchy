@@ -199,10 +199,10 @@ from app.prompt_content import (
 from app.prompts import letter_histogram
 from app.refusals import ErrorCode
 
-# How many times a pin write restarts when a merge lands inside the barrier's
-# window between its alias read and its lock (app.auth.erasure).
 logger = logging.getLogger(__name__)
 
+# How many times a pin write restarts when a merge lands inside the barrier's
+# window between its alias read and its lock (app.auth.erasure).
 PIN_WRITE_LOCK_RETRIES = 3
 
 LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
