@@ -4,6 +4,8 @@
   "description": "De moeilijkere lijst: zeldzamere dingen, scènes en uitdrukkingen, in elke taal dezelfde.",
   "language": "nl",
   "version": 3,
+  "shelf": "everyday",
+  "position": 1,
   "prompts": [
     {"conceptId":"01a0f467-2041-71b2-9e85-05dd1bbe08e4","answer":"telraam","aliases":["het telraam","abacus"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-05deda591bc4","answer":"aas in de mouw","aliases":["troef achter de hand","kaart in de mouw","aas in je mouw"]},

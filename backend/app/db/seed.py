@@ -10,10 +10,12 @@ from app.domain_values import (
     PromptLanguage,
 )
 from app.prompt_content import (
+    clean_list_tags,
     clean_prompt_aliases,
     clean_prompt_tags,
     normalize_prompt_answer,
-    validate_prompt_language,
+    validate_prompt_list_language,
+    validate_shelf_placement,
 )
 from app.repositories.interfaces import (
     BundledPromptDefinition,
@@ -82,7 +84,9 @@ async def seed_prompt_lists(
             slug = str(data["slug"]).strip()
             name = str(data["name"]).strip()
             description = str(data.get("description", "")).strip()
-            language = validate_prompt_language(str(
+            # A list in no language (`zxx`, R-PROMPT-12) is official content
+            # too: the names that are the same in every language (#1374).
+            language = validate_prompt_list_language(str(
                 data.get("language", PromptLanguage.ENGLISH.value)
             ).strip())
             version = int(data.get("version", 1))
@@ -94,6 +98,15 @@ async def seed_prompt_lists(
             ]
             if not prompts:
                 raise ValueError("bundled prompt list must not be empty")
+            # Every official list stands somewhere in the picker's tree
+            # (#1374); one that named no shelf would be on none.
+            raw_series = data.get("series")
+            shelf, series, position = validate_shelf_placement(
+                str(data["shelf"]).strip(),
+                None if raw_series is None else str(raw_series).strip(),
+                int(data.get("position", 0)),
+            )
+            tags = clean_list_tags([str(tag) for tag in data.get("tags", [])])
 
             summary = await repo.upsert_bundled(
                 slug=slug,
@@ -102,6 +115,10 @@ async def seed_prompt_lists(
                 language=language,
                 prompts=prompts,
                 version=version,
+                shelf=shelf,
+                series=series,
+                shelf_position=position,
+                tags=tags,
             )
             seeded.append(summary)
             logger.info("Seeded bundled prompt list '%s' (v%d, %d prompts)", slug, version, len(prompts))

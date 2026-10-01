@@ -123,6 +123,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_prompt_lists: "Queste liste di parole non si possono usare insieme.",
   invalid_custom_prompts: "Non è stato possibile leggere queste parole personalizzate.",
   mixed_room_list_unsupported: "Le stanze miste possono usare solo liste in tutte le lingue o di «Qualsiasi lingua».",
+  too_many_player_prompt_lists: "Una stanza può usare al massimo 20 liste create dai giocatori.",
   mixed_room_custom_prompts: "Le stanze miste non possono usare parole personalizzate: ogni giocatore ha bisogno della parola nella sua lingua.",
   max_players_below_seated: (params) =>
   `Il massimo di giocatori non può essere inferiore ai ${count(params.seated, 2)} già presenti nella stanza.`,

@@ -4,6 +4,8 @@
   "description": "Lo que se conoce en el mundo hispanohablante: comida, costumbres y vida cotidiana.",
   "language": "es",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ac-7338-a424-ce8e5b3eee7a","answer":"alebrije","aliases":["el alebrije"]},
     {"conceptId":"01a0f6a4-69ac-7338-a424-ce881b8fa570","answer":"alfajor","aliases":["el alfajor"]},

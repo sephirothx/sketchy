@@ -1,7 +1,7 @@
 """Publishing makes an immutable edition of a list's working copy
 
-Revision ID: b4c5d6e7f8a1
-Revises: a3b4c5d6e7f9
+Revision ID: c5d6e7f8a9b2
+Revises: b4c5d6e7f8a1
 Create Date: 2026-10-01 00:00:00.000000
 
 Publication was a state of the list, so every save reached the catalogue at
@@ -19,8 +19,8 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 
-revision: str = "b4c5d6e7f8a1"
-down_revision: str | Sequence[str] | None = "a3b4c5d6e7f9"
+revision: str = "c5d6e7f8a9b2"
+down_revision: str | Sequence[str] | None = "b4c5d6e7f8a1"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 

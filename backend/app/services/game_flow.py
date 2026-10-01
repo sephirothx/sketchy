@@ -51,6 +51,7 @@ from app.prompts import letter_histogram, parse_custom_prompt_list
 from app.refusals import ErrorCode
 from app.repositories.interfaces import (
     MixedRoomListError,
+    TooManyPlayerListsError,
     PromptListSelectionError,
     PromptListsChangedError,
     PromptSample,
@@ -341,6 +342,10 @@ class GameFlowService:
                 raise RoomPromptResolutionError(
                     str(error), code=ErrorCode.MIXED_ROOM_LIST_UNSUPPORTED
                 ) from error
+            except TooManyPlayerListsError as error:
+                raise RoomPromptResolutionError(
+                    str(error), code=ErrorCode.TOO_MANY_PLAYER_PROMPT_LISTS
+                ) from error
             except PromptListSelectionError as error:
                 raise RoomPromptResolutionError(str(error)) from error
             except Exception as error:
@@ -415,6 +420,10 @@ class GameFlowService:
         except MixedRoomListError as error:
             raise RoomPromptResolutionError(
                 str(error), code=ErrorCode.MIXED_ROOM_LIST_UNSUPPORTED
+            ) from error
+        except TooManyPlayerListsError as error:
+            raise RoomPromptResolutionError(
+                str(error), code=ErrorCode.TOO_MANY_PLAYER_PROMPT_LISTS
             ) from error
         except PromptListSelectionError as error:
             raise RoomPromptResolutionError(str(error)) from error

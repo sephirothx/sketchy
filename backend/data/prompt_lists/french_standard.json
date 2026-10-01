@@ -4,6 +4,8 @@
   "description": "La liste standard : des mots courants et faciles à dessiner.",
   "language": "fr",
   "version": 2,
+  "shelf": "everyday",
+  "position": 0,
   "prompts": [
     {"conceptId":"01a02b7b-b425-7bb7-be27-7d7c39ad5cf5","answer":"accordéon","aliases":["l'accordéon"]},
     {"conceptId":"01a02b7b-b426-780c-9690-24cbc0f539d1","answer":"gland","aliases":["le gland"]},

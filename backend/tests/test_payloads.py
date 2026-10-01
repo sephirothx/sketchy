@@ -10,6 +10,7 @@ from app.game import Game
 from app.handlers.payloads import (
     MAX_GUESS_ID,
     MAX_NICKNAME_LENGTH,
+    MAX_PROMPT_LISTS,
     CreateRoomPayload,
     GuessPayload,
     HintPayload,
@@ -254,6 +255,19 @@ async def test_updating_settings_reapplies_the_hint_rule(update, expected):
 def test_a_create_payload_normalizes_the_tool_set(tools, expected):
     payload = parse_payload(CreateRoomPayload, {"nickname": "Ann", "allowedTools": tools})
     assert payload.allowed_tools == expected
+
+
+@pytest.mark.parametrize("model", [CreateRoomPayload, UpdateRoomSettingsPayload])
+def test_a_room_may_pick_a_whole_series_beside_its_other_lists(model):
+    """Forty lists: room for a whole series of official lists beside a room's
+    other choices (#1374). How many of them may be players' is the
+    repository's to say, since a payload cannot tell."""
+    assert MAX_PROMPT_LISTS == 40
+    base = {"nickname": "Ann"} if model is CreateRoomPayload else {}
+    fits = [f"list_{index}" for index in range(MAX_PROMPT_LISTS)]
+    assert parse_payload(model, {**base, "promptListSlugs": fits}).prompt_list_slugs == fits
+    with pytest.raises(PayloadError):
+        parse_payload(model, {**base, "promptListSlugs": [*fits, "one_more"]})
 
 
 def test_the_drawing_rules_default_to_taking_nothing_away():

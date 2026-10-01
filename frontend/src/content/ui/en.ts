@@ -135,6 +135,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_prompt_lists: "Those prompt lists cannot be used together.",
   invalid_custom_prompts: "Those custom prompts could not be read.",
   mixed_room_list_unsupported: "Mixed-language rooms can only use lists in every language, or in Any language.",
+  too_many_player_prompt_lists: "A room can use at most 20 lists made by players.",
   mixed_room_custom_prompts: "Mixed-language rooms can't use custom prompts: every player needs the prompt in their own language.",
   max_players_below_seated: (params) =>
   `Max players cannot be below the ${count(params.seated, 2)} players already in the room.`,

@@ -99,7 +99,11 @@ class EmptyPayload(RequestModel):
     pass
 
 
-MAX_PROMPT_LISTS = 20
+# Room for a whole series of official lists beside a room's other choices
+# (#1374). The worst-case cost of authorizing a selection lives in players'
+# lists, which the repository holds to twenty of these
+# (`prompt_content.MAX_PLAYER_PROMPT_LISTS`) once it knows which they are.
+MAX_PROMPT_LISTS = 40
 
 
 def _clean_slugs(slugs: list[str]) -> list[str]:

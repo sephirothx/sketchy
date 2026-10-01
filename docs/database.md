@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`b4c5d6e7f8a1_prompt_list_editions.py` (#1360). Both this line and the table
+`c5d6e7f8a9b2_prompt_list_editions.py` (#1360). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1988,7 +1988,8 @@ Deliberately relational rather than a JSON tag blob.
 `copied_from_edition_id` (`SET NULL`, partial index) ·
 `visibility` (`private \| public`) ·
 `moderation_state` (`active \| hidden`; a hold is the edition's) · `moderated_by_user_id` ·
-`moderated_at` · `version` · `letter_counts` · `letter_total` · `edition_count` ·
+`moderated_at` · `version` · `letter_counts` · `letter_total` · `shelf` · `series` ·
+`shelf_position` (all three nullable) · `edition_count` ·
 `content_hash` · `published_at` (nullable) · `deleted_at` (indexed, nullable) · timestamps.
 
 `edition_count` numbers the list's next edition, so a number is never reused after the
@@ -1998,6 +1999,16 @@ edition's — the pending one while one waits, else the live one — it says whe
 has **unpublished changes** without reading either one's prompts (#1360). It digests
 version ids, so a prompt changed and changed back reads as changed until the next publish.
 `copied_from_edition_id` is the edition a copy was taken from while it lasts; `copied_from_list_id` is what the credit reads.
+
+`shelf`, `series` and `shelf_position` place an **official** list in the room picker's tree
+(#1374, R-PROMPT-14): a shelf slug from `prompt_content.PROMPT_SHELVES`, an optional
+series slug within it, and its position there. They are navigation, not content, so
+`upsert_bundled` rewrites them - and the list's tags in `prompt_list_tags` - on every seed
+without a new list version, as it does the name. `ck_prompt_lists_shelf_is_bundled` keeps
+them off a player's list, `ck_prompt_lists_shelf_position` makes a shelf and a position
+come together, and `ck_prompt_lists_series_on_shelf` keeps a series on a shelf. No CHECK
+names the shelves: adding one is a code change to the registry, not a migration. Rows
+migrated in start empty and the next start fills them.
 
 `letter_counts` (JSON) and `letter_total` are the working copy's **letter histogram**
 (#1359; it lived on each revision before): every save that changes content rewrites
@@ -2261,6 +2272,8 @@ the direction the community catalogue reads (*which lists carry this tag*). The 
 copy's tags (#1359), rewritten in place by a save like the rest of it, a row added or
 removed only for a tag that changed. They used to be copied onto every revision, so that a
 filter agreed with the revision a game pinned; a game snapshots what it drew instead.
+An official list's tags come from its seed file (`tags`) and are rewritten by every seed,
+through the same helper a save uses (#1374).
 
 ### `prompt_list_editions`
 `id` · `prompt_list_id` (CASCADE) · `number` (≥ 1, unique per list) · `state`

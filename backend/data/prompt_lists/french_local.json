@@ -4,6 +4,8 @@
   "description": "Ce que l'on connaît dans le monde francophone : cuisine, coutumes et vie quotidienne.",
   "language": "fr",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ad-741d-8d7a-76ccf86f68d2","answer":"14 Juillet","aliases":["quatorze juillet","le 14 Juillet","le quatorze juillet"]},
     {"conceptId":"01a0f6a4-69ad-741d-8d7a-76ca044153d7","answer":"apéro","aliases":["apéritif","l'apéro","l'apéritif"]},

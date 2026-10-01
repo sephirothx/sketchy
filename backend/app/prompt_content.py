@@ -56,6 +56,40 @@ LIST_TAG_SLUGS = frozenset(slug for slug, _ in LIST_TAG_VOCABULARY)
 # The vocabulary's order, which is the order a list's tags are shown and stored in.
 LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 
+# How many of a room's lists may be players' own or published ones (#1374).
+# What a selection costs to authorize grows with its answers and aliases, and
+# a player's list is where the worst case lives - 500 prompts of 20 aliases
+# each (R-LIST-04): twenty of them, agnostic in a mixed room, folded cold cost
+# 1.5 s of CPU off the loop on PostgreSQL (`benchmarks/authorize_selection.py`,
+# measured for #1374 on the #1237 benchmark). Official lists are reviewed content and alias
+# sparingly, so the room-wide cap rose to forty (`MAX_PROMPT_LISTS`) to hold a
+# whole series, while this one keeps the worst case where it was measured.
+MAX_PLAYER_PROMPT_LISTS = 20
+
+# The shelves the official lists stand on (#1374), in the order the room
+# picker shows them. A shelf is navigation, not content: every official list
+# names one, and a **series** within it (a franchise's generations, say) is
+# optional.
+# Only slugs live here - what a player reads is in the frontend catalogue, in
+# every interface language - and a shelf is added here before a list names it,
+# so a typo in a seed file fails startup instead of opening a shelf of one.
+PROMPT_SHELVES: tuple[str, ...] = ("everyday",)
+
+
+def validate_shelf_placement(
+    shelf: str, series: str | None, position: int
+) -> tuple[str, str | None, int]:
+    """Check where an official list stands in the picker's tree, or refuse it."""
+    if shelf not in PROMPT_SHELVES:
+        raise ValueError(f"Unknown shelf: {shelf}")
+    if series is not None and (
+        len(series) > MAX_TAG_SLUG_LENGTH or not _TAG_SLUG.fullmatch(series)
+    ):
+        raise ValueError(f"A series must be a lowercase slug: {series}")
+    if position < 0:
+        raise ValueError("A shelf position must not be negative")
+    return shelf, series, position
+
 
 class UnknownListTag(ValueError):
     """A tag the curated vocabulary does not hold, kept so a refusal can name it.

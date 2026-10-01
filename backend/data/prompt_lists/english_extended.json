@@ -4,6 +4,8 @@
   "description": "A harder list: rarer things, scenes and expressions, the same in every language.",
   "language": "en",
   "version": 3,
+  "shelf": "everyday",
+  "position": 1,
   "prompts": [
     {"conceptId":"01a0f467-2041-71b2-9e85-05dd1bbe08e4","answer":"abacus"},
     {"conceptId":"01a0f467-2041-71b2-9e85-05deda591bc4","answer":"ace up the sleeve","aliases":["ace up your sleeve","ace up one's sleeve","card up the sleeve","card up your sleeve"]},

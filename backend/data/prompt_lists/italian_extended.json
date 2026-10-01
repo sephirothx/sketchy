@@ -4,6 +4,8 @@
   "description": "La lista difficile: cose più rare, scene ed espressioni, la stessa in tutte le lingue.",
   "language": "it",
   "version": 3,
+  "shelf": "everyday",
+  "position": 1,
   "prompts": [
     {"conceptId":"01a0f467-2041-71b2-9e85-05dd1bbe08e4","answer":"pallottoliere","aliases":["il pallottoliere","abaco","l'abaco"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-05deda591bc4","answer":"asso nella manica","aliases":["l'asso nella manica"]},

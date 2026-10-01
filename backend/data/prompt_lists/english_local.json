@@ -4,6 +4,8 @@
   "description": "Things English speakers know and others might not: food, customs and everyday life.",
   "language": "en",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ab-73f4-b041-d4148a5e8d82","answer":"American football","aliases":["gridiron","pigskin","touchdown","gridiron football"]},
     {"conceptId":"01a0f6a4-69ab-73f4-b041-d3ff23598d28","answer":"apple bobbing","aliases":["bobbing for apples","bob for apples","duck apple","apple dunking"]},
