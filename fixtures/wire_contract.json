@@ -2843,7 +2843,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 53,
+ "protocolVersion": 54,
  "refusal": {
   "codes": [
    "invalid_payload",
