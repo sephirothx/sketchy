@@ -92,7 +92,7 @@
     {"conceptId":"01a0f983-7841-7246-8c11-af073f378b05","answer":"Hyporoi","aliases":["Kingdra"]},
     {"conceptId":"01a0f983-7841-7246-8c11-af08ece598f3","answer":"Phanpy"},
     {"conceptId":"01a0f983-7841-7246-8c11-af09ebb7d3da","answer":"Donphan"},
-    {"conceptId":"01a0f983-7841-7246-8c11-af0ae4b27513","answer":"Porygon2"},
+    {"conceptId":"01a0f983-7841-7246-8c11-af0ae4b27513","answer":"Porygon2","aliases":["Porygon 2"]},
     {"conceptId":"01a0f983-7841-7246-8c11-af0be8467a9a","answer":"Cerfrousse","aliases":["Stantler"]},
     {"conceptId":"01a0f983-7841-7246-8c11-af0cfc39e350","answer":"Queulorior","aliases":["Smeargle"]},
     {"conceptId":"01a0f983-7841-7246-8c11-af0d037ddad5","answer":"Debugant","aliases":["Tyrogue"]},
@@ -109,7 +109,7 @@
     {"conceptId":"01a0f983-7841-7246-8c11-af18453a8d78","answer":"Ymphect","aliases":["Pupitar"]},
     {"conceptId":"01a0f983-7841-7246-8c11-af19effc5ede","answer":"Tyranocif","aliases":["Tyranitar"]},
     {"conceptId":"01a0f983-7841-7246-8c11-af1a85c9fb7f","answer":"Lugia"},
-    {"conceptId":"01a0f983-7841-7246-8c11-af1bdd40473b","answer":"Ho-Oh","aliases":["HoOh","Ho Oh"]},
+    {"conceptId":"01a0f983-7841-7246-8c11-af1bdd40473b","answer":"Ho-Oh","aliases":["Ho Oh","HoOh"]},
     {"conceptId":"01a0f983-7841-7246-8c11-af1ca2b290f8","answer":"Celebi"}
   ]
 }
