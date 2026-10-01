@@ -1918,7 +1918,9 @@ An immutable, language-specific wording.
 `moderation_state` (`active \| under_review \| hidden`) · `moderated_by_user_id` ·
 `moderated_at` · `unlisted_at` (nullable, partial index) · `unlisted_from_list_id`
 (nullable, `SET NULL`, partial index) · `created_at`, with
-`uq_prompt_version_concept_language_version`.
+`uq_prompt_version_concept_language_version`. A save numbers a new wording above the highest
+version its concept has stored, not above the working copy's: Discard changes puts an
+edition's older wording back while the newer one stays (#1392 review).
 
 **`unlisted_at`** is when a save, a Discard changes or a list's deletion last took the version out of a
 working copy (#1359). A game that drew it before then holds it in memory and writes it into

@@ -385,3 +385,29 @@ async def test_publishing_a_list_from_before_editions_says_nothing_is_unpublishe
     assert first.live_edition.number == 1
     assert not first.unpublished_changes
 
+
+
+async def test_a_prompt_reworded_after_discard_changes_can_be_reworded_again(env):
+    """#1392 review: Discard puts the edition's older wording back while the
+    newer one stays stored, and the next save numbered its wording after the
+    restored one - a version the concept already had."""
+    prompts, users, _ = env
+    owner = await account(users, "Owner")
+    first = await published(prompts, owner.id, "gull")
+    gull = first.prompts[0]
+    reworded = await prompts.update_owned(
+        owner.id, first.id, expected_version=first.version, name=first.name, description="",
+        prompts=(PromptListEntryInput(answer="seagull", concept_id=gull.concept_id),),
+    )
+    restored = await prompts.discard_owned_changes(
+        owner.id, first.id, expected_version=reworded.version
+    )
+
+    again = await prompts.update_owned(
+        owner.id, first.id, expected_version=restored.version, name=first.name,
+        description="",
+        prompts=(PromptListEntryInput(answer="tern", concept_id=gull.concept_id),),
+    )
+
+    assert [entry.answer for entry in again.prompts] == ["tern"]
+    assert again.prompts[0].concept_id == gull.concept_id

@@ -5920,6 +5920,38 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 (alias.concept_id, alias.match_key): alias for alias in aliases
             }
 
+        # The highest version each reworded concept has stored, which can be
+        # above the working copy's: Discard changes puts an edition's older
+        # wording back (#1363), and the next one is numbered above every
+        # wording the concept ever had, or it collides with one (#1392
+        # review). Read only when a save rewords something.
+        reworded = {
+            UUID(entry.concept_id)
+            for entry in entries
+            if entry.concept_id
+            and (existing := current_by_concept.get(UUID(entry.concept_id))) is not None
+            and (
+                existing.canonical_answer != entry.answer
+                or existing.aliases != tuple(sorted(entry.aliases))
+            )
+        }
+        latest_version: dict[UUID, int] = (
+            dict(
+                (
+                    await session.execute(
+                        select(PromptVersion.concept_id, func.max(PromptVersion.version))
+                        .where(
+                            PromptVersion.concept_id.in_(reworded),
+                            PromptVersion.language == prompt_list.language,
+                        )
+                        .group_by(PromptVersion.concept_id)
+                    )
+                ).all()
+            )
+            if reworded
+            else {}
+        )
+
         resolved: list[tuple[UUID, PromptVersion, PromptListEntryInput]] = []
         pending_links: list[tuple[PromptVersion, PromptAlias]] = []
         carried_to: set[UUID] = set()
@@ -5938,7 +5970,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 session.add(PromptConcept(id=concept_id))
                 prompt_version_number = 1
             else:
-                prompt_version_number = existing.version + 1
+                prompt_version_number = (
+                    max(existing.version, latest_version.get(concept_id, 0)) + 1
+                )
             prompt_version = PromptVersion(
                 id=generate_uuid(),
                 concept_id=concept_id,
