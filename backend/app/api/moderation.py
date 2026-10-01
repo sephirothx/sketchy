@@ -15,7 +15,7 @@ from app.request_text import ControlFreeModel
 from sqlalchemy import and_, func, or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import defer, selectinload
+from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.api.errors import Refusal
 from app.message_limits import MAX_REPORT_DETAILS
@@ -43,6 +43,8 @@ from app.repositories.sqlalchemy import (
     apply_gallery_decision,
 )
 from app.services.gallery_shelf import read_shelf_review
+from app.services.prompt_editions import UNDER_REVIEW as EDITION_UNDER_REVIEW
+from app.services.prompt_editions import drop_editions, editions_of, promote_pending
 from app.services.prompt_takedowns import record_takedowns, release_takedowns
 from app.services.player_reports import (
     canonical_user_id,
@@ -74,6 +76,8 @@ from app.db.models import (
     Prompt,
     PromptContentReport,
     PromptList,
+    PromptListEdition,
+    PromptListEditionItem,
     PromptTakedown,
     PromptVersion,
     RoomMessage,
@@ -240,9 +244,10 @@ class PublicationReviewBody(ControlFreeModel):
 
     state: Literal["active", "hidden"]
     note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
-    # The version the reviewer read. An owner can edit a held list - every
-    # save moves the version (R-LIST-05) - so without this a moderator could
-    # read version N and release N+1, which they never saw.
+    # The edition the reviewer read (#1360). An edition never changes, but
+    # its owner can publish again while it waits, which replaces it with the
+    # next number - so without this a moderator could read edition N and
+    # release N+1, which they never saw.
     expected_version: int = Field(alias="expectedVersion", ge=1)
 
     @field_validator("note")
@@ -1368,11 +1373,13 @@ def create_moderation_router(
 
                 prompt_version = None
                 if body.prompt_version_id is not None:
-                    # A prompt the list holds now, in any of its wordings, or
-                    # one a save took out of it within the grace: the reporter
-                    # may have met an older one in a game, or read it on a
-                    # page opened before the owner's last save (#1359, #1385
-                    # review).
+                    # A prompt the list holds now, in any of its wordings -
+                    # in its working copy or an edition, which is what a
+                    # reader of the catalogue sees (#1360) - or one taken out
+                    # of it within the grace: the reporter may have met an
+                    # older one in a game, or read it on a page opened before
+                    # the owner's last save (#1359, #1385 review).
+                    edition_wording = aliased(PromptVersion)
                     prompt_version = await session.scalar(
                         select(PromptVersion).where(
                             PromptVersion.id == body.prompt_version_id,
@@ -1381,6 +1388,20 @@ def create_moderation_router(
                                 .where(
                                     Prompt.concept_id == PromptVersion.concept_id,
                                     Prompt.prompt_list_id == prompt_list.id,
+                                )
+                                .exists(),
+                                select(PromptListEditionItem.edition_id)
+                                .join(
+                                    PromptListEdition,
+                                    PromptListEdition.id == PromptListEditionItem.edition_id,
+                                )
+                                .join(
+                                    edition_wording,
+                                    edition_wording.id == PromptListEditionItem.prompt_version_id,
+                                )
+                                .where(
+                                    PromptListEdition.prompt_list_id == prompt_list.id,
+                                    edition_wording.concept_id == PromptVersion.concept_id,
                                 )
                                 .exists(),
                                 and_(
@@ -1420,6 +1441,13 @@ def create_moderation_router(
                         ),
                     )
 
+                # The name the reporter read: the live edition's (#1386 review).
+                seen_name = await session.scalar(
+                    select(PromptListEdition.name).where(
+                        PromptListEdition.prompt_list_id == prompt_list.id,
+                        PromptListEdition.state == "published",
+                    )
+                )
                 report = PromptContentReport(
                     id=generate_uuid(),
                     reporter_user_id=db_reporter_id,
@@ -1427,7 +1455,7 @@ def create_moderation_router(
                     prompt_list_id=prompt_list.id,
                     prompt_version_id=(prompt_version.id if prompt_version else None),
                     target_type="prompt" if prompt_version else "list",
-                    list_name_snapshot=prompt_list.name,
+                    list_name_snapshot=seen_name or prompt_list.name,
                     prompt_snapshot=(
                         prompt_version.canonical_answer if prompt_version else None
                     ),
@@ -2441,6 +2469,26 @@ def create_moderation_router(
                         target.moderated_by_user_id,
                         target.moderated_at,
                     )
+                    if (
+                        report.target_type == "list"
+                        and body.moderation_state == PromptContentModerationState.HIDDEN.value
+                    ):
+                        # A list taken down drops the edition waiting for
+                        # review, as a takedown from the review queue does
+                        # (R-LIST-13): a hidden list waits for nothing, and
+                        # a pending edition beside it would read "under
+                        # review" to its owner in a queue that excludes it
+                        # (#1386 review). Locked before anything is written.
+                        await session.execute(
+                            select(PromptList.id)
+                            .where(PromptList.id == target.id)
+                            .with_for_update()
+                        )
+                        pending = (await editions_of(session, target.id)).get(
+                            EDITION_UNDER_REVIEW
+                        )
+                        if pending is not None:
+                            await drop_editions(session, [pending.id], now=now)
                     target.moderation_state = body.moderation_state
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
@@ -2630,16 +2678,18 @@ def create_moderation_router(
         return named
 
     def _held():
-        """A publication the switch is holding, and nothing else.
+        """A publication the switch is holding, and nothing else: a pending
+        edition of a public list (#1360).
 
-        Public as well as under review. Unpublishing now releases a hold, but
+        Public as well as pending. Unpublishing drops a pending edition, but
         the queue asks both questions anyway: a list its owner withdrew is
-        private content, and a moderator has no business deciding on it.
+        private content, and a moderator has no business deciding on it. A
+        list a moderator already hid is not waiting for a release either.
         """
         return (
-            PromptList.moderation_state
-            == PromptContentModerationState.UNDER_REVIEW.value,
+            PromptListEdition.state == EDITION_UNDER_REVIEW,
             PromptList.visibility == PromptListVisibility.PUBLIC.value,
+            PromptList.moderation_state != PromptContentModerationState.HIDDEN.value,
             PromptList.is_bundled.is_(False),
             PromptList.deleted_at.is_(None),
         )
@@ -2650,7 +2700,7 @@ def create_moderation_router(
         limit: int = Query(default=50, ge=1, le=100),
         offset: int = Query(default=0, ge=0),
     ):
-        """Lists the operator switch held back (R-LIST-13).
+        """Editions the operator switch held back (R-LIST-13).
 
         Content moderation is otherwise report-driven: somebody complains, and
         the complaint is the queue entry. A publication routed to review has
@@ -2659,7 +2709,10 @@ def create_moderation_router(
         catalogue, unplayable, and unreachable by its owner, who cannot report
         their own list. The switch was a trapdoor.
 
-        Oldest first: somebody has been waiting since they published.
+        Each row is the pending edition, as it will be shown when released -
+        a first publication or an update to a live list (#1360). `version`
+        is the edition's number, the one a decision names. Oldest first:
+        somebody has been waiting since they published.
         """
         async with session_factory() as session:
             reviewer = await _reviewer(session, request)
@@ -2669,30 +2722,38 @@ def create_moderation_router(
                 # they are neither listed nor counted as waiting for them
                 # (R-MOD-07, #1063).
                 held.append(PromptList.owner_user_id != reviewer.id)
+            pending = (
+                select(PromptListEdition, PromptList, User.display_name)
+                .join(PromptList, PromptList.id == PromptListEdition.prompt_list_id)
+                .outerjoin(User, User.id == PromptList.owner_user_id)
+                .where(*held)
+            )
             rows = (
                 await session.execute(
-                    select(PromptList, User.display_name)
-                    .outerjoin(User, User.id == PromptList.owner_user_id)
-                    .where(*held)
-                    .order_by(PromptList.published_at, PromptList.id)
+                    pending.order_by(PromptListEdition.created_at, PromptListEdition.id)
                     .offset(offset)
                     .limit(limit)
                 )
             ).all()
             waiting = await session.scalar(
-                select(func.count(PromptList.id)).where(*held)
+                select(func.count(PromptListEdition.id))
+                .join(PromptList, PromptList.id == PromptListEdition.prompt_list_id)
+                .where(*held)
             )
-            prompts_by_list = {
-                list_id: count
-                for list_id, count in (
+            prompts_by_edition = {
+                edition_id: count
+                for edition_id, count in (
                     await session.execute(
-                        select(Prompt.prompt_list_id, func.count(Prompt.id))
+                        select(
+                            PromptListEditionItem.edition_id,
+                            func.count(PromptListEditionItem.prompt_version_id),
+                        )
                         .where(
-                            Prompt.prompt_list_id.in_(
-                                [prompt_list.id for prompt_list, _ in rows]
+                            PromptListEditionItem.edition_id.in_(
+                                [edition.id for edition, _, _ in rows]
                             )
                         )
-                        .group_by(Prompt.prompt_list_id)
+                        .group_by(PromptListEditionItem.edition_id)
                     )
                 ).all()
             }
@@ -2701,31 +2762,32 @@ def create_moderation_router(
             "lists": [
                 {
                     "id": str(prompt_list.id),
-                    "name": prompt_list.name,
-                    "description": prompt_list.description,
-                    "language": prompt_list.language,
+                    "name": edition.name,
+                    "description": edition.description,
+                    "language": edition.language,
                     "ownerDisplayName": display_name,
-                    "promptCount": int(prompts_by_list.get(prompt_list.id, 0)),
-                    "version": prompt_list.version,
-                    "publishedAt": (
-                        prompt_list.published_at.isoformat()
-                        if prompt_list.published_at
-                        else None
-                    ),
+                    "promptCount": int(prompts_by_edition.get(edition.id, 0)),
+                    "version": edition.number,
+                    # When they asked for it to be published.
+                    "publishedAt": edition.created_at.isoformat(),
                 }
-                for prompt_list, display_name in rows
+                for edition, prompt_list, display_name in rows
             ],
         }
 
     @router.get("/moderation/prompt-lists/{prompt_list_id}")
     async def read_held_publication(prompt_list_id: UUID, request: Request):
-        """Every prompt in a held list, at the version being decided on.
+        """Every prompt in a held list's pending edition.
 
         The queue carries a name and a count; a decision needs the words. No
         other route could supply them - the owner's route is the owner's, and
-        the catalogue and room resolution both exclude a list that is not
-        active - so without this a release was a blind one, and the switch
-        could not keep anything out that it was turned on to keep out.
+        the catalogue and room resolution both read only a live edition - so
+        without this a release was a blind one, and the switch could not keep
+        anything out that it was turned on to keep out.
+
+        The pending edition rather than the working copy (#1360): it is what
+        a release puts in front of players, and it does not change while the
+        reviewer reads it, whatever its owner saves meanwhile.
 
         Scoped to held lists rather than any list by id: it is a reading
         surface for this queue, not a general staff window into private
@@ -2735,35 +2797,28 @@ def create_moderation_router(
             await _reviewer(session, request)
             row = (
                 await session.execute(
-                    select(PromptList, User.display_name)
+                    select(PromptListEdition, User.display_name)
+                    .join(PromptList, PromptList.id == PromptListEdition.prompt_list_id)
                     .outerjoin(User, User.id == PromptList.owner_user_id)
                     .where(PromptList.id == prompt_list_id, *_held())
-                    # Held while the prompts are read, so the version sent
-                    # back is the one they were read at: a save overwrites the
-                    # working copy in place (#1359).
-                    .with_for_update(read=True, of=PromptList)
                 )
             ).one_or_none()
             if row is None:
                 raise HTTPException(
                     status_code=404, detail="That prompt list is not awaiting review."
                 )
-            prompt_list, display_name = row
-            entries = await SqlAlchemyPromptListRepository._working_copy_entries(
-                session, prompt_list.id
+            edition, display_name = row
+            entries = await SqlAlchemyPromptListRepository._edition_entries(
+                session, edition.id
             )
         return {
-            "id": str(prompt_list.id),
-            "name": prompt_list.name,
-            "description": prompt_list.description,
-            "language": prompt_list.language,
+            "id": str(prompt_list_id),
+            "name": edition.name,
+            "description": edition.description,
+            "language": edition.language,
             "ownerDisplayName": display_name,
-            "version": prompt_list.version,
-            "publishedAt": (
-                prompt_list.published_at.isoformat()
-                if prompt_list.published_at
-                else None
-            ),
+            "version": edition.number,
+            "publishedAt": edition.created_at.isoformat(),
             "prompts": [
                 {
                     "prompt": entry.answer,
@@ -2782,12 +2837,15 @@ def create_moderation_router(
         body: PublicationReviewBody,
         request: Request,
     ):
-        """Release a held publication into the catalogue, or take it down.
+        """Release a held edition into the catalogue, or take the list down.
 
         The same two outcomes a reported list has, reached without a report.
-        Releasing is the ordinary answer and the one the queue exists for;
-        hiding tells the owner, because that is the least a decision owes
-        somebody and the second use their address was collected for.
+        Releasing is the ordinary answer and the one the queue exists for: the
+        pending edition goes live and the one it replaces is dropped (#1360).
+        Hiding takes the whole list down - a moderator's finding about what
+        its owner tried to publish - drops the pending edition, and tells the
+        owner, because that is the least a decision owes somebody and the
+        second use their address was collected for.
         """
         request_id, ip_hash = await audit_coordinates(request, session_factory)
         now = datetime.now(timezone.utc)
@@ -2817,11 +2875,13 @@ def create_moderation_router(
                         status_code=403,
                         detail="Your own list is for another moderator to review.",
                     )
-                if not (
-                    prompt_list.moderation_state
-                    == PromptContentModerationState.UNDER_REVIEW.value
-                    and prompt_list.visibility
-                    == PromptListVisibility.PUBLIC.value
+                pending = (await editions_of(session, prompt_list.id)).get(
+                    EDITION_UNDER_REVIEW
+                )
+                if pending is None or not (
+                    prompt_list.visibility == PromptListVisibility.PUBLIC.value
+                    and prompt_list.moderation_state
+                    != PromptContentModerationState.HIDDEN.value
                 ):
                     # Deciding a list nobody held would be a decision made
                     # about content this queue never showed the reviewer -
@@ -2830,7 +2890,7 @@ def create_moderation_router(
                         status_code=409,
                         detail="That prompt list is not awaiting review.",
                     )
-                if prompt_list.version != body.expected_version:
+                if pending.number != body.expected_version:
                     raise HTTPException(
                         status_code=409,
                         detail=(
@@ -2838,10 +2898,13 @@ def create_moderation_router(
                             "and read it again before deciding."
                         ),
                     )
-                prompt_list.moderation_state = body.state
                 prompt_list.moderated_by_user_id = reviewer.id
                 prompt_list.moderated_at = now
-                if body.state == PromptContentModerationState.HIDDEN.value:
+                if body.state == PromptContentModerationState.ACTIVE.value:
+                    await promote_pending(session, prompt_list.id, now=now)
+                else:
+                    prompt_list.moderation_state = body.state
+                    await drop_editions(session, [pending.id], now=now)
                     owner = (
                         await session.get(User, prompt_list.owner_user_id)
                         if prompt_list.owner_user_id
@@ -2876,9 +2939,8 @@ def create_moderation_router(
                         ip_hash=ip_hash,
                         details={
                             "note": body.note,
-                            # Which content the decision was about, since the
-                            # list can be edited again after it.
-                            "version": prompt_list.version,
+                            # Which edition the decision was about.
+                            "version": pending.number,
                         },
                         created_at=now,
                     )

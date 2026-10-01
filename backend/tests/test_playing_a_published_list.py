@@ -30,6 +30,7 @@ from app.repositories.sqlalchemy import (
 )
 
 from tests.dbfixtures import create_test_db
+from tests.publishing import publish_in_place
 
 PUBLISHED_AT = datetime(2026, 9, 1, tzinfo=timezone.utc)
 
@@ -58,8 +59,7 @@ async def a_published_list(prompts, users, factory, name: str = "Published"):
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptList, UUID(created.id))
-            row.visibility = "public"
-            row.published_at = PUBLISHED_AT
+            await publish_in_place(session, row, at=PUBLISHED_AT)
     return created
 
 
@@ -96,7 +96,10 @@ async def test_start_re_authorizes_and_records_the_version_it_finds(env):
     )
 
     assert len(pinned.list_ids) == 1
-    assert pinned.list_versions == {published.id: published.version}
+    # A stranger plays the live edition, which never changes, so there is no
+    # working-copy version to check (#1360).
+    assert set(pinned.edition_ids) == {published.id}
+    assert pinned.list_versions == {}
 
 
 async def test_unpublishing_between_the_picker_and_start_refuses_the_room(env):

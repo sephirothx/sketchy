@@ -46,6 +46,8 @@ from app.db.models import (
     PromptConcept,
     PromptContentReport,
     PromptList,
+    PromptListEdition,
+    PromptListEditionItem,
     PromptListRevision,
     PromptListRevisionItem,
     PromptTakedown,
@@ -84,10 +86,20 @@ async def retire_prompt_list(
     """
     retired_at = now or datetime.now(timezone.utc)
     prompt_list.deleted_at = retired_at
-    # Its working copy's versions leave it now; a room that drew them before
-    # the deletion still writes them, so they are collected a grace later.
+    # Its working copy's versions and its editions' leave it now; a room that
+    # drew them before the deletion still writes them, so they are collected
+    # only a grace later.
     held = PromptVersion.id.in_(
-        select(Prompt.prompt_version_id).where(Prompt.prompt_list_id == prompt_list.id)
+        select(Prompt.prompt_version_id)
+        .where(Prompt.prompt_list_id == prompt_list.id)
+        .union(
+            select(PromptListEditionItem.prompt_version_id)
+            .join(
+                PromptListEdition,
+                PromptListEdition.id == PromptListEditionItem.edition_id,
+            )
+            .where(PromptListEdition.prompt_list_id == prompt_list.id)
+        )
     )
     # In id order, as every multi-row version write takes them (#1385 review).
     await session.execute(
@@ -104,6 +116,15 @@ async def retire_prompt_list(
         prompt_list.name = RETIRED_LIST_NAME
         prompt_list.description = ""
     await session.execute(delete(Prompt).where(Prompt.prompt_list_id == prompt_list.id))
+    # The editions go now too, not with the list row (#1386 review). Left for
+    # the reclaim, they named their versions, so the unlisted sweep found them
+    # referenced and unstamped them, and nothing stamped them again when the
+    # editions finally went - the text outlived the list for good. And each
+    # edition holds its own name and description, which an erasure must not
+    # leave behind. A room pinned to one is refused at its next draw.
+    await session.execute(
+        delete(PromptListEdition).where(PromptListEdition.prompt_list_id == prompt_list.id)
+    )
 
 
 @dataclass(frozen=True)
@@ -252,6 +273,7 @@ def _version_is_referenced(version_id):
         | exists().where(TurnPromptOffer.prompt_version_id == version_id)
         | exists().where(PromptUsageFact.prompt_version_id == version_id)
         | exists().where(PromptContentReport.prompt_version_id == version_id)
+        | exists().where(PromptListEditionItem.prompt_version_id == version_id)
     )
 
 
@@ -562,6 +584,31 @@ async def retire_owned_lists(
             .with_for_update()
         )
     ).all()
+    # Every version the lists hold, in one id order, before any list is
+    # retired: each retirement locks its own batch, and two sorted batches
+    # are not one order against a decision carried across the owner's lists
+    # (#1386 review). The per-list locks after this are already held.
+    list_ids = [prompt_list.id for prompt_list in lists]
+    if list_ids:
+        await session.execute(
+            select(PromptVersion.id)
+            .where(
+                PromptVersion.id.in_(
+                    select(Prompt.prompt_version_id)
+                    .where(Prompt.prompt_list_id.in_(list_ids))
+                    .union(
+                        select(PromptListEditionItem.prompt_version_id)
+                        .join(
+                            PromptListEdition,
+                            PromptListEdition.id == PromptListEditionItem.edition_id,
+                        )
+                        .where(PromptListEdition.prompt_list_id.in_(list_ids))
+                    )
+                )
+            )
+            .order_by(PromptVersion.id)
+            .with_for_update()
+        )
     for prompt_list in lists:
         already = prompt_list.deleted_at
         await retire_prompt_list(session, prompt_list, now=now, erase_copy=True)

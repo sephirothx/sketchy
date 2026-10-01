@@ -36,6 +36,7 @@ from app.repositories.sqlalchemy import (
 from tests.dbfixtures import create_test_db
 
 from tests.staffauth import mark_staff_ready
+from tests.publishing import publish_in_place
 
 PASSWORD = "a-good-password"
 
@@ -97,8 +98,7 @@ async def published(factory, prompt_list_id: str) -> None:
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptList, UUID(prompt_list_id))
-            row.visibility = "public"
-            row.published_at = datetime.now(timezone.utc)
+            await publish_in_place(session, row, at=datetime.now(timezone.utc))
 
 
 async def test_exact_prompt_and_list_reports_drive_audited_takedowns(env):
@@ -798,10 +798,11 @@ async def test_the_reviewer_can_read_every_prompt_they_are_deciding_on(env):
 async def test_an_edit_after_the_reviewer_opened_the_list_refuses_the_decision(env):
     """The bait and the switch.
 
-    An owner can edit a held list, and every save is a new revision. Without
-    the version on the decision, a moderator could read a harmless revision,
-    the owner could save a different one, and the release would put the one
-    nobody read into the catalogue.
+    An owner can publish again while an edition waits, which replaces it with
+    the next one (#1360). Without the edition's number on the decision, a
+    moderator could read a harmless edition, the owner could publish a
+    different one, and the release would put the one nobody read into the
+    catalogue.
     """
     owner, moderator_http, prompts, factory, created, held = await staffed_env(
         env, "BaitOwner", "BaitModerator"
@@ -823,6 +824,9 @@ async def test_an_edit_after_the_reviewer_opened_the_list_refuses_the_decision(e
             PromptListEntryInput(answer="something nobody reviewed"),
         ),
     )
+    await prompts.set_owned_publication(
+        owner["id"], created.id, published=True, under_review=True
+    )
 
     decision = await moderator_http.patch(
         f"/api/moderation/prompt-lists/{created.id}",
@@ -835,9 +839,39 @@ async def test_an_edit_after_the_reviewer_opened_the_list_refuses_the_decision(e
 
     assert decision.status_code == 409
     assert "changed after you opened it" in decision.json()["detail"]
-    async with factory() as session:
-        row = await session.get(PromptList, UUID(created.id))
-    assert row.moderation_state == "under_review", "nothing was released"
+    still = await prompts.get_owned(owner["id"], created.id)
+    assert still.live_edition is None, "nothing was released"
+    assert still.pending_edition.number == read["version"] + 1
+
+
+async def test_a_release_puts_live_the_edition_read_not_a_later_save(env):
+    """An edit the owner saves without publishing changes the working copy,
+    never the edition waiting for review: a release puts live exactly what
+    the moderator read (#1360)."""
+    owner, moderator_http, prompts, factory, created, held = await staffed_env(
+        env, "SaveOwner", "SaveModerator"
+    )
+    read = (
+        await moderator_http.get(f"/api/moderation/prompt-lists/{created.id}")
+    ).json()
+    await prompts.update_owned(
+        owner["id"], created.id, expected_version=held.version,
+        name="Under the switch", description="",
+        prompts=(PromptListEntryInput(answer="something nobody reviewed"),),
+    )
+
+    decision = await moderator_http.patch(
+        f"/api/moderation/prompt-lists/{created.id}",
+        json={"state": "active", "note": "Fine.", "expectedVersion": read["version"]},
+    )
+
+    assert decision.status_code == 200
+    page = await prompts.get_community(created.id)
+    assert sorted(entry.answer for entry in page.prompts) == ["badger", "otter"]
+    after = await prompts.get_owned(owner["id"], created.id)
+    assert after.pending_edition is None
+    assert after.live_edition.number == read["version"]
+    assert after.unpublished_changes is True
 
 
 async def test_the_detail_route_does_not_open_a_list_nobody_held(env):
@@ -1769,3 +1803,44 @@ async def test_a_prompt_removed_after_the_page_was_read_can_still_be_reported(en
               "reason": "other", "details": "Not in it."},
     )
     assert refused.status_code == 422
+
+
+async def test_a_list_taken_down_through_a_report_drops_its_pending_edition(env):
+    """#1386 review: a hidden list waits for nothing. A takedown from a
+    report left the update waiting beside it, so its owner read "under
+    review" in a queue that excludes hidden lists."""
+    from app.services.prompt_editions import UNDER_REVIEW, editions_of
+
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "PendingOwner")
+    await register(reporter_http, "PendingReporter")
+    moderator = await register(moderator_http, "PendingModerator")
+    await _staff_member(factory, moderator, UserRole.MODERATOR)
+    created = await prompts.create_owned(
+        owner["id"], name="Waiting update", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gull"),),
+    )
+    live = await prompts.set_owned_publication(owner["id"], created.id, published=True)
+    edited = await prompts.update_owned(
+        owner["id"], created.id, expected_version=live.version, name="Waiting update",
+        description="", prompts=(PromptListEntryInput(answer="crab"),),
+    )
+    held = await prompts.set_owned_publication(
+        owner["id"], created.id, published=True, under_review=True
+    )
+    assert held.pending_edition is not None and edited.version == held.version
+    filed = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": created.id, "reason": "other", "details": "Take it down."},
+    )
+    assert filed.status_code == 201, filed.text
+
+    decided = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
+        json={"status": "resolved", "note": "hidden", "moderationState": "hidden"},
+    )
+
+    assert decided.status_code == 200, decided.text
+    async with factory() as session:
+        assert UNDER_REVIEW not in await editions_of(session, UUID(created.id))

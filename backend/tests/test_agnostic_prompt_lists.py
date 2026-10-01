@@ -39,6 +39,7 @@ from app.repositories.sqlalchemy import (
 )
 
 from tests.dbfixtures import create_test_db
+from tests.publishing import publish_in_place
 
 
 def test_zxx_is_a_list_language_and_never_a_room_one():
@@ -93,8 +94,9 @@ async def _publish(factory, list_id: str) -> None:
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptList, UUID(list_id))
-            row.visibility = "public"
-            row.published_at = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+            await publish_in_place(
+                session, row, at=datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
+            )
 
 
 async def _list(prompts, owner_id: str, name: str, language: str, *answers: str):

@@ -40,6 +40,7 @@ from app.repositories.sqlalchemy import (
 )
 from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from tests.dbfixtures import create_test_db
+from tests.publishing import publish_in_place
 
 PUBLISHED_AT = datetime(2026, 9, 1, tzinfo=timezone.utc)
 
@@ -77,8 +78,14 @@ async def set_list(factory, prompt_list_id: str, **columns) -> None:
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptList, UUID(prompt_list_id))
+            published_at = columns.pop("published_at", None)
+            visibility = columns.pop("visibility", None)
             for column, value in columns.items():
                 setattr(row, column, value)
+            if visibility == "public":
+                await publish_in_place(session, row, at=published_at)
+            elif visibility is not None:
+                row.visibility, row.published_at = visibility, published_at
 
 
 async def a_published_list(prompts, factory, owner_id: str, name: str = "Creatures of the deep"):
@@ -179,7 +186,9 @@ async def test_a_deleted_original_is_credited_without_its_name_even_after_the_sw
     assert await credit_seen_by_owner(http, factory, bo.id, copy_id) == deleted
 
 
-async def test_the_credit_follows_a_renamed_original(env):
+async def test_the_credit_follows_a_renamed_original_once_it_is_published(env):
+    """The credit names the original as players see it: a rename its owner
+    has not published yet is theirs alone (#1360)."""
     http, users, prompts, factory = env
     ada = await account(users, "Ada")
     source = await a_published_list(prompts, factory, ada.id)
@@ -187,7 +196,9 @@ async def test_the_credit_follows_a_renamed_original(env):
     copy_id = await copy_as(http, factory, bo.id, source.id)
 
     await set_list(factory, source.id, name="Deep sea, revised")
+    assert (await credit_seen_by_owner(http, factory, bo.id, copy_id))["name"] == "Creatures of the deep"
 
+    await prompts.set_owned_publication(ada.id, source.id, published=True)
     assert (await credit_seen_by_owner(http, factory, bo.id, copy_id))["name"] == "Deep sea, revised"
 
 

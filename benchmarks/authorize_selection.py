@@ -6,7 +6,9 @@ two different prompts under the room's fold, and in a mixed-language room it
 asks that of every room language. Seeds one account with ``--lists`` lists of
 ``--prompts`` prompts and ``--aliases`` aliases each, in ``--language`` (``zxx``,
 language-agnostic, is the case a mixed room folds seven times), then authorizes
-the whole selection twice: cold, and again unchanged.
+the whole selection twice: cold, and again unchanged. With ``--host stranger``
+the lists are published and another account authorizes them, so the room plays
+each one's live edition rather than its working copy (#1360).
 
 For each: the statements issued, process CPU, wall time, and the worst wait a
 1 ms ticker saw on the loop meanwhile.
@@ -40,12 +42,13 @@ async def run(args) -> dict:
     probe = Probe(engine)
     try:
         repo = SqlAlchemyPromptListRepository(factory)
-        user_id = generate_uuid()
+        user_id, stranger_id = generate_uuid(), generate_uuid()
         async with factory() as session, session.begin():
-            await session.execute(insert(User), [{
-                "id": user_id, "display_name": "Host", "username": "Host",
-                "password_hash": "hash", "state": "registered",
-            }])
+            await session.execute(insert(User), [
+                {"id": account, "display_name": name, "username": name,
+                 "password_hash": "hash", "state": "registered"}
+                for account, name in ((user_id, "Host"), (stranger_id, "Stranger"))
+            ])
         owner = str(user_id)
         slugs = []
         for index in range(args.lists):
@@ -54,15 +57,18 @@ async def run(args) -> dict:
                 prompts=entries(args.prompts, args.aliases, salt=f"l{index}x"),
             )
             slugs.append(created.slug)
+            if args.host == "stranger":
+                await repo.set_owned_publication(owner, created.id, published=True)
+        host = owner if args.host == "owner" else str(stranger_id)
         room = MIXED_PROMPT_LANGUAGE if args.room == "mixed" else args.room
 
         def authorize():
-            return repo.authorize_selection(slugs, requesting_user_id=owner, expected_language=room)
+            return repo.authorize_selection(slugs, requesting_user_id=host, expected_language=room)
 
         cold_selection, cold = await probe.measure(authorize())
         _, warm = await probe.measure(authorize())
         return {
-            "selection": f"{args.lists} lists x {args.prompts} prompts x {args.aliases} aliases, {args.language}, room {args.room}",
+            "selection": f"{args.lists} lists x {args.prompts} prompts x {args.aliases} aliases, {args.language}, room {args.room}, host {args.host}",
             "prompt_count": cold_selection.prompt_count,
             "cold": cold,
             "warm": warm,
@@ -78,6 +84,7 @@ def main() -> None:
     parser.add_argument("--aliases", type=int, default=20)
     parser.add_argument("--language", default="zxx")
     parser.add_argument("--room", default="mixed", help="`mixed`, or a room language such as en")
+    parser.add_argument("--host", choices=("owner", "stranger"), default="owner")
     args = parser.parse_args()
     print(json.dumps(asyncio.run(run(args)), indent=2))
 

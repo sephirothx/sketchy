@@ -99,12 +99,20 @@ export interface CopiedFrom {
   ownerDisplayName: string | null;
 }
 
+/** One edition of a published list: an immutable snapshot of its working
+ * copy (#1360). `publishedAt` is null while it waits for review. */
+export interface PromptListEdition {
+  number: number;
+  createdAt: string;
+  publishedAt: string | null;
+}
+
 export interface OwnedPromptList extends PromptListSummary {
   id: string;
   /** Private until published; only publishing changes it (R-LIST-02). */
   visibility: "private" | "public";
   moderationState: "active" | "under_review" | "hidden";
-  /** Curated tag slugs on the list's current revision, in vocabulary order. */
+  /** Curated tag slugs on the working copy, in vocabulary order. */
   tags: string[];
   /** How many people starred it. Who they are is disclosed to nobody. */
   starCount: number;
@@ -112,6 +120,13 @@ export interface OwnedPromptList extends PromptListSummary {
   copyCount: number;
   /** Where this list was copied from, or null if it was not a copy (R-LIST-21). */
   copiedFrom: CopiedFrom | null;
+  /** What readers and other rooms see, while the list is published (#1360). */
+  liveEdition: PromptListEdition | null;
+  /** An edition held for review by the operator switch (R-LIST-13). */
+  pendingEdition: PromptListEdition | null;
+  /** The working copy differs from the latest edition: the pending one while
+   * one waits, else the live one. */
+  unpublishedChanges: boolean;
   createdAt: string;
   updatedAt: string;
   prompts: OwnedPromptEntry[];

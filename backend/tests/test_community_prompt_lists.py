@@ -35,6 +35,7 @@ from app.repositories.sqlalchemy import (
 )
 
 from tests.dbfixtures import create_test_db
+from tests.publishing import publish_in_place
 
 PUBLISHED_AT = datetime(2026, 9, 1, 12, 0, tzinfo=timezone.utc)
 
@@ -87,8 +88,7 @@ async def published(
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptList, UUID(created.id))
-            row.visibility = "public"
-            row.published_at = at
+            await publish_in_place(session, row, at=at)
             for index in range(stars):
                 fan = await users.create_anonymous(f"{name} fan {index}")
                 session.add(
@@ -641,9 +641,10 @@ async def test_publishing_through_the_repository_resets_the_ranking(env):
 
 
 async def test_a_cached_page_holds_to_its_tag_filter_when_a_list_is_retagged(env):
-    """The ranking is kept per filter, but tags live on the revision: a save
-    that drops a tag must take the list off that tag's page, and one that adds
-    it must put the list on, without waiting out the TTL."""
+    """The ranking is kept per filter, and tags live on the edition: a Publish
+    update that drops a tag must take the list off that tag's page, and one
+    that adds it must put the list on, without waiting out the TTL. A save
+    alone changes nothing a reader sees (#1360)."""
     _, users, prompts, factory = env
     owner = await account(users, "Tagger")
     nature = await published(prompts, factory, owner.id, "Coast", tags=("nature",), users=users)
@@ -659,5 +660,9 @@ async def test_a_cached_page_holds_to_its_tag_filter_when_a_list_is_retagged(env
             prompts=tuple(PromptListEntryInput(answer=entry.answer) for entry in current.prompts),
             tags=tags,
         )
+    page = await cached.list_community(tags=("nature",))
+    assert [(row.name, row.tags) for row in page.lists] == [("Coast", ("nature",))]
+    for made in (nature, other):
+        await cached.set_owned_publication(owner.id, made.id, published=True)
     page = await cached.list_community(tags=("nature",))
     assert [(row.name, row.tags) for row in page.lists] == [("Town", ("nature",))]

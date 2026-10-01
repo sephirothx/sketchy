@@ -53,6 +53,8 @@ LIST_TAG_VOCABULARY: tuple[tuple[str, str], ...] = (
 )
 
 LIST_TAG_SLUGS = frozenset(slug for slug, _ in LIST_TAG_VOCABULARY)
+# The vocabulary's order, which is the order a list's tags are shown and stored in.
+LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 
 # How many of a room's lists may be players' own or published ones (#1374).
 # What a selection costs to authorize grows with its answers and aliases, and

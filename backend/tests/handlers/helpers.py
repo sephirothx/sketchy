@@ -337,7 +337,7 @@ class StubPromptListRepo:
 
     async def sample_prompts(
         self, list_ids, *, limit, exclude_match_keys=(), exclude_language=None,
-        expected_versions=None,
+        expected_versions=None, edition_ids=None,
     ):
         self.draws += 1
         # Keys in another fold are not compared, as in the live store.
@@ -369,7 +369,9 @@ class StubPromptListRepo:
             drawable=len(drawable),
         )
 
-    async def sample_mixed_prompts(self, list_ids, *, limit, expected_versions=None):
+    async def sample_mixed_prompts(
+        self, list_ids, *, limit, expected_versions=None, edition_ids=None
+    ):
         self.draws += 1
         drawable = list(self.prompts)
         random.shuffle(drawable)

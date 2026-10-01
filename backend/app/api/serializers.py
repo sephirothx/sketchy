@@ -14,6 +14,7 @@ from app.repositories.interfaces import (
     CommunityPromptList,
     CommunityPromptListDetail,
     CopiedFrom,
+    EditionSummary,
     OwnedPromptList,
     PromptListSummary,
     PromptStatsSummary,
@@ -249,6 +250,16 @@ def community_prompt_list_detail_payload(prompt_list: CommunityPromptListDetail)
     }
 
 
+def _edition_payload(edition: EditionSummary | None) -> dict | None:
+    if edition is None:
+        return None
+    return {
+        "number": edition.number,
+        "createdAt": _timestamp(edition.created_at),
+        "publishedAt": _timestamp(edition.published_at) if edition.published_at else None,
+    }
+
+
 def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
     return {
         "id": prompt_list.id,
@@ -267,6 +278,11 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
         "starCount": prompt_list.star_count,
         "copyCount": prompt_list.copy_count,
         "copiedFrom": copied_from_payload(prompt_list.copied_from),
+        # What players see (#1360): the live edition, one waiting for review,
+        # and whether the working copy has changes not yet published.
+        "liveEdition": _edition_payload(prompt_list.live_edition),
+        "pendingEdition": _edition_payload(prompt_list.pending_edition),
+        "unpublishedChanges": prompt_list.unpublished_changes,
         "createdAt": _timestamp(prompt_list.created_at),
         "updatedAt": _timestamp(prompt_list.updated_at),
         "prompts": [

@@ -436,7 +436,11 @@ export function MyPromptListsPage() {
                   {ui.myPromptListsPage.listSummary({
                     prompts: item.promptCount,
                     visibility: visibilityLabel(item.visibility),
-                    moderationState: moderationLabel(item.moderationState),
+                    // The hold is on an edition now, not the list (#1360) -
+                    // and a moderator's takedown outranks it (#1386 review).
+                    moderationState: item.moderationState !== "hidden" && item.pendingEdition
+                      ? ui.myPromptListsPage.underReview
+                      : moderationLabel(item.moderationState),
                   })}
                 </span>
             </button>)}
@@ -633,7 +637,8 @@ export function MyPromptListsPage() {
                 : <span />}
               <div className="prompt-list-manager-buttons">
                 {selectedId && <button type="button" className="btn btn-danger-ghost btn-compact" disabled={busy} onClick={() => setConfirmingDelete(true)}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
-                {selectedId && !copiedFrom && moderationState === "active" && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
+                {selectedId && !copiedFrom && moderationState === "active"
+                  && !lists.find((item) => item.id === selectedId)?.pendingEdition && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
                 <button type="submit" className="btn btn-primary btn-compact" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
               </div>
             </div>

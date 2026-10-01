@@ -552,7 +552,7 @@ Prompt-list governance is schema-first and deny-by-default. A user-owned list
 is **Private** or **Published** and nothing else: it starts Private, and only
 publishing changes that, never a save. Official bundled lists are always public. Ownership, the list a copy was
 taken from, structured tags, moderation actor/time, and the
-Active/Under review/Hidden moderation state are relational fields with
+Active/Hidden moderation state are relational fields with
 portable constraints—never JSON tags or a lossy `is_nsfw` flag. Difficulty and
 content rating remain on the exact immutable prompt version where their
 meaning belongs. Community discovery — publishing a list, the community
@@ -578,16 +578,20 @@ Publishing a list puts it in the **Community catalogue**, where anyone can find
 and play it. It is a deliberate act with its own controls rather than a
 visibility setting: it needs a confirmed email address and no unread moderator
 warning, it is rate-limited, it is recorded in the audit ledger, and editing a
-published list never takes it back out. Unpublishing does, at once, and leaves
-its stars where they are. Any published list can also be **forked** — copied into a private list
+published list never takes it back out. Publishing makes an **edition** — a snapshot of
+the list as it stands — and that is what the catalogue shows and what everyone else plays
+and copies; the owner's later edits change only their own copy (and the rooms they host)
+until they publish again, which replaces the edition. Unpublishing takes the list out
+of the catalogue at once and leaves its stars where they are. Any published list can also be **forked** — its edition copied into a private list
 of your own, recording the list it came from. A fork is independent
 content from the moment it exists, gets its own prompt versions, leaves out
 anything a moderator had hidden, and counts against your 25-list allowance. Community content is moderated **after** publication,
 through the same report and review path any player-authored content uses — an
 administrator can switch new publications into a review queue instead
 (`POST /api/admin/prompt-list-review`) without a redeploy, if that stops being
-enough. Lists held that way wait in a moderation queue of their own, where a
-moderator releases them into the catalogue or takes them down; it is separate
+enough. A publication held that way — a first one or an update, while the edition
+already out keeps playing unless the owner had withdrawn the list — waits in a moderation queue of its own, where a
+moderator releases it into the catalogue or takes the list down; it is separate
 from the report queue because nothing was reported — they were held by a policy,
 not an accusation. Players browse published lists at **Community catalogue**, reached from the
 account menu, and open one to read every prompt in it before

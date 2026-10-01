@@ -390,7 +390,10 @@ async def test_the_operator_switch_sends_a_new_publication_to_review(env):
 
     assert published.status_code == 200
     assert published.json()["visibility"] == "public"
-    assert published.json()["moderationState"] == "under_review"
+    # The hold is on the edition, not the list (#1360).
+    assert published.json()["moderationState"] == "active"
+    assert published.json()["liveEdition"] is None
+    assert published.json()["pendingEdition"]["number"] == 1
 
 
 async def test_a_hidden_list_cannot_be_published_by_its_owner(env):

@@ -29,7 +29,7 @@ sys.path.insert(0, BACKEND)
 
 from sqlalchemy import insert, text  # noqa: E402
 
-from app.db.models import PromptList, PromptListStar, User, generate_uuid  # noqa: E402
+from app.db.models import PromptList, PromptListEdition, PromptListStar, User, generate_uuid  # noqa: E402
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository  # noqa: E402
 from tests.dbfixtures import create_test_db  # noqa: E402
 
@@ -52,11 +52,21 @@ async def _seed(factory, lists: int, owners: int, stars: int) -> None:
             {"id": list_id, "owner_user_id": owner_ids[index % owners], "slug": f"user-{list_id}",
              "name": f"List {index}", "description": "", "language": "en", "is_bundled": False,
              "visibility": "public", "moderation_state": "active", "version": 1,
-             "published_at": now - timedelta(minutes=index)}
+             "edition_count": 1, "published_at": now - timedelta(minutes=index)}
             for index, list_id in enumerate(list_ids)
         ]
         for start in range(0, len(rows), 2000):
             await session.execute(insert(PromptList), rows[start : start + 2000])
+        # What the catalogue shows is each list's live edition (#1360).
+        editions = [
+            {"id": generate_uuid(), "prompt_list_id": row["id"], "number": 1,
+             "state": "published", "name": row["name"], "description": "", "language": "en",
+             "content_hash": "", "letter_counts": {}, "letter_total": 0,
+             "created_at": row["published_at"], "published_at": row["published_at"]}
+            for row in rows
+        ]
+        for start in range(0, len(editions), 2000):
+            await session.execute(insert(PromptListEdition), editions[start : start + 2000])
         given = []
         per_fan = max(1, stars // fans)
         for index, fan in enumerate(fan_ids):

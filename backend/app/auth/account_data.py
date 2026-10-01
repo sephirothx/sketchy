@@ -53,6 +53,7 @@ from app.db.models import (
     PromptAlias,
     PromptContentReport,
     PromptList,
+    PromptListEdition,
     PromptListStar,
     PromptTakedown,
     PromptVersion,
@@ -1062,8 +1063,17 @@ async def _write_export_artifact(
     await _write_rows(
         writer,
         session,
-        select(PromptListStar, PromptList.name)
+        # The name the reader saw: the live edition's, not an unpublished
+        # rename that is its owner's alone (#1386 review).
+        select(PromptListStar, func.coalesce(PromptListEdition.name, PromptList.name))
         .join(PromptList, PromptList.id == PromptListStar.prompt_list_id)
+        .outerjoin(
+            PromptListEdition,
+            and_(
+                PromptListEdition.prompt_list_id == PromptList.id,
+                PromptListEdition.state == "published",
+            ),
+        )
         .where(PromptListStar.user_id.in_(identity_ids))
         .order_by(PromptListStar.created_at, PromptListStar.prompt_list_id),
         lambda row: {
