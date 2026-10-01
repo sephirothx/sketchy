@@ -52,9 +52,18 @@ async def _choices_in_a_new_room(host, guest, list_id: str) -> set[str]:
     await host.goto(f"{BASE_URL}/create?list={list_id}")
     await host.click('summary:has-text("Prompts")')
     # The carried list's branch of the tree opens because it is chosen (#1388).
-    await expect(
-        host.locator(".prompt-list-check").filter(has_text="Shore words").locator("input")
-    ).to_be_checked()
+    # It arrives with a catalogue read of its own, after the form; a shared CI
+    # runner can take longer than `expect`'s five seconds to land it.
+    carried = host.locator(".prompt-list-check").filter(has_text="Shore words").locator("input")
+    try:
+        await expect(carried).to_be_checked(timeout=15000)
+    except AssertionError as error:
+        chosen = await host.evaluate(
+            """() => [...document.querySelectorAll('.prompt-list-check')].map(
+                 (row) => `${row.textContent.trim()}=${row.querySelector('input').checked}`)"""
+        )
+        language = await host.locator(".create-room-language-field").inner_text()
+        raise AssertionError(f"carried list not chosen; form held {chosen} in {language!r}") from error
     # Only this list: nothing built-in mixed in.
     for box in await host.locator(".prompt-list-check input:checked").all():
         if "Shore words" not in await box.locator("xpath=..").inner_text():
