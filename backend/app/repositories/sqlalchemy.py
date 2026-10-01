@@ -5737,10 +5737,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         admitted only with its **family** - the bundled lists whose current
         revisions hold exactly its concepts - and only when that family spells
         every concept in every room language, because every seat must be able
-        to play every prompt in its own. Today that is Standard alone
-        (R-PROMPT-01); a list in one language is refused by name rather than
-        quietly narrowing who may sit down. Asked of the data, not of a slug,
-        so a family made some other way is admitted the same way.
+        to play every prompt in its own. Today that is Standard and Extended
+        (R-PROMPT-01), and never Local; a list in one language is refused by
+        name rather than quietly narrowing who may sit down. Asked of the data,
+        not of a slug, so a family made some other way is admitted the same way.
         """
         bundled_current = (
             await session.execute(
@@ -6257,8 +6257,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
             alias_rows = []
             if rows:
-                # Joined to the items rather than listed by id: a selection at
-                # its ceiling is 10,000 versions, too many to bind one by one.
+                # Joined to the items rather than listed by id: Standard and
+                # Extended pinned in every language are ~17,000 versions on
+                # their own (#1367), too many to bind one by one.
                 alias_rows = await _rows_in_chunks(
                     session,
                     select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)

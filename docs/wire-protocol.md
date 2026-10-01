@@ -882,7 +882,7 @@ mirrors it with every field optional (absent means *unchanged*).
 | `allowedTools` | string[] | `["brush","fill","shapes"]` | at least one of `brush`/`shapes` must remain |
 | `colorMode` | string | `"all"` | `all \| palette \| colorblind_safe \| black_and_white` |
 | `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, `pl`, or `mul` for a mixed-language room (#1182). **Create only** — see below |
-| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard - and empty ⇒ Standard in every language (R-PROMPT-13) |
+| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard or Extended, never Local - and empty ⇒ Standard in every language (R-PROMPT-13) |
 
 `create_room` adds `nickname`, `nameColor`
 (`#rrggbb`), `colorblindSafeColors`, and `seatLanguage` - the language the creator plays

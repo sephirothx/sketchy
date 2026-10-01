@@ -221,7 +221,8 @@ export function RoomSetupForm({
                   onChange={(next) => onChange({
                     promptLanguage: next as RoomLanguage,
                     // A list in a language cannot follow the room into
-                    // another; one in no language can (#821).
+                    // another, except Extended, which every language has
+                    // (#1367); one in no language can (#821).
                     promptListSlugs: selectionForLanguage(loadedLists, next, promptListSlugs, playLanguage),
                   })}
                 />

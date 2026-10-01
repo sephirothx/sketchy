@@ -9,6 +9,8 @@ import { useToast } from "../lib/toast";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, EditableRoomSettings, PromptListSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { selectionInPlayLanguage } from "../lib/promptLanguages";
+import { useSettingsStore } from "../store/settingsStore";
 import { ui } from "../content/ui/index.ts";
 
 const emptySettings: EditableRoomSettings = {
@@ -75,6 +77,10 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
   // itself follows only while the host has not touched it.
   const roomColorMode = useGameStore((state) => state.colorMode);
   const seatLanguage = useGameStore((state) => state.seatLanguage);
+  // The language the form shows a mixed room's lists in: the same fallback
+  // `RoomSetupForm` uses, so the selection and the picker agree.
+  const preferredLanguage = useSettingsStore((state) => state.promptLanguage);
+  const playLanguage = seatLanguage ?? preferredLanguage;
   const [seenColorMode, setSeenColorMode] = useState(roomColorMode);
   if (roomColorMode !== seenColorMode) {
     setSeenColorMode(roomColorMode);
@@ -128,6 +134,29 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // A mixed room's Standard and Extended are shown in this host's language
+  // (R-PROMPT-13), whichever language's copy the room was saved with: an
+  // English host's `english_extended` is German Extended to a German one, or
+  // the chip reads unselected and the list cannot be taken out. The baseline
+  // moves with the draft, so a mapping alone is not a change to save.
+  const mappedFor = useRef<{ lists: PromptListSummary[]; language: string } | null>(null);
+  useEffect(() => {
+    if (loading || loadedLists.length === 0) return;
+    if (mappedFor.current?.lists === loadedLists && mappedFor.current.language === playLanguage) return;
+    mappedFor.current = { lists: loadedLists, language: playLanguage };
+    const inOwn = (current: RoomSetupValues): RoomSetupValues => ({
+      ...current,
+      promptListSlugs: selectionInPlayLanguage(
+        loadedLists,
+        current.promptLanguage,
+        current.promptListSlugs,
+        playLanguage,
+      ),
+    });
+    setValues(inOwn);
+    setBaseline(inOwn);
+  }, [loading, loadedLists, playLanguage]);
 
   const promptsError = customPrompts.analysis.hasErrors;
   const dirty = useMemo(() => {
@@ -226,7 +255,7 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
           onListsLoaded={setLoadedLists}
           loadedLists={loadedLists}
           languageLocked
-          playLanguage={seatLanguage ?? undefined}
+          playLanguage={playLanguage}
         />
       )}
       {error && <p className="create-room-error" role="alert">{error}</p>}
