@@ -195,7 +195,15 @@ export function createProtocolRenderer(
     }
   };
 
-  const playOut = () => {
+  // A piece is its budget plus, at most, the one action that crosses it: an
+  // action is never begun once the budget is spent - the last one included,
+  // which used to ride along with the action before it, two fills in one
+  // task wherever a fill alone outlasts the budget (a 226 ms task on a CI
+  // runner at 4x, #1347). `inline` is the piece run inside the task that
+  // delivered the history, which has already decoded and adopted it at the
+  // page's expense: it paints no fill, and leaves those to pieces of their
+  // own.
+  const playOut = (inline = false) => {
     const job = live;
     const surface = surfaceRef.current;
     if (!job || !surface) {
@@ -208,18 +216,22 @@ export function createProtocolRenderer(
     if (job.next > actions.length) job.next = checkpoints.begin(surface.pixels, actions);
     const started = now();
     const hurry = !liveReplay!.live();
-    while (job.next < actions.length - 1) {
+    let painted = 0;
+    for (;;) {
+      if (!hurry && painted > 0 && now() - started >= sliceMs) break;
+      if (!hurry && inline && actions[job.next]?.kind === "fill") break;
+      if (job.next >= actions.length - 1) {
+        if (job.next < actions.length) checkpoints.step(surface.pixels, actions, job.next++);
+        live = null;
+        commitAll(surface);
+        resumeAfter(actions);
+        return;
+      }
       checkpoints.step(surface.pixels, actions, job.next++);
-      if (!hurry && now() - started >= sliceMs) break;
+      painted += 1;
     }
-    if (job.next >= actions.length - 1) {
-      if (job.next < actions.length) checkpoints.step(surface.pixels, actions, job.next++);
-      live = null;
-      commitAll(surface);
-      resumeAfter(actions);
-      return;
-    }
-    commitAll(surface);
+    // Nothing painted leaves what the canvas showed until the next piece.
+    if (painted > 0) commitAll(surface);
     nextTask!(() => {
       if (live === job) playOut();
     });
@@ -329,10 +341,10 @@ export function createProtocolRenderer(
       return;
     }
     if (liveReplay?.live()) {
-      // The first piece now, so a short history is on the canvas before
-      // this returns, exactly as it was.
+      // The first piece now, so a short history of strokes is on the canvas
+      // before this returns, as it was; its fills wait for pieces of their own.
       live = { actions, next: checkpoints.begin(surface.pixels, actions) };
-      playOut();
+      playOut(true);
       return;
     }
     checkpoints.replayInto(surface.pixels, actions);
