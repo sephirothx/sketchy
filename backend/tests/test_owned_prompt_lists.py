@@ -960,3 +960,88 @@ async def test_a_collision_the_fold_created_since_the_rows_were_written_is_caugh
             assert (await repo.authorize_selection([slug], requesting_user_id=owner_id)).prompt_count == 1
     finally:
         await engine.dispose()
+
+
+# --- #1385 review: the draw is held to what was checked ----------------------
+
+
+async def test_a_draw_refuses_a_list_saved_since_it_was_checked():
+    """A save between authorization and the draw could add an answer that
+    collides with another selected list's - `beaver` with the alias `otter`
+    beside a list holding `otter` - which the check never saw. The draw
+    refuses content at any version but the one checked."""
+    from app.repositories.interfaces import PromptListsChangedError
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        first = await repo.create_owned(
+            owner_id, name="First", description="", language="en",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        second = await repo.create_owned(
+            owner_id, name="Second", description="", language="en",
+            prompts=(PromptListEntryInput(answer="panda"),),
+        )
+        pinned = await repo.authorize_selection(
+            [first.slug, second.slug], requesting_user_id=owner_id
+        )
+        await repo.update_owned(
+            owner_id, second.id, expected_version=second.version, name="Second",
+            description="", prompts=(PromptListEntryInput(answer="beaver", aliases=("otter",)),),
+        )
+
+        with pytest.raises(PromptListsChangedError):
+            await repo.sample_prompts(
+                list(pinned.list_ids), limit=5, expected_versions=pinned.list_versions
+            )
+        with pytest.raises(PromptListSelectionError, match="ambiguous"):
+            await repo.authorize_selection([first.slug, second.slug], requesting_user_id=owner_id)
+        # Unchanged, it draws.
+        again = await repo.authorize_selection([first.slug], requesting_user_id=owner_id)
+        drawn = await repo.sample_prompts(
+            list(again.list_ids), limit=5, expected_versions=again.list_versions
+        )
+        assert [prompt.answer for prompt in drawn.prompts] == ["otter"]
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    not __import__("os").environ.get("TEST_DATABASE_URL"),
+    reason="READ COMMITTED snapshots are PostgreSQL's",
+)
+async def test_a_save_landing_mid_draw_does_not_take_the_drawn_prompts_sources(monkeypatch):
+    """The draw reads its prompts, then where each came from. A save that
+    rewords a drawn prompt between the two statements left it with no source
+    - no provenance and no usage facts (#1385 review). The draw reads one
+    snapshot."""
+    import app.repositories.sqlalchemy as repository
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id, name="Mine", description="", language="en",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        pinned = await repo.authorize_selection([created.slug], requesting_user_id=owner_id)
+        original = repository._source_lists
+
+        async def a_save_lands_first(session, pins, version_ids):
+            await repo.update_owned(
+                owner_id, created.id, expected_version=created.version, name="Mine",
+                description="",
+                prompts=(PromptListEntryInput(answer="sea otter", concept_id=created.prompts[0].concept_id),),
+            )
+            return await original(session, pins, version_ids)
+
+        monkeypatch.setattr(repository, "_source_lists", a_save_lands_first)
+        drawn = await repo.sample_prompts(
+            list(pinned.list_ids), limit=5, expected_versions=pinned.list_versions
+        )
+
+        assert [prompt.answer for prompt in drawn.prompts] == ["otter"]
+        assert drawn.prompts[0].source_list_ids == (created.id,)
+    finally:
+        await engine.dispose()

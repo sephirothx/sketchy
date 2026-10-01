@@ -738,21 +738,17 @@ A document is written, not assembled: the builder reads each section a page at a
 and hands every row to the compressor as it comes, counting the JSON bytes against
 `EXPORT_MAX_BYTES` (64 MiB before compression by default, R-PRIV-13). Past it the job is
 failed as `too_large` with no document stored; `generation_failed` is anything else.
-Prompt lists are read below the list: every content save writes the whole list again as
-a new revision, so the section grows with how often the owner saved, and it once loaded
-every revision's items as one graph - 801 saves of a 500-prompt list stalled the loop
-~3 s and took ~1 GB before failing `too_large`, repeatably (#1250). Each list's
-revisions are read as metadata, then each revision's aliases and its items by
-`revision_id`, one revision at a time with the loop given back between them
-(`_write_prompt_lists`). A revision is read whole rather than through a server-side
-cursor: it is never more than a page, and on PostgreSQL each cursor stayed open as a
-portal until the build's transaction ended, one per revision. Its aliases come one row
-per prompt, joined in the database (500 rows rather than 10,000 at the ceiling), its
-prompts are written 100 at a time, and the document is compressed at gzip level 6: level
-9 cost ~9× the CPU for 0.6% less, in 128 KB steps that held the loop ~40 ms on repetitive
-aliases. Benchmark (`export_list_revisions.py`, PostgreSQL 17, a 500-prompt list of 20
-aliases each saved 60 times): worst loop wait 45 → 20 ms, build CPU 2,059 → 389 ms;
-without aliases, 300 saves, 13.5 → 5 ms.
+Prompt lists are written one list at a time (`_write_prompt_lists`): each list's working
+copy is read whole - never more than `MAX_PROMPTS_PER_OWNED_LIST` prompts - with its
+aliases joined in the database to one row per prompt, written 100 prompts at a time, and
+the loop is given back between lists. Until #1359 every save was a revision and the export
+wrote them all; 801 saves of a 500-prompt list stalled the loop ~3 s and took ~1 GB before
+failing `too_large` (#1250). A working copy does not grow with saves: an export after 300
+saves of a 500-prompt list went from 26.6 MB / 2,693 ms to 0.1 MB / 57 ms. A list is read
+whole rather than through a server-side cursor because on PostgreSQL each cursor stayed open
+as a portal until the build's transaction ended. The document is compressed at gzip level 6:
+level 9 cost ~9× the CPU for 0.6% less, in 128 KB steps that held the loop ~40 ms on
+repetitive aliases.
 The download hands a client that accepts gzip the stored bytes untouched, and one that
 does not the same bytes decompressed a chunk at a time with the length the gzip trailer
 records — never parsed, never held whole, never compressed twice (R-PRIV-14).
@@ -1914,7 +1910,8 @@ An immutable, language-specific wording.
 `match_key` · `editorial_difficulty` (`unspecified \| easy \| medium \| hard`) ·
 `content_rating` (`everyone \| teen \| mature`) ·
 `moderation_state` (`active \| under_review \| hidden`) · `moderated_by_user_id` ·
-`moderated_at` · `unlisted_at` (nullable, partial index) · `created_at`, with
+`moderated_at` · `unlisted_at` (nullable, partial index) · `unlisted_from_list_id`
+(nullable, `SET NULL`, partial index) · `created_at`, with
 `uq_prompt_version_concept_language_version`.
 
 **`unlisted_at`** is when a save or a list's deletion last took the version out of a
@@ -1924,6 +1921,13 @@ its turns when it ends, so the hourly `unlisted_prompt_versions` sweep
 if nothing names it — no list, turn, offer, usage fact, report or takedown record; one that
 something does name is unstamped, kept by that reference from then on. A revision used to
 keep a replaced wording that long; a save writes none now.
+
+**`unlisted_from_list_id`** is the list it was taken out of, set and cleared with
+`unlisted_at`. A reader who opened a catalogue page before the save can still report the
+prompt they saw on that list during the grace window — membership is the working copy
+*or* a version unlisted from that list — and a takedown decided then still reaches the
+list's owner. Without it, an owner could edit a reported word out of the list and the
+report would be refused as "not on this list" (#1385 review).
 
 A moderator's decision is the concept's, not one wording's: resolving a report sets
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
@@ -2058,8 +2062,8 @@ A reviewer reads the prompts through `GET /api/moderation/prompt-lists/{id}`, an
 decision carries the `version` they read. Both are needed. Without the first, a release
 was made from a name and a prompt count, so the switch could not keep out anything it
 was turned on to keep out. Without the second, reading was not enough either: an owner
-can edit a held list, every save is a new revision (R-LIST-05), and a moderator could
-read one revision and release the next — the bait and the switch. A stale version is a
+can edit a held list, every save bumps its version (R-LIST-05), and a moderator could
+read one version and release the next — the bait and the switch. A stale version is a
 409, and the audit event records which version was decided on, since the list can be
 edited again afterwards.
 
@@ -2069,8 +2073,8 @@ and it is **not retroactive**, since sweeping already-published lists into a que
 both punish people for a rule that did not exist when they acted and produce, in one
 moment, the backlog this design exists to avoid.
 
-**Three grounds admit a list into a room**, checked in the one `_pinned_revisions`
-helper that room creation and Start's re-authorization share: bundled, owned by the
+**Three grounds admit a list into a room**, checked in the one `_pinned_lists` (and, for a mixed room,
+`_pinned_mixed_lists`) helper that room creation and Start's re-authorization share: bundled, owned by the
 requester, or **published**. The sharing is the point — the
 checks a room is admitted by stay the checks its prompts are drawn under (R-LIST-07), so
 an unpublish or a takedown between the picker and Start refuses the room visibly rather

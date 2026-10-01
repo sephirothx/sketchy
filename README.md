@@ -2583,8 +2583,8 @@ checks or deleted, are included in the owner's private data export, and are
 erased on account deletion.
 
 Presets retain stable IDs for active built-in prompt
-lists or lists owned by the preset owner, then resolve their latest authorized
-revision when applied. Deleted, hidden, or no-longer-owned references produce a
+lists or lists owned by the preset owner, then resolve the list as it is
+when applied. Deleted, hidden, or no-longer-owned references produce a
 visible error. Quick custom prompts are never stored in a preset; save them as
 an owned list first. No
 built-in preset catalogue or preset sharing exists in v1.

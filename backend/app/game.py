@@ -418,7 +418,7 @@ class Game:
     prompt_pool: list[str] | None = None
     prompt_answers: dict[str, str] = field(default_factory=dict)
     # How often each a-z letter appears across the pool this sample was drawn
-    # from, summed from the pinned revisions. Empty means "count `prompt_pool`
+    # from, summed from the lists' working copies. Empty means "count `prompt_pool`
     # instead", which is what the built-in and quick-prompt-only paths do -
     # pricing a 72-prompt sample as though it were the whole pool would make
     # rare letters swing on the luck of one draw.

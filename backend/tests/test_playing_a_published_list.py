@@ -86,7 +86,7 @@ async def test_a_signed_out_caller_can_too(env):
     assert list(resolved.prompts) == ["otter"]
 
 
-async def test_start_re_authorizes_and_pins_the_revision_it_finds(env):
+async def test_start_re_authorizes_and_records_the_version_it_finds(env):
     prompts, users, factory = env
     published = await a_published_list(prompts, users, factory)
     stranger = await users.create_anonymous("Host")
@@ -96,6 +96,7 @@ async def test_start_re_authorizes_and_pins_the_revision_it_finds(env):
     )
 
     assert len(pinned.list_ids) == 1
+    assert pinned.list_versions == {published.id: published.version}
 
 
 async def test_unpublishing_between_the_picker_and_start_refuses_the_room(env):

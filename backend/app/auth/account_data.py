@@ -584,7 +584,7 @@ async def _write_rows(
 
 
 def _prompt_list_fields(prompt_list: PromptList) -> dict:
-    """A list's own fields, in document order; its revisions follow them."""
+    """A list's own fields, in document order; its prompts follow them."""
     return {
         "id": str(prompt_list.id),
         "slug": prompt_list.slug,
@@ -605,19 +605,12 @@ def _prompt_list_fields(prompt_list: PromptList) -> dict:
 async def _write_prompt_lists(
     writer: _ExportWriter, session: AsyncSession, identity_ids: list[UUID]
 ) -> None:
-    """The owner's lists, each revision's prompts read and written a page at a time.
+    """The owner's lists, each one's working copy written a page at a time.
 
-    Every content save writes the whole list again as a new revision, so what
-    this section holds grows with how often the owner saved, not with how long
-    a list is: 801 saves of a 500-prompt list are 400,500 prompts. Loaded as
-    one graph and encoded as one value per list, that stalled the loop every
-    room shares for ~3 s and took ~1 GB, and a refused build does not count
-    against the week (R-PRIV-12), so it could be asked for again at once
-    (#1250). Here a list's revisions are read as metadata, then each
-    revision's aliases and its prompts, one revision at a time, and the loop
-    is given back between them: a build holds one revision's prompts and
-    aliases, and each list's revision metadata - a row per save - rather
-    than every revision's content. The document is the one the graph made.
+    The section grows with how many lists the owner keeps, never with how
+    often they saved: a list is one working copy (#1359). Each list's
+    prompts are read and written before the next list's, with the loop given
+    back between them, so a build holds one list's prompts at a time.
     """
     writer.begin_array()
     lists = (

@@ -7,7 +7,7 @@ import hmac
 import math
 import secrets
 from collections import Counter, OrderedDict, defaultdict
-from collections.abc import Awaitable, Callable, Collection, Sequence
+from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 import dataclasses
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
@@ -177,6 +177,7 @@ from app.repositories.interfaces import (
     PromptListMutationError,
     PromptListNotFoundError,
     PromptListSelectionError,
+    PromptListsChangedError,
     MixedRoomListError,
     PromptTranslation,
     PromptSeedConflictError,
@@ -3733,6 +3734,52 @@ class _SelectionVerdict:
     ambiguous: bool
 
 
+async def _lock_versions(session: AsyncSession, *where) -> None:
+    """Take the row locks a multi-row UPDATE of prompt versions needs, in id
+    order, before it runs.
+
+    A save stamps the versions it drops and a moderator's decision carries
+    to copies in the owner's other lists; two such UPDATEs over the same
+    rows, each locking in whatever order the plan visits them, can deadlock
+    (#1385 review). Ascending ids give every writer one order.
+    """
+    await session.execute(
+        select(PromptVersion.id).where(*where).order_by(PromptVersion.id).with_for_update()
+    )
+
+
+async def _draw_snapshot(
+    session: AsyncSession, expected_versions: Mapping[str, int] | None
+) -> None:
+    """Hold a draw to one snapshot of the content authorization checked.
+
+    The working copy changes in place (#1359), so a draw that read its
+    versions, then their sources, then their false friends in separate
+    snapshots could see a save land between them - a drawn prompt whose
+    sources had gone, so no provenance and no usage facts (#1385 review).
+    REPEATABLE READ on PostgreSQL, taken before the first statement; SQLite
+    has one writer and reads one snapshot per transaction already. Then the
+    lists must still be at the versions authorization checked, or a save in
+    between could have added an answer it never saw collide.
+    """
+    if session.get_bind().dialect.name == "postgresql":
+        await session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+    if not expected_versions:
+        return
+    expected = {_entity_id(list_id): version for list_id, version in expected_versions.items()}
+    found = dict(
+        (
+            await session.execute(
+                select(PromptList.id, PromptList.version).where(
+                    PromptList.id.in_(list(expected))
+                )
+            )
+        ).all()
+    )
+    if any(found.get(list_id) != version for list_id, version in expected.items()):
+        raise PromptListsChangedError("A selected prompt list changed since it was checked.")
+
+
 async def _source_lists(
     session: AsyncSession, pinned: Sequence[UUID], version_ids: Sequence[UUID]
 ) -> defaultdict[UUID, tuple[str, ...]]:
@@ -4758,10 +4805,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             async with session.begin():
                 await require_live_account(session, forker_id, exclusive=True)
                 source = await session.scalar(
-                    select(PromptList).where(
+                    select(PromptList)
+                    .where(
                         PromptList.id == source_id,
                         *_published_by_a_player(),
                     )
+                    # One save's prompts beside the same save's name and tags
+                    # (#1385 review).
+                    .with_for_update(read=True, of=PromptList)
                 )
                 if source is None:
                     raise PromptListNotFoundError("Prompt list not found.")
@@ -4808,12 +4859,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             async with session.begin():
                 await require_live_account(session, owner_id, exclusive=True)
                 source = await session.scalar(
-                    select(PromptList).where(
+                    select(PromptList)
+                    .where(
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
                         PromptList.deleted_at.is_(None),
                     )
+                    # One save's prompts beside the same save's name and tags:
+                    # a save, holding the row FOR UPDATE, waits (#1385 review).
+                    .with_for_update(read=True)
                 )
                 if source is None:
                     raise PromptListNotFoundError("Prompt list not found.")
@@ -5424,10 +5479,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             and row.prompt_version_id != prompt_version.id
         }
         if unlisted:
+            await _lock_versions(session, PromptVersion.id.in_(unlisted))
             await session.execute(
                 update(PromptVersion)
                 .where(PromptVersion.id.in_(unlisted))
-                .values(unlisted_at=func.now())
+                .values(unlisted_at=func.now(), unlisted_from_list_id=prompt_list.id)
                 .execution_options(synchronize_session=False)
             )
         for row in removed:
@@ -5798,6 +5854,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 slugs=tuple(slugs),
                 language=language,
                 list_ids=tuple(_public_id(list_id) for list_id in list_ids),
+                list_versions={_public_id(pinned.id): pinned.version for pinned in lists},
                 prompt_count=int(prompt_count),
                 letter_counts=dict(letter_counts),
                 letter_total=letter_total,
@@ -5913,12 +5970,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         return await _rows_in_chunks(session, own_answers.union(alias_answers))
 
     async def sample_mixed_prompts(
-        self, list_ids: Sequence[str], *, limit: int
+        self,
+        list_ids: Sequence[str],
+        *,
+        limit: int,
+        expected_versions: Mapping[str, int] | None = None,
     ) -> PromptSample:
         if limit <= 0 or not list_ids:
             return PromptSample()
         pinned = [_entity_id(list_id) for list_id in list_ids]
         async with self._session_factory() as session:
+            await _draw_snapshot(session, expected_versions)
             in_pinned = [
                 PromptVersion.id.in_(
                     select(Prompt.prompt_version_id).where(
@@ -5981,6 +6043,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             ).all()
             sources = await _source_lists(session, pinned, [version.id for version in versions])
+            # In the same snapshot as the draw: false friends of the content
+            # drawn, not of a save that landed since.
+            false_friends = await self._mixed_false_friends(pinned, session=session)
 
         def form(version: PromptVersion) -> PromptTranslation:
             return PromptTranslation(
@@ -6022,11 +6087,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         return PromptSample(
             prompts=tuple(prompts),
             drawable=drawable,
-            false_friends=await self._mixed_false_friends(pinned),
+            false_friends=false_friends,
         )
 
     async def _mixed_false_friends(
-        self, list_ids: Sequence[UUID]
+        self, list_ids: Sequence[UUID], *, session: AsyncSession
     ) -> dict[str, dict[str, frozenset[str]]]:
         """`_mixed_false_friends` for these lists, remembered.
 
@@ -6036,14 +6101,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         version as well as its id: a save overwrites the working copy and
         moves the version (#1359), so one version is one content.
         """
-        async with self._session_factory() as session:
-            versions = (
-                await session.execute(
-                    select(PromptList.id, PromptList.version).where(
-                        PromptList.id.in_(list(list_ids))
-                    )
+        versions = (
+            await session.execute(
+                select(PromptList.id, PromptList.version).where(
+                    PromptList.id.in_(list(list_ids))
                 )
-            ).all()
+            )
+        ).all()
         key = tuple(sorted((str(list_id), version) for list_id, version in versions))
         remembered = self._false_friends.get(key)
         if remembered is not None:
@@ -6062,8 +6126,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
             .where(members)
         )
-        async with self._session_factory() as session:
-            rows = await _rows_in_chunks(session, answers.union(aliases))
+        rows = await _rows_in_chunks(session, answers.union(aliases))
         found = await _off_loop(
             _mixed_false_friends,
             [(language, _public_id(concept), text) for language, concept, text in rows],
@@ -6159,6 +6222,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             slugs=tuple(slugs),
             language=MIXED_PROMPT_LANGUAGE,
             list_ids=tuple(_public_id(pinned.id) for pinned in lists),
+            list_versions={_public_id(pinned.id): pinned.version for pinned in lists},
             prompt_count=verdict.prompt_count,
             letter_counts_by_language={
                 language: dict(tally) for language, tally in counts.items()
@@ -6173,12 +6237,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         limit: int,
         exclude_match_keys: Collection[str] = (),
         exclude_language: str | None = None,
+        expected_versions: Mapping[str, int] | None = None,
     ) -> PromptSample:
         if limit <= 0 or not list_ids:
             return PromptSample()
         pinned = [_entity_id(list_id) for list_id in list_ids]
         excluded = set(exclude_match_keys)
         async with self._session_factory() as session:
+            await _draw_snapshot(session, expected_versions)
             # Shadowed answers are excluded in the query rather than filtered
             # afterwards, so a draw returns what was asked for however much of
             # a list the room has claimed. Quick prompts are capped at

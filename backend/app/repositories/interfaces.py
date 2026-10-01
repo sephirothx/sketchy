@@ -659,6 +659,9 @@ class PinnedPromptSelection:
     slugs: tuple[str, ...]
     language: str
     list_ids: tuple[str, ...] = ()
+    # Each list's version when it was checked: the draw refuses content that
+    # has moved since (`PromptListsChangedError`, #1385 review).
+    list_versions: Mapping[str, int] = field(default_factory=dict)
     prompt_count: int = 0
     letter_counts: Mapping[str, int] = field(default_factory=dict)
     letter_total: int = 0
@@ -725,13 +728,23 @@ class PromptListSelectionError(ValueError):
     """A selected list is missing or cannot be combined with the others."""
 
 
+class PromptListsChangedError(PromptListSelectionError):
+    """A list was saved between the selection's authorization and the draw.
+
+    The draw is held to the content authorization checked (R-LIST-07): a save
+    in between could add an answer that collides with another list's, which
+    the check never saw (#1385 review). The caller authorizes again and draws
+    again.
+    """
+
+
 class MixedRoomListError(PromptListSelectionError):
     """A list a mixed-language room cannot draw on (#1182): one that is in a
     language but whose concepts not every room language spells."""
 
 
 class PromptSeedConflictError(ValueError):
-    """Bundled source contradicts an already-persisted immutable revision."""
+    """Bundled source contradicts what is already seeded under its slug."""
 
 
 class PromptListMutationError(ValueError):
@@ -1268,8 +1281,12 @@ class PromptListRepository(ABC):
         limit: int,
         exclude_match_keys: Collection[str] = (),
         exclude_language: str | None = None,
+        expected_versions: Mapping[str, int] | None = None,
     ) -> PromptSample:
         """Draw up to `limit` random prompts from these lists' working copies.
+
+        In one snapshot, and only of the versions `expected_versions` names -
+        the ones authorization checked - or `PromptListsChangedError`.
 
         The draw is the snapshot (R-LIST-07): what it returns is what the game
         plays, whatever the lists' owners save afterwards (#1359).
@@ -1287,7 +1304,11 @@ class PromptListRepository(ABC):
         ...
 
     async def sample_mixed_prompts(
-        self, list_ids: Sequence[str], *, limit: int
+        self,
+        list_ids: Sequence[str],
+        *,
+        limit: int,
+        expected_versions: Mapping[str, int] | None = None,
     ) -> PromptSample:
         """Draw up to `limit` random concepts for a mixed-language room (#1182).
 

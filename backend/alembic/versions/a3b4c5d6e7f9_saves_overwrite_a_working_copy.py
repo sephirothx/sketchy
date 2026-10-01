@@ -56,6 +56,21 @@ def upgrade() -> None:
     op.create_index("ix_prompt_list_tags_tag_id", "prompt_list_tags", ["tag_id"])
     with op.batch_alter_table("prompt_versions") as batch:
         batch.add_column(sa.Column("unlisted_at", sa.DateTime(timezone=True), nullable=True))
+        batch.add_column(sa.Column("unlisted_from_list_id", sa.Uuid(), nullable=True))
+        batch.create_foreign_key(
+            "fk_prompt_versions_unlisted_from_list_id",
+            "prompt_lists",
+            ["unlisted_from_list_id"],
+            ["id"],
+            ondelete="SET NULL",
+        )
+    op.create_index(
+        "ix_prompt_versions_unlisted_from_list",
+        "prompt_versions",
+        ["unlisted_from_list_id"],
+        postgresql_where=sa.text("unlisted_from_list_id IS NOT NULL"),
+        sqlite_where=sa.text("unlisted_from_list_id IS NOT NULL"),
+    )
     op.create_index(
         "ix_prompt_versions_unlisted_at",
         "prompt_versions",
@@ -88,7 +103,10 @@ def upgrade() -> None:
 
 def downgrade() -> None:
     op.drop_index("ix_prompt_versions_unlisted_at", table_name="prompt_versions")
+    op.drop_index("ix_prompt_versions_unlisted_from_list", table_name="prompt_versions")
     with op.batch_alter_table("prompt_versions") as batch:
+        batch.drop_constraint("fk_prompt_versions_unlisted_from_list_id", type_="foreignkey")
+        batch.drop_column("unlisted_from_list_id")
         batch.drop_column("unlisted_at")
     op.drop_index("ix_prompt_list_tags_tag_id", table_name="prompt_list_tags")
     op.drop_table("prompt_list_tags")

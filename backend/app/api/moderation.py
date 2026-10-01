@@ -1117,6 +1117,14 @@ async def _carry_decision_to_copies(
     )
     if not concept_ids:
         return
+    # In id order, as every multi-row version write takes them: a save in
+    # another of the owner's lists may be stamping some of these (#1385 review).
+    await session.execute(
+        select(PromptVersion.id)
+        .where(*carried, PromptVersion.concept_id.in_(concept_ids))
+        .order_by(PromptVersion.id)
+        .with_for_update()
+    )
     await session.execute(
         update(PromptVersion)
         .where(*carried, PromptVersion.concept_id.in_(concept_ids))
@@ -1356,15 +1364,26 @@ def create_moderation_router(
 
                 prompt_version = None
                 if body.prompt_version_id is not None:
-                    # A prompt the list holds now, in any of its wordings:
-                    # the reporter may have met an older one in a game or on
-                    # a page read before the owner's last save (#1359).
+                    # A prompt the list holds now, in any of its wordings, or
+                    # one a save took out of it within the grace: the reporter
+                    # may have met an older one in a game, or read it on a
+                    # page opened before the owner's last save (#1359, #1385
+                    # review).
                     prompt_version = await session.scalar(
-                        select(PromptVersion)
-                        .join(Prompt, Prompt.concept_id == PromptVersion.concept_id)
-                        .where(
+                        select(PromptVersion).where(
                             PromptVersion.id == body.prompt_version_id,
-                            Prompt.prompt_list_id == prompt_list.id,
+                            or_(
+                                select(Prompt.id)
+                                .where(
+                                    Prompt.concept_id == PromptVersion.concept_id,
+                                    Prompt.prompt_list_id == prompt_list.id,
+                                )
+                                .exists(),
+                                and_(
+                                    PromptVersion.unlisted_at.is_not(None),
+                                    PromptVersion.unlisted_from_list_id == prompt_list.id,
+                                ),
+                            ),
                         )
                     )
                     if prompt_version is None:

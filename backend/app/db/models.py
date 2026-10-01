@@ -3672,6 +3672,8 @@ class PromptVersion(Base):
         _actor_index("ix_prompt_versions_moderated_by", "moderated_by_user_id"),
         # What the unlisted-version sweep selects, oldest first (#1359).
         _actor_index("ix_prompt_versions_unlisted_at", "unlisted_at"),
+        # Deleting a list sets it null on the versions it let go of.
+        _actor_index("ix_prompt_versions_unlisted_from_list", "unlisted_from_list_id"),
         UniqueConstraint(
             "concept_id",
             "language",
@@ -3745,6 +3747,14 @@ class PromptVersion(Base):
     # (`services.prompt_reclaim.reclaim_unlisted_versions`). Revisions used
     # to keep a replaced wording that long; a save writes none now.
     unlisted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # The list it was taken out of, for as long as `unlisted_at` stands: a
+    # reader who opened the list before the save can still report what they
+    # read during the grace (#1385 review).
+    unlisted_from_list_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="SET NULL"),
+        nullable=True,
+    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )

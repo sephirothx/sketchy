@@ -283,7 +283,7 @@ def create_admin_controls_router(
         path #378 already built, because an approval queue in a
         single-operator deployment makes the catalogue's contents depend on
         the scarcest resource here - and because pre-approval fights R-LIST-05,
-        which gives every metadata edit a new immutable revision. This switch
+        under which every metadata edit is a new version of the list. This switch
         is what keeps that a reversible decision: with it on, a list published
         from now on lands `under_review` and waits, without a release.
 

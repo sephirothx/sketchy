@@ -361,3 +361,41 @@ async def test_approved_restart_is_cancelled_if_too_few_players_remain():
     assert restarted_events == []
 
     await context.timers.close()
+
+
+async def test_an_approved_restart_checks_its_lists_again_before_drawing():
+    """A restart draws from the lists as they are now, so it checks them as a
+    Start does: a list unpublished or taken down since the last game is not
+    drawn from on the strength of the earlier check (#1385 review)."""
+    from app.repositories.interfaces import PromptListSelectionError
+    from tests.handlers.helpers import StubPromptListRepo
+
+    class WithdrawnSinceRepo(StubPromptListRepo):
+        async def authorize_selection(self, slugs, *, requesting_user_id=None, expected_language=None):
+            raise PromptListSelectionError("Prompt list not found: theirs")
+
+    room_manager, room, players = active_room(2)
+    proposer, voter = players
+    proposer.is_host = True
+    room.prompt_list_slugs = ["theirs"]
+    room.prompt_list_ids = ["list-theirs"]
+    room.prompt_pool_size = 2
+    sio = socketio.AsyncServer(async_mode="asgi")
+    context = register_handlers(sio, room_manager, prompt_list_repo=WithdrawnSinceRepo())
+    sessions = {player.sid: {"room_id": room.id, "player_id": player.id} for player in players}
+    sio.get_session = AsyncMock(side_effect=lambda sid: sessions.get(sid))
+    sio.emit = AsyncMock()
+
+    await sio.handlers["/"]["propose_restart_vote"](proposer.sid, {})
+    with patch.object(timing, "restart_delay_seconds", 0.01):
+        approved = await sio.handlers["/"]["cast_restart_vote"](voter.sid, {"vote": True})
+        assert approved["approved"] is True
+        await asyncio.sleep(0.05)
+
+    assert room.state == "waiting" and room.game is None
+    assert any(
+        line.get("code") == "restart_cancelled"
+        and line["params"]["reason"] == "prompt_lists_unavailable"
+        for line in room_lines(sio.emit)
+    )
+    await context.timers.close()

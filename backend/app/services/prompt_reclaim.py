@@ -1,4 +1,4 @@
-"""Reclaiming prompt-list revisions nothing needs, without touching the games that played them.
+"""Reclaiming deleted lists and unlisted prompt versions nothing needs, without touching the games that played them.
 
 A finished game used to pin the exact revision it drew from
 (`game_prompt_sources`, `turn_prompt_offer_sources`, `prompt_usage_facts`,
@@ -86,16 +86,17 @@ async def retire_prompt_list(
     prompt_list.deleted_at = retired_at
     # Its working copy's versions leave it now; a room that drew them before
     # the deletion still writes them, so they are collected a grace later.
+    held = PromptVersion.id.in_(
+        select(Prompt.prompt_version_id).where(Prompt.prompt_list_id == prompt_list.id)
+    )
+    # In id order, as every multi-row version write takes them (#1385 review).
+    await session.execute(
+        select(PromptVersion.id).where(held).order_by(PromptVersion.id).with_for_update()
+    )
     await session.execute(
         update(PromptVersion)
-        .where(
-            PromptVersion.id.in_(
-                select(Prompt.prompt_version_id).where(
-                    Prompt.prompt_list_id == prompt_list.id
-                )
-            )
-        )
-        .values(unlisted_at=retired_at)
+        .where(held)
+        .values(unlisted_at=retired_at, unlisted_from_list_id=prompt_list.id)
         .execution_options(synchronize_session=False)
     )
     prompt_list.visibility = PromptListVisibility.PRIVATE.value
@@ -502,7 +503,7 @@ async def reclaim_unlisted_versions(
                 await session.execute(
                     update(PromptVersion)
                     .where(PromptVersion.id.in_(version_ids))
-                    .values(unlisted_at=None)
+                    .values(unlisted_at=None, unlisted_from_list_id=None)
                     .execution_options(synchronize_session=False)
                 )
         deleted += versions_deleted

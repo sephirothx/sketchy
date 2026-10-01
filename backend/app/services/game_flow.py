@@ -52,6 +52,7 @@ from app.refusals import ErrorCode
 from app.repositories.interfaces import (
     MixedRoomListError,
     PromptListSelectionError,
+    PromptListsChangedError,
     PromptSample,
     SampledPrompt,
 )
@@ -172,6 +173,11 @@ class RoomNoLongerStartableError(RuntimeError):
     """
 
 
+# How many times a start checks the lists again after a save landed between
+# the check and the draw (#1385 review).
+DRAW_RECHECKS = 3
+
+
 class RoomPromptResolutionError(ValueError):
     """A safe room-configuration failure for selected prompt content.
 
@@ -268,6 +274,8 @@ class GameFlowService:
             prompt_list_slugs = [default_prompt_list_slug(declared_language)]
 
         prompt_list_ids = list(fallback.prompt_list_ids) if fallback else []
+        prompt_list_versions = dict(fallback.prompt_list_versions) if fallback else {}
+        prompt_lists_checked_for = fallback.prompt_lists_checked_for if fallback else None
         prompt_pool_size = fallback.prompt_pool_size if fallback else 0
         prompt_letter_counts = (
             dict(fallback.prompt_letter_counts) if fallback else {}
@@ -317,6 +325,8 @@ class GameFlowService:
                         prompt_list_slugs, expected_language=declared_language
                     )
                 prompt_list_ids = list(selection.list_ids)
+                prompt_list_versions = dict(selection.list_versions)
+                prompt_lists_checked_for = requesting_user_id
                 prompt_pool_size = selection.prompt_count
                 prompt_letter_counts = dict(selection.letter_counts)
                 prompt_letter_total = selection.letter_total
@@ -337,6 +347,7 @@ class GameFlowService:
                         "Prompt-list store unavailable for custom-only room"
                     )
                     prompt_list_ids = []
+                    prompt_list_versions = {}
                     prompt_pool_size = 0
                     prompt_letter_counts = {}
                     prompt_letter_total = 0
@@ -365,6 +376,8 @@ class GameFlowService:
             "prompt_language": declared_language,
             "prompt_list_slugs": prompt_list_slugs,
             "prompt_list_ids": prompt_list_ids,
+            "prompt_list_versions": prompt_list_versions,
+            "prompt_lists_checked_for": prompt_lists_checked_for,
             "prompt_pool_size": prompt_pool_size,
             "prompt_letter_counts": prompt_letter_counts,
             "prompt_letter_total": prompt_letter_total,
@@ -407,6 +420,8 @@ class GameFlowService:
                 "Prompt lists could not be loaded. Please try again."
             ) from error
         room.prompt_list_ids = list(selection.list_ids)
+        room.prompt_list_versions = dict(selection.list_versions)
+        room.prompt_lists_checked_for = requesting_user_id
         room.prompt_pool_size = selection.prompt_count
         room.prompt_letter_counts = dict(selection.letter_counts)
         room.prompt_letter_total = selection.letter_total
@@ -686,10 +701,14 @@ class GameFlowService:
         try:
             sample = await asyncio.wait_for(
                 self._ctx.prompt_list_repo.sample_mixed_prompts(
-                    list(room.prompt_list_ids), limit=needed
+                    list(room.prompt_list_ids),
+                    limit=needed,
+                    expected_versions=dict(room.prompt_list_versions),
                 ),
                 timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
             )
+        except PromptListsChangedError:
+            raise
         except Exception as error:
             logger.exception("Failed to draw prompts for room %s", room.id)
             raise RoomPromptResolutionError(
@@ -747,6 +766,25 @@ class GameFlowService:
             false_friends=sample.false_friends,
         )
 
+    async def _draw_checked(self, room: Room) -> _PromptDraw:
+        """Draw the game's prompts from the content the room was checked on.
+
+        A list saved between the check and the draw has content nothing
+        checked (#1385 review): the draw refuses it, and the room is checked
+        again, for the account it was checked for, and draws again. Saves
+        coming faster than that are a list nobody can play right now.
+        """
+        for _attempt in range(DRAW_RECHECKS):
+            try:
+                return await self._draw_prompt_sample(room)
+            except PromptListsChangedError:
+                await self.refresh_room_prompt_selection(
+                    room, requesting_user_id=room.prompt_lists_checked_for
+                )
+        raise RoomPromptResolutionError(
+            "Prompt lists could not be loaded. Please try again."
+        )
+
     async def _draw_prompt_sample(self, room: Room) -> _PromptDraw:
         """Draw every prompt this game can possibly need, once, up front.
 
@@ -788,9 +826,12 @@ class GameFlowService:
                         limit=needed,
                         exclude_match_keys=room.custom_prompt_match_keys(),
                         exclude_language=room.prompt_language,
+                        expected_versions=dict(room.prompt_list_versions),
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )
+            except PromptListsChangedError:
+                raise
             except Exception as error:
                 # Opening on the built-in list while the host is shown the
                 # lists they chose is the failure R-LIST-06a exists to prevent,
@@ -912,7 +953,7 @@ class GameFlowService:
         # here would see them as neither new nor included.
         if seated_before is None:
             seated_before = set(room.players)
-        draw = await self._draw_prompt_sample(room)
+        draw = await self._draw_checked(room)
         # Drawing is a database call, and seating is not held by `room.lock`,
         # so the roster the caller handed over can be stale by the time there
         # is a game to put it in. Somebody who joined in that window was seated

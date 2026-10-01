@@ -480,6 +480,11 @@ class Room:
     # from their working copies when it starts (#1359), and its provenance
     # names them (#1358).
     prompt_list_ids: list[str] = field(default_factory=list)
+    # Each list's version when the selection was last checked, and for whom:
+    # a draw refuses content saved since, and the room checks again for the
+    # same account before drawing again (#1385 review).
+    prompt_list_versions: dict[str, int] = field(default_factory=dict)
+    prompt_lists_checked_for: str | None = None
     # What the pinned lists hold, rather than the content itself. The pool
     # used to live here for the room's whole life so that a game could offer
     # three choices and price wheel letters; both need a number and a
@@ -874,6 +879,8 @@ class RoomManager:
         prompt_language: str = "en",
         prompt_list_slugs: list[str] | None = None,
         prompt_list_ids: list[str] | None = None,
+        prompt_list_versions: dict[str, int] | None = None,
+        prompt_lists_checked_for: str | None = None,
         prompt_pool_size: int = 0,
         prompt_letter_counts: dict[str, int] | None = None,
         prompt_letter_total: int = 0,
@@ -908,6 +915,8 @@ class RoomManager:
             prompt_language=prompt_language,
             prompt_list_slugs=list(prompt_list_slugs or []),
             prompt_list_ids=list(prompt_list_ids or []),
+            prompt_list_versions=dict(prompt_list_versions or {}),
+            prompt_lists_checked_for=prompt_lists_checked_for,
             prompt_pool_size=prompt_pool_size,
             prompt_letter_counts=dict(prompt_letter_counts or {}),
             prompt_letter_total=prompt_letter_total,

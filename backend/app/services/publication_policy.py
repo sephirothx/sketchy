@@ -10,8 +10,8 @@ Post-hoc moderation is the posture this switch exists to make reversible.
 Community content is reviewed after a report (#378) rather than before
 publication, because an approval queue in a single-operator deployment (N-01,
 N-12) makes the catalogue's contents depend on the scarcest resource here, and
-because pre-approval fights R-LIST-05: editing writes a new immutable revision,
-so approval would have to attach to revisions and every metadata change would
+because pre-approval fights R-LIST-05: editing changes the list in place,
+so approval would have to attach to one saved version of it and every metadata change would
 drop a list out of the catalogue until staff cleared it again.
 
 Turning this on is therefore not a small configuration change. It is the

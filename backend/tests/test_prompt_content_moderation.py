@@ -1729,3 +1729,43 @@ async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
         )
     assert left == 0
     assert text_left == 0
+
+
+async def test_a_prompt_removed_after_the_page_was_read_can_still_be_reported(env):
+    """#1385 review: a reader opens a published list, the owner removes a
+    prompt, the reader reports it. The working copy no longer holds it, but
+    the version it left still names the list during the grace, so the report
+    the reader's page offers still goes through."""
+    new_client, factory, prompts = env
+    owner_http, reporter_http = new_client(), new_client()
+    owner = await register(owner_http, "Remover")
+    await register(reporter_http, "LateReader")
+    listed = await prompts.create_owned(
+        owner["id"], name="Shrinking", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"), PromptListEntryInput(answer="fine")),
+    )
+    await published(factory, listed.id)
+    word, fine = listed.prompts
+    await prompts.update_owned(
+        owner["id"], listed.id, expected_version=listed.version, name="Shrinking",
+        description="", prompts=(PromptListEntryInput(answer="fine", concept_id=fine.concept_id),),
+    )
+
+    filed = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": listed.id, "promptVersionId": word.prompt_version_id,
+              "reason": "other", "details": "Read it before it went."},
+    )
+
+    assert filed.status_code == 201, filed.text
+    # A version that never belonged to the list still does not.
+    stranger = await prompts.create_owned(
+        owner["id"], name="Elsewhere", description="", language="en",
+        prompts=(PromptListEntryInput(answer="unrelated"),),
+    )
+    refused = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": listed.id, "promptVersionId": stranger.prompts[0].prompt_version_id,
+              "reason": "other", "details": "Not in it."},
+    )
+    assert refused.status_code == 422
