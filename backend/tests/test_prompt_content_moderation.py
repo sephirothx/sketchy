@@ -11,7 +11,11 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
 
-from app.api.moderation import _record_takedown, create_moderation_router
+from app.api.moderation import (
+    _lock_takedown_owners,
+    _record_takedown,
+    create_moderation_router,
+)
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import (
@@ -81,7 +85,9 @@ async def taken_down(session, version: PromptVersion) -> None:
         session,
         concept_id=version.concept_id,
         decision="hidden",
-        reported_owner_user_id=None,
+        owners=await _lock_takedown_owners(
+            session, concept_id=version.concept_id, reported_owner_user_id=None
+        ),
     )
 
 

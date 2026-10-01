@@ -54,7 +54,11 @@ from app.services.player_reports import (
 from app.auth.sessions import revoke_all_sessions
 from app.auth.step_up import require_step_up
 from app.auth.warnings import pending_warning_payload
-from app.auth.erasure import AccountErasedError, require_live_account
+from app.auth.erasure import (
+    AccountErasedError,
+    erased_identity_ids,
+    require_live_account,
+)
 from app.db.models import (
     AuditEvent,
     GameRecord,
@@ -1134,39 +1138,53 @@ async def _carry_decision_to_copies(
         )
 
 
+async def _lock_takedown_owners(
+    session: AsyncSession, *, concept_id: UUID, reported_owner_user_id: UUID | None
+) -> set[UUID]:
+    """The owners a decision on this word reaches, locked, the erased left out.
+
+    The reported owner - whose list may have been deleted since - and every
+    owner whose lists hold the concept now (R-MOD-11, #1357). Taken through the
+    erasure barrier, shared and in ascending order, **before** the decision
+    locks a list or writes a version: account deletion holds the account and
+    then retires its lists, so taking the list first and reaching for the
+    account at the takedown insert deadlocked against it, and reading the
+    lifecycle without the lock let a deletion commit in between and leave a
+    record for an erased account that nothing would ever remove (#1375 review).
+    """
+    holders = set(
+        (
+            await session.scalars(
+                select(PromptList.owner_user_id)
+                .join(Prompt, Prompt.prompt_list_id == PromptList.id)
+                .where(
+                    Prompt.concept_id == concept_id,
+                    PromptList.owner_user_id.is_not(None),
+                )
+            )
+        ).all()
+    )
+    owners = holders | ({reported_owner_user_id} if reported_owner_user_id else set())
+    return owners - await erased_identity_ids(session, owners)
+
+
 async def _record_takedown(
     session: AsyncSession,
     *,
     concept_id: UUID,
     decision: str,
-    reported_owner_user_id: UUID | None,
+    owners: set[UUID],
 ) -> None:
     """Record who may not type a hidden word back in, or forget it once it is
     left up (R-MOD-11, #1357).
 
-    A hidden word gets one row for the owner it was reported against - whose
-    list may have been deleted since - and for every owner whose lists hold
-    the concept now; an erased account saves nothing, so it gets none. Any
-    other decision is the word's too, so it removes every row naming it.
+    A hidden word gets one row for each live owner the decision reaches
+    (`_lock_takedown_owners`, whose locks the caller holds). Any other decision
+    is the word's too, so it removes every row naming it.
     """
     if decision != PromptContentModerationState.HIDDEN.value:
         await release_takedowns(session, PromptTakedown.concept_id == concept_id)
         return
-    holders = select(PromptList.owner_user_id).join(
-        Prompt, Prompt.prompt_list_id == PromptList.id
-    ).where(Prompt.concept_id == concept_id, PromptList.owner_user_id.is_not(None))
-    owners = set(
-        (
-            await session.scalars(
-                select(User.id).where(
-                    or_(User.id == reported_owner_user_id, User.id.in_(holders))
-                    if reported_owner_user_id is not None
-                    else User.id.in_(holders),
-                    User.state != AccountState.DELETED.value,
-                )
-            )
-        ).all()
-    )
     # Idempotent: two decisions on one concept - two reports of different
     # versions are two incidents - can both find no row here.
     await record_takedowns(session, ((owner_id, concept_id) for owner_id in owners))
@@ -2369,6 +2387,16 @@ def create_moderation_router(
                             status_code=409,
                             detail="The reported content has already been deleted.",
                         )
+                    takedown_owners: set[UUID] = set()
+                    if report.target_type == "prompt":
+                        # Before anything is locked or written beyond the
+                        # reports: the accounts, then the list, then the
+                        # versions - the order account deletion takes them.
+                        takedown_owners = await _lock_takedown_owners(
+                            session,
+                            concept_id=target.concept_id,
+                            reported_owner_user_id=report.reported_owner_user_id,
+                        )
                     prior_decision = (
                         target.moderation_state,
                         target.moderated_by_user_id,
@@ -2415,7 +2443,7 @@ def create_moderation_router(
                             session,
                             concept_id=target.concept_id,
                             decision=body.moderation_state,
-                            reported_owner_user_id=report.reported_owner_user_id,
+                            owners=takedown_owners,
                         )
                         await _carry_decision_to_copies(
                             session,

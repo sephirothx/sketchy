@@ -8,8 +8,10 @@ removed by a decision that leaves the word up and with the account.
 """
 from __future__ import annotations
 
+import os
 from uuid import UUID
 
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -26,7 +28,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyUserRepository,
 )
 from tests.dbfixtures import create_test_db
-from tests.test_prompt_content_moderation import _staff_member, published, register
+from tests.test_prompt_content_moderation import _staff_member, published, register, taken_down
 
 HIDDEN = PromptContentModerationState.HIDDEN.value
 
@@ -141,7 +143,6 @@ async def test_the_decision_reads_no_revision(site):
 async def test_a_save_costs_the_same_however_many_words_were_taken_down(site):
     """R-LIST-04: a save is a fixed number of statements. The records are read
     in one statement, joined to the versions they name, whatever their count."""
-    from app.api.moderation import _record_takedown
     from app.db.models import PromptVersion
 
     _, factory, engine, prompts = site
@@ -179,11 +180,8 @@ async def test_a_save_costs_the_same_however_many_words_were_taken_down(site):
     async def hide(count: int, skip: int) -> None:
         async with factory() as session, session.begin():
             for entry in many.prompts[skip:skip + count]:
-                version = await session.get(PromptVersion, UUID(entry.prompt_version_id))
-                version.moderation_state = HIDDEN
-                await _record_takedown(
-                    session, concept_id=version.concept_id, decision=HIDDEN,
-                    reported_owner_user_id=None,
+                await taken_down(
+                    session, await session.get(PromptVersion, UUID(entry.prompt_version_id))
                 )
 
     await hide(1, 0)
@@ -253,3 +251,66 @@ async def test_a_released_takedown_takes_the_spellings_it_kept(site):
     assert deleted.status_code == 200, deleted.text
     await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
     assert await spellings() == 0
+
+
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"), reason="row locks are only real on PostgreSQL"
+)
+async def test_a_hide_waits_for_the_owner_s_deletion_in_flight_and_records_nothing(
+    site, monkeypatch
+):
+    """Account deletion holds the account, then retires its lists. A decision
+    that locked the list first and reached for the account at the takedown
+    insert deadlocked against it; one that read the lifecycle unlocked could
+    record a takedown for an account erased a moment later (#1375 review).
+    The decision now takes the owners through the erasure barrier before the
+    list, so it waits, then sees the account gone and records nothing."""
+    import asyncio
+
+    import app.auth.account_data as account_data
+    from app.auth.account_data import anonymize_account
+
+    new_client, factory, _, prompts = site
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "RaceOwner")
+    await register(reporter_http, "RaceReporter")
+    moderator = await register(moderator_http, "RaceMod")
+    await _staff_member(factory, moderator, UserRole.MODERATOR)
+    listed = await prompts.create_owned(
+        owner["id"], name="Raced", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"), PromptListEntryInput(answer="fine")),
+    )
+    await published(factory, listed.id)
+    word = next(p for p in listed.prompts if p.answer == "borderline word")
+    filed = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": listed.id, "promptVersionId": word.prompt_version_id,
+              "reason": "other", "details": "Decide it."},
+    )
+    assert filed.status_code == 201, filed.text
+
+    real = account_data.retire_owned_lists
+    deletion_holds_the_account = asyncio.Event()
+    let_the_deletion_go_on = asyncio.Event()
+
+    async def paused(*args, **kwargs):
+        deletion_holds_the_account.set()
+        await let_the_deletion_go_on.wait()
+        return await real(*args, **kwargs)
+
+    monkeypatch.setattr(account_data, "retire_owned_lists", paused)
+    erase = asyncio.create_task(anonymize_account(factory, user_id=owner["id"]))
+    await deletion_holds_the_account.wait()
+    decide = asyncio.create_task(
+        moderator_http.patch(
+            f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
+            json={"status": "resolved", "note": "hidden", "moderationState": "hidden"},
+        )
+    )
+    await asyncio.sleep(0.3)
+    assert not decide.done(), "the decision waits for the deletion's lock on the account"
+    let_the_deletion_go_on.set()
+    _, decided = await asyncio.gather(erase, decide)
+
+    assert decided.status_code == 200, decided.text
+    assert await _records(factory) == set(), "no takedown outlives the erased account"

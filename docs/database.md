@@ -1162,7 +1162,11 @@ with the decision's byline. That entry's concept is recorded too, so the word fo
 into a list only it shares words with, and a later decision on the original finds it by
 its byline. A decision that leaves the word up deletes the rows naming it, and the
 account's deletion deletes its rows explicitly — the CASCADE never fires, since deletion
-tombstones the user row. Both writers live in
+tombstones the user row. A decision takes the owners it reaches through the erasure
+barrier — shared, ascending — before it locks the list or writes a version: deletion
+holds the account and then retires its lists, so the other order deadlocked against it,
+and an unlocked lifecycle read let a deletion commit in between and leave a record for an
+erased account (#1375 review). Both writers live in
 [`services/prompt_takedowns.py`](../backend/app/services/prompt_takedowns.py): the insert
 ignores a row already there, since two decisions on one concept (two reports of different
 versions are two incidents) can both find none, and removing a row offers its concept's
