@@ -3,9 +3,9 @@
 Seeding checks each file on its own - one conceptId and one answer key per
 concept - and a room checks what it selected. Neither says whether the
 catalogue is the one R-PROMPT-01 describes: that every language holds the same
-Standard concepts, that there are enough of them to keep a regular crowd from
-seeing the same words every evening, and that a language's lists can be picked
-together. An alias that another concept answers to is not refused by the seed
+Standard and Extended concepts, that there are enough of them to keep a regular
+crowd from seeing the same words every evening, that Local stays its own
+language's, and that a language's lists can be picked together. An alias that another concept answers to is not refused by the seed
 at all; the first host to select both lists would meet it as a refusal. These
 tests read the files directly, so a gap in the content fails here, by name,
 instead of in a room.
@@ -23,10 +23,14 @@ from app.db.seed import DEFAULT_PROMPT_LISTS_DIR as PROMPT_LIST_DIR
 from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
 from app.prompt_content import MAX_PROMPT_LENGTH, prompt_match_key
 
-#: Every Standard list holds at least this many concepts. A game draws
-#: `rounds x players x 3` offers - up to 480 - so a list of a few hundred
+#: Every Standard and Extended list holds at least this many concepts. A game
+#: draws `rounds x players x 3` offers - up to 480 - so a list of a few hundred
 #: repeats itself within an evening; a thousand does not.
-STANDARD_FLOOR = 1000
+FLOOR = 1000
+
+#: The lists every language spells concept for concept: the families a mixed
+#: room can pin (R-PROMPT-13). Local is the one that is not.
+SHARED = ("standard", "extended")
 
 #: Standard is mostly single words: it is the list a room opens on, and one
 #: word is what a new player expects to type. A share rather than a ban,
@@ -59,22 +63,44 @@ def _concepts(slug: str) -> set[str]:
     return {entry["conceptId"] for entry in _list(slug)["prompts"]}
 
 
+@pytest.mark.parametrize("tier", SHARED)
 @pytest.mark.parametrize("language", PROMPT_LANGUAGES)
-def test_standard_is_large_enough(language):
-    prompts = _list(f"{_stem(language)}_standard")["prompts"]
-    assert len(prompts) >= STANDARD_FLOOR
+def test_the_shared_lists_are_large_enough(language, tier):
+    prompts = _list(f"{_stem(language)}_{tier}")["prompts"]
+    assert len(prompts) >= FLOOR
 
 
-def test_standard_is_the_same_concepts_in_every_language():
-    """A mixed room pins Standard in every language at once (R-PROMPT-13),
-    which it can only do when each language's list holds exactly the same
-    concepts: one missing anywhere and the family stops being one."""
-    english = _concepts("english_standard")
+@pytest.mark.parametrize("tier", SHARED)
+def test_a_shared_list_is_the_same_concepts_in_every_language(tier):
+    """A mixed room pins Standard or Extended in every language at once
+    (R-PROMPT-13), which it can only do when each language's list holds exactly
+    the same concepts: one missing anywhere and the family stops being one."""
+    english = _concepts(f"english_{tier}")
     for language in PROMPT_LANGUAGES:
-        slug = f"{_stem(language)}_standard"
+        slug = f"{_stem(language)}_{tier}"
         concepts = _concepts(slug)
         assert concepts - english == set(), slug
         assert english - concepts == set(), slug
+
+
+def test_standard_and_extended_share_no_concept():
+    """Extended is the harder list beside Standard, not a superset of it: a room
+    that picks both draws from both, and a concept in each would only be one
+    prompt with two chances of being offered."""
+    assert _concepts("english_standard") & _concepts("english_extended") == set()
+
+
+@pytest.mark.parametrize("language", PROMPT_LANGUAGES)
+def test_local_is_its_own_languages(language):
+    """Local holds what does not travel, so none of it may be a concept another
+    language spells - nor one of the shared lists, which every language does."""
+    local = _concepts(f"{_stem(language)}_local")
+    assert local
+    elsewhere = set()
+    for path in PROMPT_LIST_DIR.glob("*.json"):
+        if path.stem != f"{_stem(language)}_local":
+            elsewhere |= _concepts(path.stem)
+    assert local & elsewhere == set()
 
 
 @pytest.mark.parametrize("language", PROMPT_LANGUAGES)

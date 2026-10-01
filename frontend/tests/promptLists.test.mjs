@@ -154,16 +154,24 @@ test("a list in no language is played in every room and follows it across a swit
   assert.deepEqual(selectionForLanguage(lists, "de"), ["german_standard"]);
 });
 
-test("a mixed room plays Standard, once, and lists in no language", () => {
+test("a mixed room plays Standard and Extended, once, and lists in no language", () => {
   const languages = ["de", "en", "es", "fr", "it", "nl", "pl", "pt"];
+  const stems = { de: "german", en: "english", es: "spanish", fr: "french", it: "italian", nl: "dutch", pl: "polish", pt: "portuguese" };
   const standard = languages.map((language) => ({
-    slug: `${{ de: "german", en: "english", es: "spanish", fr: "french", it: "italian", nl: "dutch", pl: "polish", pt: "portuguese" }[language]}_standard`,
+    slug: `${stems[language]}_standard`,
+    language,
+    isBundled: true,
+  }));
+  const extended = languages.map((language) => ({
+    slug: `${stems[language]}_extended`,
     language,
     isBundled: true,
   }));
   const lists = [
     ...standard,
-    { slug: "german_extended", language: "de", isBundled: true },
+    ...extended,
+    // Local is its own language's alone, so a mixed room cannot play it.
+    { slug: "german_local", language: "de", isBundled: true },
     { slug: "mine", language: "de", isBundled: false },
     // A player's own list named like Standard is not Standard.
     { slug: "fake_standard", language: "de", isBundled: false },
@@ -172,16 +180,26 @@ test("a mixed room plays Standard, once, and lists in no language", () => {
   // Offered once Standard is there in every language, and last.
   assert.equal(availablePromptLanguages(lists, "de").at(-1), "mul");
   assert.equal(availablePromptLanguages(lists.slice(1), "de").includes("mul"), false);
-  // Standard shown in the language the player plays, beside lists in none.
+  // Standard and Extended shown in the language the player plays, beside
+  // lists in none.
   const playable = lists.filter((list) => isPlayableIn(list, "mul", "de")).map((l) => l.slug);
-  assert.deepEqual(playable, ["german_standard", "pokemon"]);
+  assert.deepEqual(playable, ["german_standard", "german_extended", "pokemon"]);
   assert.deepEqual(
-    selectionForLanguage(lists, "mul", ["german_extended", "pokemon"], "fr"),
+    selectionForLanguage(lists, "mul", ["german_local", "pokemon"], "fr"),
     ["french_standard", "pokemon"],
   );
-  // Another host's Standard is shown in this player's language instead.
+  // Another host's Standard and Extended are shown in this player's language.
   assert.deepEqual(
     reconcileSelectionForLanguage(lists, "mul", ["english_standard"], "de"),
+    ["german_standard"],
+  );
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "mul", ["english_standard", "english_extended", "pokemon"], "de"),
+    ["german_standard", "german_extended", "pokemon"],
+  );
+  // Local does not follow the room into Mixed.
+  assert.deepEqual(
+    reconcileSelectionForLanguage(lists, "mul", ["german_local"], "de"),
     ["german_standard"],
   );
   // A room already mixed keeps saying so while its lists load.

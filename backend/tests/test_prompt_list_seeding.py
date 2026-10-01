@@ -1,7 +1,6 @@
 """Unit tests for prompt list seeding, REST API, selection, and usage metrics."""
 from __future__ import annotations
 
-import json
 from uuid import uuid4
 
 import pytest
@@ -15,7 +14,7 @@ from app.db.models import (
     PromptTag,
     PromptVersion,
 )
-from app.db.seed import DEFAULT_PROMPT_LISTS_DIR as PROMPT_LIST_DIR, seed_prompt_lists
+from app.db.seed import seed_prompt_lists
 from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
@@ -50,15 +49,14 @@ async def test_seed_bundled_prompt_lists():
         assert "accordion" in std_words
 
         ext_words = await repo.get_prompts_by_slugs(["english_extended"])
-        assert len(ext_words) > 300
+        assert len(ext_words) >= 1000
         assert "albatross" in ext_words
 
-        combined_words = await repo.get_prompts_by_slugs(["english_standard", "english_extended"])
-        assert len(combined_words) >= len(std_words)
+        # Extended sits beside Standard rather than repeating it.
         combined = await repo.resolve_selection(
             ["english_standard", "english_extended"]
         )
-        assert combined.prompts.count("anchor") == 1
+        assert len(combined.prompts) == len(std_words) + len(ext_words)
         assert len(combined.revision_ids) == 2
 
         first_revision_ids = combined.revision_ids
@@ -72,66 +70,60 @@ async def test_seed_bundled_prompt_lists():
         await engine.dispose()
 
 
-async def test_every_supported_language_ships_a_standard_and_an_extended_list():
+async def test_a_concept_in_two_selected_lists_is_one_prompt():
+    """Equal text shares a concept only where the files repeat its id, and a
+    concept a room selects twice is drawn as one prompt (R-PROMPT-03)."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        shared = str(uuid4())
+        for slug, other in (("first", "otter"), ("second", "walrus")):
+            await repo.upsert_bundled(
+                slug=slug,
+                name=slug,
+                description="",
+                language="en",
+                prompts=[
+                    BundledPromptDefinition(shared, "anchor"),
+                    BundledPromptDefinition(str(uuid4()), other),
+                ],
+                version=1,
+            )
+        combined = await repo.resolve_selection(["first", "second"])
+        assert sorted(combined.prompts) == ["anchor", "otter", "walrus"]
+    finally:
+        await engine.dispose()
+
+
+async def test_every_supported_language_ships_its_three_lists():
     """A room may only be opened in a language that has content (R-PROMPT-01),
     so the eight supported languages and the bundled catalogue have to be the
-    same set - and each language's two lists have to be playable together."""
+    same set - and each language's three lists have to be playable together."""
     factory, engine = await create_test_db()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         seeded = await seed_prompt_lists(repo)
         slugs = {summary.slug for summary in seeded}
-        assert len(slugs) == 2 * len(PROMPT_LANGUAGES)
+        assert len(slugs) == 3 * len(PROMPT_LANGUAGES)
 
         for language in PROMPT_LANGUAGES:
             stem = PromptLanguage(language).name.lower()
-            standard, extended = f"{stem}_standard", f"{stem}_extended"
-            assert {standard, extended} <= slugs, language
-            assert default_prompt_list_slug(language) == standard
+            lists = [f"{stem}_standard", f"{stem}_extended", f"{stem}_local"]
+            assert set(lists) <= slugs, language
+            assert default_prompt_list_slug(language) == lists[0]
 
-            # Both lists at once is the ordinary selection, and it is where a
-            # collision between the translated core and the native extension
-            # would show up as a refusal rather than as a bad prompt.
-            combined = await repo.resolve_selection([standard, extended])
+            # All three at once is where a collision between the shared lists
+            # and the local one would show up as a refusal rather than as a
+            # bad prompt.
+            combined = await repo.resolve_selection(lists)
             assert combined.language == language
-            assert len(combined.revision_ids) == 2
-            assert len(combined.prompts) > 400
+            assert len(combined.revision_ids) == 3
+            assert len(combined.prompts) > 2000
 
             keys = [
                 prompt_match_key(answer, language) for answer in combined.prompts
             ]
             assert len(keys) == len(set(keys)), language
-    finally:
-        await engine.dispose()
-
-
-async def test_the_translated_core_is_one_concept_per_language():
-    """Standard is a concept-aligned translation: "anchor" and "Anker" are one
-    prompt concept in two languages, which is what the concept/version split
-    exists for. Usage facts key on the version, so the statistics stay apart."""
-    factory, engine = await create_test_db()
-    try:
-        repo = SqlAlchemyPromptListRepository(factory)
-        await seed_prompt_lists(repo)
-        english = {
-            entry["conceptId"]
-            for entry in json.loads(
-                (PROMPT_LIST_DIR / "english_standard.json").read_text()
-            )["prompts"]
-        }
-        for language in PROMPT_LANGUAGES:
-            if language == "en":
-                continue
-            stem = PromptLanguage(language).name.lower()
-            translated = json.loads(
-                (PROMPT_LIST_DIR / f"{stem}_standard.json").read_text()
-            )["prompts"]
-            assert {entry["conceptId"] for entry in translated} == english, language
-            # And the extension is native: its concepts are its own.
-            native = json.loads(
-                (PROMPT_LIST_DIR / f"{stem}_extended.json").read_text()
-            )["prompts"]
-            assert not {entry["conceptId"] for entry in native} & english, language
     finally:
         await engine.dispose()
 

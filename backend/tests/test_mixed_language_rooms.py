@@ -2,7 +2,7 @@
 
 A mixed room declares `mul`. It may draw on lists every room language can
 play - a list in no language, or a list whose family spells every concept in
-all eight (Standard, R-PROMPT-01) - and each seat meets the drawn prompt in
+all eight (Standard and Extended, R-PROMPT-01) - and each seat meets the drawn prompt in
 the language it joined with: its offers, its letter tiles, its hints and its
 near misses. A guess naming the drawing in any language scores, except where
 that spelling is another concept of the room's selection in the guesser's own
@@ -34,6 +34,9 @@ from tests.dbfixtures import create_test_db
 #: Standard's size, read off the file rather than written down: it is content.
 STANDARD = len(
     json.loads((DEFAULT_PROMPT_LISTS_DIR / "english_standard.json").read_text())["prompts"]
+)
+EXTENDED = len(
+    json.loads((DEFAULT_PROMPT_LISTS_DIR / "english_extended.json").read_text())["prompts"]
 )
 
 
@@ -72,11 +75,24 @@ async def test_a_mixed_room_pins_standard_in_every_language(seeded):
     assert sorted(both.revision_ids) == sorted(pinned.revision_ids)
 
 
+async def test_a_mixed_room_pins_extended_too(seeded):
+    """Extended is the same concepts in every language as well (R-PROMPT-01),
+    so it is a family a mixed room can pin beside Standard."""
+    prompts, owner = seeded
+    pinned = await prompts.authorize_selection(
+        ["german_standard", "french_extended"],
+        requesting_user_id=owner.id,
+        expected_language="mul",
+    )
+    assert len(pinned.revision_ids) == 2 * len(PROMPT_LANGUAGES)
+    assert pinned.prompt_count == STANDARD + EXTENDED
+
+
 async def test_a_mixed_room_refuses_a_list_not_every_language_spells(seeded):
     prompts, owner = seeded
     with pytest.raises(MixedRoomListError):
         await prompts.authorize_selection(
-            ["german_extended"], requesting_user_id=owner.id, expected_language="mul"
+            ["german_local"], requesting_user_id=owner.id, expected_language="mul"
         )
     owned = await prompts.create_owned(
         owner.id,
