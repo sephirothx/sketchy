@@ -1414,7 +1414,7 @@ class PromptListRepository(ABC):
 
     @abstractmethod
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
-        """Take a player-owned list out of reach (retire it)."""
+        """Delete a player-owned list outright (#1362)."""
         ...
 
     @abstractmethod

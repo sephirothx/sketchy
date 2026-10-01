@@ -947,6 +947,63 @@ async def test_prompt_list_repository():
         await engine.dispose()
 
 
+async def test_an_older_build_starting_over_a_newer_seed_keeps_the_newer_content():
+    """#1394 review: revisions remembered every version a seed had written,
+    so a deploy rolled back to an older build reseeded its version as
+    metadata only. Without them, refusing it kept the server down."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        concept = str(generate_uuid())
+        await repo.upsert_bundled(
+            slug="rolled", name="Rolled", description="", language="en",
+            prompts=[BundledPromptDefinition(concept, "lighthouse")], version=2,
+        )
+
+        older = await repo.upsert_bundled(
+            slug="rolled", name="Rolled, older build", description="", language="en",
+            prompts=[BundledPromptDefinition(concept, "gull")], version=1,
+        )
+
+        assert older.version == 2 and older.name == "Rolled, older build"
+        assert list((await repo.resolve_selection(["rolled"])).prompts) == ["lighthouse"]
+    finally:
+        await engine.dispose()
+
+
+async def test_a_seeded_list_with_no_digest_is_stamped_rather_than_refused():
+    """A row nothing stamped - one the migration could not backfill - says
+    nothing about its content, so the seed of its version writes the digest
+    rather than calling it changed in place (#1394 review)."""
+    from app.db.models import PromptList
+
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        concept = str(generate_uuid())
+        definition = [BundledPromptDefinition(concept, "lighthouse")]
+        await repo.upsert_bundled(
+            slug="unstamped", name="Unstamped", description="", language="en",
+            prompts=definition, version=1,
+        )
+        async with factory() as session, session.begin():
+            await session.execute(
+                update(PromptList).where(PromptList.slug == "unstamped").values(content_hash="")
+            )
+
+        await repo.upsert_bundled(
+            slug="unstamped", name="Unstamped", description="", language="en",
+            prompts=definition, version=1,
+        )
+        with pytest.raises(PromptSeedConflictError, match="changed in place"):
+            await repo.upsert_bundled(
+                slug="unstamped", name="Unstamped", description="", language="en",
+                prompts=[BundledPromptDefinition(concept, "gull")], version=1,
+            )
+    finally:
+        await engine.dispose()
+
+
 async def test_a_fresh_database_seeds_a_reworded_prompt_at_its_current_version():
     """A file that reworded a prompt carries it at version 2 (R-PROMPT-05). A
     database that never held version 1 must still take it, or every fresh

@@ -1,8 +1,7 @@
 """Deleting prompt lists, and collecting the prompt versions nothing names.
 
 A list is deleted outright (#1362): its working copy, editions, tags and stars
-go with the row at once, and a copy of it, a report about it and a version
-unlisted from it let go of it (`SET NULL`). The history its games wrote -
+go with the row at once, and a copy of it lets go of it (`SET NULL`). The history its games wrote -
 their source rows, their offers' source rows, its usage facts - keeps its id
 as an opaque value with no foreign key, so a delete costs what the list holds
 and never what it was played: a list played in ten thousand games names
@@ -26,7 +25,7 @@ import logging
 import time
 from uuid import UUID
 
-from sqlalchemy import delete, exists, select, update
+from sqlalchemy import delete, exists, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import (
@@ -68,20 +67,23 @@ async def delete_prompt_lists(
 ) -> int:
     """Delete these lists outright (#1362); how many went.
 
-    The caller holds the list rows `FOR UPDATE`. The versions they held are
-    locked in one id order - the order every multi-row version writer takes
-    them (#1385 review) - and stamped for the unlisted sweep, then the rows
-    go and everything that is the list's goes with them.
+    The caller holds the list rows `FOR UPDATE`. The versions they held -
+    and the wordings a save took out of them within the grace, which point
+    back at them - are locked in one id order, the order every multi-row
+    version writer takes them (#1385 review), and stamped for the unlisted
+    sweep with no list to point at. So the row's delete has no `SET NULL`
+    left to run over versions outside that order (#1394 review), and goes,
+    with everything that is the list's.
     """
     if not list_ids:
         return 0
-    held = _held_by(list_ids)
+    touched = or_(_held_by(list_ids), PromptVersion.unlisted_from_list_id.in_(list_ids))
     await session.execute(
-        select(PromptVersion.id).where(held).order_by(PromptVersion.id).with_for_update()
+        select(PromptVersion.id).where(touched).order_by(PromptVersion.id).with_for_update()
     )
     await session.execute(
         update(PromptVersion)
-        .where(held)
+        .where(touched)
         .values(unlisted_at=now or datetime.now(timezone.utc), unlisted_from_list_id=None)
         .execution_options(synchronize_session=False)
     )
@@ -100,19 +102,27 @@ async def delete_owned_lists(
     go with the rows; a copy someone else made keeps its own content and
     credits a deleted list (R-LIST-21).
     """
-    list_ids = list(
-        (
-            await session.scalars(
-                select(PromptList.id)
-                .where(
-                    PromptList.owner_user_id.in_(owner_ids),
-                    PromptList.is_bundled.is_(False),
-                )
-                .order_by(PromptList.id)
-                .with_for_update()
-            )
-        ).all()
+    owned = (
+        select(PromptList.id)
+        .where(
+            PromptList.owner_user_id.in_(owner_ids),
+            PromptList.is_bundled.is_(False),
+        )
+        .scalar_subquery()
     )
+    # The lists and every copy of them, in one id order: deleting a list
+    # writes its copies' pointer (`SET NULL`), and two erasures each locking
+    # their own lists first and the other's copies after could deadlock
+    # through a pair of lists copied each way (#1394 review).
+    locked = (
+        await session.execute(
+            select(PromptList.id, PromptList.owner_user_id)
+            .where(or_(PromptList.id.in_(owned), PromptList.copied_from_list_id.in_(owned)))
+            .order_by(PromptList.id)
+            .with_for_update()
+        )
+    ).all()
+    list_ids = [list_id for list_id, owner in locked if owner in set(owner_ids)]
     return await delete_prompt_lists(session, list_ids, now=now)
 
 

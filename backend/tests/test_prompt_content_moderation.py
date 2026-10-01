@@ -305,8 +305,8 @@ async def test_report_snapshots_survive_owner_deletion(env):
         assert report.prompt_snapshot == "reported prompt"
         assert report.details == "Retain this evidence."
 
-    # The list is deleted with the account (#1362) and the report's pointer
-    # to it detaches; the version it cites stays, kept by the report.
+    # The list is deleted with the account (#1362); the report keeps its id,
+    # which names nothing now, and the version it cites stays, kept by it.
     async with factory() as session:
         assert await session.get(PromptList, UUID(prompt_list.id)) is None
         report = await session.get(PromptContentReport, UUID(response.json()["id"]))

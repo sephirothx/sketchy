@@ -1166,7 +1166,7 @@ its byline. A decision that leaves the word up deletes the rows naming it, and t
 account's deletion deletes its rows explicitly — the CASCADE never fires, since deletion
 tombstones the user row. A decision takes the owners it reaches through the erasure
 barrier — shared, ascending — before it locks the list or writes a version: deletion
-holds the account and then retires its lists, so the other order deadlocked against it,
+holds the account and then deletes its lists, so the other order deadlocked against it,
 and an unlocked lifecycle read let a deletion commit in between and leave a record for an
 erased account (#1375 review). Both writers live in
 [`services/prompt_takedowns.py`](../backend/app/services/prompt_takedowns.py): the insert
@@ -2033,8 +2033,8 @@ records among the histogram's approximations.
 
 **Deleting a list deletes it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py),
 #1362): the row goes in the owner's request, and its working copy, editions, tags and stars
-go with it (`CASCADE`); a copy of it, a report about it and a version unlisted from it let
-go of it (`SET NULL`); the history its games wrote keeps its id as an opaque value (see
+go with it (`CASCADE`); a copy of it lets go of it (`SET NULL`), and a report about it keeps
+its id, as the history does; the history its games wrote keeps its id as an opaque value (see
 `game_prompt_sources`). So a delete costs what the list holds, never how much it was
 played. The versions it held are stamped `unlisted_at` first, locked in id order, so a
 room that drew from it before the delete still finds them when it writes its game, and
@@ -2114,8 +2114,7 @@ an unpublish or a takedown between the picker and Start refuses the room visibly
 than shrinking its pool. A room preset needs nothing of its own: it stores slugs, which
 are resolved through that same helper.
 
-**The catalogue is one predicate, in one place.** Public, active, not retired, and with
-a live edition — served by `ix_prompt_lists_published`, which is partial on the first
+**The catalogue is one predicate, in one place.** Public, active, and with a live edition — served by `ix_prompt_lists_published`, which is partial on the first
 three; a row shows the live edition's name, description, tags and prompts, never the
 working copy's (#1360). A
 takedown or a deletion therefore drops a list out of the catalogue without a second read
@@ -2211,7 +2210,9 @@ number of saves (#1250), bounded after the fact by a `superseded_list_revisions`
 with holds of its own (#1258). After #1359 only bundled seeding wrote them, for its
 conflict check: a reseed of the same version with different content is a startup-failing
 conflict. That check reads `prompt_lists.content_hash` now, the bundled digest the seed
-writes on the list row.
+writes on the list row; an empty one (a row nothing stamped) is written rather than
+refused, and an older version seeded over a newer one - a rolled-back deploy - refreshes
+only the metadata, as it did while revisions remembered every version.
 
 **A copy names the list it came from, on its own row** (`prompt_lists.copied_from_list_id`,
 `SET NULL`, #1361). `fork_published` writes it and nothing else does, and a list's copy
@@ -2652,8 +2653,8 @@ Deletion:
   on copied evidence;
 - removes every block owned by or targeting the anonymized identities;
 - removes every friendship and pending or refused request involving them;
-- retires owned prompt lists — out of reach at once, name erased, collected whole by
-  the sweep a day later (see `prompt_lists` in §8) — and deletes the account's takedown
+- deletes owned prompt lists outright, with their prompts and editions (see
+  `prompt_lists` in §8) — and deletes the account's takedown
   records, with the spellings only they kept (`prompt_takedowns` in §5);
 - erases the drawings that account made while leaving the row saying so, and deletes the
   reactions those drawings had; reactions the account gave elsewhere stay, under the

@@ -515,6 +515,39 @@ async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_
         await engine.dispose()
 
 
+async def test_deleting_a_list_leaves_no_wording_pointing_at_it():
+    """A wording a save took out of the list within the grace points back at
+    it. The delete locks and clears those in its one id-ordered pass rather
+    than leaving them to the row's `SET NULL`, which would update versions
+    outside that order (#1394 review). This checks the end state; the order
+    itself only shows under a concurrent writer."""
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id, name="Edited", description="", language="en",
+            prompts=(PromptListEntryInput(answer="gull"),),
+        )
+        gull = created.prompts[0]
+        await repo.update_owned(
+            owner_id, created.id, expected_version=created.version, name="Edited",
+            description="",
+            prompts=(PromptListEntryInput(answer="seagull", concept_id=gull.concept_id),),
+        )
+        async with factory() as session:
+            assert (
+                await session.get(PromptVersion, UUID(gull.prompt_version_id))
+            ).unlisted_from_list_id == UUID(created.id)
+
+        assert await repo.delete_owned(owner_id, created.id)
+
+        async with factory() as session:
+            stamped = await session.get(PromptVersion, UUID(gull.prompt_version_id))
+        assert stamped.unlisted_at is not None and stamped.unlisted_from_list_id is None
+    finally:
+        await engine.dispose()
+
+
 async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind():
     from datetime import datetime, timedelta, timezone
 

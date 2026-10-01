@@ -1161,7 +1161,7 @@ async def _lock_takedown_owners(
     owner whose lists hold the concept now (R-MOD-11, #1357). Taken through the
     erasure barrier, shared and in ascending order, **before** the decision
     locks a list or writes a version: account deletion holds the account and
-    then retires its lists, so taking the list first and reaching for the
+    then deletes its lists, so taking the list first and reaching for the
     account at the takedown insert deadlocked against it, and reading the
     lifecycle without the lock let a deletion commit in between and leave a
     record for an erased account that nothing would ever remove (#1375 review).

@@ -3671,7 +3671,7 @@ class _CatalogueRanking:
     can return the first 25, which cost 14 ms per page at 5,000 lists and
     grew with every list published; a page read from the cached order fetches
     its 25 rows by id, with their counts, in under a millisecond. One worker
-    owns it, so it is exact to within its TTL. A list taken down, retired or
+    owns it, so it is exact to within its TTL. A list taken down, deleted or
     unpublished leaves the page at once - the page's own read re-applies
     every filter - and a publish, or a save that changes a published list's
     tags, through this process resets it.
@@ -4139,7 +4139,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         Whether it links is the catalogue's own question, asked the way the
         catalogue asks it (`_published_by_a_player`), so a credit never links to
         a list the catalogue would refuse to open. A copy whose original is gone
-        - retired, or already reclaimed so the pointer is null - says only that
+        - deleted, so the pointer is null - says only that
         it was copied: `is_copy` is what survives, and it names nothing.
         """
         if not list_ids:
@@ -4460,7 +4460,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         """One page of published lists (R-LIST-14).
 
         Three conditions decide what is in the catalogue, and they are the
-        same three everywhere: public, active, and not retired. A takedown or a
+        same three everywhere: public, active, and with a live edition. A takedown or a
         deletion therefore drops a list out of here without a second code path
         agreeing to it.
 
@@ -7117,23 +7117,33 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
 
                 # What this version was seeded as lives on the list row: its
                 # digest in `content_hash` (#1362; until then on a revision per
-                # version). Only the current version can be compared - an older
-                # one is refused below as a rollback either way.
+                # version), so only the current version can be compared.
                 if seeded_hash is not None and wl.version == version:
-                    if seeded_hash != content_hash or wl.language != language:
+                    if wl.language != language or (
+                        seeded_hash and seeded_hash != content_hash
+                    ):
                         raise PromptSeedConflictError(
                             f"bundled list {slug} version {version} changed in place"
                         )
+                    # No digest yet - a row nothing stamped (#1394 review) -
+                    # is unknown rather than different: this seed says it.
+                    wl.content_hash = content_hash
                     wl.name = name
                     wl.description = description
                     wl.visibility = PromptListVisibility.PUBLIC.value
                     wl.published_at = wl.published_at or datetime.now(timezone.utc)
                     wl.moderation_state = PromptContentModerationState.ACTIVE.value
                 elif version < wl.version:
-                    raise PromptSeedConflictError(
-                        f"bundled list {slug} cannot roll back from version "
-                        f"{wl.version} to {version}"
-                    )
+                    # An older build started over a newer seed - a deploy
+                    # rolled back. The newer content stays and the older
+                    # build refreshes only the list's metadata, as it did
+                    # while revisions recorded every version it had seeded
+                    # (#1394 review); refusing would keep the server down.
+                    wl.name = name
+                    wl.description = description
+                    wl.visibility = PromptListVisibility.PUBLIC.value
+                    wl.published_at = wl.published_at or datetime.now(timezone.utc)
+                    wl.moderation_state = PromptContentModerationState.ACTIVE.value
                 else:
                     prompt_versions = await self._ensure_bundled_prompt_versions(
                         session, definitions=source_prompts, language=language

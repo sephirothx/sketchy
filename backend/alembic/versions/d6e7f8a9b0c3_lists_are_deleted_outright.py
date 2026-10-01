@@ -205,6 +205,27 @@ def upgrade() -> None:
     _report_list_fk(present=False)
 
     # Tombstones go now; their versions were stamped when they were retired.
+    # Their references are cleared by hand first: SQLite migrates with foreign
+    # keys off, so no `CASCADE` or `SET NULL` would run for them (#1394 review).
+    gone = "SELECT id FROM prompt_lists WHERE deleted_at IS NOT NULL"
+    editions = f"SELECT id FROM prompt_list_editions WHERE prompt_list_id IN ({gone})"
+    op.execute(f"UPDATE prompt_lists SET copied_from_edition_id = NULL WHERE copied_from_edition_id IN ({editions})")
+    for table in ("prompt_list_edition_items", "prompt_list_edition_tags"):
+        op.execute(f"DELETE FROM {table} WHERE edition_id IN ({editions})")
+    op.execute(f"DELETE FROM prompt_list_editions WHERE prompt_list_id IN ({gone})")
+    op.execute(f"UPDATE prompt_lists SET copied_from_list_id = NULL WHERE copied_from_list_id IN ({gone})")
+    op.execute(f"UPDATE prompt_versions SET unlisted_from_list_id = NULL WHERE unlisted_from_list_id IN ({gone})")
+    for table in ("prompts", "prompt_list_tags", "prompt_list_stars", "prompt_list_localizations"):
+        op.execute(f"DELETE FROM {table} WHERE prompt_list_id IN ({gone})")
+    op.execute(
+        "DELETE FROM prompt_list_revision_items WHERE revision_id IN "
+        f"(SELECT id FROM prompt_list_revisions WHERE prompt_list_id IN ({gone}))"
+    )
+    op.execute(
+        "DELETE FROM prompt_list_revision_tags WHERE revision_id IN "
+        f"(SELECT id FROM prompt_list_revisions WHERE prompt_list_id IN ({gone}))"
+    )
+    op.execute(f"DELETE FROM prompt_list_revisions WHERE prompt_list_id IN ({gone})")
     op.execute("DELETE FROM prompt_lists WHERE deleted_at IS NOT NULL")
     op.drop_index("ix_prompt_lists_published", table_name="prompt_lists")
     op.drop_index("ix_prompt_lists_deleted_at", table_name="prompt_lists")

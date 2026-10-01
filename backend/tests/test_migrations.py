@@ -902,3 +902,73 @@ async def test_the_runtime_metrics_revision_on_postgresql():
         await _exercise_runtime_metrics_revision(engine)
     finally:
         await engine.dispose()
+
+
+async def test_lists_deleted_outright_migrate_over_rows(tmp_path):
+    """#1362's revision run over rows rather than an empty schema (#1394
+    review): a bundled list's digest comes from its revision at its current
+    version, a tombstone goes and a copy of it lets go, and the history keeps
+    the tombstone's id."""
+    engine = create_db_engine(f"sqlite+aiosqlite:///{tmp_path / 'outright.db'}")
+    try:
+        await _migrate(engine, alembic_command.upgrade, "c5d6e7f8a9b2")
+        bundled, tombstone, copy, game = (uuid.uuid4() for _ in range(4))
+        async with engine.begin() as connection:
+            for list_id, slug, extra in (
+                (bundled, "bundled", ", 1, 2, NULL, 0, NULL"),
+                (tombstone, "gone", ", 0, 1, datetime('now'), 0, NULL"),
+                (copy, "copy", ", 0, 1, NULL, 1, :tombstone"),
+            ):
+                await connection.execute(
+                    text(
+                        "INSERT INTO prompt_lists (id, slug, name, is_bundled, version,"
+                        " deleted_at, is_copy, copied_from_list_id, visibility,"
+                        " created_at, updated_at) VALUES (:id, :slug, :slug"
+                        + extra
+                        + ", 'private', datetime('now'), datetime('now'))"
+                    ),
+                    {"id": list_id.hex, "slug": slug, "tombstone": tombstone.hex},
+                )
+            for version, digest in ((1, "a" * 64), (2, "b" * 64)):
+                await connection.execute(
+                    text(
+                        "INSERT INTO prompt_list_revisions (id, prompt_list_id, version,"
+                        " language, content_hash, created_at) VALUES (:id, :list, :version,"
+                        " 'en', :digest, datetime('now'))"
+                    ),
+                    {"id": uuid.uuid4().hex, "list": bundled.hex, "version": version, "digest": digest},
+                )
+            await connection.execute(
+                text(
+                    "INSERT INTO game_records (id, room_name, scoring_mode, hint_mode,"
+                    " prompt_source_mode, drawing_seconds, total_rounds, player_count,"
+                    " started_at, finished_at) VALUES (:id, 'Room', 'default', 'none',"
+                    " 'curated', 60, 1, 2, datetime('now'), datetime('now'))"
+                ),
+                {"id": game.hex},
+            )
+            await connection.execute(
+                text("INSERT INTO game_prompt_sources (game_id, prompt_list_id) VALUES (:g, :l)"),
+                {"g": game.hex, "l": tombstone.hex},
+            )
+
+        await _migrate(engine, alembic_command.upgrade, "head")
+
+        async with engine.begin() as connection:
+            rows = dict(
+                (
+                    await connection.execute(
+                        text("SELECT slug, content_hash FROM prompt_lists")
+                    )
+                ).all()
+            )
+            copied_from = await connection.scalar(
+                text("SELECT copied_from_list_id FROM prompt_lists WHERE slug = 'copy'")
+            )
+            source = await connection.scalar(text("SELECT prompt_list_id FROM game_prompt_sources"))
+        assert rows.keys() == {"bundled", "copy"}
+        assert rows["bundled"] == "b" * 64
+        assert copied_from is None
+        assert uuid.UUID(str(source)) == tombstone
+    finally:
+        await engine.dispose()
