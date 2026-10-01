@@ -11,6 +11,7 @@ as a blank. Translate the words; leave the holes, the plural categories and
 the slot tokens exactly where they are. */
 import { formattersFor } from "./format.ts";
 import type { Catalogue } from "./index.ts";
+import type { PromptShelf } from "../../lib/promptListTree.ts";
 import type { AnnouncementCode } from "../../lib/announcements.ts";
 import type { ErrorCode } from "../../types.ts";
 
@@ -1600,6 +1601,17 @@ export const PL: Catalogue = {
     promptLists: "Listy haseł",
     namePromptCountPrompts:
       (p: { name: string; promptCount: number }) => `${p.name} (hasła: ${p.promptCount})`,
+    yourLists: "Twoje listy",
+    fromCommunityCatalogue: "Z katalogu społeczności",
+    /** A shelf's name, by its slug (`lib/promptListTree.ts`, R-PROMPT-14). */
+    shelves: { everyday: "Na co dzień" } satisfies Record<PromptShelf, string>,
+    /** A series's name, by its slug; one without falls back to its slug. */
+    series: {} as Record<string, string>,
+    chosenCount: (p: { count: number }) => `wybrano: ${number(p.count)}`,
+    seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} z ${number(p.total)}`,
+    showSeries: (p: { name: string }) => `Pokaż listy: ${p.name}`,
+    hideSeries: (p: { name: string }) => `Ukryj listy: ${p.name}`,
+    tooManyLists: (p: { max: number }) => `Pokój może korzystać z najwyżej ${number(p.max)} list. Odznacz kilka, zanim przejdziesz dalej.`,
   },
 
   promptStatsPage: {

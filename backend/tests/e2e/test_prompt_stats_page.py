@@ -105,7 +105,7 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             await page.goto(f"{BASE_URL}/prompt-lists/not-a-real-list")
             await page.get_by_text("There is no prompt list with that name.").wait_for()
 
-            # Room setup offers the stats from the chip itself, not as a link row.
+            # Room setup offers the stats from the list's own row, not as a link row.
             await page.goto(f"{BASE_URL}/create")
             await page.click('summary:has-text("Prompts")')
             info = page.get_by_role("link", name="How English — Standard prompts play")
