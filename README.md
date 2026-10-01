@@ -552,8 +552,8 @@ Adding/removing/reordering membership requires a higher top-level list
 to that immutable prompt version.
 Prompt-list governance is schema-first and deny-by-default. A user-owned list
 is **Private** or **Published** and nothing else: it starts Private, and only
-publishing changes that, never a save. Official bundled lists are always public. Ownership, exact source-revision
-fork provenance, structured revision tags, moderation actor/time, and the
+publishing changes that, never a save. Official bundled lists are always public. Ownership, the list a copy was
+taken from, structured revision tags, moderation actor/time, and the
 Active/Under review/Hidden moderation state are relational fields with
 portable constraints—never JSON tags or a lossy `is_nsfw` flag. Difficulty and
 content rating remain on the exact immutable prompt version where their
@@ -582,7 +582,7 @@ visibility setting: it needs a confirmed email address and no unread moderator
 warning, it is rate-limited, it is recorded in the audit ledger, and editing a
 published list never takes it back out. Unpublishing does, at once, and leaves
 its stars where they are. Any published list can also be **forked** — copied into a private list
-of your own, recording the exact revision it came from. A fork is independent
+of your own, recording the list it came from. A fork is independent
 content from the moment it exists, gets its own prompt versions, leaves out
 anything a moderator had hidden, and counts against your 25-list allowance. Community content is moderated **after** publication,
 through the same report and review path any player-authored content uses — an

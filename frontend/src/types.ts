@@ -102,12 +102,6 @@ export interface OwnedPromptList extends PromptListSummary {
   copyCount: number;
   /** Where this list was copied from, or null if it was not a copy (R-LIST-21). */
   copiedFrom: CopiedFrom | null;
-  /**
-   * The exact revision this list was copied from, if it was one — a revision
-   * rather than a list, because both go on being edited. It may name one that
-   * is no longer served.
-   */
-  forkedFromRevisionId: string | null;
   createdAt: string;
   updatedAt: string;
   prompts: OwnedPromptEntry[];

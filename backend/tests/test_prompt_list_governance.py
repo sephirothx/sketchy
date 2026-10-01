@@ -103,9 +103,9 @@ async def test_copy_provenance_and_tags_are_structured():
                 )
                 session.add(source_revision)
                 await session.flush()
+                fork.is_copy, fork.copied_from_list_id = True, source.id
                 fork_revision = PromptListRevision(
                     prompt_list_id=fork.id,
-                    forked_from_revision_id=source_revision.id,
                     version=1,
                     language="en",
                     content_hash="b" * 64,
@@ -121,13 +121,9 @@ async def test_copy_provenance_and_tags_are_structured():
                 )
 
         async with factory() as session:
-            stored = await session.scalar(
-                select(PromptListRevision).where(
-                    PromptListRevision.prompt_list_id == fork.id
-                )
-            )
+            stored = await session.get(PromptList, fork.id)
             assert stored is not None
-            assert stored.forked_from_revision_id == source_revision.id
+            assert stored.copied_from_list_id == source.id
             assert (
                 await session.scalar(select(PromptListRevisionTag.tag_id))
             ) == tag.id

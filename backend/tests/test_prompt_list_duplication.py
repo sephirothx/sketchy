@@ -19,7 +19,7 @@ from app.api.errors import install_refusal_handler
 from app.api.prompt_lists import create_prompt_list_router, publish_limiter
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.sessions import COOKIE_NAME, create_session
-from app.db.models import PromptList, PromptListRevision, PromptVersion
+from app.db.models import PromptList, PromptVersion
 from app.repositories.interfaces import PromptListEntryInput
 from app.repositories.sqlalchemy import (
     MAX_OWNED_PROMPT_LISTS,
@@ -91,18 +91,15 @@ async def test_a_duplicate_has_the_contents_and_none_of_the_history(env):
         ("whisk", []),
     ]
     assert body["tags"] == ["animals"]
-    assert body["copiedFrom"] is None and body["forkedFromRevisionId"] is None
+    assert body["copiedFrom"] is None
     # Its own prompt identities, not the source's.
     assert {entry["conceptId"] for entry in body["prompts"]}.isdisjoint(
         {entry.concept_id for entry in source.prompts}
     )
     async with factory() as session:
         row = await session.get(PromptList, UUID(body["id"]))
-        revision = await session.scalar(
-            select(PromptListRevision).where(PromptListRevision.prompt_list_id == row.id)
-        )
     assert row.is_copy is False
-    assert revision.forked_from_revision_id is None
+    assert row.copied_from_list_id is None
 
 
 async def test_a_hidden_prompt_is_left_out_rather_than_given_a_new_identity(env):

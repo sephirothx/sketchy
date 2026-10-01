@@ -947,7 +947,6 @@ def _to_owned_prompt_list(
     star_count: int = 0,
     copy_count: int = 0,
     copied_from: CopiedFrom | None = None,
-    forked_from_revision_id: str | None = None,
 ) -> OwnedPromptList:
     return OwnedPromptList(
         id=_public_id(wl.id),
@@ -966,7 +965,6 @@ def _to_owned_prompt_list(
         star_count=star_count,
         copy_count=copy_count,
         copied_from=copied_from,
-        forked_from_revision_id=forked_from_revision_id,
     )
 def _bundled_revision_hash(
     *, language: str, prompts: Sequence[BundledPromptDefinition]
@@ -3888,9 +3886,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         """What each of these lists was copied from, as it is now (R-LIST-21).
 
         One query for all of them, whatever the caller is reading. The original
-        is found through the copy's **first** revision - the only one derived
-        from anywhere else - and read as it currently stands: its name and its
-        owner's display name today, since a revision carries no name and an
+        is the list the copy's `copied_from_list_id` names (#1361), read as it
+        currently stands: its name and its owner's display name today, since an
         original is free to be renamed. A list that is not a copy is absent.
 
         Whether it links is the catalogue's own question, asked the way the
@@ -3901,24 +3898,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         """
         if not list_ids:
             return {}
-        copy_revision = aliased(PromptListRevision)
-        source_revision = aliased(PromptListRevision)
         copy_list = aliased(PromptList)
         source = aliased(PromptList)
         rows = (
             await session.execute(
                 select(copy_list.id, source, User.display_name)
                 .select_from(copy_list)
-                .outerjoin(
-                    copy_revision,
-                    (copy_revision.prompt_list_id == copy_list.id)
-                    & (copy_revision.version == 1),
-                )
-                .outerjoin(
-                    source_revision,
-                    source_revision.id == copy_revision.forked_from_revision_id,
-                )
-                .outerjoin(source, source.id == source_revision.prompt_list_id)
+                .outerjoin(source, source.id == copy_list.copied_from_list_id)
                 .outerjoin(User, User.id == source.owner_user_id)
                 .where(copy_list.id.in_(list_ids), copy_list.is_copy.is_(True))
             )
@@ -3951,24 +3937,16 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         """How many copies of this list still exist. Derived, never stored
         (R-LIST-20).
 
-        A copy's first revision names the revision it was taken from, and only
-        its first: that is the one derived from anywhere else. So the count is
-        the lists whose revision one points at *any* revision of this list -
-        any, because an edit moves the source on to a new revision and the
-        copies of the old one are still its copies. A copy that was deleted is
-        not counted, and a copy of a copy counts toward what it was taken from.
+        The lists whose `copied_from_list_id` names this one (#1361): a copy
+        records the list it was taken from, so an edit on either side changes
+        nothing here. A copy that was deleted is not counted, and a copy of a
+        copy counts toward what it was taken from.
         """
-        copy_revision = aliased(PromptListRevision)
-        source_revision = aliased(PromptListRevision)
         copy_list = aliased(PromptList)
         return (
-            select(func.count(func.distinct(copy_revision.prompt_list_id)))
-            .select_from(copy_revision)
-            .join(source_revision, source_revision.id == copy_revision.forked_from_revision_id)
-            .join(copy_list, copy_list.id == copy_revision.prompt_list_id)
+            select(func.count(copy_list.id))
             .where(
-                source_revision.prompt_list_id == PromptList.id,
-                copy_revision.version == 1,
+                copy_list.copied_from_list_id == PromptList.id,
                 copy_list.deleted_at.is_(None),
             )
             .correlate(PromptList)
@@ -4509,26 +4487,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         own row as subqueries, the content is one flat select, and the tags
         and the copy credit are one query each.
         """
-        origin_revision = aliased(PromptListRevision)
         row = (
             await session.execute(
                 select(
                     PromptList,
                     self._star_count(),
                     self._copy_count(),
-                    # Revision one's, not the current revision's.
-                    # `forked_from_revision_id` is a fact about one revision -
-                    # where *it* was derived from - and only the revision a fork
-                    # starts life as was derived from anywhere else. Reading
-                    # the current one answered correctly until the fork's owner
-                    # made their first edit, and null from then on.
-                    select(origin_revision.forked_from_revision_id)
-                    .where(
-                        origin_revision.prompt_list_id == PromptList.id,
-                        origin_revision.version == 1,
-                    )
-                    .correlate(PromptList)
-                    .scalar_subquery(),
                 ).where(
                     PromptList.id == prompt_list_id,
                     PromptList.owner_user_id == owner_id,
@@ -4539,7 +4503,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         ).first()
         if row is None:
             return None
-        prompt_list, stars, copies, origin = row
+        prompt_list, stars, copies = row
         entries = await self._revision_entries(session, prompt_list.id, prompt_list.version)
         # The revision the entries were read at, not whichever is current by
         # now: a save committed between the two reads gave the editor one
@@ -4553,7 +4517,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             star_count=int(stars or 0),
             copy_count=int(copies or 0),
             copied_from=credits.get(prompt_list.id),
-            forked_from_revision_id=_public_id(origin) if origin else None,
         )
 
     @staticmethod
@@ -4792,8 +4755,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         what may be carried is decided once for both: only prompt versions a
         moderator left active, through the editor's own validation, checked
         against the owner's allowance before anything is written. `lineage` is
-        the difference - a copy records the revision it came from and is marked
-        as one (R-LIST-17, R-LIST-21); a duplicate records neither.
+        the difference - a copy records the list it came from and is marked as
+        one (R-LIST-17, R-LIST-21, #1361); a duplicate records neither.
         """
         # Checked before anything is written, so a refusal at the cap
         # leaves nothing behind (R-LIST-08's spirit: fail visibly). Both
@@ -4857,6 +4820,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             language=source.language,
             is_bundled=False,
             is_copy=lineage,
+            copied_from_list_id=source.id if lineage else None,
             visibility=PromptListVisibility.PRIVATE.value,
             moderation_state=PromptContentModerationState.ACTIVE.value,
             version=1,
@@ -4874,13 +4838,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 if slug in {link.tag.slug for link in origin.revision_tags}
             ),
         )
-        if lineage:
-            revision = await session.scalar(
-                select(PromptListRevision).where(
-                    PromptListRevision.prompt_list_id == list_id
-                )
-            )
-            revision.forked_from_revision_id = origin.id
         return list_id
 
     async def fork_published(
@@ -4892,11 +4849,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         content to work on, and publishing it is a separate act with its own
         gate (R-LIST-11). Independent from the moment it exists, too - hiding
         the source afterwards does not reach into the copy, which is why the
-        lineage may end up pointing at a revision that is no longer served.
+        lineage may end up naming a list that is no longer served.
 
-        The lineage names the exact source **revision**, not the list. Both
-        sides go on being edited, and a pointer at the list would stop meaning
-        anything after the first edit on either.
+        The lineage names the source **list**, on the copy's own row (#1361):
+        the credit reads it as it is now, so an edit on either side changes
+        nothing, and the pointer is cleared when the source is deleted.
         """
         forker_id = _optional_entity_id(user_id)
         source_id = _optional_entity_id(prompt_list_id)
