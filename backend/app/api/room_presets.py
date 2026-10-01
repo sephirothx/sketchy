@@ -13,6 +13,7 @@ from app.services.room_presets import (
     RoomPresetAuthorizationError,
     RoomPresetConflict,
     RoomPresetError,
+    RoomPresetTooManyPlayerLists,
     RoomPresetNotFound,
     RoomPresetService,
     RoomPresetSummary,
@@ -76,6 +77,8 @@ def _http_error(error: RoomPresetError) -> Refusal:
         return Refusal(404, ErrorCode.ROOM_PRESET_NOT_FOUND, str(error))
     if isinstance(error, RoomPresetConflict):
         return Refusal(409, ErrorCode.ROOM_PRESET_CONFLICT, str(error))
+    if isinstance(error, RoomPresetTooManyPlayerLists):
+        return Refusal(422, ErrorCode.TOO_MANY_PLAYER_PROMPT_LISTS, str(error))
     return Refusal(422, ErrorCode.ROOM_PRESET_UNAVAILABLE, str(error))
 
 

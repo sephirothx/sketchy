@@ -4,6 +4,8 @@
   "description": "Was man im deutschsprachigen Raum kennt: Essen, Bräuche und Alltag.",
   "language": "de",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ac-7338-a424-ce6558b22fc8","answer":"Almabtrieb","aliases":["der Almabtrieb","Alpabzug","Viehscheid","Alpabfahrt"]},
     {"conceptId":"01a0f6a4-69ac-7338-a424-ce73ec6e7696","answer":"Ampelmännchen","aliases":["das Ampelmännchen","Ampelmann"]},

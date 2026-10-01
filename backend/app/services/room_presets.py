@@ -17,6 +17,7 @@ from app.domain_values import (
     AccountState,
     PromptContentModerationState,
 )
+from app.prompt_content import MAX_PLAYER_PROMPT_LISTS
 from app.repositories.interfaces import PromptListRepository, PromptListSelectionError
 
 
@@ -25,6 +26,10 @@ MAX_ROOM_PRESETS_PER_OWNER = 20
 
 class RoomPresetError(ValueError):
     """Safe validation or authorization failure for a room preset."""
+
+
+class RoomPresetTooManyPlayerLists(RoomPresetError):
+    """More players' lists than a room may use (`MAX_PLAYER_PROMPT_LISTS`)."""
 
 
 class RoomPresetNotFound(RoomPresetError):
@@ -146,6 +151,13 @@ class RoomPresetService:
         ):
             raise RoomPresetError(
                 "Room presets may use only active built-in prompt lists or lists you own"
+            )
+        # Refused here, at the save, with the room's own reason: otherwise the
+        # preset is written and every later read of it fails, since reading
+        # one authorizes its lists as a room would (#1374).
+        if sum(1 for slug in slugs if not by_slug[slug].is_bundled) > MAX_PLAYER_PROMPT_LISTS:
+            raise RoomPresetTooManyPlayerLists(
+                f"A room can use at most {MAX_PLAYER_PROMPT_LISTS} players' lists"
             )
         if expected_language == MIXED_PROMPT_LANGUAGE:
             # A mixed-language preset (#1182): which lists qualify is asked

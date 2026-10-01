@@ -4,6 +4,8 @@
   "description": "La lista difícil: cosas menos comunes, escenas y expresiones, la misma en todos los idiomas.",
   "language": "es",
   "version": 3,
+  "shelf": "everyday",
+  "position": 1,
   "prompts": [
     {"conceptId":"01a0f467-2041-71b2-9e85-05dd1bbe08e4","answer":"ábaco","aliases":["el ábaco"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-05deda591bc4","answer":"as en la manga","aliases":["as bajo la manga","un as en la manga","un as bajo la manga"]},

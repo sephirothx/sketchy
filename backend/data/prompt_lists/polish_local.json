@@ -4,6 +4,8 @@
   "description": "To, co zna się w Polsce: jedzenie, zwyczaje i codzienność.",
   "language": "pl",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ae-773c-b815-4e06f89cf23f","answer":"andrzejki","aliases":["lanie wosku","wróżby andrzejkowe"]},
     {"conceptId":"01a088e3-e9b9-7b4e-ae09-8f7a698bfd0a","answer":"Baba Jaga"},

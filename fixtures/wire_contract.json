@@ -1998,7 +1998,8 @@
   ],
   "api.serializers:prompt_list_payload": [
    "isBundled",
-   "promptCount"
+   "promptCount",
+   "shelfPosition"
   ],
   "api.serializers:prompt_stats_payload": [
    "correctGuessCount",
@@ -2849,7 +2850,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 57,
+ "protocolVersion": 58,
  "refusal": {
   "codes": [
    "invalid_payload",
@@ -2861,6 +2862,7 @@
    "invalid_custom_prompts",
    "mixed_room_list_unsupported",
    "mixed_room_custom_prompts",
+   "too_many_player_prompt_lists",
    "max_players_below_seated",
    "empty_message",
    "too_fast",
