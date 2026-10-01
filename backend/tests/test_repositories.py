@@ -954,6 +954,63 @@ async def test_prompt_list_repository():
         await engine.dispose()
 
 
+async def test_a_fresh_database_seeds_a_reworded_prompt_at_its_current_version():
+    """A file that reworded a prompt carries it at version 2 (R-PROMPT-05). A
+    database that never held version 1 must still take it, or every fresh
+    install would refuse to start once one bundled word had been reworded."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        concept = str(generate_uuid())
+        await repo.upsert_bundled(
+            slug="reworded",
+            name="Reworded",
+            description="",
+            language="en",
+            prompts=[BundledPromptDefinition(concept, "apple tree", prompt_version=2)],
+            version=2,
+        )
+        async with factory() as session:
+            versions = (
+                await session.execute(
+                    select(PromptVersion).where(PromptVersion.concept_id == UUID(concept))
+                )
+            ).scalars().all()
+        assert [(entry.version, entry.canonical_answer) for entry in versions] == [
+            (2, "apple tree")
+        ]
+    finally:
+        await engine.dispose()
+
+
+async def test_a_held_prompt_still_climbs_one_version_at_a_time():
+    """Where the database already holds the wording, a skipped version is still
+    a mistake in the file and still refuses to seed."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        concept = str(generate_uuid())
+        await repo.upsert_bundled(
+            slug="climbing",
+            name="Climbing",
+            description="",
+            language="en",
+            prompts=[BundledPromptDefinition(concept, "apple")],
+            version=1,
+        )
+        with pytest.raises(PromptSeedConflictError, match="expected version 2, got 3"):
+            await repo.upsert_bundled(
+                slug="climbing",
+                name="Climbing",
+                description="",
+                language="en",
+                prompts=[BundledPromptDefinition(concept, "apple tree", prompt_version=3)],
+                version=2,
+            )
+    finally:
+        await engine.dispose()
+
+
 async def test_save_game_persists_the_analytics_columns():
     """These are written for later analysis and are not read back by any view,
     so the write itself is what has to be checked."""

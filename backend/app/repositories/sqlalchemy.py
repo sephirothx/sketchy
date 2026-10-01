@@ -226,8 +226,8 @@ def _published_by_a_player():
     Bundled lists are public and active too - that is what the official
     catalogue *is* - so a predicate checking only public-active-present let an
     official list be starred and forked. Forking one was the worse half: the
-    fork path builds its entries directly, so copying the 592-prompt bundled
-    list would have written an owned list well past R-LIST-04's 500.
+    fork path builds its entries directly, so copying a bundled list - a
+    thousand prompts and more - would have written an owned list well past R-LIST-04's 500.
     """
     return (
         PromptList.visibility == PromptListVisibility.PUBLIC.value,
@@ -6593,8 +6593,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 resolved.append(prompt_version)
                 continue
 
+            # A wording this database has never held in this language starts
+            # wherever the file says: a fresh install seeds a reworded prompt
+            # at its current version, never having seen the first. Only a
+            # language that already holds versions must climb one at a time,
+            # because a gap there is a version the file skipped (#1367).
             expected_version = latest_versions[concept_id] + 1
-            if definition.prompt_version != expected_version:
+            if latest_versions[concept_id] and definition.prompt_version != expected_version:
                 raise PromptSeedConflictError(
                     f"prompt concept {definition.concept_id} expected version "
                     f"{expected_version}, got {definition.prompt_version}"

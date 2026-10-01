@@ -2,17 +2,19 @@
 
 A mixed room declares `mul`. It may draw on lists every room language can
 play - a list in no language, or a list whose family spells every concept in
-all seven (Standard, R-PROMPT-01) - and each seat meets the drawn prompt in
+all eight (Standard, R-PROMPT-01) - and each seat meets the drawn prompt in
 the language it joined with: its offers, its letter tiles, its hints and its
 near misses. A guess naming the drawing in any language scores, except where
 that spelling is another prompt of the game in the guesser's own language.
 """
 from __future__ import annotations
 
+import json
+
 import pytest
 import pytest_asyncio
 
-from app.db.seed import seed_prompt_lists
+from app.db.seed import DEFAULT_PROMPT_LISTS_DIR, seed_prompt_lists
 from app.domain_values import PROMPT_LANGUAGES
 from app.game import Game, Phase, PromptForm
 from app.repositories.interfaces import (
@@ -27,6 +29,11 @@ from app.repositories.sqlalchemy import (
 from app.services.prompt_usage import tally_prompt_usage
 
 from tests.dbfixtures import create_test_db
+
+#: Standard's size, read off the file rather than written down: it is content.
+STANDARD = len(
+    json.loads((DEFAULT_PROMPT_LISTS_DIR / "english_standard.json").read_text())["prompts"]
+)
 
 
 @pytest_asyncio.fixture
@@ -51,7 +58,7 @@ async def test_a_mixed_room_pins_standard_in_every_language(seeded):
     assert pinned.language == "mul"
     assert len(pinned.revision_ids) == len(PROMPT_LANGUAGES)
     # One prompt, however many languages spell it.
-    assert pinned.prompt_count == 260
+    assert pinned.prompt_count == STANDARD
     assert set(pinned.letter_total_by_language) == set(PROMPT_LANGUAGES)
     assert all(pinned.letter_total_by_language.values())
 
@@ -97,12 +104,14 @@ async def test_a_mixed_room_draws_every_language_s_form_and_agnostic_ones_whole(
         requesting_user_id=owner.id,
         expected_language="mul",
     )
-    assert pinned.prompt_count == 261
+    assert pinned.prompt_count == STANDARD + 1
 
-    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=300)
+    sample = await prompts.sample_mixed_prompts(
+        list(pinned.revision_ids), limit=STANDARD + 1
+    )
 
-    assert sample.drawable == 261
-    assert len(sample.prompts) == 261
+    assert sample.drawable == STANDARD + 1
+    assert len(sample.prompts) == STANDARD + 1
     agnostic = [prompt for prompt in sample.prompts if not prompt.translations]
     assert [prompt.answer for prompt in agnostic] == ["Pikachu"]
     spelled = [prompt for prompt in sample.prompts if prompt.translations]
@@ -469,11 +478,11 @@ async def test_a_concept_taken_down_in_one_language_is_not_drawn(seeded):
             hund.moderation_state = "hidden"
             dog_concept = hund.concept_id
 
-    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=300)
+    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=STANDARD)
 
     assert all(prompt.concept_id != str(UUID(str(dog_concept))) for prompt in sample.prompts)
-    assert len(sample.prompts) == 259
-    assert sample.drawable == 259
+    assert len(sample.prompts) == STANDARD - 1
+    assert sample.drawable == STANDARD - 1
 
 
 async def test_a_mixed_draw_counts_what_it_could_have_drawn(seeded):
@@ -485,7 +494,7 @@ async def test_a_mixed_draw_counts_what_it_could_have_drawn(seeded):
     sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=10)
 
     assert len(sample.prompts) == 10
-    assert sample.drawable == 260
+    assert sample.drawable == STANDARD
 
 
 def test_a_spectator_neither_hurries_the_players_letters_nor_quiets_their_chat():

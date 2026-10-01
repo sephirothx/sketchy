@@ -2292,7 +2292,11 @@ by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape i
 
 - Equal text shares a concept **only** when the files deliberately repeat that ID.
 - Changing capitalization, punctuation, wording, aliases, or editorial metadata requires
-  the **same `conceptId` and a higher `promptVersion`**.
+  the **same `conceptId` and a higher `promptVersion`** - one higher than the newest the
+  database holds in that language. A database that holds none (a fresh install) seeds the
+  file's version as it stands: it never saw the earlier wording, and refusing a version 2
+  for want of a version 1 would stop every fresh install once one word was reworded
+  (#1367).
 - Adding, removing, or reordering membership requires a higher top-level list `version`.
 - Optional `aliases`, `difficulty`, `contentRating`, and `tags` belong to the immutable
   prompt version.
