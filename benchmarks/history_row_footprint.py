@@ -124,7 +124,7 @@ async def run(games: int) -> dict:
     # measure the live rows only.
     async with engine.connect() as conn:
         await conn.execution_options(isolation_level="AUTOCOMMIT")
-        for table in TABLES + ("game_records", "users", "prompt_list_revision_items", "game_prompt_sources"):
+        for table in TABLES + ("game_records", "users", "prompts", "game_prompt_sources"):
             await conn.execute(text(f"VACUUM FULL ANALYZE {table}"))
     async with engine.connect() as conn:
         sizes = {}
@@ -136,11 +136,10 @@ async def run(games: int) -> dict:
                             "total_bytes_per_game": (heap + idx) / games}
         derived = (await conn.execute(text(
             "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
-            "SELECT o.id, r.prompt_list_id FROM turn_prompt_offers o "
+            "SELECT o.id, i.prompt_list_id FROM turn_prompt_offers o "
             "JOIN turn_records t ON t.id = o.turn_id "
             "JOIN game_prompt_sources s ON s.game_id = t.game_id "
-            "JOIN prompt_list_revisions r ON r.prompt_list_id = s.prompt_list_id "
-            "JOIN prompt_list_revision_items i ON i.revision_id = r.id AND i.prompt_version_id = o.prompt_version_id "
+            "JOIN prompts i ON i.prompt_list_id = s.prompt_list_id AND i.prompt_version_id = o.prompt_version_id "
             "WHERE t.game_id = (SELECT id FROM game_records LIMIT 1)"))).scalar_one()
         stored = (await conn.execute(text(
             "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) "
@@ -150,10 +149,9 @@ async def run(games: int) -> dict:
             "WHERE t.game_id = (SELECT id FROM game_records LIMIT 1)"))).scalar_one()
         equal = await conn.scalar(text(
             "SELECT count(*) FROM ("
-            "SELECT o.id, r.prompt_list_id FROM turn_prompt_offers o JOIN turn_records t ON t.id = o.turn_id "
+            "SELECT o.id, i.prompt_list_id FROM turn_prompt_offers o JOIN turn_records t ON t.id = o.turn_id "
             "JOIN game_prompt_sources s ON s.game_id = t.game_id "
-            "JOIN prompt_list_revisions r ON r.prompt_list_id = s.prompt_list_id "
-            "JOIN prompt_list_revision_items i ON i.revision_id = r.id AND i.prompt_version_id = o.prompt_version_id "
+            "JOIN prompts i ON i.prompt_list_id = s.prompt_list_id AND i.prompt_version_id = o.prompt_version_id "
             "EXCEPT SELECT offer_id, prompt_list_id FROM turn_prompt_offer_sources) d"))
     await engine.dispose()
     def plan(p):

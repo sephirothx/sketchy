@@ -134,7 +134,7 @@ class RoomPresetService:
         rows = (
             await session.scalars(
                 select(PromptList).where(
-                    PromptList.slug.in_(slugs), PromptList.deleted_at.is_(None)
+                    PromptList.slug.in_(slugs)
                 )
             )
         ).all()
@@ -194,7 +194,7 @@ class RoomPresetService:
             rows = (
                 await session.scalars(
                     select(PromptList).where(
-                        PromptList.id.in_(ids), PromptList.deleted_at.is_(None)
+                        PromptList.id.in_(ids)
                     )
                 )
             ).all()

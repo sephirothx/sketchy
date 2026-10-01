@@ -8,7 +8,7 @@ with it. The credit reads the original as it is now, so the list is enough.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest_asyncio
@@ -29,7 +29,6 @@ from app.repositories.interfaces import (
     BundledPromptDefinition,
     PromptListEntryInput,
 )
-from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.repositories.sqlalchemy import (
     MAX_OWNED_PROMPT_LISTS,
     SqlAlchemyPromptListRepository,
@@ -322,7 +321,7 @@ async def test_an_official_bundled_list_cannot_be_forked(env):
     assert owned == 0, "a refused fork spends no list slot"
 
 
-async def test_reclaiming_a_deleted_source_forgets_where_the_fork_came_from(env):
+async def test_deleting_a_source_forgets_where_the_fork_came_from(env):
     """And that is retention working, not provenance being lost.
 
     A fork reference is deliberately **not** a pin. Pins exist so a finished
@@ -347,9 +346,6 @@ async def test_reclaiming_a_deleted_source_forgets_where_the_fork_came_from(env)
     assert await _copied_from_list_id(factory, forked["id"]) == UUID(source.id)
 
     assert await prompts.delete_owned(author.id, source.id)
-    await reclaim_retired_prompt_lists(
-        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
-    )
 
     kept = await http.get(f"/api/prompt-lists/mine/{forked['id']}")
     assert kept.status_code == 200

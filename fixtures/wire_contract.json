@@ -2212,6 +2212,12 @@
    "turnNumber",
    "wrongGuessCount"
   ],
+  "auth.account_data:_write_editions": [
+   "conceptId",
+   "createdAt",
+   "promptVersionId",
+   "publishedAt"
+  ],
   "auth.account_data:_write_export_artifact": [
    "avatarKey",
    "blockedUserId",
@@ -2855,7 +2861,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 59,
+ "protocolVersion": 60,
  "refusal": {
   "codes": [
    "invalid_payload",

@@ -26,10 +26,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import AccountState
-from app.services.prompt_reclaim import (
-    reclaim_retired_prompt_lists,
-    reclaim_unlisted_versions,
-)
+from app.services.prompt_reclaim import reclaim_unlisted_versions
 from app.services.readiness import LoopHealth
 from app.services.sweeps import (
     SweepBudget,
@@ -427,15 +424,6 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             "bug_report_screenshots",
             expire_stale_bug_report_screenshots,
             exempt="the report itself and every byte of its metadata; only the pixels go",
-        ),
-        Sweep(
-            "retired_prompt_lists",
-            reclaim_retired_prompt_lists,
-            sla_seconds=HEAVY_SLA_SECONDS,
-            exempt=(
-                "nothing past the grace: a finished game names the list, not a revision, and "
-                "reads the same without it; a hidden word is kept by its owner's takedown record"
-            ),
         ),
         Sweep(
             "unlisted_prompt_versions",

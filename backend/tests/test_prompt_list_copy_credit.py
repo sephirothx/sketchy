@@ -16,7 +16,7 @@ one - that it was copied, never what from.
 """
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest_asyncio
@@ -38,7 +38,6 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
     SqlAlchemyUserRepository,
 )
-from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from tests.dbfixtures import create_test_db
 from tests.publishing import publish_in_place
 
@@ -167,7 +166,7 @@ async def test_an_unpublished_or_hidden_original_is_still_named_but_not_linked(e
         }
 
 
-async def test_a_deleted_original_is_credited_without_its_name_even_after_the_sweep(env):
+async def test_a_deleted_original_is_credited_without_its_name(env):
     http, users, prompts, factory = env
     ada = await account(users, "Ada")
     source = await a_published_list(prompts, factory, ada.id)
@@ -176,13 +175,9 @@ async def test_a_deleted_original_is_credited_without_its_name_even_after_the_sw
 
     assert await prompts.delete_owned(ada.id, source.id)
     deleted = {"status": "deleted", "listId": None, "name": None, "ownerDisplayName": None}
-    assert await credit_seen_by_owner(http, factory, bo.id, copy_id) == deleted
-
-    # The sweep clears the only pointer back to the original. The copy still
-    # knows it was a copy; it no longer knows what of, which is the point.
-    await reclaim_retired_prompt_lists(
-        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
-    )
+    # The delete cleared the only pointer back to the original (#1362). The
+    # copy still knows it was a copy; it no longer knows what of, which is
+    # the point.
     assert await credit_seen_by_owner(http, factory, bo.id, copy_id) == deleted
 
 

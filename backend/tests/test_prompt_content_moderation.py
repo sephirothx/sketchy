@@ -26,7 +26,6 @@ from app.db.models import (
     User,
 )
 from app.domain_values import PromptContentModerationState, UserRole
-from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 from app.repositories.interfaces import PromptListEntryInput, PromptListSelectionError
 from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
@@ -306,26 +305,12 @@ async def test_report_snapshots_survive_owner_deletion(env):
         assert report.prompt_snapshot == "reported prompt"
         assert report.details == "Retain this evidence."
 
-    # The list is retired with the account (#605): the row stays as a
-    # tombstone until the sweep reclaims it, and the report still points at
-    # it and at the version it cites.
+    # The list is deleted with the account (#1362) and the report's pointer
+    # to it detaches; the version it cites stays, kept by the report.
     async with factory() as session:
+        assert await session.get(PromptList, UUID(prompt_list.id)) is None
         report = await session.get(PromptContentReport, UUID(response.json()["id"]))
-        assert report is not None
-        assert report.prompt_list_id == UUID(prompt_list.id)
-        assert report.prompt_version_id == UUID(prompt_list.prompts[0].prompt_version_id)
-        retired = await session.get(PromptList, UUID(prompt_list.id))
-        assert retired.deleted_at is not None and retired.name == "Deleted list"
-        _snapshots_intact(report)
-
-    # Nothing pins the list, so the sweep drops it and the FK detaches; the
-    # version the report cites is kept for the report.
-    await reclaim_retired_prompt_lists(
-        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
-    )
-    async with factory() as session:
-        report = await session.get(PromptContentReport, UUID(response.json()["id"]))
-        assert report.prompt_list_id is None
+        assert report.prompt_list_id == UUID(prompt_list.id), "the id stays, naming nothing"
         assert report.prompt_version_id == UUID(prompt_list.prompts[0].prompt_version_id)
         _snapshots_intact(report)
 
@@ -354,13 +339,9 @@ async def test_a_takedown_decided_after_its_list_was_deleted_still_reaches_the_o
               "reason": "other", "details": "Decide it."},
     )
     assert filed.status_code == 201, filed.text
+    # Deleted at once (#1362): the decision below records the takedown
+    # against the owner the report names (#1357).
     assert await prompts.delete_owned(owner["id"], reported.id) is True
-    later = datetime.now(timezone.utc) + timedelta(days=2)
-
-    # The report is no hold on the list any more (#1357): the decision below
-    # records the takedown against the owner the report names.
-    reclaimed = await reclaim_retired_prompt_lists(factory, now=later)
-    assert reclaimed.lists_deleted == 1
 
     decided = await moderator_http.patch(
         f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
@@ -1696,10 +1677,10 @@ async def test_a_takedown_outlives_its_deleted_list(env):
     """#1091 review: the lookup reached hidden words through list revisions,
     and reclaiming a deleted list's unpinned revisions a day later let the word
     be typed into a new list active. The takedown is its own record now
-    (#1357), so the revisions go and the word stays hidden."""
+    (#1357), so the list goes and the word stays hidden."""
     from datetime import datetime, timedelta, timezone
 
-    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
 
     new_client, factory, prompts = env
     owner_http = new_client()
@@ -1714,7 +1695,7 @@ async def test_a_takedown_outlives_its_deleted_list(env):
             await taken_down(session, row)
             row.moderated_at = datetime.now(timezone.utc)
     assert await prompts.delete_owned(owner["id"], doomed.id)
-    await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+    await reclaim_unlisted_versions(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
 
     fresh = await prompts.create_owned(
         owner["id"], name="Fresh start", description="", language="en",
@@ -1732,8 +1713,8 @@ async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
     route is the one to check."""
     from datetime import datetime, timedelta, timezone
 
-    from app.db.models import PromptListRevision, PromptTakedown
-    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+    from app.db.models import PromptTakedown
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
 
     new_client, factory, prompts = env
     owner_http = new_client()
@@ -1748,13 +1729,11 @@ async def test_an_erased_owners_takedown_is_not_kept_for_nobody(env):
             await taken_down(session, row)
     deleted = await owner_http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
     assert deleted.status_code == 200, deleted.text
-    await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+    await reclaim_unlisted_versions(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
     async with factory() as session:
         assert await session.scalar(select(func.count()).select_from(PromptTakedown)) == 0
         left = await session.scalar(
-            select(func.count(PromptListRevision.id)).where(
-                PromptListRevision.prompt_list_id == UUID(doomed.id)
-            )
+            select(func.count(PromptList.id)).where(PromptList.id == UUID(doomed.id))
         )
         text_left = await session.scalar(
             select(func.count(PromptVersion.id)).where(

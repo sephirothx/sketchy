@@ -253,7 +253,7 @@ async def _assert_agnostic_is_a_list_language(engine: AsyncEngine) -> None:
                 name: tables[table]
                 for table, name in (
                     ("prompt_lists", "ck_prompt_lists_language"),
-                    ("prompt_list_revisions", "ck_prompt_list_revisions_language"),
+                    ("prompt_list_editions", "ck_prompt_list_editions_language"),
                     ("prompt_versions", "ck_prompt_versions_language"),
                     ("prompt_aliases", "ck_prompt_aliases_language"),
                     ("room_presets", "ck_room_presets_prompt_language"),
@@ -262,7 +262,7 @@ async def _assert_agnostic_is_a_list_language(engine: AsyncEngine) -> None:
             }
     for name in (
         "ck_prompt_lists_language",
-        "ck_prompt_list_revisions_language",
+        "ck_prompt_list_editions_language",
         "ck_prompt_versions_language",
         "ck_prompt_aliases_language",
     ):
@@ -286,6 +286,7 @@ async def _exercise_migration_chain(engine: AsyncEngine) -> None:
     script = ScriptDirectory.from_config(get_alembic_config())
     revisions = list(script.walk_revisions())
     assert [revision.revision for revision in revisions] == [
+        "d6e7f8a9b0c3",
         "c5d6e7f8a9b2",
         "b4c5d6e7f8a1",
         "a3b4c5d6e7f9",

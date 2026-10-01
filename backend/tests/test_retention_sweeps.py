@@ -332,22 +332,12 @@ async def test_every_scheduled_sweep_runs_to_completion_under_the_budget():
         )
         assert [name for name, report in reports.items() if report.get("failed")] == []
         assert health.consecutive_failures == 0
-        assert "retired_prompt_lists" in reports
+        assert "unlisted_prompt_versions" in reports
     finally:
         await engine.dispose()
 
 
-async def test_the_reclaim_sweep_takes_no_more_lists_than_the_budget_has_rows():
-    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
-
-    factory, engine = await create_test_db()
-    try:
-        result = await reclaim_retired_prompt_lists(
-            factory, limit=25, budget=SweepBudget(rows=1, batch=1)
-        )
-        assert result.lists_examined <= 1
-    finally:
-        await engine.dispose()
+REMOVED_SWEEPS = {"retired_prompt_lists", "superseded_list_revisions"}
 
 
 def test_every_scheduled_sweep_is_registered_once():
@@ -365,9 +355,12 @@ def test_every_scheduled_sweep_is_registered_once():
         "room_code_reservations",
         "runtime_events",
         "bug_report_screenshots",
-        "retired_prompt_lists",
+        "unlisted_prompt_versions",
         "anonymous_accounts",
     }
+    # Deleted lists go outright and revisions are gone (#1362): nothing is
+    # left for these to sweep, and one coming back would be a tombstone back.
+    assert not set(names) & REMOVED_SWEEPS
 
 
 async def test_login_lockouts_untouched_for_a_day_are_swept_by_the_loop():

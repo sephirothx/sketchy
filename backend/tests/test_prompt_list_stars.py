@@ -134,7 +134,7 @@ async def test_a_hidden_or_retired_list_cannot_be_starred(env):
     async with factory() as session:
         async with session.begin():
             (await session.get(PromptList, UUID(hidden.id))).moderation_state = "hidden"
-            (await session.get(PromptList, UUID(retired.id))).deleted_at = PUBLISHED_AT
+            await session.delete(await session.get(PromptList, UUID(retired.id)))
     await sign_in(http, factory, reader.id)
 
     assert (await http.put(f"/api/prompt-lists/{hidden.id}/star")).status_code == 404

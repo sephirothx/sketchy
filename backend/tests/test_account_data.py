@@ -19,11 +19,9 @@ from app.auth.middleware import SessionAuthMiddleware
 from tests.dbfixtures import create_test_db
 import app.auth.account_data as account_data_module
 from app.services.avatars import set_avatar
-from app.services.prompt_reclaim import (
-    reclaim_retired_prompt_lists,
-    reclaim_unlisted_versions,
-)
+from app.services.prompt_reclaim import reclaim_unlisted_versions
 from tests.png_fixture import png_bytes
+from tests.publishing import publish_in_place
 from app.auth.account_data import (
     EXPORT_INTERVAL,
     AccountDataError,
@@ -477,6 +475,12 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         language="en",
         prompts=(PromptListEntryInput(answer="red panda"),),
     )
+    # Published, so its edition is in the document beside its working copy
+    # (#1362).
+    async with factory() as session:
+        async with session.begin():
+            row = await session.get(PromptList, UUID(exported_list.id))
+            await publish_in_place(session, row, at=datetime.now(timezone.utc))
     starred_list = await SqlAlchemyPromptListRepository(factory).create_owned(
         other.id,
         name="Somebody else's published list",
@@ -533,8 +537,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 15
-    assert artifact["schemaVersion"] == 15
+    assert status["schemaVersion"] == 16
+    assert artifact["schemaVersion"] == 16
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -586,6 +590,9 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["blocks"][0]["blockedUserId"] == other.id
     assert artifact["promptLists"][0]["name"] == "Exported prompts"
     assert artifact["promptLists"][0]["prompts"][0]["prompt"] == "red panda"
+    [edition] = artifact["promptLists"][0]["editions"]
+    assert (edition["number"], edition["state"]) == (1, "published")
+    assert [entry["prompt"] for entry in edition["prompts"]] == ["red panda"]
     assert artifact["roomPresets"][0]["name"] == "Tournament night"
     # A star names the list, not the person who owns it: the export is the
     # requester's data, and a stranger's account id would travel further than
@@ -598,8 +605,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         }
     ]
     assert other.id not in json.dumps(artifact["stars"])
-    # The owner's own list says whether it is published; this one never was.
-    assert artifact["promptLists"][0]["publishedAt"] is None
+    # The owner's own list says whether it is published.
+    assert artifact["promptLists"][0]["publishedAt"] is not None
     assert artifact["roomPresets"][0]["promptListIds"] == [exported_list.id]
     assert artifact["promptContentReportsSubmitted"][0]["details"] == (
         "Requester-authored prompt report"
@@ -622,7 +629,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["settings"]["extraPromptLanguages"] == ["nl", "fr"]
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v15_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v16_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -842,16 +849,10 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert await session.get(DataExport, UUID(export_status["id"])) is None
         assert await session.get(UserSettings, account.id) is None
         assert await session.scalar(select(func.count(UserBlock.blocked_user_id))) == 0
-        # The list is retired with the account - out of reach, copy erased -
-        # and physically reclaimed by the sweep once its grace has passed
-        # (#605); nothing pinned it, so nothing of it survives that.
-        retired = await session.scalar(select(PromptList))
-        assert retired is not None and retired.deleted_at is not None
-        assert retired.name == "Deleted list" and retired.visibility == "private"
+        # The list is deleted with the account at once (#1362); its versions
+        # are collected by the unlisted sweep a grace later.
+        assert await session.scalar(select(func.count(PromptList.id))) == 0
         assert await session.scalar(select(func.count(RoomPreset.id))) == 0
-    await reclaim_retired_prompt_lists(
-        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
-    )
     await reclaim_unlisted_versions(
         factory, now=datetime.now(timezone.utc) + timedelta(days=2)
     )

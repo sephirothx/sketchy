@@ -204,10 +204,7 @@ async def test_a_released_takedown_takes_the_spellings_it_kept(site):
     from sqlalchemy import func
 
     from app.db.models import PromptVersion
-    from app.services.prompt_reclaim import (
-        reclaim_retired_prompt_lists,
-        reclaim_unlisted_versions,
-    )
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
     from tests.test_prompt_content_moderation import PASSWORD
 
     new_client, factory, _, prompts = site
@@ -251,7 +248,7 @@ async def test_a_released_takedown_takes_the_spellings_it_kept(site):
 
     deleted = await owner_http.request("DELETE", "/api/auth/account", json={"password": PASSWORD})
     assert deleted.status_code == 200, deleted.text
-    await reclaim_retired_prompt_lists(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+    await reclaim_unlisted_versions(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
     assert await spellings() == 0
 
 
@@ -291,7 +288,7 @@ async def test_a_hide_waits_for_the_owner_s_deletion_in_flight_and_records_nothi
     )
     assert filed.status_code == 201, filed.text
 
-    real = account_data.retire_owned_lists
+    real = account_data.delete_owned_lists
     deletion_holds_the_account = asyncio.Event()
     let_the_deletion_go_on = asyncio.Event()
 
@@ -300,7 +297,7 @@ async def test_a_hide_waits_for_the_owner_s_deletion_in_flight_and_records_nothi
         await let_the_deletion_go_on.wait()
         return await real(*args, **kwargs)
 
-    monkeypatch.setattr(account_data, "retire_owned_lists", paused)
+    monkeypatch.setattr(account_data, "delete_owned_lists", paused)
     erase = asyncio.create_task(anonymize_account(factory, user_id=owner["id"]))
     await deletion_holds_the_account.wait()
     decide = asyncio.create_task(

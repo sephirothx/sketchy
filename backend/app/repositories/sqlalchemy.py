@@ -42,8 +42,6 @@ from app.db.models import (
     PromptAlias,
     PromptConcept,
     PromptList,
-    PromptListRevision,
-    PromptListRevisionItem,
     PromptListEdition,
     PromptListEditionItem,
     PromptListEditionTag,
@@ -124,7 +122,7 @@ from app.services.prompt_editions import (
     snapshot_edition,
     working_copy_state,
 )
-from app.services.prompt_reclaim import retire_prompt_list
+from app.services.prompt_reclaim import delete_prompt_lists
 from app.services.prompt_takedowns import record_takedowns
 from app.auth.erasure import (
     LockSetChangedError,
@@ -257,7 +255,6 @@ def _published_by_a_player():
     return (
         PromptList.visibility == PromptListVisibility.PUBLIC.value,
         PromptList.moderation_state == PromptContentModerationState.ACTIVE.value,
-        PromptList.deleted_at.is_(None),
         PromptList.is_bundled.is_(False),
         # And something to show: what the catalogue serves is the live
         # edition (#1360), so a first publication still waiting for review
@@ -374,7 +371,6 @@ async def _owned_list_count(session: AsyncSession, owner_id: UUID) -> int:
         select(func.count(PromptList.id)).where(
             PromptList.owner_user_id == owner_id,
             PromptList.is_bundled.is_(False),
-            PromptList.deleted_at.is_(None),
         )
     )
     return int(count or 0)
@@ -1931,28 +1927,13 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                     visibility=game_record.visibility,
                 )
                 session.add(game_db)
-                # The lists the game drew from that still exist: one deleted
-                # while the game ran - or before a retry of its write - leaves
-                # no provenance to point at, and the turns read the same
-                # without it (#1358). Held against deletion until commit, so
-                # the check cannot go stale before the rows land; a non-key
-                # update such as a save is not blocked by it.
-                present_sources = (
-                    set(
-                        (
-                            await session.scalars(
-                                select(PromptList.id)
-                                .where(PromptList.id.in_(game_source_ids))
-                                .with_for_update(read=True, key_share=True)
-                            )
-                        ).all()
-                    )
-                    if game_source_ids
-                    else set()
-                )
+                # The lists the game drew from, by id, whether or not they are
+                # still there: the id is an opaque value with no foreign key
+                # (#1362), so a list deleted while the game ran is named as
+                # what the game played, and neither checked nor locked here.
                 session.add_all(
                     GamePromptSource(game_id=record_id, prompt_list_id=list_id)
-                    for list_id in sorted(present_sources)
+                    for list_id in sorted(game_source_ids)
                 )
 
                 participant_inputs_by_id: dict[UUID, GameParticipantInput] = {}
@@ -2158,7 +2139,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                                 source_kind=offer.source_kind,
                             )
                         )
-                        kept_sources = sorted(offer_source_ids & present_sources)
+                        kept_sources = sorted(offer_source_ids & game_source_ids)
                         session.add_all(
                             TurnPromptOfferSource(offer_id=offer_id, prompt_list_id=list_id)
                             for list_id in kept_sources
@@ -2571,7 +2552,7 @@ class SqlAlchemyGameHistoryRepository(GameHistoryRepository):
                 score_events=len(score_events),
                 drawings=len(drawings or ()),
                 reactions=len(reactions),
-                prompt_sources=len(present_sources),
+                prompt_sources=len(game_source_ids),
             )
         except IntegrityError as error:
             # A concurrent writer may have committed the same stable ID after
@@ -4184,7 +4165,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             # The name the original was published under: its working copy's
             # may be an unpublished rename, which is the owner's alone (#1360).
             name = live_name if live_name is not None else original.name if original else None
-            if original is None or original.deleted_at is not None:
+            if original is None:
                 credits[list_id] = CopiedFrom(status="deleted")
             elif (
                 original.visibility == PromptListVisibility.PUBLIC.value
@@ -4221,7 +4202,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             select(func.count(copy_list.id))
             .where(
                 copy_list.copied_from_list_id == PromptList.id,
-                copy_list.deleted_at.is_(None),
             )
             .correlate(PromptList)
             .scalar_subquery()
@@ -4801,7 +4781,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     .where(
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
                     )
                     .order_by(PromptList.updated_at.desc(), PromptList.name)
                 )
@@ -4855,7 +4834,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     PromptList.id == prompt_list_id,
                     PromptList.owner_user_id == owner_id,
                     PromptList.is_bundled.is_(False),
-                    PromptList.deleted_at.is_(None),
                 )
                 .with_for_update(read=True, of=PromptList)
             )
@@ -5022,7 +5000,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
                     )
                     .with_for_update()
                 )
@@ -5260,7 +5237,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     PromptList.id == list_id,
                     PromptList.owner_user_id == owner_id,
                     PromptList.is_bundled.is_(False),
-                    PromptList.deleted_at.is_(None),
                     PromptListEdition.state == EDITION_PUBLISHED,
                 )
             )
@@ -5304,7 +5280,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
                     )
                     .with_for_update()
                 )
@@ -5421,7 +5396,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
                     )
                     # One save's prompts beside the same save's name and tags:
                     # a save, holding the row FOR UPDATE, waits (#1385 review).
@@ -5555,7 +5529,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
                     )
                     .with_for_update()
                 )
@@ -5691,10 +5664,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             return result
 
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
-        """Retire the list: gone from the owner's view and from every room now,
-        and collected whole by the sweep after a grace (`services.prompt_reclaim`,
-        #605); the games that played it name the list and read the same without
-        it (#1358)."""
+        """Delete the list outright (#1362): its working copy, editions, tags
+        and stars go now, and the games that played it keep its id as an
+        opaque value and read the same without it (`services.prompt_reclaim`)."""
         owner_id = _optional_entity_id(owner_user_id)
         list_id = _optional_entity_id(prompt_list_id)
         if owner_id is None or list_id is None:
@@ -5707,13 +5679,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         PromptList.id == list_id,
                         PromptList.owner_user_id == owner_id,
                         PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
                     )
                     .with_for_update()
                 )
                 if prompt_list is None:
                     return False
-                await retire_prompt_list(session, prompt_list)
+                await delete_prompt_lists(session, [prompt_list.id])
             return True
 
     async def seed_list_tags(self) -> tuple[str, ...]:
@@ -6213,7 +6184,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         list_rows = (
             await session.scalars(
                 select(PromptList).where(
-                    PromptList.slug.in_(slugs), PromptList.deleted_at.is_(None)
+                    PromptList.slug.in_(slugs)
                 )
             )
         ).all()
@@ -6375,7 +6346,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     select(PromptList).where(
                         PromptList.id.in_(list(wanted)),
                         PromptList.is_bundled.is_(True),
-                        PromptList.deleted_at.is_(None),
                         PromptList.moderation_state
                         == PromptContentModerationState.ACTIVE.value,
                     )
@@ -6407,7 +6377,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             await session.execute(
                 select(PromptList.id, PromptList.slug, PromptList.language).where(
                     PromptList.is_bundled.is_(True),
-                    PromptList.deleted_at.is_(None),
                     PromptList.moderation_state
                     == PromptContentModerationState.ACTIVE.value,
                     PromptList.language.in_(PROMPT_LANGUAGES),
@@ -7113,17 +7082,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 stmt = (
                     select(PromptList)
                     .where(PromptList.slug == slug)
-                    .options(
-                        selectinload(PromptList.prompts),
-                        selectinload(PromptList.revisions),
-                    )
+                    .options(selectinload(PromptList.prompts))
                 )
                 result = await session.execute(stmt)
                 wl = result.scalar_one_or_none()
 
                 if wl is None:
                     existing_prompts: tuple[Prompt, ...] = ()
-                    existing_revisions: tuple[PromptListRevision, ...] = ()
+                    seeded_hash = None
                     wl = PromptList(
                         id=generate_uuid(),
                         slug=slug,
@@ -7147,21 +7113,14 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
                 else:
                     existing_prompts = tuple(wl.prompts)
-                    existing_revisions = tuple(wl.revisions)
+                    seeded_hash = wl.content_hash
 
-                existing_revision = next(
-                    (
-                        revision
-                        for revision in existing_revisions
-                        if revision.version == version
-                    ),
-                    None,
-                )
-                if existing_revision is not None:
-                    if (
-                        existing_revision.content_hash != content_hash
-                        or existing_revision.language != language
-                    ):
+                # What this version was seeded as lives on the list row: its
+                # digest in `content_hash` (#1362; until then on a revision per
+                # version). Only the current version can be compared - an older
+                # one is refused below as a rollback either way.
+                if seeded_hash is not None and wl.version == version:
+                    if seeded_hash != content_hash or wl.language != language:
                         raise PromptSeedConflictError(
                             f"bundled list {slug} version {version} changed in place"
                         )
@@ -7179,30 +7138,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     prompt_versions = await self._ensure_bundled_prompt_versions(
                         session, definitions=source_prompts, language=language
                     )
-                    revision_counts, revision_total = letter_histogram(
+                    seeded_counts, seeded_total = letter_histogram(
                         prompt_version.canonical_answer
                         for prompt_version in prompt_versions
-                    )
-                    revision = PromptListRevision(
-                        id=generate_uuid(),
-                        prompt_list_id=wl.id,
-                        version=version,
-                        language=language,
-                        content_hash=content_hash,
-                        letter_counts=revision_counts,
-                        letter_total=revision_total,
-                    )
-                    session.add(revision)
-                    await session.flush()
-                    session.add_all(
-                        [
-                            PromptListRevisionItem(
-                                revision_id=revision.id,
-                                prompt_version_id=prompt_version.id,
-                                position=position,
-                            )
-                            for position, prompt_version in enumerate(prompt_versions)
-                        ]
                     )
 
                     existing_by_concept = {
@@ -7261,11 +7199,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     wl.published_at = wl.published_at or datetime.now(timezone.utc)
                     wl.moderation_state = PromptContentModerationState.ACTIVE.value
                     wl.version = version
+                    wl.content_hash = content_hash
                     # The working copy rooms draw from (#1359), priced like
-                    # an owned list's: the revision keeps the same tally
-                    # only for the seed's own conflict check.
-                    wl.letter_counts = revision_counts
-                    wl.letter_total = revision_total
+                    # an owned list's.
+                    wl.letter_counts = seeded_counts
+                    wl.letter_total = seeded_total
 
                 # Navigation, rewritten on every start whatever the version
                 # (#1374): moving a list to another shelf is not new content.
@@ -7497,8 +7435,8 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         Each version is credited to the lists the draw found it in
         (`usage.sources`), and only to lists the game pinned, so a malformed
         internal call cannot credit a list the game never played. A list
-        deleted since keeps its facts with the list set to null, as the
-        `SET NULL` would have left them a moment after the write (#1358).
+        deleted since is credited all the same: the id is an opaque value with
+        no foreign key (#1362), so the facts say which list was played.
         """
         list_ids = [
             list_id
@@ -7525,17 +7463,6 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     raise PromptUsageConflictError(
                         f"Prompt usage batch '{batch_id}' was retried with different facts."
                     )
-                # Held against deletion until commit, so a list found here
-                # cannot go before its facts land (the history write's rule).
-                present = set(
-                    (
-                        await session.scalars(
-                            select(PromptList.id)
-                            .where(PromptList.id.in_(list_ids))
-                            .with_for_update(read=True, key_share=True)
-                        )
-                    ).all()
-                )
                 facts: list[PromptUsageFact] = []
                 for version_key in sorted({*usage.offers, *usage.picks}):
                     prompt_version_id = _optional_entity_id(version_key)
@@ -7554,7 +7481,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         facts.append(
                             PromptUsageFact(
                                 batch_id=batch_id,
-                                prompt_list_id=list_id if list_id in present else None,
+                                prompt_list_id=list_id,
                                 prompt_version_id=prompt_version_id,
                                 occurred_at=usage.occurred_at,
                                 scoring_mode=usage.scoring_mode,

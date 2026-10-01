@@ -2691,7 +2691,6 @@ def create_moderation_router(
             PromptList.visibility == PromptListVisibility.PUBLIC.value,
             PromptList.moderation_state != PromptContentModerationState.HIDDEN.value,
             PromptList.is_bundled.is_(False),
-            PromptList.deleted_at.is_(None),
         )
 
     @router.get("/moderation/prompt-lists")
@@ -2858,7 +2857,6 @@ def create_moderation_router(
                     .where(
                         PromptList.id == prompt_list_id,
                         PromptList.is_bundled.is_(False),
-                        PromptList.deleted_at.is_(None),
                     )
                     .with_for_update()
                 )

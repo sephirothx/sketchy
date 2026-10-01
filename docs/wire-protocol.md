@@ -2545,7 +2545,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (59) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (60) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
@@ -2555,7 +2555,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 | `contractVersion` on `server_shutdown` (1) | The shutdown notice | The notice's shape changes |
 | `contractVersion` on `server_paused` (1) | The maintenance-pause notice | The notice's shape changes |
 | `contractVersion` on `client_config` (5) | The client-cadence notice | A cadence is added, removed or renamed |
-| Data export `schema_version` (15) | The export document, pinned by [`fixtures/account_data_export_v15_fields.json`](../fixtures/account_data_export_v15_fields.json) | The export's field surface changes |
+| Data export `schema_version` (16) | The export document, pinned by [`fixtures/account_data_export_v16_fields.json`](../fixtures/account_data_export_v16_fields.json) | The export's field surface changes |
 
 ### The contract as a document
 
