@@ -3,10 +3,10 @@ nothing needs (#1258).
 
 Every content save writes the whole list again as a new revision, and only
 retired lists were reclaimed, so a live list kept every revision it was ever
-saved as. The sweep keeps a live list's current revision, every revision
-still inside the grace, and any a finished game pins or a fork was copied
-from. A hidden prompt is no reason to keep one: its owner's takedown record
-is (#1357).
+saved as. The sweep keeps a live list's current revision and every revision
+still inside the grace, and nothing else: a finished game names its list
+(#1358), a copy the list it came from (#1361), and a hidden prompt is kept by
+its owner's takedown record (#1357).
 """
 from __future__ import annotations
 

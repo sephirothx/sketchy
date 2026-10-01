@@ -439,8 +439,9 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             reclaim_superseded_revisions,
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt=(
-                "a live list's current revision, and any a fork was copied from or a copy "
-                "records its origin in, for ever"
+                "a live list's current revision; nothing else past the grace - a finished "
+                "game names its list, a copy the list it came from, and a hidden word is "
+                "kept by its takedown record"
             ),
         ),
         Sweep(
