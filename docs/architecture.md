@@ -112,7 +112,7 @@ and scoring. It performs no I/O and touches no socket. `Phase` is
 ([`backend/app/game.py:140`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
 ([`backend/app/game.py:47`](../backend/app/game.py),
-[`backend/app/game.py:460`](../backend/app/game.py)). This is the module to change when
+[`backend/app/game.py:493`](../backend/app/game.py)). This is the module to change when
 game rules change — and changing an outcome-producing constant requires bumping
 `SCORING_RULES_VERSION`.
 

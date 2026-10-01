@@ -1312,7 +1312,7 @@ class Game:
         difference of at most 1) one or more correct words together add up to
         at least `CLOSE_GUESS_MIN_CORRECT_LETTERS` letters, "another_language"
         if a mixed-language room's false-friend guard refused it - the drawing
-        in another seat's language, a different prompt in the guesser's own -
+        in another language, a different prompt in the guesser's own -
         or None if none applies.
         """
         if not self.prompt:
