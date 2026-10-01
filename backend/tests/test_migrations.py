@@ -952,9 +952,51 @@ async def test_lists_deleted_outright_migrate_over_rows(tmp_path):
                 {"g": game.hex, "l": tombstone.hex},
             )
 
+        async with engine.begin() as connection:
+            # A wording a revision of a live list was the last to name.
+            concept, replaced, owned, revision = (uuid.uuid4() for _ in range(4))
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_lists (id, slug, name, is_bundled, version,"
+                    " visibility, created_at, updated_at) VALUES (:id, 'owned', 'Owned',"
+                    " 0, 2, 'private', datetime('now'), datetime('now'))"
+                ),
+                {"id": owned.hex},
+            )
+            await connection.execute(
+                text("INSERT INTO prompt_concepts (id) VALUES (:id)"), {"id": concept.hex}
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_versions (id, concept_id, language, version,"
+                    " canonical_answer, match_key) VALUES (:id, :concept, 'en', 1,"
+                    " 'old wording', 'old wording')"
+                ),
+                {"id": replaced.hex, "concept": concept.hex},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revisions (id, prompt_list_id, version, language,"
+                    " content_hash, created_at) VALUES (:id, :list, 1, 'en', :digest,"
+                    " datetime('now'))"
+                ),
+                {"id": revision.hex, "list": owned.hex, "digest": "c" * 64},
+            )
+            await connection.execute(
+                text(
+                    "INSERT INTO prompt_list_revision_items (revision_id, prompt_version_id,"
+                    " position) VALUES (:revision, :version, 0)"
+                ),
+                {"revision": revision.hex, "version": replaced.hex},
+            )
+
         await _migrate(engine, alembic_command.upgrade, "head")
 
         async with engine.begin() as connection:
+            stamped = await connection.scalar(
+                text("SELECT unlisted_at FROM prompt_versions WHERE id = :id"),
+                {"id": replaced.hex},
+            )
             rows = dict(
                 (
                     await connection.execute(
@@ -966,7 +1008,8 @@ async def test_lists_deleted_outright_migrate_over_rows(tmp_path):
                 text("SELECT copied_from_list_id FROM prompt_lists WHERE slug = 'copy'")
             )
             source = await connection.scalar(text("SELECT prompt_list_id FROM game_prompt_sources"))
-        assert rows.keys() == {"bundled", "copy"}
+        assert stamped is not None, "the sweep can collect what only a revision named"
+        assert rows.keys() == {"bundled", "copy", "owned"}
         assert rows["bundled"] == "b" * 64
         assert copied_from is None
         assert uuid.UUID(str(source)) == tombstone

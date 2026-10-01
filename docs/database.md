@@ -2212,7 +2212,9 @@ conflict check: a reseed of the same version with different content is a startup
 conflict. That check reads `prompt_lists.content_hash` now, the bundled digest the seed
 writes on the list row; an empty one (a row nothing stamped) is written rather than
 refused, and an older version seeded over a newer one - a rolled-back deploy - refreshes
-only the metadata, as it did while revisions remembered every version.
+only the metadata, as it did while revisions remembered every version. The migration that
+dropped them stamped `unlisted_at` on every player wording a revision was the last to
+name, so the unlisted sweep collects those a grace later like any other (#1394 review).
 
 **A copy names the list it came from, on its own row** (`prompt_lists.copied_from_list_id`,
 `SET NULL`, #1361). `fork_published` writes it and nothing else does, and a list's copy

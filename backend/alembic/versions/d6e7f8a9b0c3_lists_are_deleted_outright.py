@@ -204,6 +204,23 @@ def upgrade() -> None:
     _rebuild_history(list_fk=False)
     _report_list_fk(present=False)
 
+    # A player's wording a revision was the last to name - replaced before
+    # saves overwrote a working copy (#1359), or held only by a tombstone's
+    # old revisions - loses that reference with the revisions. Stamped now,
+    # so the unlisted sweep collects it a grace later unless a turn, an
+    # offer, a fact, a report or a takedown still names it (#1394 review).
+    # Bundled wordings are left as they were: seeding owns them.
+    op.execute(
+        "UPDATE prompt_versions SET unlisted_at = CURRENT_TIMESTAMP "
+        "WHERE unlisted_at IS NULL "
+        "AND id IN (SELECT i.prompt_version_id FROM prompt_list_revision_items i "
+        "JOIN prompt_list_revisions r ON r.id = i.revision_id "
+        "JOIN prompt_lists l ON l.id = r.prompt_list_id WHERE NOT l.is_bundled) "
+        "AND id NOT IN (SELECT prompt_version_id FROM prompts p "
+        "JOIN prompt_lists l ON l.id = p.prompt_list_id WHERE l.deleted_at IS NULL) "
+        "AND id NOT IN (SELECT prompt_version_id FROM prompt_list_edition_items)"
+    )
+
     # Tombstones go now; their versions were stamped when they were retired.
     # Their references are cleared by hand first: SQLite migrates with foreign
     # keys off, so no `CASCADE` or `SET NULL` would run for them (#1394 review).
