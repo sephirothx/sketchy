@@ -19,6 +19,7 @@ used twice is one entry. Staff surfaces - the moderation queue, the operations
 pages - are deliberately absent: they are English on purpose (R-I18N-01). */
 import { formattersFor } from "./format.ts";
 import type { AnnouncementCode } from "../../lib/announcements.ts";
+import type { PromptShelf } from "../../lib/promptListTree.ts";
 import type { ErrorCode } from "../../types.ts";
 
 const { counted, number, ordinal, plural } = formattersFor("en", {
@@ -1607,6 +1608,16 @@ export const EN = {
     promptLists: "Prompt lists",
     namePromptCountPrompts:
       (p: { name: string; promptCount: number }) => `${p.name} (${p.promptCount} prompts)`,
+    yourLists: "Your lists",
+    fromCommunityCatalogue: "From the community catalogue",
+    /** A shelf's name, by its slug (`lib/promptListTree.ts`, R-PROMPT-14). */
+    shelves: { everyday: "Everyday" } satisfies Record<PromptShelf, string>,
+    /** A series's name, by its slug; one without falls back to its slug. */
+    series: {} as Record<string, string>,
+    chosenCount: (p: { count: number }) => `${number(p.count)} chosen`,
+    seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} of ${number(p.total)}`,
+    showSeries: (p: { name: string }) => `Show ${p.name} lists`,
+    hideSeries: (p: { name: string }) => `Hide ${p.name} lists`,
   },
 
   promptStatsPage: {

@@ -166,6 +166,27 @@ const listChip = (name, count, on) => {
     : `<button type="button" aria-pressed="false" style="display: inline-flex; align-items: center; gap: 7px; background: ${T.card}; border: 1.5px solid ${T.lineStrong}; border-radius: 999px; padding: 9px 15px; font-family: ${T.body}; font-size: 13.5px; font-weight: 800; color: ${T.muted}; min-height: 42px">${icon.plus(12)}${name}${pill}</button>`;
 };
 
+// The prompt-list tree (#1388): a shelf heading folds, a list is a row with a
+// native checkbox tinted with the accent, and its count sits at the end.
+const treeShelf = (name, open, meta, rows = '') => `
+<div style="display: flex; flex-direction: column">
+  <button type="button" aria-expanded="${open}" style="display: flex; align-items: center; gap: 8px; min-height: 44px; padding: 4px 10px; border: 0; border-radius: 8px; background: transparent; color: ${T.ink}; text-align: left; font-family: ${T.body}">
+    <span style="display: inline-flex; color: ${T.muted}; transform: rotate(${open ? 90 : 0}deg)">${icon.chevR(14)}</span>
+    <span style="font-family: ${T.display}; font-weight: 500; font-size: 16px">${name}</span>
+    ${meta ? `<span style="margin-left: auto; font-size: 12.5px; font-weight: 800; color: ${T.primaryInk}">${meta}</span>` : ''}
+  </button>
+  ${open ? `<ul style="display: flex; flex-direction: column; list-style: none; margin: 0; padding: 0 0 4px 14px">${rows}</ul>` : ''}
+</div>`;
+
+const treeList = (name, count, on) => `
+<li style="display: flex; align-items: center; min-height: 44px; padding: 0 6px; border-radius: 8px">
+  <label style="flex: 1; display: flex; align-items: center; gap: 10px; min-height: 40px; margin-left: 36px; font-size: 14.5px; font-weight: 800; color: ${T.ink}">
+    <input type="checkbox"${on ? ' checked' : ''} style="width: 18px; height: 18px; margin: 0; accent-color: ${T.primary}">
+    <span>${name}</span>
+    <span style="margin-left: auto; font-size: 12.5px; font-weight: 700; color: ${T.faint}">${count}</span>
+  </label>
+</li>`;
+
 const optionCard = (title, desc, on, extra = '') => `
 <button type="button" aria-pressed="${on}" style="display: flex; flex-direction: column; gap: 4px; text-align: left; background: ${on ? T.primarySoft : T.card}; border: 1.5px solid ${on ? T.primary : T.line}; border-radius: ${T.radiusSm}; padding: 12px 14px; font-family: ${T.body}; min-height: 44px">
   <span style="display: flex; align-items: center; gap: 7px; font-size: 14px; font-weight: 800; color: ${on ? T.primaryInk : T.ink}">${on ? `<span style="display: inline-flex; color: ${T.primary}">${icon.check(13)}</span>` : ''}${title}${extra}</span>
@@ -237,12 +258,11 @@ export const CreateRoomPage = `
         </div>
       </div>`)}
 
-    ${formSection('Prompts', 'English · Standard English · 432 prompts', `
+    ${formSection('Prompts', 'English — Standard · 1,036 prompts', `
       <div style="display: grid; gap: 14px">
-        <div style="display: flex; flex-wrap: wrap; gap: 8px">
-          ${listChip('Standard English', 432, true)}
-          ${listChip('Extended English', 1284, false)}
-          ${listChip('Studio in-jokes', 64, false)}
+        <div style="display: flex; flex-direction: column; border: 1.5px solid ${T.line}; border-radius: ${T.radiusSm}; padding: 6px">
+          ${treeShelf('Everyday', true, '1 chosen', `${treeList('English — Standard', '1,036', true)}${treeList('English — Extended', '1,110', false)}${treeList('English — Local', 52, false)}`)}
+          <div style="border-top: 1px solid ${T.line}; margin-top: 4px; padding-top: 4px">${treeShelf('Your lists', false, '')}</div>
         </div>
         <details style="border-top: 1.5px solid ${T.line}; padding-top: 14px">
           <summary style="font-size: 14px; font-weight: 800; color: ${T.muted}">Custom prompts for this game <span style="color: ${T.faint}; font-weight: 700">· 3 added</span></summary>

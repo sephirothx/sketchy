@@ -7,10 +7,19 @@ import {
   promptLanguageLabel,
 } from "../lib/promptLanguages";
 import { listCommunityPromptLists, listOwnedPromptLists } from "../lib/promptLists";
+import {
+  listsIn,
+  promptListTree,
+  seriesState,
+  toggleSelection,
+  type PromptListBranch,
+  type PromptListSeries,
+  type PromptShelf,
+} from "../lib/promptListTree";
 import { readEveryPage } from "../lib/communityLists";
 import { useAuthStore } from "../store/authStore";
 import type { PromptLanguage, PromptListSummary, RoomLanguage } from "../types";
-import { AnyLanguageIcon, CheckIcon, PlusIcon } from "./icons";
+import { AnyLanguageIcon, ChevronRightIcon } from "./icons";
 import { FieldHint } from "./RoomSetupControls";
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
@@ -72,6 +81,9 @@ export function PromptListPicker({
   >(null);
   const [loading, setLoading] = useState(true);
   const [fetchError, setFetchError] = useState<string | null>(null);
+  // Which shelves and series the player opened or folded; anything absent
+  // follows the selection (`isOpen` below).
+  const [opened, setOpened] = useState<Record<string, boolean>>({});
   const onListsLoadedRef = useRef(onListsLoaded);
   const onListsUnavailableRef = useRef(onListsUnavailable);
 
@@ -156,14 +168,14 @@ export function PromptListPicker({
     return () => { cancelled = true; };
   }, [userId, isAnonymous, language]);
 
-  function handleToggle(slug: string) {
+  function choose(slugs: readonly string[], on: boolean, branchKey: string) {
     if (disabled) return;
-    if (selectedSlugs.includes(slug)) {
-      // Don't deselect if it's the only one selected
-      if (selectedSlugs.length <= 1) return;
-      onChange(selectedSlugs.filter((s) => s !== slug));
-    } else {
-      onChange([...selectedSlugs, slug]);
+    const next = toggleSelection(selectedSlugs, slugs, on);
+    if (next.length !== selectedSlugs.length || next.some((slug, index) => slug !== selectedSlugs[index])) {
+      // A shelf opens by itself but never closes by itself: clearing the last
+      // list on it would otherwise fold it away under the pointer.
+      setOpened((current) => (branchKey in current ? current : { ...current, [branchKey]: true }));
+      onChange(next);
     }
   }
 
@@ -178,6 +190,15 @@ export function PromptListPicker({
     (list) => isPlayableIn(list, language, playLanguage)
       && !visibleLists.some((shown) => shown.slug === list.slug),
   );
+  const owned = new Set(promptLists.filter((list) => !list.isBundled).map((list) => list.slug));
+  const tree = promptListTree({
+    official: visibleLists.filter((list) => list.isBundled),
+    own: visibleLists.filter((list) => owned.has(list.slug)),
+    // A community list carried in from the catalogue's Play: neither the
+    // player's nor, necessarily, one they starred.
+    carried: visibleLists.filter((list) => !list.isBundled && !owned.has(list.slug)),
+    starred: visibleStarred,
+  });
 
   if (loading) {
     return (
@@ -197,43 +218,95 @@ export function PromptListPicker({
     );
   }
 
-  // One chip, rendered for the catalogue's lists and for the shortlist
-  // below it. Extracted rather than duplicated: two copies of this drift.
-  function renderChip(wl: PromptListSummary) {
-          const isSelected = selectedSlugs.includes(wl.slug);
-          const isOnlySelected = isSelected && selectedSlugs.length <= 1;
+  // A shelf opens where something on it is chosen, until the player says
+  // otherwise; a series starts folded, saying how much of it is chosen.
+  const isOpen = (key: string, fallback: boolean) => opened[key] ?? fallback;
+  const flip = (key: string, fallback: boolean) =>
+    setOpened((current) => ({ ...current, [key]: !(current[key] ?? fallback) }));
 
-          return (
-            // The toggle and the link are siblings rather than nested: one
-            // button inside another is not valid, and a link that selected the
-            // list on the way out would be worse than no link.
-            <span key={wl.slug} className="prompt-list-chip-group">
-              <button
-                type="button"
-                className="toggle-chip"
-                aria-pressed={isSelected}
-                disabled={disabled || (isSelected && isOnlySelected)}
-                title={wl.description || ui.promptListPicker.namePromptCountPrompts({ name: wl.name, promptCount: wl.promptCount })}
-                onClick={() => handleToggle(wl.slug)}
-              >
-                <span className="toggle-chip-status" aria-hidden="true">
-                  {isSelected ? <CheckIcon size={12} /> : <PlusIcon size={12} />}
-                </span>
-                <span className="toggle-chip-name">{wl.name}</span>
-                {wl.language === AGNOSTIC_PROMPT_LANGUAGE && (
-                  <span className="prompt-list-chip-language" title={ui.languagePicker.anyLanguage}>
-                    <AnyLanguageIcon size={13} />
-                    <span className="visually-hidden">{ui.languagePicker.anyLanguage}</span>
-                  </span>
-                )}
-                <span className="prompt-list-chip-count">{wl.promptCount}</span>
-              </button>
-              {wl.isBundled && <FieldHint
-                hint={ui.promptListPicker.howListPlays({ name: wl.name })}
-                href={`/prompt-lists/${wl.slug}`}
-              />}
+  function branchName(branch: PromptListBranch): string {
+    if (branch.kind === "own") return ui.promptListPicker.yourLists;
+    if (branch.kind === "carried") return ui.promptListPicker.fromCommunityCatalogue;
+    if (branch.kind === "starred") return ui.promptListPicker.listsYouStarred;
+    return ui.promptListPicker.shelves[branch.id as PromptShelf] ?? branch.id;
+  }
+
+  // One row, for a list on a shelf, in a series or on the player's branches.
+  function renderList(list: PromptListSummary, branchKey: string) {
+    const isSelected = selectedSlugs.includes(list.slug);
+    return (
+      <li key={list.slug} className="prompt-list-row">
+        <label
+          className="prompt-list-check"
+          title={list.description || ui.promptListPicker.namePromptCountPrompts({ name: list.name, promptCount: list.promptCount })}
+        >
+          <input
+            type="checkbox"
+            checked={isSelected}
+            // The last list chosen stays chosen - a room has to draw on
+            // something - by `toggleSelection` refusing to clear it, not by
+            // disabling it: a disabled box reads as unavailable, not as kept.
+            disabled={disabled}
+            onChange={(event) => choose([list.slug], event.target.checked, branchKey)}
+          />
+          <span className="prompt-list-check-name">{list.name}</span>
+          {list.language === AGNOSTIC_PROMPT_LANGUAGE && (
+            <span className="prompt-list-check-language" title={ui.languagePicker.anyLanguage}>
+              <AnyLanguageIcon size={13} />
+              <span className="visually-hidden">{ui.languagePicker.anyLanguage}</span>
             </span>
-          );
+          )}
+          <span className="prompt-list-check-count">{ui.format.number({ value: list.promptCount })}</span>
+        </label>
+        {list.isBundled && <FieldHint
+          hint={ui.promptListPicker.howListPlays({ name: list.name })}
+          href={`/prompt-lists/${list.slug}`}
+        />}
+      </li>
+    );
+  }
+
+  function renderSeries(series: PromptListSeries, branchKey: string) {
+    // Not copy: the fold state's key.
+    const key = `series:${series.id}`;
+    const open = isOpen(key, false);
+    const state = seriesState(series, selectedSlugs);
+    const slugs = series.lists.map((list) => list.slug);
+    const name = ui.promptListPicker.series[series.id] ?? series.id;
+    const chosen = series.lists.filter((list) => selectedSlugs.includes(list.slug)).length;
+    return (
+      <li key={key} className="prompt-list-series">
+        <div className="prompt-list-row">
+          <button
+            type="button"
+            className="prompt-list-fold"
+            aria-expanded={open}
+            aria-controls={`prompt-list-${key}`}
+            aria-label={open ? ui.promptListPicker.hideSeries({ name }) : ui.promptListPicker.showSeries({ name })}
+            onClick={() => flip(key, false)}
+          >
+            <ChevronRightIcon size={14} />
+          </button>
+          <label className="prompt-list-check">
+            <SeriesCheckbox
+              state={state}
+              // Clearing the whole room's selection is refused, as for a list.
+              disabled={disabled}
+              onChange={(on) => choose(slugs, on, branchKey)}
+            />
+            <span className="prompt-list-check-name">{name}</span>
+            <span className="prompt-list-check-count">
+              {ui.promptListPicker.seriesChosen({ chosen, total: series.lists.length })}
+            </span>
+          </label>
+        </div>
+        {open && (
+          <ul id={`prompt-list-${key}`} className="prompt-list-tree-items is-nested">
+            {series.lists.map((list) => renderList(list, branchKey))}
+          </ul>
+        )}
+      </li>
+    );
   }
 
   return (
@@ -246,18 +319,67 @@ export function PromptListPicker({
           })}
         </p>
       )}
-      <div className="toggle-chips" role="group" aria-label={ui.promptListPicker.promptLists}>
-        {visibleLists.map(renderChip)}
+      <div className="prompt-list-tree">
+        {tree.map((branch) => {
+          // Not copy: the fold state's key.
+          const key = `branch:${branch.id}`;
+          const lists = listsIn(branch.items);
+          const chosen = lists.filter((list) => selectedSlugs.includes(list.slug)).length;
+          const open = isOpen(key, chosen > 0);
+          return (
+            <section key={key} className="prompt-list-branch">
+              <button
+                type="button"
+                className="prompt-list-branch-toggle"
+                aria-expanded={open}
+                aria-controls={`prompt-list-${key}`}
+                onClick={() => flip(key, chosen > 0)}
+              >
+                <span className="prompt-list-fold-icon" aria-hidden="true"><ChevronRightIcon size={14} /></span>
+                <span className="prompt-list-branch-name">{branchName(branch)}</span>
+                {chosen > 0 && (
+                  <span className="prompt-list-branch-count">{ui.promptListPicker.chosenCount({ count: chosen })}</span>
+                )}
+              </button>
+              {open && (
+                <ul id={`prompt-list-${key}`} className="prompt-list-tree-items">
+                  {branch.items.map((item) => (item.kind === "list" ? renderList(item.list, key) : renderSeries(item, key)))}
+                </ul>
+              )}
+            </section>
+          );
+        })}
       </div>
-      {visibleStarred.length > 0 && <>
-        <p className="prompt-list-starred-label">{ui.promptListPicker.listsYouStarred}</p>
-        <div className="toggle-chips" role="group" aria-label={ui.promptListPicker.listsYouStarred}>
-          {visibleStarred.map(renderChip)}
-        </div>
-        {shortlistCut && <p className="prompt-list-fallback-note">
-          {ui.promptListPicker.starredNotAllShown({ shown: shortlist.length })}
-        </p>}
-      </>}
+      {shortlistCut && <p className="prompt-list-fallback-note">
+        {ui.promptListPicker.starredNotAllShown({ shown: shortlist.length })}
+      </p>}
     </fieldset>
+  );
+}
+
+/** A series's checkbox: ticked, clear, or - partly chosen - indeterminate,
+which only a property sets, never an attribute. */
+function SeriesCheckbox({
+  state,
+  disabled,
+  onChange,
+}: {
+  state: "none" | "some" | "all";
+  disabled: boolean;
+  onChange: (on: boolean) => void;
+}) {
+  const ref = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    if (ref.current) ref.current.indeterminate = state === "some";
+  }, [state]);
+  return (
+    <input
+      ref={ref}
+      type="checkbox"
+      checked={state === "all"}
+      disabled={disabled}
+      // Partly chosen, a tick chooses the rest.
+      onChange={() => onChange(state !== "all")}
+    />
   );
 }

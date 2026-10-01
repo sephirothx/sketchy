@@ -161,14 +161,6 @@
   text-indent: var(--ink-overhang);
 }
 
-/* The shortlist is a second group under the catalogue's own, labelled so it
-   is clear these came from somewhere else. */
-.prompt-list-starred-label {
-  color: var(--muted);
-  font-size: 13px;
-  font-weight: 600;
-  margin: 10px 0 4px;
-}
 
 /* The form's actions, pinned to the bottom of the viewport: a list runs to
    500 prompts, and Save - with whatever stopped it - has to stay in reach

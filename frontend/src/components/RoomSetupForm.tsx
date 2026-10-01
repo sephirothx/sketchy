@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
 import { CustomPromptsEditor } from "./CustomPromptsEditor";
 import { PromptListPicker } from "./PromptListPicker";
+import { selectionNames } from "../lib/promptListTree";
 import { LanguageFace, LanguagePicker } from "./LanguagePicker";
 import {
   ChoiceCards,
@@ -154,7 +155,10 @@ export function RoomSetupForm({
   const promptsSummary = (() => {
     const parts: string[] = [];
     if (selectedLists.length > 0) {
-      const names = selectedLists.map((list) => list.name);
+      const names = selectionNames(selectedLists, loadedLists, (series, chosen, total) => {
+        const name = ui.promptListPicker.series[series] ?? series;
+        return chosen === total ? name : `${name} · ${ui.promptListPicker.seriesChosen({ chosen, total })}`;
+      });
       parts.push(names.length > 2 ? `${names.slice(0, 2).join(", ")} +${names.length - 2}` : names.join(", "));
       const total = selectedLists.reduce((sum, list) => sum + list.promptCount, 0);
       if (total > 0) parts.push(ui.roomSetupForm.promptTotal({ count: total }));

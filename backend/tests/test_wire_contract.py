@@ -437,6 +437,33 @@ def test_the_client_mirrors_every_error_code_and_nothing_else(frontend):
     assert client == _refusal_codes()
 
 
+def test_the_client_knows_every_shelf_and_names_every_series(frontend):
+    """The picker's tree orders official lists by shelf (#1374, R-PROMPT-14).
+    The order is the server's registry and the names are player copy, so the
+    client mirrors the slugs - in order - and its catalogue names each series a
+    seed file uses. A shelf it did not know would sort after the rest; a series
+    it could not name would show its slug."""
+    import json
+
+    from app.db.seed import DEFAULT_PROMPT_LISTS_DIR
+    from app.prompt_content import PROMPT_SHELVES
+
+    tree = (FRONTEND_SRC / "lib" / "promptListTree.ts").read_text(encoding="utf-8")
+    block = re.search(r"export const PROMPT_SHELVES = \[([^\]]*)\] as const;", tree)
+    assert block, "promptListTree.ts must declare `export const PROMPT_SHELVES = [...] as const;`"
+    assert re.findall(r'"([a-z0-9-]+)"', block.group(1)) == list(PROMPT_SHELVES)
+
+    english = (FRONTEND_SRC / "content" / "ui" / "en.ts").read_text(encoding="utf-8")
+    named = re.search(r"\n    series: \{([^}]*)\}", english)
+    assert named, "en.ts must declare promptListPicker.series"
+    names = set(re.findall(r'"?([a-z0-9-]+)"?\s*:', named.group(1)))
+    used = {
+        json.loads(path.read_text(encoding="utf-8")).get("series")
+        for path in DEFAULT_PROMPT_LISTS_DIR.glob("*.json")
+    } - {None}
+    assert used <= names, sorted(used - names)
+
+
 def test_the_client_mirrors_every_announcement_code():
     """`AnnouncementCode` in announcements.ts is the server enum, in order.
 

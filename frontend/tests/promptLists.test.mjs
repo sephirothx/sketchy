@@ -158,15 +158,19 @@ test("a list in no language is played in every room and follows it across a swit
 test("a mixed room plays Standard and Extended, once, and lists in no language", () => {
   const languages = ["de", "en", "es", "fr", "it", "nl", "pl", "pt"];
   const stems = { de: "german", en: "english", es: "spanish", fr: "french", it: "italian", nl: "dutch", pl: "polish", pt: "portuguese" };
+  // The server names each list's family (#1374); the client reads that, not
+  // the slug.
   const standard = languages.map((language) => ({
     slug: `${stems[language]}_standard`,
     language,
     isBundled: true,
+    family: "english_standard",
   }));
   const extended = languages.map((language) => ({
     slug: `${stems[language]}_extended`,
     language,
     isBundled: true,
+    family: "english_extended",
   }));
   const lists = [
     ...standard,
@@ -321,4 +325,27 @@ test("a picker lists your languages first, in your order, and all eight", () => 
   assert.equal(new Set(ranked).size, 8);
   // Within what a form can offer: a language it cannot is left out, not added.
   assert.deepEqual(rankedPromptLanguages("it", ["nl"], ["en", "nl"]), ["nl", "en"]);
+});
+
+test("a themed official family follows the room across languages and into Mixed", () => {
+  // Not Standard or Extended by name: the family the server reports is what
+  // makes a list one list in every language (#1374).
+  const languages = ["de", "en", "es", "fr", "it", "nl", "pl", "pt"];
+  const lists = [
+    ...languages.map((language) => ({ slug: `standard_${language}`, language, isBundled: true, family: "standard_en" })),
+    ...languages.map((language) => ({ slug: `critters_${language}`, language, isBundled: true, family: "critters_en" })),
+    { slug: "english_standard", language: "en", isBundled: true, family: "standard_en" },
+    { slug: "german_local", language: "de", isBundled: true, family: null },
+  ];
+  const playable = lists.filter((list) => isPlayableIn(list, "mul", "fr")).map((list) => list.slug);
+  assert.deepEqual(playable, ["standard_fr", "critters_fr"]);
+  assert.equal(isPlayableIn(lists.at(-1), "mul", "de"), false);
+  assert.deepEqual(
+    selectionForLanguage(lists, "it", ["standard_de", "critters_de", "german_local"]),
+    ["standard_it", "critters_it"],
+  );
+  assert.deepEqual(
+    selectionInPlayLanguage(lists, "mul", ["critters_en"], "pl"),
+    ["critters_pl"],
+  );
 });

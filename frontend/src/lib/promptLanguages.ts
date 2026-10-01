@@ -56,23 +56,29 @@ function isStandard(list: { slug: string; isBundled?: boolean }): boolean {
   return list.slug.endsWith("_standard") && list.isBundled !== false;
 }
 
-/** Whether a list is one a mixed room can play: Standard or Extended, the
-same concepts in every language (R-PROMPT-01). Local is its own language's
-alone. The server decides by the concepts themselves; this only says which
-lists to show. */
-function isMixable(list: { slug: string; isBundled?: boolean }): boolean {
-  return (
-    (list.slug.endsWith("_standard") || list.slug.endsWith("_extended"))
-    && list.isBundled !== false
-  );
+/** The fields of a list these helpers read. `family` is the server's word on
+which official lists are one list in every language (R-PROMPT-13, #1374). */
+type ListFacts = {
+  slug: string;
+  language: string;
+  isBundled?: boolean;
+  family?: string | null;
+};
+
+/** Whether a list is one a mixed room can play in a language: an official
+list every language translates - Standard, Extended, a themed family - as the
+server says by its `family`. Local is its own language's alone, and a player's
+list belongs to no family whatever it is called. */
+function isMixable(list: { isBundled?: boolean; family?: string | null }): boolean {
+  return Boolean(list.family) && list.isBundled !== false;
 }
 
 /** Whether a room in `roomLanguage` can pick `list`: one in its own language,
 or in none at all (R-PROMPT-02). A mixed room (R-PROMPT-13) takes lists in no
-language, Standard and Extended - each shown once, in `playLanguage`, since
-choosing any language's copy is choosing all of them. */
+language and the official families - each shown once, in `playLanguage`,
+since choosing any language's copy is choosing all of them. */
 export function isPlayableIn(
-  list: { slug: string; language: string; isBundled?: boolean },
+  list: ListFacts,
   roomLanguage: string,
   playLanguage: string = "en",
 ): boolean {
@@ -128,7 +134,7 @@ export const SUPPORTED_PROMPT_LANGUAGES = (
  * catalogue is loading or after a list is withdrawn.
  */
 export function availablePromptLanguages(
-  lists: { slug: string; language: string; isBundled?: boolean }[],
+  lists: ListFacts[],
   current: string,
 ): RoomLanguage[] {
   const languages = new Set<string>([current]);
@@ -151,14 +157,15 @@ export function availablePromptLanguages(
  * What a room switching to `language` should have selected.
  *
  * A list in a language cannot follow the room into another one, so none of
- * those carries over - except Extended, which every language has the same
- * (R-PROMPT-01): a host who chose it keeps the new language's own, and in a
- * mixed room their own language's. A list in no language (#821) is played in
- * any room, so whichever of those were in `carried` stay chosen beside the new
- * language's Standard list.
+ * those carries over - except an official family (Extended, a themed list
+ * every language translates), which every language has the same (R-PROMPT-01):
+ * a host who chose it keeps the new language's copy, and in a mixed room their
+ * own language's. A list in no language (#821) is played in any room, so
+ * whichever of those were in `carried` stay chosen beside the new language's
+ * Standard list.
  */
 export function selectionForLanguage(
-  lists: { slug: string; language: string; isBundled?: boolean }[],
+  lists: ListFacts[],
   language: string,
   carried: readonly string[] = [],
   playLanguage: string = "en",
@@ -178,16 +185,18 @@ export function selectionForLanguage(
       .filter((list) => list.language === AGNOSTIC_PROMPT_LANGUAGE)
       .map((list) => list.slug),
   );
-  const extendedChosen = carried.some((slug) => {
-    const list = lists.find((candidate) => candidate.slug === slug);
-    return list !== undefined && isMixable(list) && slug.endsWith("_extended");
-  });
-  const extended = extendedChosen
-    ? inLanguage.find((list) => isMixable(list) && list.slug.endsWith("_extended"))
-    : undefined;
+  const families = new Set(
+    carried
+      .map((slug) => lists.find((candidate) => candidate.slug === slug))
+      .filter((list): list is ListFacts => list !== undefined && isMixable(list))
+      .map((list) => list.family),
+  );
+  const followed = inLanguage
+    .filter((list) => isMixable(list) && families.has(list.family) && list.slug !== chosen?.slug)
+    .map((list) => list.slug);
   return [
     ...(chosen ? [chosen.slug] : []),
-    ...(extended && extended.slug !== chosen?.slug ? [extended.slug] : []),
+    ...followed,
     ...carried.filter((slug) => agnostic.has(slug)),
   ];
 }
@@ -204,7 +213,7 @@ export function selectionForLanguage(
  * list.
  */
 export function reconcileSelectionForLanguage(
-  lists: { slug: string; language: string; isBundled?: boolean }[],
+  lists: ListFacts[],
   language: string,
   selected: readonly string[],
   playLanguage: string = "en",
@@ -219,11 +228,11 @@ export function reconcileSelectionForLanguage(
   return kept.length > 0 ? kept : selectionForLanguage(lists, language, [], playLanguage);
 }
 
-/** `selected`, with each Standard or Extended of another language replaced by
-the player's own copy in a mixed room, and nothing else changed - the same
+/** `selected`, with each official family's copy in another language replaced
+by the player's own in a mixed room, and nothing else changed - the same
 lists, as this player is shown them. */
 export function selectionInPlayLanguage(
-  lists: { slug: string; language: string; isBundled?: boolean }[],
+  lists: ListFacts[],
   language: string,
   selected: readonly string[],
   playLanguage: string = "en",
@@ -231,12 +240,12 @@ export function selectionInPlayLanguage(
   return [...new Set(selected.map((slug) => inPlayLanguage(lists, language, slug, playLanguage)))];
 }
 
-/** In a mixed room, another language's Standard or Extended is the same family
-as the player's own copy, which is the one shown (R-PROMPT-13): a preset saved
-by an English host holds `english_extended`, and a German player opening it
-should see German Extended chosen rather than lose it. */
+/** In a mixed room, another language's copy of an official list is the same
+family as the player's own, which is the one shown (R-PROMPT-13): a preset
+saved by an English host holds `english_extended`, and a German player opening
+it should see German Extended chosen rather than lose it. */
 function inPlayLanguage(
-  lists: { slug: string; language: string; isBundled?: boolean }[],
+  lists: ListFacts[],
   language: string,
   slug: string,
   playLanguage: string,
@@ -244,11 +253,10 @@ function inPlayLanguage(
   if (language !== MIXED_PROMPT_LANGUAGE) return slug;
   const list = lists.find((candidate) => candidate.slug === slug);
   if (!list || !isMixable(list) || list.language === playLanguage) return slug;
-  const tier = slug.slice(slug.lastIndexOf("_"));
   const own = lists.find(
     (candidate) => isMixable(candidate)
       && candidate.language === playLanguage
-      && candidate.slug.endsWith(tier),
+      && candidate.family === list.family,
   );
   return own?.slug ?? slug;
 }

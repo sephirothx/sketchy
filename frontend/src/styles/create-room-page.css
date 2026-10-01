@@ -784,29 +784,131 @@ details.form-section > .form-section-body {
   }
 }
 
-/* The prompt list picker. Its chips are the `toggle-chip` recipe in
-   primitives.css, shared with the room's allowed tools and every filter. */
+/* The prompt list picker: a tree of shelves, series and lists (#1388).
+   A row is a native checkbox, tinted with the accent, and a shelf or series
+   folds with a disclosure button: every row is reached with Tab, and a series
+   partly chosen is the checkbox's own indeterminate state. */
 .prompt-list-picker-group {
   grid-column: 1 / -1;
 }
-.prompt-list-chip-count {
-  background: var(--well);
-  border-radius: var(--radius-pill);
-  color: var(--faint);
-  font-size: 11.5px;
-  font-weight: 700;
-  padding: 1px 8px;
+.prompt-list-tree {
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  padding: 6px;
 }
-.prompt-list-chip-language {
+.prompt-list-branch + .prompt-list-branch {
+  border-top: 1px solid var(--line);
+  margin-top: 4px;
+  padding-top: 4px;
+}
+.prompt-list-branch-toggle,
+.prompt-list-fold {
+  align-items: center;
+  background: transparent;
+  border: 0;
+  border-radius: var(--radius-xs);
+  color: var(--muted);
+  cursor: pointer;
+  display: inline-flex;
+}
+.prompt-list-branch-toggle {
+  color: var(--ink);
+  font: inherit;
+  gap: 8px;
+  min-height: 44px;
+  padding: 4px 10px;
+  text-align: left;
+  width: 100%;
+}
+.prompt-list-fold {
+  flex: none;
+  height: 32px;
+  justify-content: center;
+  width: 32px;
+}
+.prompt-list-branch-toggle:hover,
+.prompt-list-fold:hover,
+.prompt-list-row:hover {
+  background: var(--track);
+}
+.prompt-list-fold-icon {
+  color: var(--muted);
+  display: inline-flex;
+}
+.prompt-list-fold-icon,
+.prompt-list-fold svg {
+  transition: transform var(--dur-fast) ease;
+}
+.prompt-list-branch-toggle[aria-expanded="true"] .prompt-list-fold-icon,
+.prompt-list-fold[aria-expanded="true"] svg {
+  transform: rotate(90deg);
+}
+.prompt-list-branch-name {
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 500;
+}
+.prompt-list-branch-count {
+  color: var(--primary-ink);
+  font-size: 12.5px;
+  font-weight: 800;
+  margin-left: auto;
+}
+.prompt-list-tree-items {
+  display: flex;
+  flex-direction: column;
+  list-style: none;
+  margin: 0;
+  padding: 0 0 4px 14px;
+}
+.prompt-list-row {
+  align-items: center;
+  border-radius: var(--radius-xs);
+  display: flex;
+  gap: 4px;
+  min-height: 44px;
+  padding: 0 6px;
+}
+/* A list's checkbox lines up with a series's, which has its fold button in
+   front of it. */
+.prompt-list-row > .prompt-list-check:first-child {
+  margin-left: 36px;
+}
+.prompt-list-check {
+  align-items: center;
+  color: var(--ink);
+  cursor: pointer;
+  display: flex;
+  flex: 1;
+  font-size: 14.5px;
+  font-weight: 800;
+  gap: 10px;
+  min-height: 40px;
+  min-width: 0;
+}
+.prompt-list-check input {
+  accent-color: var(--primary);
+  flex: none;
+  height: 18px;
+  margin: 0;
+  width: 18px;
+}
+.prompt-list-check-name {
+  overflow-wrap: anywhere;
+}
+.prompt-list-check-language {
   color: var(--faint);
   display: inline-flex;
 }
-.toggle-chip[aria-pressed="true"] .prompt-list-chip-language {
-  color: var(--primary);
-}
-.toggle-chip[aria-pressed="true"] .prompt-list-chip-count {
-  background: var(--card);
-  color: var(--primary);
+.prompt-list-check-count {
+  color: var(--faint);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  margin-left: auto;
+  white-space: nowrap;
 }
 .prompt-list-picker-loading,
 .prompt-list-picker-fallback {

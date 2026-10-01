@@ -11,6 +11,7 @@ as a blank. Translate the words; leave the holes, the plural categories and
 the slot tokens exactly where they are. */
 import { formattersFor } from "./format.ts";
 import type { Catalogue } from "./index.ts";
+import type { PromptShelf } from "../../lib/promptListTree.ts";
 import type { AnnouncementCode } from "../../lib/announcements.ts";
 import type { ErrorCode } from "../../types.ts";
 
@@ -1587,6 +1588,16 @@ export const IT: Catalogue = {
     promptLists: "Liste di parole",
     namePromptCountPrompts: (p: { name: string; promptCount: number }) =>
       `${p.name} (${p.promptCount} parole)`,
+    yourLists: "Le tue liste",
+    fromCommunityCatalogue: "Dal catalogo della community",
+    /** A shelf's name, by its slug (`lib/promptListTree.ts`, R-PROMPT-14). */
+    shelves: { everyday: "Di tutti i giorni" } satisfies Record<PromptShelf, string>,
+    /** A series's name, by its slug; one without falls back to its slug. */
+    series: {} as Record<string, string>,
+    chosenCount: (p: { count: number }) => `${number(p.count)} scelte`,
+    seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} di ${number(p.total)}`,
+    showSeries: (p: { name: string }) => `Mostra le liste di ${p.name}`,
+    hideSeries: (p: { name: string }) => `Nascondi le liste di ${p.name}`,
   },
 
   promptStatsPage: {
