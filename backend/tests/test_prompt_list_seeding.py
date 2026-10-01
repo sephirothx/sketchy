@@ -19,6 +19,7 @@ from app.db.seed import seed_prompt_lists
 from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
+    MAX_PLAYER_PROMPT_LISTS,
     PROMPT_SHELVES,
     default_prompt_list_slug,
     prompt_match_key,
@@ -26,10 +27,16 @@ from app.prompt_content import (
 from app.prompts import letter_histogram
 from app.repositories.interfaces import (
     BundledPromptDefinition,
+    PromptListEntryInput,
     PromptPickTotals,
+    PromptSeedConflictError,
     PromptUsage,
+    TooManyPlayerListsError,
 )
-from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
+from app.repositories.sqlalchemy import (
+    SqlAlchemyPromptListRepository,
+    SqlAlchemyUserRepository,
+)
 
 from tests.dbfixtures import create_test_db
 
@@ -729,5 +736,60 @@ async def test_an_official_list_in_no_language_seeds_and_plays_anywhere(tmp_path
             ["champions"], expected_language="de"
         )
         assert pinned.prompt_count == 2
+    finally:
+        await engine.dispose()
+
+
+async def test_a_room_may_hold_forty_lists_but_twenty_of_players(tmp_path):
+    """The room-wide cap is forty so a whole series fits (#1374), but a
+    player's list is where a selection's worst case lives, so no more than
+    twenty of those - the ceiling #1237 measured."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        users = SqlAlchemyUserRepository(factory)
+        guest = await users.create_anonymous("Owner")
+        owner = await users.claim_account(guest.id, "Owner", "test-hash")
+        owned = [
+            (
+                await repo.create_owned(
+                    owner.id,
+                    name=f"Mine {index}",
+                    description="",
+                    language="en",
+                    prompts=(PromptListEntryInput(answer=f"otter{index}"),),
+                )
+            ).slug
+            for index in range(MAX_PLAYER_PROMPT_LISTS + 1)
+        ]
+        allowed = await repo.authorize_selection(
+            owned[:MAX_PLAYER_PROMPT_LISTS],
+            requesting_user_id=owner.id,
+            expected_language="en",
+        )
+        assert len(allowed.list_ids) == MAX_PLAYER_PROMPT_LISTS
+        with pytest.raises(TooManyPlayerListsError):
+            await repo.authorize_selection(
+                owned, requesting_user_id=owner.id, expected_language="en"
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_an_official_list_tag_outside_the_vocabulary_is_a_seed_conflict():
+    factory, engine = await create_test_db()
+    try:
+        with pytest.raises(PromptSeedConflictError):
+            await SqlAlchemyPromptListRepository(factory).upsert_bundled(
+                slug="critters",
+                name="Critters",
+                description="",
+                language="en",
+                prompts=[BundledPromptDefinition(str(uuid4()), "otter")],
+                version=1,
+                shelf="everyday",
+                shelf_position=0,
+                tags=["not-a-tag"],
+            )
     finally:
         await engine.dispose()

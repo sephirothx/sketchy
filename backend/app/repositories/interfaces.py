@@ -749,6 +749,10 @@ class PromptListsChangedError(PromptListSelectionError):
     """
 
 
+class TooManyPlayerListsError(PromptListSelectionError):
+    """More players' lists than a selection may hold (`MAX_PLAYER_PROMPT_LISTS`)."""
+
+
 class MixedRoomListError(PromptListSelectionError):
     """A list a mixed-language room cannot draw on (#1182): one that is in a
     language but whose concepts not every room language spells."""

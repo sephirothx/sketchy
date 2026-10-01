@@ -259,8 +259,9 @@ def test_a_create_payload_normalizes_the_tool_set(tools, expected):
 
 @pytest.mark.parametrize("model", [CreateRoomPayload, UpdateRoomSettingsPayload])
 def test_a_room_may_pick_a_whole_series_beside_its_other_lists(model):
-    """Forty lists: all nine Pokémon generations and plenty more (#1374). The
-    cap bounds a selection's work, which is counted in prompts, not lists."""
+    """Forty lists: room for a whole series of official lists beside a room's
+    other choices (#1374). How many of them may be players' is the
+    repository's to say, since a payload cannot tell."""
     assert MAX_PROMPT_LISTS == 40
     base = {"nickname": "Ann"} if model is CreateRoomPayload else {}
     fits = [f"list_{index}" for index in range(MAX_PROMPT_LISTS)]

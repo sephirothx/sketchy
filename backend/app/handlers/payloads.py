@@ -99,12 +99,10 @@ class EmptyPayload(RequestModel):
     pass
 
 
-# A bound on the work a selection costs, which is counted in prompts rather
-# than lists: authorizing one checks every answer of every list for a
-# collision, and a draw orders the whole pool (#1237). It is set in lists only
-# because that is what a payload holds. Forty is room for a whole series - all
-# nine Pokémon generations are one Standard's worth of prompts - beside a
-# room's other choices (#1374).
+# Room for a whole series of official lists beside a room's other choices
+# (#1374). The worst-case cost of authorizing a selection lives in players'
+# lists, which the repository holds to twenty of these
+# (`prompt_content.MAX_PLAYER_PROMPT_LISTS`) once it knows which they are.
 MAX_PROMPT_LISTS = 40
 
 

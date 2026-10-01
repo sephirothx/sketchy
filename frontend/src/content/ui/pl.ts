@@ -123,6 +123,7 @@ const REFUSALS: Record<ErrorCode, Sentence> = {
   invalid_prompt_lists: "Tych list haseł nie można używać razem.",
   invalid_custom_prompts: "Nie udało się odczytać tych własnych haseł.",
   mixed_room_list_unsupported: "W pokojach mieszanych można używać tylko list dostępnych we wszystkich językach lub oznaczonych jako „Dowolny język”.",
+  too_many_player_prompt_lists: "Pokój może korzystać z najwyżej 20 list stworzonych przez graczy.",
   mixed_room_custom_prompts: "W pokojach mieszanych nie można używać własnych haseł: każdy gracz musi dostać hasło w swoim języku.",
   max_players_below_seated: (params) =>
   `Limit graczy nie może być niższy niż liczba graczy, którzy już są w pokoju (${count(params.seated, 2)}).`,

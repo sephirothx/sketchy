@@ -180,6 +180,7 @@ from app.repositories.interfaces import (
     PromptListSelectionError,
     PromptListsChangedError,
     MixedRoomListError,
+    TooManyPlayerListsError,
     PromptTranslation,
     PromptSeedConflictError,
     PromptListSummary,
@@ -190,6 +191,7 @@ from app.repositories.interfaces import (
 )
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
+    MAX_PLAYER_PROMPT_LISTS,
     UnknownListTag,
     clean_list_tags,
     clean_prompt_aliases_keyed,
@@ -5663,6 +5665,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 f"Prompt list{'s' if len(missing) != 1 else ''} not found: "
                 + ", ".join(missing)
             )
+        if (
+            sum(1 for row in authorized_rows if not row.is_bundled)
+            > MAX_PLAYER_PROMPT_LISTS
+        ):
+            raise TooManyPlayerListsError(
+                f"A room can use at most {MAX_PLAYER_PROMPT_LISTS} players' lists"
+            )
         if expected_language == MIXED_PROMPT_LANGUAGE:
             return (
                 await self._pinned_mixed_lists(
@@ -5797,6 +5806,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     == PromptContentModerationState.ACTIVE.value,
                     PromptList.language.in_(PROMPT_LANGUAGES),
                 )
+                .order_by(PromptList.slug)
             )
         ).all()
         concepts: dict[UUID, set[UUID]] = defaultdict(set)
@@ -5810,19 +5820,29 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
             ).all():
                 concepts[list_id].add(concept_id)
-        by_content: dict[frozenset[UUID], dict[str, Row]] = defaultdict(dict)
+        by_content: dict[frozenset[UUID], dict[str, list[Row]]] = defaultdict(
+            lambda: defaultdict(list)
+        )
         for row in bundled:
-            by_content[frozenset(concepts[row.id])].setdefault(row.language, row)
+            by_content[frozenset(concepts[row.id])][row.language].append(row)
         members: dict[UUID, tuple[UUID, ...]] = {}
         names: dict[UUID, str] = {}
         for content, by_language in by_content.items():
             if not content or not set(PROMPT_LANGUAGES) <= set(by_language):
                 continue
-            family = tuple(by_language[language].id for language in PROMPT_LANGUAGES)
-            name = by_language[PromptLanguage.ENGLISH.value].slug
-            for member in family:
-                members[member] = family
-                names[member] = name
+            # Ordered by slug, so a family keeps its name from one start to
+            # the next. Two lists of one language with the same concepts are
+            # both members: each is pinned with itself in its own language's
+            # place and the first of the others, as a pin always was.
+            first = {language: by_language[language][0] for language in PROMPT_LANGUAGES}
+            name = first[PromptLanguage.ENGLISH.value].slug
+            for language, rows in by_language.items():
+                for row in rows:
+                    members[row.id] = tuple(
+                        row.id if member_language == language else first[member_language].id
+                        for member_language in PROMPT_LANGUAGES
+                    )
+                    names[row.id] = name
         families = _BundledFamilies(members=members, names=names)
         if generation == self._families_generation:
             self._families = families
@@ -6449,6 +6469,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         shelf_position: int | None = None,
         tags: Sequence[str] = (),
     ) -> PromptListSummary:
+        try:
+            # Held to the vocabulary here too, not only by the seed, so a
+            # caller passing another slug is refused as a seed conflict.
+            list_tags = clean_list_tags(list(tags))
+        except ValueError as error:
+            raise PromptSeedConflictError(str(error)) from error
+        list_tags = tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in list_tags)
         source_prompts = tuple(prompts)
         if not source_prompts:
             raise PromptSeedConflictError("bundled prompt lists cannot be empty")
@@ -6633,7 +6660,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 wl.shelf = shelf
                 wl.series = series if shelf is not None else None
                 wl.shelf_position = (shelf_position or 0) if shelf is not None else None
-                await self._replace_list_tags(session, wl.id, tags)
+                await self._replace_list_tags(session, wl.id, list_tags)
             # Official content may have changed, and the families with it.
             self._families = None
             self._families_generation += 1
@@ -6642,7 +6669,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             prompt_count = await session.scalar(
                 select(func.count(Prompt.id)).where(Prompt.prompt_list_id == wl.id)
             )
-            return _to_prompt_list_summary(wl, int(prompt_count or 0), tags=tuple(tags))
+            return _to_prompt_list_summary(wl, int(prompt_count or 0), tags=list_tags)
 
     async def _ensure_bundled_prompt_versions(
         self,

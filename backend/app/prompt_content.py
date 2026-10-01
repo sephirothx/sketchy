@@ -54,6 +54,15 @@ LIST_TAG_VOCABULARY: tuple[tuple[str, str], ...] = (
 
 LIST_TAG_SLUGS = frozenset(slug for slug, _ in LIST_TAG_VOCABULARY)
 
+# How many of a room's lists may be players' own or published ones (#1374).
+# What a selection costs to authorize grows with its answers and aliases, and
+# a player's list is where the worst case lives - 500 prompts of 20 aliases
+# each (R-LIST-04): twenty of them folded cold cost 1.5 s of CPU off the loop
+# on PostgreSQL (#1237). Official lists are reviewed content and alias
+# sparingly, so the room-wide cap rose to forty (`MAX_PROMPT_LISTS`) to hold a
+# whole series, while this one keeps the worst case where it was measured.
+MAX_PLAYER_PROMPT_LISTS = 20
+
 # The shelves the official lists stand on (#1374), in the order the room
 # picker shows them. A shelf is navigation, not content: every official list
 # names one, and a **series** within it (the Pokémon generations) is optional.

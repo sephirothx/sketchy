@@ -442,7 +442,7 @@ moderation - are the rest of the same enum, and are listed at
 
 | Family | Codes |
 | --- | --- |
-| Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `mixed_room_list_unsupported`, `mixed_room_custom_prompts`, `max_players_below_seated`, `empty_message` |
+| Payloads and arguments | `invalid_payload`, `invalid_nickname`, `invalid_name_color`, `invalid_hint`, `invalid_letter`, `invalid_prompt_lists`, `invalid_custom_prompts`, `mixed_room_list_unsupported`, `mixed_room_custom_prompts`, `too_many_player_prompt_lists`, `max_players_below_seated`, `empty_message` |
 | Rate and capacity | `too_fast`, `seat_changing_too_fast`, `joining_too_fast`, `room_quota`, `room_full`, `spectators_full`, `player_slots_full` |
 | Server and account state | `server_draining`, `server_paused`, `server_busy`, `database_busy`, `account_ended`, `account_required`, `identity_unavailable` |
 | Rooms | `not_in_room`, `room_not_found`, `room_ended`, `could_not_create_room`, `no_session_to_resume`, `host_only`, `players_only`, `waiting_room_only`, `kicked_from_room`, `already_a_player`, `registered_name_fixed`, `name_taken_by_account`, `name_in_use`, `guests_cannot_choose_color`, `suggestion_inactive`, `drawing_not_found`, `drawing_not_kept` |
@@ -752,7 +752,8 @@ Shared bounds:
 | `MAX_ROOM_NAME_LENGTH` | 40 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 | `MAX_NICKNAME_LENGTH` | 16 (`MAX_NAME_LENGTH`, shared with usernames) | [`auth/names.py`](../backend/app/auth/names.py) |
 | `MAX_IDENTIFIER_LENGTH` | 128 | [`payloads.py`](../backend/app/handlers/payloads.py) |
-| `MAX_PROMPT_LISTS` per room | 40 — a whole series beside a room's other lists; the work it bounds is counted in prompts (R-PROMPT-14) | [`payloads.py`](../backend/app/handlers/payloads.py) |
+| `MAX_PROMPT_LISTS` per room | 40 — a whole series beside a room's other lists (R-PROMPT-14) | [`payloads.py`](../backend/app/handlers/payloads.py) |
+| `MAX_PLAYER_PROMPT_LISTS` per room | 20 players' own or published lists among them — where a selection's worst-case authorization cost lives (#1237); refused as `too_many_player_prompt_lists` | [`prompt_content.py`](../backend/app/prompt_content.py) |
 | `MAX_CANVAS_SEQUENCE` | 2³¹ − 1 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 | `MAX_GUESS_ID` | 2³¹ − 1 | [`payloads.py`](../backend/app/handlers/payloads.py) |
 
@@ -882,7 +883,7 @@ mirrors it with every field optional (absent means *unchanged*).
 | `allowedTools` | string[] | `["brush","fill","shapes"]` | at least one of `brush`/`shapes` must remain |
 | `colorMode` | string | `"all"` | `all \| palette \| colorblind_safe \| black_and_white` |
 | `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, `pl`, or `mul` for a mixed-language room (#1182). **Create only** — see below |
-| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 40 (protocol 57, #1374), trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard, Extended or a themed official family, never Local - and empty ⇒ Standard in every language (R-PROMPT-13) |
+| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 40 (protocol 57, #1374), of which ≤ 20 players' lists (`too_many_player_prompt_lists`), trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard, Extended or a themed official family, never Local - and empty ⇒ Standard in every language (R-PROMPT-13) |
 
 `create_room` adds `nickname`, `nameColor`
 (`#rrggbb`), `colorblindSafeColors`, and `seatLanguage` - the language the creator plays

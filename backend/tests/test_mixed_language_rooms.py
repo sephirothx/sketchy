@@ -851,3 +851,31 @@ async def test_a_themed_list_missing_a_language_is_no_family():
             )
     finally:
         await engine.dispose()
+
+
+async def test_two_official_lists_of_one_language_with_the_same_concepts_are_both_family():
+    """A second English list holding the family's very concepts is admitted
+    too, pinned with itself in English's place - as every pin was before the
+    families were worked out once (#1374 review)."""
+    factory, engine = await create_test_db()
+    try:
+        prompts = SqlAlchemyPromptListRepository(factory)
+        concepts = [(str(uuid4()), "Zorblax"), (str(uuid4()), "Quimbo")]
+        await _themed_family(prompts, concepts)
+        await prompts.upsert_bundled(
+            slug="critters_classic",
+            name="Critters classic",
+            description="",
+            language="en",
+            prompts=[BundledPromptDefinition(c, a) for c, a in concepts],
+            version=1,
+            shelf="everyday",
+            shelf_position=4,
+        )
+        for slug in ("critters_en", "critters_classic"):
+            pinned = await prompts.authorize_selection([slug], expected_language="mul")
+            assert len(pinned.list_ids) == len(PROMPT_LANGUAGES), slug
+        classic = await prompts.get_by_slug("critters_classic")
+        assert classic is not None and classic.family == "critters_classic"
+    finally:
+        await engine.dispose()

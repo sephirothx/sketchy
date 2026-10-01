@@ -570,6 +570,7 @@ export type ErrorCode =
   | "invalid_custom_prompts"
   | "mixed_room_list_unsupported"
   | "mixed_room_custom_prompts"
+  | "too_many_player_prompt_lists"
   | "max_players_below_seated"
   | "empty_message"
   | "too_fast"
