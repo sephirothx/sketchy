@@ -12,19 +12,22 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
+import logging
 import time
 from time import thread_time
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, case, delete, desc, exists, func, insert, or_, select, update
+from sqlalchemy import text as sql_text
 from sqlalchemy.dialects import postgresql
-from sqlalchemy.exc import IntegrityError
+from sqlalchemy.exc import DBAPIError, IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from sqlalchemy.orm import aliased, defer, selectinload
 
 from app.services.runtime_metrics import metrics
 from app.services.telemetry import database_operation_of, telemetry
 from app.db import read_session
+from app.db.roles import SEEDED_TABLES
 from app.encode_pool import off_loop as _off_loop
 from app.db.models import (
     GalleryShelfReview,
@@ -192,10 +195,13 @@ from app.prompt_content import (
     languages_sharing_words,
     prompt_match_key,
     prompt_match_keys,
+    prompt_match_variants,
     validate_prompt_list_language,
 )
 from app.prompts import letter_histogram
 from app.refusals import ErrorCode
+
+logger = logging.getLogger(__name__)
 
 # How many times a pin write restarts when a merge lands inside the barrier's
 # window between its alias read and its lock (app.auth.erasure).
@@ -228,8 +234,8 @@ def _published_by_a_player():
     Bundled lists are public and active too - that is what the official
     catalogue *is* - so a predicate checking only public-active-present let an
     official list be starred and forked. Forking one was the worse half: the
-    fork path builds its entries directly, so copying the 592-prompt bundled
-    list would have written an owned list well past R-LIST-04's 500.
+    fork path builds its entries directly, so copying Standard - a thousand
+    prompts and more - would have written an owned list well past R-LIST-04's 500.
     """
     return (
         PromptList.visibility == PromptListVisibility.PUBLIC.value,
@@ -3677,6 +3683,48 @@ async def _rows_in_chunks(session: AsyncSession, statement) -> list:
 #: Selections whose verdict is remembered (#1237). A verdict is a few
 #: integers; the bound is on how many distinct selections are kept, oldest out.
 MAX_REMEMBERED_VERDICTS = 512
+
+#: Mixed selections whose false friends are remembered (#1367). Most mixed
+#: rooms pin the same bundled families, so a handful covers them; each entry is
+#: a few hundred keys.
+MAX_REMEMBERED_FALSE_FRIENDS = 64
+
+
+def _mixed_false_friends(rows: Sequence[tuple[str, str, str]]) -> dict[str, dict[str, frozenset[str]]]:
+    """Every key, per seat language, that names one concept there and is
+    another concept's word in some other language (#1367).
+
+    `rows` are (language, concept, text): every answer and alias of the pinned
+    revisions. Keys are spellings as `prompt_match_variants` gives them - what
+    a guess and an answer are compared on. A text in no language is that
+    seat's word too, whatever the seat plays. A guess that lands on one of the
+    returned keys means the concepts listed to that seat - German "Hut" is the hat - and so must not
+    win a drawing whose other-language spelling folds the same way (an
+    English hut), drawn into the game or not.
+    """
+    # By every spelling each language accepts, not only the canonical key: a
+    # guess is accepted on those (R-GUESS-01), and German "Lüge" is "luge" as
+    # well as "luege" - the French sled - which a canonical key never meets.
+    own: dict[str, dict[str, set[str]]] = {language: defaultdict(set) for language in PROMPT_LANGUAGES}
+    for language, concept, text in rows:
+        for seat in PROMPT_LANGUAGES:
+            if language in (seat, AGNOSTIC_PROMPT_LANGUAGE):
+                for spelling in prompt_match_variants(text, seat):
+                    own[seat][spelling].add(concept)
+    found: dict[str, dict[str, frozenset[str]]] = {}
+    for language, concept, text in rows:
+        if language == AGNOSTIC_PROMPT_LANGUAGE:
+            continue
+        for spelling in prompt_match_variants(text, language):
+            for seat in PROMPT_LANGUAGES:
+                if seat == language:
+                    continue
+                owners = own[seat].get(spelling)
+                if owners and owners - {concept}:
+                    found.setdefault(seat, {})[spelling] = frozenset(owners)
+    return found
+
+
 AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
 EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
 
@@ -3788,6 +3836,37 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # pinned and the fold they were checked under, with the moderation
         # fingerprint it was concluded at. See `authorize_selection`.
         self._verdicts: OrderedDict[tuple, tuple[tuple, _SelectionVerdict]] = OrderedDict()
+        # A mixed selection's false friends (#1367), by the revisions pinned.
+        # A revision never changes, so neither does what it collides with.
+        self._false_friends: OrderedDict[tuple, dict[str, dict[str, frozenset[str]]]] = (
+            OrderedDict()
+        )
+
+    async def refresh_planner_statistics(self) -> None:
+        """ANALYZE the prompt tables after seeding, on PostgreSQL.
+
+        A database the seed has just filled has no statistics yet, so the
+        planner takes every table for a row or two and joins the aliases of a
+        thousand-prompt list by walking all of them once per prompt: two
+        million comparisons for one list, and a mixed room's selection past
+        the 30-second statement timeout on a busy CI runner (#1367).
+        Autovacuum would get there, a minute later; startup should not wait
+        on it. The application role is granted MAINTAIN on these tables for
+        it (`app.db.roles.SEEDED_TABLES`). Never a reason not to start: a
+        role without the grant is warned and skipped by PostgreSQL itself, a
+        table a VACUUM or a migration is holding is skipped rather than
+        waited for, and anything else is logged - autovacuum is the fallback.
+        """
+        async with self._session_factory() as session:
+            if session.get_bind().dialect.name != "postgresql":
+                return
+            try:
+                await session.execute(
+                    sql_text(f"ANALYZE (SKIP_LOCKED) {', '.join(SEEDED_TABLES)}")
+                )
+                await session.commit()
+            except DBAPIError:
+                logger.warning("Could not analyze the seeded prompt tables", exc_info=True)
 
     @staticmethod
     def _star_count():
@@ -5675,10 +5754,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         admitted only with its **family** - the bundled lists whose current
         revisions hold exactly its concepts - and only when that family spells
         every concept in every room language, because every seat must be able
-        to play every prompt in its own. Today that is Standard alone
-        (R-PROMPT-01); a list in one language is refused by name rather than
-        quietly narrowing who may sit down. Asked of the data, not of a slug,
-        so a family made some other way is admitted the same way.
+        to play every prompt in its own. Today that is Standard and Extended
+        (R-PROMPT-01), and never Local; a list in one language is refused by
+        name rather than quietly narrowing who may sit down. Asked of the data,
+        not of a slug, so a family made some other way is admitted the same way.
         """
         bundled_current = (
             await session.execute(
@@ -6097,7 +6176,49 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     translations=translations,
                 )
             )
-        return PromptSample(prompts=tuple(prompts), drawable=drawable)
+        return PromptSample(
+            prompts=tuple(prompts),
+            drawable=drawable,
+            false_friends=await self._mixed_false_friends(pinned),
+        )
+
+    async def _mixed_false_friends(
+        self, revision_ids: Sequence[UUID]
+    ) -> dict[str, dict[str, frozenset[str]]]:
+        """`_mixed_false_friends` for these revisions, remembered.
+
+        Every version counts, hidden ones too: a hidden word is still what the
+        word means to the seat, and leaving it out would only let a few more
+        guesses through for the wrong drawing.
+        """
+        key = tuple(sorted(str(revision_id) for revision_id in revision_ids))
+        remembered = self._false_friends.get(key)
+        if remembered is not None:
+            self._false_friends.move_to_end(key)
+            return remembered
+        members = PromptListRevisionItem.revision_id.in_(list(revision_ids))
+        answers = (
+            select(PromptVersion.language, PromptVersion.concept_id, PromptVersion.canonical_answer)
+            .join(PromptListRevisionItem, PromptListRevisionItem.prompt_version_id == PromptVersion.id)
+            .where(members)
+        )
+        aliases = (
+            select(PromptVersion.language, PromptVersion.concept_id, PromptAlias.answer)
+            .join(PromptListRevisionItem, PromptListRevisionItem.prompt_version_id == PromptVersion.id)
+            .join(PromptVersionAlias, PromptVersionAlias.prompt_version_id == PromptVersion.id)
+            .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+            .where(members)
+        )
+        async with self._session_factory() as session:
+            rows = await _rows_in_chunks(session, answers.union(aliases))
+        found = await _off_loop(
+            _mixed_false_friends,
+            [(language, _public_id(concept), text) for language, concept, text in rows],
+        )
+        self._false_friends[key] = found
+        while len(self._false_friends) > MAX_REMEMBERED_FALSE_FRIENDS:
+            self._false_friends.popitem(last=False)
+        return found
 
     async def _authorize_mixed(
         self,
@@ -6137,8 +6258,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
             alias_rows = []
             if rows:
-                # Joined to the items rather than listed by id: a selection at
-                # its ceiling is 10,000 versions, too many to bind one by one.
+                # Joined to the items rather than listed by id: Standard and
+                # Extended pinned in every language are ~17,000 versions on
+                # their own (#1367), too many to bind one by one.
                 alias_rows = await _rows_in_chunks(
                     session,
                     select(PromptVersionAlias.prompt_version_id, PromptAlias.answer)
@@ -6576,8 +6698,13 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 resolved.append(prompt_version)
                 continue
 
+            # A wording this database has never held in this language starts
+            # wherever the file says: a fresh install seeds a reworded prompt
+            # at its current version, never having seen the first. Only a
+            # language that already holds versions must climb one at a time,
+            # because a gap there is a version the file skipped (#1367).
             expected_version = latest_versions[concept_id] + 1
-            if definition.prompt_version != expected_version:
+            if latest_versions[concept_id] and definition.prompt_version != expected_version:
                 raise PromptSeedConflictError(
                     f"prompt concept {definition.concept_id} expected version "
                     f"{expected_version}, got {definition.prompt_version}"

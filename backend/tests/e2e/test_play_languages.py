@@ -82,8 +82,8 @@ async def test_a_player_ranks_the_other_languages_they_play_in():
             # By dragging its grip: Nederlands, held and dropped on English,
             # goes first.
             chips = dialog.locator(".play-language-chip")
-            target = await chips.nth(0).locator(".play-language-chip-handle").bounding_box()
             x, y = await _press_on(page, chips.nth(2))
+            target = await chips.nth(0).locator(".play-language-chip-handle").bounding_box()
             await page.mouse.move(x, y - 10, steps=3)
             await page.mouse.move(x, target["y"] + target["height"] / 2, steps=8)
             await page.mouse.up()
@@ -171,7 +171,15 @@ async def test_an_accounts_languages_follow_it_to_another_device():
 
 
 async def _press_on(page: Page, chip) -> tuple[float, float]:
-    """Hold a chip by its grip - the only part that lifts it."""
+    """Hold a chip by its grip - the only part that lifts it.
+
+    Not while chips are still settling from the last move: a grip measured
+    mid-slide has moved on by the time it is pressed, and the press lands
+    between two chips, or on the neighbour sliding into its place."""
+    await page.wait_for_function(
+        "() => [...document.querySelectorAll('.play-language-chip')]"
+        ".every(chip => chip.getAnimations().length === 0)"
+    )
     box = await chip.locator(".play-language-chip-handle").bounding_box()
     x, y = box["x"] + box["width"] / 2, box["y"] + box["height"] / 2
     await page.mouse.move(x, y)

@@ -109,4 +109,5 @@ async def seed_prompt_lists(
             logger.exception("Failed to seed prompt list from %s", file_path)
             raise
 
+    await repo.refresh_planner_statistics()
     return seeded

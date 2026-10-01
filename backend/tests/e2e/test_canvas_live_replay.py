@@ -22,8 +22,12 @@ FILLS = 60
 CPU_THROTTLE = 4
 # A guard against the one-task replay, not the acceptance measurement: #1347's
 # 100 ms at 4x is the reference machine's (`BENCHMARK=thumbnail_browser`,
-# 43 ms), and a CI runner at 4x is slower still - it saw a 113 ms task where
-# a laptop saw none. The old replay is several times this on either.
+# 43 ms), and a CI runner at 4x is slower still - a fill there outlasts a
+# whole piece, so each piece is one fill, ~115 ms, where a laptop sees no long
+# task at all. The old replay is several times this on either. So were two
+# fills in one task - the last action painted with the one before it, and a
+# fill on top of the task that delivered the history - 209 and 226 ms on CI,
+# and every time at 48x on a laptop.
 LONGEST_TASK_BUDGET_MS = 200
 
 # Long tasks from the moment the canvas history arrives. The page has its own

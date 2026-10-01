@@ -24,6 +24,15 @@ from app.prompts import MAX_PROMPT_LENGTH
 from app.handlers.refusals import ErrorCode
 from app.services.telemetry import telemetry
 
+# What the guesser is told about a wrong guess the room did not see, by
+# `Game.guess_hint`'s verdict.
+_NEAR_MISS_VERDICTS = {
+    "close": Announcement.GUESS_VERY_CLOSE,
+    "partial": Announcement.GUESS_SOME_WORDS_CORRECT,
+    "another_language": Announcement.GUESS_ANSWER_IN_ANOTHER_LANGUAGE,
+}
+
+
 def _chat_line(player, text: str, **extra) -> dict:
     """A chat line attributed to `player`, plus any per-case flags."""
     return {
@@ -308,7 +317,9 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
                 recipients=recipients,
                 message_kind="wrong_guess",
                 audience="prompt_aware",
-                near_miss_kind=hint,
+                # A false friend is kept from the room as a near miss is,
+                # and stored as one: the room's copy needs no new kind.
+                near_miss_kind="close" if hint == "another_language" else hint,
                 additional_audience_sids=[sid],
             )
             # The guesser's own line and the verdict ride the acknowledgement
@@ -318,10 +329,8 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
             answer = {
                 "line": line,
                 "verdict": system_chat_message(
-                    Announcement.GUESS_VERY_CLOSE
-                    if hint == "close"
-                    else Announcement.GUESS_SOME_WORDS_CORRECT,
-                    {"text": text} if hint == "close" else None,
+                    _NEAR_MISS_VERDICTS[hint],
+                    {"text": text} if hint != "partial" else None,
                     close=True,
                 ),
             }

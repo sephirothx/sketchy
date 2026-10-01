@@ -36,6 +36,23 @@ MONITOR_ROLE = "sketchy_monitor"
 APPEND_ONLY_TABLES = ("audit_events", "score_events")
 ROW_PRIVILEGES = "SELECT, INSERT, UPDATE, DELETE"
 
+# What the web process seeds at startup, and so must be able to ANALYZE
+# (PostgreSQL 17's MAINTAIN): a database the seed has just filled has no
+# planner statistics, and authorizing a thousand-prompt list then walks every
+# alias once per prompt (#1367). MAINTAIN also allows VACUUM, REINDEX and
+# LOCK TABLE on these tables - nothing a role that may already delete every
+# row in them could not do worse.
+SEEDED_TABLES = (
+    "prompt_concepts",
+    "prompt_versions",
+    "prompt_aliases",
+    "prompt_version_aliases",
+    "prompt_lists",
+    "prompt_list_revisions",
+    "prompt_list_revision_items",
+    "prompts",
+)
+
 
 def grant_statements(app_role: str = APP_ROLE) -> tuple[str, ...]:
     """The application role's privileges, as idempotent statements run by the owner."""
@@ -44,6 +61,7 @@ def grant_statements(app_role: str = APP_ROLE) -> tuple[str, ...]:
         f"GRANT USAGE ON SCHEMA public TO {app_role}",
         f"GRANT {ROW_PRIVILEGES} ON ALL TABLES IN SCHEMA public TO {app_role}",
         f"GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO {app_role}",
+        f"GRANT MAINTAIN ON {', '.join(SEEDED_TABLES)} TO {app_role}",
         # Whatever a later revision creates is granted the same way, even by
         # a hand-run migration that forgot this module.
         f"ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT {ROW_PRIVILEGES} ON TABLES TO {app_role}",
