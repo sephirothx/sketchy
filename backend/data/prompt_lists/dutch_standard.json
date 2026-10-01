@@ -3,7 +3,7 @@
   "name": "Nederlands — Standaard",
   "description": "De standaardlijst: bekende woorden die makkelijk te tekenen zijn.",
   "language": "nl",
-  "version": 2,
+  "version": 3,
   "shelf": "everyday",
   "position": 0,
   "prompts": [
@@ -275,7 +275,7 @@
     {"conceptId":"01a02b7b-b507-7364-85a3-98b0da1753c7","answer":"donut","aliases":["de donut","doughnut"]},
     {"conceptId":"01a02b7b-b505-775c-9e54-d5e801242c54","answer":"deur"},
     {"conceptId":"01a088e3-e9ad-71b3-8c76-b7f8f06aaed0","answer":"deurbel","aliases":["de deurbel","belknop"]},
-    {"conceptId":"01a02b7b-b506-79f4-9cad-3b6db8852558","answer":"deurknop","aliases":["de deurknop","deurklink","klink","de klink"]},
+    {"conceptId":"01a02b7b-b506-79f4-9cad-3b6db8852558","answer":"deurknop","aliases":["de deurknop","deurklink"],"promptVersion":2},
     {"conceptId":"01a088e3-e9ad-71b3-8c76-b7fac2b2872a","answer":"deurmat","aliases":["de deurmat","voetmat","welkomstmat"]},
     {"conceptId":"01a02b7b-b509-7fd3-b273-b235f5a12aa4","answer":"draak"},
     {"conceptId":"01a02b7b-b50a-7df0-8108-fcc7605a55db","answer":"libel","aliases":["de libel","libelle"]},

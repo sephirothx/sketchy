@@ -786,3 +786,36 @@ async def test_an_official_list_tag_outside_the_vocabulary_is_a_seed_conflict():
             )
     finally:
         await engine.dispose()
+
+
+async def test_the_pokemon_generations_are_families_a_mixed_room_plays():
+    """Every Pokémon, one official list per generation in each of the eight
+    languages (#1389): nine families on the Video games shelf, one series,
+    pinned whole by a mixed room and combinable with each language's own lists
+    without a collision."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        catalogue = await repo.list_all()
+        pokemon = [summary for summary in catalogue if summary.series == "pokemon"]
+        assert len(pokemon) == 9 * len(PROMPT_LANGUAGES)
+        assert {summary.shelf for summary in pokemon} == {"video-games"}
+        assert {summary.family for summary in pokemon} == {
+            f"english_pokemon_gen{n}" for n in range(1, 10)
+        }
+        assert sum(
+            summary.prompt_count for summary in pokemon if summary.language == "en"
+        ) == 1025
+
+        generations = [f"german_pokemon_gen{n}" for n in range(1, 10)]
+        mixed = await repo.authorize_selection(generations, expected_language="mul")
+        assert len(mixed.list_ids) == 9 * len(PROMPT_LANGUAGES)
+        assert mixed.prompt_count == 1025
+        german = await repo.authorize_selection(
+            ["german_standard", "german_extended", "german_local", *generations],
+            expected_language="de",
+        )
+        assert german.prompt_count > 3000
+    finally:
+        await engine.dispose()

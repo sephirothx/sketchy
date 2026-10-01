@@ -7,7 +7,7 @@ import type { PromptListSummary } from "../types";
  * `backend/tests/test_wire_contract.py` holds the two to the same slugs in the
  * same order.
  */
-export const PROMPT_SHELVES = ["everyday"] as const;
+export const PROMPT_SHELVES = ["everyday", "video-games"] as const;
 
 export type PromptShelf = (typeof PROMPT_SHELVES)[number];
 
