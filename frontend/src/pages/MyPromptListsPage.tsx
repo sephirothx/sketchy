@@ -287,6 +287,11 @@ export function MyPromptListsPage() {
       setPublishError(ui.myPromptListsPage.saveBeforePublishingUpdate);
       return;
     }
+    if (!saved.liveEdition) {
+      // A first publication still waiting: nothing is live to compare with.
+      setPublishingUpdate(ui.myPromptListsPage.replacesPendingVersion);
+      return;
+    }
     setBusy(true);
     try {
       const live = await getOwnedLiveEdition(selectedId);
@@ -305,14 +310,19 @@ export function MyPromptListsPage() {
     setBusy(true);
     clearMessages();
     try {
-      const updated = await setOwnedPromptListPublished(selectedId, true);
+      const updated = await setOwnedPromptListPublished(selectedId, true, version ?? undefined);
       show(updated);
       setLists((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
       notify(updated.pendingEdition
         ? ui.myPromptListsPage.promptListUpdateSentForReview
         : ui.myPromptListsPage.promptListUpdatePublished, "success");
     } catch (publishError) {
-      setPublishError(refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication));
+      // A save from another tab since the summary: reloading is the fix.
+      if (refusalCode(publishError) === "prompt_list_conflict") {
+        setActionError({ sentence: refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication), reload: true });
+      } else {
+        setPublishError(refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication));
+      }
     } finally {
       setBusy(false);
     }
@@ -329,7 +339,11 @@ export function MyPromptListsPage() {
       setLists((current) => current.map((item) => (item.id === restored.id ? restored : item)));
       notify(ui.myPromptListsPage.changesDiscarded, "success");
     } catch (discardError) {
-      setPublishError(refusalText(discardError, ui.myPromptListsPage.couldNotDiscardChanges));
+      if (refusalCode(discardError) === "prompt_list_conflict") {
+        setActionError({ sentence: refusalText(discardError, ui.myPromptListsPage.couldNotDiscardChanges), reload: true });
+      } else {
+        setPublishError(refusalText(discardError, ui.myPromptListsPage.couldNotDiscardChanges));
+      }
     } finally {
       setBusy(false);
     }
@@ -580,7 +594,9 @@ export function MyPromptListsPage() {
                     ? ui.myPromptListsPage.publicationUnderReview
                     : editionStatus === "update-under-review"
                       ? ui.myPromptListsPage.updateUnderReview
-                      : editionStatus === "changed"
+                      : editionStatus === "changed-since-review"
+                        ? ui.myPromptListsPage.changedSinceReview
+                        : editionStatus === "changed"
                         ? ui.myPromptListsPage.unpublishedChanges
                         : ui.myPromptListsPage.inCommunityCatalogue}</strong>
                 <p>{published
@@ -588,7 +604,9 @@ export function MyPromptListsPage() {
                     ? ui.myPromptListsPage.publicationUnderReviewExplainer
                     : editionStatus === "update-under-review"
                       ? ui.myPromptListsPage.updateUnderReviewExplainer
-                      : editionStatus === "changed"
+                      : editionStatus === "changed-since-review"
+                        ? ui.myPromptListsPage.changedSinceReviewExplainer
+                        : editionStatus === "changed"
                         ? ui.myPromptListsPage.unpublishedChangesExplainer
                         : ui.myPromptListsPage.publishedExplainer
                   : publishBlocker === "no-address"
@@ -619,13 +637,13 @@ export function MyPromptListsPage() {
                 >{publishBlocker === "pending" ? ui.myPromptListsPage.changeEmail : ui.myPromptListsPage.addAnEmail}</button>}
                 {/* Only while there is something players do not see yet: the
                     working copy differs from the live edition (#1363). */}
-                {editionStatus === "changed" && <>
-                  <button
-                    type="button"
-                    className="btn btn-secondary btn-compact"
-                    disabled={busy}
-                    onClick={() => setConfirmingDiscard(true)}
-                  >{ui.myPromptListsPage.discardChanges}</button>
+                {editionStatus === "changed" && <button
+                  type="button"
+                  className="btn btn-secondary btn-compact"
+                  disabled={busy}
+                  onClick={() => setConfirmingDiscard(true)}
+                >{ui.myPromptListsPage.discardChanges}</button>}
+                {(editionStatus === "changed" || editionStatus === "changed-since-review") && <>
                   <button
                     type="button"
                     className="btn btn-primary btn-compact"

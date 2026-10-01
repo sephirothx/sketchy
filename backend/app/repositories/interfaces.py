@@ -1458,8 +1458,10 @@ class PromptListRepository(ABC):
         published: bool,
         under_review: bool = False,
         audit: AuditStamp | None = None,
+        expected_version: int | None = None,
     ) -> OwnedPromptList:
-        """Publish or unpublish an owned list as an act of its own (R-LIST-11)."""
+        """Publish or unpublish an owned list as an act of its own (R-LIST-11).
+        With `expected_version`, a list saved since is refused."""
         ...
 
     @abstractmethod

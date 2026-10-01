@@ -147,6 +147,15 @@ class DuplicateOwnedPromptListRequest(ControlFreeModel):
     name: str = Field(min_length=1, max_length=64)
 
 
+class PublishOwnedPromptListRequest(ControlFreeModel):
+    model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
+
+    # Optional: the version the owner was shown what an update changes on.
+    # Without it a save from another tab could be published under a summary
+    # of different content (#1392 review).
+    expected_version: int | None = Field(default=None, alias="expectedVersion", ge=1)
+
+
 class DiscardOwnedChangesRequest(ControlFreeModel):
     model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
 
@@ -646,7 +655,11 @@ def create_prompt_list_router(
         return await _set_star(prompt_list_id, request, starred=False)
 
     @router.post("/prompt-lists/mine/{prompt_list_id}/publish")
-    async def publish_my_prompt_list(prompt_list_id: str, request: Request):
+    async def publish_my_prompt_list(
+        prompt_list_id: str,
+        request: Request,
+        body: PublishOwnedPromptListRequest | None = None,
+    ):
         """Put an owned list in the community catalogue (R-LIST-11).
 
         Its own endpoint rather than a `visibility` field on the save, because
@@ -666,6 +679,7 @@ def create_prompt_list_router(
                 prompt_list_id,
                 published=True,
                 under_review=await read_publication_review(session_factory),
+                expected_version=body.expected_version if body else None,
                 audit=await _stamp(request, user, PUBLISHED_EVENT),
             )
         except PromptListMutationError as error:

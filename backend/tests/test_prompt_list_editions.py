@@ -344,3 +344,22 @@ async def test_a_list_never_published_has_nothing_to_discard_to(env):
         await prompts.discard_owned_changes(
             owner.id, created.id, expected_version=created.version
         )
+
+
+async def test_publish_update_refuses_a_list_saved_since_its_summary(env):
+    """The editor shows what an update changes and sends the version it read:
+    a save from another tab in between is refused, not published unseen."""
+    from app.repositories.interfaces import PromptListConflictError
+
+    prompts, users, _ = env
+    owner = await account(users, "Owner")
+    first = await published(prompts, owner.id, "gull")
+    shown = await saved(prompts, owner.id, first, "crab")
+    await saved(prompts, owner.id, shown, "otter")
+
+    with pytest.raises(PromptListConflictError):
+        await prompts.set_owned_publication(
+            owner.id, first.id, published=True, expected_version=shown.version
+        )
+    page = await prompts.get_community(first.id)
+    assert [entry.answer for entry in page.prompts] == ["gull"]

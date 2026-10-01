@@ -162,10 +162,14 @@ export function updateOwnedPromptList(
 export function setOwnedPromptListPublished(
   id: string,
   published: boolean,
+  /** For Publish update: the version its summary of changes was made from,
+      so a save from another tab is refused rather than published unseen. */
+  expectedVersion?: number,
 ): Promise<OwnedPromptList> {
   const action = published ? "publish" : "unpublish";
   return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}/${action}`, {
     method: "POST",
+    ...(published && expectedVersion !== undefined ? { body: { expectedVersion } } : {}),
   });
 }
 

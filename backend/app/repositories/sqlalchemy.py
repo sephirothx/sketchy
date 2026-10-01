@@ -5451,6 +5451,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         published: bool,
         under_review: bool = False,
         audit: AuditStamp | None = None,
+        expected_version: int | None = None,
     ) -> OwnedPromptList:
         """Publish or unpublish an owned list (R-LIST-11).
 
@@ -5485,6 +5486,10 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                 )
                 if prompt_list is None:
                     raise PromptListNotFoundError("Prompt list not found.")
+                if expected_version is not None and prompt_list.version != expected_version:
+                    raise PromptListConflictError(
+                        "This list changed since you opened it. Reload before publishing."
+                    )
                 now = datetime.now(timezone.utc)
                 editions = await editions_of(session, prompt_list.id)
                 if published:

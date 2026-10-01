@@ -169,16 +169,22 @@ interface EditionSide {
 export function editionChanges(live: EditionSide, working: EditionSide): EditionChanges {
   const liveByConcept = new Map(live.prompts.map((entry) => [entry.conceptId, entry.prompt]));
   const workingConcepts = new Set(working.prompts.map((entry) => entry.conceptId));
-  const added: string[] = [];
+  let added: string[] = [];
   const reworded: { from: string; to: string }[] = [];
   for (const entry of working.prompts) {
     const before = liveByConcept.get(entry.conceptId);
     if (before === undefined) added.push(entry.prompt);
     else if (before !== entry.prompt) reworded.push({ from: before, to: entry.prompt });
   }
+  let removed = live.prompts.filter((entry) => !workingConcepts.has(entry.conceptId)).map((entry) => entry.prompt);
+  // A word removed and typed in again is a new concept, but the same word to
+  // a player: neither a removal nor an addition.
+  const readded = new Set(added.filter((prompt) => removed.includes(prompt)));
+  added = added.filter((prompt) => !readded.has(prompt));
+  removed = removed.filter((prompt) => !readded.has(prompt));
   return {
     added,
-    removed: live.prompts.filter((entry) => !workingConcepts.has(entry.conceptId)).map((entry) => entry.prompt),
+    removed,
     reworded,
     name: live.name !== working.name,
     description: live.description !== working.description,
@@ -188,15 +194,27 @@ export function editionChanges(live: EditionSide, working: EditionSide): Edition
 
 /** The changes as the confirmation says them, one sentence each; empty when
 only the order moved. */
+/** How many prompts each line names before it says how many more: a
+replaced list of 500 would otherwise be a wall of text, read out whole as the
+dialog's description. */
+export const CHANGES_NAMED = 8;
+
+function named(prompts: string[]): string {
+  const shown = prompts.slice(0, CHANGES_NAMED).join(", ");
+  return prompts.length > CHANGES_NAMED
+    ? `${shown} ${ui.myPromptListsPage.andNMore({ count: prompts.length - CHANGES_NAMED })}`
+    : shown;
+}
+
 export function describeEditionChanges(changes: EditionChanges): string[] {
   const words = ui.myPromptListsPage;
   const lines: string[] = [];
-  if (changes.added.length) lines.push(words.promptsAdded({ count: changes.added.length, prompts: changes.added.join(", ") }));
-  if (changes.removed.length) lines.push(words.promptsRemoved({ count: changes.removed.length, prompts: changes.removed.join(", ") }));
+  if (changes.added.length) lines.push(words.promptsAdded({ count: changes.added.length, prompts: named(changes.added) }));
+  if (changes.removed.length) lines.push(words.promptsRemoved({ count: changes.removed.length, prompts: named(changes.removed) }));
   if (changes.reworded.length) {
     lines.push(words.promptsReworded({
       count: changes.reworded.length,
-      prompts: changes.reworded.map(({ from, to }) => `${from} → ${to}`).join(", "),
+      prompts: named(changes.reworded.map(({ from, to }) => `${from} → ${to}`)),
     }));
   }
   if (changes.name) lines.push(words.nameChanged);
@@ -206,15 +224,21 @@ export function describeEditionChanges(changes: EditionChanges): string[] {
 }
 
 /** Where a published list stands against what players see (#1363). `none`
-for a private list; a pending edition first, since while one waits the
-owner's next step is the moderator's, not theirs. */
-export type EditionStatus = "none" | "first-under-review" | "update-under-review" | "changed" | "live";
+for a private list. While an edition waits, the owner's next step is the
+moderator's - unless they have changed the list since, which the waiting
+edition does not hold: `changed-since-review`, and Publish update sends the
+newer version in its place. */
+export type EditionStatus =
+  | "none" | "first-under-review" | "update-under-review" | "changed-since-review" | "changed" | "live";
 
 export function publishedEditionStatus(
   list: Pick<OwnedPromptList, "visibility" | "liveEdition" | "pendingEdition" | "unpublishedChanges"> | null,
 ): EditionStatus {
   if (!list || list.visibility !== "public") return "none";
-  if (list.pendingEdition) return list.liveEdition ? "update-under-review" : "first-under-review";
+  if (list.pendingEdition) {
+    if (list.unpublishedChanges) return "changed-since-review";
+    return list.liveEdition ? "update-under-review" : "first-under-review";
+  }
   if (!list.liveEdition) return "none";
   return list.unpublishedChanges ? "changed" : "live";
 }

@@ -5,6 +5,7 @@ that edition while its owner keeps editing. The editor says so - Unpublished
 changes - and offers Publish update, after saying what it changes, or Discard
 changes.
 """
+import asyncio
 from uuid import uuid4
 
 from playwright.async_api import async_playwright
@@ -57,8 +58,18 @@ async def _choices_in_a_new_room(host, guest, list_id: str) -> set[str]:
     await host.click('button:has-text("Start game")')
     await host.wait_for_selector(".game-layout")
     await guest.wait_for_selector(".game-layout")
-    drawer = host if await host.locator(".prompt-choices button").count() else guest
-    await drawer.locator(".prompt-choices button").first.wait_for()
+    # Polled on both pages: either may draw first, and the drawer's choices
+    # can land a moment after the layout does.
+    drawer = None
+    for _ in range(150):
+        for page in (host, guest):
+            if await page.locator(".prompt-choices button").count():
+                drawer = page
+                break
+        if drawer:
+            break
+        await asyncio.sleep(0.1)
+    assert drawer is not None, "no drawer received prompt choices"
     return {text.strip() for text in await drawer.locator(".prompt-choices button").all_inner_texts()}
 
 

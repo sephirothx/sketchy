@@ -42,11 +42,33 @@ test("the status follows the pending edition first, then the changes", () => {
   assert.equal(publishedEditionStatus(base), "live");
   assert.equal(publishedEditionStatus({ ...base, unpublishedChanges: true }), "changed");
   assert.equal(
-    publishedEditionStatus({ ...base, unpublishedChanges: true, pendingEdition: { number: 2 } }),
+    publishedEditionStatus({ ...base, pendingEdition: { number: 2 } }),
     "update-under-review",
   );
   assert.equal(
     publishedEditionStatus({ ...base, liveEdition: null, pendingEdition: { number: 1 } }),
     "first-under-review",
   );
+});
+
+test("a word removed and typed in again is no change to a player", () => {
+  const changes = editionChanges(live, {
+    ...live,
+    prompts: [{ conceptId: "a", prompt: "gull" }, { conceptId: "z", prompt: "lighthouse" }],
+  });
+  assert.deepEqual(changes.added, []);
+  assert.deepEqual(changes.removed, []);
+});
+
+test("a long change names a few and counts the rest", () => {
+  const many = Array.from({ length: 20 }, (_, index) => ({ conceptId: `n${index}`, prompt: `word${index}` }));
+  const [line] = describeEditionChanges(editionChanges({ ...live, prompts: [] }, { ...live, prompts: many }));
+  assert.match(line, /word7 and 12 more/);
+  assert.doesNotMatch(line, /word8/);
+});
+
+test("edits after an update was sent for review are said, not hidden", () => {
+  const waiting = { visibility: "public", liveEdition: { number: 1 }, pendingEdition: { number: 2 }, unpublishedChanges: true };
+  assert.equal(publishedEditionStatus(waiting), "changed-since-review");
+  assert.equal(publishedEditionStatus({ ...waiting, liveEdition: null }), "changed-since-review");
 });

@@ -1920,7 +1920,7 @@ An immutable, language-specific wording.
 (nullable, `SET NULL`, partial index) · `created_at`, with
 `uq_prompt_version_concept_language_version`.
 
-**`unlisted_at`** is when a save or a list's deletion last took the version out of a
+**`unlisted_at`** is when a save, a Discard changes or a list's deletion last took the version out of a
 working copy (#1359). A game that drew it before then holds it in memory and writes it into
 its turns when it ends, so the hourly `unlisted_prompt_versions` sweep
 (`reclaim_unlisted_versions`) collects it only `RETIRED_LIST_GRACE` (a day) later, and only
@@ -1993,7 +1993,7 @@ Deliberately relational rather than a JSON tag blob.
 
 `edition_count` numbers the list's next edition, so a number is never reused after the
 edition that held it was replaced. `content_hash` is the working copy's digest, written by
-every save beside the histogram, in the form an edition's is: compared with the latest
+every save beside the histogram (and copied from the live edition by Discard changes, #1363), in the form an edition's is: compared with the latest
 edition's — the pending one while one waits, else the live one — it says whether the list
 has **unpublished changes** without reading either one's prompts (#1360). It digests
 version ids, so a prompt changed and changed back reads as changed until the next publish.
