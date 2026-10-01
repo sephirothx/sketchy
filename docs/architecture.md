@@ -112,7 +112,7 @@ and scoring. It performs no I/O and touches no socket. `Phase` is
 ([`backend/app/game.py:140`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
 ([`backend/app/game.py:47`](../backend/app/game.py),
-[`backend/app/game.py:454`](../backend/app/game.py)). This is the module to change when
+[`backend/app/game.py:493`](../backend/app/game.py)). This is the module to change when
 game rules change — and changing an outcome-producing constant requires bumping
 `SCORING_RULES_VERSION`.
 
@@ -526,7 +526,7 @@ no request in flight.
 7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
 8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
 9. No purge of its own: the retention loop's first pass starts immediately and is bounded, so a backlog left by a long outage cannot delay serving (#550)
-10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
+10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup; it ends by `ANALYZE`-ing the prompt tables on PostgreSQL so a fresh seed is not planned blind (#1367)
 11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
 12. `mark_ready()` — `GET /api/ready` starts answering 200
 13. Under the production runner only (`app/server.py`), once Uvicorn is listening:

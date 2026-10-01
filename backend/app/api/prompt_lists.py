@@ -57,15 +57,18 @@ from app.domain_values import HintMode, ScoringMode
 MIN_RATED_GUESSERS = 5
 
 # The whole list, because the page shows the whole list. The largest bundled
-# one is under 600 prompts of at most 64 characters, so the response is small
-# even at the ceiling; the cap is here to bound a list someone builds later.
+# one is a little over a thousand prompts of at most 64 characters, so the
+# response is small even at the ceiling; the cap is here to bound a list
+# someone builds later, and a bundled list past it would be cut short, which
+# `test_bundled_prompt_content` refuses.
 MAX_PAGE_SIZE = 2000
 DEFAULT_PAGE_SIZE = 2000
 
 SORTS = ("hardest", "easiest", "most-picked")
 COMMUNITY_SORTS = ("stars", "newest")
 
-# The bundled lists top out around 600 prompts, and this reads them whole.
+# The bundled lists top out a little over a thousand prompts, and this reads
+# them whole.
 # Generous for someone browsing, tight enough to be a poor scraping tool.
 stats_limiter = RateLimiter(limit=60, window_seconds=60)
 # Publishing is a deliberate act somebody takes a handful of times, and the
@@ -692,7 +695,7 @@ def create_prompt_list_router(
         """How a list's prompts have actually played, hardest first by default.
 
         Fact filtering and aggregation happen in the repository. Ranking and
-        slicing stay here: the largest bundled list is a few hundred rows,
+        slicing stay here: the largest bundled list is about a thousand rows,
         which is small enough to sort in memory after aggregation.
 
         Every prompt in the list comes back, so a player can look one up. Only

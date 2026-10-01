@@ -57,6 +57,9 @@ class Announcement(StrEnum):
     HINT_LETTER_MISSING = "hint_letter_missing"  # letter, cost
     GUESS_VERY_CLOSE = "guess_very_close"  # text
     GUESS_SOME_WORDS_CORRECT = "guess_some_words_correct"
+    # A mixed-language room: the guess names the drawing in another seat's
+    # language, and in the guesser's own it is a different word (#1367).
+    GUESS_ANSWER_IN_ANOTHER_LANGUAGE = "guess_answer_in_another_language"  # text
 
 
 class RestartCancelReason(StrEnum):

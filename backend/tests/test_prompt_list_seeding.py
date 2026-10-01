@@ -45,13 +45,13 @@ async def test_seed_bundled_prompt_lists():
         assert "english_extended" in slugs
 
         std_words = await repo.get_prompts_by_slugs(["english_standard"])
-        assert len(std_words) > 200
+        assert len(std_words) >= 1000
         assert "airplane" in std_words
-        assert "guitar" in std_words
+        assert "accordion" in std_words
 
         ext_words = await repo.get_prompts_by_slugs(["english_extended"])
-        assert len(ext_words) > 400
-        assert "accordion" in ext_words
+        assert len(ext_words) > 300
+        assert "albatross" in ext_words
 
         combined_words = await repo.get_prompts_by_slugs(["english_standard", "english_extended"])
         assert len(combined_words) >= len(std_words)
@@ -126,7 +126,7 @@ async def test_the_translated_core_is_one_concept_per_language():
             translated = json.loads(
                 (PROMPT_LIST_DIR / f"{stem}_standard.json").read_text()
             )["prompts"]
-            assert {entry["conceptId"] for entry in translated} <= english, language
+            assert {entry["conceptId"] for entry in translated} == english, language
             # And the extension is native: its concepts are its own.
             native = json.loads(
                 (PROMPT_LIST_DIR / f"{stem}_extended.json").read_text()
@@ -348,11 +348,11 @@ async def test_repeated_draws_reach_across_the_whole_pool():
     """The draw has to be random across the whole revision, not a stable prefix.
 
     Asserting *total* coverage would be asserting a coin lands heads enough
-    times: 40 draws of 50 from 260 leave at least one prompt untouched about
-    5% of the time, so that test fails for a correct implementation once every
-    twenty runs. The margin below is far outside anything sampling produces
-    (20,000 simulated runs never missed more than 2) while still being nowhere
-    near the 50 a fixed prefix would reach.
+    times. Each draw takes a fifth of the list, so 40 of them leave any one
+    prompt untouched with probability 0.8^40, about 1 in 7,500: the expected
+    number missed is well under one for a list of a thousand, and the margin
+    below is far outside anything sampling produces while still being nowhere
+    near the one draw's worth a fixed prefix would reach.
     """
     factory, engine = await create_test_db()
     try:
@@ -360,19 +360,20 @@ async def test_repeated_draws_reach_across_the_whole_pool():
         await seed_prompt_lists(repo)
         pinned = await repo.authorize_selection(["english_standard"])
         revisions = list(pinned.revision_ids)
+        draw = pinned.prompt_count // 5
 
         seen: set[str] = set()
         for _ in range(40):
             seen |= {
                 prompt.answer
                 for prompt in (
-                    await repo.sample_prompts(revisions, limit=50)
+                    await repo.sample_prompts(revisions, limit=draw)
                 ).prompts
             }
 
         assert len(seen) >= pinned.prompt_count - 20
         # A stable prefix would stop at one draw's worth however many we take.
-        assert len(seen) > 50
+        assert len(seen) > draw
     finally:
         await engine.dispose()
 
@@ -519,5 +520,38 @@ async def test_seeding_makes_the_tag_vocabulary_present_and_keeps_names_current(
             renamed = await session.get(PromptTag, stale_id)
         assert renamed.name == "Animals"
         assert renamed.id == stale_id, "the row is the same row; only the name moved"
+    finally:
+        await engine.dispose()
+
+
+async def test_seeding_analyzes_what_it_wrote():
+    """A freshly seeded PostgreSQL database planned a thousand-prompt list's
+    aliases as a nested loop over every alias - two million comparisons, and
+    a statement timeout on a busy runner - until something analyzed it
+    (#1367). Seeding analyzes what it wrote; elsewhere there is nothing to do.
+
+    Counted rather than read off the estimates: the suite empties tables with
+    DELETE, so an estimate from an earlier test survives into this one.
+    """
+    from sqlalchemy import text
+
+    factory, engine = await create_test_db()
+    try:
+        if engine.dialect.name != "postgresql":
+            await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
+            return
+        counted = text(
+            "SELECT coalesce(sum(analyze_count), 0) FROM pg_stat_user_tables "
+            "WHERE relname = 'prompt_aliases'"
+        )
+
+        async def analyzed() -> int:
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT pg_stat_clear_snapshot()"))
+                return int(await connection.scalar(counted))
+
+        before = await analyzed()
+        await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
+        assert await analyzed() > before
     finally:
         await engine.dispose()

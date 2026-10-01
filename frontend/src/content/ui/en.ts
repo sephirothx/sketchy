@@ -429,6 +429,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
     `Bought "${text(p.letter)}" for ${counted(count(p.cost), { one: "point", other: "points" })}: not in the prompt.`,
   guess_very_close: (p) => `"${text(p.text)}" is very close!`,
   guess_some_words_correct: () => "Some words are correct.",
+  guess_answer_in_another_language: (p) => `"${text(p.text)}" is the answer in another language.`,
 };
 
 export const EN = {
