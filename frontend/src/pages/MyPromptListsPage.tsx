@@ -139,7 +139,15 @@ export function MyPromptListsPage() {
   // update publishes the saved list, so the editor compares that, never the
   // draft, and says when the draft has edits an update would not carry.
   const [saved, setSaved] = useState<OwnedPromptList | null>(null);
-  const [publishingUpdate, setPublishingUpdate] = useState<string | null>(null);
+  // The summary a Publish update confirmation shows, with the list and the
+  // version it was made from: confirming publishes exactly those, whatever
+  // the editor has opened since (#1392 review).
+  const [publishingUpdate, setPublishingUpdate] = useState<
+    { listId: string; version: number; description: string } | null
+  >(null);
+  // Which list is on screen now, for a summary whose read lands after the
+  // owner moved on to another one.
+  const shownListId = useRef<string | null>(null);
   const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [moderationState, setModerationState] = useState<OwnedPromptList["moderationState"]>("active");
   const [promptModeration, setPromptModeration] = useState<Record<string, OwnedPromptList["moderationState"]>>({});
@@ -222,6 +230,11 @@ export function MyPromptListsPage() {
 
   /** Put a list the server just answered with on screen, whole. */
   function show(promptList: OwnedPromptList) {
+    if (shownListId.current !== promptList.id) {
+      setPublishingUpdate(null);
+      setConfirmingDiscard(false);
+    }
+    shownListId.current = promptList.id;
     setSaved(promptList);
     setSelectedId(promptList.id);
     setVersion(promptList.version);
@@ -236,6 +249,9 @@ export function MyPromptListsPage() {
   }
 
   function beginNew() {
+    shownListId.current = null;
+    setPublishingUpdate(null);
+    setConfirmingDiscard(false);
     setSaved(null);
     setSelectedId(null);
     setVersion(null);
@@ -287,16 +303,23 @@ export function MyPromptListsPage() {
       setPublishError(ui.myPromptListsPage.saveBeforePublishingUpdate);
       return;
     }
+    const summarised = { listId: saved.id, version: saved.version };
     if (!saved.liveEdition) {
       // A first publication still waiting: nothing is live to compare with.
-      setPublishingUpdate(ui.myPromptListsPage.replacesPendingVersion);
+      setPublishingUpdate({ ...summarised, description: ui.myPromptListsPage.replacesPendingVersion });
       return;
     }
     setBusy(true);
     try {
-      const live = await getOwnedLiveEdition(selectedId);
+      const live = await getOwnedLiveEdition(summarised.listId);
+      // The owner opened another list while this was read: its summary
+      // describes a list no longer on screen, so it is not offered.
+      if (shownListId.current !== summarised.listId) return;
       const lines = describeEditionChanges(editionChanges(live, saved));
-      setPublishingUpdate(lines.length ? lines.join(" ") : ui.myPromptListsPage.publishUpdateOrderOnly);
+      setPublishingUpdate({
+        ...summarised,
+        description: lines.length ? lines.join(" ") : ui.myPromptListsPage.publishUpdateOrderOnly,
+      });
     } catch {
       setPublishError(ui.myPromptListsPage.couldNotReadPublishedVersion);
     } finally {
@@ -305,12 +328,15 @@ export function MyPromptListsPage() {
   }
 
   async function publishUpdate() {
-    if (!selectedId) return;
+    const summarised = publishingUpdate;
+    if (!summarised) return;
     setPublishingUpdate(null);
     setBusy(true);
     clearMessages();
     try {
-      const updated = await setOwnedPromptListPublished(selectedId, true, version ?? undefined);
+      const updated = await setOwnedPromptListPublished(
+        summarised.listId, true, summarised.version,
+      );
       show(updated);
       setLists((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
       notify(updated.pendingEdition
@@ -761,7 +787,8 @@ export function MyPromptListsPage() {
                 : <span />}
               <div className="prompt-list-manager-buttons">
                 {selectedId && <button type="button" className="btn btn-danger-ghost btn-compact" disabled={busy} onClick={() => setConfirmingDelete(true)}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
-                {selectedId && !copiedFrom && moderationState === "active" && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
+                {selectedId && !copiedFrom && moderationState === "active"
+                  && !lists.find((item) => item.id === selectedId)?.pendingEdition && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
                 <button type="submit" className="btn btn-primary btn-compact" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
               </div>
             </div>
@@ -771,7 +798,7 @@ export function MyPromptListsPage() {
     )}
     {publishingUpdate !== null && <ConfirmationDialog
       title={ui.myPromptListsPage.publishUpdateTitle}
-      description={publishingUpdate}
+      description={publishingUpdate.description}
       confirmLabel={ui.myPromptListsPage.publishUpdate}
       tone="primary"
       onCancel={() => setPublishingUpdate(null)}

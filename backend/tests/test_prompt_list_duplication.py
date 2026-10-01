@@ -123,9 +123,16 @@ async def test_a_list_under_moderation_or_a_copy_is_not_duplicated(env):
     owner = await signed_in_owner(http, users, factory)
     for state in ("hidden", "under_review"):
         source = await a_list(prompts, owner.id)
-        async with factory() as session:
-            async with session.begin():
-                (await session.get(PromptList, UUID(source.id))).moderation_state = state
+        if state == "hidden":
+            async with factory() as session:
+                async with session.begin():
+                    (await session.get(PromptList, UUID(source.id))).moderation_state = state
+        else:
+            # A publication the review switch holds: the hold is the pending
+            # edition's since #1360 (#1386 review).
+            await prompts.set_owned_publication(
+                owner.id, source.id, published=True, under_review=True
+            )
         response = await duplicate(http, source.id)
         assert response.status_code == 422, state
         assert response.json()["errorCode"] == "cannot_duplicate_prompt_list"
