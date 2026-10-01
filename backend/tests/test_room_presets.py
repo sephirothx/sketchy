@@ -317,9 +317,14 @@ async def test_a_preset_may_declare_a_mixed_language_room(env):
     assert standard.status_code == 201, standard.text
     extended = await client.post(
         "/api/room-presets",
-        json={"name": "German extras", "settings": settings("german_extended", promptLanguage="mul")},
+        json={"name": "Harder for all", "settings": settings("german_extended", promptLanguage="mul")},
     )
-    assert extended.status_code == 422
+    assert extended.status_code == 201, extended.text
+    local = await client.post(
+        "/api/room-presets",
+        json={"name": "German extras", "settings": settings("german_local", promptLanguage="mul")},
+    )
+    assert local.status_code == 422
 
 
 async def test_deleted_prompt_list_makes_preset_visibly_unavailable(env):

@@ -112,7 +112,7 @@ and scoring. It performs no I/O and touches no socket. `Phase` is
 ([`backend/app/game.py:140`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
 ([`backend/app/game.py:47`](../backend/app/game.py),
-[`backend/app/game.py:454`](../backend/app/game.py)). This is the module to change when
+[`backend/app/game.py:493`](../backend/app/game.py)). This is the module to change when
 game rules change — and changing an outcome-producing constant requires bumping
 `SCORING_RULES_VERSION`.
 
@@ -437,7 +437,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
 | Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by revision ids and fold, reused while the members' moderation fingerprint is unchanged (#1237) | No: re-derived from the revisions on a miss |
 | Drawing thumbnails being drawn | The thumbnail worker (`lib/thumbnailQueue.ts`, `workers/thumbnail.worker.ts`, #1282) — one module worker per page, started on first use and let go after 20 s idle; one job in flight, at most 48 waiting (past that the oldest is dropped and its card asks again when it next comes into view); a card that unmounts or changes drawing cancels its job. Where no worker can be had the same `renderThumbnail` runs on the page. Replay cost follows the history, not its size: the accepted 100-fill turn is 244 ms a thumbnail on desktop Chromium and 972 ms at 4× CPU on the page, no long task on the worker | No: redrawn from the fetched bytes |
-| A viewer's canvas repaint being played out | `createProtocolRenderer`'s live replay (`lib/protocolRenderer.ts`, #1347) — a join's, a reconnect's or an undo's repaint of the whole history, run in 16 ms pieces through a `MessageChannel` and shown after each, reading the protocol's history array as it grows; frames that land meanwhile are painted from it rather than by `apply`. The drawer's and the scratch pad's repaints stay immediate: their pointer paints the canvas directly. The accepted 100-fill turn at 4× CPU: one 1,003 ms task → 43 ms worst, the canvas complete after 1,031 ms instead of 1,002 | No: repainted from the history |
+| A viewer's canvas repaint being played out | `createProtocolRenderer`'s live replay (`lib/protocolRenderer.ts`, #1347) — a join's, a reconnect's or an undo's repaint of the whole history, run in 16 ms pieces through a `MessageChannel` and shown after each — a piece never begins an action once its 16 ms are spent, the history's last one included, and the task that delivered the history paints none of its fills, so the longest task is the budget plus one fill wherever a fill outlasts it — reading the protocol's history array as it grows; frames that land meanwhile are painted from it rather than by `apply`. The drawer's and the scratch pad's repaints stay immediate: their pointer paints the canvas directly. The accepted 100-fill turn at 4× CPU: one 1,003 ms task → 43 ms worst, the canvas complete after 1,031 ms instead of 1,002 | No: repainted from the history |
 | A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
 | Reactions to the current turn's and the last game's drawings | `Room.drawing_reactions` (memory) — folded into the finished-game write, then mirrored back on each recap write | Live ones no; once written, the row does |
 | The last game's id and whether its history write landed | `Room.last_game_id`, `Room.last_game_history` (memory) | No |
@@ -526,7 +526,7 @@ no request in flight.
 7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
 8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
 9. No purge of its own: the retention loop's first pass starts immediately and is bounded, so a backlog left by a long outage cannot delay serving (#550)
-10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup
+10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup; it ends by `ANALYZE`-ing the prompt tables on PostgreSQL so a fresh seed is not planned blind (#1367)
 11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
 12. `mark_ready()` — `GET /api/ready` starts answering 200
 13. Under the production runner only (`app/server.py`), once Uvicorn is listening:

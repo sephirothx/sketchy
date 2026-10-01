@@ -8,7 +8,7 @@ from sqlalchemy import text
 from sqlalchemy.exc import DBAPIError
 
 from app.db import DatabaseRoleError, get_migration_database_url, verify_least_privilege
-from app.db.roles import APPEND_ONLY_TABLES, grant_statements
+from app.db.roles import APPEND_ONLY_TABLES, SEEDED_TABLES, grant_statements
 
 from tests.dbfixtures import create_test_db, create_test_engine
 
@@ -22,6 +22,11 @@ def test_the_grants_leave_the_ledgers_append_only_and_no_ddl():
     assert all(table in revoke for table in APPEND_ONLY_TABLES)
     assert "TRUNCATE" in revoke and "TRIGGER" in revoke
     assert not any(" CREATE " in f" {statement} " or "ALL PRIVILEGES" in statement for statement in statements)
+    # MAINTAIN, for ANALYZE after seeding (#1367), names the prompt tables and
+    # nothing else - never a whole schema, never a ledger.
+    [maintain] = [statement for statement in statements if "MAINTAIN" in statement]
+    assert maintain == f"GRANT MAINTAIN ON {', '.join(SEEDED_TABLES)} TO sketchy_app"
+    assert all(table.startswith("prompt") for table in SEEDED_TABLES)
 
 
 def test_migrations_use_their_own_url_and_production_insists_on_it():

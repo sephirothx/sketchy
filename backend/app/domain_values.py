@@ -112,7 +112,7 @@ AGNOSTIC_PROMPT_LANGUAGE = "zxx"
 # is in it and no player plays in it. Each seat plays in the prompt language
 # it joined with, and the room may only draw on content that exists in all of
 # them - lists in no language, and lists whose concepts every room language
-# spells (Standard, R-PROMPT-01).
+# spells (Standard and Extended, R-PROMPT-01).
 MIXED_PROMPT_LANGUAGE = "mul"
 
 

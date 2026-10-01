@@ -417,6 +417,7 @@ const ANNOUNCEMENTS: Record<AnnouncementCode, (params: MessageParams) => string>
     `«${text(p.letter)}» comprada por ${counted(count(p.cost), { one: "punto", other: "puntos" })}: no está en la palabra.`,
   guess_very_close: (p) => `¡«${text(p.text)}» está muy cerca!`,
   guess_some_words_correct: () => "Algunas palabras son correctas.",
+  guess_answer_in_another_language: (p) => `«${text(p.text)}» es la respuesta en otro idioma.`,
 };
 
 export const ES: Catalogue = {

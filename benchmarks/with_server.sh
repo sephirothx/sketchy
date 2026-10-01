@@ -60,7 +60,9 @@ cleanup() {
 }
 trap cleanup EXIT
 
-for _ in {1..30}; do
+# A scratch database is fresh, so startup seeds every bundled list from
+# nothing - several seconds since #1367, where a seeded one takes half of one.
+for _ in {1..180}; do
   if curl -fsS "$BASE_URL/api/health" >/dev/null 2>&1; then
     break
   fi

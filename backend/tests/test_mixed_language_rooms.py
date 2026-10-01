@@ -2,17 +2,20 @@
 
 A mixed room declares `mul`. It may draw on lists every room language can
 play - a list in no language, or a list whose family spells every concept in
-all seven (Standard, R-PROMPT-01) - and each seat meets the drawn prompt in
+all eight (Standard and Extended, R-PROMPT-01) - and each seat meets the drawn prompt in
 the language it joined with: its offers, its letter tiles, its hints and its
 near misses. A guess naming the drawing in any language scores, except where
-that spelling is another prompt of the game in the guesser's own language.
+that spelling is another concept of the room's selection in the guesser's own
+language - drawn into the game or not (#1367).
 """
 from __future__ import annotations
+
+import json
 
 import pytest
 import pytest_asyncio
 
-from app.db.seed import seed_prompt_lists
+from app.db.seed import DEFAULT_PROMPT_LISTS_DIR, seed_prompt_lists
 from app.domain_values import PROMPT_LANGUAGES
 from app.game import Game, Phase, PromptForm
 from app.repositories.interfaces import (
@@ -27,6 +30,14 @@ from app.repositories.sqlalchemy import (
 from app.services.prompt_usage import tally_prompt_usage
 
 from tests.dbfixtures import create_test_db
+
+#: Standard's size, read off the file rather than written down: it is content.
+STANDARD = len(
+    json.loads((DEFAULT_PROMPT_LISTS_DIR / "english_standard.json").read_text())["prompts"]
+)
+EXTENDED = len(
+    json.loads((DEFAULT_PROMPT_LISTS_DIR / "english_extended.json").read_text())["prompts"]
+)
 
 
 @pytest_asyncio.fixture
@@ -51,7 +62,7 @@ async def test_a_mixed_room_pins_standard_in_every_language(seeded):
     assert pinned.language == "mul"
     assert len(pinned.revision_ids) == len(PROMPT_LANGUAGES)
     # One prompt, however many languages spell it.
-    assert pinned.prompt_count == 260
+    assert pinned.prompt_count == STANDARD
     assert set(pinned.letter_total_by_language) == set(PROMPT_LANGUAGES)
     assert all(pinned.letter_total_by_language.values())
 
@@ -64,11 +75,24 @@ async def test_a_mixed_room_pins_standard_in_every_language(seeded):
     assert sorted(both.revision_ids) == sorted(pinned.revision_ids)
 
 
+async def test_a_mixed_room_pins_extended_too(seeded):
+    """Extended is the same concepts in every language as well (R-PROMPT-01),
+    so it is a family a mixed room can pin beside Standard."""
+    prompts, owner = seeded
+    pinned = await prompts.authorize_selection(
+        ["german_standard", "french_extended"],
+        requesting_user_id=owner.id,
+        expected_language="mul",
+    )
+    assert len(pinned.revision_ids) == 2 * len(PROMPT_LANGUAGES)
+    assert pinned.prompt_count == STANDARD + EXTENDED
+
+
 async def test_a_mixed_room_refuses_a_list_not_every_language_spells(seeded):
     prompts, owner = seeded
     with pytest.raises(MixedRoomListError):
         await prompts.authorize_selection(
-            ["german_extended"], requesting_user_id=owner.id, expected_language="mul"
+            ["german_local"], requesting_user_id=owner.id, expected_language="mul"
         )
     owned = await prompts.create_owned(
         owner.id,
@@ -97,12 +121,14 @@ async def test_a_mixed_room_draws_every_language_s_form_and_agnostic_ones_whole(
         requesting_user_id=owner.id,
         expected_language="mul",
     )
-    assert pinned.prompt_count == 261
+    assert pinned.prompt_count == STANDARD + 1
 
-    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=300)
+    sample = await prompts.sample_mixed_prompts(
+        list(pinned.revision_ids), limit=STANDARD + 1
+    )
 
-    assert sample.drawable == 261
-    assert len(sample.prompts) == 261
+    assert sample.drawable == STANDARD + 1
+    assert len(sample.prompts) == STANDARD + 1
     agnostic = [prompt for prompt in sample.prompts if not prompt.translations]
     assert [prompt.answer for prompt in agnostic] == ["Pikachu"]
     spelled = [prompt for prompt in sample.prompts if prompt.translations]
@@ -110,6 +136,53 @@ async def test_a_mixed_room_draws_every_language_s_form_and_agnostic_ones_whole(
     dog = next(p for p in spelled if p.translations["en"].answer == "dog")
     assert dog.translations["de"].answer == "Hund"
     assert dog.translations["de"].prompt_version_id != dog.translations["en"].prompt_version_id
+
+
+async def test_a_mixed_draw_carries_the_selection_s_false_friends(seeded):
+    """German "Hut" is the hat, and English "hut" a different concept: the
+    draw says so for the German seat whatever it sampled (#1367)."""
+    prompts, owner = seeded
+    pinned = await prompts.authorize_selection(
+        ["english_standard"], requesting_user_id=owner.id, expected_language="mul"
+    )
+    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=1)
+
+    hat = _concept_of("german_standard", "Hut")
+    assert sample.false_friends["de"]["hut"] == frozenset({hat})
+    # A word every language spells for the same concept is nobody's false
+    # friend: it is the drawing in each.
+    assert all(
+        _concept_of("english_standard", "hotel") not in owners
+        for language in sample.false_friends.values()
+        for owners in language.values()
+    )
+
+
+def test_false_friends_are_found_per_seat_language():
+    from app.repositories.sqlalchemy import _mixed_false_friends
+
+    found = _mixed_false_friends(
+        [
+            ("de", "hat", "Hut"),
+            ("en", "hat", "hat"),
+            ("en", "hut", "hut"),
+            ("de", "hut", "Hütte"),
+            ("de", "hotel", "Hotel"),
+            ("en", "hotel", "hotel"),
+            ("zxx", "pika", "Pikachu"),
+        ]
+    )
+    # "hut" is English for the hut and German for the hat: taken from a German
+    # seat for anything but the hat, and from an English seat for anything
+    # but the hut.
+    assert found["de"] == {"hut": frozenset({"hat"})}
+    assert found["en"] == {"hut": frozenset({"hut"})}
+    assert "hotel" not in found.get("de", {})
+
+
+def _concept_of(slug: str, answer: str) -> str:
+    entries = json.loads((DEFAULT_PROMPT_LISTS_DIR / f"{slug}.json").read_text())["prompts"]
+    return next(entry["conceptId"] for entry in entries if entry["answer"] == answer)
 
 
 def _mixed_game() -> Game:
@@ -168,9 +241,108 @@ def test_a_guess_in_any_language_scores_but_not_a_false_friend():
     # this game: it does not win the Italian bow tie for them.
     assert game.submit_guess("french", "papillon")[0] is False
     # ...and kept out of the room, where the Italian seat would read its own
-    # answer: it is routed like a near miss.
-    assert game.guess_hint("french", "papillon") == "close"
+    # answer: it is routed like a near miss, and the seat is told why.
+    assert game.guess_hint("french", "papillon") == "another_language"
     assert game.submit_guess("french", "noeud papillon")[0] is True
+
+
+def test_a_false_friend_the_game_never_drew_does_not_score_either():
+    """With two thousand concepts the twin is rarely drawn (#1367), so the
+    guard asks the whole selection: German "Hut" is the hat, and does not win
+    an English hut for a German seat even in a game that never drew the hat."""
+    hut = {
+        "en": PromptForm("hut", (), "v-hut-en"),
+        "de": PromptForm("Hütte", (), "v-hut-de"),
+    }
+    game = Game(
+        turn_order=["drawer", "german"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-hut"],
+        prompt_answers={"c-hut": "hut"},
+        prompt_version_ids={"c-hut": "v-hut-en"},
+        prompt_translations={"c-hut": hut},
+        seat_languages={"drawer": "en", "german": "de"},
+        false_friends={"de": {"hut": frozenset({"c-hat"})}},
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("german", "Hut")[0] is False
+    assert game.guess_hint("german", "Hut") == "another_language"
+    assert game.submit_guess("german", "Hütte")[0] is True
+
+
+def test_a_false_friend_through_a_second_spelling_does_not_score():
+    """German "Lüge" (lie) is written "luge" too, which is the French sled:
+    compared on every spelling a guess is accepted on, not one key (#1367)."""
+    from app.repositories.sqlalchemy import _mixed_false_friends
+
+    false_friends = _mixed_false_friends(
+        [("de", "c-lie", "Lüge"), ("fr", "c-lie", "mensonge"),
+         ("de", "c-sled", "Schlitten"), ("fr", "c-sled", "luge")]
+    )
+    sled = {"de": PromptForm("Schlitten", (), "v-de"), "fr": PromptForm("luge", (), "v-fr")}
+    game = Game(
+        turn_order=["drawer", "german"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-sled"],
+        prompt_answers={"c-sled": "luge"},
+        prompt_version_ids={"c-sled": "v-fr"},
+        prompt_translations={"c-sled": sled},
+        seat_languages={"drawer": "fr", "german": "de"},
+        false_friends=false_friends,
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("german", "Lüge")[0] is False
+    assert game.guess_hint("german", "Lüge") == "another_language"
+    assert game.submit_guess("german", "Schlitten")[0] is True
+
+
+def test_a_spelling_that_names_the_drawing_itself_is_not_taken_from_the_seat():
+    """The guard takes a spelling only when it names *another* concept to the
+    seat: an English seat's "baer", accepted through German "Bär", stands
+    even where the selection lists "baer" as that same bear's."""
+    bear = {"en": PromptForm("bear", (), "v-en"), "de": PromptForm("Bär", (), "v-de")}
+    game = Game(
+        turn_order=["drawer", "english"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-bear"],
+        prompt_answers={"c-bear": "Bär"},
+        prompt_version_ids={"c-bear": "v-de"},
+        prompt_translations={"c-bear": bear},
+        seat_languages={"drawer": "de", "english": "en"},
+        false_friends={"en": {"baer": frozenset({"c-bear"})}},
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("english", "baer")[0] is True
+
+
+def test_a_word_that_is_the_drawing_s_own_in_both_languages_still_scores():
+    """A key is only taken from a seat when it names *another* concept there:
+    "Hotel" is the hotel in German and in English alike."""
+    hotel = {"en": PromptForm("hotel", (), "v-en"), "de": PromptForm("Hotel", (), "v-de")}
+    game = Game(
+        turn_order=["drawer", "german"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-hotel"],
+        prompt_answers={"c-hotel": "hotel"},
+        prompt_version_ids={"c-hotel": "v-en"},
+        prompt_translations={"c-hotel": hotel},
+        seat_languages={"drawer": "en", "german": "de"},
+        false_friends={"de": {"hotel": frozenset({"c-hotel"})}},
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("german", "hotel")[0] is True
 
 
 def test_a_near_miss_is_measured_in_the_seat_s_own_language_only():
@@ -389,7 +561,7 @@ def test_the_false_friend_guard_asks_about_the_prompt_in_play_now():
     assert game.submit_guess("italian", "papillon")[0] is False
     # Not this seat's answer, but the French one: kept out of the room, and
     # not because it is near the Italian "farfalla".
-    assert game.guess_hint("italian", "papillon") == "close"
+    assert game.guess_hint("italian", "papillon") == "another_language"
     assert game.submit_guess("italian", "farfalla")[0] is True
 
 
@@ -469,11 +641,11 @@ async def test_a_concept_taken_down_in_one_language_is_not_drawn(seeded):
             hund.moderation_state = "hidden"
             dog_concept = hund.concept_id
 
-    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=300)
+    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=STANDARD)
 
     assert all(prompt.concept_id != str(UUID(str(dog_concept))) for prompt in sample.prompts)
-    assert len(sample.prompts) == 259
-    assert sample.drawable == 259
+    assert len(sample.prompts) == STANDARD - 1
+    assert sample.drawable == STANDARD - 1
 
 
 async def test_a_mixed_draw_counts_what_it_could_have_drawn(seeded):
@@ -485,7 +657,7 @@ async def test_a_mixed_draw_counts_what_it_could_have_drawn(seeded):
     sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=10)
 
     assert len(sample.prompts) == 10
-    assert sample.drawable == 260
+    assert sample.drawable == STANDARD
 
 
 def test_a_spectator_neither_hurries_the_players_letters_nor_quiets_their_chat():

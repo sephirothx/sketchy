@@ -144,9 +144,13 @@ cleanup() {
 trap cleanup EXIT
 
 # Wait for application readiness while also watching for an early server exit.
+# The database is fresh, so startup seeds every bundled list from nothing -
+# thousands of concepts in eight languages since #1367, several seconds on a CI
+# runner where a restart over a seeded database takes half of one. A server
+# that dies early still fails at once, below.
 log "Waiting for server startup..."
 server_healthy=false
-for i in {1..30}; do
+for i in {1..90}; do
   if curl --fail --silent "http://127.0.0.1:$PORT/api/ready" >/dev/null; then
     server_healthy=true
     break
@@ -161,7 +165,7 @@ for i in {1..30}; do
 done
 
 if [[ "$server_healthy" == false ]]; then
-  fail_startup "health check did not pass within 15 seconds"
+  fail_startup "health check did not pass within 45 seconds"
 fi
 
 # The thing answering must be the thing we started. A 200 alone does not say
