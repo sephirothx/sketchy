@@ -15,6 +15,7 @@ from app.refusals import ErrorCode
 from app.api.serializers import (
     community_prompt_list_detail_payload,
     community_prompt_list_payload,
+    owned_live_edition_payload,
     owned_prompt_list_payload,
     prompt_list_payload,
     prompt_stats_payload,
@@ -144,6 +145,14 @@ class DuplicateOwnedPromptListRequest(ControlFreeModel):
     # The client names it, because "(duplicate)" is a word in the reader's
     # language and the server does not write player-facing words (R-I18N-01).
     name: str = Field(min_length=1, max_length=64)
+
+
+class DiscardOwnedChangesRequest(ControlFreeModel):
+    model_config = ConfigDict(strict=True, extra="forbid", populate_by_name=True)
+
+    # The version the editor shows: a discard that lost a race to a save in
+    # another tab would throw away an edit its owner never saw.
+    expected_version: int = Field(alias="expectedVersion", ge=1)
 
 
 class UpdateOwnedPromptListRequest(ControlFreeModel):
@@ -455,6 +464,39 @@ def create_prompt_list_router(
         if prompt_list is None:
             raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
         return owned_prompt_list_payload(prompt_list)
+
+    @router.get("/prompt-lists/mine/{prompt_list_id}/live-edition")
+    async def get_my_live_edition(prompt_list_id: str, request: Request):
+        """What players see of one of the caller's published lists (#1363):
+        the live edition, for the editor to show what Publish update would
+        change. 404 when the list has none."""
+        user = await require_registered(request)
+        if not read_limiter.check(user.id):
+            raise Refusal(
+                429,
+                ErrorCode.TOO_MANY_REQUESTS,
+                "Too many requests. Please wait and try again.",
+            )
+        edition = await prompt_list_repo.get_owned_live_edition(user.id, prompt_list_id)
+        if edition is None:
+            raise Refusal(404, ErrorCode.PROMPT_LIST_NOT_FOUND, "Prompt list not found.")
+        return owned_live_edition_payload(edition)
+
+    @router.post("/prompt-lists/mine/{prompt_list_id}/discard")
+    async def discard_my_changes(
+        prompt_list_id: str, body: DiscardOwnedChangesRequest, request: Request
+    ):
+        """Discard changes: the working copy back to the live edition (#1363).
+        A save in effect, so it spends the save allowance."""
+        user = await require_registered(request)
+        await spend(save_limiter, user)
+        try:
+            updated = await prompt_list_repo.discard_owned_changes(
+                user.id, prompt_list_id, expected_version=body.expected_version
+            )
+        except PromptListMutationError as error:
+            raise mutation_error(error) from error
+        return owned_prompt_list_payload(updated)
 
     @router.put("/prompt-lists/mine/{prompt_list_id}")
     async def update_my_prompt_list(

@@ -193,6 +193,7 @@ from app.repositories.interfaces import (
     PromptTranslation,
     PromptSeedConflictError,
     PromptListSummary,
+    OwnedLiveEdition,
     OwnedPromptList,
     PromptStatsSummary,
     PromptUsage,
@@ -5163,6 +5164,158 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     edition=edition,
                 )
             result = await self._owned_with_entries(session, forker_id, list_id)
+            assert result is not None
+            return result
+
+    async def get_owned_live_edition(
+        self, owner_user_id: str, prompt_list_id: str
+    ) -> OwnedLiveEdition | None:
+        """The live edition of one of the caller's lists, or None if it has
+        none: what other players see, beside the working copy the editor
+        shows, so the editor can say what Publish update would change (#1363)."""
+        owner_id = _optional_entity_id(owner_user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if owner_id is None or list_id is None:
+            return None
+        async with self._session_factory() as session:
+            edition = await session.scalar(
+                select(PromptListEdition)
+                .join(PromptList, PromptList.id == PromptListEdition.prompt_list_id)
+                .where(
+                    PromptList.id == list_id,
+                    PromptList.owner_user_id == owner_id,
+                    PromptList.is_bundled.is_(False),
+                    PromptList.deleted_at.is_(None),
+                    PromptListEdition.state == EDITION_PUBLISHED,
+                )
+            )
+            if edition is None:
+                return None
+            tags = (await self._edition_tags(session, [edition.id])).get(edition.id, ())
+            prompts = await self._edition_entries(session, edition.id)
+        return OwnedLiveEdition(
+            number=edition.number,
+            name=edition.name,
+            description=edition.description,
+            tags=tags,
+            prompts=prompts,
+        )
+
+    async def discard_owned_changes(
+        self, owner_user_id: str, prompt_list_id: str, *, expected_version: int
+    ) -> OwnedPromptList:
+        """Put the working copy back to the live edition (#1363): its prompts,
+        each at the exact version the edition holds, in its order, with its
+        name, description and tags.
+
+        Written whole rather than through `_write_working_copy`, which resolves
+        answers to versions and would mint a new one for any wording whose
+        concept has moved on - and a working copy that names other versions
+        than the edition's is still "changed". A discard is a rare, explicit
+        act, so rewriting every row is the simple price of being exact. Hidden
+        versions come back hidden: a moderator's decision is the version's,
+        not the list's, so nothing here can undo one.
+        """
+        owner_id = _optional_entity_id(owner_user_id)
+        list_id = _optional_entity_id(prompt_list_id)
+        if owner_id is None or list_id is None:
+            raise PromptListNotFoundError("Prompt list not found.")
+        async with self._session_factory() as session:
+            async with session.begin():
+                await require_live_account(session, owner_id)
+                prompt_list = await session.scalar(
+                    select(PromptList)
+                    .where(
+                        PromptList.id == list_id,
+                        PromptList.owner_user_id == owner_id,
+                        PromptList.is_bundled.is_(False),
+                        PromptList.deleted_at.is_(None),
+                    )
+                    .with_for_update()
+                )
+                if prompt_list is None:
+                    raise PromptListNotFoundError("Prompt list not found.")
+                if prompt_list.version != expected_version:
+                    raise PromptListConflictError(
+                        "This list changed since you opened it. Reload before saving."
+                    )
+                live = (await editions_of(session, prompt_list.id)).get(EDITION_PUBLISHED)
+                if live is None:
+                    raise PromptListConflictError(
+                        "This list has no published edition to go back to."
+                    )
+                if live.content_hash == prompt_list.content_hash:
+                    # Nothing to discard: the version stays, as an unchanged
+                    # save keeps it (#613).
+                    result = await self._owned_with_entries(session, owner_id, list_id)
+                    assert result is not None
+                    return result
+                items = (
+                    await session.execute(
+                        select(
+                            PromptListEditionItem.position,
+                            PromptVersion.id,
+                            PromptVersion.concept_id,
+                            PromptVersion.canonical_answer,
+                        )
+                        .join(
+                            PromptVersion,
+                            PromptVersion.id == PromptListEditionItem.prompt_version_id,
+                        )
+                        .where(PromptListEditionItem.edition_id == live.id)
+                        .order_by(PromptListEditionItem.position)
+                    )
+                ).all()
+                kept = {version_id for _, version_id, _, _ in items}
+                leaving = PromptVersion.id.in_(
+                    select(Prompt.prompt_version_id).where(
+                        Prompt.prompt_list_id == prompt_list.id,
+                        Prompt.prompt_version_id.notin_(kept),
+                    )
+                )
+                # Stamped like any save's dropped wordings: a game that drew
+                # one still writes it, and an open page can still report it.
+                await _lock_versions(session, leaving)
+                await session.execute(
+                    update(PromptVersion)
+                    .where(leaving)
+                    .values(unlisted_at=func.now(), unlisted_from_list_id=prompt_list.id)
+                    .execution_options(synchronize_session=False)
+                )
+                await session.execute(delete(Prompt).where(Prompt.prompt_list_id == prompt_list.id))
+                await session.flush()
+                session.add_all(
+                    Prompt(
+                        prompt_list_id=prompt_list.id,
+                        concept_id=concept_id,
+                        prompt_version_id=version_id,
+                        text=answer,
+                        position=position,
+                    )
+                    for position, version_id, concept_id, answer in items
+                )
+                tag_ids = (
+                    await session.scalars(
+                        select(PromptListEditionTag.tag_id).where(
+                            PromptListEditionTag.edition_id == live.id
+                        )
+                    )
+                ).all()
+                await session.execute(
+                    delete(PromptListTag).where(PromptListTag.prompt_list_id == prompt_list.id)
+                )
+                session.add_all(
+                    PromptListTag(prompt_list_id=prompt_list.id, tag_id=tag_id)
+                    for tag_id in tag_ids
+                )
+                prompt_list.name = live.name
+                prompt_list.description = live.description
+                prompt_list.letter_counts = dict(live.letter_counts or {})
+                prompt_list.letter_total = live.letter_total or 0
+                prompt_list.content_hash = live.content_hash
+                prompt_list.version += 1
+                prompt_list.updated_at = datetime.now(timezone.utc)
+            result = await self._owned_with_entries(session, owner_id, list_id)
             assert result is not None
             return result
 

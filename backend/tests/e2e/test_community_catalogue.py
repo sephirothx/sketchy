@@ -16,6 +16,18 @@ async def test_the_catalogue_opens_for_a_reader_with_no_account():
         context = await browser.new_context()
         page = await context.new_page()
         page.set_default_timeout(10000)
+
+        # The suite shares one server and runs in parallel, and another test
+        # publishes a list (`test_publish_update.py`). The page is asked what
+        # a fresh deployment answers: the server's real response, emptied.
+        async def as_on_a_fresh_server(route):
+            response = await route.fetch()
+            body = await response.json()
+            body["lists"] = []
+            await route.fulfill(response=response, json=body)
+
+        await page.route("**/api/prompt-lists/community?*", as_on_a_fresh_server)
+        await page.route("**/api/prompt-lists/community", as_on_a_fresh_server)
         try:
             await page.goto(f"{BASE_URL}/community-lists")
 

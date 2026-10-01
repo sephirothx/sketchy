@@ -1,6 +1,6 @@
 import type { EmailState } from "./accountRecovery";
 import type { PromptListDraftEntry } from "./promptLists";
-import type { PromptListLanguage } from "../types";
+import type { OwnedPromptList, PromptListLanguage } from "../types";
 import { PROMPT_LANGUAGE_LABELS } from "./promptLanguages.ts";
 import { withoutInvisibleCharacters } from "./visibleText.ts";
 import { ui } from "../content/ui/index.ts";
@@ -145,4 +145,76 @@ export function emailPublishBlocker(
     for good, and the only way back was to delete it (#1272). */
 export function newListLanguage(playLanguage: string | null | undefined): PromptListLanguage {
   return playLanguage && playLanguage in PROMPT_LANGUAGE_LABELS ? (playLanguage as PromptListLanguage) : "en";
+}
+
+/** What Publish update would change for players (#1363): the saved working
+copy against the live edition. Prompts are matched by concept, so a reworded
+prompt is one change rather than a removal and an addition. */
+export interface EditionChanges {
+  added: string[];
+  removed: string[];
+  reworded: { from: string; to: string }[];
+  name: boolean;
+  description: boolean;
+  tags: boolean;
+}
+
+interface EditionSide {
+  name: string;
+  description: string;
+  tags: string[];
+  prompts: { conceptId: string; prompt: string }[];
+}
+
+export function editionChanges(live: EditionSide, working: EditionSide): EditionChanges {
+  const liveByConcept = new Map(live.prompts.map((entry) => [entry.conceptId, entry.prompt]));
+  const workingConcepts = new Set(working.prompts.map((entry) => entry.conceptId));
+  const added: string[] = [];
+  const reworded: { from: string; to: string }[] = [];
+  for (const entry of working.prompts) {
+    const before = liveByConcept.get(entry.conceptId);
+    if (before === undefined) added.push(entry.prompt);
+    else if (before !== entry.prompt) reworded.push({ from: before, to: entry.prompt });
+  }
+  return {
+    added,
+    removed: live.prompts.filter((entry) => !workingConcepts.has(entry.conceptId)).map((entry) => entry.prompt),
+    reworded,
+    name: live.name !== working.name,
+    description: live.description !== working.description,
+    tags: [...live.tags].sort().join(",") !== [...working.tags].sort().join(","),
+  };
+}
+
+/** The changes as the confirmation says them, one sentence each; empty when
+only the order moved. */
+export function describeEditionChanges(changes: EditionChanges): string[] {
+  const words = ui.myPromptListsPage;
+  const lines: string[] = [];
+  if (changes.added.length) lines.push(words.promptsAdded({ count: changes.added.length, prompts: changes.added.join(", ") }));
+  if (changes.removed.length) lines.push(words.promptsRemoved({ count: changes.removed.length, prompts: changes.removed.join(", ") }));
+  if (changes.reworded.length) {
+    lines.push(words.promptsReworded({
+      count: changes.reworded.length,
+      prompts: changes.reworded.map(({ from, to }) => `${from} → ${to}`).join(", "),
+    }));
+  }
+  if (changes.name) lines.push(words.nameChanged);
+  if (changes.description) lines.push(words.descriptionChanged);
+  if (changes.tags) lines.push(words.tagsChanged);
+  return lines;
+}
+
+/** Where a published list stands against what players see (#1363). `none`
+for a private list; a pending edition first, since while one waits the
+owner's next step is the moderator's, not theirs. */
+export type EditionStatus = "none" | "first-under-review" | "update-under-review" | "changed" | "live";
+
+export function publishedEditionStatus(
+  list: Pick<OwnedPromptList, "visibility" | "liveEdition" | "pendingEdition" | "unpublishedChanges"> | null,
+): EditionStatus {
+  if (!list || list.visibility !== "public") return "none";
+  if (list.pendingEdition) return list.liveEdition ? "update-under-review" : "first-under-review";
+  if (!list.liveEdition) return "none";
+  return list.unpublishedChanges ? "changed" : "live";
 }

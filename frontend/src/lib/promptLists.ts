@@ -3,6 +3,7 @@ import { withoutInvisibleCharacters } from "./visibleText";
 import type {
   CommunityPromptList,
   CommunityPromptListDetail,
+  OwnedLiveEdition,
   OwnedPromptList,
   PromptListLanguage,
   PromptTag,
@@ -165,6 +166,24 @@ export function setOwnedPromptListPublished(
   const action = published ? "publish" : "unpublish";
   return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}/${action}`, {
     method: "POST",
+  });
+}
+
+/** What players see of one of the caller's published lists (#1363). */
+export function getOwnedLiveEdition(id: string): Promise<OwnedLiveEdition> {
+  return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}/live-edition`);
+}
+
+/** Discard changes: the working copy back to the live edition (#1363). The
+version is the one the editor shows, so a save from another tab is not thrown
+away unseen. */
+export function discardOwnedPromptListChanges(
+  id: string,
+  expectedVersion: number,
+): Promise<OwnedPromptList> {
+  return apiRequest(`/api/prompt-lists/mine/${encodeURIComponent(id)}/discard`, {
+    method: "POST",
+    body: { expectedVersion },
   });
 }
 

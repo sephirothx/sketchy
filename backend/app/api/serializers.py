@@ -15,6 +15,7 @@ from app.repositories.interfaces import (
     CommunityPromptListDetail,
     CopiedFrom,
     EditionSummary,
+    OwnedLiveEdition,
     OwnedPromptList,
     PromptListSummary,
     PromptStatsSummary,
@@ -289,6 +290,27 @@ def owned_prompt_list_payload(prompt_list: OwnedPromptList) -> dict:
                 "moderationState": entry.moderation_state,
             }
             for entry in prompt_list.prompts
+        ],
+    }
+
+
+def owned_live_edition_payload(edition: OwnedLiveEdition) -> dict:
+    """The owner's view of their live edition (#1363): the same prompt shape
+    the working copy has, so the editor compares like with like."""
+    return {
+        "number": edition.number,
+        "name": edition.name,
+        "description": edition.description,
+        "tags": list(edition.tags),
+        "prompts": [
+            {
+                "conceptId": entry.concept_id,
+                "promptVersionId": entry.prompt_version_id,
+                "prompt": entry.answer,
+                "aliases": list(entry.aliases),
+                "moderationState": entry.moderation_state,
+            }
+            for entry in edition.prompts
         ],
     }
 

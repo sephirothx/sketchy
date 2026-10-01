@@ -12,7 +12,9 @@ import { EmptyState } from "../components/ui/EmptyState";
 import {
   createOwnedPromptList,
   deleteOwnedPromptList,
+  discardOwnedPromptListChanges,
   duplicateOwnedPromptList,
+  getOwnedLiveEdition,
   getOwnedPromptList,
   listOwnedPromptLists,
   listPromptTags,
@@ -21,12 +23,15 @@ import {
   type PromptListDraft,
 } from "../lib/promptLists";
 import {
+  describeEditionChanges,
   describePromptMerge,
   duplicateName,
+  editionChanges,
   emailPublishBlocker,
   mergePromptEntries,
   newListLanguage,
   promptEntriesFromQuickInput,
+  publishedEditionStatus,
   MAX_LIST_PROMPTS,
 } from "../lib/promptListDrafts";
 import { useSettingsStore } from "../store/settingsStore";
@@ -130,6 +135,12 @@ export function MyPromptListsPage() {
   const [copiedFrom, setCopiedFrom] = useState<CopiedFrom | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [version, setVersion] = useState<number | null>(null);
+  // The list as last saved, beside what players see of it (#1363): an
+  // update publishes the saved list, so the editor compares that, never the
+  // draft, and says when the draft has edits an update would not carry.
+  const [saved, setSaved] = useState<OwnedPromptList | null>(null);
+  const [publishingUpdate, setPublishingUpdate] = useState<string | null>(null);
+  const [confirmingDiscard, setConfirmingDiscard] = useState(false);
   const [moderationState, setModerationState] = useState<OwnedPromptList["moderationState"]>("active");
   const [promptModeration, setPromptModeration] = useState<Record<string, OwnedPromptList["moderationState"]>>({});
   const [draft, setDraft] = useState<PromptListDraft>(() => ({
@@ -211,6 +222,7 @@ export function MyPromptListsPage() {
 
   /** Put a list the server just answered with on screen, whole. */
   function show(promptList: OwnedPromptList) {
+    setSaved(promptList);
     setSelectedId(promptList.id);
     setVersion(promptList.version);
     setPublished(promptList.visibility === "public");
@@ -224,6 +236,7 @@ export function MyPromptListsPage() {
   }
 
   function beginNew() {
+    setSaved(null);
     setSelectedId(null);
     setVersion(null);
     setPublished(false);
@@ -255,6 +268,68 @@ export function MyPromptListsPage() {
       // address, read a warning, wait for a moderator - so each has its own
       // sentence, in the reader's language (R-I18N-01).
       setPublishError(refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  /** Whether the editor holds edits the saved list does not: an update
+      publishes what is saved, so those would not reach players. */
+  function hasUnsavedEdits(): boolean {
+    return saved !== null && JSON.stringify(draftFromList(saved)) !== JSON.stringify(draft);
+  }
+
+  /** Publish update, after saying what it changes for players (#1363). */
+  async function confirmPublishUpdate() {
+    if (!selectedId || !saved) return;
+    clearMessages();
+    if (hasUnsavedEdits()) {
+      setPublishError(ui.myPromptListsPage.saveBeforePublishingUpdate);
+      return;
+    }
+    setBusy(true);
+    try {
+      const live = await getOwnedLiveEdition(selectedId);
+      const lines = describeEditionChanges(editionChanges(live, saved));
+      setPublishingUpdate(lines.length ? lines.join(" ") : ui.myPromptListsPage.publishUpdateOrderOnly);
+    } catch {
+      setPublishError(ui.myPromptListsPage.couldNotReadPublishedVersion);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function publishUpdate() {
+    if (!selectedId) return;
+    setPublishingUpdate(null);
+    setBusy(true);
+    clearMessages();
+    try {
+      const updated = await setOwnedPromptListPublished(selectedId, true);
+      show(updated);
+      setLists((current) => [updated, ...current.filter((item) => item.id !== updated.id)]);
+      notify(updated.pendingEdition
+        ? ui.myPromptListsPage.promptListUpdateSentForReview
+        : ui.myPromptListsPage.promptListUpdatePublished, "success");
+    } catch (publishError) {
+      setPublishError(refusalText(publishError, ui.myPromptListsPage.couldNotChangePublication));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function discardChanges() {
+    if (!selectedId || version === null) return;
+    setConfirmingDiscard(false);
+    setBusy(true);
+    clearMessages();
+    try {
+      const restored = await discardOwnedPromptListChanges(selectedId, version);
+      show(restored);
+      setLists((current) => current.map((item) => (item.id === restored.id ? restored : item)));
+      notify(ui.myPromptListsPage.changesDiscarded, "success");
+    } catch (discardError) {
+      setPublishError(refusalText(discardError, ui.myPromptListsPage.couldNotDiscardChanges));
     } finally {
       setBusy(false);
     }
@@ -396,6 +471,7 @@ export function MyPromptListsPage() {
   }
 
   const publishBlocker = emailPublishBlocker(emailState, published);
+  const editionStatus = publishedEditionStatus(saved);
 
   return <main className="prompt-list-manager-page">
     <AppHeader backLabel={ui.myPromptListsPage.backToLobby} />
@@ -498,9 +574,23 @@ export function MyPromptListsPage() {
                 others for a save to carry, and nothing for it to misreport. */}
             <div className="prompt-list-publication">
               <div>
-                <strong>{published ? ui.myPromptListsPage.inCommunityCatalogue : ui.myPromptListsPage.notPublished}</strong>
+                <strong>{!published
+                  ? ui.myPromptListsPage.notPublished
+                  : editionStatus === "first-under-review"
+                    ? ui.myPromptListsPage.publicationUnderReview
+                    : editionStatus === "update-under-review"
+                      ? ui.myPromptListsPage.updateUnderReview
+                      : editionStatus === "changed"
+                        ? ui.myPromptListsPage.unpublishedChanges
+                        : ui.myPromptListsPage.inCommunityCatalogue}</strong>
                 <p>{published
-                  ? ui.myPromptListsPage.publishedExplainer
+                  ? editionStatus === "first-under-review"
+                    ? ui.myPromptListsPage.publicationUnderReviewExplainer
+                    : editionStatus === "update-under-review"
+                      ? ui.myPromptListsPage.updateUnderReviewExplainer
+                      : editionStatus === "changed"
+                        ? ui.myPromptListsPage.unpublishedChangesExplainer
+                        : ui.myPromptListsPage.publishedExplainer
                   : publishBlocker === "no-address"
                     ? ui.myPromptListsPage.publishNeedsAnEmail
                     : publishBlocker === "pending" && emailState?.pendingAddress
@@ -527,6 +617,22 @@ export function MyPromptListsPage() {
                   className="btn btn-secondary btn-compact"
                   onClick={() => setAddingEmail(true)}
                 >{publishBlocker === "pending" ? ui.myPromptListsPage.changeEmail : ui.myPromptListsPage.addAnEmail}</button>}
+                {/* Only while there is something players do not see yet: the
+                    working copy differs from the live edition (#1363). */}
+                {editionStatus === "changed" && <>
+                  <button
+                    type="button"
+                    className="btn btn-secondary btn-compact"
+                    disabled={busy}
+                    onClick={() => setConfirmingDiscard(true)}
+                  >{ui.myPromptListsPage.discardChanges}</button>
+                  <button
+                    type="button"
+                    className="btn btn-primary btn-compact"
+                    disabled={busy || publishBlocker !== null}
+                    onClick={() => void confirmPublishUpdate()}
+                  >{ui.myPromptListsPage.publishUpdate}</button>
+                </>}
                 <button
                   type="button"
                   className={published ? "btn btn-secondary btn-compact" : "btn btn-primary btn-compact"}
@@ -644,6 +750,21 @@ export function MyPromptListsPage() {
         </div>
       </section>
     )}
+    {publishingUpdate !== null && <ConfirmationDialog
+      title={ui.myPromptListsPage.publishUpdateTitle}
+      description={publishingUpdate}
+      confirmLabel={ui.myPromptListsPage.publishUpdate}
+      tone="primary"
+      onCancel={() => setPublishingUpdate(null)}
+      onConfirm={() => void publishUpdate()}
+    />}
+    {confirmingDiscard && <ConfirmationDialog
+      title={ui.myPromptListsPage.discardChangesTitle}
+      description={ui.myPromptListsPage.discardChangesDescription}
+      confirmLabel={ui.myPromptListsPage.discardChanges}
+      onCancel={() => setConfirmingDiscard(false)}
+      onConfirm={() => void discardChanges()}
+    />}
     {confirmingDelete && <ConfirmationDialog
       title={ui.myPromptListsPage.deleteListTitle({ name: lists.find((item) => item.id === selectedId)?.name ?? draft.name })}
       description={ui.myPromptListsPage.deleteListDescription}

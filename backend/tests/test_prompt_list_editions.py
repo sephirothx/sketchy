@@ -276,3 +276,71 @@ async def test_edits_made_while_an_edition_waits_are_unpublished_changes(env):
     edited = await saved(prompts, owner.id, held, "crab")
 
     assert edited.unpublished_changes
+# --- #1363: what the editor compares against, and Discard changes
+
+
+async def test_the_owner_reads_the_live_edition_beside_the_working_copy(env):
+    prompts, users, _ = env
+    owner = await account(users, "Owner")
+    stranger = await account(users, "Stranger")
+    first = await published(prompts, owner.id, "gull", "lighthouse")
+    await saved(prompts, owner.id, first, "gull", "crab", name="Renamed")
+
+    live = await prompts.get_owned_live_edition(owner.id, first.id)
+
+    assert live.number == 1 and live.name == "Seaside"
+    assert [entry.answer for entry in live.prompts] == ["gull", "lighthouse"]
+    assert await prompts.get_owned_live_edition(stranger.id, first.id) is None
+
+
+async def test_discard_changes_restores_exactly_the_live_edition(env):
+    from app.repositories.interfaces import PromptListConflictError
+
+    prompts, users, factory = env
+    owner = await account(users, "Owner")
+    first = await published(prompts, owner.id, "gull", "lighthouse")
+    gull = first.prompts[0]
+    edited = await prompts.update_owned(
+        owner.id, first.id, expected_version=first.version, name="Renamed",
+        description="changed",
+        prompts=(
+            PromptListEntryInput(answer="crab"),
+            PromptListEntryInput(answer="seagull", concept_id=gull.concept_id),
+        ),
+        tags=("nature",),
+    )
+    assert edited.unpublished_changes
+
+    with pytest.raises(PromptListConflictError):
+        await prompts.discard_owned_changes(owner.id, first.id, expected_version=first.version)
+    restored = await prompts.discard_owned_changes(
+        owner.id, first.id, expected_version=edited.version
+    )
+
+    assert not restored.unpublished_changes
+    assert restored.version == edited.version + 1
+    assert (restored.name, restored.description, restored.tags) == ("Seaside", "", ())
+    assert [(e.concept_id, e.prompt_version_id, e.answer) for e in restored.prompts] == [
+        (e.concept_id, e.prompt_version_id, e.answer) for e in first.prompts
+    ]
+    # What the edit added leaves the working copy the way a save's removals do.
+    crab = next(e for e in edited.prompts if e.answer == "crab")
+    async with factory() as session:
+        stamped = await session.get(PromptVersion, UUID(crab.prompt_version_id))
+    assert stamped.unlisted_from_list_id == UUID(first.id)
+
+
+async def test_a_list_never_published_has_nothing_to_discard_to(env):
+    from app.repositories.interfaces import PromptListConflictError
+
+    prompts, users, _ = env
+    owner = await account(users, "Owner")
+    created = await prompts.create_owned(
+        owner.id, name="Private", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gull"),),
+    )
+
+    with pytest.raises(PromptListConflictError):
+        await prompts.discard_owned_changes(
+            owner.id, created.id, expected_version=created.version
+        )
