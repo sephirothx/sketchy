@@ -114,7 +114,8 @@ export interface OwnedPromptList extends PromptListSummary {
   liveEdition: PromptListEdition | null;
   /** An edition held for review by the operator switch (R-LIST-13). */
   pendingEdition: PromptListEdition | null;
-  /** The working copy differs from the live edition. */
+  /** The working copy differs from the latest edition: the pending one while
+   * one waits, else the live one. */
   unpublishedChanges: boolean;
   createdAt: string;
   updatedAt: string;

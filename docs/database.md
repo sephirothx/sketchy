@@ -1993,10 +1993,11 @@ Deliberately relational rather than a JSON tag blob.
 
 `edition_count` numbers the list's next edition, so a number is never reused after the
 edition that held it was replaced. `content_hash` is the working copy's digest, written by
-every save beside the histogram, in the form an edition's is: the owner's editor compares
-the two to say whether the list has **unpublished changes** without reading either one's
-prompts (#1360). `copied_from_edition_id` is the edition a copy was taken from while it
-lasts; `copied_from_list_id` is what the credit reads.
+every save beside the histogram, in the form an edition's is: compared with the latest
+edition's — the pending one while one waits, else the live one — it says whether the list
+has **unpublished changes** without reading either one's prompts (#1360). It digests
+version ids, so a prompt changed and changed back reads as changed until the next publish.
+`copied_from_edition_id` is the edition a copy was taken from while it lasts; `copied_from_list_id` is what the credit reads.
 
 `letter_counts` (JSON) and `letter_total` are the working copy's **letter histogram**
 (#1359; it lived on each revision before): every save that changes content rewrites
@@ -2542,7 +2543,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`RETIRED_LIST_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
-| Retired (deleted) prompt lists | Out of reach at once; after a 1-day grace its play history is cleared in budgeted batches, then the list, its revisions and orphan content go, 50 lists per hourly sweep | 24 h | Nothing past the grace: a finished game names the list, not a revision, and reads the same without it (#1358). A hidden word is kept by its owner's takedown record (`prompt_takedowns`) | `services.prompt_reclaim` | `retired_prompt_lists` |
+| Retired (deleted) prompt lists | Out of reach at once, its working copy and editions deleted with it (#1386 review: an edition left for the reclaim kept its versions alive past the sweep, and its name past an erasure); after a 1-day grace its play history is cleared in budgeted batches, then the list, its revisions and orphan content go, 50 lists per hourly sweep | 24 h | Nothing past the grace: a finished game names the list, not a revision, and reads the same without it (#1358). A hidden word is kept by its owner's takedown record (`prompt_takedowns`) | `services.prompt_reclaim` | `retired_prompt_lists` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep

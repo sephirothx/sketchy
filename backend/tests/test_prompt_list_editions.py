@@ -200,3 +200,79 @@ async def test_a_word_only_the_live_edition_holds_is_kept_past_the_grace(env):
         kept = await session.get(PromptVersion, UUID(gull))
     assert kept is not None
     assert (kept.unlisted_at, kept.unlisted_from_list_id) == (None, None)
+
+
+# --- #1386 review
+
+
+async def test_deleting_a_published_list_takes_its_editions_at_once(env):
+    """Left for the list's reclaim, an edition named its versions, so the
+    unlisted sweep unstamped them and nothing stamped them again when the
+    edition finally went: the text outlived the list."""
+    from app.services.prompt_reclaim import (
+        reclaim_retired_prompt_lists,
+        reclaim_unlisted_versions,
+    )
+
+    prompts, users, factory = env
+    owner = await account(users, "Owner")
+    first = await published(prompts, owner.id, "gull")
+    gull = UUID(first.prompts[0].prompt_version_id)
+    assert await prompts.delete_owned(owner.id, first.id)
+    assert await edition_count(factory, first.id) == 0
+    later = datetime.now(timezone.utc) + timedelta(days=2)
+
+    # The unlisted sweep first, as when the list's reclaim is deferred.
+    await reclaim_unlisted_versions(factory, now=later)
+    await reclaim_retired_prompt_lists(factory, now=later)
+
+    async with factory() as session:
+        assert await session.get(PromptVersion, gull) is None
+
+
+async def test_erasure_leaves_no_edition_holding_the_authored_name(env):
+    from app.services.prompt_reclaim import retire_owned_lists
+
+    prompts, users, factory = env
+    owner = await account(users, "Owner")
+    await published(prompts, owner.id, "gull", name="Authored name")
+    async with factory() as session:
+        async with session.begin():
+            await retire_owned_lists(session, [UUID(owner.id)], now=datetime.now(timezone.utc))
+
+    async with factory() as session:
+        assert (await session.scalars(select(PromptListEdition.name))).all() == []
+
+
+async def test_republishing_a_withdrawn_list_under_review_shows_nothing_unreviewed(env):
+    """The withdrawn live edition would be back the moment the list turned
+    public, unreviewed, beside the edition waiting for a moderator."""
+    prompts, users, _ = env
+    owner = await account(users, "Owner")
+    first = await published(prompts, owner.id, "gull")
+    withdrawn = await prompts.set_owned_publication(owner.id, first.id, published=False)
+    await saved(prompts, owner.id, withdrawn, "crab")
+
+    held = await prompts.set_owned_publication(
+        owner.id, first.id, published=True, under_review=True
+    )
+
+    assert held.live_edition is None and held.pending_edition is not None
+    assert await prompts.get_community(first.id) is None
+
+
+async def test_edits_made_while_an_edition_waits_are_unpublished_changes(env):
+    prompts, users, _ = env
+    owner = await account(users, "Owner")
+    created = await prompts.create_owned(
+        owner.id, name="Seaside", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gull"),),
+    )
+    held = await prompts.set_owned_publication(
+        owner.id, created.id, published=True, under_review=True
+    )
+    assert not held.unpublished_changes
+
+    edited = await saved(prompts, owner.id, held, "crab")
+
+    assert edited.unpublished_changes

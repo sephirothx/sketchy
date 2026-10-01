@@ -1441,6 +1441,13 @@ def create_moderation_router(
                         ),
                     )
 
+                # The name the reporter read: the live edition's (#1386 review).
+                seen_name = await session.scalar(
+                    select(PromptListEdition.name).where(
+                        PromptListEdition.prompt_list_id == prompt_list.id,
+                        PromptListEdition.state == "published",
+                    )
+                )
                 report = PromptContentReport(
                     id=generate_uuid(),
                     reporter_user_id=db_reporter_id,
@@ -1448,7 +1455,7 @@ def create_moderation_router(
                     prompt_list_id=prompt_list.id,
                     prompt_version_id=(prompt_version.id if prompt_version else None),
                     target_type="prompt" if prompt_version else "list",
-                    list_name_snapshot=prompt_list.name,
+                    list_name_snapshot=seen_name or prompt_list.name,
                     prompt_snapshot=(
                         prompt_version.canonical_answer if prompt_version else None
                     ),

@@ -994,7 +994,11 @@ def _to_owned_prompt_list(
         copied_from=copied_from,
         live_edition=_edition_summary(live),
         pending_edition=_edition_summary(pending),
-        unpublished_changes=live is not None and live.content_hash != wl.content_hash,
+        # Against the latest edition, pending first: edits made while one waits
+        # are not in it, and a release would publish the older content (#1386
+        # review).
+        unpublished_changes=(pending or live) is not None
+        and (pending or live).content_hash != wl.content_hash,
     )
 
 
@@ -5368,6 +5372,18 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                         replaced = [pending.id] if pending is not None else []
                         if state == EDITION_PUBLISHED and already is not None:
                             replaced.append(already.id)
+                        live = editions.get(EDITION_PUBLISHED)
+                        if (
+                            state == EDITION_UNDER_REVIEW
+                            and live is not None
+                            and prompt_list.visibility != PromptListVisibility.PUBLIC.value
+                        ):
+                            # Republishing a withdrawn list under the switch:
+                            # the edition its owner took out of the catalogue
+                            # would be back the moment the list turned public,
+                            # unreviewed, beside the one waiting (#1386
+                            # review). It goes; the list is out until release.
+                            replaced.append(live.id)
                         await drop_editions(session, replaced, now=now)
                         await session.flush()
                         await snapshot_edition(

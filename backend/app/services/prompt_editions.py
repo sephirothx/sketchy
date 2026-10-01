@@ -137,18 +137,31 @@ async def drop_editions(
             )
         )
     ).all()
-    for edition_id, prompt_list_id in editions:
-        held = PromptVersion.id.in_(
-            select(PromptListEditionItem.prompt_version_id).where(
-                PromptListEditionItem.edition_id == edition_id
+    # One ordered lock over every version the dropped editions hold, not one
+    # batch per edition: two sorted batches are not one order, and a decision
+    # carried across the owner's lists locks across them (#1386 review).
+    await session.execute(
+        select(PromptVersion.id)
+        .where(
+            PromptVersion.id.in_(
+                select(PromptListEditionItem.prompt_version_id).where(
+                    PromptListEditionItem.edition_id.in_(list(edition_ids))
+                )
             )
         )
-        await session.execute(
-            select(PromptVersion.id).where(held).order_by(PromptVersion.id).with_for_update()
-        )
+        .order_by(PromptVersion.id)
+        .with_for_update()
+    )
+    for edition_id, prompt_list_id in editions:
         await session.execute(
             update(PromptVersion)
-            .where(held)
+            .where(
+                PromptVersion.id.in_(
+                    select(PromptListEditionItem.prompt_version_id).where(
+                        PromptListEditionItem.edition_id == edition_id
+                    )
+                )
+            )
             .values(unlisted_at=now, unlisted_from_list_id=prompt_list_id)
             .execution_options(synchronize_session=False)
         )

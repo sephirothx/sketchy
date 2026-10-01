@@ -86,9 +86,9 @@ async def retire_prompt_list(
     """
     retired_at = now or datetime.now(timezone.utc)
     prompt_list.deleted_at = retired_at
-    # Its working copy's versions leave it now, and its editions' with the
-    # list a grace later; a room that drew them before the deletion still
-    # writes them, so they are collected only after that grace.
+    # Its working copy's versions and its editions' leave it now; a room that
+    # drew them before the deletion still writes them, so they are collected
+    # only a grace later.
     held = PromptVersion.id.in_(
         select(Prompt.prompt_version_id)
         .where(Prompt.prompt_list_id == prompt_list.id)
@@ -116,6 +116,15 @@ async def retire_prompt_list(
         prompt_list.name = RETIRED_LIST_NAME
         prompt_list.description = ""
     await session.execute(delete(Prompt).where(Prompt.prompt_list_id == prompt_list.id))
+    # The editions go now too, not with the list row (#1386 review). Left for
+    # the reclaim, they named their versions, so the unlisted sweep found them
+    # referenced and unstamped them, and nothing stamped them again when the
+    # editions finally went - the text outlived the list for good. And each
+    # edition holds its own name and description, which an erasure must not
+    # leave behind. A room pinned to one is refused at its next draw.
+    await session.execute(
+        delete(PromptListEdition).where(PromptListEdition.prompt_list_id == prompt_list.id)
+    )
 
 
 @dataclass(frozen=True)
