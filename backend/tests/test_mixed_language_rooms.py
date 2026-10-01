@@ -11,6 +11,7 @@ language - drawn into the game or not (#1367).
 from __future__ import annotations
 
 import json
+from uuid import uuid4
 
 import pytest
 import pytest_asyncio
@@ -19,6 +20,7 @@ from app.db.seed import DEFAULT_PROMPT_LISTS_DIR, seed_prompt_lists
 from app.domain_values import PROMPT_LANGUAGES
 from app.game import Game, Phase, PromptForm
 from app.repositories.interfaces import (
+    BundledPromptDefinition,
     MixedRoomListError,
     PromptListEntryInput,
     PromptListSelectionError,
@@ -757,3 +759,123 @@ def test_the_false_friend_memo_holds_the_turn_in_play_and_no_other():
         game.phase = Phase.CHOOSING_PROMPT
         game.prompt_choices = ["c-fly" if turn % 2 == 0 else "c-bow"]
         assert game.choose_prompt_option("drawer", 0)
+
+
+async def _themed_family(prompts: SqlAlchemyPromptListRepository, concepts, *, skip=()):
+    """A themed official list in every language (#1374): the same concepts,
+    spelled alike, as a franchise's names mostly are."""
+    for language in PROMPT_LANGUAGES:
+        if language in skip:
+            continue
+        await prompts.upsert_bundled(
+            slug=f"critters_{language}",
+            name="Critters",
+            description="",
+            language=language,
+            prompts=[
+                BundledPromptDefinition(concept_id, answer)
+                for concept_id, answer in concepts
+            ],
+            version=1,
+            shelf="everyday",
+            shelf_position=3,
+        )
+
+
+async def test_a_mixed_room_plays_a_themed_family():
+    """Not only Standard and Extended: any official lists holding the same
+    concepts in every language are a family a mixed room pins whole, and their
+    summaries name it so the picker can show it once (R-PROMPT-13, #1374)."""
+    factory, engine = await create_test_db()
+    try:
+        prompts = SqlAlchemyPromptListRepository(factory)
+        concepts = [(str(uuid4()), "Zorblax"), (str(uuid4()), "Quimbo")]
+        await _themed_family(prompts, concepts)
+
+        pinned = await prompts.authorize_selection(
+            ["critters_de"], expected_language="mul"
+        )
+        assert len(pinned.list_ids) == len(PROMPT_LANGUAGES)
+        assert pinned.prompt_count == 2
+        assert {summary.family for summary in await prompts.list_all()} == {
+            "critters_en"
+        }
+    finally:
+        await engine.dispose()
+
+
+async def test_a_family_broken_by_a_new_seed_is_refused():
+    """The families are worked out once and kept, so a seed that changes one
+    member's concepts has to be what forgets them: the next pin finds the
+    family no longer whole and refuses it, rather than pinning a German seat
+    a prompt it has no word for."""
+    factory, engine = await create_test_db()
+    try:
+        prompts = SqlAlchemyPromptListRepository(factory)
+        concepts = [(str(uuid4()), "Zorblax"), (str(uuid4()), "Quimbo")]
+        await _themed_family(prompts, concepts)
+        await prompts.authorize_selection(["critters_en"], expected_language="mul")
+
+        await prompts.upsert_bundled(
+            slug="critters_de",
+            name="Critters",
+            description="",
+            language="de",
+            prompts=[
+                *(BundledPromptDefinition(c, a) for c, a in concepts),
+                BundledPromptDefinition(str(uuid4()), "Flimmel"),
+            ],
+            version=2,
+            shelf="everyday",
+            shelf_position=3,
+        )
+        with pytest.raises(MixedRoomListError):
+            await prompts.authorize_selection(
+                ["critters_en"], expected_language="mul"
+            )
+        assert (await prompts.get_by_slug("critters_en")).family is None
+    finally:
+        await engine.dispose()
+
+
+async def test_a_themed_list_missing_a_language_is_no_family():
+    factory, engine = await create_test_db()
+    try:
+        prompts = SqlAlchemyPromptListRepository(factory)
+        await _themed_family(
+            prompts, [(str(uuid4()), "Zorblax")], skip=("pl",)
+        )
+        with pytest.raises(MixedRoomListError):
+            await prompts.authorize_selection(
+                ["critters_en"], expected_language="mul"
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_two_official_lists_of_one_language_with_the_same_concepts_are_both_family():
+    """A second English list holding the family's very concepts is admitted
+    too, pinned with itself in English's place - as every pin was before the
+    families were worked out once (#1374 review)."""
+    factory, engine = await create_test_db()
+    try:
+        prompts = SqlAlchemyPromptListRepository(factory)
+        concepts = [(str(uuid4()), "Zorblax"), (str(uuid4()), "Quimbo")]
+        await _themed_family(prompts, concepts)
+        await prompts.upsert_bundled(
+            slug="critters_classic",
+            name="Critters classic",
+            description="",
+            language="en",
+            prompts=[BundledPromptDefinition(c, a) for c, a in concepts],
+            version=1,
+            shelf="everyday",
+            shelf_position=4,
+        )
+        for slug in ("critters_en", "critters_classic"):
+            pinned = await prompts.authorize_selection([slug], expected_language="mul")
+            assert len(pinned.list_ids) == len(PROMPT_LANGUAGES), slug
+        classic = await prompts.get_by_slug("critters_classic")
+        assert classic is not None and classic.family == "critters_classic"
+    finally:
+        await engine.dispose()

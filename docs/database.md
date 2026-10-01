@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a3b4c5d6e7f9_saves_overwrite_a_working_copy.py` (#1359). Both this line and the table
+`b4c5d6e7f8a1_official_lists_stand_on_shelves.py` (#1374). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -1983,8 +1983,19 @@ Deliberately relational rather than a JSON tag blob.
 `language` · `is_bundled` · `is_copy` · `copied_from_list_id` (`SET NULL`) ·
 `visibility` (`private \| public`) ·
 `moderation_state` · `moderated_by_user_id` ·
-`moderated_at` · `version` · `letter_counts` · `letter_total` · `published_at` (nullable) · `deleted_at` (indexed,
+`moderated_at` · `version` · `letter_counts` · `letter_total` · `shelf` · `series` ·
+`shelf_position` (all three nullable) · `published_at` (nullable) · `deleted_at` (indexed,
 nullable) · timestamps.
+
+`shelf`, `series` and `shelf_position` place an **official** list in the room picker's tree
+(#1374, R-PROMPT-14): a shelf slug from `prompt_content.PROMPT_SHELVES`, an optional
+series slug within it, and its position there. They are navigation, not content, so
+`upsert_bundled` rewrites them - and the list's tags in `prompt_list_tags` - on every seed
+without a new list version, as it does the name. `ck_prompt_lists_shelf_is_bundled` keeps
+them off a player's list, `ck_prompt_lists_shelf_position` makes a shelf and a position
+come together, and `ck_prompt_lists_series_on_shelf` keeps a series on a shelf. No CHECK
+names the shelves: adding one is a code change to the registry, not a migration. Rows
+migrated in start empty and the next start fills them.
 
 `letter_counts` (JSON) and `letter_total` are the working copy's **letter histogram**
 (#1359; it lived on each revision before): every save that changes content rewrites
@@ -2240,6 +2251,8 @@ the direction the community catalogue reads (*which lists carry this tag*). The 
 copy's tags (#1359), rewritten in place by a save like the rest of it, a row added or
 removed only for a tag that changed. They used to be copied onto every revision, so that a
 filter agreed with the revision a game pinned; a game snapshots what it drew instead.
+An official list's tags come from its seed file (`tags`) and are rewritten by every seed,
+through the same helper a save uses (#1374).
 
 Editing a list uses **optimistic concurrency** on `prompt_lists.version` and overwrites the
 working copy in place, writing only what changed (R-LIST-05, #1359). Setting or clearing

@@ -43,6 +43,9 @@ class ErrorCode(StrEnum):
     # prompts, which have one language and no translations.
     MIXED_ROOM_LIST_UNSUPPORTED = "mixed_room_list_unsupported"
     MIXED_ROOM_CUSTOM_PROMPTS = "mixed_room_custom_prompts"
+    # A room may pick forty lists, but only twenty of them players' (#1374):
+    # a player's list is where the selection's worst-case work lives.
+    TOO_MANY_PLAYER_PROMPT_LISTS = "too_many_player_prompt_lists"
     MAX_PLAYERS_BELOW_SEATED = "max_players_below_seated"
     EMPTY_MESSAGE = "empty_message"
 

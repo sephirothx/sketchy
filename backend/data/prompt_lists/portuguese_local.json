@@ -4,6 +4,8 @@
   "description": "O que se conhece no mundo lusófono: comida, costumes e vida cotidiana.",
   "language": "pt",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ae-773c-b815-4e2cd12486d5","answer":"arroz doce","aliases":["o arroz doce","arroz-doce"]},
     {"conceptId":"01a088e3-e9b7-771a-83a3-23d4684b3c73","answer":"azulejo","aliases":["o azulejo","painel de azulejos"],"promptVersion":2},

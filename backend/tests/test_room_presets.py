@@ -10,7 +10,7 @@ from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import select
 
-from app.api.room_presets import create_room_preset_router
+from app.api.room_presets import _http_error, create_room_preset_router
 from app.auth.middleware import SessionAuthMiddleware
 from app.auth.routes import create_auth_router
 from app.db.models import RoomPreset
@@ -19,7 +19,12 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyPromptListRepository,
     SqlAlchemyUserRepository,
 )
-from app.services.room_presets import RoomPresetError, RoomPresetService
+from app.refusals import ErrorCode
+from app.services.room_presets import (
+    RoomPresetError,
+    RoomPresetService,
+    RoomPresetTooManyPlayerLists,
+)
 
 
 from tests.dbfixtures import create_test_db
@@ -406,3 +411,29 @@ async def test_a_name_that_outgrows_its_key_when_folded_is_refused(env):
         },
     )
     assert fits.status_code == 200, fits.text
+
+
+async def test_a_preset_of_more_players_lists_than_a_room_may_use_is_refused_at_save(env):
+    """A room may use forty lists but only twenty players' (#1374). A preset
+    is read back by authorizing its lists as a room would, so one holding
+    twenty-one would save and then fail every read: it is refused at the save,
+    with the room's own code, and nothing is written."""
+    client, _, prompt_lists, _, factory = env
+    owner = await register(client)
+    slugs = [
+        (await owned_prompt_list(prompt_lists, owner["id"], name=f"Mine {index}")).slug
+        for index in range(21)
+    ]
+    # Distinct answers, so the twenty that are allowed resolve together.
+    refused = await client.post(
+        "/api/room-presets",
+        json={"name": "Too many", "settings": {**settings(slugs[0]), "promptListSlugs": slugs}},
+    )
+    assert refused.status_code == 422
+    assert "players' lists" in refused.json()["detail"]
+    assert (
+        _http_error(RoomPresetTooManyPlayerLists("x")).code
+        == ErrorCode.TOO_MANY_PLAYER_PROMPT_LISTS
+    )
+    async with factory() as session:
+        assert (await session.scalars(select(RoomPreset))).all() == []

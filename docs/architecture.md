@@ -140,7 +140,12 @@ remembered by the repository (`SqlAlchemyPromptListRepository._verdicts`, 512 se
 oldest out) by list ids and versions, under a fingerprint of what moderation has made of
 the lists' members — one aggregate statement — and a miss is read a thousand rows per turn of the loop and folded on the
 drawings' encode threads rather than on the loop (#1237): twenty agnostic lists in a
-mixed room held the loop 3.3 s on every authorization. `to_state_payload()`
+mixed room held the loop 3.3 s on every authorization. A mixed room's lists are pinned
+with their **families** - the official lists holding the same concepts in every language -
+which the repository works out once (`_families`) and forgets on every `upsert_bundled`,
+the only writer of official content, rather than reading every official list's prompts
+on every pin: that cost grew with the official catalogue, not with the room (#1374).
+`to_state_payload()`
 ([`backend/app/rooms.py:814`](../backend/app/rooms.py)) and `to_public_summary()`
 ([`backend/app/rooms.py:714`](../backend/app/rooms.py)) are the two shapes the room is
 published in.
@@ -436,6 +441,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
 | Encoding a finished game, folding a prompt-list selection's answers cold (#1237), and the integrity audit's drawing checks (#1251, 16 drawings a job) | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `encode_pool.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
+| Which official lists form a family a mixed room can pin (R-PROMPT-13) | `SqlAlchemyPromptListRepository._families` (memory) — worked out on first use, dropped by every `upsert_bundled` (#1374) | No: re-derived from the official working copies |
 | Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by list ids, versions and fold, reused while the members' moderation fingerprint is unchanged (#1237, #1359) | No: re-derived from the working copies on a miss |
 | Drawing thumbnails being drawn | The thumbnail worker (`lib/thumbnailQueue.ts`, `workers/thumbnail.worker.ts`, #1282) — one module worker per page, started on first use and let go after 20 s idle; one job in flight, at most 48 waiting (past that the oldest is dropped and its card asks again when it next comes into view); a card that unmounts or changes drawing cancels its job. Where no worker can be had the same `renderThumbnail` runs on the page. Replay cost follows the history, not its size: the accepted 100-fill turn is 244 ms a thumbnail on desktop Chromium and 972 ms at 4× CPU on the page, no long task on the worker | No: redrawn from the fetched bytes |
 | A viewer's canvas repaint being played out | `createProtocolRenderer`'s live replay (`lib/protocolRenderer.ts`, #1347) — a join's, a reconnect's or an undo's repaint of the whole history, run in 16 ms pieces through a `MessageChannel` and shown after each — a piece never begins an action once its 16 ms are spent, the history's last one included, and the task that delivered the history paints none of its fills, so the longest task is the budget plus one fill wherever a fill outlasts it — reading the protocol's history array as it grows; frames that land meanwhile are painted from it rather than by `apply`. The drawer's and the scratch pad's repaints stay immediate: their pointer paints the canvas directly. The accepted 100-fill turn at 4× CPU: one 1,003 ms task → 43 ms worst, the canvas complete after 1,031 ms instead of 1,002 | No: repainted from the history |

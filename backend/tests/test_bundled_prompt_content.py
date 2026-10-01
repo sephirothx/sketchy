@@ -20,8 +20,8 @@ import pytest
 
 from app.api.prompt_lists import MAX_PAGE_SIZE
 from app.db.seed import DEFAULT_PROMPT_LISTS_DIR as PROMPT_LIST_DIR
-from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
-from app.prompt_content import MAX_PROMPT_LENGTH, prompt_match_key
+from app.domain_values import AGNOSTIC_PROMPT_LANGUAGE, PROMPT_LANGUAGES, PromptLanguage
+from app.prompt_content import MAX_PROMPT_LENGTH, PROMPT_SHELVES, prompt_match_key
 
 #: Every Standard and Extended list holds at least this many concepts. A game
 #: draws `rounds x players x 3` offers - up to 480 - so a list of a few hundred
@@ -47,11 +47,12 @@ def _list(slug: str) -> dict:
 
 
 def _slugs(language: str) -> list[str]:
-    """Every bundled list in `language`: the lists a room in it can combine."""
+    """Every bundled list a room in `language` can combine: its own, and the
+    ones in no language (`zxx`, R-PROMPT-12), which every room may pick."""
     return sorted(
         path.stem
         for path in PROMPT_LIST_DIR.glob("*.json")
-        if _list(path.stem)["language"] == language
+        if _list(path.stem)["language"] in (language, AGNOSTIC_PROMPT_LANGUAGE)
     )
 
 
@@ -133,7 +134,9 @@ def test_a_languages_lists_can_be_picked_together(language):
     """No two concepts may answer to the same key across a language's lists,
     answers and aliases alike: a room that selects both would be refused as
     ambiguous (R-PROMPT-01), and the seed never looks at aliases across
-    concepts. A concept deliberately repeated in two lists is one concept."""
+    concepts. A concept deliberately repeated in two lists is one concept. A
+    list in no language is keyed as a room in this one keys it - so "Müller"
+    beside a German "Mueller" clashes here and nowhere else."""
     owners: dict[str, set[str]] = defaultdict(set)
     where: dict[str, set[str]] = defaultdict(set)
     for slug in _slugs(language):
@@ -151,3 +154,17 @@ def test_the_stats_page_reads_every_bundled_list_whole():
     a bundled list longer than that would be cut short without a word."""
     for path in PROMPT_LIST_DIR.glob("*.json"):
         assert len(_list(path.stem)["prompts"]) <= MAX_PAGE_SIZE, path.stem
+
+
+def test_every_official_list_has_its_own_place_on_a_known_shelf():
+    """The picker's tree (#1374) orders a shelf, or a series on it, by each
+    list's position: two lists of one language in the same place would sort
+    by whatever order the server happened to return."""
+    places: dict[tuple, list[str]] = defaultdict(list)
+    for path in PROMPT_LIST_DIR.glob("*.json"):
+        body = _list(path.stem)
+        assert body["shelf"] in PROMPT_SHELVES, path.stem
+        places[
+            (body["language"], body["shelf"], body.get("series"), body.get("position", 0))
+        ].append(path.stem)
+    assert {place: slugs for place, slugs in places.items() if len(slugs) > 1} == {}

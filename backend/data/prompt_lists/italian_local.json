@@ -4,6 +4,8 @@
   "description": "Quello che si conosce in Italia: cibo, usanze e vita di tutti i giorni.",
   "language": "it",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ad-741d-8d7a-76fb37d699c9","answer":"albero della cuccagna","aliases":["l'albero della cuccagna","cuccagna","palo della cuccagna"]},
     {"conceptId":"01a0f6a4-69ad-741d-8d7a-76e61e262015","answer":"arancino","aliases":["l'arancino","arancina","l'arancina","arancini","arancine"]},

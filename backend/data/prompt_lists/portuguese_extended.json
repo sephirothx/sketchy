@@ -4,6 +4,8 @@
   "description": "A lista mais difícil: coisas mais raras, cenas e expressões, a mesma em todos os idiomas.",
   "language": "pt",
   "version": 3,
+  "shelf": "everyday",
+  "position": 1,
   "prompts": [
     {"conceptId":"01a0f467-2041-71b2-9e85-05dd1bbe08e4","answer":"ábaco","aliases":["o ábaco"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-05deda591bc4","answer":"ás na manga","aliases":["um ás na manga","carta na manga","uma carta na manga"]},

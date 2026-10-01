@@ -4,6 +4,8 @@
   "description": "Lista domyślna: popularne, łatwe do narysowania hasła.",
   "language": "pl",
   "version": 2,
+  "shelf": "everyday",
+  "position": 0,
   "prompts": [
     {"conceptId":"01a02b7b-b425-7bb7-be27-7d7c39ad5cf5","answer":"akordeon","aliases":["harmonia"]},
     {"conceptId":"01a02b7b-b426-780c-9690-24cbc0f539d1","answer":"żołądź","aliases":["żołędź"]},

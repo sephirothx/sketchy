@@ -3920,6 +3920,20 @@ class PromptList(Base):
             "copied_from_list_id IS NULL OR is_copy = true",
             name="ck_prompt_lists_copied_from_is_copy",
         ),
+        # Shelves hold the official catalogue only (#1374); a list on one has
+        # a place there, and a series is always on a shelf.
+        CheckConstraint(
+            "shelf IS NULL OR is_bundled = true",
+            name="ck_prompt_lists_shelf_is_bundled",
+        ),
+        CheckConstraint(
+            "(shelf IS NULL) = (shelf_position IS NULL)",
+            name="ck_prompt_lists_shelf_position",
+        ),
+        CheckConstraint(
+            "series IS NULL OR shelf IS NOT NULL",
+            name="ck_prompt_lists_series_on_shelf",
+        ),
         # The catalogue's whole question - published, still active, still
         # here - and the star counts join through it (#712).
         Index(
@@ -4022,6 +4036,14 @@ class PromptList(Base):
     letter_total: Mapped[int] = mapped_column(
         Integer, default=0, server_default=text("0"), nullable=False
     )
+    # Where an official list stands in the room picker's tree (#1374): a shelf
+    # from `prompt_content.PROMPT_SHELVES`, optionally a series within it, and
+    # its place among the lists there. Navigation rather than content, so the
+    # seed rewrites all three on every start, as it does the name, without a
+    # new version. A player's list has none: its place is *Your lists*.
+    shelf: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    series: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    shelf_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
     # A retired list: out of every listing, resolution and share the moment
     # this is set, physically reclaimed by `services.prompt_reclaim` after a
     # grace (#605). Bundled lists are never retired.

@@ -483,6 +483,17 @@ class PromptListSummary:
     prompt_count: int
     is_bundled: bool
     version: int
+    # Where an official list stands in the picker's tree (#1374); a player's
+    # list has none.
+    shelf: str | None = None
+    series: str | None = None
+    shelf_position: int | None = None
+    tags: tuple[str, ...] = ()
+    # The family a mixed-language room plays it in (R-PROMPT-13): the slug of
+    # its English member, shared by the lists in every language holding the
+    # same concepts. None for a list in one language only, and for a list in
+    # no language, which a mixed room plays as it is.
+    family: str | None = None
 
 
 @dataclass(frozen=True)
@@ -736,6 +747,10 @@ class PromptListsChangedError(PromptListSelectionError):
     the check never saw (#1385 review). The caller authorizes again and draws
     again.
     """
+
+
+class TooManyPlayerListsError(PromptListSelectionError):
+    """More players' lists than a selection may hold (`MAX_PLAYER_PROMPT_LISTS`)."""
 
 
 class MixedRoomListError(PromptListSelectionError):
@@ -1448,8 +1463,17 @@ class PromptListRepository(ABC):
         language: str,
         prompts: Sequence[BundledPromptDefinition],
         version: int,
+        *,
+        shelf: str | None = None,
+        series: str | None = None,
+        shelf_position: int | None = None,
+        tags: Sequence[str] = (),
     ) -> PromptListSummary:
-        """Store one immutable bundled revision without text-keyed identity."""
+        """Store one immutable bundled revision without text-keyed identity.
+
+        The shelf, series, position and tags are navigation and are rewritten
+        on every call, as the name is, without a new version (#1374).
+        """
         ...
 
     @abstractmethod

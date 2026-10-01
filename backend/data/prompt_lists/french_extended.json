@@ -4,6 +4,8 @@
   "description": "La liste difficile : objets plus rares, scènes et expressions, la même dans toutes les langues.",
   "language": "fr",
   "version": 3,
+  "shelf": "everyday",
+  "position": 1,
   "prompts": [
     {"conceptId":"01a0f467-2041-71b2-9e85-05dd1bbe08e4","answer":"boulier","aliases":["abaque","le boulier"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-05deda591bc4","answer":"as dans la manche","aliases":["un as dans la manche","as caché"]},
