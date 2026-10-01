@@ -105,6 +105,9 @@ class ReclaimResult:
     # Game sources removed and usage facts detached from the lists, in the
     # committed batches that come before any list is deleted (#1358).
     history_cleared: int = 0
+    # Whether the run stopped on its budget with work still owed, which is
+    # what makes the retention loop schedule the next run sooner.
+    exhausted: bool = False
 
 
 def _reclaimable(cutoff: datetime):
@@ -179,10 +182,16 @@ async def _drain_one_batch(
                     or 0
                 )
             if cleared < rows:
+                # In the order of `ix_prompt_usage_facts_list_occurred_at`,
+                # so a batch reads its slice rather than the whole list's.
                 facts = (
                     select(PromptUsageFact.id)
                     .where(PromptUsageFact.prompt_list_id.in_(list_ids))
-                    .order_by(PromptUsageFact.id)
+                    .order_by(
+                        PromptUsageFact.prompt_list_id,
+                        PromptUsageFact.occurred_at,
+                        PromptUsageFact.id,
+                    )
                     .limit(rows - cleared)
                 )
                 cleared += int(
@@ -204,9 +213,10 @@ async def _drain_history(
     cutoff: datetime,
     limit: int,
     budget: SweepBudget,
-) -> int:
+) -> tuple[int, bool]:
     """Clear reclaimable lists' history a committed batch at a time, within
-    the budget's rows and seconds."""
+    the budget's rows and seconds: (rows cleared, whether the budget ran out
+    before the history did)."""
     cleared = 0
     started = time.monotonic()
     while cleared < budget.rows and time.monotonic() - started < budget.seconds:
@@ -215,8 +225,8 @@ async def _drain_history(
         )
         cleared += batch
         if batch == 0:
-            break
-    return cleared
+            return cleared, False
+    return cleared, True
 
 
 def _version_is_referenced(version_id):
@@ -332,7 +342,7 @@ async def reclaim_retired_prompt_lists(
     if budget is not None:
         limit = max(1, min(limit, budget.rows))
     cutoff = (now or datetime.now(timezone.utc)) - grace
-    history_cleared = await _drain_history(
+    history_cleared, drain_cut_short = await _drain_history(
         session_factory, cutoff, limit, budget or SweepBudget()
     )
     revisions_deleted = lists_deleted = versions_deleted = concepts_deleted = 0
@@ -353,6 +363,7 @@ async def reclaim_retired_prompt_lists(
                     oldest_overdue_seconds=overdue_seconds,
                     backlog=backlog,
                     history_cleared=history_cleared,
+                    exhausted=drain_cut_short and backlog > 0,
                 )
             list_ids = [row.id for row in retired]
 
@@ -404,6 +415,10 @@ async def reclaim_retired_prompt_lists(
         oldest_overdue_seconds=overdue_seconds,
         backlog=backlog,
         history_cleared=history_cleared,
+        # Cut short with lists still owed: the retention loop comes back
+        # sooner rather than in an hour (R-PRIV-16), or a popular list's
+        # history drains at one budget an hour and outlives its SLA.
+        exhausted=backlog > 0 and (drain_cut_short or len(retired) >= limit),
     )
     if revisions_deleted or lists_deleted or versions_deleted or concepts_deleted:
         logger.info(

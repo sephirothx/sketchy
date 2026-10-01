@@ -1868,7 +1868,8 @@ reclaim its holds. No reader needs it: each turn stores its prompt text and vers
 names only which list it was, so it goes with the list rather than staying as a pointer
 at nothing, and the history reads the same. The writer names only lists that still exist
 — one deleted while the game ran leaves no row — and holds them `FOR KEY SHARE` until
-commit, so the check cannot go stale before the rows land.
+commit, so the check cannot go stale before the rows land. The list's side is indexed `(prompt_list_id, game_id)` — and the offer table's
+`(prompt_list_id, offer_id)` — the order the retired-list reclaim drains them in.
 
 ---
 
@@ -2232,7 +2233,7 @@ which is authored in the repository and reviewed as code; `clean_list_tags` is t
 that answers a request.
 
 Editing a list uses **optimistic concurrency** and creates a new immutable revision
-instead of rewriting the revision a running or finished game pinned. Setting or clearing
+instead of rewriting the revision a waiting or running room drew from. Setting or clearing
 tags is such an edit and earns its own revision (R-LIST-05). The content
 language — a room language, or `zxx` — cannot change after creation. Rooms resolve and
 draw from exact revision IDs; what a finished game records is the list (#1358).

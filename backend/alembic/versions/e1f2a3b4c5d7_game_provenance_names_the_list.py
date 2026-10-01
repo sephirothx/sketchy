@@ -115,7 +115,8 @@ def upgrade() -> None:
             "JOIN prompt_list_revisions r ON r.id = o.prompt_list_revision_id"
         )
         op.drop_table(old)
-        op.create_index(f"ix_{table}_prompt_list_id", table, ["prompt_list_id"])
+        # The list's side, in the order the reclaim drains it.
+        op.create_index(f"ix_{table}_prompt_list_id", table, ["prompt_list_id", owner])
 
     old = _set_aside(
         "prompt_usage_facts",

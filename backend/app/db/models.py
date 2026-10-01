@@ -2780,6 +2780,11 @@ class GamePromptSource(Base):
     """
 
     __tablename__ = "game_prompt_sources"
+    __table_args__ = (
+        # The list's side, in the order the reclaim drains it (#1358): a batch
+        # reads its own slice instead of every row the list has (#1376 review).
+        Index("ix_game_prompt_sources_prompt_list_id", "prompt_list_id", "game_id"),
+    )
 
     game_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -2790,7 +2795,6 @@ class GamePromptSource(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         primary_key=True,
-        index=True,
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="prompt_sources")
@@ -3620,6 +3624,11 @@ class TurnPromptOfferSource(Base):
     """One prompt list that held an offered curated prompt version (#1358)."""
 
     __tablename__ = "turn_prompt_offer_sources"
+    __table_args__ = (
+        Index(
+            "ix_turn_prompt_offer_sources_prompt_list_id", "prompt_list_id", "offer_id"
+        ),
+    )
 
     offer_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -3630,7 +3639,6 @@ class TurnPromptOfferSource(Base):
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         primary_key=True,
-        index=True,
     )
 
     offer: Mapped[TurnPromptOffer] = relationship(back_populates="sources")
