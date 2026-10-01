@@ -2068,7 +2068,7 @@ The operator switch is `app_config['prompt_lists.publication_review']`
 ([`services/publication_policy.py`](../backend/app/services/publication_policy.py)):
 with it set, a publication — a first one or a Publish update — writes a **pending
 edition** (`prompt_list_editions.state = under_review`) instead of a live one, and the live
-edition, if any, keeps playing while it waits (#1360). A list it holds waits in `GET /api/moderation/prompt-lists`, which is a queue of its own
+edition, if any, keeps playing while it waits (#1360) — unless the list was withdrawn, whose live edition is dropped so nothing unreviewed returns with it. A list it holds waits in `GET /api/moderation/prompt-lists`, which is a queue of its own
 rather than an entry in the report queue: nothing was complained about, so there is no
 report to hang it on, and the owner cannot make one (a self-report is refused). Without
 that queue the switch was a trapdoor — held lists were out of the catalogue, unplayable,
@@ -2272,7 +2272,7 @@ An **edition** is an immutable snapshot of a published list's working copy (#136
 written by `set_owned_publication` each time its owner publishes content that differs from
 the edition already in that state: the live one (`published`) is what the catalogue shows
 and what other players' rooms draw and copy; a pending one (`under_review`) waits for a
-moderator under the operator switch (R-LIST-13) while the live one keeps playing. The
+moderator under the operator switch (R-LIST-13) while the live one keeps playing — unless the list was withdrawn, whose live edition is dropped so nothing unreviewed returns with it. The
 unique index is the "at most a live and a pending edition" rule: a Publish update or a
 release deletes the edition it replaces (`drop_editions`), whose versions are stamped
 `unlisted_at` / `unlisted_from_list_id` exactly as a save stamps what it drops, so a game

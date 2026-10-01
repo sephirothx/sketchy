@@ -584,6 +584,31 @@ async def retire_owned_lists(
             .with_for_update()
         )
     ).all()
+    # Every version the lists hold, in one id order, before any list is
+    # retired: each retirement locks its own batch, and two sorted batches
+    # are not one order against a decision carried across the owner's lists
+    # (#1386 review). The per-list locks after this are already held.
+    list_ids = [prompt_list.id for prompt_list in lists]
+    if list_ids:
+        await session.execute(
+            select(PromptVersion.id)
+            .where(
+                PromptVersion.id.in_(
+                    select(Prompt.prompt_version_id)
+                    .where(Prompt.prompt_list_id.in_(list_ids))
+                    .union(
+                        select(PromptListEditionItem.prompt_version_id)
+                        .join(
+                            PromptListEdition,
+                            PromptListEdition.id == PromptListEditionItem.edition_id,
+                        )
+                        .where(PromptListEdition.prompt_list_id.in_(list_ids))
+                    )
+                )
+            )
+            .order_by(PromptVersion.id)
+            .with_for_update()
+        )
     for prompt_list in lists:
         already = prompt_list.deleted_at
         await retire_prompt_list(session, prompt_list, now=now, erase_copy=True)

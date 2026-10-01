@@ -590,7 +590,7 @@ through the same report and review path any player-authored content uses — an
 administrator can switch new publications into a review queue instead
 (`POST /api/admin/prompt-list-review`) without a redeploy, if that stops being
 enough. A publication held that way — a first one or an update, while the edition
-already out keeps playing — waits in a moderation queue of its own, where a
+already out keeps playing unless the owner had withdrawn the list — waits in a moderation queue of its own, where a
 moderator releases it into the catalogue or takes the list down; it is separate
 from the report queue because nothing was reported — they were held by a policy,
 not an accusation. Players browse published lists at **Community catalogue**, reached from the
