@@ -189,6 +189,16 @@ test("a mixed room plays Standard and Extended, once, and lists in no language",
     selectionForLanguage(lists, "mul", ["german_local", "pokemon"], "fr"),
     ["french_standard", "pokemon"],
   );
+  // Extended is the same list in every language, so it follows the room into
+  // Mixed - shown in the host's language - and out of it again; Local stays.
+  assert.deepEqual(
+    selectionForLanguage(lists, "mul", ["german_standard", "german_extended", "german_local"], "fr"),
+    ["french_standard", "french_extended"],
+  );
+  assert.deepEqual(
+    selectionForLanguage(lists, "de", ["french_standard", "french_extended"], "fr"),
+    ["german_standard", "german_extended"],
+  );
   // Another host's Standard and Extended are shown in this player's language.
   assert.deepEqual(
     reconcileSelectionForLanguage(lists, "mul", ["english_standard"], "de"),

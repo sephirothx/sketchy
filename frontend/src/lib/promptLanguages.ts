@@ -151,9 +151,11 @@ export function availablePromptLanguages(
  * What a room switching to `language` should have selected.
  *
  * A list in a language cannot follow the room into another one, so none of
- * those carries over. A list in no language (#821) is played in any room, so
- * whichever of those were in `carried` stay chosen beside the new language's
- * Standard list.
+ * those carries over - except Extended, which every language has the same
+ * (R-PROMPT-01): a host who chose it keeps the new language's own, and in a
+ * mixed room their own language's. A list in no language (#821) is played in
+ * any room, so whichever of those were in `carried` stay chosen beside the new
+ * language's Standard list.
  */
 export function selectionForLanguage(
   lists: { slug: string; language: string; isBundled?: boolean }[],
@@ -176,8 +178,16 @@ export function selectionForLanguage(
       .filter((list) => list.language === AGNOSTIC_PROMPT_LANGUAGE)
       .map((list) => list.slug),
   );
+  const extendedChosen = carried.some((slug) => {
+    const list = lists.find((candidate) => candidate.slug === slug);
+    return list !== undefined && isMixable(list) && slug.endsWith("_extended");
+  });
+  const extended = extendedChosen
+    ? inLanguage.find((list) => isMixable(list) && list.slug.endsWith("_extended"))
+    : undefined;
   return [
     ...(chosen ? [chosen.slug] : []),
+    ...(extended ? [extended.slug] : []),
     ...carried.filter((slug) => agnostic.has(slug)),
   ];
 }

@@ -331,7 +331,7 @@
     {"conceptId":"01a0f467-2041-71b2-9e85-06ae52c52627","answer":"eye drops","aliases":["eyedrops","eye drop"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-06af2445ef86","answer":"eye roll","aliases":["eyeroll","rolling eyes","rolling your eyes","roll eyes"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-06b024c491fe","answer":"eye test","aliases":["eye chart","eye exam","eye examination","vision test","snellen chart"]},
-    {"conceptId":"01a0f467-2041-71b2-9e85-06b149f9d001","answer":"bed of nails","aliases":["fakir","nail bed"]},
+    {"conceptId":"01a0f467-2041-71b2-9e85-06b149f9d001","answer":"bed of nails","aliases":["fakir"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-06b268138741","answer":"falconer","aliases":["falconry"]},
     {"conceptId":"01a0f467-2041-71b2-9e85-06b31f5d619d","answer":"family tree","aliases":["genealogy","ancestry"]},
     {"conceptId":"01a02b7b-b52b-7e35-99b9-c8b6282fd49d","answer":"fang","aliases":["vampire fang","snake fang"],"promptVersion":2},
