@@ -157,3 +157,54 @@ async def test_an_edit_reaches_other_rooms_only_after_publish_update():
             assert offered and offered <= UPDATED, offered
         finally:
             await browser.close()
+
+
+async def test_a_summary_read_for_one_list_is_never_confirmed_for_another():
+    """#1392 review: the owner asks for list A's summary, opens list B while
+    it is read, and the dialog that lands describes A while confirming it
+    published B. A summary for a list no longer on screen is dropped."""
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        owner = await (await browser.new_context()).new_page()
+        owner.set_default_timeout(15000)
+        try:
+            await owner.goto(BASE_URL)
+            author = f"Author{uuid4().hex[:8]}"
+            await register_account(owner, author)
+            await confirm_email(author)
+            await owner.evaluate(
+                """async () => {
+                  const h = {'content-type': 'application/json'};
+                  const make = async (name, prompt) => (await (await fetch('/api/prompt-lists/mine',
+                    {method: 'POST', headers: h, body: JSON.stringify({name, language: 'en',
+                      prompts: [{prompt}]})})).json());
+                  const a = await make('List A', 'otter');
+                  await fetch(`/api/prompt-lists/mine/${a.id}/publish`, {method: 'POST'});
+                  await fetch(`/api/prompt-lists/mine/${a.id}`, {method: 'PUT', headers: h,
+                    body: JSON.stringify({expectedVersion: a.version, name: 'List A', description: '',
+                      prompts: [{prompt: 'badger'}]})});
+                  await make('List B', 'heron');
+                }"""
+            )
+            await owner.goto(f"{BASE_URL}/my-prompt-lists")
+            await owner.locator("aside button").filter(has_text="List A").click()
+            publication = owner.locator(".prompt-list-publication")
+            await publication.get_by_text("Unpublished changes").wait_for()
+
+            release = asyncio.Event()
+
+            async def held(route):
+                await release.wait()
+                await route.continue_()
+
+            await owner.route("**/live-edition", held)
+            await publication.get_by_role("button", name="Publish update").click()
+            await owner.locator("aside button").filter(has_text="List B").click()
+            await owner.get_by_label("Name").and_(owner.locator("[value='List B']")).wait_for()
+            release.set()
+            await owner.wait_for_timeout(1000)
+
+            assert await owner.get_by_role("alertdialog").count() == 0
+            assert await publication.get_by_role("button", name="Publish", exact=True).is_visible()
+        finally:
+            await browser.close()
