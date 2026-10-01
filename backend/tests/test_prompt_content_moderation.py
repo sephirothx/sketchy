@@ -1803,3 +1803,44 @@ async def test_a_prompt_removed_after_the_page_was_read_can_still_be_reported(en
               "reason": "other", "details": "Not in it."},
     )
     assert refused.status_code == 422
+
+
+async def test_a_list_taken_down_through_a_report_drops_its_pending_edition(env):
+    """#1386 review: a hidden list waits for nothing. A takedown from a
+    report left the update waiting beside it, so its owner read "under
+    review" in a queue that excludes hidden lists."""
+    from app.services.prompt_editions import UNDER_REVIEW, editions_of
+
+    new_client, factory, prompts = env
+    owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
+    owner = await register(owner_http, "PendingOwner")
+    await register(reporter_http, "PendingReporter")
+    moderator = await register(moderator_http, "PendingModerator")
+    await _staff_member(factory, moderator, UserRole.MODERATOR)
+    created = await prompts.create_owned(
+        owner["id"], name="Waiting update", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gull"),),
+    )
+    live = await prompts.set_owned_publication(owner["id"], created.id, published=True)
+    edited = await prompts.update_owned(
+        owner["id"], created.id, expected_version=live.version, name="Waiting update",
+        description="", prompts=(PromptListEntryInput(answer="crab"),),
+    )
+    held = await prompts.set_owned_publication(
+        owner["id"], created.id, published=True, under_review=True
+    )
+    assert held.pending_edition is not None and edited.version == held.version
+    filed = await reporter_http.post(
+        "/api/prompt-content-reports",
+        json={"promptListId": created.id, "reason": "other", "details": "Take it down."},
+    )
+    assert filed.status_code == 201, filed.text
+
+    decided = await moderator_http.patch(
+        f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
+        json={"status": "resolved", "note": "hidden", "moderationState": "hidden"},
+    )
+
+    assert decided.status_code == 200, decided.text
+    async with factory() as session:
+        assert UNDER_REVIEW not in await editions_of(session, UUID(created.id))

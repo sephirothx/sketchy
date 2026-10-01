@@ -276,3 +276,25 @@ async def test_edits_made_while_an_edition_waits_are_unpublished_changes(env):
     edited = await saved(prompts, owner.id, held, "crab")
 
     assert edited.unpublished_changes
+
+
+async def test_publishing_a_list_from_before_editions_says_nothing_is_unpublished(env):
+    """A list migrated with no working-copy digest: publishing it must leave
+    the editor saying players see what it shows (#1386 review)."""
+    from app.db.models import PromptList
+
+    prompts, users, factory = env
+    owner = await account(users, "Owner")
+    created = await prompts.create_owned(
+        owner.id, name="Old", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gull"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(PromptList, UUID(created.id))).content_hash = ""
+
+    first = await prompts.set_owned_publication(owner.id, created.id, published=True)
+
+    assert first.live_edition.number == 1
+    assert not first.unpublished_changes
+

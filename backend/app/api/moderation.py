@@ -2469,6 +2469,26 @@ def create_moderation_router(
                         target.moderated_by_user_id,
                         target.moderated_at,
                     )
+                    if (
+                        report.target_type == "list"
+                        and body.moderation_state == PromptContentModerationState.HIDDEN.value
+                    ):
+                        # A list taken down drops the edition waiting for
+                        # review, as a takedown from the review queue does
+                        # (R-LIST-13): a hidden list waits for nothing, and
+                        # a pending edition beside it would read "under
+                        # review" to its owner in a queue that excludes it
+                        # (#1386 review). Locked before anything is written.
+                        await session.execute(
+                            select(PromptList.id)
+                            .where(PromptList.id == target.id)
+                            .with_for_update()
+                        )
+                        pending = (await editions_of(session, target.id)).get(
+                            EDITION_UNDER_REVIEW
+                        )
+                        if pending is not None:
+                            await drop_editions(session, [pending.id], now=now)
                     target.moderation_state = body.moderation_state
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
