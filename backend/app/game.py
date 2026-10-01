@@ -1379,9 +1379,10 @@ class Game:
             if other == language:
                 continue
             for answer in (form.answer, *form.aliases):
-                if _normalize(answer, language) in taken:
+                accepted = _accepted_spellings(answer, other)
+                if not accepted.isdisjoint(taken):
                     continue
-                spellings = spellings | _accepted_spellings(answer, other)
+                spellings = spellings | accepted
         return spellings
 
     def _spells_the_prompt_elsewhere(self, guessed: frozenset[str]) -> bool:
@@ -1396,7 +1397,7 @@ class Game:
         )
 
     def _other_prompts_keys(self, language: str) -> frozenset[str]:
-        """The canonical keys, in `language`'s fold, of every other prompt
+        """Every spelling, in `language`'s fold, of every other prompt
         this game could play - what a word already means to that seat - and
         of every other concept the room pinned whose word there another
         language spells too (#1367): with two thousand concepts, the twin of
@@ -1406,10 +1407,11 @@ class Game:
         if cached is not None:
             return cached
         taken = frozenset(
-            _normalize(answer, language)
+            spelling
             for key in self.prompt_pool or []
             if key != current
             for answer in (self.answer_for(key, language), *self.aliases_for(key, language))
+            for spelling in _accepted_spellings(answer, language)
         ) | frozenset(
             key
             for key, owners in self.false_friends.get(language, {}).items()

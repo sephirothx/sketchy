@@ -1408,6 +1408,14 @@ class PromptListRepository(ABC):
         """Make the curated list-tag vocabulary present (R-LIST-18)."""
         ...
 
+    async def refresh_planner_statistics(self) -> None:
+        """Tell the database what seeding just wrote, where it plans by it.
+
+        Nothing to do by default: only a store with a query planner has
+        statistics to refresh.
+        """
+        return None
+
     @abstractmethod
     async def upsert_bundled(
         self,

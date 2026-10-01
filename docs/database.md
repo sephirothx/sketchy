@@ -2898,7 +2898,7 @@ property was only a convention of the code:
 | Role | Used by | May |
 | --- | --- | --- |
 | `sketchy_owner` | `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`) | own the schema and every table; DDL |
-| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events` and `score_events`, only `SELECT` on `alembic_version`; no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
+| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events` and `score_events`, only `SELECT` on `alembic_version`; `MAINTAIN` on the eight prompt tables startup seeds, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
 | `sketchy_monitor` | postgres_exporter | `pg_monitor`; no table |
 
 The grants live in [`db/roles.py`](../backend/app/db/roles.py) and are applied by the

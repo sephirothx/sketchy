@@ -9,7 +9,7 @@ every language guessing wrong once a turn - over a synthetic pool of
 ``--pool`` concepts with ``--aliases`` aliases per language, and reports what
 the memo holds at the end: its sets, the strings in them, and their bytes.
 
-    backend/.venv/bin/python benchmarks/false_friend_memo.py --seats 16 --languages 7 --rounds 10
+    backend/.venv/bin/python benchmarks/false_friend_memo.py --seats 16 --languages 8 --rounds 10
 """
 from __future__ import annotations
 
@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(ROOT, "backend"))
 
 from app.game import Game, PromptForm  # noqa: E402
 
-LANGUAGES = ("en", "de", "fr", "it", "es", "pt", "nl")
+LANGUAGES = ("en", "de", "fr", "it", "es", "pt", "nl", "pl")
 
 
 def build(args) -> Game:
@@ -71,12 +71,13 @@ def play(game: Game, turns: int) -> None:
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--seats", type=int, default=16)
-    parser.add_argument("--languages", type=int, default=7, choices=range(2, len(LANGUAGES) + 1))
+    parser.add_argument("--languages", type=int, default=8, choices=range(2, len(LANGUAGES) + 1))
     parser.add_argument("--rounds", type=int, default=10)
-    # The Standard family: 260 concepts a language and next to no aliases.
-    # A 16 x 10 game draws rounds x seats x 3 = 480, so it holds all 260, and
-    # each of its 160 turns plays a prompt of its own for most of the game.
-    parser.add_argument("--pool", type=int, default=260, help="concepts the game drew")
+    # A 16 x 10 game draws rounds x seats x 3 = 480 concepts, and Standard
+    # alone holds a thousand (#1367), so the draw is full; each of its 160
+    # turns plays a prompt of its own. The selection's false friends are a
+    # few dozen keys a language on top, too few to move this.
+    parser.add_argument("--pool", type=int, default=480, help="concepts the game drew")
     parser.add_argument("--aliases", type=int, default=0)
     args = parser.parse_args()
     game = build(args)

@@ -522,3 +522,44 @@ async def test_seeding_makes_the_tag_vocabulary_present_and_keeps_names_current(
         assert renamed.id == stale_id, "the row is the same row; only the name moved"
     finally:
         await engine.dispose()
+
+
+async def test_seeding_analyzes_what_it_wrote():
+    """A freshly seeded PostgreSQL database planned a thousand-prompt list's
+    aliases as a nested loop over every alias - two million comparisons, and
+    a statement timeout on a busy runner - until something analyzed it
+    (#1367). Seeding analyzes what it wrote; elsewhere there is nothing to do.
+
+    Counted rather than read off the estimates: the suite empties tables with
+    DELETE, so an estimate from an earlier test survives into this one.
+    """
+    import asyncio
+
+    from sqlalchemy import text
+
+    factory, engine = await create_test_db()
+    try:
+        if engine.dialect.name != "postgresql":
+            await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
+            return
+        counted = text(
+            "SELECT coalesce(sum(analyze_count), 0) FROM pg_stat_user_tables "
+            "WHERE relname = 'prompt_aliases'"
+        )
+
+        async def analyzed() -> int:
+            async with engine.connect() as connection:
+                await connection.execute(text("SELECT pg_stat_clear_snapshot()"))
+                return int(await connection.scalar(counted))
+
+        before = await analyzed()
+        await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
+        # Statistics are published when the analyzing backend next goes idle,
+        # within about a second.
+        for _ in range(50):
+            if await analyzed() > before:
+                break
+            await asyncio.sleep(0.1)
+        assert await analyzed() > before
+    finally:
+        await engine.dispose()

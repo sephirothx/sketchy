@@ -17,6 +17,7 @@ from time import thread_time
 from uuid import UUID
 
 from sqlalchemy import ColumnElement, Row, Uuid, and_, any_, bindparam, case, delete, desc, exists, func, insert, or_, select, update
+from sqlalchemy import text as sql_text
 from sqlalchemy.dialects import postgresql
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -25,6 +26,7 @@ from sqlalchemy.orm import aliased, defer, selectinload
 from app.services.runtime_metrics import metrics
 from app.services.telemetry import database_operation_of, telemetry
 from app.db import read_session
+from app.db.roles import SEEDED_TABLES
 from app.encode_pool import off_loop as _off_loop
 from app.db.models import (
     GalleryShelfReview,
@@ -190,6 +192,7 @@ from app.prompt_content import (
     languages_sharing_words,
     prompt_match_key,
     prompt_match_keys,
+    prompt_match_variants,
     validate_prompt_list_language,
 )
 from app.prompts import letter_histogram
@@ -3674,30 +3677,33 @@ def _mixed_false_friends(rows: Sequence[tuple[str, str, str]]) -> dict[str, dict
     another concept's word in some other language (#1367).
 
     `rows` are (language, concept, text): every answer and alias of the pinned
-    revisions. A text in no language is that seat's word too, whatever the
+    revisions. Keys are spellings as `prompt_match_variants` gives them - what
+    a guess and an answer are compared on. A text in no language is that seat's word too, whatever the
     seat plays. A guess that lands on one of the returned keys means the
     concepts listed to that seat - German "Hut" is the hat - and so must not
     win a drawing whose other-language spelling folds the same way (an
     English hut), drawn into the game or not.
     """
+    # By every spelling each language accepts, not only the canonical key: a
+    # guess is accepted on those (R-GUESS-01), and German "Lüge" is "luge" as
+    # well as "luege" - the French sled - which a canonical key never meets.
     own: dict[str, dict[str, set[str]]] = {language: defaultdict(set) for language in PROMPT_LANGUAGES}
-    folded: list[tuple[str, str, dict[str, str]]] = []
     for language, concept, text in rows:
-        keys = prompt_match_keys(text, PROMPT_LANGUAGES)
-        folded.append((language, concept, keys))
         for seat in PROMPT_LANGUAGES:
             if language in (seat, AGNOSTIC_PROMPT_LANGUAGE):
-                own[seat][keys[seat]].add(concept)
+                for spelling in prompt_match_variants(text, seat):
+                    own[seat][spelling].add(concept)
     found: dict[str, dict[str, frozenset[str]]] = {}
-    for language, concept, keys in folded:
+    for language, concept, text in rows:
         if language == AGNOSTIC_PROMPT_LANGUAGE:
             continue
-        for seat in PROMPT_LANGUAGES:
-            if seat == language:
-                continue
-            owners = own[seat].get(keys[seat])
-            if owners and owners - {concept}:
-                found.setdefault(seat, {})[keys[seat]] = frozenset(owners)
+        for spelling in prompt_match_variants(text, language):
+            for seat in PROMPT_LANGUAGES:
+                if seat == language:
+                    continue
+                owners = own[seat].get(spelling)
+                if owners and owners - {concept}:
+                    found.setdefault(seat, {})[spelling] = frozenset(owners)
     return found
 AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
 EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
@@ -3778,6 +3784,26 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         self._false_friends: OrderedDict[tuple, dict[str, dict[str, frozenset[str]]]] = (
             OrderedDict()
         )
+
+    async def refresh_planner_statistics(self) -> None:
+        """ANALYZE the prompt tables after seeding, on PostgreSQL.
+
+        A database the seed has just filled has no statistics yet, so the
+        planner takes every table for a row or two and joins the aliases of a
+        thousand-prompt list by walking all of them once per prompt: two
+        million comparisons for one list, and a mixed room's selection past
+        the 30-second statement timeout on a busy CI runner (#1367).
+        Autovacuum would get there, a minute later; startup should not wait
+        on it. The application role is granted MAINTAIN on these tables for
+        it (`app.db.roles.SEEDED_TABLES`); a role without it is warned and
+        skipped, never refused, so this cannot stop a server from starting.
+        """
+        async with self._session_factory() as session:
+            if session.get_bind().dialect.name != "postgresql":
+                return
+            for table in SEEDED_TABLES:
+                await session.execute(sql_text(f"ANALYZE {table}"))
+            await session.commit()
 
     @staticmethod
     def _star_count():

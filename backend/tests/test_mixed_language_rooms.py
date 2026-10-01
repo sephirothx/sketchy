@@ -256,6 +256,57 @@ def test_a_false_friend_the_game_never_drew_does_not_score_either():
     assert game.submit_guess("german", "Hütte")[0] is True
 
 
+def test_a_false_friend_through_a_second_spelling_does_not_score():
+    """German "Lüge" (lie) is written "luge" too, which is the French sled:
+    compared on every spelling a guess is accepted on, not one key (#1367)."""
+    from app.repositories.sqlalchemy import _mixed_false_friends
+
+    false_friends = _mixed_false_friends(
+        [("de", "c-lie", "Lüge"), ("fr", "c-lie", "mensonge"),
+         ("de", "c-sled", "Schlitten"), ("fr", "c-sled", "luge")]
+    )
+    sled = {"de": PromptForm("Schlitten", (), "v-de"), "fr": PromptForm("luge", (), "v-fr")}
+    game = Game(
+        turn_order=["drawer", "german"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-sled"],
+        prompt_answers={"c-sled": "luge"},
+        prompt_version_ids={"c-sled": "v-fr"},
+        prompt_translations={"c-sled": sled},
+        seat_languages={"drawer": "fr", "german": "de"},
+        false_friends=false_friends,
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("german", "Lüge")[0] is False
+    assert game.guess_hint("german", "Lüge") == "another_language"
+    assert game.submit_guess("german", "Schlitten")[0] is True
+
+
+def test_a_spelling_that_names_the_drawing_itself_is_not_taken_from_the_seat():
+    """The guard takes a spelling only when it names *another* concept to the
+    seat: an English seat's "baer", accepted through German "Bär", stands
+    even where the selection lists "baer" as that same bear's."""
+    bear = {"en": PromptForm("bear", (), "v-en"), "de": PromptForm("Bär", (), "v-de")}
+    game = Game(
+        turn_order=["drawer", "english"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-bear"],
+        prompt_answers={"c-bear": "Bär"},
+        prompt_version_ids={"c-bear": "v-de"},
+        prompt_translations={"c-bear": bear},
+        seat_languages={"drawer": "de", "english": "en"},
+        false_friends={"en": {"baer": frozenset({"c-bear"})}},
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("english", "baer")[0] is True
+
+
 def test_a_word_that_is_the_drawing_s_own_in_both_languages_still_scores():
     """A key is only taken from a seat when it names *another* concept there:
     "Hotel" is the hotel in German and in English alike."""
