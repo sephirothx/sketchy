@@ -2547,7 +2547,8 @@ is offered prompts in theirs, each guesser's letter tiles, hints and near misses
 their own, and the reveal shows each player their own word. A guess naming the drawing
 in any of the eight languages scores - unless the word means another prompt of the room's
 lists in the guesser's own language, in which case they alone are told it is the answer
-in another language. Such a room plays Standard and lists in Any language;
+in another language. Such a room plays Standard, Extended and lists in Any language - never
+a Local list;
 custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings, the highlights, and the drawing recap — where a registered

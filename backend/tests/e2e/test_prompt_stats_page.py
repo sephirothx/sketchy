@@ -32,7 +32,7 @@ async def test_prompt_stats_page_loads_sorts_and_is_linked_from_the_picker():
             # of scroll on a phone - so the count is asserted by paging to the
             # end, which also proves nothing is silently dropped. How many to
             # expect is read off the picker's own option rather than written
-            # down here: the catalogue holds two lists per supported language
+            # down here: the catalogue holds three lists per supported language
             # and each one's size is content, not a constant this test knows.
             #
             # Two shapes, and which one is not ours to predict - the suite
