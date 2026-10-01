@@ -77,7 +77,13 @@ async def _choices_in_a_new_room(host, guest, list_id: str) -> set[str]:
             break
         await asyncio.sleep(0.1)
     assert drawer is not None, "no drawer received prompt choices"
-    return {text.strip() for text in await drawer.locator(".prompt-choices button").all_inner_texts()}
+    offered = {text.strip() for text in await drawer.locator(".prompt-choices button").all_inner_texts()}
+    # Both players go as soon as the offer is read: a game left running is
+    # two pages of timers and canvases for the rest of the test, and the
+    # suite's CPU-throttled tests share the runner (#1392 CI).
+    await host.context.close()
+    await guest.context.close()
+    return offered
 
 
 async def test_an_edit_reaches_other_rooms_only_after_publish_update():
