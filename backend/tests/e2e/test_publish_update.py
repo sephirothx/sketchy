@@ -23,13 +23,6 @@ FIRST = {"lighthouse", "harbour", "seagull"}
 UPDATED = {"volcano", "glacier", "canyon"}
 
 
-async def _open_my_list(page, name: str) -> None:
-    await page.goto(f"{BASE_URL}/my-prompt-lists")
-    await page.get_by_role("heading", name="My prompt lists").wait_for()
-    await page.locator("aside button").filter(has_text=name).click()
-    await page.get_by_label("Name").wait_for()
-
-
 async def _replace_prompts(page, prompts: set[str], remove: set[str]) -> None:
     for prompt in remove:
         await page.get_by_role("button", name=f"Remove {prompt}").click()
@@ -39,8 +32,22 @@ async def _replace_prompts(page, prompts: set[str], remove: set[str]) -> None:
     await page.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
 
 
+async def _strangers(browser) -> tuple:
+    """Two players who have never seen the list or a room: a game's state on
+    a page is no part of what the next room should depend on."""
+    pages = []
+    for role in ("Host", "Guest"):
+        context = await browser.new_context()
+        page = await context.new_page()
+        page.set_default_timeout(15000)
+        await page.goto(BASE_URL)
+        await use_guest_name(page, f"{role}{uuid4().hex[:6]}")
+        pages.append(page)
+    return tuple(pages)
+
+
 async def _choices_in_a_new_room(host, guest, list_id: str) -> set[str]:
-    """The prompts the first drawer is offered, in a room the stranger hosts
+    """The prompts the first drawer is offered, in a room a stranger hosts
     on this list alone - so the room plays the live edition."""
     await host.goto(f"{BASE_URL}/create?list={list_id}")
     await host.click('summary:has-text("Prompts")')
@@ -77,11 +84,8 @@ async def test_an_edit_reaches_other_rooms_only_after_publish_update():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
         owner_context = await browser.new_context()
-        stranger_context = await browser.new_context()
         owner = await owner_context.new_page()
-        stranger = await stranger_context.new_page()
         owner.set_default_timeout(15000)
-        stranger.set_default_timeout(15000)
         try:
             await owner.goto(BASE_URL)
             # Unique per run: the account outlives it in the server's database.
@@ -119,13 +123,10 @@ async def test_an_edit_reaches_other_rooms_only_after_publish_update():
             await _replace_prompts(owner, UPDATED, FIRST)
             await publication.get_by_text("Unpublished changes").wait_for()
 
-            await stranger.goto(BASE_URL)
-            await use_guest_name(stranger, f"Stranger{uuid4().hex[:6]}")
-            offered = await _choices_in_a_new_room(stranger, owner, list_id)
+            offered = await _choices_in_a_new_room(*await _strangers(browser), list_id)
             assert offered and offered <= FIRST, offered
 
             # Publish update says what it changes before it does it.
-            await _open_my_list(owner, "Shore words")
             await publication.get_by_role("button", name="Publish update").click()
             dialog = owner.get_by_role("alertdialog")
             await dialog.get_by_text("Added (3)").wait_for()
@@ -134,9 +135,7 @@ async def test_an_edit_reaches_other_rooms_only_after_publish_update():
             await owner.locator(".app-toast").get_by_text("Update published.").wait_for()
             await publication.get_by_text("In the community catalogue").wait_for()
 
-            offered = await _choices_in_a_new_room(stranger, owner, list_id)
+            offered = await _choices_in_a_new_room(*await _strangers(browser), list_id)
             assert offered and offered <= UPDATED, offered
         finally:
-            await owner_context.close()
-            await stranger_context.close()
             await browser.close()
