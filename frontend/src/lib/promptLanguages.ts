@@ -187,7 +187,7 @@ export function selectionForLanguage(
     : undefined;
   return [
     ...(chosen ? [chosen.slug] : []),
-    ...(extended ? [extended.slug] : []),
+    ...(extended && extended.slug !== chosen?.slug ? [extended.slug] : []),
     ...carried.filter((slug) => agnostic.has(slug)),
   ];
 }

@@ -176,6 +176,7 @@ test("a mixed room plays Standard and Extended, once, and lists in no language",
     { slug: "mine", language: "de", isBundled: false },
     // A player's own list named like Standard is not Standard.
     { slug: "fake_standard", language: "de", isBundled: false },
+    { slug: "fake_extended", language: "de", isBundled: false },
     { slug: "pokemon", language: "zxx", isBundled: false },
   ];
   // Offered once Standard is there in every language, and last.
@@ -190,10 +191,15 @@ test("a mixed room plays Standard and Extended, once, and lists in no language",
     ["french_standard", "pokemon"],
   );
   // Extended is the same list in every language, so it follows the room into
-  // Mixed - shown in the host's language - and out of it again; Local stays.
+  // Mixed - shown in the host's language - and out of it again; Local stays
+  // behind, and so does a player's own list that merely sounds like Extended.
   assert.deepEqual(
     selectionForLanguage(lists, "mul", ["german_standard", "german_extended", "german_local"], "fr"),
     ["french_standard", "french_extended"],
+  );
+  assert.deepEqual(
+    selectionForLanguage(lists, "mul", ["fake_extended"], "fr"),
+    ["french_standard"],
   );
   assert.deepEqual(
     selectionForLanguage(lists, "de", ["french_standard", "french_extended"], "fr"),
