@@ -822,7 +822,7 @@ async def test_prompt_list_repository():
         assert resolved.language == "en"
         assert resolved.prompts == ("apple", "banana", "cherry")
         assert resolved.aliases["apple"] == ("malus",)
-        assert len(resolved.revision_ids) == 1
+        assert len(resolved.list_ids) == 1
         assert resolved.prompt_version_ids["apple"]
         assert resolved.prompt_source_list_ids["apple"] == resolved.list_ids
 
@@ -892,7 +892,7 @@ async def test_prompt_list_repository():
 
         # 7. Version upgrade maintains stats
         date_concept = str(generate_uuid())
-        first_revision_ids = resolved.revision_ids
+        first_list_ids = resolved.list_ids
         upgraded = await repo.upsert_bundled(
             slug="standard",
             name="Standard List v2",
@@ -918,7 +918,8 @@ async def test_prompt_list_repository():
         apple_stat_v2 = next(s for s in new_stats if s.text == "apple tree")
         assert apple_stat_v2.pick_count == 1  # preserved stats
         resolved_v2 = await repo.resolve_selection(["standard"])
-        assert resolved_v2.revision_ids != first_revision_ids
+        # The same list, its working copy overwritten by the new version.
+        assert resolved_v2.list_ids == first_list_ids
         assert resolved_v2.aliases["apple tree"] == ("apple", "malus")
         assert (
             resolved_v2.prompt_version_ids["apple tree"]

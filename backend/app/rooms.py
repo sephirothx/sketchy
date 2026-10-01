@@ -476,11 +476,16 @@ class Room:
     color_mode: str = DEFAULT_COLOR_MODE
     prompt_language: str = "en"
     prompt_list_slugs: list[str] = field(default_factory=list)
-    prompt_list_revision_ids: list[str] = field(default_factory=list)
-    # The lists those revisions belong to, in the same order: what a game's
-    # provenance names (#1358), while the revisions are what it draws from.
+    # The lists the room was admitted with, in the order chosen. A game draws
+    # from their working copies when it starts (#1359), and its provenance
+    # names them (#1358).
     prompt_list_ids: list[str] = field(default_factory=list)
-    # What the pinned revisions hold, rather than the content itself. The pool
+    # Each list's version when the selection was last checked, and for whom:
+    # a draw refuses content saved since, and the room checks again for the
+    # same account before drawing again (#1385 review).
+    prompt_list_versions: dict[str, int] = field(default_factory=dict)
+    prompt_lists_checked_for: str | None = None
+    # What the pinned lists hold, rather than the content itself. The pool
     # used to live here for the room's whole life so that a game could offer
     # three choices and price wheel letters; both need a number and a
     # distribution, and a game draws the prompts it will actually use when it
@@ -695,7 +700,7 @@ class Room:
         )
 
     def draws_from_prompt_lists(self) -> bool:
-        """Whether a game here would draw anything from the pinned revisions."""
+        """Whether a game here would draw anything from the pinned lists."""
         return not self.custom_prompts_only and self.prompt_pool_size > 0
 
     def prompt_source_mode(self) -> str:
@@ -873,8 +878,9 @@ class RoomManager:
         color_mode: str = DEFAULT_COLOR_MODE,
         prompt_language: str = "en",
         prompt_list_slugs: list[str] | None = None,
-        prompt_list_revision_ids: list[str] | None = None,
         prompt_list_ids: list[str] | None = None,
+        prompt_list_versions: dict[str, int] | None = None,
+        prompt_lists_checked_for: str | None = None,
         prompt_pool_size: int = 0,
         prompt_letter_counts: dict[str, int] | None = None,
         prompt_letter_total: int = 0,
@@ -908,8 +914,9 @@ class RoomManager:
             color_mode=color_mode,
             prompt_language=prompt_language,
             prompt_list_slugs=list(prompt_list_slugs or []),
-            prompt_list_revision_ids=list(prompt_list_revision_ids or []),
             prompt_list_ids=list(prompt_list_ids or []),
+            prompt_list_versions=dict(prompt_list_versions or {}),
+            prompt_lists_checked_for=prompt_lists_checked_for,
             prompt_pool_size=prompt_pool_size,
             prompt_letter_counts=dict(prompt_letter_counts or {}),
             prompt_letter_total=prompt_letter_total,

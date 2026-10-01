@@ -49,11 +49,10 @@ from app.db.models import (
     PlayerReport,
     PlayerReportMessageEvidence,
     RoomPreset,
+    Prompt,
     PromptAlias,
     PromptContentReport,
     PromptList,
-    PromptListRevision,
-    PromptListRevisionItem,
     PromptListStar,
     PromptTakedown,
     PromptVersion,
@@ -107,7 +106,9 @@ from app.domain_values import (
 # theirs carries `decided` instead of its status and review times, and the
 # declines and the blocks and reports against them are gone. To 14 when an
 # offer's sources became the lists it was drawn from (`sourceListIds`, #1358).
-EXPORT_SCHEMA_VERSION = 14
+# To 15 when a list carries its working copy's `prompts` instead of every
+# revision it was saved as (#1359).
+EXPORT_SCHEMA_VERSION = 15
 
 # Events that name the requester only as their **target** and are exported:
 # the ones they are already told about when they happen (#1238). Anything
@@ -143,9 +144,9 @@ DEFAULT_EXPORT_BATCH_SIZE = 25
 # list section, so this - not the size of the account's history - is what one
 # build holds in memory besides its compressed output.
 EXPORT_PAGE_SIZE = 500
-# A list revision's prompts are written in smaller pieces than that: at the
+# A list's prompts are written in smaller pieces than that: at the
 # ceiling (500 prompts of 20 aliases) encoding them as one page held the loop
-# ~30 ms, once per revision (#1250 review).
+# ~30 ms (#1250 review).
 REVISION_PROMPT_PAGE = 100
 # Joins one prompt's aliases in the database. No stored alias can hold it:
 # alias text is whitespace-collapsed before it is kept (`clean_prompt_aliases`)
@@ -583,7 +584,7 @@ async def _write_rows(
 
 
 def _prompt_list_fields(prompt_list: PromptList) -> dict:
-    """A list's own fields, in document order; its revisions follow them."""
+    """A list's own fields, in document order; its prompts follow them."""
     return {
         "id": str(prompt_list.id),
         "slug": prompt_list.slug,
@@ -604,19 +605,12 @@ def _prompt_list_fields(prompt_list: PromptList) -> dict:
 async def _write_prompt_lists(
     writer: _ExportWriter, session: AsyncSession, identity_ids: list[UUID]
 ) -> None:
-    """The owner's lists, each revision's prompts read and written a page at a time.
+    """The owner's lists, each one's working copy written a page at a time.
 
-    Every content save writes the whole list again as a new revision, so what
-    this section holds grows with how often the owner saved, not with how long
-    a list is: 801 saves of a 500-prompt list are 400,500 prompts. Loaded as
-    one graph and encoded as one value per list, that stalled the loop every
-    room shares for ~3 s and took ~1 GB, and a refused build does not count
-    against the week (R-PRIV-12), so it could be asked for again at once
-    (#1250). Here a list's revisions are read as metadata, then each
-    revision's aliases and its prompts, one revision at a time, and the loop
-    is given back between them: a build holds one revision's prompts and
-    aliases, and each list's revision metadata - a row per save - rather
-    than every revision's content. The document is the one the graph made.
+    The section grows with how many lists the owner keeps, never with how
+    often they saved: a list is one working copy (#1359). Each list's
+    prompts are read and written before the next list's, with the loop given
+    back between them, so a build holds one list's prompts at a time.
     """
     writer.begin_array()
     lists = (
@@ -633,65 +627,35 @@ async def _write_prompt_lists(
         writer.begin_object()
         for name, item in _prompt_list_fields(prompt_list).items():
             writer.field(name, item)
-        writer.key("revisions")
-        writer.begin_array()
-        revisions = (
-            await session.execute(
-                select(
-                    PromptListRevision.id,
-                    PromptListRevision.version,
-                    PromptListRevision.language,
-                    PromptListRevision.content_hash,
-                    PromptListRevision.created_at,
-                )
-                .where(PromptListRevision.prompt_list_id == prompt_list.id)
-                .order_by(PromptListRevision.version)
-            )
-        ).all()
-        for revision in revisions:
-            writer.begin_object()
-            writer.field("id", str(revision.id))
-            writer.field("version", revision.version)
-            writer.field("language", revision.language)
-            writer.field("contentHash", revision.content_hash)
-            writer.field("createdAt", _timestamp(revision.created_at))
-            writer.key("prompts")
-            await _write_revision_prompts(writer, session, revision.id)
-            writer.end_object()
-            await asyncio.sleep(0)
-        writer.end_array()
+        writer.key("prompts")
+        await _write_working_copy_prompts(writer, session, prompt_list.id)
         writer.end_object()
     writer.end_array()
 
 
-async def _write_revision_prompts(
-    writer: _ExportWriter, session: AsyncSession, revision_id: UUID
+async def _write_working_copy_prompts(
+    writer: _ExportWriter, session: AsyncSession, prompt_list_id: UUID
 ) -> None:
-    """One revision's prompts in position order.
+    """A list's working copy in order (#1359).
 
-    Read whole, not through a server-side cursor: a revision holds at most
-    `MAX_PROMPTS_PER_OWNED_LIST` prompts, so a cursor saves nothing, and on
-    PostgreSQL each one stayed open as a portal until the build's
-    transaction ended - one per revision, ~350 MB of the database's memory
-    for a list saved 800 times (#1250 review). The prompts are then written
-    a page of `REVISION_PROMPT_PAGE` at a time."""
+    Until #1359 the export wrote every revision a list had been saved as,
+    and grew with every save (#1250); a list is one working copy now, at most
+    `MAX_PROMPTS_PER_OWNED_LIST` prompts. Read whole, not through a
+    server-side cursor - a cursor saves nothing at that size, and on
+    PostgreSQL it stayed open as a portal until the build's transaction
+    ended (#1250 review) - and written a page of `REVISION_PROMPT_PAGE` at a
+    time."""
     # One row per prompt, its aliases joined in the database. At the ceiling
     # that is 500 rows rather than 10,000, and `AsyncSession.execute` builds
-    # every row it returns before it gives the loop back: ~40 ms of it for
-    # one revision's alias rows, which no paging afterwards could split
-    # (#1250 review).
+    # every row it returns before it gives the loop back (#1250 review).
     alias_rows = await session.execute(
         select(
             PromptVersionAlias.prompt_version_id,
             func.aggregate_strings(PromptAlias.answer, ALIAS_SEPARATOR),
         )
         .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
-        .join(
-            PromptListRevisionItem,
-            PromptListRevisionItem.prompt_version_id
-            == PromptVersionAlias.prompt_version_id,
-        )
-        .where(PromptListRevisionItem.revision_id == revision_id)
+        .join(Prompt, Prompt.prompt_version_id == PromptVersionAlias.prompt_version_id)
+        .where(Prompt.prompt_list_id == prompt_list_id)
         .group_by(PromptVersionAlias.prompt_version_id)
     )
     aliases = {version_id: joined.split(ALIAS_SEPARATOR) for version_id, joined in alias_rows}
@@ -703,12 +667,12 @@ async def _write_revision_prompts(
             PromptVersion.id,
             PromptVersion.version,
             PromptVersion.canonical_answer,
-            PromptListRevisionItem.position,
+            Prompt.position,
         )
-        .select_from(PromptListRevisionItem)
-        .join(PromptVersion, PromptVersion.id == PromptListRevisionItem.prompt_version_id)
-        .where(PromptListRevisionItem.revision_id == revision_id)
-        .order_by(PromptListRevisionItem.position)
+        .select_from(Prompt)
+        .join(PromptVersion, PromptVersion.id == Prompt.prompt_version_id)
+        .where(Prompt.prompt_list_id == prompt_list_id)
+        .order_by(Prompt.position, Prompt.id)
     )
     for page in result.partitions(REVISION_PROMPT_PAGE):
         for concept_id, version_id, version, answer, position in page:

@@ -128,16 +128,17 @@ outlives the `Game`s played in it. `RoomManager` is the process-wide registry, h
 as a singleton in [`backend/app/state.py`](../backend/app/state.py) so REST routes and
 Socket.IO handlers see the same rooms. Room settings and the recap buffer live
 here, along with the room's own custom prompts; its **curated prompts do not**.
-A room holds only what its selected lists were pinned to - the revision IDs, how
+A room holds only what its selected lists were pinned to - the list IDs, how
 many prompts they hold, and a letter histogram for wheel pricing - and the
 prompts themselves stay in the database until a game starts and draws the
-bounded sample it can actually play (see `app/game.py` above). Pinning is checked at
+bounded sample it can actually play from the lists' working copies, which is the
+game's snapshot of them (#1359) (see `app/game.py` above). Pinning is checked at
 room creation, at every change of the selection and before every game: that no answer
 reaches two prompts under the room's fold, in a mixed room under every room language's.
-A revision never changes, so the verdict is remembered by the repository
-(`SqlAlchemyPromptListRepository._verdicts`, 512 selections, oldest out) under a
-fingerprint of what moderation has made of the revisions' members — one aggregate
-statement — and a miss is read a thousand rows per turn of the loop and folded on the
+A list at one version holds one content - a save moves the version - so the verdict is
+remembered by the repository (`SqlAlchemyPromptListRepository._verdicts`, 512 selections,
+oldest out) by list ids and versions, under a fingerprint of what moderation has made of
+the lists' members — one aggregate statement — and a miss is read a thousand rows per turn of the loop and folded on the
 drawings' encode threads rather than on the loop (#1237): twenty agnostic lists in a
 mixed room held the loop 3.3 s on every authorization. `to_state_payload()`
 ([`backend/app/rooms.py:814`](../backend/app/rooms.py)) and `to_public_summary()`
@@ -435,7 +436,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Deferred room teardowns and stagings | `HandlerContext.room_cleanups`, a set of tasks — a teardown an entry caused, and every finished game's staging (#879, #976). Drained, then cancelled and counted, by the planned shutdown | No: what is cancelled is counted as a lost write, and the room is told |
 | Encoding a finished game, folding a prompt-list selection's answers cold (#1237), and the integrity audit's drawing checks (#1251, 16 drawings a job) | Two `ThreadPoolExecutor`s, `HISTORY_ENCODE_WORKERS` threads each (`services/game_handoff.py`, `encode_pool.py`) — the envelope's and the drawings' own threads, never the default pool blocking SMTP shares. Built on first use, so the width one startup validated is the width they get, and left to the interpreter at exit (#976) | No: the work is redone from the envelope on a retry |
 | The Gallery's **This week** shelf | `GalleryShelfCache` (memory) — one snapshot per process, recomputed at most once a minute, invalidated by a moderation decision on the shelf | No: derived from history rows |
-| Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by revision ids and fold, reused while the members' moderation fingerprint is unchanged (#1237) | No: re-derived from the revisions on a miss |
+| Whether a pinned selection's answers collide, and how many prompts it offers | `SqlAlchemyPromptListRepository._verdicts` (memory) — by list ids, versions and fold, reused while the members' moderation fingerprint is unchanged (#1237, #1359) | No: re-derived from the working copies on a miss |
 | Drawing thumbnails being drawn | The thumbnail worker (`lib/thumbnailQueue.ts`, `workers/thumbnail.worker.ts`, #1282) — one module worker per page, started on first use and let go after 20 s idle; one job in flight, at most 48 waiting (past that the oldest is dropped and its card asks again when it next comes into view); a card that unmounts or changes drawing cancels its job. Where no worker can be had the same `renderThumbnail` runs on the page. Replay cost follows the history, not its size: the accepted 100-fill turn is 244 ms a thumbnail on desktop Chromium and 972 ms at 4× CPU on the page, no long task on the worker | No: redrawn from the fetched bytes |
 | A viewer's canvas repaint being played out | `createProtocolRenderer`'s live replay (`lib/protocolRenderer.ts`, #1347) — a join's, a reconnect's or an undo's repaint of the whole history, run in 16 ms pieces through a `MessageChannel` and shown after each — a piece never begins an action once its 16 ms are spent, the history's last one included, and the task that delivered the history paints none of its fills, so the longest task is the budget plus one fill wherever a fill outlasts it — reading the protocol's history array as it grows; frames that land meanwhile are painted from it rather than by `apply`. The drawer's and the scratch pad's repaints stay immediate: their pointer paints the canvas directly. The accepted 100-fill turn at 4× CPU: one 1,003 ms task → 43 ms worst, the canvas complete after 1,031 ms instead of 1,002 | No: repainted from the history |
 | A stored drawing's decoded bytes | `WireDrawingCache` (memory, `api/profiles.py`) — wire bytes and a gzip copy by stored checksum and wire version, 32 MiB LRU; never the answer to who may read them, which every request asks its route's query (#979) | No: derived from `turn_drawings` |
@@ -444,7 +445,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Quick custom prompts typed into a room | `Room` (memory) | No |
 | Accounts, sessions, roles, bans, blocks | Database | Yes |
 | Finished game history, turns, outcomes, score ledger, drawings | Database | Yes |
-| Prompt concepts, versions, aliases, lists, revisions, usage facts | Database | Yes |
+| Prompt concepts, versions, aliases, lists and their working copies, usage facts (revisions: bundled seeding only, until #1362) | Database | Yes |
 | Room-setting presets | Database | Yes |
 | Room-code reservations (including retirement) | Database | Yes |
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
@@ -1995,7 +1996,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled, and reading back what a decision shows the player. |
 | [`app/services/incidents.py`](../backend/app/services/incidents.py) | Grouping reports of one incident, and reading them as one thread (#620). |
-| [`app/services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py) | Reclaiming prompt-list revisions nothing needs, without touching the games that played them. |
+| [`app/services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py) | Reclaiming deleted lists and unlisted prompt versions nothing needs, without touching the games that played them. |
 | [`app/services/prompt_takedowns.py`](../backend/app/services/prompt_takedowns.py) | Recording which words an owner may not type back in, and forgetting them. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
 | [`app/services/friends.py`](../backend/app/services/friends.py) | **Every** friendship rule: the canonical pair, the ceilings, the hourly limit, what a request is not told, and who is told a list moved. |

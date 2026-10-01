@@ -769,3 +769,41 @@ async def test_each_guest_tier_reports_its_own_lateness():
         assert measured["backlog"] == 1
     finally:
         await engine.dispose()
+
+
+async def test_the_unlisted_version_sweep_keeps_to_its_budget_and_says_when_it_is_behind():
+    """#1359: a save stamps the wordings it drops, and the sweep collects them
+    a grace later - in committed batches within its budget, reporting itself
+    cut short so the loop comes back sooner (R-PRIV-16)."""
+    from app.db.models import PromptConcept, PromptVersion
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
+
+    factory, engine = await create_test_db()
+    try:
+        now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+        async with factory() as session:
+            async with session.begin():
+                for index in range(5):
+                    concept_id = generate_uuid()
+                    session.add(PromptConcept(id=concept_id))
+                    await session.flush()
+                    session.add(
+                        PromptVersion(
+                            concept_id=concept_id, language="en",
+                            canonical_answer=f"dropped {index}", match_key=f"dropped {index}",
+                            unlisted_at=now - timedelta(days=3),
+                        )
+                    )
+
+        first = await reclaim_unlisted_versions(
+            factory, now=now, budget=SweepBudget(rows=2, batch=1, seconds=30)
+        )
+        assert int(first) == 2 and first.batches == 2
+        assert first.exhausted and first.backlog == 3
+        rest = await reclaim_unlisted_versions(factory, now=now)
+        assert int(rest) == 3 and not rest.exhausted and rest.backlog == 0
+        # Within the grace, nothing is collected.
+        assert int(await reclaim_unlisted_versions(factory, now=now - timedelta(days=3))) == 0
+    finally:
+        await engine.dispose()
+

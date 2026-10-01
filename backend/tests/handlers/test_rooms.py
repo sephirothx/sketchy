@@ -222,7 +222,7 @@ async def test_a_single_changed_setting_saves_alone_and_without_a_chat_line():
 async def test_owned_list_authority_reaches_the_store_and_share_codes_are_refused():
     class AuthorizingPromptListRepo(StubPromptListRepo):
         def __init__(self):
-            super().__init__(("capybara",), revision_ids=("revision-user-1",))
+            super().__init__(("capybara",), list_ids=("list-user-1",))
             self.authorization = None
 
         async def authorize_selection(
@@ -324,7 +324,7 @@ async def test_declared_room_language_reaches_every_payload_and_game_matching():
     repo = StubPromptListRepo(
         ("éléphant", "vélo"),
         language="fr",
-        revision_ids=("revision-fr-1",),
+        list_ids=("list-fr-1",),
         aliases={"vélo": ("bicyclette",)},
         prompt_version_ids={"éléphant": "prompt-fr-1", "vélo": "prompt-fr-2"},
     )
@@ -344,7 +344,7 @@ async def test_declared_room_language_reaches_every_payload_and_game_matching():
     assert result == {"ok": True}
     assert room.prompt_language == "fr"
     assert room.prompt_pool_size == 2
-    assert room.prompt_list_revision_ids == ["revision-fr-1"]
+    assert room.prompt_list_ids == ["list-fr-1"]
     for payload in (
         room.to_state_payload(),
         room.to_public_summary(),
@@ -357,7 +357,7 @@ async def test_declared_room_language_reaches_every_payload_and_game_matching():
     assert room.game is not None
     assert room.game.prompt_language == "fr"
     assert room.game.prompt_aliases == {"vélo": ("bicyclette",)}
-    assert room.game.prompt_source_list_ids == ("revision-fr-1",)
+    assert room.game.prompt_source_list_ids == ("list-fr-1",)
     assert room.game.prompt_version_ids == {
         "éléphant": "prompt-fr-1",
         "vélo": "prompt-fr-2",

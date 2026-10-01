@@ -316,12 +316,12 @@ than claiming parameters that cannot be reconstructed. Participant-only game
 detail and private account export include the exact snapshot; public history
 summaries expose only its versions and typed mode/time fields.
 Prompt provenance is normalized as well as snapshotted. Each game records the
-immutable list revisions that were actually present after custom-prompt
+lists that were actually present after custom-prompt
 shadowing—not merely configured slugs—and classifies its real pool as curated,
 custom, mixed, or built-in fallback. Every prompt option offered in a completed
 turn gets an ordered immutable row with its text snapshot, selected flag,
-curated prompt-version ID when applicable, and every list revision containing
-that version. Custom and fallback options have explicit source kinds and null
+curated prompt-version ID when applicable, and every list the draw found
+that version in. Custom and fallback options have explicit source kinds and null
 curated identities, so collisions cannot inflate curated statistics or make a
 bad prompt untraceable. Exact offers are private export data - the drawer's own
 turns' - and are shown on no history page (#1254).
@@ -529,13 +529,11 @@ otherwise surface as a room refusing its own selection. Official answers carry n
 leading article (`Hund`, not `der Hund`); the article form is an alias, which
 is why guess matching does not try to strip one. Every
 language-specific wording has an immutable `promptVersion`, and every bundled
-list version becomes a content-hashed immutable **Prompt-list revision** with
-ordered membership. Deploying different content under an already-seen list or
-prompt version is a startup-failing seed conflict, not an in-place rewrite.
-Rooms resolve and draw from the exact revision IDs at start; a finished game records the list. During the
-transition to rebuildable projections, the legacy counter row is linked by
-concept and updated in place when a new prompt version rewords it, preserving
-its existing statistics; old revisions keep referencing the old wording.
+list version is recorded with a content hash. Deploying different content under
+an already-seen list or prompt version is a startup-failing seed conflict, not
+an in-place rewrite. A list's prompts are its **working copy**: seeding and a
+player's save overwrite it in place, a room draws from it when a game starts,
+and that draw is the game's snapshot. A finished game records the list.
 
 The checked-in seed shape is therefore identity-based rather than text-keyed:
 
@@ -553,7 +551,7 @@ to that immutable prompt version.
 Prompt-list governance is schema-first and deny-by-default. A user-owned list
 is **Private** or **Published** and nothing else: it starts Private, and only
 publishing changes that, never a save. Official bundled lists are always public. Ownership, the list a copy was
-taken from, structured revision tags, moderation actor/time, and the
+taken from, structured tags, moderation actor/time, and the
 Active/Under review/Hidden moderation state are relational fields with
 portable constraints—never JSON tags or a lossy `is_nsfw` flag. Difficulty and
 content rating remain on the exact immutable prompt version where their
@@ -566,14 +564,14 @@ in-memory room. A registered host can explicitly save usable custom prompts to
 **My prompt lists** as a Private prompt list; nothing is stored
 merely because it was typed. An account may own at most 25 lists and a saved
 list may contain at most 500 prompts. Editing uses optimistic concurrency and
-creates a new immutable revision instead of rewriting the revision a waiting or
-running room drew from. The content language - one of the eight, or **Any language**
+overwrites the list's working copy in place, writing only what changed; a game
+already running keeps what it drew, and the next one sees the edit. The content language - one of the eight, or **Any language**
 for a list of names or brands that is not in one - cannot change after creation. An
 Any-language list is refused if two of its prompts would be one answer in some room
 language ("Müller" and "Mueller" in German). A list
 may carry up to five **Prompt tags**, chosen from a curated vocabulary the server
 serves at `GET /api/prompt-tags` rather than the client guessing at it; the tags
-belong to the revision, so setting them is an edit like any other, and a tag the
+are part of the working copy, so setting them is an edit like any other, and a tag the
 vocabulary does not contain is refused by name rather than quietly dropped.
 
 Publishing a list puts it in the **Community catalogue**, where anyone can find
@@ -625,14 +623,17 @@ resolved report frees the target to be raised again; one moderator review may di
 the exact target Active or Hidden, with actor/time provenance and an append-only
 audit event. Hidden prompts are filtered from future selection, and a list with
 no usable prompts fails visibly. Waiting rooms re-authorize the list and every
-prompt immediately before Start, closing stale-picker bypasses. A game already
-in progress keeps its pinned prompt snapshot and is not rewritten mid-turn.
+prompt immediately before Start, and again before an approved restart, closing
+stale-picker bypasses; a list saved in between is checked again rather than
+drawn unchecked. A game draws its prompts once, at Start, and is not rewritten
+mid-turn. A prompt an owner edits out of a list stays reportable from a page
+opened before the edit for a day.
 Owners see list/prompt moderation state in **My prompt lists**, but editing does
 not silently override a moderator decision.
 
 Report snapshots survive list and account deletion even after target foreign
-keys are cleared. Account data exports include the owner's complete revision
-history and a reporter's own prompt-content report text/status, while excluding
+keys are cleared. Account data exports include each of the owner's lists as it
+is saved and a reporter's own prompt-content report text/status, while excluding
 owner, reviewer, and internal-note identities. Account deletion removes the
 lists and their owned prompt concepts rather than leaving ownerless content.
 
@@ -1086,8 +1087,8 @@ filing, after which the pixels are erased and the row reads `expired` rather
 than `erased` — nobody decided anything, and a reviewer opening the still
 pending report should be told which of the two happened. The report and every
 piece of screenshot metadata stay. The same hourly sweep reclaims deleted prompt lists:
-deleting a list takes it out of reach at once, and the rest — its revisions,
-the list row, prompts nothing names any more — is removed a day later, once any
+deleting a list takes it out of reach at once, and the rest — the list row and
+prompts nothing names any more — is removed a day later, once any
 room that drew from it before the deletion has had time to finish. A finished
 game that played it names the list and reads the same once it is gone. A word a moderator
 hid is remembered for its owner in a record of its own, not in the deleted list, so
@@ -2144,7 +2145,8 @@ backend/.venv/bin/python benchmarks/socket_abuse.py --scenario garbage --sockets
 # Reading and saving one of a player's own prompt lists at the ceiling, 500 x 20 aliases (#1236)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/owned_list_io.py
 
-# An account export when the owner saved a 500-prompt list 300 times: worst loop wait, build, memory (#1250)
+# An account export when the owner saved a 500-prompt list 300 times: worst loop wait, build, memory (#1250;
+# flat in the number of saves since #1359, when a save stopped writing a revision)
 TEST_DATABASE_URL=postgresql+asyncpg://… backend/.venv/bin/python benchmarks/export_list_revisions.py --saves 300
 
 # What a mixed-language game's false-friend memo holds at its end: 16 seats, 8 languages, 10 rounds (#1252)
@@ -2584,8 +2586,8 @@ checks or deleted, are included in the owner's private data export, and are
 erased on account deletion.
 
 Presets retain stable IDs for active built-in prompt
-lists or lists owned by the preset owner, then resolve their latest authorized
-revision when applied. Deleted, hidden, or no-longer-owned references produce a
+lists or lists owned by the preset owner, then resolve the list as it is
+when applied. Deleted, hidden, or no-longer-owned references produce a
 visible error. Quick custom prompts are never stored in a preset; save them as
 an owned list first. No
 built-in preset catalogue or preset sharing exists in v1.

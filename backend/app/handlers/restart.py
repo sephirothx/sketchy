@@ -119,6 +119,18 @@ def _schedule_restart(ctx: HandlerContext, room: Room, vote: RestartVote) -> Non
                 return
 
             try:
+                # Checked again, as a Start checks them (R-LIST-07): the lists
+                # are drawn from as they are now, and one unpublished or taken
+                # down since the last game - or saved with an answer that
+                # collides with another list's - must not be drawn from on the
+                # strength of an older check (#1385 review).
+                host = next((p for p in room.players.values() if p.is_host), None)
+                await ctx.game_flow.refresh_room_prompt_selection(
+                    room,
+                    requesting_user_id=(
+                        host.user_id if host is not None else room.prompt_lists_checked_for
+                    ),
+                )
                 await ctx.game_flow._start_fresh_game(
                     room,
                     active_players,

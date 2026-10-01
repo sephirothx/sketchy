@@ -57,15 +57,15 @@ async def test_seed_bundled_prompt_lists():
             ["english_standard", "english_extended"]
         )
         assert len(combined.prompts) == len(std_words) + len(ext_words)
-        assert len(combined.revision_ids) == 2
+        assert len(combined.list_ids) == 2
 
-        first_revision_ids = combined.revision_ids
+        first_list_ids = combined.list_ids
         await seed_prompt_lists(repo)
         assert (
             await repo.resolve_selection(
                 ["english_standard", "english_extended"]
             )
-        ).revision_ids == first_revision_ids
+        ).list_ids == first_list_ids
     finally:
         await engine.dispose()
 
@@ -117,7 +117,7 @@ async def test_every_supported_language_ships_its_three_lists():
             # bad prompt.
             combined = await repo.resolve_selection(lists)
             assert combined.language == language
-            assert len(combined.revision_ids) == 3
+            assert len(combined.list_ids) == 3
             assert len(combined.prompts) > 2000
 
             keys = [
@@ -248,7 +248,7 @@ async def test_pinning_agrees_with_resolution_about_what_a_selection_holds():
         resolved = await repo.resolve_selection(slugs)
 
         assert pinned.prompt_count == len(resolved.prompts)
-        assert pinned.revision_ids == resolved.revision_ids
+        assert pinned.list_ids == resolved.list_ids
         assert pinned.language == resolved.language
     finally:
         await engine.dispose()
@@ -295,7 +295,7 @@ async def test_sampling_draws_distinct_prompts_and_records_where_each_came_from(
         repo = SqlAlchemyPromptListRepository(factory)
         await seed_prompt_lists(repo)
         pinned = await repo.authorize_selection(["english_standard"])
-        revisions = list(pinned.revision_ids)
+        revisions = list(pinned.list_ids)
 
         sample = await repo.sample_prompts(revisions, limit=72)
 
@@ -320,7 +320,7 @@ async def test_sampling_skips_answers_a_room_has_already_shadowed():
         repo = SqlAlchemyPromptListRepository(factory)
         await seed_prompt_lists(repo)
         pinned = await repo.authorize_selection(["english_standard"])
-        revisions = list(pinned.revision_ids)
+        revisions = list(pinned.list_ids)
 
         shadowed = {
             prompt.match_key
@@ -354,7 +354,7 @@ async def test_repeated_draws_reach_across_the_whole_pool():
         repo = SqlAlchemyPromptListRepository(factory)
         await seed_prompt_lists(repo)
         pinned = await repo.authorize_selection(["english_standard"])
-        revisions = list(pinned.revision_ids)
+        revisions = list(pinned.list_ids)
         draw = pinned.prompt_count // 5
 
         seen: set[str] = set()
@@ -386,7 +386,7 @@ async def test_a_draw_that_excludes_most_of_a_list_still_fills_from_the_rest():
         repo = SqlAlchemyPromptListRepository(factory)
         await seed_prompt_lists(repo)
         pinned = await repo.authorize_selection(["english_standard"])
-        revisions = list(pinned.revision_ids)
+        revisions = list(pinned.list_ids)
 
         everything = await repo.sample_prompts(
             revisions, limit=pinned.prompt_count

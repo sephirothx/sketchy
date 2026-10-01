@@ -19,7 +19,10 @@ from app.auth.middleware import SessionAuthMiddleware
 from tests.dbfixtures import create_test_db
 import app.auth.account_data as account_data_module
 from app.services.avatars import set_avatar
-from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+from app.services.prompt_reclaim import (
+    reclaim_retired_prompt_lists,
+    reclaim_unlisted_versions,
+)
 from tests.png_fixture import png_bytes
 from app.auth.account_data import (
     EXPORT_INTERVAL,
@@ -530,8 +533,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 14
-    assert artifact["schemaVersion"] == 14
+    assert status["schemaVersion"] == 15
+    assert artifact["schemaVersion"] == 15
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -582,7 +585,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert "bannedByUserId" not in artifact["suspensions"][0]
     assert artifact["blocks"][0]["blockedUserId"] == other.id
     assert artifact["promptLists"][0]["name"] == "Exported prompts"
-    assert artifact["promptLists"][0]["revisions"][0]["prompts"][0]["prompt"] == "red panda"
+    assert artifact["promptLists"][0]["prompts"][0]["prompt"] == "red panda"
     assert artifact["roomPresets"][0]["name"] == "Tournament night"
     # A star names the list, not the person who owns it: the export is the
     # requester's data, and a stranger's account id would travel further than
@@ -619,7 +622,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["settings"]["extraPromptLanguages"] == ["nl", "fr"]
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v14_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v15_fields.json").read_text(
             encoding="utf-8"
         )
     )
@@ -847,6 +850,9 @@ async def test_deletion_requires_password_and_anonymizes_history(env):
         assert retired.name == "Deleted list" and retired.visibility == "private"
         assert await session.scalar(select(func.count(RoomPreset.id))) == 0
     await reclaim_retired_prompt_lists(
+        factory, now=datetime.now(timezone.utc) + timedelta(days=2)
+    )
+    await reclaim_unlisted_versions(
         factory, now=datetime.now(timezone.utc) + timedelta(days=2)
     )
     async with factory() as session:
@@ -1662,19 +1668,16 @@ async def test_a_reporter_is_told_a_report_was_decided_and_nothing_else(env):
     assert not {"status", "reviewedAt", "updatedAt"} & set(report)
 
 
-async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env, monkeypatch):
-    """#1250: every save of a list is a whole new revision, and the export
-    loaded every revision's prompts as one graph before writing a byte - a
-    ~3 s stall at 801 saves of a 500-prompt list. Each revision's prompts are
-    now read by statements naming that one revision, a page at a time, and
-    the section is the one the graph produced, byte for byte."""
+async def test_a_list_s_working_copy_is_written_a_page_at_a_time(env, monkeypatch):
+    """#1250: the export wrote every revision a list was ever saved as, and
+    grew with every save. A list is its working copy now (#1359): one section
+    of prompts however often it was saved, written a page at a time so a list
+    at the ceiling gives the loop back as it goes (#1250 review)."""
     from sqlalchemy import event
-    from sqlalchemy.orm import selectinload
 
-    from app.auth.account_data import _ExportWriter, _timestamp, _write_export_artifact
-    from app.db.models import PromptListRevision, PromptListRevisionItem, PromptVersion, PromptVersionAlias
-    from app.repositories.interfaces import PromptListEntryInput
+    from app.auth.account_data import _ExportWriter, _write_export_artifact
     from app.prompt_content import clean_prompt_aliases
+    from app.repositories.interfaces import PromptListEntryInput
     from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
     http, _, _, factory = env
@@ -1701,51 +1704,14 @@ async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env,
             owner["id"], created.id, expected_version=current.version,
             name=current.name, description=current.description, prompts=rows,
         )
-
-    # What the eager graph wrote, kept here as the reference.
-    async with factory() as session:
-        graph = (
-            await session.scalars(
-                select(PromptList)
-                .where(PromptList.id == UUID(created.id))
-                .options(
-                    selectinload(PromptList.revisions)
-                    .selectinload(PromptListRevision.items)
-                    .selectinload(PromptListRevisionItem.prompt_version)
-                    .selectinload(PromptVersion.version_aliases)
-                    .selectinload(PromptVersionAlias.alias)
-                )
-            )
-        ).one()
-        expected_revisions = [
-            {
-                "id": str(revision.id),
-                "version": revision.version,
-                "language": revision.language,
-                "contentHash": revision.content_hash,
-                "createdAt": _timestamp(revision.created_at),
-                "prompts": [
-                    {
-                        "conceptId": str(item.prompt_version.concept_id),
-                        "promptVersionId": str(item.prompt_version.id),
-                        "promptVersion": item.prompt_version.version,
-                        "prompt": item.prompt_version.canonical_answer,
-                        "aliases": sorted(link.alias.answer for link in item.prompt_version.version_aliases),
-                        "position": item.position,
-                    }
-                    for item in revision.items
-                ],
-            }
-            for revision in sorted(graph.revisions, key=lambda revision: revision.version)
-        ]
-    assert len(expected_revisions) == 3
+    saved = await lists.get_owned(owner["id"], created.id)
 
     engine = factory.kw["bind"]
-    item_reads: list[tuple[str, object]] = []
+    revision_reads: list[str] = []
 
-    def note(_conn, _cursor, statement, parameters, _context, _executemany):
-        if "prompt_list_revision_items" in statement and "prompt_lists" not in statement:
-            item_reads.append((statement, parameters))
+    def note(_conn, _cursor, statement, _parameters, _context, _executemany):
+        if "prompt_list_revision" in statement:
+            revision_reads.append(statement)
 
     async def build() -> bytes:
         async with factory() as session:
@@ -1765,7 +1731,6 @@ async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env,
     event.listen(engine.sync_engine, "before_cursor_execute", note)
     try:
         whole = await build()
-        reads_per_build = len(item_reads)
         whole_yields, yields = yields, 0
         monkeypatch.setattr(account_data_module, "EXPORT_PAGE_SIZE", 2)
         monkeypatch.setattr(account_data_module, "REVISION_PROMPT_PAGE", 2)
@@ -1774,30 +1739,30 @@ async def test_list_revisions_are_read_one_at_a_time_into_the_same_document(env,
         event.remove(engine.sync_engine, "before_cursor_execute", note)
 
     assert paged == whole
-    # A revision's prompts give the loop back a page at a time, not once for
-    # the whole revision (#1250 review): at the ceiling that was ~30 ms of it
-    # per revision. Its aliases arrive one row per prompt, after one yield.
-    pages = sum(1 + -(-len(revision["prompts"]) // 2) for revision in expected_revisions)
-    assert whole_yields == 2 * len(expected_revisions)
-    assert yields == pages
+    assert revision_reads == [], "no revision is read, however often the list was saved"
+    # The aliases arrive one row per prompt, after one yield; the prompts a
+    # page at a time.
+    assert whole_yields == 2
+    assert yields == 1 + -(-len(saved.prompts) // 2)
     (document_list,) = json.loads(whole)["promptLists"]
-    assert document_list["revisions"] == expected_revisions
-    # Byte for byte, key order included: the document is written as it
-    # comes, so equal parsed values would not catch fields written out of
-    # the order the graph's dicts had them in.
-    assert json.dumps(expected_revisions, separators=(",", ":")).encode() in whole
-    assert [prompt["prompt"] for prompt in document_list["revisions"][-1]["prompts"]] == [
+    assert "revisions" not in document_list
+    assert document_list["prompts"] == [
+        {
+            "conceptId": entry.concept_id,
+            "promptVersionId": entry.prompt_version_id,
+            "promptVersion": 1,
+            "prompt": entry.answer,
+            "aliases": sorted(entry.aliases),
+            "position": position,
+        }
+        for position, entry in enumerate(saved.prompts)
+    ]
+    assert [prompt["prompt"] for prompt in document_list["prompts"]] == [
         "changed 0", "changed 1", "thing 2", "thing 3", "thing 4",
     ]
-    # Two statements per revision - its aliases, then its prompts - and each
-    # names one revision: none reads the items of a list, or of every list.
     # The aliases come joined, one row per prompt, on a separator no stored
     # alias can hold, because alias text is whitespace-collapsed on the way in.
-    assert reads_per_build == 2 * len(expected_revisions)
     assert account_data_module.ALIAS_SEPARATOR.isspace()
     assert clean_prompt_aliases(
         [f"a{account_data_module.ALIAS_SEPARATOR}b"], canonical_answer="thing", language="en"
     ) == ("a b",)
-    for statement, _parameters in item_reads:
-        assert "prompt_list_revision_items.revision_id =" in statement, statement
-        assert " IN (" not in statement.upper(), statement

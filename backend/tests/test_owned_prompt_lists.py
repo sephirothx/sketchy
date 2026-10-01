@@ -5,8 +5,10 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import (
+    PromptList,
     PromptListRevision,
     PromptListRevisionItem,
     PromptVersion,
@@ -82,7 +84,7 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
             [created.slug], requesting_user_id=owner_id
         )
         assert selection.prompts == ("red panda", "otter")
-        assert len(selection.revision_ids) == 1
+        assert len(selection.list_ids) == 1
 
         panda = created.prompts[0]
         updated = await repo.update_owned(
@@ -122,11 +124,13 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
                     )
                 )
             ).all()
-        assert {revision.version for revision in revisions} == {1, 2}
-        assert {version.canonical_answer for version in panda_versions} == {
-            "red panda",
-            "giant panda",
-        }
+        # A save overwrites the working copy and writes no revision (#1359);
+        # the old wording stays, stamped, until the grace has passed.
+        assert revisions == []
+        assert {
+            (version.canonical_answer, version.unlisted_at is not None)
+            for version in panda_versions
+        } == {("red panda", True), ("giant panda", False)}
 
         with pytest.raises(PromptListConflictError, match="Reload"):
             await repo.update_owned(
@@ -167,10 +171,11 @@ async def test_only_the_owner_can_delete_a_player_list():
         await engine.dispose()
 
 
-async def test_an_owned_list_revision_is_priced_when_it_is_written():
-    """Owned lists take the same path: no revision exists without its tallies.
+async def test_an_owned_list_is_priced_when_it_is_written():
+    """Owned lists take the same path: no working copy exists without its
+    tallies (#1359, on the list row since there is no revision).
 
-    Wheel pricing reads these instead of walking a resident pool, so a revision
+    Wheel pricing reads these instead of walking a resident pool, so a list
     written without them would silently price every letter at the same rate.
     """
     factory, engine, owner_id, _ = await _database()
@@ -188,17 +193,11 @@ async def test_an_owned_list_revision_is_priced_when_it_is_written():
         )
 
         async with factory() as session:
-            revision = (
-                await session.execute(
-                    select(PromptListRevision).where(
-                        PromptListRevision.prompt_list_id == UUID(created.id)
-                    )
-                )
-            ).scalars().one()
+            row = await session.get(PromptList, UUID(created.id))
 
         expected_counts, expected_total = letter_histogram(["banjo", "kazoo"])
-        assert revision.letter_counts == expected_counts
-        assert revision.letter_total == expected_total == 10
+        assert row.letter_counts == expected_counts
+        assert row.letter_total == expected_total == 10
     finally:
         await engine.dispose()
 
@@ -273,15 +272,15 @@ async def test_pinning_refuses_a_list_the_requester_may_not_read():
         await engine.dispose()
 
 
-async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says():
-    """Moderation state is mutable; a revision's membership is not.
+async def test_a_lists_tallies_cover_every_member_whatever_moderation_says():
+    """Moderation state is mutable; the save that wrote the tallies is not.
 
-    Counting only what was active when the revision was written makes the
+    Counting only what was active when the working copy was saved makes the
     stored tallies a function of something that can change afterwards. A
     version hidden then restored is drawable again but missing from the counts
-    for good, and a revision whose content was all hidden at write time keeps a
-    zero total - which drops wheel pricing onto the drawn sample, the very
-    thing storing a histogram exists to avoid.
+    until the next save, and a list whose content was all hidden at save time
+    keeps a zero total - which drops wheel pricing onto the drawn sample, the
+    very thing storing a histogram exists to avoid.
     """
     factory, engine, owner_id, _ = await _database()
     try:
@@ -323,42 +322,14 @@ async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says()
         )
 
         async with factory() as session:
-            revision = (
-                await session.execute(
-                    select(PromptListRevision)
-                    .where(PromptListRevision.prompt_list_id == UUID(created.id))
-                    .order_by(PromptListRevision.version.desc())
-                )
-            ).scalars().first()
-            members = (
-                await session.execute(
-                    select(PromptVersion.canonical_answer)
-                    .join(
-                        PromptListRevisionItem,
-                        PromptListRevisionItem.prompt_version_id == PromptVersion.id,
-                    )
-                    .where(PromptListRevisionItem.revision_id == revision.id)
-                )
-            ).scalars().all()
+            row = await session.get(PromptList, UUID(created.id))
 
         assert updated.version == created.version + 1
-        expected_counts, expected_total = letter_histogram(members)
-        assert revision.letter_counts == expected_counts
-        assert revision.letter_total == expected_total
-
-        # And the revision written while "kazoo" was hidden counts it too: it
-        # is a member, and a moderator restoring it must not need a rewrite.
-        async with factory() as session:
-            first = (
-                await session.execute(
-                    select(PromptListRevision)
-                    .where(PromptListRevision.prompt_list_id == UUID(created.id))
-                    .order_by(PromptListRevision.version)
-                )
-            ).scalars().first()
-        first_counts, first_total = letter_histogram(["banjo", "kazoo"])
-        assert first.letter_counts == first_counts
-        assert first.letter_total == first_total
+        # "kazoo" was hidden when the save ran, and is counted: it is a member,
+        # and a moderator restoring it must not need a rewrite.
+        expected_counts, expected_total = letter_histogram(["banjo", "kazoo", "fiddle"])
+        assert row.letter_counts == expected_counts
+        assert row.letter_total == expected_total
     finally:
         await engine.dispose()
 
@@ -602,7 +573,10 @@ async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_
 async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind():
     from datetime import datetime, timedelta, timezone
 
-    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+    from app.services.prompt_reclaim import (
+        reclaim_retired_prompt_lists,
+        reclaim_unlisted_versions,
+    )
 
     factory, engine, owner_id, _ = await _database()
     try:
@@ -628,13 +602,16 @@ async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind(
             )
             assert await repo.delete_owned(owner_id, created.id) is True
         before = await _content_counts(factory)
-        assert before["lists"] == 3 and before["revisions"] == 6
+        assert before["lists"] == 3 and before["revisions"] == 0, "saves write none (#1359)"
 
         later = datetime.now(timezone.utc) + timedelta(days=2)
         result = await reclaim_retired_prompt_lists(factory, now=later, limit=2)
         assert result.lists_examined == 2 and result.lists_deleted == 2
         assert (await _content_counts(factory))["lists"] == 1, "bounded batch"
         await reclaim_retired_prompt_lists(factory, now=later)
+        # The working copies' versions were stamped when the lists went, and
+        # are collected the same grace later.
+        await reclaim_unlisted_versions(factory, now=later)
 
         assert await _content_counts(factory) == {
             "lists": 0,
@@ -653,7 +630,10 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
     from datetime import datetime, timedelta, timezone
 
     from app.db.models import PromptContentReport
-    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
+    from app.services.prompt_reclaim import (
+        reclaim_retired_prompt_lists,
+        reclaim_unlisted_versions,
+    )
 
     factory, engine, owner_id, other_id = await _database()
     try:
@@ -694,8 +674,9 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
         # is recorded against the owner the report names (#1357), and the
         # reported version stays for the report itself.
         result = await reclaim_retired_prompt_lists(factory, now=later)
-        assert result.lists_deleted == 1 and result.revisions_deleted == 1
-        assert result.versions_deleted == 1 and result.concepts_deleted == 1
+        assert result.lists_deleted == 1 and result.revisions_deleted == 0
+        swept = await reclaim_unlisted_versions(factory, now=later)
+        assert int(swept) == 1, "the harmless sibling goes; the reported one stays"
         async with factory() as session:
             assert await session.get(PromptVersion, UUID(reported.prompt_version_id)) is not None
             report = await session.scalar(select(PromptContentReport))
@@ -705,6 +686,93 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
     finally:
         await engine.dispose()
 
+
+
+async def _a_word_saved_away(repo, owner_id):
+    """A list whose save took `gone` out, the version stamped as unlisted from it."""
+    created = await repo.create_owned(
+        owner_id, name="Edited", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gone"), PromptListEntryInput(answer="kept")),
+    )
+    gone = next(entry for entry in created.prompts if entry.answer == "gone")
+    kept = next(entry for entry in created.prompts if entry.answer == "kept")
+    await repo.update_owned(
+        owner_id, created.id, expected_version=created.version, name="Edited",
+        description="", prompts=(PromptListEntryInput(answer="kept", concept_id=kept.concept_id),),
+    )
+    return created, UUID(gone.prompt_version_id)
+
+
+async def test_a_version_the_sweep_keeps_is_no_longer_unlisted_from_anything():
+    """Kept by a report, a removed wording loses both stamps together: it is
+    named by something now, and no longer a page's grace-window prompt."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import PromptContentReport
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
+
+    factory, engine, owner_id, other_id = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created, gone = await _a_word_saved_away(repo, owner_id)
+        async with factory() as session:
+            stamped = await session.get(PromptVersion, gone)
+            assert stamped.unlisted_at is not None
+            assert stamped.unlisted_from_list_id == UUID(created.id)
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    PromptContentReport(
+                        id=generate_uuid(), reporter_user_id=UUID(other_id),
+                        reported_owner_user_id=UUID(owner_id), prompt_list_id=UUID(created.id),
+                        prompt_version_id=gone, target_type="prompt",
+                        list_name_snapshot="Edited", prompt_snapshot="gone",
+                        reason="inappropriate", details="",
+                    )
+                )
+
+        await reclaim_unlisted_versions(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+
+        async with factory() as session:
+            kept = await session.get(PromptVersion, gone)
+            assert kept is not None
+            assert (kept.unlisted_at, kept.unlisted_from_list_id) == (None, None)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    not __import__("os").environ.get("TEST_DATABASE_URL"),
+    reason="row locks are PostgreSQL's",
+)
+async def test_the_unlisted_sweep_passes_over_a_version_a_decision_holds():
+    """A moderator's decision holds every wording of the concept. The sweep
+    takes what nobody holds and leaves the rest for its next pass rather than
+    waiting on it with its batch locked - which could deadlock against the
+    decision (#1385 review)."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        _, gone = await _a_word_saved_away(repo, owner_id)
+        later = datetime.now(timezone.utc) + timedelta(days=2)
+        async with factory() as holder:
+            async with holder.begin():
+                await holder.execute(
+                    select(PromptVersion.id).where(PromptVersion.id == gone).with_for_update()
+                )
+                swept = await asyncio.wait_for(
+                    reclaim_unlisted_versions(factory, now=later), timeout=5
+                )
+                assert int(swept) == 0
+        swept = await reclaim_unlisted_versions(factory, now=later)
+        assert int(swept) == 1, "released, it goes on the next pass"
+    finally:
+        await engine.dispose()
 
 # --- #613: an unchanged save changes nothing, an edit rewrites only what moved
 
@@ -742,7 +810,7 @@ def _restated(saved) -> tuple[PromptListEntryInput, ...]:
     )
 
 
-async def test_an_exact_restatement_adds_no_revision_and_keeps_the_version():
+async def test_an_exact_restatement_writes_nothing_and_keeps_the_version():
     factory, engine, owner_id, _ = await _database()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
@@ -774,7 +842,7 @@ async def test_an_exact_restatement_adds_no_revision_and_keeps_the_version():
                         PromptListRevision.prompt_list_id == UUID(created.id)
                     )
                 )
-                == 1
+                == 0
             )
         # Optimistic concurrency still applies to a restatement.
         with pytest.raises(PromptListConflictError):
@@ -782,7 +850,7 @@ async def test_an_exact_restatement_adds_no_revision_and_keeps_the_version():
                 owner_id, created.id, expected_version=7, name="Same", description="d",
                 prompts=_restated(created),
             )
-        # A metadata-only edit is still an edit (R-LIST-05): a revision, a version.
+        # A metadata-only edit is still an edit (R-LIST-05): a version.
         renamed = await repo.update_owned(
             owner_id, created.id, expected_version=1, name="Renamed", description="d",
             prompts=_restated(created),
@@ -812,6 +880,39 @@ async def test_a_one_answer_edit_in_a_big_list_rewrites_one_display_row():
         updates = _display_updates(statements)
         assert len(updates) == 1, updates
         assert not any("__editing__" in s for s in statements), "no swap, no temporary text"
+    finally:
+        await engine.dispose()
+
+
+async def test_a_one_prompt_edit_writes_rows_for_the_change_not_the_list():
+    """#1359: a save overwrites the working copy in place. Before it, a
+    one-word edit of a 500-prompt list wrote the whole list again as a
+    revision - 500 item rows, and the rest of the display rows besides."""
+    from sqlalchemy import event
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await _big_list(repo, owner_id)
+        entries = list(_restated(created))
+        entries[250] = PromptListEntryInput(answer="prompt two-fifty", concept_id=entries[250].concept_id)
+        written: list[int] = []
+
+        def count(conn, cursor, statement, parameters, context, executemany):
+            if statement.lstrip().startswith(("INSERT", "UPDATE", "DELETE")):
+                written.append(len(parameters) if executemany else 1)
+
+        event.listen(engine.sync_engine, "before_cursor_execute", count)
+        try:
+            await repo.update_owned(
+                owner_id, created.id, expected_version=1, name="Big", description="",
+                prompts=tuple(entries),
+            )
+        finally:
+            event.remove(engine.sync_engine, "before_cursor_execute", count)
+
+        # The new wording, its display row, the old wording's stamp, the list.
+        assert sum(written) <= 5, written
     finally:
         await engine.dispose()
 
@@ -945,5 +1046,153 @@ async def test_a_collision_the_fold_created_since_the_rows_were_written_is_caugh
             await repo.authorize_selection(slugs, requesting_user_id=owner_id)
         for slug in slugs:
             assert (await repo.authorize_selection([slug], requesting_user_id=owner_id)).prompt_count == 1
+    finally:
+        await engine.dispose()
+
+
+# --- #1385 review: the draw is held to what was checked ----------------------
+
+
+async def test_a_draw_refuses_a_list_saved_since_it_was_checked():
+    """A save between authorization and the draw could add an answer that
+    collides with another selected list's - `beaver` with the alias `otter`
+    beside a list holding `otter` - which the check never saw. The draw
+    refuses content at any version but the one checked."""
+    from app.repositories.interfaces import PromptListsChangedError
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        first = await repo.create_owned(
+            owner_id, name="First", description="", language="en",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        second = await repo.create_owned(
+            owner_id, name="Second", description="", language="en",
+            prompts=(PromptListEntryInput(answer="panda"),),
+        )
+        pinned = await repo.authorize_selection(
+            [first.slug, second.slug], requesting_user_id=owner_id
+        )
+        await repo.update_owned(
+            owner_id, second.id, expected_version=second.version, name="Second",
+            description="", prompts=(PromptListEntryInput(answer="beaver", aliases=("otter",)),),
+        )
+
+        with pytest.raises(PromptListsChangedError):
+            await repo.sample_prompts(
+                list(pinned.list_ids), limit=5, expected_versions=pinned.list_versions
+            )
+        with pytest.raises(PromptListSelectionError, match="ambiguous"):
+            await repo.authorize_selection([first.slug, second.slug], requesting_user_id=owner_id)
+        # Unchanged, it draws.
+        again = await repo.authorize_selection([first.slug], requesting_user_id=owner_id)
+        drawn = await repo.sample_prompts(
+            list(again.list_ids), limit=5, expected_versions=again.list_versions
+        )
+        assert [prompt.answer for prompt in drawn.prompts] == ["otter"]
+    finally:
+        await engine.dispose()
+
+
+async def _draw_database(tmp_path):
+    """The suite's database, or on SQLite a file one: an in-memory database
+    shares one cache, where a writer meets a table lock rather than a reader's
+    snapshot, so only a file shows what the draw's readers see (#1385 review)."""
+    import os
+
+    if os.environ.get("TEST_DATABASE_URL"):
+        return await _database()
+    from tests.dbfixtures import _run_driver_script, _sqlite_schema_script, create_test_engine
+
+    engine = create_test_engine(f"sqlite+aiosqlite:///{tmp_path / 'draw.db'}")
+    async with engine.begin() as conn:
+        await _run_driver_script(conn, _sqlite_schema_script())
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    owner_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                User(
+                    id=owner_id, username="owner", password_hash="hash",
+                    display_name="Owner", is_anonymous=False, state="registered",
+                )
+            )
+    return factory, engine, str(owner_id), None
+
+
+async def test_a_save_landing_mid_draw_does_not_take_the_drawn_prompts_sources(
+    monkeypatch, tmp_path
+):
+    """The draw reads its prompts, then where each came from. A save that
+    rewords a drawn prompt between the two statements left it with no source
+    - no provenance and no usage facts (#1385 review). The draw reads one
+    snapshot, on either engine."""
+    import app.repositories.sqlalchemy as repository
+
+    factory, engine, owner_id, _ = await _draw_database(tmp_path)
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id, name="Mine", description="", language="en",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        pinned = await repo.authorize_selection([created.slug], requesting_user_id=owner_id)
+        original = repository._source_lists
+
+        async def a_save_lands_first(session, pins, version_ids):
+            await repo.update_owned(
+                owner_id, created.id, expected_version=created.version, name="Mine",
+                description="",
+                prompts=(PromptListEntryInput(answer="sea otter", concept_id=created.prompts[0].concept_id),),
+            )
+            return await original(session, pins, version_ids)
+
+        monkeypatch.setattr(repository, "_source_lists", a_save_lands_first)
+        drawn = await repo.sample_prompts(
+            list(pinned.list_ids), limit=5, expected_versions=pinned.list_versions
+        )
+
+        assert [prompt.answer for prompt in drawn.prompts] == ["otter"]
+        assert drawn.prompts[0].source_list_ids == (created.id,)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_save_landing_after_the_version_check_is_not_drawn(monkeypatch, tmp_path):
+    """The version check and the sample are one snapshot: a save committing
+    between them - `beaver` with the alias `otter`, beside a list holding
+    `otter` - is not in what the draw returns (#1385 review)."""
+    import app.repositories.sqlalchemy as repository
+
+    factory, engine, owner_id, _ = await _draw_database(tmp_path)
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        first = await repo.create_owned(
+            owner_id, name="First", description="", language="en",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        second = await repo.create_owned(
+            owner_id, name="Second", description="", language="en",
+            prompts=(PromptListEntryInput(answer="panda"),),
+        )
+        pinned = await repo.authorize_selection(
+            [first.slug, second.slug], requesting_user_id=owner_id
+        )
+        original = repository._draw_snapshot
+
+        async def checked_then_saved(session, expected_versions):
+            await original(session, expected_versions)
+            await repo.update_owned(
+                owner_id, second.id, expected_version=second.version, name="Second",
+                description="", prompts=(PromptListEntryInput(answer="beaver", aliases=("otter",)),),
+            )
+
+        monkeypatch.setattr(repository, "_draw_snapshot", checked_then_saved)
+        drawn = await repo.sample_prompts(
+            list(pinned.list_ids), limit=5, expected_versions=pinned.list_versions
+        )
+
+        assert sorted(prompt.answer for prompt in drawn.prompts) == ["otter", "panda"]
     finally:
         await engine.dispose()

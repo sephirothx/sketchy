@@ -5,7 +5,7 @@ served from memory. A game now draws only what it can possibly play - at most
 `rounds x max_players x 3` prompts - once, at start. These are the properties
 that had to survive the move: the same mixture of curated and quick prompts,
 the same shadowing, the same refusal when the lists cannot be read, and content
-pinned to the revisions the room was authorized on.
+drawn from the lists as they were when the room was authorized on them.
 """
 from __future__ import annotations
 
@@ -34,16 +34,15 @@ from app.services.game_flow import (
 
 
 from tests.handlers.helpers import room_lines
-def pin(room, repo, *, revision_ids=("revision-1",)):
+def pin(room, repo, *, list_ids=("list-1",)):
     """Put the room in the state `authorize_selection` would have left it in."""
     room.prompt_list_slugs = ["curated"]
-    room.prompt_list_revision_ids = list(revision_ids)
-    room.prompt_list_ids = list(revision_ids)
+    room.prompt_list_ids = list(list_ids)
     room.prompt_pool_size = len(repo.prompts)
     counts, total = letter_histogram(repo.prompts)
     room.prompt_letter_counts = counts
     room.prompt_letter_total = total
-    repo.revision_ids = tuple(revision_ids)
+    repo.list_ids = tuple(list_ids)
 
 
 async def test_a_game_draws_only_the_prompts_it_could_ever_play():
@@ -220,7 +219,7 @@ async def test_a_game_tracks_list_prompts_by_concept_and_quick_ones_by_text():
     assert game.prompt_answers == {"concept-anchor": "anchor"}
     assert game.prompt_version_ids == {"concept-anchor": "version-anchor"}
     assert game.prompt_aliases == {"concept-anchor": ("ship anchor",)}
-    assert game.prompt_source_list_ids_by_key == {"concept-anchor": ("revision-1",)}
+    assert game.prompt_source_list_ids_by_key == {"concept-anchor": ("list-1",)}
     assert game.prompt_source_kind("concept-anchor") == "curated"
     assert game.prompt_source_kind("lighthouse") == "custom"
 
@@ -351,7 +350,7 @@ async def test_wheel_prices_come_from_the_whole_pool_not_the_sample():
     )
 
 
-async def test_a_game_keeps_the_revision_it_started_on():
+async def test_a_game_keeps_the_prompts_it_started_with():
     """R-LIST-07: a list edited mid-game must not reach a turn in flight."""
     room_manager, room, _ = build_room(rounds=2)
     room.max_players = 2
@@ -618,7 +617,7 @@ async def test_a_short_draw_is_believed_over_the_count():
 
     async def one_row_only(*_args, **_kwargs):
         drawn = await StubPromptListRepo.sample_prompts(
-            repo, list(room.prompt_list_revision_ids), limit=1
+            repo, list(room.prompt_list_ids), limit=1
         )
         return PromptSample(prompts=drawn.prompts, drawable=500)
 
@@ -692,4 +691,57 @@ async def test_a_start_that_drops_below_two_players_is_refused():
         await ctx.game_flow._start_fresh_game(room, room.player_list())
 
     assert room.state == "waiting"
+    assert room.game is None
+
+
+async def test_a_start_checks_the_lists_again_when_one_was_saved_before_the_draw():
+    """A save between the check and the draw could add a collision nothing
+    checked (#1385 review): the draw refuses it, and the start checks the
+    lists again, for the same account, and draws what that check passed."""
+    from app.repositories.interfaces import PromptListsChangedError
+
+    class SavedOnceRepo(StubPromptListRepo):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.checked_for: list[str | None] = []
+            self.refused = False
+
+        async def authorize_selection(self, slugs, *, requesting_user_id=None, expected_language=None):
+            self.checked_for.append(requesting_user_id)
+            return await super().authorize_selection(
+                slugs, requesting_user_id=requesting_user_id, expected_language=expected_language
+            )
+
+        async def sample_prompts(self, list_ids, *, limit, expected_versions=None, **kwargs):
+            if not self.refused:
+                self.refused = True
+                raise PromptListsChangedError("saved since")
+            return await super().sample_prompts(list_ids, limit=limit, **kwargs)
+
+    room_manager, room, _ = build_room(rounds=1)
+    repo = SavedOnceRepo(["otter", "panda"])
+    pin(room, repo)
+    room.prompt_lists_checked_for = "host-account"
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    assert room.game is not None
+    assert repo.checked_for == ["host-account"]
+
+
+async def test_a_start_gives_up_on_lists_that_keep_changing():
+    from app.repositories.interfaces import PromptListsChangedError
+
+    class AlwaysSavedRepo(StubPromptListRepo):
+        async def sample_prompts(self, list_ids, *, limit, **kwargs):
+            raise PromptListsChangedError("saved since")
+
+    room_manager, room, _ = build_room(rounds=1)
+    repo = AlwaysSavedRepo(["otter", "panda"])
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    with pytest.raises(RoomPromptResolutionError):
+        await ctx.game_flow._start_fresh_game(room, room.player_list())
     assert room.game is None

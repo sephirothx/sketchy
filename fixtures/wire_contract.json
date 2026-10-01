@@ -2237,7 +2237,7 @@
    "updatedAt",
    "userId"
   ],
-  "auth.account_data:_write_revision_prompts": [
+  "auth.account_data:_write_working_copy_prompts": [
    "conceptId",
    "promptVersion",
    "promptVersionId"
@@ -2842,7 +2842,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 55,
+ "protocolVersion": 56,
  "refusal": {
   "codes": [
    "invalid_payload",

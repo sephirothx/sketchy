@@ -26,7 +26,10 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import AccountState
-from app.services.prompt_reclaim import reclaim_retired_prompt_lists, reclaim_superseded_revisions
+from app.services.prompt_reclaim import (
+    reclaim_retired_prompt_lists,
+    reclaim_unlisted_versions,
+)
 from app.services.readiness import LoopHealth
 from app.services.sweeps import (
     SweepBudget,
@@ -435,13 +438,12 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             ),
         ),
         Sweep(
-            "superseded_list_revisions",
-            reclaim_superseded_revisions,
+            "unlisted_prompt_versions",
+            reclaim_unlisted_versions,
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt=(
-                "a live list's current revision; nothing else past the grace - a finished "
-                "game names its list, a copy the list it came from, and a hidden word is "
-                "kept by its takedown record"
+                "a version still named by a list, a turn, an offer, a usage fact, a report "
+                "or a takedown record, which is unstamped and kept by it"
             ),
         ),
         Sweep(

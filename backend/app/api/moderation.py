@@ -37,7 +37,11 @@ from app.canvas_storage import (
 from app.api.gallery import gallery_entry_payload
 from app.api.profiles import serve_drawing
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
-from app.repositories.sqlalchemy import apply_gallery_decision
+from app.repositories.sqlalchemy import (
+    SqlAlchemyPromptListRepository,
+    _lock_versions,
+    apply_gallery_decision,
+)
 from app.services.gallery_shelf import read_shelf_review
 from app.services.prompt_takedowns import record_takedowns, release_takedowns
 from app.services.player_reports import (
@@ -70,11 +74,8 @@ from app.db.models import (
     Prompt,
     PromptContentReport,
     PromptList,
-    PromptListRevision,
-    PromptListRevisionItem,
     PromptTakedown,
     PromptVersion,
-    PromptVersionAlias,
     RoomMessage,
     TurnRecord,
     User,
@@ -240,8 +241,8 @@ class PublicationReviewBody(ControlFreeModel):
     state: Literal["active", "hidden"]
     note: str = Field(min_length=1, max_length=MAX_RESOLUTION_NOTE)
     # The version the reviewer read. An owner can edit a held list - every
-    # save is a new revision (R-LIST-05) - so without this a moderator could
-    # read revision N and release N+1, which they never saw.
+    # save moves the version (R-LIST-05) - so without this a moderator could
+    # read version N and release N+1, which they never saw.
     expected_version: int = Field(alias="expectedVersion", ge=1)
 
     @field_validator("note")
@@ -1120,6 +1121,14 @@ async def _carry_decision_to_copies(
     )
     if not concept_ids:
         return
+    # In id order, as every multi-row version write takes them: a save in
+    # another of the owner's lists may be stamping some of these (#1385 review).
+    await session.execute(
+        select(PromptVersion.id)
+        .where(*carried, PromptVersion.concept_id.in_(concept_ids))
+        .order_by(PromptVersion.id)
+        .with_for_update()
+    )
     await session.execute(
         update(PromptVersion)
         .where(*carried, PromptVersion.concept_id.in_(concept_ids))
@@ -1359,21 +1368,26 @@ def create_moderation_router(
 
                 prompt_version = None
                 if body.prompt_version_id is not None:
+                    # A prompt the list holds now, in any of its wordings, or
+                    # one a save took out of it within the grace: the reporter
+                    # may have met an older one in a game, or read it on a
+                    # page opened before the owner's last save (#1359, #1385
+                    # review).
                     prompt_version = await session.scalar(
-                        select(PromptVersion)
-                        .join(
-                            PromptListRevisionItem,
-                            PromptListRevisionItem.prompt_version_id
-                            == PromptVersion.id,
-                        )
-                        .join(
-                            PromptListRevision,
-                            PromptListRevision.id
-                            == PromptListRevisionItem.revision_id,
-                        )
-                        .where(
+                        select(PromptVersion).where(
                             PromptVersion.id == body.prompt_version_id,
-                            PromptListRevision.prompt_list_id == prompt_list.id,
+                            or_(
+                                select(Prompt.id)
+                                .where(
+                                    Prompt.concept_id == PromptVersion.concept_id,
+                                    Prompt.prompt_list_id == prompt_list.id,
+                                )
+                                .exists(),
+                                and_(
+                                    PromptVersion.unlisted_at.is_not(None),
+                                    PromptVersion.unlisted_from_list_id == prompt_list.id,
+                                ),
+                            ),
                         )
                     )
                     if prompt_version is None:
@@ -2397,6 +2411,31 @@ def create_moderation_router(
                             concept_id=target.concept_id,
                             reported_owner_user_id=report.reported_owner_user_id,
                         )
+                        # Taken in the order `update_owned` takes it, and
+                        # before any version is written: an owner's save in
+                        # flight holds the list row while it reads the
+                        # concept's state, writes its new version and stamps
+                        # the one it replaces (#1359), so it either commits
+                        # first - and the UPDATE below covers the version it
+                        # wrote - or starts after, and carries the decision.
+                        # Without it a save that read "active" could commit a
+                        # new active version the UPDATE never saw (#1092
+                        # review); writing the reported version first, then
+                        # reaching for the list, deadlocked against the save's
+                        # stamp on that same version.
+                        if report.prompt_list_id is not None:
+                            await session.execute(
+                                select(PromptList.id)
+                                .where(PromptList.id == report.prompt_list_id)
+                                .with_for_update()
+                            )
+                        # Then every wording of the concept, in id order -
+                        # the order every multi-row version writer takes them,
+                        # the unlisted sweep included - before the reported
+                        # one is written and the rest updated after it.
+                        await _lock_versions(
+                            session, PromptVersion.concept_id == target.concept_id
+                        )
                     prior_decision = (
                         target.moderation_state,
                         target.moderated_by_user_id,
@@ -2406,20 +2445,6 @@ def create_moderation_router(
                     target.moderated_by_user_id = reviewer.id
                     target.moderated_at = now
                     if report.target_type == "prompt":
-                        # Taken in the order `update_owned` takes it: an
-                        # owner's save in flight holds the list row while it
-                        # reads the concept's state and writes its new
-                        # version, so it either commits first - and the
-                        # UPDATE below covers the version it wrote - or starts
-                        # after, and carries the decision. Without it a save
-                        # that read "active" could commit a new active version
-                        # the UPDATE never saw (#1092 review).
-                        if report.prompt_list_id is not None:
-                            await session.execute(
-                                select(PromptList.id)
-                                .where(PromptList.id == report.prompt_list_id)
-                                .with_for_update()
-                            )
                         # The decision is the concept's, not one wording's
                         # (R-MOD-11, #1020): a report names the version the
                         # game played, and the owner may have saved a newer
@@ -2713,6 +2738,10 @@ def create_moderation_router(
                     select(PromptList, User.display_name)
                     .outerjoin(User, User.id == PromptList.owner_user_id)
                     .where(PromptList.id == prompt_list_id, *_held())
+                    # Held while the prompts are read, so the version sent
+                    # back is the one they were read at: a save overwrites the
+                    # working copy in place (#1359).
+                    .with_for_update(read=True, of=PromptList)
                 )
             ).one_or_none()
             if row is None:
@@ -2720,18 +2749,8 @@ def create_moderation_router(
                     status_code=404, detail="That prompt list is not awaiting review."
                 )
             prompt_list, display_name = row
-            revision = await session.scalar(
-                select(PromptListRevision)
-                .where(
-                    PromptListRevision.prompt_list_id == prompt_list.id,
-                    PromptListRevision.version == prompt_list.version,
-                )
-                .options(
-                    selectinload(PromptListRevision.items)
-                    .selectinload(PromptListRevisionItem.prompt_version)
-                    .selectinload(PromptVersion.version_aliases)
-                    .selectinload(PromptVersionAlias.alias)
-                )
+            entries = await SqlAlchemyPromptListRepository._working_copy_entries(
+                session, prompt_list.id
             )
         return {
             "id": str(prompt_list.id),
@@ -2747,16 +2766,13 @@ def create_moderation_router(
             ),
             "prompts": [
                 {
-                    "prompt": item.prompt_version.canonical_answer,
-                    "aliases": sorted(
-                        link.alias.answer
-                        for link in item.prompt_version.version_aliases
-                    ),
+                    "prompt": entry.answer,
+                    "aliases": list(entry.aliases),
                     # A version may already be hidden by an earlier report;
                     # the reviewer should see that rather than rediscover it.
-                    "moderationState": item.prompt_version.moderation_state,
+                    "moderationState": entry.moderation_state,
                 }
-                for item in (revision.items if revision is not None else ())
+                for entry in entries
             ],
         }
 
