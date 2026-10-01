@@ -105,8 +105,9 @@ from app.domain_values import (
 # `extraPromptLanguages`, the other languages a player plays in (#1209). To 13
 # when what other people did to the requester left it (#1238): a report of
 # theirs carries `decided` instead of its status and review times, and the
-# declines and the blocks and reports against them are gone.
-EXPORT_SCHEMA_VERSION = 13
+# declines and the blocks and reports against them are gone. To 14 when an
+# offer's sources became the lists it was drawn from (`sourceListIds`, #1358).
+EXPORT_SCHEMA_VERSION = 14
 
 # Events that name the requester only as their **target** and are exported:
 # the ones they are already told about when they happen (#1238). Anything
@@ -824,8 +825,8 @@ def _drawn_turn_document(turn: TurnRecord) -> dict:
                 "promptVersionId": (
                     str(offer.prompt_version_id) if offer.prompt_version_id else None
                 ),
-                "sourceRevisionIds": [
-                    str(source.prompt_list_revision_id) for source in offer.sources
+                "sourceListIds": [
+                    str(source.prompt_list_id) for source in offer.sources
                 ],
             }
             for offer in turn.prompt_offers

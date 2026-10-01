@@ -112,16 +112,11 @@ async def test_a_curated_offer_names_its_version_and_nothing_else_does():
                                                 selected=False, source_kind="custom", prompt_version_id=version_id))
 
         # Usage totals: picked at most as often as offered, guessed by at most everyone.
-        list_id, revision_id = generate_uuid(), generate_uuid()
-        from app.db.models import PromptListRevision
-
+        list_id = generate_uuid()
         async with factory() as session:
             async with session.begin():
                 session.add(PromptList(id=list_id, slug="l", name="L", is_bundled=True))
-                await session.flush()
-                session.add(PromptListRevision(id=revision_id, prompt_list_id=list_id, version=1, language="en",
-                                               content_hash="0" * 64, letter_counts={}, letter_total=0))
-        fact = dict(prompt_list_revision_id=revision_id, prompt_version_id=version_id, occurred_at=NOW,
+        fact = dict(prompt_list_id=list_id, prompt_version_id=version_id, occurred_at=NOW,
                     scoring_mode="default", hint_mode="none")
         await _accepts(factory, PromptUsageFact(batch_id=generate_uuid(), offer_count=3, pick_count=1,
                                                 correct_guess_count=2, total_guesser_count=2, **fact))

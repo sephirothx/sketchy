@@ -363,8 +363,8 @@ async def test_a_revisions_tallies_cover_every_member_whatever_moderation_says()
         await engine.dispose()
 
 
-async def _pin_a_game_to(factory, owner_id: str, revision_id: str) -> None:
-    """A finished game that names the list's revision as a prompt source."""
+async def _play_a_game_from(factory, owner_id: str, list_id: str) -> None:
+    """A finished game that names the list as a prompt source (#1358)."""
     from datetime import datetime, timedelta, timezone
 
     from app.repositories.interfaces import (
@@ -387,7 +387,7 @@ async def _pin_a_game_to(factory, owner_id: str, revision_id: str) -> None:
             started_at=started,
             finished_at=started + timedelta(minutes=5),
             prompt_source_mode="curated",
-            prompt_source_revision_ids=(revision_id,),
+            prompt_source_list_ids=(list_id,),
         ),
         [
             GameParticipantInput(
@@ -424,13 +424,13 @@ async def _current_revision_id(factory, list_id: str) -> str:
     return str(revision.id)
 
 
-async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance():
+async def test_deleting_a_list_a_finished_game_played_succeeds():
     """R-LIST-01 lets an owner delete a list; R-PRIV-05 keeps the game intact.
 
     Found by #612: with foreign keys enforced, deleting a used list rolled the
     whole transaction back because the game's pinned revision restricted it.
-    The list is retired instead (#605): gone from its owner, pinned revision
-    kept for the game.
+    The list was retired instead (#605); since #1358 the game names the list,
+    and nothing it references can stop the deletion.
     """
     factory, engine, owner_id, _ = await _database()
     try:
@@ -442,21 +442,18 @@ async def test_deleting_a_list_a_finished_game_used_keeps_that_games_provenance(
             language="en",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
-        revision_id = await _current_revision_id(factory, created.id)
-        await _pin_a_game_to(factory, owner_id, revision_id)
+        await _play_a_game_from(factory, owner_id, created.id)
 
         assert await repo.delete_owned(owner_id, created.id) is True
 
         assert await repo.get_owned(owner_id, created.id) is None
-        async with factory() as session:
-            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
     finally:
         await engine.dispose()
 
 
 async def test_erasing_the_owner_of_a_used_list_succeeds():
     """R-PRIV-05: the other players' history is never damaged, so erasure
-    cannot delete the revision their game pinned - and it cannot fail either."""
+    cannot fail because a game played the account's list."""
     from app.auth.account_data import anonymize_account
 
     factory, engine, owner_id, _ = await _database()
@@ -469,15 +466,13 @@ async def test_erasing_the_owner_of_a_used_list_succeeds():
             language="en",
             prompts=(PromptListEntryInput(answer="otter"),),
         )
-        revision_id = await _current_revision_id(factory, created.id)
-        await _pin_a_game_to(factory, owner_id, revision_id)
+        await _play_a_game_from(factory, owner_id, created.id)
 
         await anonymize_account(factory, user_id=owner_id)
 
         async with factory() as session:
             owner = await session.get(User, UUID(owner_id))
             assert owner is not None and owner.state == "deleted"
-            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
     finally:
         await engine.dispose()
 
@@ -511,10 +506,13 @@ async def _content_counts(factory) -> dict[str, int]:
         }
 
 
-async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_stays():
+async def test_a_deleted_list_is_out_of_reach_at_once_and_collected_after_the_grace():
+    """Out of every way in at once (R-LIST-01), and gone whole a day later
+    even though a finished game played it: the game names the list, not a
+    revision, and reads the same without it (#1358)."""
     from datetime import datetime, timedelta, timezone
 
-    from app.db.models import GamePromptSource, PromptList
+    from app.db.models import GamePromptSource, GameRecord, PromptList, TurnRecord
     from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 
     factory, engine, owner_id, _ = await _database()
@@ -527,8 +525,9 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_st
             language="en",
             prompts=(PromptListEntryInput(answer="otter", aliases=("sea otter",)),),
         )
-        revision_id = await _current_revision_id(factory, created.id)
-        await _pin_a_game_to(factory, owner_id, revision_id)
+        await _play_a_game_from(factory, owner_id, created.id)
+        async with factory() as session:
+            assert await session.scalar(select(GamePromptSource.game_id)) is not None
 
         assert await repo.delete_owned(owner_id, created.id) is True
         assert await repo.delete_owned(owner_id, created.id) is False, "retired once"
@@ -548,39 +547,26 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_its_pinned_revision_st
                 prompts=(PromptListEntryInput(answer=f"answer {index}"),),
             )
 
-        # The sweep, well after the grace: the pinned revision and its content
-        # stay, the tombstone row stays with them, the display rows are gone.
-        # It is not even examined - a list whose every remaining revision is
-        # pinned has no work left for ever, and selecting it would let a
-        # handful of these fill the batch and starve the lists retired after
-        # them (#478).
         later = datetime.now(timezone.utc) + timedelta(days=2)
         result = await reclaim_retired_prompt_lists(factory, now=later)
-        assert result.lists_examined == 0
-        assert result.revisions_deleted == 0 and result.lists_deleted == 0
-        assert result.backlog == 0, "a permanent tombstone is exempt, not overdue"
+        assert result.lists_examined == 1 and result.lists_deleted == 1
+        assert result.backlog == 0
         async with factory() as session:
-            tombstone = await session.get(PromptList, UUID(created.id))
-            assert tombstone is not None and tombstone.visibility == "private"
-            assert tombstone.deleted_at is not None
-            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
-            assert (
-                await session.scalar(
-                    select(GamePromptSource).where(
-                        GamePromptSource.prompt_list_revision_id == UUID(revision_id)
-                    )
-                )
-                is not None
-            )
+            assert await session.get(PromptList, UUID(created.id)) is None
+            assert await session.scalar(select(GamePromptSource.game_id)) is None
+            assert await session.scalar(select(func.count(GameRecord.id))) == 1
+            assert await session.scalar(select(TurnRecord.prompt)) == "otter"
     finally:
         await engine.dispose()
 
 
 async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_game():
-    """R-LIST-07: the pin is a revision id held in memory; the grace before
-    reclaim is what keeps that id valid until the game is written."""
+    """R-LIST-07: the room holds what it drew; the grace before reclaim is
+    what keeps the list there to be named when the game is written, and a
+    write after it simply names no list (#1358)."""
     from datetime import datetime, timedelta, timezone
 
+    from app.db.models import GamePromptSource
     from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 
     factory, engine, owner_id, _ = await _database()
@@ -594,17 +580,21 @@ async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_
             prompts=(PromptListEntryInput(answer="otter"),),
         )
         pinned = await repo.authorize_selection([created.slug], requesting_user_id=owner_id)
-        (revision_id,) = pinned.revision_ids
+        (list_id,) = pinned.list_ids
 
         assert await repo.delete_owned(owner_id, created.id) is True
-        # Within the grace, the sweep leaves the revision for the running game.
+        # Within the grace, the sweep leaves the list for the running game.
         await reclaim_retired_prompt_lists(factory)
-        await _pin_a_game_to(factory, owner_id, revision_id)
+        await _play_a_game_from(factory, owner_id, list_id)
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 1
 
         later = datetime.now(timezone.utc) + timedelta(days=2)
         await reclaim_retired_prompt_lists(factory, now=later)
+        # A game written after the list went names no list, and is written.
+        await _play_a_game_from(factory, owner_id, list_id)
         async with factory() as session:
-            assert await session.get(PromptListRevision, UUID(revision_id)) is not None
+            assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 0
     finally:
         await engine.dispose()
 
@@ -874,7 +864,10 @@ async def test_swapped_answers_and_alias_only_edits_still_land():
         await engine.dispose()
 
 
-async def test_usage_reads_only_the_memberships_the_game_touched():
+async def test_usage_is_credited_to_the_lists_the_draw_found_it_in():
+    """No revision's membership is asked when a game ends (#1358): each
+    version is credited to the lists its draw found it in, and only to lists
+    the game played - a source it did not play credits nobody."""
     from datetime import datetime, timezone
 
     from app.db.models import PromptUsageFact
@@ -884,32 +877,34 @@ async def test_usage_reads_only_the_memberships_the_game_touched():
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         created = await _big_list(repo, owner_id, size=200)
-        revision_id = await _current_revision_id(factory, created.id)
         offered = created.prompts[3].prompt_version_id
         picked = created.prompts[7].prompt_version_id
+        stranger = created.prompts[9].prompt_version_id
         usage = PromptUsage(
             batch_id=str(generate_uuid()),
             occurred_at=datetime.now(timezone.utc),
             scoring_mode="default",
             hint_mode="none",
-            offers={offered: 2, picked: 1},
+            offers={offered: 2, picked: 1, stranger: 1},
             picks={picked: PromptPickTotals(picks=1, correct_guesses=1, total_guessers=3)},
+            sources={
+                offered: (created.id,),
+                picked: (created.id,),
+                stranger: (str(generate_uuid()),),
+            },
         )
         statements = _capture(engine)
 
-        await repo.record_prompt_usage([revision_id], usage)
+        await repo.record_prompt_usage([created.id], usage)
 
-        membership_reads = [
-            s for s in statements
-            if s.lstrip().startswith("SELECT") and "prompt_list_revision_items" in s
-        ]
-        assert membership_reads and all(
-            "prompt_list_revision_items.prompt_version_id IN" in s for s in membership_reads
-        )
+        assert not [s for s in statements if "prompt_list_revision" in s]
         async with factory() as session:
             facts = (await session.scalars(select(PromptUsageFact))).all()
         assert {str(f.prompt_version_id).replace("-", "") for f in facts} == {
             offered.replace("-", ""), picked.replace("-", "")
+        }
+        assert {str(f.prompt_list_id).replace("-", "") for f in facts} == {
+            created.id.replace("-", "")
         }
         assert sum(f.offer_count for f in facts) == 3 and sum(f.pick_count for f in facts) == 1
     finally:

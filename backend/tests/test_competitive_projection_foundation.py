@@ -31,7 +31,7 @@ def test_recalculable_competitive_foundation_is_present_without_product_tables()
             "target_user_id",
             "created_at",
         },
-        "game_prompt_sources": {"game_id", "prompt_list_revision_id"},
+        "game_prompt_sources": {"game_id", "prompt_list_id"},
         "turn_records": {
             "id",
             "game_id",

@@ -649,7 +649,7 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
             version=1,
         )
         selection = await prompts.resolve_selection(["source-list"])
-        revision_id = selection.revision_ids[0]
+        list_id = selection.list_ids[0]
         turn_id = str(generate_uuid())
         now = datetime.now(timezone.utc)
         game_id = await history.save_game(
@@ -663,7 +663,7 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
                 started_at=now,
                 finished_at=now,
                 prompt_source_mode="curated",
-                prompt_source_revision_ids=(revision_id,),
+                prompt_source_list_ids=(list_id,),
             ),
             [
                 GameParticipantInput(drawer.id, 300, 1),
@@ -686,7 +686,7 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
                             selected=answer == "banana",
                             source_kind="curated",
                             prompt_version_id=selection.prompt_version_ids[answer],
-                            source_revision_ids=selection.prompt_source_revision_ids[
+                            source_list_ids=selection.prompt_source_list_ids[
                                 answer
                             ],
                         )
@@ -725,11 +725,11 @@ async def test_game_history_records_the_actual_prompt_pool_and_every_offer():
                 )
             ).all()
             sources = set(
-                (await session.scalars(select(TurnPromptOfferSource.prompt_list_revision_id))).all()
+                (await session.scalars(select(TurnPromptOfferSource.prompt_list_id))).all()
             )
         assert [offer.prompt_snapshot for offer in offers] == ["apple", "banana", "castle"]
         assert [offer.prompt_snapshot for offer in offers if offer.selected] == ["banana"]
-        assert {str(source) for source in sources} == {revision_id}
+        assert {str(source) for source in sources} == {list_id}
     finally:
         await engine.dispose()
 
@@ -824,7 +824,7 @@ async def test_prompt_list_repository():
         assert resolved.aliases["apple"] == ("malus",)
         assert len(resolved.revision_ids) == 1
         assert resolved.prompt_version_ids["apple"]
-        assert resolved.prompt_source_revision_ids["apple"] == resolved.revision_ids
+        assert resolved.prompt_source_list_ids["apple"] == resolved.list_ids
 
         french = await repo.upsert_bundled(
             slug="francais",
@@ -860,8 +860,9 @@ async def test_prompt_list_repository():
         apple_id = resolved.prompt_version_ids["apple"]
         banana_id = resolved.prompt_version_ids["banana"]
         await repo.record_prompt_usage(
-            resolved.revision_ids,
+            resolved.list_ids,
             PromptUsage(
+                sources=_sources(resolved),
                 offers={
                     apple_id: 1,
                     banana_id: 1,
@@ -1239,6 +1240,14 @@ async def _seed_two_lists(repo):
     )
 
 
+def _sources(selection):
+    """Each version's source lists, as a game's usage carries them (#1358)."""
+    return {
+        version_id: selection.prompt_source_list_ids[answer]
+        for answer, version_id in selection.prompt_version_ids.items()
+    }
+
+
 def _stat(stats, text):
     return next(entry for entry in stats if entry.text == text)
 
@@ -1254,8 +1263,9 @@ async def test_prompt_usage_reaches_every_named_list_in_one_call():
         castle_id = selection.prompt_version_ids["castle"]
 
         await repo.record_prompt_usage(
-            selection.revision_ids,
+            selection.list_ids,
             PromptUsage(
+                sources=_sources(selection),
                 offers={apple_id: 3, banana_id: 1, castle_id: 1},
                 picks={
                     apple_id: PromptPickTotals(
@@ -1291,6 +1301,7 @@ async def test_prompt_usage_is_idempotent_windowable_and_segmentable():
         occurred_at = datetime(2026, 8, 1, 12, tzinfo=timezone.utc)
         usage = PromptUsage(
             offers={apple_id: 1},
+            sources=_sources(selection),
             picks={
                 apple_id: PromptPickTotals(
                     picks=1, correct_guesses=2, total_guessers=3
@@ -1302,8 +1313,8 @@ async def test_prompt_usage_is_idempotent_windowable_and_segmentable():
             hint_mode="wheel",
         )
 
-        await repo.record_prompt_usage(selection.revision_ids, usage)
-        await repo.record_prompt_usage(selection.revision_ids, usage)
+        await repo.record_prompt_usage(selection.list_ids, usage)
+        await repo.record_prompt_usage(selection.list_ids, usage)
 
         async with factory() as session:
             facts = list(
@@ -1337,19 +1348,21 @@ async def test_prompt_usage_is_idempotent_windowable_and_segmentable():
         await engine.dispose()
 
 
-async def test_a_revision_that_no_longer_exists_does_not_cost_the_others():
-    """A pinned revision disappearing beside a valid one is not fatal."""
+async def test_a_list_that_no_longer_exists_does_not_cost_the_others():
+    """A list deleted beside a valid one is not fatal: its facts are kept with
+    no list, as the `SET NULL` would have left them (#1358)."""
     factory, engine = await create_test_db()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         await _seed_two_lists(repo)
         alpha = await repo.resolve_selection(["alpha"])
         apple_id = alpha.prompt_version_ids["apple"]
-        missing_revision_id = str(generate_uuid())
+        missing_list_id = str(generate_uuid())
 
         await repo.record_prompt_usage(
-            [*alpha.revision_ids, missing_revision_id],
+            [*alpha.list_ids, missing_list_id],
             PromptUsage(
+                sources={apple_id: (*alpha.list_ids, missing_list_id)},
                 offers={apple_id: 1},
                 picks={
                     apple_id: PromptPickTotals(
@@ -1360,9 +1373,17 @@ async def test_a_revision_that_no_longer_exists_does_not_cost_the_others():
         )
 
         assert _stat(await repo.get_prompt_stats("alpha"), "apple").pick_count == 1
-        # A call naming only missing revisions is a no-op rather than an error.
+        async with factory() as session:
+            orphaned = await session.scalar(
+                select(func.count(PromptUsageFact.id)).where(
+                    PromptUsageFact.prompt_list_id.is_(None)
+                )
+            )
+        assert orphaned == 1
+        # A call naming only a missing list is not an error, and credits nobody.
         await repo.record_prompt_usage(
-            [missing_revision_id], PromptUsage(offers={apple_id: 1}, picks={})
+            [missing_list_id],
+            PromptUsage(sources={apple_id: (missing_list_id,)}, offers={apple_id: 1}, picks={}),
         )
         assert _stat(await repo.get_prompt_stats("alpha"), "apple").offer_count == 1
     finally:
@@ -1378,7 +1399,7 @@ async def test_recording_nothing_touches_no_counters():
         apple_id = alpha.prompt_version_ids["apple"]
 
         await repo.record_prompt_usage([], PromptUsage(offers={apple_id: 1}, picks={}))
-        await repo.record_prompt_usage(alpha.revision_ids, PromptUsage(offers={}, picks={}))
+        await repo.record_prompt_usage(alpha.list_ids, PromptUsage(offers={}, picks={}))
 
         assert _stat(await repo.get_prompt_stats("alpha"), "apple").offer_count == 0
     finally:

@@ -163,9 +163,12 @@ async def test_prompt_usage_tracking_metrics():
         # One game: "apple", "banana" and "robot" offered, "robot" drawn and
         # guessed by 2 of 3 possible guessers.
         await repo.record_prompt_usage(
-            selection.revision_ids,
+            selection.list_ids,
             PromptUsage(
                 offers={apple_id: 1, banana_id: 1, robot_id: 1},
+                sources={
+                    version: selection.list_ids for version in (apple_id, banana_id, robot_id)
+                },
                 picks={
                     robot_id: PromptPickTotals(
                         picks=1, correct_guesses=2, total_guessers=3
@@ -301,7 +304,7 @@ async def test_sampling_draws_distinct_prompts_and_records_where_each_came_from(
         assert len({prompt.answer for prompt in sample.prompts}) == 72
         for prompt in sample.prompts:
             assert prompt.prompt_version_id
-            assert prompt.source_revision_ids == tuple(revisions)
+            assert prompt.source_list_ids == pinned.list_ids
 
         # Nothing is drawn without somewhere to draw from.
         assert (await repo.sample_prompts(revisions, limit=0)).prompts == ()

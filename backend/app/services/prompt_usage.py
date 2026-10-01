@@ -7,7 +7,7 @@ remembers to the increments a `PromptListRepository` applies.
 from __future__ import annotations
 
 from collections import Counter
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from datetime import datetime
 
 from app.game import CompletedTurnStats
@@ -17,6 +17,7 @@ from app.repositories.interfaces import PromptPickTotals, PromptUsage
 def tally_prompt_usage(
     turns: Iterable[CompletedTurnStats],
     *,
+    sources: Mapping[str, tuple[str, ...]] | None = None,
     batch_id: str | None = None,
     occurred_at: datetime | None = None,
     scoring_mode: str = "default",
@@ -28,6 +29,10 @@ def tally_prompt_usage(
     be written in a few statements. It also has to be aggregation rather than
     a set: the same prompt can be offered in several turns, and a pool too small
     to keep excluding what it has already used can have it chosen twice too.
+
+    `sources` names the lists the draw found each version in; only the
+    versions the game used are carried, and they are what the facts are
+    credited to (#1358).
 
     Identity, never display text, decides attribution. Ephemeral room prompts
     carry null source IDs and are discarded even if their text is identical to
@@ -62,8 +67,14 @@ def tally_prompt_usage(
         **({"batch_id": batch_id} if batch_id is not None else {}),
         **({"occurred_at": occurred_at} if occurred_at is not None else {}),
     }
+    used = {*offers, *picks, *total_guessers}
     return PromptUsage(
         offers=dict(offers),
+        sources={
+            version: tuple(lists)
+            for version, lists in sorted((sources or {}).items())
+            if version in used and lists
+        },
         picks={
             prompt: PromptPickTotals(
                 picks=picks[prompt],

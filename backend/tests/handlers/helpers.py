@@ -328,6 +328,9 @@ class StubPromptListRepo:
             slugs=tuple(slugs),
             language=expected_language or self.language,
             revision_ids=self.revision_ids,
+            # A stub list's id is its revision's: provenance names the list
+            # (#1358), and the stub has one of each.
+            list_ids=self.revision_ids,
             prompt_count=len(self.prompts),
             letter_counts=counts,
             letter_total=total,
@@ -360,7 +363,7 @@ class StubPromptListRepo:
                     match_key=self._match_key(prompt),
                     aliases=self.aliases.get(prompt, ()),
                     prompt_version_id=self.prompt_version_ids.get(prompt),
-                    source_revision_ids=tuple(revision_ids),
+                    source_list_ids=tuple(revision_ids),
                     concept_id=self.concept_ids.get(prompt),
                 )
                 for prompt in drawable[:limit]
@@ -378,13 +381,13 @@ class StubPromptListRepo:
                     answer=prompt,
                     match_key=self._match_key(prompt),
                     prompt_version_id=self.prompt_version_ids.get(prompt),
-                    source_revision_ids=tuple(revision_ids),
+                    source_list_ids=tuple(revision_ids),
                     concept_id=self.concept_ids.get(prompt),
                     translations={
                         language: PromptTranslation(
                             answer=answer,
                             prompt_version_id=f"{self.prompt_version_ids.get(prompt)}-{language}",
-                            source_revision_ids=tuple(revision_ids),
+                            source_list_ids=tuple(revision_ids),
                         )
                         for language, answer in self.translations.get(prompt, {}).items()
                     },
@@ -394,7 +397,7 @@ class StubPromptListRepo:
             drawable=len(drawable),
         )
 
-    async def record_prompt_usage(self, revision_ids, usage):
+    async def record_prompt_usage(self, list_ids, usage):
         return None
 
 

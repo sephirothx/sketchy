@@ -26,7 +26,7 @@ from app.repositories.interfaces import PromptListEntryInput
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 from app.services.prompt_reclaim import RETIRED_LIST_GRACE, reclaim_superseded_revisions
 from app.services.sweeps import SweepBudget
-from tests.test_owned_prompt_lists import _database, _pin_a_game_to
+from tests.test_owned_prompt_lists import _database, _play_a_game_from
 from tests.test_prompt_content_moderation import (  # noqa: F401 - env is a fixture
     _staff_member,
     env,
@@ -89,10 +89,10 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
     factory, engine, owner_id, _ = await _database()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
-        list_id, (pinned, forked_from, hiding, plain, young, current) = await _saved(
+        list_id, (played_from, forked_from, hiding, plain, young, current) = await _saved(
             repo, factory, owner_id, "Saved often", ["otter", "heron", "crane", "ibis", "swan", "lark"]
         )
-        await _pin_a_game_to(factory, owner_id, pinned)
+        await _play_a_game_from(factory, owner_id, list_id)
         other_id, (fork,) = await _saved(repo, factory, owner_id, "Copied", ["heron"])
         async with factory() as session, session.begin():
             await session.execute(
@@ -113,13 +113,14 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
         now = datetime.now(timezone.utc)
         # Everything but the current save was superseded ten days ago; the
         # current one, which supersedes `young`, was saved just now.
-        await _age(factory, [pinned, forked_from, hiding, plain, young], LONG_AGO)
+        await _age(factory, [played_from, forked_from, hiding, plain, young], LONG_AGO)
         assert await _answer_versions(factory, "ibis") == 1
 
         report = await reclaim_superseded_revisions(factory, now=now)
 
-        assert int(report) == 2, "a hidden word is not a hold (#1357)"
-        assert await _revisions(factory, list_id) == [pinned, forked_from, young, current]
+        # Neither a hidden word (#1357) nor a finished game (#1358) is a hold.
+        assert int(report) == 3
+        assert await _revisions(factory, list_id) == [forked_from, young, current]
         assert await _answer_versions(factory, "ibis") == 0, "the content only it named went with it"
         assert await _revisions(factory, other_id) == [fork], "the fork itself is a current revision"
         assert report.backlog == 0 and report.oldest_overdue_seconds == 0

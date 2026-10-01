@@ -156,7 +156,7 @@ export interface GameRuleSnapshot {
   prompt: {
     language: string;
     hideMaskedPrompt: boolean;
-    sourceRevisionIds: string[];
+    sourceListIds: string[];
   };
 }
 

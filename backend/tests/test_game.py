@@ -1552,7 +1552,7 @@ def test_a_list_prompt_is_tracked_by_its_key_and_shown_by_its_answer():
         prompt_answers={concept: "Mädchen"},
         prompt_aliases={concept: ("das Mädchen",)},
         prompt_version_ids={concept: "version-de"},
-        prompt_source_revision_ids_by_key={concept: ("revision-de",)},
+        prompt_source_list_ids_by_key={concept: ("revision-de",)},
         prompt_language="de",
     )
     game.start_next_turn(canvas_generation=1)
@@ -1580,10 +1580,31 @@ def test_a_list_prompt_is_tracked_by_its_key_and_shown_by_its_answer():
     assert turn.chosen_prompt == "Mädchen"
     assert turn.chosen_prompt_version_id == "version-de"
     assert turn.offered_prompt_version_ids == ("version-de",)
-    assert turn.offered_prompt_source_revision_ids == (("revision-de",),)
+    assert turn.offered_prompt_source_list_ids == (("revision-de",),)
     assert game.key_for("Mädchen") == concept
     # A turn ended before anything was chosen records no provenance - not the
     # previous turn's.
     game.rounds_total = 2
     game.start_next_turn(canvas_generation=2)
     assert game.prompt_key is None and game.prompt is None
+
+
+def test_version_sources_names_every_form_s_lists():
+    """What a finished game's usage facts are credited to (#1358): each
+    version the draw produced, the room's spelling and every other language's
+    form of a mixed game's prompt alike, with the lists it was found in."""
+    from app.game import PromptForm
+
+    game = Game(
+        turn_order=["a", "b"],
+        prompt_version_ids={"concept-1": "v-en"},
+        prompt_source_list_ids_by_key={"concept-1": ("list-en",)},
+        prompt_translations={
+            "concept-1": {
+                "de": PromptForm(answer="Hund", version_id="v-de", source_list_ids=("list-de",)),
+                "fr": PromptForm(answer="chien", version_id=None),
+            }
+        },
+    )
+
+    assert game.version_sources() == {"v-en": ("list-en",), "v-de": ("list-de",)}

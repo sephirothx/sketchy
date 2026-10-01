@@ -477,6 +477,9 @@ class Room:
     prompt_language: str = "en"
     prompt_list_slugs: list[str] = field(default_factory=list)
     prompt_list_revision_ids: list[str] = field(default_factory=list)
+    # The lists those revisions belong to, in the same order: what a game's
+    # provenance names (#1358), while the revisions are what it draws from.
+    prompt_list_ids: list[str] = field(default_factory=list)
     # What the pinned revisions hold, rather than the content itself. The pool
     # used to live here for the room's whole life so that a game could offer
     # three choices and price wheel letters; both need a number and a
@@ -871,6 +874,7 @@ class RoomManager:
         prompt_language: str = "en",
         prompt_list_slugs: list[str] | None = None,
         prompt_list_revision_ids: list[str] | None = None,
+        prompt_list_ids: list[str] | None = None,
         prompt_pool_size: int = 0,
         prompt_letter_counts: dict[str, int] | None = None,
         prompt_letter_total: int = 0,
@@ -905,6 +909,7 @@ class RoomManager:
             prompt_language=prompt_language,
             prompt_list_slugs=list(prompt_list_slugs or []),
             prompt_list_revision_ids=list(prompt_list_revision_ids or []),
+            prompt_list_ids=list(prompt_list_ids or []),
             prompt_pool_size=prompt_pool_size,
             prompt_letter_counts=dict(prompt_letter_counts or {}),
             prompt_letter_total=prompt_letter_total,

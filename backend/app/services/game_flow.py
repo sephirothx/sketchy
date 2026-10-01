@@ -141,10 +141,10 @@ class _PromptDraw:
     answers: dict[str, str] = field(default_factory=dict)
     aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     version_ids: dict[str, str] = field(default_factory=dict)
-    source_revision_ids_by_key: dict[str, tuple[str, ...]] = field(
+    source_list_ids_by_key: dict[str, tuple[str, ...]] = field(
         default_factory=dict
     )
-    source_revision_ids: tuple[str, ...] = ()
+    source_list_ids: tuple[str, ...] = ()
     letter_counts: dict[str, int] = field(default_factory=dict)
     letter_total: int = 0
     # A mixed-language game's prompts in every room language (#1182).
@@ -270,6 +270,7 @@ class GameFlowService:
         prompt_list_revision_ids = (
             list(fallback.prompt_list_revision_ids) if fallback else []
         )
+        prompt_list_ids = list(fallback.prompt_list_ids) if fallback else []
         prompt_pool_size = fallback.prompt_pool_size if fallback else 0
         prompt_letter_counts = (
             dict(fallback.prompt_letter_counts) if fallback else {}
@@ -319,6 +320,7 @@ class GameFlowService:
                         prompt_list_slugs, expected_language=declared_language
                     )
                 prompt_list_revision_ids = list(selection.revision_ids)
+                prompt_list_ids = list(selection.list_ids)
                 prompt_pool_size = selection.prompt_count
                 prompt_letter_counts = dict(selection.letter_counts)
                 prompt_letter_total = selection.letter_total
@@ -339,6 +341,7 @@ class GameFlowService:
                         "Prompt-list store unavailable for custom-only room"
                     )
                     prompt_list_revision_ids = []
+                    prompt_list_ids = []
                     prompt_pool_size = 0
                     prompt_letter_counts = {}
                     prompt_letter_total = 0
@@ -367,6 +370,7 @@ class GameFlowService:
             "prompt_language": declared_language,
             "prompt_list_slugs": prompt_list_slugs,
             "prompt_list_revision_ids": prompt_list_revision_ids,
+            "prompt_list_ids": prompt_list_ids,
             "prompt_pool_size": prompt_pool_size,
             "prompt_letter_counts": prompt_letter_counts,
             "prompt_letter_total": prompt_letter_total,
@@ -408,6 +412,7 @@ class GameFlowService:
                 "Prompt lists could not be loaded. Please try again."
             ) from error
         room.prompt_list_revision_ids = list(selection.revision_ids)
+        room.prompt_list_ids = list(selection.list_ids)
         room.prompt_pool_size = selection.prompt_count
         room.prompt_letter_counts = dict(selection.letter_counts)
         room.prompt_letter_total = selection.letter_total
@@ -715,14 +720,14 @@ class GameFlowService:
                 for prompt in drawn
                 if prompt.prompt_version_id is not None
             },
-            source_revision_ids_by_key={
-                _prompt_key(prompt): prompt.source_revision_ids for prompt in drawn
+            source_list_ids_by_key={
+                _prompt_key(prompt): prompt.source_list_ids for prompt in drawn
             },
-            source_revision_ids=tuple(
-                revision_id
-                for revision_id in room.prompt_list_revision_ids
+            source_list_ids=tuple(
+                list_id
+                for list_id in room.prompt_list_ids
                 if any(
-                    revision_id in form.source_revision_ids
+                    list_id in form.source_list_ids
                     for prompt in drawn
                     for form in (prompt, *prompt.translations.values())
                 )
@@ -733,7 +738,7 @@ class GameFlowService:
                         answer=form.answer,
                         aliases=form.aliases,
                         version_id=form.prompt_version_id,
-                        source_revision_ids=form.source_revision_ids,
+                        source_list_ids=form.source_list_ids,
                     )
                     for language, form in prompt.translations.items()
                 }
@@ -875,15 +880,13 @@ class GameFlowService:
                 for prompt in drawn
                 if prompt.prompt_version_id is not None
             },
-            source_revision_ids_by_key={
-                _prompt_key(prompt): prompt.source_revision_ids for prompt in drawn
+            source_list_ids_by_key={
+                _prompt_key(prompt): prompt.source_list_ids for prompt in drawn
             },
-            source_revision_ids=tuple(
-                revision_id
-                for revision_id in room.prompt_list_revision_ids
-                if any(
-                    revision_id in prompt.source_revision_ids for prompt in drawn
-                )
+            source_list_ids=tuple(
+                list_id
+                for list_id in room.prompt_list_ids
+                if any(list_id in prompt.source_list_ids for prompt in drawn)
             ),
             letter_counts=dict(letter_counts),
             letter_total=letter_total,
@@ -978,9 +981,9 @@ class GameFlowService:
             allowed_tools=tuple(room.allowed_tools),
             color_mode=room.color_mode,
             prompt_language=room.prompt_language,
-            prompt_source_revision_ids=draw.source_revision_ids,
+            prompt_source_list_ids=draw.source_list_ids,
             prompt_version_ids=draw.version_ids,
-            prompt_source_revision_ids_by_key=draw.source_revision_ids_by_key,
+            prompt_source_list_ids_by_key=draw.source_list_ids_by_key,
             prompt_translations=draw.translations,
             letter_counts_by_language=draw.letter_counts_by_language,
             letter_total_by_language=draw.letter_total_by_language,
@@ -1835,11 +1838,12 @@ class GameFlowService:
         it rides in the same envelope as the history so the two are staged
         together and replayed under one manifest (#541).
         """
-        revision_ids = game.prompt_source_revision_ids
-        if not self._ctx.prompt_list_repo or not revision_ids:
+        list_ids = game.prompt_source_list_ids
+        if not self._ctx.prompt_list_repo or not list_ids:
             return None, ()
         usage = tally_prompt_usage(
             game.completed_turns,
+            sources=game.version_sources(),
             batch_id=game.id,
             occurred_at=occurred_at,
             scoring_mode=game.scoring_mode,
@@ -1847,7 +1851,7 @@ class GameFlowService:
         )
         if not usage:
             return None, ()
-        return usage, tuple(revision_ids)
+        return usage, tuple(list_ids)
 
     async def _finish_or_next(self, room: Room, *, defer_durable: bool = False) -> None:
         game = room.game

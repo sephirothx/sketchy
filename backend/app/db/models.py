@@ -2770,20 +2770,31 @@ class PlannedShutdownAbandonment(Base):
 
 
 class GamePromptSource(Base):
-    """One exact immutable prompt-list revision present in a game's real pool."""
+    """One prompt list present in a game's real pool.
+
+    Points at the list, not at an exact revision (#1358): each turn already
+    stores its prompt text and version, so the history needs no revision to
+    read the same, and a revision pin is what forced a deleted list to linger
+    as a tombstone. The row says only which list it was, so it goes with the
+    list rather than staying as a pointer at nothing.
+    """
 
     __tablename__ = "game_prompt_sources"
+    __table_args__ = (
+        # The list's side, in the order the reclaim drains it (#1358): a batch
+        # reads its own slice instead of every row the list has (#1376 review).
+        Index("ix_game_prompt_sources_prompt_list_id", "prompt_list_id", "game_id"),
+    )
 
     game_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("game_records.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    prompt_list_revision_id: Mapped[uuid.UUID] = mapped_column(
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_list_revisions.id", ondelete="RESTRICT"),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         primary_key=True,
-        index=True,
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="prompt_sources")
@@ -3610,20 +3621,24 @@ class TurnPromptOffer(Base):
 
 
 class TurnPromptOfferSource(Base):
-    """One list revision that contained an offered curated prompt version."""
+    """One prompt list that held an offered curated prompt version (#1358)."""
 
     __tablename__ = "turn_prompt_offer_sources"
+    __table_args__ = (
+        Index(
+            "ix_turn_prompt_offer_sources_prompt_list_id", "prompt_list_id", "offer_id"
+        ),
+    )
 
     offer_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("turn_prompt_offers.id", ondelete="CASCADE"),
         primary_key=True,
     )
-    prompt_list_revision_id: Mapped[uuid.UUID] = mapped_column(
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_list_revisions.id", ondelete="RESTRICT"),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
         primary_key=True,
-        index=True,
     )
 
     offer: Mapped[TurnPromptOffer] = relationship(back_populates="sources")
@@ -4203,7 +4218,7 @@ class PromptTakedown(Base):
 
 
 class PromptUsageFact(Base):
-    """Append-only, per-game usage totals for one prompt in one pinned revision."""
+    """Append-only, per-game usage totals for one prompt drawn from one list."""
 
     __tablename__ = "prompt_usage_facts"
     __table_args__ = (
@@ -4233,8 +4248,8 @@ class PromptUsageFact(Base):
             "hint_mode", HINT_MODES, "ck_prompt_usage_facts_hint_mode"
         ),
         Index(
-            "ix_prompt_usage_facts_revision_occurred_at",
-            "prompt_list_revision_id",
+            "ix_prompt_usage_facts_list_occurred_at",
+            "prompt_list_id",
             "occurred_at",
         ),
         Index(
@@ -4244,21 +4259,27 @@ class PromptUsageFact(Base):
         ),
     )
 
-    # The idempotency triple is the identity - it is what makes a retried
-    # finished game a no-op - so it is the key, and the surrogate id and its
-    # two extra indexes are gone.
-    batch_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True
+    # A surrogate key, because the list is not part of the fact's identity
+    # any more: it is `SET NULL` when the list is deleted (#1358), so a fact
+    # outlives the list it was counted against, and a nullable column cannot
+    # sit in a key. A retried game is still a no-op: `prompt_usage_batches`
+    # records the batch in the same transaction as its facts (#541), and is
+    # asked first.
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
     )
-    prompt_list_revision_id: Mapped[uuid.UUID] = mapped_column(
+    batch_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), nullable=False
+    )
+    prompt_list_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
-        primary_key=True,
+        ForeignKey("prompt_lists.id", ondelete="SET NULL"),
+        nullable=True,
     )
     prompt_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
-        primary_key=True,
+        nullable=False,
     )
     occurred_at: Mapped[datetime] = mapped_column(UTCDateTime(), nullable=False)
     scoring_mode: Mapped[str] = mapped_column(String(16), nullable=False)

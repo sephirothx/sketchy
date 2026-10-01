@@ -357,7 +357,7 @@ async def test_declared_room_language_reaches_every_payload_and_game_matching():
     assert room.game is not None
     assert room.game.prompt_language == "fr"
     assert room.game.prompt_aliases == {"vélo": ("bicyclette",)}
-    assert room.game.prompt_source_revision_ids == ("revision-fr-1",)
+    assert room.game.prompt_source_list_ids == ("revision-fr-1",)
     assert room.game.prompt_version_ids == {
         "éléphant": "prompt-fr-1",
         "vélo": "prompt-fr-2",

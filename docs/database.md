@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`d0e1f2a3b4c9_prompt_takedown_records.py` (#1357). Both this line and the table
+`e1f2a3b4c5d7_game_provenance_names_the_list.py` (#1358). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -110,7 +110,7 @@ erDiagram
 
     game_records ||--o{ game_participants : "seats"
     game_records ||--o{ turn_records : "turns"
-    game_records ||--o{ game_prompt_sources : "pinned revisions"
+    game_records ||--o{ game_prompt_sources : "source lists"
     game_records ||--o{ score_events : "ledger"
     turn_records ||--o| turn_drawings : "drawing"
     turn_records ||--o{ turn_participant_outcomes : "per seat"
@@ -127,7 +127,7 @@ erDiagram
     prompt_lists ||--o{ prompt_list_stars : "starred by"
     prompt_lists ||--o{ prompt_list_revisions : "versions"
     prompt_list_revisions ||--o{ prompt_list_revision_items : "membership"
-    prompt_list_revisions ||--o{ prompt_usage_facts : "usage"
+    prompt_lists ||--o{ prompt_usage_facts : "usage"
     prompt_lists ||--o{ prompts : "display rows"
 
     player_reports ||--o{ player_report_message_evidence : "pins"
@@ -792,7 +792,7 @@ the **target** are limited to the ones they are told about as they happen (warni
 bans and revocations, a moderator removing their picture, role changes, and `session.*`,
 `account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
 not in it, and a report they filed carries `decided` and no status or review time. The field surface is
-pinned by [`fixtures/account_data_export_v13_fields.json`](../fixtures/account_data_export_v13_fields.json).
+pinned by [`fixtures/account_data_export_v14_fields.json`](../fixtures/account_data_export_v14_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1381,6 +1381,8 @@ to write, which is a fact, not a gap) · `attempts` · `next_attempt_at` · `cla
 `failed_at`. `ix_finished_game_envelopes_due` on `(state, next_attempt_at)` is the
 loop's queue scan.
 
+Since `envelope_version` 3 (#1358) an envelope's provenance names lists rather than
+revisions, and its usage batch carries each version's source lists (`sources`).
 Since `envelope_version` 2 (#1259) a drawing is prepared once, at staging on the
 envelope's threads, and the replay writes that blob as it is after verifying its
 checksum. Version 1 carried each wire frame as base64 and the replay prepared it again:
@@ -1487,8 +1489,8 @@ cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # repla
 
 **The rule snapshot** ([`backend/app/game.py:493`](../backend/app/game.py)) freezes the
 numeric default/pressure/hint parameters, the drawer-bonus algorithm, the drawing time,
-the permitted tools and colors, prompt visibility and language, and the pinned prompt-
-source revision IDs. Historical points can therefore be interpreted under the rules that
+the permitted tools and colors, prompt visibility and language, and the prompt lists the
+game drew from (`sourceListIds`; the exact revisions until #1358). Historical points can therefore be interpreted under the rules that
 produced them after defaults or algorithms change. Legacy rows use version `0` and an
 **empty** snapshot rather than claiming parameters that cannot be reconstructed.
 Participant-only game detail and private account export include the exact snapshot;
@@ -1857,10 +1859,17 @@ cannot be reconstructed from their net totals. No-scoring games use the current 
 with an **empty** event list.
 
 ### `game_prompt_sources`
-`game_id` + `prompt_list_revision_id` composite **PK** (CASCADE / RESTRICT).
+`game_id` + `prompt_list_id` composite **PK** (CASCADE / CASCADE).
 
-The exact immutable list revisions that were actually present in the game's real pool
-**after custom-prompt shadowing** — not merely the configured slugs.
+The lists that were actually present in the game's real pool **after custom-prompt
+shadowing** — not merely the configured slugs. Until #1358 these rows named the exact
+revision, `RESTRICT`, and that pin is what made a deleted list a tombstone and gave the
+reclaim its holds. No reader needs it: each turn stores its prompt text and version. A row
+names only which list it was, so it goes with the list rather than staying as a pointer
+at nothing, and the history reads the same. The writer names only lists that still exist
+— one deleted while the game ran leaves no row — and holds them `FOR KEY SHARE` until
+commit, so the check cannot go stale before the rows land. The list's side is indexed `(prompt_list_id, game_id)` — and the offer table's
+`(prompt_list_id, offer_id)` — the order the retired-list reclaim drains them in.
 
 ---
 
@@ -1884,8 +1893,8 @@ Exact offers are **private export data** - in the drawer's own export, for the t
 they drew - and are shown on no history page (#1254).
 
 ### `turn_prompt_offer_sources`
-`offer_id` + `prompt_list_revision_id` composite **PK**. Every list revision that
-contained an offered curated prompt version.
+`offer_id` + `prompt_list_id` composite **PK** (CASCADE / CASCADE). Every list the draw
+found an offered curated prompt version in — `game_prompt_sources`' rule, per offer (#1358).
 
 ---
 
@@ -1964,36 +1973,25 @@ nullable) · timestamps.
 `deleted_at` is set, the visibility falls back to private and the current-display `prompts` rows go, in the same transaction. From then on
 nothing lists, opens, resolves, forks or counts it against the 25-list allowance (which
 create, copy and duplicate count under the owner's row lock, taken `FOR UPDATE` by the
-erasure barrier, so two requests at 24 cannot both land — #898). The
-revisions stay exactly as long as a finished game pins one (`game_prompt_sources`,
-`turn_prompt_offer_sources`, `prompt_usage_facts`): the `RESTRICT`s there are what
-keep another player's provenance from vanishing because its author tidied up
-(R-PRIV-05). Before #605 the delete removed the revisions and rolled back whole for
-every owner whose list a game had ever used.
+erasure barrier, so two requests at 24 cannot both land — #898). Before #605 the delete
+removed the revisions and rolled back whole for every owner whose list a game had ever
+used, because finished games pinned revisions `RESTRICT`; since #1358 they name the list
+instead, and nothing a game references can stop the list going.
 
-The hourly retention sweep reclaims what a retired list no longer needs, once
-`RETIRED_LIST_GRACE` (one day) has passed — long enough for a room that pinned the
-revision before the deletion to finish and write its game (R-LIST-07): the unpinned
-revisions and their items, then the list row itself once no revision is left, then the
-prompt versions and concepts that no revision, list, turn, offer, usage fact or content
-report names any more, aliases cascading with them. A list a game pinned stays as a
-non-discoverable, private tombstone (`deleted_at` set). A hidden word is no hold: until
-#1357 an owner's saves looked for takedowns in their revisions, so a revision holding a
-hidden word, or one a pending report named, was kept too (#1091, #1354) — and those holds
-produced three review bugs. The takedown is its own record now (`prompt_takedowns`), and a
-reported version is kept by its report.
-
-That tombstone is **permanent, and the sweep no longer selects it**. A pin is a finished
-game's provenance and never lapses, so a list whose every remaining revision is pinned
-has no work left for ever — while the batch takes the oldest retired lists first, which
-is exactly what a permanent tombstone always is. Once `RECLAIM_BATCH_LISTS` (50) of them
-existed they were the whole batch on every future run, and every list retired afterwards
-waited behind them indefinitely while the sweep ran hourly and reported success (#478).
-The candidate predicate now requires a list to have at least one unpinned revision, or
-none at all, and the sweep's backlog is measured over that same set — so a permanent
-tombstone is exempt rather than overdue, and the lists behind one are late like any
-other row. It is re-evaluated on every run rather than recorded, so a list becomes a
-candidate again by itself if a pin ever lapses.
+The hourly retention sweep collects a retired list whole once `RETIRED_LIST_GRACE` (one
+day) has passed — long enough for a room that drew from it before the deletion to finish
+and write its game (R-LIST-07), whose turns reference the prompt versions it drew. First
+the history naming the list — its games' source rows, its usage facts' pointer, which
+grow with how much it was played — is cleared in committed batches within the run's
+budget, so a popular list is drained across runs rather than in one transaction of any
+size (R-PRIV-16, #1376 review); then, for lists nothing names any more, the revisions and
+their items, the list row, and the prompt versions and concepts that
+no revision, list, turn, offer, usage fact, content report or takedown record names any
+more, aliases cascading with them. Nothing is left behind as a tombstone. Until #1358 a list
+a game pinned stayed as one for ever, and the batch had to be kept from filling with them
+(#478); until #1357 a revision holding a hidden word, or one a pending report named, was
+kept too (#1091, #1354), and those holds produced three review bugs. The takedown is its
+own record now (`prompt_takedowns`), and a reported version is kept by its report.
 
 Account erasure retires the account's lists the same way, with the name and description
 erased as authored copy.
@@ -2176,7 +2174,7 @@ rows allow, counting each revision's items - 5,000 by default, nine revisions of
 owned list once the save that superseded it is older than `RETIRED_LIST_GRACE` - counted
 from the superseding save, not from the revision's own creation, because a room that
 pinned it when its game started plays it to the end - unless it is the current revision
-(never superseded), or a finished game pins it, a fork was copied from it (the copy
+(never superseded), or a fork was copied from it (the copy
 count reads `forked_from_revision_id`), it is a copy's first revision (the one carrying
 that pointer, which the count, the credit and the lineage all read). A hidden prompt, or
 one a pending report names, is not a hold since #1357: the owner's takedown record keeps
@@ -2198,7 +2196,7 @@ exact revision a copy was taken from, which is what keeps it meaningful: both li
 on being edited, so a pointer at the *list* would stop saying anything after the first
 edit on either side. It may end up naming a revision nothing serves — the source was hidden, and revisions are
 immutable, so the id stays true while the content is out of play. When the source is
-**retired**, the pointer goes: the reclaim sweep deletes unpinned revisions and the
+**retired**, the pointer goes: the reclaim sweep deletes the list's revisions and the
 `SET NULL` clears it.
 
 **`is_copy` is what survives it** (R-LIST-21). A copy credits the list it came from, and once the
@@ -2209,12 +2207,9 @@ nothing about what from — a name, an author or an id would be exactly what the
 list's author asked to take away. `ck_prompt_lists_copy_is_player_owned` keeps it off the
 bundled catalogue.
 
-That is deliberate, and it is why a fork reference is **not** a pin. Pins exist so a
-finished game's provenance survives its content's author tidying up (R-PRIV-05); a fork
-is not a finished game, it is a live list somebody else owns and edits. Counting one as a
-pin would mean an author who deletes their list can never actually remove it once a
-stranger has copied it — the revision would be kept alive for as long as the copy exists,
-which is indefinitely. The copy keeps every prompt it took; it forgets only where they
+That is deliberate, and it is why a fork reference holds nothing up. A fork is a live
+list somebody else owns and edits; if its pointer kept the original alive, an author who
+deletes their list could never actually remove it once a stranger had copied it. The copy keeps every prompt it took; it forgets only where they
 came from, because the person they came from asked for the list to go. A fork gets **new prompt concepts and versions** rather than references
 to the source's, so one owner's edit cannot rewrite what the other's list means, and
 hidden versions are left out of the copy entirely.
@@ -2237,9 +2232,10 @@ which is authored in the repository and reviewed as code; `clean_list_tags` is t
 that answers a request.
 
 Editing a list uses **optimistic concurrency** and creates a new immutable revision
-instead of rewriting the revision a running or finished game pinned. Setting or clearing
+instead of rewriting the revision a waiting or running room drew from. Setting or clearing
 tags is such an edit and earns its own revision (R-LIST-05). The content
-language — a room language, or `zxx` — cannot change after creation. Rooms resolve, and games pin, exact revision IDs.
+language — a room language, or `zxx` — cannot change after creation. Rooms resolve and
+draw from exact revision IDs; what a finished game records is the list (#1358).
 
 ### `prompt_list_localizations`
 `id` · `prompt_list_id` (CASCADE) · `locale` · `name` · `description`, unique on
@@ -2271,28 +2267,35 @@ referencing the old wording.
 ### `prompt_usage_facts`
 Append-only per-game usage totals, **not** mutable counters on a display row.
 
-`batch_id` + `prompt_list_revision_id` (CASCADE) + `prompt_version_id` (RESTRICT)
-composite **PK** · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` ·
-`pick_count` · `correct_guess_count` · `total_guesser_count` · `created_at` — the
-idempotency triple is the identity, so it is the key.
+`id` **PK** · `batch_id` · `prompt_list_id` (`SET NULL`, nullable) · `prompt_version_id`
+(RESTRICT) · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` · `pick_count` ·
+`correct_guess_count` · `total_guesser_count` · `created_at`.
+
+A fact names the **list** it was counted against, not the revision (#1358), and outlives
+it: deleting the list sets the column null and keeps the fact, so a server-wide
+observation is not silently decremented by an author tidying up. A nullable column cannot
+sit in a key, so the fact takes a surrogate one; the triple used to be the key and the
+retry's idempotency, and `prompt_usage_batches` (below) is what makes a retry a no-op.
 
 A mixed-language turn (R-PROMPT-13) records the offer and the pick against the drawer's
 language's version and each language's guessers against that language's version, so
 a version can carry guessers with `pick_count = 0`: a language's statistics count the
 players who met the prompt in it.
 
-**Flow.** Each finished game appends one idempotent fact per used prompt/version and
-pinned list revision, with the authoritative occurrence time plus scoring and hint modes
+**Flow.** Each finished game appends one fact per used prompt version and list the draw
+found it in, with the authoritative occurrence time plus scoring and hint modes
 (`batch_id` is the game's UUIDv7, which is what makes a retry idempotent). Since #541
 the batch is also a fact of its own: `prompt_usage_batches` (`batch_id` **PK** ·
 `payload_hash` · `fact_count` · `recorded_at`) records that the batch was written and
 with what content, so a retry can tell an identical batch (idempotent) from a different
 one under the same id (`PromptUsageConflictError`), and a batch that touched no pinned
-prompt (zero facts, still a row) from one never written at all. The writer
-reads only the memberships the game touched — the pinned revisions intersected with the
-offered and picked versions, in chunks of 500 — rather than every membership of every
-pinned revision (#613); the revision predicate stays, so nothing outside the game's
-sources can be credited. Stats are derived by **stable prompt concept**, so a later
+prompt (zero facts, still a row) from one never written at all. The batch carries each
+version's source lists as the draw found them (`sources`), and the writer credits only
+lists the game played, so a malformed call cannot credit one it did not; it reads no
+membership at all. Until #1358 it asked the pinned revisions which versions they held
+(#613), which a list's working copy could no longer answer once edited mid-game. A list
+deleted while the game ran is credited as null, what the `SET NULL` would have left a
+moment later. Stats are derived by **stable prompt concept**, so a later
 wording revision keeps its history without matching on display text.
 
 The indexes support time-window and rule filters; the Prompt stats page offers all-time,
@@ -2302,8 +2305,8 @@ ranking floor applies independently to the selected slice. `occurred_at`, `scori
 so bounded and segmented reads never have to exclude unattributable rows.
 
 **Runtime attribution observes the durable/live boundary.** Completed turns
-snapshot nullable prompt-version source IDs, and usage writes intersect those IDs with
-the game's pinned list revisions. An ephemeral prompt has a **null source even when its
+snapshot nullable prompt-version source IDs, and usage writes credit those versions only
+to the lists the game played. An ephemeral prompt has a **null source even when its
 display text equals a curated prompt**, so neither its offers, picks, nor guess results
 can inflate the curated list's statistics.
 
@@ -2465,8 +2468,8 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
-| Superseded revisions of live prompt lists | Until the save that superseded one is a day old (`RETIRED_LIST_GRACE`); each hourly pass deletes as many as the row budget allows, items counted | 24 h | A live list's current revision, and any a finished game pins, a fork was copied from, or a copy records its origin in, for ever | `services.prompt_reclaim.reclaim_superseded_revisions`; the overdue age is measured from the superseding save (#1258) | `superseded_list_revisions` |
-| Retired (deleted) prompt lists | Out of reach at once; unpinned revisions, the tombstone and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Revisions a finished game pins, and the tombstones holding them, for ever. A hidden word is kept by its owner's takedown record (`prompt_takedowns`), not by a revision | `services.prompt_reclaim`; the batch selects only lists that still have something to collect, so permanent tombstones cannot fill it and starve the lists retired behind them, and the backlog is measured over the same set | `retired_prompt_lists` |
+| Superseded revisions of live prompt lists | Until the save that superseded one is a day old (`RETIRED_LIST_GRACE`); each hourly pass deletes as many as the row budget allows, items counted | 24 h | A live list's current revision, and any a fork was copied from or a copy records its origin in, for ever | `services.prompt_reclaim.reclaim_superseded_revisions`; the overdue age is measured from the superseding save (#1258) | `superseded_list_revisions` |
+| Retired (deleted) prompt lists | Out of reach at once; after a 1-day grace its play history is cleared in budgeted batches, then the list, its revisions and orphan content go, 50 lists per hourly sweep | 24 h | Nothing past the grace: a finished game names the list, not a revision, and reads the same without it (#1358). A hidden word is kept by its owner's takedown record (`prompt_takedowns`) | `services.prompt_reclaim` | `retired_prompt_lists` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep
@@ -2492,7 +2495,7 @@ age of the oldest non-exempt row still eligible, and how many there are, counted
 `BACKLOG_CAP` (10,000) because "more than ten thousand overdue" and "eight hundred
 thousand" call for the same action and only one of them costs a sequential scan an hour.
 Both are measured over the sweep's own eligibility predicate, so a suspended account's
-sessions, a pinned prompt revision, a persistent room code and pending mail are absent
+sessions, a list still inside its grace, a persistent room code and pending mail are absent
 from the backlog exactly as they are absent from the candidates. A table that owes
 nothing reports **zero rather than nothing**: an absent Prometheus series does not
 compare greater than its allowance, so a rule written on a metric that appears only
@@ -2577,9 +2580,9 @@ Deletion:
   on copied evidence;
 - removes every block owned by or targeting the anonymized identities;
 - removes every friendship and pending or refused request involving them;
-- retires owned prompt lists — out of reach at once, name erased, revisions kept
-  only while a finished game pins them, the rest reclaimed by the sweep (see
-  `prompt_lists` in §8);
+- retires owned prompt lists — out of reach at once, name erased, collected whole by
+  the sweep a day later (see `prompt_lists` in §8) — and deletes the account's takedown
+  records, with the spellings only they kept (`prompt_takedowns` in §5);
 - erases the drawings that account made while leaving the row saying so, and deletes the
   reactions those drawings had; reactions the account gave elsewhere stay, under the
   tombstoned seat;

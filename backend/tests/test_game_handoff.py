@@ -580,19 +580,26 @@ async def test_a_usage_batch_is_a_fact_of_its_own(env):
     selection = await prompts.resolve_selection(["standard"])
     apple = selection.prompt_version_ids["apple"]
     batch_id = str(generate_uuid())
-    usage = PromptUsage(offers={apple: 1}, picks={apple: PromptPickTotals(1, 1, 2)}, batch_id=batch_id)
+    sources = {apple: selection.list_ids}
+    usage = PromptUsage(
+        offers={apple: 1}, picks={apple: PromptPickTotals(1, 1, 2)}, sources=sources,
+        batch_id=batch_id,
+    )
 
-    await prompts.record_prompt_usage(selection.revision_ids, usage)
-    await prompts.record_prompt_usage(selection.revision_ids, usage)
+    await prompts.record_prompt_usage(selection.list_ids, usage)
+    await prompts.record_prompt_usage(selection.list_ids, usage)
     with pytest.raises(PromptUsageConflictError):
         await prompts.record_prompt_usage(
-            selection.revision_ids,
-            PromptUsage(offers={apple: 2}, picks={}, batch_id=batch_id, occurred_at=usage.occurred_at),
+            selection.list_ids,
+            PromptUsage(
+                offers={apple: 2}, picks={}, sources=sources, batch_id=batch_id,
+                occurred_at=usage.occurred_at,
+            ),
         )
 
     empty_id = str(generate_uuid())
     await prompts.record_prompt_usage(
-        selection.revision_ids, PromptUsage(offers={str(generate_uuid()): 1}, picks={}, batch_id=empty_id)
+        selection.list_ids, PromptUsage(offers={str(generate_uuid()): 1}, picks={}, batch_id=empty_id)
     )
     async with session_factory() as session:
         batches = {str(b.batch_id): b.fact_count for b in (await session.scalars(select(PromptUsageBatch))).all()}

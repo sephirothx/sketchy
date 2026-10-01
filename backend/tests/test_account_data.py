@@ -530,8 +530,8 @@ async def test_export_is_versioned_durable_and_requester_only(env):
             )
 
     status, artifact = await request_ready_export(http)
-    assert status["schemaVersion"] == 13
-    assert artifact["schemaVersion"] == 13
+    assert status["schemaVersion"] == 14
+    assert artifact["schemaVersion"] == 14
     assert artifact["account"]["email"] == "owner@example.test"
     assert artifact["gameParticipations"][0]["game"]["id"] == game_id
     assert artifact["gameParticipations"][0]["game"]["scoringVersion"] == 1
@@ -544,7 +544,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
         "selected": True,
         "sourceKind": "custom",
         "promptVersionId": None,
-        "sourceRevisionIds": [],
+        "sourceListIds": [],
     }
     assert artifact["drawnTurns"][0]["promptVersionId"] is None
     assert artifact["drawnTurns"][0]["promptSourceKind"] == "custom"
@@ -619,7 +619,7 @@ async def test_export_is_versioned_durable_and_requester_only(env):
     assert artifact["settings"]["extraPromptLanguages"] == ["nl", "fr"]
 
     contract = json.loads(
-        (REPO_ROOT / "fixtures" / "account_data_export_v13_fields.json").read_text(
+        (REPO_ROOT / "fixtures" / "account_data_export_v14_fields.json").read_text(
             encoding="utf-8"
         )
     )

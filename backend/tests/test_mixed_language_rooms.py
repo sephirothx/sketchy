@@ -490,7 +490,7 @@ def test_a_german_drawer_draws_and_records_the_german_word():
     assert sorted(turn.offered_prompts) == ["Fliege", "Schmetterling"]
     assert turn.chosen_prompt_version_id == "v-bow-de"
     assert sorted(turn.offered_prompt_version_ids) == ["v-bow-de", "v-fly-de"]
-    assert set(turn.offered_prompt_source_revision_ids) == {("r-de",)}
+    assert set(turn.offered_prompt_source_list_ids) == {("r-de",)}
 
 
 def test_a_seat_that_never_said_plays_in_english():

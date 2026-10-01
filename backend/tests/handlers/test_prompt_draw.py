@@ -38,6 +38,7 @@ def pin(room, repo, *, revision_ids=("revision-1",)):
     """Put the room in the state `authorize_selection` would have left it in."""
     room.prompt_list_slugs = ["curated"]
     room.prompt_list_revision_ids = list(revision_ids)
+    room.prompt_list_ids = list(revision_ids)
     room.prompt_pool_size = len(repo.prompts)
     counts, total = letter_histogram(repo.prompts)
     room.prompt_letter_counts = counts
@@ -219,7 +220,7 @@ async def test_a_game_tracks_list_prompts_by_concept_and_quick_ones_by_text():
     assert game.prompt_answers == {"concept-anchor": "anchor"}
     assert game.prompt_version_ids == {"concept-anchor": "version-anchor"}
     assert game.prompt_aliases == {"concept-anchor": ("ship anchor",)}
-    assert game.prompt_source_revision_ids_by_key == {"concept-anchor": ("revision-1",)}
+    assert game.prompt_source_list_ids_by_key == {"concept-anchor": ("revision-1",)}
     assert game.prompt_source_kind("concept-anchor") == "curated"
     assert game.prompt_source_kind("lighthouse") == "custom"
 

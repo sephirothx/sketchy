@@ -45,8 +45,9 @@ MIN_GUESS_POINTS = 100
 MAX_GUESS_POINTS = 300
 # Bump this whenever any parameter or algorithm that can change a score changes.
 SCORING_RULES_VERSION = 1
-# Bump this only when the stored rule-snapshot JSON contract changes.
-GAME_RULE_SNAPSHOT_VERSION = 1
+# Bump this only when the stored rule-snapshot JSON contract changes. 2 since
+# #1358: `prompt.sourceRevisionIds` became `prompt.sourceListIds`.
+GAME_RULE_SNAPSHOT_VERSION = 2
 
 
 def competition_ranks(sorted_scores: Sequence[int]) -> list[int]:
@@ -282,7 +283,7 @@ class PromptForm:
     answer: str
     aliases: tuple[str, ...] = ()
     version_id: str | None = None
-    source_revision_ids: tuple[str, ...] = ()
+    source_list_ids: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -340,7 +341,7 @@ class CompletedTurnStats:
     # an ephemeral room custom prompt and must never enter curated projections.
     offered_prompt_version_ids: tuple[str | None, ...] = ()
     offered_prompt_source_kinds: tuple[str, ...] = ()
-    offered_prompt_source_revision_ids: tuple[tuple[str, ...], ...] = ()
+    offered_prompt_source_list_ids: tuple[tuple[str, ...], ...] = ()
     chosen_prompt_version_id: str | None = None
     # A mixed game's guessers each met the prompt in their own language's
     # version (#1182): (version id, correct guesses, guessers) per version, so
@@ -428,9 +429,9 @@ class Game:
     # frozen into history. Keyed like the pool, as is the provenance below.
     prompt_aliases: dict[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_language: str = "en"
-    prompt_source_revision_ids: tuple[str, ...] = ()
+    prompt_source_list_ids: tuple[str, ...] = ()
     prompt_version_ids: dict[str, str] = field(default_factory=dict)
-    prompt_source_revision_ids_by_key: dict[str, tuple[str, ...]] = field(
+    prompt_source_list_ids_by_key: dict[str, tuple[str, ...]] = field(
         default_factory=dict
     )
     custom_prompt_keys: frozenset[str] = frozenset()
@@ -535,7 +536,7 @@ class Game:
             "prompt": {
                 "language": self.prompt_language,
                 "hideMaskedPrompt": self.hide_masked_prompt,
-                "sourceRevisionIds": list(self.prompt_source_revision_ids),
+                "sourceListIds": list(self.prompt_source_list_ids),
             },
         }
 
@@ -563,13 +564,26 @@ class Game:
             return form.version_id
         return self.prompt_version_ids.get(key)
 
-    def source_revision_ids_for(
+    def source_list_ids_for(
         self, key: str, language: str | None = None
     ) -> tuple[str, ...]:
         form = self.prompt_translations.get(key, {}).get(language or "")
         if form is not None:
-            return form.source_revision_ids
-        return self.prompt_source_revision_ids_by_key.get(key, ())
+            return form.source_list_ids
+        return self.prompt_source_list_ids_by_key.get(key, ())
+
+    def version_sources(self) -> dict[str, tuple[str, ...]]:
+        """The lists the draw found each prompt version in, every language's
+        form included: what a finished game's usage facts are credited to
+        (#1358)."""
+        sources: dict[str, tuple[str, ...]] = {}
+        for key, version_id in self.prompt_version_ids.items():
+            sources[version_id] = self.prompt_source_list_ids_by_key.get(key, ())
+        for forms in self.prompt_translations.values():
+            for form in forms.values():
+                if form.version_id is not None:
+                    sources[form.version_id] = form.source_list_ids
+        return sources
 
     def prompt_for(self, token: str | None) -> str | None:
         """The chosen prompt as `token`'s language spells it: `prompt` itself
@@ -1541,8 +1555,8 @@ class Game:
                 offered_prompt_source_kinds=tuple(
                     self.prompt_source_kind(prompt) for prompt in self.prompt_choices
                 ),
-                offered_prompt_source_revision_ids=tuple(
-                    self.source_revision_ids_for(prompt, turn_language)
+                offered_prompt_source_list_ids=tuple(
+                    self.source_list_ids_for(prompt, turn_language)
                     for prompt in self.prompt_choices
                 ),
                 chosen_prompt_version_id=self.version_id_for(
