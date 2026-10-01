@@ -3681,8 +3681,8 @@ def _mixed_false_friends(rows: Sequence[tuple[str, str, str]]) -> dict[str, dict
 
     `rows` are (language, concept, text): every answer and alias of the pinned
     revisions. Keys are spellings as `prompt_match_variants` gives them - what
-    a guess and an answer are compared on. A text in no language is that seat's word too, whatever the
-    seat plays. A guess that lands on one of the returned keys means the
+    a guess and an answer are compared on. A text in no language is that
+    seat's word too, whatever the seat plays. A guess that lands on one of the returned keys means the
     concepts listed to that seat - German "Hut" is the hat - and so must not
     win a drawing whose other-language spelling folds the same way (an
     English hut), drawn into the game or not.
@@ -3708,6 +3708,8 @@ def _mixed_false_friends(rows: Sequence[tuple[str, str, str]]) -> dict[str, dict
                 if owners and owners - {concept}:
                     found.setdefault(seat, {})[spelling] = frozenset(owners)
     return found
+
+
 AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
 EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
 

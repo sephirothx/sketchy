@@ -5,7 +5,8 @@ play - a list in no language, or a list whose family spells every concept in
 all eight (Standard, R-PROMPT-01) - and each seat meets the drawn prompt in
 the language it joined with: its offers, its letter tiles, its hints and its
 near misses. A guess naming the drawing in any language scores, except where
-that spelling is another prompt of the game in the guesser's own language.
+that spelling is another concept of the room's selection in the guesser's own
+language - drawn into the game or not (#1367).
 """
 from __future__ import annotations
 

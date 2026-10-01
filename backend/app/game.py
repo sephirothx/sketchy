@@ -446,7 +446,7 @@ class Game:
     letter_total_by_language: dict[str, int] = field(default_factory=dict)
     # By seat language, every key that is one pinned concept's word there and
     # another concept's word elsewhere (#1367), from the whole selection - not
-    # only what was drawn, which is a few dozen of two thousand concepts.
+    # only what was drawn, at most 480 of a thousand concepts and more.
     false_friends: Mapping[str, Mapping[str, frozenset[str]]] = field(
         default_factory=dict, repr=False
     )
@@ -1361,8 +1361,9 @@ class Game:
         In a mixed game (#1182) the prompt in any language wins too - a German
         who types "dog" has named the drawing - each spelling folded the way
         its own language folds it. Except where that spelling is a different
-        prompt of this game in the guesser's own language: a French seat's
-        "papillon" means butterfly, and does not win the Italian bow tie.
+        concept of the room's selection in the guesser's own language, drawn
+        or not (#1367): a French seat's "papillon" means butterfly, and does
+        not win the Italian bow tie.
         """
         if not self.prompt:
             return frozenset()
@@ -1399,8 +1400,8 @@ class Game:
         """Every spelling, in `language`'s fold, of every other prompt
         this game could play - what a word already means to that seat - and
         of every other concept the room pinned whose word there another
-        language spells too (#1367): with two thousand concepts, the twin of
-        a false friend is rarely among the few dozen drawn."""
+        language spells too (#1367): with a thousand concepts and more, the
+        twin of a false friend is rarely among those drawn."""
         current = self._current_key()
         cached = self._taken_keys.get((current, language))
         if cached is not None:
