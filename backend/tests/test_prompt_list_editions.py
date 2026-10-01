@@ -363,3 +363,25 @@ async def test_publish_update_refuses_a_list_saved_since_its_summary(env):
         )
     page = await prompts.get_community(first.id)
     assert [entry.answer for entry in page.prompts] == ["gull"]
+
+
+async def test_publishing_a_list_from_before_editions_says_nothing_is_unpublished(env):
+    """A list migrated with no working-copy digest: publishing it must leave
+    the editor saying players see what it shows (#1386 review)."""
+    from app.db.models import PromptList
+
+    prompts, users, factory = env
+    owner = await account(users, "Owner")
+    created = await prompts.create_owned(
+        owner.id, name="Old", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gull"),),
+    )
+    async with factory() as session:
+        async with session.begin():
+            (await session.get(PromptList, UUID(created.id))).content_hash = ""
+
+    first = await prompts.set_owned_publication(owner.id, created.id, published=True)
+
+    assert first.live_edition.number == 1
+    assert not first.unpublished_changes
+

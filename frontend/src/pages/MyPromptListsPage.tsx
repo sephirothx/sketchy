@@ -526,8 +526,9 @@ export function MyPromptListsPage() {
                   {ui.myPromptListsPage.listSummary({
                     prompts: item.promptCount,
                     visibility: visibilityLabel(item.visibility),
-                    // The hold is on an edition now, not the list (#1360).
-                    moderationState: item.pendingEdition
+                    // The hold is on an edition now, not the list (#1360) -
+                    // and a moderator's takedown outranks it (#1386 review).
+                    moderationState: item.moderationState !== "hidden" && item.pendingEdition
                       ? ui.myPromptListsPage.underReview
                       : moderationLabel(item.moderationState),
                   })}

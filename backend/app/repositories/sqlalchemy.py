@@ -5590,6 +5590,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     version_ids, tags, digest = await working_copy_state(
                         session, prompt_list
                     )
+                    # The working copy's digest as of now, written back: a
+                    # list from before editions carries none, and comparing an
+                    # empty one with the edition just made said "unpublished
+                    # changes" of identical content (#1386 review).
+                    prompt_list.content_hash = digest
                     state = EDITION_UNDER_REVIEW if under_review else EDITION_PUBLISHED
                     already = editions.get(state)
                     pending = editions.get(EDITION_UNDER_REVIEW)

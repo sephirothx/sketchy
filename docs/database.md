@@ -2096,7 +2096,7 @@ could read one and release the other — the bait and the switch. A stale number
 and the audit event records which edition was decided on. A save the owner makes without
 publishing changes only the working copy, so it cannot reach a release at all. A release
 makes the pending edition live and deletes the one it replaces; a takedown hides the list
-and drops the pending edition.
+and drops the pending edition, as a takedown from a content report does (#1386 review).
 
 It is read per publish rather than cached, because a cached posture is stale exactly
 when it matters — just after an operator turned it on because something is going wrong —
