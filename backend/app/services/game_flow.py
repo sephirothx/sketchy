@@ -276,6 +276,7 @@ class GameFlowService:
         prompt_list_ids = list(fallback.prompt_list_ids) if fallback else []
         prompt_list_versions = dict(fallback.prompt_list_versions) if fallback else {}
         prompt_lists_checked_for = fallback.prompt_lists_checked_for if fallback else None
+        prompt_edition_ids = dict(fallback.prompt_edition_ids) if fallback else {}
         prompt_pool_size = fallback.prompt_pool_size if fallback else 0
         prompt_letter_counts = (
             dict(fallback.prompt_letter_counts) if fallback else {}
@@ -327,6 +328,7 @@ class GameFlowService:
                 prompt_list_ids = list(selection.list_ids)
                 prompt_list_versions = dict(selection.list_versions)
                 prompt_lists_checked_for = requesting_user_id
+                prompt_edition_ids = dict(selection.edition_ids)
                 prompt_pool_size = selection.prompt_count
                 prompt_letter_counts = dict(selection.letter_counts)
                 prompt_letter_total = selection.letter_total
@@ -348,6 +350,7 @@ class GameFlowService:
                     )
                     prompt_list_ids = []
                     prompt_list_versions = {}
+                    prompt_edition_ids = {}
                     prompt_pool_size = 0
                     prompt_letter_counts = {}
                     prompt_letter_total = 0
@@ -378,6 +381,7 @@ class GameFlowService:
             "prompt_list_ids": prompt_list_ids,
             "prompt_list_versions": prompt_list_versions,
             "prompt_lists_checked_for": prompt_lists_checked_for,
+            "prompt_edition_ids": prompt_edition_ids,
             "prompt_pool_size": prompt_pool_size,
             "prompt_letter_counts": prompt_letter_counts,
             "prompt_letter_total": prompt_letter_total,
@@ -422,6 +426,7 @@ class GameFlowService:
         room.prompt_list_ids = list(selection.list_ids)
         room.prompt_list_versions = dict(selection.list_versions)
         room.prompt_lists_checked_for = requesting_user_id
+        room.prompt_edition_ids = dict(selection.edition_ids)
         room.prompt_pool_size = selection.prompt_count
         room.prompt_letter_counts = dict(selection.letter_counts)
         room.prompt_letter_total = selection.letter_total
@@ -704,6 +709,7 @@ class GameFlowService:
                     list(room.prompt_list_ids),
                     limit=needed,
                     expected_versions=dict(room.prompt_list_versions),
+                    edition_ids=dict(room.prompt_edition_ids),
                 ),
                 timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
             )
@@ -827,6 +833,7 @@ class GameFlowService:
                         exclude_match_keys=room.custom_prompt_match_keys(),
                         exclude_language=room.prompt_language,
                         expected_versions=dict(room.prompt_list_versions),
+                        edition_ids=dict(room.prompt_edition_ids),
                     ),
                     timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
                 )

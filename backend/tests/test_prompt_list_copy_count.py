@@ -32,6 +32,7 @@ from app.repositories.sqlalchemy import (
     SqlAlchemyUserRepository,
 )
 from tests.dbfixtures import create_test_db
+from tests.publishing import publish_in_place
 
 PUBLISHED_AT = datetime(2026, 9, 1, tzinfo=timezone.utc)
 
@@ -69,8 +70,7 @@ async def publish(factory, prompt_list_id: str) -> None:
     async with factory() as session:
         async with session.begin():
             row = await session.get(PromptList, UUID(prompt_list_id))
-            row.visibility = "public"
-            row.published_at = PUBLISHED_AT
+            await publish_in_place(session, row, at=PUBLISHED_AT)
 
 
 async def a_published_list(prompts, factory, owner_id: str, name: str = "Source"):

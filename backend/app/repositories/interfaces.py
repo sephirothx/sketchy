@@ -609,6 +609,22 @@ class OwnedPromptList:
     copy_count: int = 0
     # The list this one was copied from, if it was one (R-LIST-21).
     copied_from: CopiedFrom | None = None
+    # What other players see of it (#1360): the live edition, one waiting for
+    # review, and whether the working copy differs from the live one - which
+    # is how the owner tells, without publishing, whether players see what the
+    # editor shows.
+    live_edition: EditionSummary | None = None
+    pending_edition: EditionSummary | None = None
+    unpublished_changes: bool = False
+
+
+@dataclass(frozen=True)
+class EditionSummary:
+    """One edition of a list, as its owner is told about it (#1360)."""
+
+    number: int
+    created_at: datetime
+    published_at: datetime | None = None
 
 
 @dataclass(frozen=True)
@@ -634,9 +650,13 @@ class ResolvedPromptSelection:
     slugs: tuple[str, ...]
     language: str
     prompts: tuple[str, ...]
-    # The lists, in the order chosen: what a game draws from - each one's
-    # working copy (#1359) - and what its provenance names (#1358).
+    # The lists, in the order chosen: what a game draws from and what its
+    # provenance names (#1358).
     list_ids: tuple[str, ...] = ()
+    # The live edition each list is played from, by list - a list the
+    # caller neither owns nor is bundled is played as published (#1360);
+    # one absent here plays its working copy (#1359).
+    edition_ids: Mapping[str, str] = field(default_factory=dict)
     aliases: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_version_ids: Mapping[str, str] = field(default_factory=dict)
     prompt_source_list_ids: Mapping[str, tuple[str, ...]] = field(
@@ -662,6 +682,7 @@ class PinnedPromptSelection:
     # Each list's version when it was checked: the draw refuses content that
     # has moved since (`PromptListsChangedError`, #1385 review).
     list_versions: Mapping[str, int] = field(default_factory=dict)
+    edition_ids: Mapping[str, str] = field(default_factory=dict)
     prompt_count: int = 0
     letter_counts: Mapping[str, int] = field(default_factory=dict)
     letter_total: int = 0
@@ -1282,8 +1303,10 @@ class PromptListRepository(ABC):
         exclude_match_keys: Collection[str] = (),
         exclude_language: str | None = None,
         expected_versions: Mapping[str, int] | None = None,
+        edition_ids: Mapping[str, str] | None = None,
     ) -> PromptSample:
-        """Draw up to `limit` random prompts from these lists' working copies.
+        """Draw up to `limit` random prompts from these lists - each one's
+        working copy, or the live edition `edition_ids` names for it (#1360).
 
         In one snapshot, and only of the versions `expected_versions` names -
         the ones authorization checked - or `PromptListsChangedError`.
@@ -1309,6 +1332,7 @@ class PromptListRepository(ABC):
         *,
         limit: int,
         expected_versions: Mapping[str, int] | None = None,
+        edition_ids: Mapping[str, str] | None = None,
     ) -> PromptSample:
         """Draw up to `limit` random concepts for a mixed-language room (#1182).
 

@@ -46,6 +46,8 @@ from app.db.models import (
     PromptConcept,
     PromptContentReport,
     PromptList,
+    PromptListEdition,
+    PromptListEditionItem,
     PromptListRevision,
     PromptListRevisionItem,
     PromptTakedown,
@@ -84,10 +86,20 @@ async def retire_prompt_list(
     """
     retired_at = now or datetime.now(timezone.utc)
     prompt_list.deleted_at = retired_at
-    # Its working copy's versions leave it now; a room that drew them before
-    # the deletion still writes them, so they are collected a grace later.
+    # Its working copy's versions leave it now, and its editions' with the
+    # list a grace later; a room that drew them before the deletion still
+    # writes them, so they are collected only after that grace.
     held = PromptVersion.id.in_(
-        select(Prompt.prompt_version_id).where(Prompt.prompt_list_id == prompt_list.id)
+        select(Prompt.prompt_version_id)
+        .where(Prompt.prompt_list_id == prompt_list.id)
+        .union(
+            select(PromptListEditionItem.prompt_version_id)
+            .join(
+                PromptListEdition,
+                PromptListEdition.id == PromptListEditionItem.edition_id,
+            )
+            .where(PromptListEdition.prompt_list_id == prompt_list.id)
+        )
     )
     # In id order, as every multi-row version write takes them (#1385 review).
     await session.execute(
@@ -252,6 +264,7 @@ def _version_is_referenced(version_id):
         | exists().where(TurnPromptOffer.prompt_version_id == version_id)
         | exists().where(PromptUsageFact.prompt_version_id == version_id)
         | exists().where(PromptContentReport.prompt_version_id == version_id)
+        | exists().where(PromptListEditionItem.prompt_version_id == version_id)
     )
 
 

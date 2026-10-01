@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`a3b4c5d6e7f9_saves_overwrite_a_working_copy.py` (#1359). Both this line and the table
+`b4c5d6e7f8a1_prompt_list_editions.py` (#1360). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-63 tables in eight domains.
+66 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -126,6 +126,9 @@ erDiagram
     prompt_versions ||--o{ prompt_version_aliases : "accepts"
     prompt_lists ||--o{ prompt_list_stars : "starred by"
     prompt_lists ||--o{ prompt_list_tags : "tagged"
+    prompt_lists ||--o{ prompt_list_editions : "published as"
+    prompt_list_editions ||--o{ prompt_list_edition_items : "membership"
+    prompt_list_editions ||--o{ prompt_list_edition_tags : "tagged"
     prompt_lists ||--o{ prompt_list_revisions : "versions"
     prompt_list_revisions ||--o{ prompt_list_revision_items : "membership"
     prompt_lists ||--o{ prompt_usage_facts : "usage"
@@ -146,7 +149,7 @@ erDiagram
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
-| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
+| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
 
@@ -1927,8 +1930,9 @@ keep a replaced wording that long; a save writes none now.
 
 **`unlisted_from_list_id`** is the list it was taken out of, set and cleared with
 `unlisted_at`. A reader who opened a catalogue page before the save can still report the
-prompt they saw on that list during the grace window — membership is the working copy
-*or* a version unlisted from that list — and a takedown decided then still reaches the
+prompt they saw on that list during the grace window — membership is the working copy,
+*or* any of its editions (what a catalogue reader sees, #1360), *or* a version unlisted
+from that list — and a takedown decided then still reaches the
 list's owner. Without it, an owner could edit a reported word out of the list and the
 report would be refused as "not on this list" (#1385 review).
 
@@ -1981,10 +1985,18 @@ Deliberately relational rather than a JSON tag blob.
 ### `prompt_lists`
 `id` · `owner_user_id` (`SET NULL`) · `slug` **unique** · `name` · `description` ·
 `language` · `is_bundled` · `is_copy` · `copied_from_list_id` (`SET NULL`) ·
+`copied_from_edition_id` (`SET NULL`, partial index) ·
 `visibility` (`private \| public`) ·
-`moderation_state` · `moderated_by_user_id` ·
-`moderated_at` · `version` · `letter_counts` · `letter_total` · `published_at` (nullable) · `deleted_at` (indexed,
-nullable) · timestamps.
+`moderation_state` (`active \| hidden`; a hold is the edition's) · `moderated_by_user_id` ·
+`moderated_at` · `version` · `letter_counts` · `letter_total` · `edition_count` ·
+`content_hash` · `published_at` (nullable) · `deleted_at` (indexed, nullable) · timestamps.
+
+`edition_count` numbers the list's next edition, so a number is never reused after the
+edition that held it was replaced. `content_hash` is the working copy's digest, written by
+every save beside the histogram, in the form an edition's is: the owner's editor compares
+the two to say whether the list has **unpublished changes** without reading either one's
+prompts (#1360). `copied_from_edition_id` is the edition a copy was taken from while it
+lasts; `copied_from_list_id` is what the credit reads.
 
 `letter_counts` (JSON) and `letter_total` are the working copy's **letter histogram**
 (#1359; it lived on each revision before): every save that changes content rewrites
@@ -2053,22 +2065,26 @@ holds the Gallery's **This week** for a moderator's release and nothing else
 
 The operator switch is `app_config['prompt_lists.publication_review']`
 ([`services/publication_policy.py`](../backend/app/services/publication_policy.py)):
-with it set, a newly published list lands `under_review` instead of `active` and waits.
-A list it holds waits in `GET /api/moderation/prompt-lists`, which is a queue of its own
+with it set, a publication — a first one or a Publish update — writes a **pending
+edition** (`prompt_list_editions.state = under_review`) instead of a live one, and the live
+edition, if any, keeps playing while it waits (#1360). A list it holds waits in `GET /api/moderation/prompt-lists`, which is a queue of its own
 rather than an entry in the report queue: nothing was complained about, so there is no
 report to hang it on, and the owner cannot make one (a self-report is refused). Without
 that queue the switch was a trapdoor — held lists were out of the catalogue, unplayable,
-and reachable only by editing the database. "Held" is under review **and** public, one
-predicate the queue, the detail route and the decision share.
+and reachable only by editing the database. "Held" is a pending edition of a public list
+that is not hidden, one predicate the queue, the detail route and the decision share.
 
-A reviewer reads the prompts through `GET /api/moderation/prompt-lists/{id}`, and the
-decision carries the `version` they read. Both are needed. Without the first, a release
-was made from a name and a prompt count, so the switch could not keep out anything it
-was turned on to keep out. Without the second, reading was not enough either: an owner
-can edit a held list, every save bumps its version (R-LIST-05), and a moderator could
-read one version and release the next — the bait and the switch. A stale version is a
-409, and the audit event records which version was decided on, since the list can be
-edited again afterwards.
+A reviewer reads the pending edition's prompts through
+`GET /api/moderation/prompt-lists/{id}`, and the decision carries the edition `number`
+they read as `expectedVersion`. Both are needed. Without the first, a release was made
+from a name and a prompt count, so the switch could not keep out anything it was turned
+on to keep out. Without the second, reading was not enough either: an owner can publish
+again while an edition waits, which replaces it with the next number, and a moderator
+could read one and release the other — the bait and the switch. A stale number is a 409,
+and the audit event records which edition was decided on. A save the owner makes without
+publishing changes only the working copy, so it cannot reach a release at all. A release
+makes the pending edition live and deletes the one it replaces; a takedown hides the list
+and drops the pending edition.
 
 It is read per publish rather than cached, because a cached posture is stale exactly
 when it matters — just after an operator turned it on because something is going wrong —
@@ -2078,19 +2094,22 @@ moment, the backlog this design exists to avoid.
 
 **Three grounds admit a list into a room**, checked in the one `_pinned_lists` (and, for a mixed room,
 `_pinned_mixed_lists`) helper that room creation and Start's re-authorization share: bundled, owned by the
-requester, or **published**. The sharing is the point — the
+requester, or **published** — played from its live edition when the room's host does not
+own it (#1360), so the room carries that edition's id beside the list's. The sharing is the point — the
 checks a room is admitted by stay the checks its prompts are drawn under (R-LIST-07), so
 an unpublish or a takedown between the picker and Start refuses the room visibly rather
 than shrinking its pool. A room preset needs nothing of its own: it stores slugs, which
 are resolved through that same helper.
 
-**The catalogue is one predicate, in one place.** Public, active, and not retired —
-served by `ix_prompt_lists_published`, which is partial on exactly those three. A
+**The catalogue is one predicate, in one place.** Public, active, not retired, and with
+a live edition — served by `ix_prompt_lists_published`, which is partial on the first
+three; a row shows the live edition's name, description, tags and prompts, never the
+working copy's (#1360). A
 takedown or a deletion therefore drops a list out of the catalogue without a second read
 path having to agree, which is the property that made post-hoc moderation defensible in
 the first place. Star counts are a correlated aggregate over `prompt_list_stars` rather
-than a column, and tag filters are one `EXISTS` per tag against the list's working-copy
-tags (`prompt_list_tags`), bounded by `MAX_LIST_TAGS`. Paging is by offset with a ceiling
+than a column, and tag filters are one `EXISTS` per tag against the live edition's tags
+(`prompt_list_edition_tags`), bounded by `MAX_LIST_TAGS`. Paging is by offset with a ceiling
 (`MAX_COMMUNITY_OFFSET`): nobody reaches page four hundred by reading, so a request that
 deep is a scrape, and a filter is the better answer than a longer scroll.
 
@@ -2204,7 +2223,8 @@ there is no counter to keep in step. Until #1361 the pointer was `forked_from_re
 on the copy's **first revision**, naming the exact revision it was taken from; editing the
 copy superseded that revision, and a sweep that reclaimed it took the count, the credit and
 the lineage with it (#1351). The credit reads the original as it is now (R-LIST-21), so the
-list is all the pointer has to name; editions (#1360) will say which content. When the
+list is all the pointer has to name; `copied_from_edition_id` says which content — a copy
+is taken from the live edition, never the owner's unpublished changes (#1360). When the
 source is **deleted**, the pointer goes: the reclaim deletes the list row and the `SET NULL`
 clears it.
 
@@ -2241,12 +2261,46 @@ copy's tags (#1359), rewritten in place by a save like the rest of it, a row add
 removed only for a tag that changed. They used to be copied onto every revision, so that a
 filter agreed with the revision a game pinned; a game snapshots what it drew instead.
 
+### `prompt_list_editions`
+`id` · `prompt_list_id` (CASCADE) · `number` (≥ 1, unique per list) · `state`
+(`published \| under_review`) · `name` · `description` · `language` · `content_hash` ·
+`letter_counts` · `letter_total` · `created_at` · `published_at` (null while pending), with
+`uq_prompt_list_editions_one_per_state` on `(prompt_list_id, state)`.
+
+An **edition** is an immutable snapshot of a published list's working copy (#1360),
+written by `set_owned_publication` each time its owner publishes content that differs from
+the edition already in that state: the live one (`published`) is what the catalogue shows
+and what other players' rooms draw and copy; a pending one (`under_review`) waits for a
+moderator under the operator switch (R-LIST-13) while the live one keeps playing. The
+unique index is the "at most a live and a pending edition" rule: a Publish update or a
+release deletes the edition it replaces (`drop_editions`), whose versions are stamped
+`unlisted_at` / `unlisted_from_list_id` exactly as a save stamps what it drops, so a game
+that drew one still writes its turns and a reader's open page can still report one for
+the grace. A list that was public before editions got its working copy as edition 1 (live,
+or pending if it was held) with an empty `content_hash`, which a first save then differs
+from. Bundled lists have none: they play their working copy.
+
+Why snapshot rather than publish the working copy: a save used to reach the catalogue and
+every room at once, so nothing could be approved as it stood, and a moderator who read a
+list could release a later save they never saw. An edition never changes, so approval
+attaches to it and a decision names it by `number`.
+
+### `prompt_list_edition_items`
+`edition_id` (CASCADE) + `prompt_version_id` (`RESTRICT`, indexed) composite **PK** ·
+`position`. An edition's prompts in order. `RESTRICT` because the orphan collection asks
+first: a version an edition names is kept, and the unlisted sweep unstamps it.
+
+### `prompt_list_edition_tags`
+`edition_id` (CASCADE) + `tag_id` (CASCADE) composite **PK**, indexed on `tag_id`. The
+catalogue's tag filter reads these: a retag reaches readers with the Publish update that
+carries it, not with the save.
+
 Editing a list uses **optimistic concurrency** on `prompt_lists.version` and overwrites the
 working copy in place, writing only what changed (R-LIST-05, #1359). Setting or clearing
 tags is such an edit and moves the version. The content language — a room language, or
-`zxx` — cannot change after creation. A room resolves lists, draws from their working
-copies at Start — the game's snapshot (R-LIST-07) — and a finished game records the list
-(#1358).
+`zxx` — cannot change after creation. A room resolves lists and draws at Start — the
+game's snapshot (R-LIST-07) — from each list's working copy, or, in a room its owner does
+not host, from its live edition (#1360); a finished game records the list (#1358).
 
 ### `prompt_list_localizations`
 `id` · `prompt_list_id` (CASCADE) · `locale` · `name` · `description`, unique on

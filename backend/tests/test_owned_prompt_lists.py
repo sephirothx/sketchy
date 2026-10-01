@@ -1181,8 +1181,8 @@ async def test_a_save_landing_after_the_version_check_is_not_drawn(monkeypatch, 
         )
         original = repository._draw_snapshot
 
-        async def checked_then_saved(session, expected_versions):
-            await original(session, expected_versions)
+        async def checked_then_saved(session, expected_versions, pinned=()):
+            await original(session, expected_versions, pinned)
             await repo.update_owned(
                 owner_id, second.id, expected_version=second.version, name="Second",
                 description="", prompts=(PromptListEntryInput(answer="beaver", aliases=("otter",)),),

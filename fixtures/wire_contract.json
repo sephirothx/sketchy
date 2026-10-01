@@ -1912,6 +1912,10 @@
    "createdAt",
    "updatedAt"
   ],
+  "api.serializers:_edition_payload": [
+   "createdAt",
+   "publishedAt"
+  ],
   "api.serializers:community_prompt_list_detail_payload": [
    "copiedFrom",
    "promptVersionId"
@@ -1983,10 +1987,13 @@
    "copyCount",
    "createdAt",
    "isBundled",
+   "liveEdition",
    "moderationState",
+   "pendingEdition",
    "promptCount",
    "promptVersionId",
    "starCount",
+   "unpublishedChanges",
    "updatedAt"
   ],
   "api.serializers:prompt_list_payload": [
@@ -2842,7 +2849,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 56,
+ "protocolVersion": 57,
  "refusal": {
   "codes": [
    "invalid_payload",

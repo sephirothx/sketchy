@@ -53,6 +53,8 @@ LIST_TAG_VOCABULARY: tuple[tuple[str, str], ...] = (
 )
 
 LIST_TAG_SLUGS = frozenset(slug for slug, _ in LIST_TAG_VOCABULARY)
+# The vocabulary's order, which is the order a list's tags are shown and stored in.
+LIST_TAG_SLUG_ORDER = tuple(slug for slug, _ in LIST_TAG_VOCABULARY)
 
 
 class UnknownListTag(ValueError):

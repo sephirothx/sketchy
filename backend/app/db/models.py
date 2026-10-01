@@ -3889,6 +3889,7 @@ class PromptList(Base):
         # The copy count asks it of every catalogue row (R-LIST-20), and the
         # `SET NULL` walks it when an original is deleted.
         _actor_index("ix_prompt_lists_copied_from", "copied_from_list_id"),
+        _actor_index("ix_prompt_lists_copied_from_edition", "copied_from_edition_id"),
         _values_check("language", PROMPT_LIST_LANGUAGES, "ck_prompt_lists_language"),
         _values_check(
             "visibility", PROMPT_LIST_VISIBILITIES, "ck_prompt_lists_visibility"
@@ -3976,6 +3977,19 @@ class PromptList(Base):
         ForeignKey("prompt_lists.id", ondelete="SET NULL"),
         nullable=True,
     )
+    # The edition the copy was taken from (#1360), while it is still the
+    # source's live one: a superseded edition is deleted, and the pointer goes
+    # with it. It says which content, where the list says whose.
+    copied_from_edition_id: Mapped[uuid.UUID | None] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey(
+            "prompt_list_editions.id",
+            ondelete="SET NULL",
+            use_alter=True,
+            name="fk_prompt_lists_copied_from_edition_id",
+        ),
+        nullable=True,
+    )
     visibility: Mapped[str] = mapped_column(
         String(16),
         default=PromptListVisibility.PRIVATE.value,
@@ -4006,6 +4020,19 @@ class PromptList(Base):
     # later publish is a new act with its own moment.
     published_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
+    )
+    # The working copy's content, as one digest (`prompt_editions.content_hash`),
+    # rewritten by every save (#1360): beside the live edition's, it says
+    # whether the owner has changes not yet published.
+    content_hash: Mapped[str] = mapped_column(
+        String(64), default="", server_default="", nullable=False
+    )
+    # How many editions the list has ever made (#1360): the next one's number.
+    # A counter rather than the highest edition's number, because a superseded
+    # or withdrawn edition is deleted, and a number used twice would let a
+    # moderator who read one edition release another under the same name.
+    edition_count: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
     )
     # The working copy's letter histogram (#1359): how often each of a-z
     # appears across every answer the list holds, and how many alphabetic
@@ -4161,6 +4188,114 @@ class PromptListRevisionTag(Base):
         back_populates="revision_tags"
     )
     tag: Mapped[PromptTag] = relationship(back_populates="list_revision_tags")
+
+
+class PromptListEdition(Base):
+    """An immutable, published snapshot of a list's working copy (#1360).
+
+    Made only by publishing: the first publish and every **Publish update**
+    snapshot the working copy - its prompts in order, tags, name, description
+    and histogram - into a new edition. The edition is what the community
+    catalogue lists, what a room that does not own the list plays, what a copy
+    is taken from and what a report on a published list names; the owner goes
+    on editing the working copy without any of that moving.
+
+    Its `state` is `published` (live) or `under_review` (held by R-LIST-13's
+    operator switch). A list has at most one of each: a new edition that is
+    published replaces the live one, which is deleted (games and copies point
+    at an edition `SET NULL`, so nothing needs it kept), and one that goes
+    under review leaves the live one playing until a moderator clears it -
+    which is what lets a reviewer approve exactly the content they read
+    (#1184) without taking a list out of the catalogue whenever its author
+    edits it.
+    """
+
+    __tablename__ = "prompt_list_editions"
+    __table_args__ = (
+        UniqueConstraint("prompt_list_id", "number", name="uq_prompt_list_edition_number"),
+        CheckConstraint(
+            "state IN ('published', 'under_review')", name="ck_prompt_list_editions_state"
+        ),
+        CheckConstraint("number >= 1", name="ck_prompt_list_editions_number_positive"),
+        # At most one live and one pending edition per list.
+        Index(
+            "uq_prompt_list_editions_one_per_state",
+            "prompt_list_id",
+            "state",
+            unique=True,
+        ),
+        _values_check("language", PROMPT_LIST_LANGUAGES, "ck_prompt_list_editions_language"),
+    )
+
+    id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
+    )
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    # Counts up per list across every edition ever made, so a moderator's
+    # decision can name the one they read (`expectedVersion`).
+    number: Mapped[int] = mapped_column(Integer, nullable=False)
+    state: Mapped[str] = mapped_column(String(16), nullable=False)
+    name: Mapped[str] = mapped_column(String(64), nullable=False)
+    description: Mapped[str] = mapped_column(Text, default="", server_default="", nullable=False)
+    language: Mapped[str] = mapped_column(String(16), nullable=False)
+    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
+    letter_counts: Mapped[dict] = mapped_column(
+        PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
+    )
+    letter_total: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
+    # When the owner published it, and when it went live - the same moment
+    # unless it waited for review.
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+    published_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+
+
+class PromptListEditionItem(Base):
+    """One prompt of an edition, in order. Never changes once written."""
+
+    __tablename__ = "prompt_list_edition_items"
+    __table_args__ = (
+        UniqueConstraint("edition_id", "position", name="uq_prompt_list_edition_item_position"),
+    )
+
+    edition_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_editions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # RESTRICT: a version an edition plays is not the orphan collection's.
+    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
+        primary_key=True,
+        index=True,
+    )
+    position: Mapped[int] = mapped_column(Integer, nullable=False)
+
+
+class PromptListEditionTag(Base):
+    """One curated tag of an edition (R-LIST-18): the catalogue filters on these."""
+
+    __tablename__ = "prompt_list_edition_tags"
+
+    edition_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_list_editions.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    tag_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_tags.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
 
 
 class PromptListTag(Base):

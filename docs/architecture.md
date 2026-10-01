@@ -445,7 +445,7 @@ This is the table to consult before adding a feature: *where does this state liv
 | Quick custom prompts typed into a room | `Room` (memory) | No |
 | Accounts, sessions, roles, bans, blocks | Database | Yes |
 | Finished game history, turns, outcomes, score ledger, drawings | Database | Yes |
-| Prompt concepts, versions, aliases, lists and their working copies, usage facts (revisions: bundled seeding only, until #1362) | Database | Yes |
+| Prompt concepts, versions, aliases, lists, their working copies and published editions, usage facts (revisions: bundled seeding only, until #1362) | Database | Yes |
 | Room-setting presets | Database | Yes |
 | Room-code reservations (including retirement) | Database | Yes |
 | Retained messages (30 days) and pinned report evidence | Database | Yes |
@@ -1996,6 +1996,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/services/message_retention.py`](../backend/app/services/message_retention.py) | Short-lived persistence for audience-aware player-authored messages. |
 | [`app/services/player_reports.py`](../backend/app/services/player_reports.py) | Writing a player report, once its subject and evidence are settled, and reading back what a decision shows the player. |
 | [`app/services/incidents.py`](../backend/app/services/incidents.py) | Grouping reports of one incident, and reading them as one thread (#620). |
+| [`app/services/prompt_editions.py`](../backend/app/services/prompt_editions.py) | Publishing a prompt list as an immutable edition, and retiring editions (#1360). |
 | [`app/services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py) | Reclaiming deleted lists and unlisted prompt versions nothing needs, without touching the games that played them. |
 | [`app/services/prompt_takedowns.py`](../backend/app/services/prompt_takedowns.py) | Recording which words an owner may not type back in, and forgetting them. |
 | [`app/services/prompt_usage.py`](../backend/app/services/prompt_usage.py) | Turn a finished game's turns into immutable prompt-usage facts. |
