@@ -527,26 +527,54 @@ async def test_seeding_analyzes_what_it_wrote():
 
     Counted rather than read off the estimates: the suite empties tables with
     DELETE, so an estimate from an earlier test survives into this one.
+
+    Autovacuum is switched off on the seeded tables first. Earlier tests'
+    seeding leaves them for autovacuum to visit, and while it holds a table
+    `ANALYZE (SKIP_LOCKED)` skips it - as it should, autovacuum being the
+    fallback - so the count did not move in two of four parallel runs. The
+    ALTER waits for (and cancels) a visit already under way.
     """
-    from sqlalchemy import text
+    import os
+
+    from sqlalchemy import bindparam, text
+
+    from app.db.roles import SEEDED_TABLES
+    from tests.dbfixtures import create_test_engine
 
     factory, engine = await create_test_db()
     try:
         if engine.dialect.name != "postgresql":
             await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
             return
+        owner_url = os.environ.get("TEST_OWNER_DATABASE_URL")
+        owner = create_test_engine(owner_url) if owner_url else engine
         counted = text(
-            "SELECT coalesce(sum(analyze_count), 0) FROM pg_stat_user_tables "
-            "WHERE relname = 'prompt_aliases'"
-        )
+            "SELECT relname, analyze_count FROM pg_stat_user_tables "
+            "WHERE relname IN :tables"
+        ).bindparams(bindparam("tables", expanding=True))
 
-        async def analyzed() -> int:
+        async def analyzed() -> dict[str, int]:
             async with engine.connect() as connection:
                 await connection.execute(text("SELECT pg_stat_clear_snapshot()"))
-                return int(await connection.scalar(counted))
+                rows = await connection.execute(counted, {"tables": list(SEEDED_TABLES)})
+                return {name: int(count) for name, count in rows}
 
-        before = await analyzed()
-        await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
-        assert await analyzed() > before
+        async def autovacuum(enabled: bool) -> None:
+            setting = "RESET (autovacuum_enabled)" if enabled else "SET (autovacuum_enabled = off)"
+            async with owner.begin() as connection:
+                for table in SEEDED_TABLES:
+                    await connection.execute(text(f"ALTER TABLE {table} {setting}"))
+
+        await autovacuum(False)
+        try:
+            before = await analyzed()
+            await seed_prompt_lists(SqlAlchemyPromptListRepository(factory))
+            after = await analyzed()
+        finally:
+            await autovacuum(True)
+            if owner is not engine:
+                await owner.dispose()
+        assert set(before) == set(SEEDED_TABLES)
+        assert [t for t in SEEDED_TABLES if after[t] <= before[t]] == []
     finally:
         await engine.dispose()
