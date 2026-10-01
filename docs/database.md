@@ -1979,9 +1979,12 @@ instead, and nothing a game references can stop the list going.
 
 The hourly retention sweep collects a retired list whole once `RETIRED_LIST_GRACE` (one
 day) has passed — long enough for a room that drew from it before the deletion to finish
-and write its game (R-LIST-07), whose turns reference the prompt versions it drew: the
-revisions and their items, then the list row (the games' source rows going with it, their
-usage facts staying with the list set to null), then the prompt versions and concepts that
+and write its game (R-LIST-07), whose turns reference the prompt versions it drew. First
+the history naming the list — its games' source rows, its usage facts' pointer, which
+grow with how much it was played — is cleared in committed batches within the run's
+budget, so a popular list is drained across runs rather than in one transaction of any
+size (R-PRIV-16, #1376 review); then, for lists nothing names any more, the revisions and
+their items, the list row, and the prompt versions and concepts that
 no revision, list, turn, offer, usage fact, content report or takedown record names any
 more, aliases cascading with them. Nothing is left behind as a tombstone. Until #1358 a list
 a game pinned stayed as one for ever, and the batch had to be kept from filling with them
@@ -2458,7 +2461,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
 | Superseded revisions of live prompt lists | Until the save that superseded one is a day old (`RETIRED_LIST_GRACE`); each hourly pass deletes as many as the row budget allows, items counted | 24 h | A live list's current revision, and any a fork was copied from or a copy records its origin in, for ever | `services.prompt_reclaim.reclaim_superseded_revisions`; the overdue age is measured from the superseding save (#1258) | `superseded_list_revisions` |
-| Retired (deleted) prompt lists | Out of reach at once; the list, its revisions and orphan content reclaimed after a 1-day grace, 50 lists per hourly sweep | 24 h | Nothing past the grace: a finished game names the list, not a revision, and reads the same without it (#1358). A hidden word is kept by its owner's takedown record (`prompt_takedowns`) | `services.prompt_reclaim` | `retired_prompt_lists` |
+| Retired (deleted) prompt lists | Out of reach at once; after a 1-day grace its play history is cleared in budgeted batches, then the list, its revisions and orphan content go, 50 lists per hourly sweep | 24 h | Nothing past the grace: a finished game names the list, not a revision, and reads the same without it (#1358). A hidden word is kept by its owner's takedown record (`prompt_takedowns`) | `services.prompt_reclaim` | `retired_prompt_lists` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep

@@ -614,6 +614,65 @@ async def test_a_budgeted_run_stops_at_the_play_history_it_can_afford():
         await engine.dispose()
 
 
+async def test_a_heavily_played_list_is_drained_across_runs_before_it_goes():
+    """One list's history is not one transaction (#1376 review): its source
+    rows and usage facts are cleared in committed batches within the run's
+    budget, and the list goes only once nothing names it."""
+    from app.db.models import GameRecord, PromptUsageFact
+
+    factory, engine = await create_test_db()
+    try:
+        now = datetime(2026, 9, 9, tzinfo=timezone.utc)
+        list_id = await _retired_list(
+            factory, retired_at=now - timedelta(days=30), played=False, name="popular"
+        )
+        version_id = generate_uuid()
+        async with factory() as session:
+            async with session.begin():
+                from app.db.models import PromptConcept, PromptVersion
+
+                concept_id = generate_uuid()
+                session.add(PromptConcept(id=concept_id))
+                await session.flush()
+                session.add(
+                    PromptVersion(
+                        id=version_id, concept_id=concept_id, language="en",
+                        canonical_answer="otter", match_key="otter",
+                    )
+                )
+                for _ in range(4):
+                    game_id = generate_uuid()
+                    session.add(
+                        GameRecord(
+                            id=game_id, room_name="Played it", scoring_mode="default",
+                            hint_mode="none", drawing_seconds=60, total_rounds=1,
+                            player_count=1, started_at=now, finished_at=now,
+                        )
+                    )
+                    await session.flush()
+                    session.add(GamePromptSource(game_id=game_id, prompt_list_id=list_id))
+                    session.add(
+                        PromptUsageFact(
+                            batch_id=game_id, prompt_list_id=list_id,
+                            prompt_version_id=version_id, occurred_at=now,
+                            scoring_mode="default", hint_mode="none", offer_count=1,
+                        )
+                    )
+
+        budget = SweepBudget(rows=5, batch=2, seconds=30)
+        first = await reclaim_retired_prompt_lists(factory, now=now, budget=budget)
+        assert first.history_cleared == 5 and first.lists_deleted == 0
+        assert first.backlog == 1, "still owed, and counted"
+        second = await reclaim_retired_prompt_lists(factory, now=now, budget=budget)
+        assert second.history_cleared == 3 and second.lists_deleted == 1
+        async with factory() as session:
+            assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 0
+            facts = (await session.scalars(select(PromptUsageFact))).all()
+            assert len(facts) == 4 and {fact.prompt_list_id for fact in facts} == {None}
+    finally:
+        await engine.dispose()
+
+
 async def test_the_reclaim_measures_its_backlog_past_the_grace():
     """Its backlog is over the retired lists past their grace, and the age is
     measured past the grace rather than from the retirement."""

@@ -543,6 +543,7 @@ def _describe(report: object) -> dict[str, object]:
         return {
             "rows": report.lists_deleted,
             "revisions": report.revisions_deleted,
+            "history": report.history_cleared,
             "examined": report.lists_examined,
             "oldest_overdue_seconds": round(report.oldest_overdue_seconds, 1),
             "backlog": report.backlog,
