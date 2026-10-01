@@ -902,8 +902,10 @@ details.form-section > .form-section-body {
   color: var(--faint);
   display: inline-flex;
 }
+/* --muted, not --faint: the count and a series's "2 of 9" are read, not
+   decoration, and --faint misses 4.5:1 on a card (themeContrast.test.mjs). */
 .prompt-list-check-count {
-  color: var(--faint);
+  color: var(--muted);
   font-size: 12.5px;
   font-variant-numeric: tabular-nums;
   font-weight: 700;

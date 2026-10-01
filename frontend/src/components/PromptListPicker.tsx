@@ -8,6 +8,7 @@ import {
 } from "../lib/promptLanguages";
 import { listCommunityPromptLists, listOwnedPromptLists } from "../lib/promptLists";
 import {
+  MAX_PROMPT_LISTS,
   listsIn,
   promptListTree,
   seriesState,
@@ -319,7 +320,12 @@ export function PromptListPicker({
           })}
         </p>
       )}
-      <div className="prompt-list-tree">
+      {selectedSlugs.length > MAX_PROMPT_LISTS && (
+        <p className="prompt-list-fallback-note" role="status">
+          {ui.promptListPicker.tooManyLists({ max: MAX_PROMPT_LISTS })}
+        </p>
+      )}
+      {tree.length > 0 && <div className="prompt-list-tree">
         {tree.map((branch) => {
           // Not copy: the fold state's key.
           const key = `branch:${branch.id}`;
@@ -349,7 +355,7 @@ export function PromptListPicker({
             </section>
           );
         })}
-      </div>
+      </div>}
       {shortlistCut && <p className="prompt-list-fallback-note">
         {ui.promptListPicker.starredNotAllShown({ shown: shortlist.length })}
       </p>}

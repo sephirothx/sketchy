@@ -1611,6 +1611,7 @@ export const PL: Catalogue = {
     seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} z ${number(p.total)}`,
     showSeries: (p: { name: string }) => `Pokaż listy: ${p.name}`,
     hideSeries: (p: { name: string }) => `Ukryj listy: ${p.name}`,
+    tooManyLists: (p: { max: number }) => `Pokój może korzystać z najwyżej ${number(p.max)} list. Odznacz kilka, zanim przejdziesz dalej.`,
   },
 
   promptStatsPage: {

@@ -11,6 +11,12 @@ export const PROMPT_SHELVES = ["everyday"] as const;
 
 export type PromptShelf = (typeof PROMPT_SHELVES)[number];
 
+/** How many lists a room may select (`handlers/payloads.MAX_PROMPT_LISTS`,
+R-PROMPT-14), mirrored so a whole series that tips a selection past it is
+said beside the tree rather than only when the room is created. Held to the
+server's by `backend/tests/test_wire_contract.py`. */
+export const MAX_PROMPT_LISTS = 40;
+
 /** One list, as a row the player ticks. */
 export interface PromptListLeaf {
   kind: "list";

@@ -276,9 +276,8 @@
 
 /* The tag picker wraps rather than scrolls: the vocabulary is fixed and small
    enough to show whole, and a set that scrolled would hide the ones already
-   chosen. Its chips are the `toggle-chip` recipe the room form's prompt lists
-   use, so picking tags here and picking prompt lists there are visibly one
-   kind of choice; only the size differs (`is-small`). */
+   chosen. Its chips are the `toggle-chip` recipe, one size down
+   (`is-small`). */
 /* Name and language on one line when both fit: the name takes what is left,
    and the language wraps under it on a narrow editor rather than squeezing it. */
 .prompt-list-name-row {

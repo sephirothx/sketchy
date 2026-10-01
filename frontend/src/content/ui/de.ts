@@ -1599,6 +1599,7 @@ export const DE: Catalogue = {
     seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} von ${number(p.total)}`,
     showSeries: (p: { name: string }) => `Listen von ${p.name} zeigen`,
     hideSeries: (p: { name: string }) => `Listen von ${p.name} ausblenden`,
+    tooManyLists: (p: { max: number }) => `Ein Raum kann höchstens ${number(p.max)} Listen verwenden. Entferne einige, bevor du weitermachst.`,
   },
 
   promptStatsPage: {

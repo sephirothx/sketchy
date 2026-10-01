@@ -1618,6 +1618,7 @@ export const EN = {
     seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} of ${number(p.total)}`,
     showSeries: (p: { name: string }) => `Show ${p.name} lists`,
     hideSeries: (p: { name: string }) => `Hide ${p.name} lists`,
+    tooManyLists: (p: { max: number }) => `A room can use at most ${number(p.max)} lists. Clear some before going on.`,
   },
 
   promptStatsPage: {

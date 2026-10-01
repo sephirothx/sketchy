@@ -1599,6 +1599,7 @@ export const NL: Catalogue = {
     seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} van ${number(p.total)}`,
     showSeries: (p: { name: string }) => `Lijsten van ${p.name} tonen`,
     hideSeries: (p: { name: string }) => `Lijsten van ${p.name} verbergen`,
+    tooManyLists: (p: { max: number }) => `Een kamer kan hoogstens ${number(p.max)} lijsten gebruiken. Haal er een paar weg voordat je verdergaat.`,
   },
 
   promptStatsPage: {
