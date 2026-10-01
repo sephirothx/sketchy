@@ -1092,7 +1092,7 @@
     {"conceptId":"01a0f467-2042-7235-b88e-1b69f8b7a319","answer":"Parkkralle","aliases":["die Parkkralle","Radkralle","Parkklemme"]},
     {"conceptId":"01a0f467-2042-7235-b88e-1b6ad37baf9e","answer":"Wasserstrudel","aliases":["der Wasserstrudel","Strudel","der Strudel","Wirbel","Mahlstrom","Sog"]},
     {"conceptId":"01a0f49a-74d4-7018-8699-685e3c2f22ea","answer":"Weißes Haus","aliases":["das Weiße Haus"]},
-    {"conceptId":"01a088e3-e9ad-71b3-8c76-b834f20f7200","answer":"Wildschwein","aliases":["das Wildschwein","Wildsau","Keiler","Bache"],"promptVersion":2},
+    {"conceptId":"01a088e3-e9ad-71b3-8c76-b834f20f7200","answer":"Wildschwein","aliases":["das Wildschwein","Wildsau","Keiler"],"promptVersion":2},
     {"conceptId":"01a0f49a-74d4-7018-8699-6862c2b89d0b","answer":"Wilhelm Tell","aliases":["Tell","William Tell"]},
     {"conceptId":"01a02b7b-b763-7a3e-889b-132df98076c1","answer":"Windspiel","aliases":["das Windspiel","Klangspiel","Windglocke","Windglockenspiel"]},
     {"conceptId":"01a02b7b-b764-7df6-845f-0a9696d095e7","answer":"Windrad","aliases":["das Windrad","Windkraftanlage","Windturbine","Windenergieanlage","Windkraftwerk"]},

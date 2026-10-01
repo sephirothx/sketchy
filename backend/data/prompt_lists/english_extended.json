@@ -922,7 +922,7 @@
     {"conceptId":"01a02b7b-b6d8-7323-8a60-7761b422b9f7","answer":"sphinx","aliases":["great sphinx","sphinx of giza"],"promptVersion":2},
     {"conceptId":"01a0f467-2042-7235-b88e-1af145fb4b68","answer":"spilled milk","aliases":["spilt milk","spilling milk","milk spill","crying over spilled milk","crying over spilt milk"]},
     {"conceptId":"01a0f467-2042-7235-b88e-1af2359aea66","answer":"spine","aliases":["backbone","spinal column","vertebral column","vertebrae","vertebra","spinal cord"]},
-    {"conceptId":"01a0f467-2042-7235-b88e-1af33942e581","answer":"spinning wheel","aliases":["spinning-wheel","spinner","spinning"]},
+    {"conceptId":"01a0f467-2042-7235-b88e-1af33942e581","answer":"spinning wheel","aliases":["spinning-wheel","spinning"]},
     {"conceptId":"01a02b7b-b6dc-7b66-8f9f-b719bc76676f","answer":"spiral staircase","aliases":["spiral stairs","spiral stair","winding staircase","winding stairs","circular staircase","helical staircase"],"promptVersion":2},
     {"conceptId":"01a0f467-2042-7235-b88e-1af442608c25","answer":"spirit level","aliases":["level","bubble level","builder's level","carpenter's level","level tool"]},
     {"conceptId":"01a0f467-2042-7235-b88e-1af54f8012b7","answer":"splinter","aliases":["sliver","wood splinter","splinter in finger"]},

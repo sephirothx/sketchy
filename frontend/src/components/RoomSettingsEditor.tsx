@@ -9,6 +9,7 @@ import { useToast } from "../lib/toast";
 import { useGameStore } from "../store/gameStore";
 import type { AckResponse, EditableRoomSettings, PromptListSummary } from "../types";
 import { refusalText } from "../lib/refusals.ts";
+import { selectionInPlayLanguage } from "../lib/promptLanguages";
 import { ui } from "../content/ui/index.ts";
 
 const emptySettings: EditableRoomSettings = {
@@ -128,6 +129,28 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     })();
     return () => { cancelled = true; };
   }, []);
+
+  // A mixed room's Standard and Extended are shown in this host's language
+  // (R-PROMPT-13), whichever language's copy the room was saved with: an
+  // English host's `english_extended` is German Extended to a German one, or
+  // the chip reads unselected and the list cannot be taken out. The baseline
+  // moves with the draft, so a mapping alone is not a change to save.
+  const mappedFor = useRef<PromptListSummary[] | null>(null);
+  useEffect(() => {
+    if (loading || loadedLists.length === 0 || mappedFor.current === loadedLists) return;
+    mappedFor.current = loadedLists;
+    const inOwn = (current: RoomSetupValues): RoomSetupValues => ({
+      ...current,
+      promptListSlugs: selectionInPlayLanguage(
+        loadedLists,
+        current.promptLanguage,
+        current.promptListSlugs,
+        seatLanguage ?? undefined,
+      ),
+    });
+    setValues(inOwn);
+    setBaseline(inOwn);
+  }, [loading, loadedLists, seatLanguage]);
 
   const promptsError = customPrompts.analysis.hasErrors;
   const dirty = useMemo(() => {

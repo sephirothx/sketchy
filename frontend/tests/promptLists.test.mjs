@@ -10,6 +10,7 @@ import {
   isPlayableIn,
   preferredPromptLanguage,
   reconcileSelectionForLanguage,
+  selectionInPlayLanguage,
   selectionForLanguage,
   rankedPromptLanguages,
   sortRoomsByLanguage,
@@ -196,6 +197,16 @@ test("a mixed room plays Standard and Extended, once, and lists in no language",
   assert.deepEqual(
     reconcileSelectionForLanguage(lists, "mul", ["english_standard", "english_extended", "pokemon"], "de"),
     ["german_standard", "german_extended", "pokemon"],
+  );
+  // The editor maps a saved room's lists into this host's copies without
+  // dropping or adding anything.
+  assert.deepEqual(
+    selectionInPlayLanguage(lists, "mul", ["english_standard", "english_extended", "pokemon"], "de"),
+    ["german_standard", "german_extended", "pokemon"],
+  );
+  assert.deepEqual(
+    selectionInPlayLanguage(lists, "de", ["german_local"], "fr"),
+    ["german_local"],
   );
   // Local does not follow the room into Mixed.
   assert.deepEqual(

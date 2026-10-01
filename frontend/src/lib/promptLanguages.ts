@@ -204,10 +204,21 @@ export function reconcileSelectionForLanguage(
       .filter((list) => isPlayableIn(list, language, playLanguage))
       .map((list) => list.slug),
   );
-  const kept = [
-    ...new Set(selected.map((slug) => inPlayLanguage(lists, language, slug, playLanguage))),
-  ].filter((slug) => playable.has(slug));
+  const kept = selectionInPlayLanguage(lists, language, selected, playLanguage)
+    .filter((slug) => playable.has(slug));
   return kept.length > 0 ? kept : selectionForLanguage(lists, language, [], playLanguage);
+}
+
+/** `selected`, with each Standard or Extended of another language replaced by
+the player's own copy in a mixed room, and nothing else changed - the same
+lists, as this player is shown them. */
+export function selectionInPlayLanguage(
+  lists: { slug: string; language: string; isBundled?: boolean }[],
+  language: string,
+  selected: readonly string[],
+  playLanguage: string = "en",
+): string[] {
+  return [...new Set(selected.map((slug) => inPlayLanguage(lists, language, slug, playLanguage)))];
 }
 
 /** In a mixed room, another language's Standard or Extended is the same family
