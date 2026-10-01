@@ -39,6 +39,7 @@ from app.api.profiles import serve_drawing
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
 from app.repositories.sqlalchemy import apply_gallery_decision
 from app.services.gallery_shelf import read_shelf_review
+from app.services.prompt_takedowns import record_takedowns, release_takedowns
 from app.services.player_reports import (
     canonical_user_id,
     context_around,
@@ -53,7 +54,11 @@ from app.services.player_reports import (
 from app.auth.sessions import revoke_all_sessions
 from app.auth.step_up import require_step_up
 from app.auth.warnings import pending_warning_payload
-from app.auth.erasure import AccountErasedError, require_live_account
+from app.auth.erasure import (
+    AccountErasedError,
+    erased_identity_ids,
+    require_live_account,
+)
 from app.db.models import (
     AuditEvent,
     GameRecord,
@@ -67,6 +72,7 @@ from app.db.models import (
     PromptList,
     PromptListRevision,
     PromptListRevisionItem,
+    PromptTakedown,
     PromptVersion,
     PromptVersionAlias,
     RoomMessage,
@@ -1080,31 +1086,43 @@ async def _carry_decision_to_copies(
         or owner_user_id is None
     ):
         return
+    # The copies are the owner's own takedown records (#1357): a save that
+    # carries a hidden word onto a new concept records that concept too, so a
+    # copy is found whether or not a list still holds it.
+    carried = (
+        PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
+        # Not narrowed by language: the byline - this decision's own
+        # instant and moderator - is what marks a copy it was carried to,
+        # and a carry can cross languages through a list in no language
+        # (#821): French "pain" hidden, typed into an Any-language list,
+        # and from there into English. A restore that stopped at the
+        # original's language left that copy hidden with nobody to decide it.
+        PromptVersion.moderated_at == decided_at,
+        (
+            PromptVersion.moderated_by_user_id == decided_by
+            if decided_by is not None
+            else PromptVersion.moderated_by_user_id.is_(None)
+        ),
+    )
+    concept_ids = set(
+        (
+            await session.scalars(
+                select(PromptVersion.concept_id.distinct()).where(
+                    *carried,
+                    PromptVersion.concept_id.in_(
+                        select(PromptTakedown.concept_id).where(
+                            PromptTakedown.owner_user_id == owner_user_id
+                        )
+                    ),
+                )
+            )
+        ).all()
+    )
+    if not concept_ids:
+        return
     await session.execute(
         update(PromptVersion)
-        .where(
-            PromptVersion.moderation_state == PromptContentModerationState.HIDDEN.value,
-            # Not narrowed by language: the byline - this decision's own
-            # instant and moderator - is what marks a copy it was carried to,
-            # and a carry can cross languages through a list in no language
-            # (#821): French "pain" hidden, typed into an Any-language list,
-            # and from there into English. A restore that stopped at the
-            # original's language left that copy hidden with nobody to decide it.
-            PromptVersion.moderated_at == decided_at,
-            (
-                PromptVersion.moderated_by_user_id == decided_by
-                if decided_by is not None
-                else PromptVersion.moderated_by_user_id.is_(None)
-            ),
-            select(PromptListRevisionItem.revision_id)
-            .join(PromptListRevision, PromptListRevision.id == PromptListRevisionItem.revision_id)
-            .join(PromptList, PromptList.id == PromptListRevision.prompt_list_id)
-            .where(
-                PromptListRevisionItem.prompt_version_id == PromptVersion.id,
-                PromptList.owner_user_id == owner_user_id,
-            )
-            .exists(),
-        )
+        .where(*carried, PromptVersion.concept_id.in_(concept_ids))
         .values(
             moderation_state=decision,
             moderated_by_user_id=reviewer_id,
@@ -1112,6 +1130,64 @@ async def _carry_decision_to_copies(
         )
         .execution_options(synchronize_session=False)
     )
+    if decision != PromptContentModerationState.HIDDEN.value:
+        await release_takedowns(
+            session,
+            PromptTakedown.owner_user_id == owner_user_id,
+            PromptTakedown.concept_id.in_(concept_ids),
+        )
+
+
+async def _lock_takedown_owners(
+    session: AsyncSession, *, concept_id: UUID, reported_owner_user_id: UUID | None
+) -> set[UUID]:
+    """The owners a decision on this word reaches, locked, the erased left out.
+
+    The reported owner - whose list may have been deleted since - and every
+    owner whose lists hold the concept now (R-MOD-11, #1357). Taken through the
+    erasure barrier, shared and in ascending order, **before** the decision
+    locks a list or writes a version: account deletion holds the account and
+    then retires its lists, so taking the list first and reaching for the
+    account at the takedown insert deadlocked against it, and reading the
+    lifecycle without the lock let a deletion commit in between and leave a
+    record for an erased account that nothing would ever remove (#1375 review).
+    """
+    holders = set(
+        (
+            await session.scalars(
+                select(PromptList.owner_user_id)
+                .join(Prompt, Prompt.prompt_list_id == PromptList.id)
+                .where(
+                    Prompt.concept_id == concept_id,
+                    PromptList.owner_user_id.is_not(None),
+                )
+            )
+        ).all()
+    )
+    owners = holders | ({reported_owner_user_id} if reported_owner_user_id else set())
+    return owners - await erased_identity_ids(session, owners)
+
+
+async def _record_takedown(
+    session: AsyncSession,
+    *,
+    concept_id: UUID,
+    decision: str,
+    owners: set[UUID],
+) -> None:
+    """Record who may not type a hidden word back in, or forget it once it is
+    left up (R-MOD-11, #1357).
+
+    A hidden word gets one row for each live owner the decision reaches
+    (`_lock_takedown_owners`, whose locks the caller holds). Any other decision
+    is the word's too, so it removes every row naming it.
+    """
+    if decision != PromptContentModerationState.HIDDEN.value:
+        await release_takedowns(session, PromptTakedown.concept_id == concept_id)
+        return
+    # Idempotent: two decisions on one concept - two reports of different
+    # versions are two incidents - can both find no row here.
+    await record_takedowns(session, ((owner_id, concept_id) for owner_id in owners))
 
 
 def _is_about_themselves(reviewer: User, subject_user_id: UUID | None) -> bool:
@@ -2311,6 +2387,16 @@ def create_moderation_router(
                             status_code=409,
                             detail="The reported content has already been deleted.",
                         )
+                    takedown_owners: set[UUID] = set()
+                    if report.target_type == "prompt":
+                        # Before anything is locked or written beyond the
+                        # reports: the accounts, then the list, then the
+                        # versions - the order account deletion takes them.
+                        takedown_owners = await _lock_takedown_owners(
+                            session,
+                            concept_id=target.concept_id,
+                            reported_owner_user_id=report.reported_owner_user_id,
+                        )
                     prior_decision = (
                         target.moderation_state,
                         target.moderated_by_user_id,
@@ -2352,6 +2438,12 @@ def create_moderation_router(
                                 moderated_by_user_id=reviewer.id,
                                 moderated_at=now,
                             )
+                        )
+                        await _record_takedown(
+                            session,
+                            concept_id=target.concept_id,
+                            decision=body.moderation_state,
+                            owners=takedown_owners,
                         )
                         await _carry_decision_to_copies(
                             session,

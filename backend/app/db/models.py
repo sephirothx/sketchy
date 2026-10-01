@@ -4162,6 +4162,46 @@ class PromptListStar(Base):
     )
 
 
+class PromptTakedown(Base):
+    """One owner's record that a moderator hid one of their words (R-MOD-11).
+
+    A save asks these rows which words the owner may not type back into any
+    of their lists (#1091). Until #1357 the record was implicit - every revision
+    of every list the owner had ever held was searched for hidden versions - so
+    revisions had to outlive their lists for as long as a takedown did, and the
+    reclaim carried holds for hidden words and pending reports that produced
+    three review bugs in one epic.
+
+    The row names the concept, not a spelling: the decision is the concept's
+    (#1020), and its versions carry the text, the aliases, the language and the
+    decision's byline that the save compares against. A concept a row names is
+    kept by the orphan collection for that reason. Written by the decision for
+    the reported owner and every owner whose lists hold the concept; removed by
+    a decision that leaves the word up, and with the owner's account.
+    """
+
+    __tablename__ = "prompt_takedowns"
+    __table_args__ = (
+        # The PK answers the save ("this owner's takedowns"); a later decision
+        # on the word, and the orphan collection, look the other way.
+        Index("ix_prompt_takedowns_concept", "concept_id"),
+    )
+
+    owner_user_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("users.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    concept_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_concepts.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        UTCDateTime(), server_default=func.now(), nullable=False
+    )
+
+
 class PromptUsageFact(Base):
     """Append-only, per-game usage totals for one prompt in one pinned revision."""
 

@@ -4,8 +4,9 @@ nothing needs (#1258).
 Every content save writes the whole list again as a new revision, and only
 retired lists were reclaimed, so a live list kept every revision it was ever
 saved as. The sweep keeps a live list's current revision, every revision
-still inside the grace, and any a finished game pins, a fork was copied from,
-or a hidden prompt is recorded in.
+still inside the grace, and any a finished game pins or a fork was copied
+from. A hidden prompt is no reason to keep one: its owner's takedown record
+is (#1357).
 """
 from __future__ import annotations
 
@@ -31,6 +32,7 @@ from tests.test_prompt_content_moderation import (  # noqa: F401 - env is a fixt
     env,
     published,
     register,
+    taken_down,
 )
 
 LONG_AGO = datetime.now(timezone.utc) - timedelta(days=10)
@@ -116,8 +118,8 @@ async def test_a_live_list_keeps_what_is_current_young_or_needed_and_nothing_els
 
         report = await reclaim_superseded_revisions(factory, now=now)
 
-        assert int(report) == 1
-        assert await _revisions(factory, list_id) == [pinned, forked_from, hiding, young, current]
+        assert int(report) == 2, "a hidden word is not a hold (#1357)"
+        assert await _revisions(factory, list_id) == [pinned, forked_from, young, current]
         assert await _answer_versions(factory, "ibis") == 0, "the content only it named went with it"
         assert await _revisions(factory, other_id) == [fork], "the fork itself is a current revision"
         assert report.backlog == 0 and report.oldest_overdue_seconds == 0
@@ -187,17 +189,14 @@ async def test_a_run_deletes_no_more_rows_than_its_budget_has():
 
 async def _hide(factory, version_id: str) -> None:
     async with factory() as session, session.begin():
-        await session.execute(
-            update(PromptVersion)
-            .where(PromptVersion.id == UUID(version_id))
-            .values(moderation_state=PromptContentModerationState.HIDDEN.value)
-        )
+        await taken_down(session, await session.get(PromptVersion, UUID(version_id)))
 
 
-async def test_a_revision_holding_a_hidden_word_among_others_is_kept():
-    """The hidden-word check is asked of the revision, not of each of its
-    items: with a second word beside it, the revision used to go, and the word
-    could be typed into a new list and be born active (#1258 review)."""
+async def test_a_takedown_outlives_the_revisions_it_was_found_in():
+    """A revision holding a hidden word used to be kept as the takedown's
+    record - asked of the revision, not of each item (#1258 review). The
+    record is its own row now (#1357): the revision goes like any other, and
+    the word still cannot be typed back in."""
     factory, engine, owner_id, _ = await _database()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
@@ -217,8 +216,9 @@ async def test_a_revision_holding_a_hidden_word_among_others_is_kept():
 
         report = await reclaim_superseded_revisions(factory)
 
-        assert int(report) == 0
-        assert await _revisions(factory, created.id) == revisions
+        assert int(report) == 1
+        assert await _revisions(factory, created.id) == revisions[1:]
+        assert await _answer_versions(factory, "offensive word") == 1, "the record keeps its spelling"
         again = await repo.create_owned(
             owner_id, name="Again", description="", language="en",
             prompts=(PromptListEntryInput(answer="offensive word"),),
@@ -258,10 +258,11 @@ async def test_an_edited_copy_keeps_what_it_was_copied_from():
         await engine.dispose()
 
 
-async def test_a_word_a_report_waits_on_keeps_its_revision_until_it_is_decided(env):  # noqa: F811
-    """A report outlives the grace easily. Reclaim the only revision that tied
-    the reported word to its owner, and a takedown decided afterwards is
-    hidden from nobody's next list (#1258 review)."""
+async def test_a_takedown_decided_after_its_revision_went_still_reaches_the_owner(env):  # noqa: F811
+    """A report outlives the grace easily. Reclaiming the only revision that
+    tied the reported word to its owner once hid a later takedown from nobody's
+    next list (#1258 review), so the revision was held; the decision now
+    records the takedown against the owner the report names (#1357)."""
     new_client, factory, prompts = env
     owner_http, reporter_http, moderator_http = new_client(), new_client(), new_client()
     owner = await register(owner_http, "SqOwner")
@@ -287,7 +288,7 @@ async def test_a_word_a_report_waits_on_keeps_its_revision_until_it_is_decided(e
     )
     later = datetime.now(timezone.utc) + timedelta(days=2)
 
-    assert int(await reclaim_superseded_revisions(factory, now=later)) == 0, "the report still waits"
+    assert int(await reclaim_superseded_revisions(factory, now=later)) == 1, "a report is no hold"
 
     decided = await moderator_http.patch(
         f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
@@ -299,5 +300,3 @@ async def test_a_word_a_report_waits_on_keeps_its_revision_until_it_is_decided(e
         prompts=(PromptListEntryInput(answer="borderline word"),),
     )
     assert again.prompts[0].moderation_state == PromptContentModerationState.HIDDEN.value
-    # Decided, and hidden: kept now as the takedown's record, not for the report.
-    assert int(await reclaim_superseded_revisions(factory, now=later)) == 0

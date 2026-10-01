@@ -431,8 +431,7 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt=(
                 "revisions a finished game pins, and the tombstones holding them, for ever; "
-                "while the owner's account lives, one a hidden prompt is recorded in, and one "
-                "holding a prompt a report waits on until it is decided"
+                "a hidden word is kept by its owner's takedown record, not by a revision"
             ),
         ),
         Sweep(
@@ -441,8 +440,7 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             sla_seconds=HEAVY_SLA_SECONDS,
             exempt=(
                 "a live list's current revision, and any a finished game pins, a fork was "
-                "copied from, a copy records its origin in, or a hidden prompt is recorded "
-                "in, for ever; one holding a prompt a report waits on, until it is decided"
+                "copied from, or a copy records its origin in, for ever"
             ),
         ),
         Sweep(
