@@ -239,3 +239,37 @@ async def test_a_seat_arriving_after_a_game_is_sent_the_recap_in_its_own_languag
     ]
     assert recap["drawings"][0]["prompt"] == "Hund"
     assert recap["highlights"][0]["prompt"] == "Hund"
+
+
+async def test_a_false_friend_tells_the_guesser_it_is_another_language_s_answer():
+    """The guard keeps the guess from the room as a near miss, and the guesser
+    is told it is the answer in another language rather than "very close"
+    (#1367)."""
+    room_manager = RoomManager()
+    sio, sessions = _server(room_manager, _standard_stub())
+    created = await _create(sio, sessions, seat="de")
+    room = room_manager.get_room(created["roomId"])
+    await sessions.save("guest-sid", {"user_id": "user-guest"})
+    await sio.handlers["/"]["join_room"](
+        "guest-sid", {"code": room.code, "nickname": "Jean", "seatLanguage": "fr"}
+    )
+    assert (await sio.handlers["/"]["start_game"]("host-sid", None))["ok"] is True
+    game = room.game
+    drawer = room.players[game.current_drawer]
+    guesser = next(p for p in room.players.values() if p is not drawer)
+    [offer] = [
+        call.args[1]
+        for call in sio.emit.await_args_list
+        if call.args[0] == "your_prompt_choices"
+    ]
+    await sio.handlers["/"]["select_prompt"](drawer.sid, {"index": 0, "turnId": offer["turnId"]})
+    english = {"c-dog": "dog", "c-cat": "cat"}[game.prompt_key]
+    other = {"c-dog": "c-cat", "c-cat": "c-dog"}[game.prompt_key]
+    # The English word is, in the guesser's own language, the other concept.
+    game.false_friends = {room.seat_language(guesser): {english: frozenset({other})}}
+
+    answer = await sio.handlers["/"]["guess"](guesser.sid, {"text": english})
+
+    assert guesser.id not in game.correct_guessers
+    assert answer["verdict"]["code"] == "guess_answer_in_another_language"
+    assert answer["verdict"]["params"] == {"text": english}

@@ -30,7 +30,8 @@ export type AnnouncementCode =
   | "hint_letter_found"
   | "hint_letter_missing"
   | "guess_very_close"
-  | "guess_some_words_correct";
+  | "guess_some_words_correct"
+  | "guess_answer_in_another_language";
 
 /** Mirrors `RestartCancelReason`, for the same reason. */
 export type RestartCancelReason =

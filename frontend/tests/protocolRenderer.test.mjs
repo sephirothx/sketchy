@@ -11,7 +11,7 @@ import {
   decodeCanvasHistory,
 } from "../src/lib/canvasHistory.ts";
 import { decodeLiveDrawing, encodeFill } from "../src/lib/liveDrawing.ts";
-import { createProtocolRenderer } from "../src/lib/protocolRenderer.ts";
+import { createProtocolRenderer, LIVE_REPLAY_SLICE_MS } from "../src/lib/protocolRenderer.ts";
 
 // The accepted 100-fill turn (#1282): the costliest history a turn may hold.
 const fillFixture = JSON.parse(readFileSync(new URL("../../fixtures/fill_replay_100.json", import.meta.url), "utf8"));
@@ -44,14 +44,14 @@ function immediately(actions) {
 
 /** A viewer's renderer whose pieces run when the test says, on a clock that
 advances 5 ms at every reading, so a 16 ms piece is a few actions. */
-function viewer({ live = () => true } = {}) {
+function viewer({ live = () => true, tickMs = 5 } = {}) {
   const target = surface();
   const tasks = [];
   let clock = 0;
   const renderer = createProtocolRenderer({ current: target }, () => 80, null, undefined, {
     live,
     nextTask: (task) => tasks.push(task),
-    now: () => (clock += 5),
+    now: () => (clock += tickMs),
   });
   const drain = () => {
     let ran = 0;
@@ -70,12 +70,43 @@ test("a viewer's replay plays out in pieces and ends on the pixels an immediate 
 
   renderer.replay(actions);
   assert.ok(tasks.length > 0, "the hundred fills did not all happen in the one task");
-  assert.ok(target.commits.length >= 1, "the first piece is shown at once");
   const pieces = drain();
 
   assert.ok(pieces > 5, `played out over ${pieces} later tasks`);
   assert.equal(digest(target.pixels), immediately(actions));
-  assert.ok(target.commits.length > pieces, "every piece is shown as it lands");
+  assert.equal(target.commits.length, pieces, "every piece is shown as it lands");
+});
+
+test("no piece begins an action once its budget is spent, the last one included (#1347)", () => {
+  // Every reading of the clock past the budget: each action outlasts a
+  // piece, as a fill does on a slow machine. The last action used to be
+  // painted with the one before it - two fills, 226 ms, on a CI runner at 4x.
+  const actions = fills();
+  const { target, renderer, drain } = viewer({ tickMs: LIVE_REPLAY_SLICE_MS + 1 });
+  renderer.replay(actions);
+  assert.equal(drain(), actions.length, "one action a piece, every piece its own task");
+  assert.equal(digest(target.pixels), immediately(actions));
+});
+
+test("the task that delivers a history paints none of its fills (#1347)", () => {
+  // That task has already decoded and adopted the history; a fill on top of
+  // it was one more fill than a piece allows.
+  const actions = [...strokes(), ...fills()];
+  const { target, renderer, tasks, drain } = viewer({ tickMs: 0 });
+  renderer.replay(actions);
+  const before = Uint8ClampedArray.from(target.pixels);
+  assert.equal(target.commits.length, 1, "the strokes before the first fill, shown at once");
+  assert.ok(tasks.length > 0);
+  assert.equal(digest(before), immediately(strokes()));
+  drain();
+  assert.equal(digest(target.pixels), immediately(actions));
+});
+
+test("a history that opens on a fill shows nothing until its first piece", () => {
+  const { target, renderer, tasks } = viewer();
+  renderer.replay(fills());
+  assert.equal(target.commits.length, 0, "no white canvas committed over what was there");
+  assert.equal(tasks.length, 1);
 });
 
 test("a short history is on the canvas before replay returns, as it always was", () => {

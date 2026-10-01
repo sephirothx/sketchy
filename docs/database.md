@@ -1485,7 +1485,7 @@ cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # repla
 | `visibility` | `public \| private`, CHECK-enforced. The room's public flag, frozen when the game is saved (#469): a public room's game is listed on a profile for anyone, a private room's only for the players who sat in it (R-HIST-25). Defaults to `private` at both layers, so a writer that does not say discloses nothing |
 | `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
 
-**The rule snapshot** ([`backend/app/game.py:454`](../backend/app/game.py)) freezes the
+**The rule snapshot** ([`backend/app/game.py:493`](../backend/app/game.py)) freezes the
 numeric default/pressure/hint parameters, the drawer-bonus algorithm, the drawing time,
 the permitted tools and colors, prompt visibility and language, and the pinned prompt-
 source revision IDs. Historical points can therefore be interpreted under the rules that
@@ -2315,7 +2315,10 @@ server-wide gameplay observation.
 
 Bundled lists live in
 [`backend/data/prompt_lists/`](../backend/data/prompt_lists/) and are seeded at startup
-by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape is
+by [`backend/app/db/seed.py`](../backend/app/db/seed.py), which then `ANALYZE`s the
+prompt tables on PostgreSQL (skipping any a VACUUM holds, never failing startup): a
+freshly seeded table has no planner statistics, and a thousand-prompt list's aliases
+were then joined by walking all of them per prompt (#1367). The checked-in shape is
 **identity-based, not text-keyed**:
 
 ```json
@@ -2324,7 +2327,11 @@ by [`backend/app/db/seed.py`](../backend/app/db/seed.py). The checked-in shape i
 
 - Equal text shares a concept **only** when the files deliberately repeat that ID.
 - Changing capitalization, punctuation, wording, aliases, or editorial metadata requires
-  the **same `conceptId` and a higher `promptVersion`**.
+  the **same `conceptId` and a higher `promptVersion`** - one higher than the newest the
+  database holds in that language. A database that holds none (a fresh install) seeds the
+  file's version as it stands: it never saw the earlier wording, and refusing a version 2
+  for want of a version 1 would stop every fresh install once one word was reworded
+  (#1367).
 - Adding, removing, or reordering membership requires a higher top-level list `version`.
 - Optional `aliases`, `difficulty`, `contentRating`, and `tags` belong to the immutable
   prompt version.
@@ -2926,7 +2933,7 @@ property was only a convention of the code:
 | Role | Used by | May |
 | --- | --- | --- |
 | `sketchy_owner` | `python -m app.db.migrate` (`MIGRATION_DATABASE_URL`) | own the schema and every table; DDL |
-| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events` and `score_events`, only `SELECT` on `alembic_version`; no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
+| `sketchy_app` | the web process and every operator command (`DATABASE_URL`) | `SELECT`, `INSERT`, `UPDATE`, `DELETE` on rows — but only `INSERT` and `SELECT` on `audit_events` and `score_events`, only `SELECT` on `alembic_version`; `MAINTAIN` (PostgreSQL 17, which the migration therefore requires) on the prompt tables startup seeds a list into, so it can `ANALYZE` what it just wrote - a freshly seeded table has no planner statistics, and a thousand-prompt list's aliases were then joined by walking all of them per prompt (#1367); no `TRUNCATE`, `TRIGGER`, `REFERENCES` or DDL |
 | `sketchy_monitor` | postgres_exporter | `pg_monitor`; no table |
 
 The grants live in [`db/roles.py`](../backend/app/db/roles.py) and are applied by the

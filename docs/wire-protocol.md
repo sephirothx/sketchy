@@ -489,7 +489,10 @@ authorization or mutation runs. A parser may name a more specific code.
   sees, it rides the receipt (#884): a correct guess `{correct: {prompt, points,
   basePoints, hintSpend}, line}` — what `you_guessed_correctly` and the guesser's own
   chat line used to say — and a near miss `{line, verdict}`, the guesser's own line and
-  the room's announcement on it. A deduplicated retry is answered with the first
+  the room's announcement on it: `guess_very_close`, `guess_some_words_correct`, or - in a
+  mixed-language room, where the guess spells the drawing in another seat's language and
+  means a different prompt in the guesser's own (#1367, protocol 53) -
+  `guess_answer_in_another_language`. A deduplicated retry is answered with the first
   attempt's body: the retry exists because that answer may be the one that was lost. A
   lost answer loses the result, which a correct guess recovers through `sync_game`
   (#870) and a near miss does not need to.
@@ -879,7 +882,7 @@ mirrors it with every field optional (absent means *unchanged*).
 | `allowedTools` | string[] | `["brush","fill","shapes"]` | at least one of `brush`/`shapes` must remain |
 | `colorMode` | string | `"all"` | `all \| palette \| colorblind_safe \| black_and_white` |
 | `promptLanguage` | string | `"en"` | one of `en`, `de`, `es`, `fr`, `it`, `nl`, `pt`, `pl`, or `mul` for a mixed-language room (#1182). **Create only** — see below |
-| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard - and empty ⇒ Standard in every language (R-PROMPT-13) |
+| `promptListSlugs` | string[] | the declared language's Standard list | ≤ 20, trimmed/lowercased/deduped; empty ⇒ that language's own `<language>_standard` on create, refused on update. Every slug must resolve to a list in `promptLanguage` or in no language (`zxx`, R-PROMPT-12); in a `mul` room, a list in no language or one whose family spells every room language - Standard or Extended, never Local - and empty ⇒ Standard in every language (R-PROMPT-13) |
 
 `create_room` adds `nickname`, `nameColor`
 (`#rrggbb`), `colorblindSafeColors`, and `seatLanguage` - the language the creator plays
@@ -1303,7 +1306,7 @@ which is never translated: what somebody said is what everybody sees.
 
 **Blocking is a presentation filter only.** When a sender is blocked, the recipient
 list is narrowed for that one `chat_message`
-([`backend/app/handlers/chat.py:27`](../backend/app/handlers/chat.py)); the sender still
+([`backend/app/handlers/chat.py:47`](../backend/app/handlers/chat.py)); the sender still
 sees their own line, and room state, players, scores, turns, correct-guess events,
 votes, and announcements keep normal room-wide delivery. Blocking never creates a
 different game state per player.
@@ -2539,7 +2542,7 @@ blindly would let a password-guesser sidestep the limit by varying it per attemp
 
 | Version constant | Governs | Bump when |
 | --- | --- | --- |
-| `PROTOCOL_VERSION` (52) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
+| `PROTOCOL_VERSION` (53) | The socket handshake: which commands, events and payload keys both ends agree on (§1) | A command or event is added, removed or renamed, or a payload's shape changes. Both ends deploy together |
 | `LIVE_DRAWING_VERSION` (1) | The live `draw` frame | An existing frame layout changes. A new tag under the same version is an addition (tags 6, 7 and 8 were), covered by the `PROTOCOL_VERSION` bump. Both ends deploy together |
 | `CANVAS_HISTORY_VERSION` (1) | `SKCH` | The history layout changes |
 | Stored `(magic, version)` | A durable drawing blob | **Add** a decoder; never remove one |
