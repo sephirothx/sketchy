@@ -2542,8 +2542,9 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 In a **mixed-language room** every seat plays in the language it joined with: the drawer
 is offered prompts in theirs, each guesser's letter tiles, hints and near misses are in
 their own, and the reveal shows each player their own word. A guess naming the drawing
-in any of the eight languages scores - unless the word means another prompt of the game
-in the guesser's own language. Such a room plays Standard and lists in Any language;
+in any of the eight languages scores - unless the word means another prompt of the room's
+lists in the guesser's own language, in which case they alone are told it is the answer
+in another language. Such a room plays Standard and lists in Any language;
 custom prompts are refused, since they have one language.
 6. Repeat until every player has drawn once per configured round count, then **Game over**
    shows the final standings, the highlights, and the drawing recap — where a registered
