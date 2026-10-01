@@ -2,7 +2,7 @@
 
 Seeds one moderator account that moderated many prompt versions and lists,
 issued many warnings and revoked many bans, plus a prompt version that many
-revisions, aliases and tags reference, then times the deletes that make the
+usage facts, aliases and tags reference, then times the deletes that make the
 database walk those references (ON DELETE SET NULL for the actor columns,
 RESTRICT for the join tables, reported as a refused delete) and prints the
 plan's trigger timings. Run it at the migration before b2c5a9d3e470 and at
@@ -13,6 +13,7 @@ head to see the scan become a probe.
 from __future__ import annotations
 
 import argparse
+from datetime import datetime, timezone
 import asyncio
 import json
 import os
@@ -28,8 +29,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine  # no
 from app.db.models import (  # noqa: E402
     PromptConcept,
     PromptList,
-    PromptListRevision,
-    PromptListRevisionItem,
+    PromptUsageFact,
     PromptVersion,
     User,
     UserWarning,
@@ -64,19 +64,17 @@ async def _seed(session, rows: int) -> tuple:
     list_id = generate_uuid()
     session.add(PromptList(id=list_id, slug="fk-bench", name="FK bench", is_bundled=True))
     await session.flush()
-    revision_ids = [generate_uuid() for _ in range(rows // 50)]
-    await session.execute(
-        insert(PromptListRevision),
-        [
-            {"id": rid, "prompt_list_id": list_id, "version": i + 1, "language": "en",
-             "content_hash": f"{i:064x}", "letter_counts": {}, "letter_total": 0}
-            for i, rid in enumerate(revision_ids)
-        ],
-    )
+    # Usage facts are the RESTRICT join that names one version many times
+    # (revisions were until #1362).
     shared_version = version_ids[0]
     await session.execute(
-        insert(PromptListRevisionItem),
-        [{"revision_id": rid, "prompt_version_id": shared_version, "position": 0} for rid in revision_ids],
+        insert(PromptUsageFact),
+        [
+            {"id": generate_uuid(), "batch_id": generate_uuid(), "prompt_list_id": list_id,
+             "prompt_version_id": shared_version, "occurred_at": datetime.now(timezone.utc),
+             "scoring_mode": "default", "hint_mode": "none", "offer_count": 1}
+            for _ in range(rows // 50)
+        ],
     )
     await session.execute(
         insert(UserWarning),
@@ -158,8 +156,8 @@ async def run(rows: int) -> dict:
                 text(
                     "SELECT indexname FROM pg_indexes WHERE tablename IN "
                     "('prompt_versions','prompt_lists','user_bans','user_warnings',"
-                    "'prompt_list_revision_items','prompt_version_aliases',"
-                    "'prompt_version_tags','prompt_list_revision_tags') ORDER BY 1"
+                    "'prompt_usage_facts','prompt_version_aliases',"
+                    "'prompt_version_tags') ORDER BY 1"
                 )
             )
         ).scalars().all()

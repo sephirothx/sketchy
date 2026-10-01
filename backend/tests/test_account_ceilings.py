@@ -95,7 +95,7 @@ async def _owned(factory, owner_id: str) -> int:
     async with factory() as session:
         return await session.scalar(
             select(func.count(PromptList.id)).where(
-                PromptList.owner_user_id == UUID(owner_id), PromptList.deleted_at.is_(None)
+                PromptList.owner_user_id == UUID(owner_id)
             )
         )
 

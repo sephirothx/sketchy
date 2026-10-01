@@ -228,6 +228,20 @@ def test_the_database_document_names_the_current_head_and_every_table():
     assert mapped == tables
 
 
+def test_no_removed_sweep_is_documented_or_scheduled_again():
+    """#1362 deleted lists outright and dropped revisions, and with them the
+    two sweeps that kept tombstones and old revisions. A row for either in
+    the retention table, or a sweep by that name, would be one coming back."""
+    from app.auth import retention
+
+    removed = {"retired_prompt_lists", "superseded_list_revisions"}
+    document = DATABASE_DOC.read_text(encoding="utf-8")
+    start = document.index("| Data |") if "| Data |" in document else 0
+    rows = [line for line in document[start:].splitlines() if line.startswith("|")]
+    assert not [name for name in removed for row in rows if f"`{name}`" in row]
+    assert not removed & {sweep.name for sweep in retention.retention_sweeps()}
+
+
 # --- the numbers the wire document states about itself --------------------------
 
 

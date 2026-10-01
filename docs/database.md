@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`c5d6e7f8a9b2_prompt_list_editions.py` (#1360). Both this line and the table
+`d6e7f8a9b0c3_lists_are_deleted_outright.py` (#1362). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-66 tables in eight domains.
+63 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -129,8 +129,6 @@ erDiagram
     prompt_lists ||--o{ prompt_list_editions : "published as"
     prompt_list_editions ||--o{ prompt_list_edition_items : "membership"
     prompt_list_editions ||--o{ prompt_list_edition_tags : "tagged"
-    prompt_lists ||--o{ prompt_list_revisions : "versions"
-    prompt_list_revisions ||--o{ prompt_list_revision_items : "membership"
     prompt_lists ||--o{ prompt_usage_facts : "usage"
     prompt_lists ||--o{ prompts : "display rows"
 
@@ -149,7 +147,7 @@ erDiagram
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
-| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
+| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_tags`, `prompt_list_editions`, `prompt_list_edition_items`, `prompt_list_edition_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
 
@@ -782,7 +780,8 @@ cd backend && .venv/bin/python -m app.auth.account_data --limit 25
 
 Format v1 exports expire after seven days. The document contains the owner's account
 fields, linked guest identities, session metadata, game seats, drawn turns, correct
-guesses, prompt-list revision history, the lists it starred, unexpired authored retained
+guesses, prompt lists with their working copies and live and pending editions (schema 16,
+#1362), the lists it starred, unexpired authored retained
 messages, submitted evidence, blocks, presets, and account-event metadata.
 It **never** contains password or session hashes, other players' profile fields, or any
 message body the requester did not explicitly receive and pin — nor what other people
@@ -792,7 +791,7 @@ the **target** are limited to the ones they are told about as they happen (warni
 bans and revocations, a moderator removing their picture, role changes, and `session.*`,
 `account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
 not in it, and a report they filed carries `decided` and no status or review time. The field surface is
-pinned by [`fixtures/account_data_export_v15_fields.json`](../fixtures/account_data_export_v15_fields.json).
+pinned by [`fixtures/account_data_export_v16_fields.json`](../fixtures/account_data_export_v16_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1125,8 +1124,8 @@ words and for the same reason (R-MOD-12, R-BAN-08).
 ### `prompt_content_reports`
 Player-authored prompt content has a separate, target-specific flow.
 
-`id` · `reporter_user_id` / `reported_owner_user_id` · `prompt_list_id` /
-`prompt_version_id` (both `SET NULL`) · `target_type` (`list \| prompt`) ·
+`id` · `reporter_user_id` / `reported_owner_user_id` · `prompt_list_id` (no foreign key,
+#1362) · `prompt_version_id` (`SET NULL`) · `target_type` (`list \| prompt`) ·
 `list_name_snapshot` · `prompt_snapshot` · `reason` · `details` ·
 `decision_group_id` ·
 `status` · `reviewed_by_user_id` · `resolution_note` ·
@@ -1146,8 +1145,11 @@ single prompt inside it stay separately reportable.
 **Post-moderation:** submission preserves a bounded evidence snapshot but never hides
 content automatically. One review may dismiss the report or set the exact target Active
 or Hidden, with actor/time provenance and an append-only audit event. A dismissal
-cannot mutate content. Snapshots survive list and account deletion even after the target
-foreign keys are cleared.
+cannot mutate content. Snapshots survive list and account deletion. The list id is kept as
+an opaque value with no foreign key (#1362): deleting a list writes nothing to its reports,
+so an erasure holding the owner's account cannot wait on a report row a moderator's
+decision holds while that decision waits on the account — the deadlock the `SET NULL`
+produced once lists were deleted outright. The report keeps naming the list it was about.
 
 ### `prompt_takedowns`
 `owner_user_id` (CASCADE) · `concept_id` (CASCADE) · `created_at`. Composite primary key
@@ -1164,7 +1166,7 @@ its byline. A decision that leaves the word up deletes the rows naming it, and t
 account's deletion deletes its rows explicitly — the CASCADE never fires, since deletion
 tombstones the user row. A decision takes the owners it reaches through the erasure
 barrier — shared, ascending — before it locks the list or writes a version: deletion
-holds the account and then retires its lists, so the other order deadlocked against it,
+holds the account and then deletes its lists, so the other order deadlocked against it,
 and an unlocked lifecycle read let a deletion commit in between and leave a record for an
 erased account (#1375 review). Both writers live in
 [`services/prompt_takedowns.py`](../backend/app/services/prompt_takedowns.py): the insert
@@ -1862,17 +1864,21 @@ cannot be reconstructed from their net totals. No-scoring games use the current 
 with an **empty** event list.
 
 ### `game_prompt_sources`
-`game_id` + `prompt_list_id` composite **PK** (CASCADE / CASCADE).
+`game_id` (CASCADE) + `prompt_list_id` (no foreign key) composite **PK**.
 
 The lists that were actually present in the game's real pool **after custom-prompt
 shadowing** — not merely the configured slugs. Until #1358 these rows named the exact
 revision, `RESTRICT`, and that pin is what made a deleted list a tombstone and gave the
-reclaim its holds. No reader needs it: each turn stores its prompt text and version. A row
-names only which list it was, so it goes with the list rather than staying as a pointer
-at nothing, and the history reads the same. The writer names only lists that still exist
-— one deleted while the game ran leaves no row — and holds them `FOR KEY SHARE` until
-commit, so the check cannot go stale before the rows land. The list's side is indexed `(prompt_list_id, game_id)` — and the offer table's
-`(prompt_list_id, offer_id)` — the order the retired-list reclaim drains them in.
+reclaim its holds. No reader needs it: each turn stores its prompt text and version.
+Since #1362 `prompt_list_id` is an **opaque value with no foreign key**, here, in
+`turn_prompt_offer_sources` and in `prompt_usage_facts`: a list is deleted outright, and a
+cascade over every game that played it grew with how much it was played — about 300,000
+rows for a list played in ten thousand games, a multi-second transaction inside the
+owner's Delete or an account erasure. The row keeps naming the list that was played,
+which a deleted list's id no longer resolves to; it is a random uuid, so it says nothing
+about the owner. The writer writes the ids the game drew from as they are, checking and
+locking nothing (until #1362 it named only lists that still existed, held `FOR KEY SHARE`).
+Nothing reads a game's sources by list, so the list's side is not indexed.
 
 ---
 
@@ -1896,7 +1902,7 @@ Exact offers are **private export data** - in the drawer's own export, for the t
 they drew - and are shown on no history page (#1254).
 
 ### `turn_prompt_offer_sources`
-`offer_id` + `prompt_list_id` composite **PK** (CASCADE / CASCADE). Every list the draw
+`offer_id` (CASCADE) + `prompt_list_id` (no foreign key, #1362) composite **PK**. Every list the draw
 found an offered curated prompt version in — `game_prompt_sources`' rule, per offer (#1358).
 
 ---
@@ -1925,7 +1931,7 @@ edition's older wording back while the newer one stays (#1392 review).
 **`unlisted_at`** is when a save, a Discard changes or a list's deletion last took the version out of a
 working copy (#1359). A game that drew it before then holds it in memory and writes it into
 its turns when it ends, so the hourly `unlisted_prompt_versions` sweep
-(`reclaim_unlisted_versions`) collects it only `RETIRED_LIST_GRACE` (a day) later, and only
+(`reclaim_unlisted_versions`) collects it only `UNLISTED_GRACE` (a day) later, and only
 if nothing names it — no list, turn, offer, usage fact, report or takedown record; one that
 something does name is unstamped, kept by that reference from then on. A revision used to
 keep a replaced wording that long; a save writes none now.
@@ -1958,7 +1964,7 @@ bundled lists are written with the plain one, so no stored key changed)
 BCP-47 tags are **rejected until their matching semantics are implemented.** Content may
 also be `zxx`, BCP-47's "no linguistic content": a list in no language (R-PROMPT-12). The
 four content tables that carry a language (`prompt_versions`, `prompt_aliases`,
-`prompt_lists`, `prompt_list_revisions`) admit it in their `CHECK`; `user_settings` and
+`prompt_lists`, `prompt_list_editions`) admit it in their `CHECK`; `user_settings` and
 `room_presets` do not, because a room needs a language to fold guesses under.
 
 `match_key` is that fold for the row's own language, with the language's
@@ -1992,7 +1998,7 @@ Deliberately relational rather than a JSON tag blob.
 `moderation_state` (`active \| hidden`; a hold is the edition's) · `moderated_by_user_id` ·
 `moderated_at` · `version` · `letter_counts` · `letter_total` · `shelf` · `series` ·
 `shelf_position` (all three nullable) · `edition_count` ·
-`content_hash` · `published_at` (nullable) · `deleted_at` (indexed, nullable) · timestamps.
+`content_hash` · `published_at` (nullable) · timestamps.
 
 `edition_count` numbers the list's next edition, so a number is never reused after the
 edition that held it was replaced. `content_hash` is the working copy's digest, written by
@@ -2025,32 +2031,25 @@ tracked moderation would be wrong from the first takedown and stay wrong through
 restore. The cost is that hidden content is priced without being drawable, which R-HINT-03
 records among the histogram's approximations.
 
-**Deleting a list retires it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py)):
-`deleted_at` is set, the visibility falls back to private and the current-display `prompts` rows go, in the same transaction. From then on
-nothing lists, opens, resolves, forks or counts it against the 25-list allowance (which
-create, copy and duplicate count under the owner's row lock, taken `FOR UPDATE` by the
-erasure barrier, so two requests at 24 cannot both land — #898). Before #605 the delete
-removed the revisions and rolled back whole for every owner whose list a game had ever
-used, because finished games pinned revisions `RESTRICT`; since #1358 they name the list
-instead, and nothing a game references can stop the list going.
+**Deleting a list deletes it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py),
+#1362): the row goes in the owner's request, and its working copy, editions, tags and stars
+go with it (`CASCADE`); a copy of it lets go of it (`SET NULL`), and a report about it keeps
+its id, as the history does; the history its games wrote keeps its id as an opaque value (see
+`game_prompt_sources`). So a delete costs what the list holds, never how much it was
+played. The versions it held are stamped `unlisted_at` first, locked in id order, so a
+room that drew from it before the delete still finds them when it writes its game, and
+the unlisted sweep collects them a day later if nothing else names them.
 
-The hourly retention sweep collects a retired list whole once `RETIRED_LIST_GRACE` (one
-day) has passed — long enough for a room that drew from it before the deletion to finish
-and write its game (R-LIST-07), whose turns reference the prompt versions it drew. First
-the history naming the list — its games' source rows, its usage facts' pointer, which
-grow with how much it was played — is cleared in committed batches within the run's
-budget, so a popular list is drained across runs rather than in one transaction of any
-size (R-PRIV-16, #1376 review); then, for lists nothing names any more, the revisions and
-their items, the list row, and the prompt versions and concepts that
-no revision, list, turn, offer, usage fact, content report or takedown record names any
-more, aliases cascading with them. Nothing is left behind as a tombstone. Until #1358 a list
-a game pinned stayed as one for ever, and the batch had to be kept from filling with them
-(#478); until #1357 a revision holding a hidden word, or one a pending report named, was
-kept too (#1091, #1354), and those holds produced three review bugs. The takedown is its
-own record now (`prompt_takedowns`), and a reported version is kept by its report.
+Until #1362 a delete only **retired** the list: `deleted_at` was set and an hourly sweep
+(`retired_prompt_lists`) collected the row a day later, after draining its play history
+in budgeted batches, because that history held foreign keys to it (#1376 review). Before
+#1358 a list a game pinned stayed a tombstone for ever (#478), and until #1357 holds for
+hidden words and pending reports kept revisions alive (#1091, #1354) — three review bugs
+between them. The takedown is its own record now (`prompt_takedowns`), a reported version
+is kept by its report, and there is no tombstone left to hold anything.
 
-Account erasure retires the account's lists the same way, with the name and description
-erased as authored copy.
+Account erasure deletes the account's lists the same way (`delete_owned_lists`), its
+authored name, description and prompts going with them.
 
 `ck_prompt_lists_bundled_owner` forbids an owner on a bundled list;
 `ck_prompt_lists_published_at` requires `published_at` on a public one.
@@ -2115,8 +2114,7 @@ an unpublish or a takedown between the picker and Start refuses the room visibly
 than shrinking its pool. A room preset needs nothing of its own: it stores slugs, which
 are resolved through that same helper.
 
-**The catalogue is one predicate, in one place.** Public, active, not retired, and with
-a live edition — served by `ix_prompt_lists_published`, which is partial on the first
+**The catalogue is one predicate, in one place.** Public, active, and with a live edition — served by `ix_prompt_lists_published`, which is partial on the first
 three; a row shows the live edition's name, description, tags and prompts, never the
 working copy's (#1360). A
 takedown or a deletion therefore drops a list out of the catalogue without a second read
@@ -2206,28 +2204,17 @@ it. Without the explicit delete a stranger's list would go on carrying the appro
 an account that no longer exists. They are also exported (`stars[]`, schema version 6),
 naming the list and never its owner's account id.
 
-### `prompt_list_revisions` / `_items` / `_tags`
-`prompt_list_revisions`: `id` · `prompt_list_id` (CASCADE) · `version` · `language` ·
-`content_hash` · `letter_counts` ·
-`letter_total` · `created_at`, unique on `(prompt_list_id, version)`.
-
-**Only bundled seeding writes a revision now** (#1359). A save overwrites a list's working
-copy (`prompts`, `prompt_list_tags`, the histogram on `prompt_lists`) and writes none,
-and nothing reads one to play, show or copy a list. `upsert_bundled` still writes one per
-bundled version: its `content_hash` is how a reseed tells an unchanged version from one
-"changed in place", which is a startup-failing conflict. #1362 removes the tables and moves
-that check.
-
-Until #1359 every save wrote the whole list again as a revision — 500 item rows for a
+**Revisions are gone** (#1362). Every save wrote one until #1359 — 500 item rows for a
 one-word edit of a 500-prompt list — so storage and the owner's export grew with the
-number of saves (#1250), bounded after the fact by a `superseded_list_revisions` sweep with
-holds of its own (#1258), which went with the revisions it swept.
-
-`prompt_list_revision_items`: `revision_id` + `prompt_version_id` composite **PK** ·
-`position`, unique on `(revision_id, position)`.
-
-`prompt_list_revision_tags`: `revision_id` + `tag_id` composite **PK**, indexed on
-`tag_id` for the direction the community catalogue reads (*which lists carry this tag*).
+number of saves (#1250), bounded after the fact by a `superseded_list_revisions` sweep
+with holds of its own (#1258). After #1359 only bundled seeding wrote them, for its
+conflict check: a reseed of the same version with different content is a startup-failing
+conflict. That check reads `prompt_lists.content_hash` now, the bundled digest the seed
+writes on the list row; an empty one (a row nothing stamped) is written rather than
+refused, and an older version seeded over a newer one - a rolled-back deploy - refreshes
+only the metadata, as it did while revisions remembered every version. The migration that
+dropped them stamped `unlisted_at` on every player wording a revision was the last to
+name, so the unlisted sweep collects those a grace later like any other (#1394 review).
 
 **A copy names the list it came from, on its own row** (`prompt_lists.copied_from_list_id`,
 `SET NULL`, #1361). `fork_published` writes it and nothing else does, and a list's copy
@@ -2356,7 +2343,7 @@ statistics are keyed by concept, so a row repointed at a new wording keeps them.
 ### `prompt_usage_facts`
 Append-only per-game usage totals, **not** mutable counters on a display row.
 
-`id` **PK** · `batch_id` · `prompt_list_id` (`SET NULL`, nullable) · `prompt_version_id`
+`id` **PK** · `batch_id` · `prompt_list_id` (nullable, no foreign key) · `prompt_version_id`
 (RESTRICT) · `occurred_at` · `scoring_mode` · `hint_mode` · `offer_count` · `pick_count` ·
 `correct_guess_count` · `total_guesser_count` · `created_at`.
 
@@ -2383,8 +2370,8 @@ version's source lists as the draw found them (`sources`), and the writer credit
 lists the game played, so a malformed call cannot credit one it did not; it reads no
 membership at all. Until #1358 it asked the pinned revisions which versions they held
 (#613), which a list's working copy could no longer answer once edited mid-game. A list
-deleted while the game ran is credited as null, what the `SET NULL` would have left a
-moment later. Stats are derived by **stable prompt concept**, so a later
+deleted while the game ran is credited all the same: `prompt_list_id` has no foreign key
+(#1362), and a fact says which list was played. Stats are derived by **stable prompt concept**, so a later
 wording revision keeps its history without matching on display text.
 
 The indexes support time-window and rule filters; the Prompt stats page offers all-time,
@@ -2557,8 +2544,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
-| Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`RETIRED_LIST_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
-| Retired (deleted) prompt lists | Out of reach at once, its working copy and editions deleted with it (#1386 review: an edition left for the reclaim kept its versions alive past the sweep, and its name past an erasure); after a 1-day grace its play history is cleared in budgeted batches, then the list, its revisions and orphan content go, 50 lists per hourly sweep | 24 h | Nothing past the grace: a finished game names the list, not a revision, and reads the same without it (#1358). A hidden word is kept by its owner's takedown record (`prompt_takedowns`) | `services.prompt_reclaim` | `retired_prompt_lists` |
+| Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`UNLISTED_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in
 [`auth/retention.py`](../backend/app/auth/retention.py), stated once beside each sweep
@@ -2566,7 +2552,7 @@ rather than restated here in prose that could drift from them. Six hours is six
 scheduled passes of an hourly loop that also catches up in five seconds when it is
 behind: reaching it means the loop missed its window six times over. A day is for the
 two sweeps whose per-run ceiling is deliberately small — guests cascade across a dozen
-tables, retired lists walk revisions, versions and concepts — so a backlog is worked off
+tables, unlisted versions walk turns, offers, facts and concepts — so a backlog is worked off
 over several passes by design.
 
 The **Sweep** column names the registered sweep (`retention_sweeps()` in
@@ -2669,8 +2655,8 @@ Deletion:
   on copied evidence;
 - removes every block owned by or targeting the anonymized identities;
 - removes every friendship and pending or refused request involving them;
-- retires owned prompt lists — out of reach at once, name erased, collected whole by
-  the sweep a day later (see `prompt_lists` in §8) — and deletes the account's takedown
+- deletes owned prompt lists outright, with their prompts and editions (see
+  `prompt_lists` in §8) — and deletes the account's takedown
   records, with the spellings only they kept (`prompt_takedowns` in §5);
 - erases the drawings that account made while leaving the row saying so, and deletes the
   reactions those drawings had; reactions the account gave elsewhere stay, under the

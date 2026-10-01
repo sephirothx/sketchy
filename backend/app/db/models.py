@@ -1443,9 +1443,13 @@ class PromptContentReport(Base):
         nullable=True,
         index=True,
     )
+    # The list the report is about, kept as an opaque value with no foreign
+    # key (#1362): deleting a list writes nothing here, so it cannot wait on
+    # a report row a moderator's decision holds while that decision waits on
+    # the owner's account an erasure holds. The report keeps naming the list
+    # it was about; `list_name_snapshot` is what it says of it.
     prompt_list_id: Mapped[uuid.UUID | None] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_lists.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )
@@ -2772,19 +2776,15 @@ class PlannedShutdownAbandonment(Base):
 class GamePromptSource(Base):
     """One prompt list present in a game's real pool.
 
-    Points at the list, not at an exact revision (#1358): each turn already
-    stores its prompt text and version, so the history needs no revision to
-    read the same, and a revision pin is what forced a deleted list to linger
-    as a tombstone. The row says only which list it was, so it goes with the
-    list rather than staying as a pointer at nothing.
+    Names the list, not an exact revision (#1358): each turn already stores
+    its prompt text and version, so the history reads the same without the
+    list. The id is an opaque value with no foreign key (#1362): a list is
+    deleted outright, and a cascade over every game that played it grew with
+    how much it was played - a multi-second transaction inside the owner's
+    Delete. Nothing reads a game's sources by list, so nothing indexes them so.
     """
 
     __tablename__ = "game_prompt_sources"
-    __table_args__ = (
-        # The list's side, in the order the reclaim drains it (#1358): a batch
-        # reads its own slice instead of every row the list has (#1376 review).
-        Index("ix_game_prompt_sources_prompt_list_id", "prompt_list_id", "game_id"),
-    )
 
     game_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
@@ -2792,9 +2792,7 @@ class GamePromptSource(Base):
         primary_key=True,
     )
     prompt_list_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
-        primary_key=True,
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
     )
 
     game: Mapped[GameRecord] = relationship(back_populates="prompt_sources")
@@ -3624,21 +3622,15 @@ class TurnPromptOfferSource(Base):
     """One prompt list that held an offered curated prompt version (#1358)."""
 
     __tablename__ = "turn_prompt_offer_sources"
-    __table_args__ = (
-        Index(
-            "ix_turn_prompt_offer_sources_prompt_list_id", "prompt_list_id", "offer_id"
-        ),
-    )
 
     offer_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),
         ForeignKey("turn_prompt_offers.id", ondelete="CASCADE"),
         primary_key=True,
     )
+    # An opaque value with no foreign key, as a game source's is (#1362).
     prompt_list_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
-        primary_key=True,
+        Uuid(as_uuid=True, native_uuid=True), primary_key=True
     )
 
     offer: Mapped[TurnPromptOffer] = relationship(back_populates="sources")
@@ -3766,9 +3758,6 @@ class PromptVersion(Base):
     version_tags: Mapped[list[PromptVersionTag]] = relationship(
         back_populates="prompt_version", cascade="all, delete-orphan"
     )
-    revision_items: Mapped[list[PromptListRevisionItem]] = relationship(
-        back_populates="prompt_version"
-    )
 
 
 class PromptAlias(Base):
@@ -3847,9 +3836,6 @@ class PromptTag(Base):
     )
 
     version_tags: Mapped[list[PromptVersionTag]] = relationship(
-        back_populates="tag", cascade="all, delete-orphan"
-    )
-    list_revision_tags: Mapped[list[PromptListRevisionTag]] = relationship(
         back_populates="tag", cascade="all, delete-orphan"
     )
     list_tags: Mapped[list[PromptListTag]] = relationship(
@@ -3935,19 +3921,13 @@ class PromptList(Base):
             "series IS NULL OR shelf IS NOT NULL",
             name="ck_prompt_lists_series_on_shelf",
         ),
-        # The catalogue's whole question - published, still active, still
-        # here - and the star counts join through it (#712).
+        # The catalogue's whole question - published and still active - and
+        # the star counts join through it (#712).
         Index(
             "ix_prompt_lists_published",
             "published_at",
-            postgresql_where=text(
-                "visibility = 'public' AND moderation_state = 'active' "
-                "AND deleted_at IS NULL"
-            ),
-            sqlite_where=text(
-                "visibility = 'public' AND moderation_state = 'active' "
-                "AND deleted_at IS NULL"
-            ),
+            postgresql_where=text("visibility = 'public' AND moderation_state = 'active'"),
+            sqlite_where=text("visibility = 'public' AND moderation_state = 'active'"),
         ),
     )
 
@@ -4071,12 +4051,6 @@ class PromptList(Base):
     shelf: Mapped[str | None] = mapped_column(String(32), nullable=True)
     series: Mapped[str | None] = mapped_column(String(32), nullable=True)
     shelf_position: Mapped[int | None] = mapped_column(Integer, nullable=True)
-    # A retired list: out of every listing, resolution and share the moment
-    # this is set, physically reclaimed by `services.prompt_reclaim` after a
-    # grace (#605). Bundled lists are never retired.
-    deleted_at: Mapped[datetime | None] = mapped_column(
-        UTCDateTime(), nullable=True, index=True
-    )
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -4092,124 +4066,6 @@ class PromptList(Base):
         back_populates="prompt_list",
         cascade="all, delete-orphan",
     )
-    revisions: Mapped[list[PromptListRevision]] = relationship(
-        back_populates="prompt_list",
-        cascade="all, delete-orphan",
-    )
-
-
-class PromptListRevision(Base):
-    """Immutable, content-addressed membership for one list version."""
-
-    __tablename__ = "prompt_list_revisions"
-    __table_args__ = (
-        UniqueConstraint(
-            "prompt_list_id", "version", name="uq_prompt_list_revision_version"
-        ),
-        CheckConstraint(
-            "version >= 1", name="ck_prompt_list_revisions_version_positive"
-        ),
-        _values_check(
-            "language", PROMPT_LIST_LANGUAGES, "ck_prompt_list_revisions_language"
-        ),
-    )
-
-    id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True), primary_key=True, default=generate_uuid
-    )
-    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
-        nullable=False,
-    )
-    version: Mapped[int] = mapped_column(Integer, nullable=False)
-    language: Mapped[str] = mapped_column(String(16), nullable=False)
-    content_hash: Mapped[str] = mapped_column(String(64), nullable=False)
-    # How often each a-z letter appears across every answer this revision
-    # holds, and how many alphabetic characters they come to in total. Wheel
-    # pricing needs that distribution, not the words, so storing it here is
-    # what lets a room price letters without keeping its prompt pool resident.
-    # Written once when the revision is, and counted over its whole membership
-    # rather than what moderation allowed at that moment: membership is
-    # immutable and moderation is not, so counting the latter would drift the
-    # first time a version was hidden or restored. Hidden content is therefore
-    # priced without being drawable - an approximation R-HINT-03 records.
-    letter_counts: Mapped[dict] = mapped_column(
-        PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
-    )
-    letter_total: Mapped[int] = mapped_column(
-        Integer, default=0, server_default=text("0"), nullable=False
-    )
-    created_at: Mapped[datetime] = mapped_column(
-        UTCDateTime(), server_default=func.now(), nullable=False
-    )
-
-    prompt_list: Mapped[PromptList] = relationship(back_populates="revisions")
-    items: Mapped[list[PromptListRevisionItem]] = relationship(
-        back_populates="revision",
-        cascade="all, delete-orphan",
-        order_by="PromptListRevisionItem.position",
-    )
-    revision_tags: Mapped[list[PromptListRevisionTag]] = relationship(
-        back_populates="revision", cascade="all, delete-orphan"
-    )
-
-
-class PromptListRevisionItem(Base):
-    """Ordered membership in one immutable prompt-list revision."""
-
-    __tablename__ = "prompt_list_revision_items"
-    __table_args__ = (
-        UniqueConstraint(
-            "revision_id", "position", name="uq_prompt_list_revision_item_position"
-        ),
-        CheckConstraint(
-            "position >= 0", name="ck_prompt_list_revision_items_position_nonnegative"
-        ),
-    )
-
-    revision_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    # Indexed on its own as well: the PK leads with the revision, and the
-    # RESTRICT check on a prompt version's deletion looks the other way (#551).
-    prompt_version_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_versions.id", ondelete="RESTRICT"),
-        primary_key=True,
-        index=True,
-    )
-    position: Mapped[int] = mapped_column(Integer, nullable=False)
-
-    revision: Mapped[PromptListRevision] = relationship(back_populates="items")
-    prompt_version: Mapped[PromptVersion] = relationship(
-        back_populates="revision_items"
-    )
-
-
-class PromptListRevisionTag(Base):
-    """Structured discovery metadata attached to one immutable list revision."""
-
-    __tablename__ = "prompt_list_revision_tags"
-
-    revision_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_list_revisions.id", ondelete="CASCADE"),
-        primary_key=True,
-    )
-    tag_id: Mapped[uuid.UUID] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_tags.id", ondelete="CASCADE"),
-        primary_key=True,
-        index=True,
-    )
-
-    revision: Mapped[PromptListRevision] = relationship(
-        back_populates="revision_tags"
-    )
-    tag: Mapped[PromptTag] = relationship(back_populates="list_revision_tags")
 
 
 class PromptListEdition(Base):
@@ -4492,10 +4348,10 @@ class PromptUsageFact(Base):
         ),
     )
 
-    # A surrogate key, because the list is not part of the fact's identity
-    # any more: it is `SET NULL` when the list is deleted (#1358), so a fact
-    # outlives the list it was counted against, and a nullable column cannot
-    # sit in a key. A retried game is still a no-op: `prompt_usage_batches`
+    # A surrogate key, because the list is not part of the fact's identity:
+    # a fact outlives the list it was counted against. The list id is an
+    # opaque value with no foreign key (#1362), so deleting a list rewrites
+    # none of its facts; it was `SET NULL` until then (#1358). A retried game is still a no-op: `prompt_usage_batches`
     # records the batch in the same transaction as its facts (#541), and is
     # asked first.
     id: Mapped[uuid.UUID] = mapped_column(
@@ -4505,9 +4361,7 @@ class PromptUsageFact(Base):
         Uuid(as_uuid=True, native_uuid=True), nullable=False
     )
     prompt_list_id: Mapped[uuid.UUID | None] = mapped_column(
-        Uuid(as_uuid=True, native_uuid=True),
-        ForeignKey("prompt_lists.id", ondelete="SET NULL"),
-        nullable=True,
+        Uuid(as_uuid=True, native_uuid=True), nullable=True
     )
     prompt_version_id: Mapped[uuid.UUID] = mapped_column(
         Uuid(as_uuid=True, native_uuid=True),

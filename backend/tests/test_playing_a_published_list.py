@@ -17,6 +17,7 @@ from datetime import datetime, timezone
 from uuid import UUID
 
 import pytest
+from sqlalchemy import select
 import pytest_asyncio
 
 from app.db.models import PromptList
@@ -143,15 +144,16 @@ async def test_a_takedown_between_the_picker_and_start_refuses_the_room(env):
         )
 
 
-async def test_retiring_a_published_list_takes_it_out_of_play_too(env):
+async def test_deleting_a_published_list_takes_it_out_of_play_too(env):
     prompts, users, factory = env
     published = await a_published_list(prompts, users, factory)
     host = await users.create_anonymous("Host")
-
     async with factory() as session:
-        async with session.begin():
-            row = await session.get(PromptList, UUID(published.id))
-            row.deleted_at = PUBLISHED_AT
+        owner_id = str(await session.scalar(
+            select(PromptList.owner_user_id).where(PromptList.id == UUID(published.id))
+        ))
+
+    assert await prompts.delete_owned(owner_id, published.id)
 
     with pytest.raises(PromptListSelectionError):
         await prompts.resolve_selection(

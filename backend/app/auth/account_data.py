@@ -54,8 +54,11 @@ from app.db.models import (
     PromptContentReport,
     PromptList,
     PromptListEdition,
+    PromptListEditionItem,
+    PromptListEditionTag,
     PromptListStar,
     PromptTakedown,
+    PromptTag,
     PromptVersion,
     PromptVersionAlias,
     RoomMessage,
@@ -78,7 +81,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.services.avatars import delete_avatars_for
-from app.services.prompt_reclaim import retire_owned_lists
+from app.services.prompt_reclaim import delete_owned_lists
 from app.services.prompt_takedowns import release_takedowns
 from app.domain_values import (
     DataExportArtifactEncoding,
@@ -109,7 +112,7 @@ from app.domain_values import (
 # offer's sources became the lists it was drawn from (`sourceListIds`, #1358).
 # To 15 when a list carries its working copy's `prompts` instead of every
 # revision it was saved as (#1359).
-EXPORT_SCHEMA_VERSION = 15
+EXPORT_SCHEMA_VERSION = 16
 
 # Events that name the requester only as their **target** and are exported:
 # the ones they are already told about when they happen (#1238). Anything
@@ -617,10 +620,7 @@ async def _write_prompt_lists(
     lists = (
         await session.scalars(
             select(PromptList)
-            .where(
-                PromptList.owner_user_id.in_(identity_ids),
-                PromptList.deleted_at.is_(None),
-            )
+            .where(PromptList.owner_user_id.in_(identity_ids))
             .order_by(PromptList.created_at, PromptList.id)
         )
     ).all()
@@ -630,7 +630,70 @@ async def _write_prompt_lists(
             writer.field(name, item)
         writer.key("prompts")
         await _write_working_copy_prompts(writer, session, prompt_list.id)
+        writer.key("editions")
+        await _write_editions(writer, session, prompt_list.id)
         writer.end_object()
+    writer.end_array()
+
+
+async def _write_editions(
+    writer: _ExportWriter, session: AsyncSession, prompt_list_id: UUID
+) -> None:
+    """The list's live and pending editions (#1362): what other players saw
+    or are about to, which can differ from the working copy. At most two,
+    each at most `MAX_PROMPTS_PER_OWNED_LIST` prompts, read whole."""
+    writer.begin_array()
+    editions = (
+        await session.scalars(
+            select(PromptListEdition)
+            .where(PromptListEdition.prompt_list_id == prompt_list_id)
+            .order_by(PromptListEdition.number)
+        )
+    ).all()
+    for edition in editions:
+        tags = sorted(
+            (
+                await session.scalars(
+                    select(PromptTag.slug)
+                    .join(PromptListEditionTag, PromptListEditionTag.tag_id == PromptTag.id)
+                    .where(PromptListEditionTag.edition_id == edition.id)
+                )
+            ).all()
+        )
+        items = (
+            await session.execute(
+                select(
+                    PromptVersion.concept_id,
+                    PromptVersion.id,
+                    PromptVersion.canonical_answer,
+                    PromptListEditionItem.position,
+                )
+                .join(PromptVersion, PromptVersion.id == PromptListEditionItem.prompt_version_id)
+                .where(PromptListEditionItem.edition_id == edition.id)
+                .order_by(PromptListEditionItem.position)
+            )
+        ).all()
+        writer.value(
+            {
+                "number": edition.number,
+                "state": edition.state,
+                "name": edition.name,
+                "description": edition.description,
+                "tags": tags,
+                "createdAt": _timestamp(edition.created_at),
+                "publishedAt": _timestamp(edition.published_at) if edition.published_at else None,
+                "prompts": [
+                    {
+                        "conceptId": str(concept_id),
+                        "promptVersionId": str(version_id),
+                        "prompt": answer,
+                        "position": position,
+                    }
+                    for concept_id, version_id, answer, position in items
+                ],
+            }
+        )
+        await _yield_to_rooms()
     writer.end_array()
 
 
@@ -1735,11 +1798,11 @@ async def anonymize_account(
             await session.execute(
                 delete(RoomPreset).where(RoomPreset.owner_user_id.in_(identity_ids))
             )
-            # Player-authored lists leave the account's view now and are
-            # reclaimed by the retention sweep once no finished game pins
-            # them (R-PRIV-05 keeps those games' provenance; #605). Their
-            # names go with the account; the prompts are shared content.
-            await retire_owned_lists(session, identity_ids, now=deleted_at)
+            # Player-authored lists are deleted outright (#1362): their names,
+            # descriptions, prompts and editions are the account's authored
+            # copy. The games that played them keep the list's id as an
+            # opaque value and read the same without it (R-PRIV-05).
+            await delete_owned_lists(session, identity_ids, now=deleted_at)
             # Stars this account gave. The cascade on the table would never
             # fire - deletion tombstones the user row rather than removing it -
             # and leaving them would keep somebody else's list carrying the

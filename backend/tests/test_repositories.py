@@ -26,7 +26,6 @@ from app.db.models import (
     TurnPromptOfferSource,
     TurnRecord,
     PromptListLocalization,
-    PromptListRevision,
     PromptUsageFact,
     PromptVersion,
     generate_uuid,
@@ -926,13 +925,6 @@ async def test_prompt_list_repository():
             != resolved.prompt_version_ids["apple"]
         )
         async with factory() as session:
-            revisions = (
-                await session.execute(
-                    select(PromptListRevision).where(
-                        PromptListRevision.prompt_list_id == UUID(wl.id)
-                    )
-                )
-            ).scalars().all()
             versions = (
                 await session.execute(
                     select(PromptVersion).where(
@@ -940,7 +932,6 @@ async def test_prompt_list_repository():
                     )
                 )
             ).scalars().all()
-        assert {revision.version for revision in revisions} == {1, 2}
         assert {entry.canonical_answer for entry in versions} == {"apple", "apple tree"}
 
         with pytest.raises(PromptSeedConflictError, match="changed in place"):
@@ -951,6 +942,63 @@ async def test_prompt_list_repository():
                 language="en",
                 prompts=[BundledPromptDefinition(apple_concept, "apple tree", 2)],
                 version=2,
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_an_older_build_starting_over_a_newer_seed_keeps_the_newer_content():
+    """#1394 review: revisions remembered every version a seed had written,
+    so a deploy rolled back to an older build reseeded its version as
+    metadata only. Without them, refusing it kept the server down."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        concept = str(generate_uuid())
+        await repo.upsert_bundled(
+            slug="rolled", name="Rolled", description="", language="en",
+            prompts=[BundledPromptDefinition(concept, "lighthouse")], version=2,
+        )
+
+        older = await repo.upsert_bundled(
+            slug="rolled", name="Rolled, older build", description="", language="en",
+            prompts=[BundledPromptDefinition(concept, "gull")], version=1,
+        )
+
+        assert older.version == 2 and older.name == "Rolled, older build"
+        assert list((await repo.resolve_selection(["rolled"])).prompts) == ["lighthouse"]
+    finally:
+        await engine.dispose()
+
+
+async def test_a_seeded_list_with_no_digest_is_stamped_rather_than_refused():
+    """A row nothing stamped - one the migration could not backfill - says
+    nothing about its content, so the seed of its version writes the digest
+    rather than calling it changed in place (#1394 review)."""
+    from app.db.models import PromptList
+
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        concept = str(generate_uuid())
+        definition = [BundledPromptDefinition(concept, "lighthouse")]
+        await repo.upsert_bundled(
+            slug="unstamped", name="Unstamped", description="", language="en",
+            prompts=definition, version=1,
+        )
+        async with factory() as session, session.begin():
+            await session.execute(
+                update(PromptList).where(PromptList.slug == "unstamped").values(content_hash="")
+            )
+
+        await repo.upsert_bundled(
+            slug="unstamped", name="Unstamped", description="", language="en",
+            prompts=definition, version=1,
+        )
+        with pytest.raises(PromptSeedConflictError, match="changed in place"):
+            await repo.upsert_bundled(
+                slug="unstamped", name="Unstamped", description="", language="en",
+                prompts=[BundledPromptDefinition(concept, "gull")], version=1,
             )
     finally:
         await engine.dispose()
@@ -1350,8 +1398,8 @@ async def test_prompt_usage_is_idempotent_windowable_and_segmentable():
 
 
 async def test_a_list_that_no_longer_exists_does_not_cost_the_others():
-    """A list deleted beside a valid one is not fatal: its facts are kept with
-    no list, as the `SET NULL` would have left them (#1358)."""
+    """A list deleted beside a valid one is not fatal: its facts keep its id,
+    which has no foreign key (#1362), and credit nobody a reader can find."""
     factory, engine = await create_test_db()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
@@ -1377,7 +1425,7 @@ async def test_a_list_that_no_longer_exists_does_not_cost_the_others():
         async with factory() as session:
             orphaned = await session.scalar(
                 select(func.count(PromptUsageFact.id)).where(
-                    PromptUsageFact.prompt_list_id.is_(None)
+                    PromptUsageFact.prompt_list_id == UUID(missing_list_id)
                 )
             )
         assert orphaned == 1

@@ -637,9 +637,8 @@ opened before the edit for a day.
 Owners see list/prompt moderation state in **My prompt lists**, but editing does
 not silently override a moderator decision.
 
-Report snapshots survive list and account deletion even after target foreign
-keys are cleared. Account data exports include each of the owner's lists as it
-is saved and a reporter's own prompt-content report text/status, while excluding
+Report snapshots survive list and account deletion. Account data exports include
+each of the owner's lists as it is saved, with its live and pending editions, and a reporter's own prompt-content report text/status, while excluding
 owner, reviewer, and internal-note identities. Account deletion removes the
 lists and their owned prompt concepts rather than leaving ownerless content.
 
@@ -808,7 +807,7 @@ process. These deployment settings can be tuned without code changes:
 | `METRICS_TOKEN` | unset | Bearer token for `GET /metrics`. Unset disables scraping entirely |
 | `RUNTIME_EVENT_RETENTION_DAYS` | `30` | How long raw observations are kept before roll-up |
 | `RUNTIME_METRICS_FLUSH_SECONDS` | `15` | How often buffered observations are written |
-| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, login lockouts, room codes, runtime events, bug-report screenshots, retired lists, guests |
+| `RETENTION_SWEEP_SECONDS` | `3600` | How often the retention loop runs every sweep: messages, outbox, tokens, sessions, exports, abandonments, rate-limit buckets, login lockouts, room codes, runtime events, bug-report screenshots, unlisted prompt wordings, guests |
 | `RETENTION_SWEEP_ROW_BUDGET` | `5000` | Rows one sweep may delete per run; a run that spends it comes back after 5 s rather than an hour |
 | `RETENTION_SWEEP_BATCH_ROWS` | `500` | Rows per committed delete batch inside a sweep |
 | `INTEGRITY_AUDIT_SECONDS` | `300` | How often the integrity audit runs a pass over its checks (#894) |
@@ -1069,7 +1068,7 @@ to 500 accounts per run, previews by default, and records aggregate audit
 evidence when applied. Every sweep in that loop — messages, outbox mail,
 one-shot tokens, sessions, exports, shutdown abandonments, rate-limit
 buckets, retired room codes, raw runtime events, unreviewed bug-report
-screenshots, retired prompt lists and guests — deletes in
+screenshots, unlisted prompt wordings and guests — deletes in
 committed batches within a per-run row and time budget, reports what it
 removed and how far behind it is under `retention_sweep` in `/api/health`,
 and cannot stop the sweeps after it by failing.
@@ -1077,10 +1076,10 @@ and cannot stop the sweeps after it by failing.
 Each of those tables also states a **deletion SLA**: how long a row may still
 be there after it became eligible for removal, which is a lag allowance on the
 machinery rather than on the policy — six hours for the ordinary tables, a day
-for guests and retired lists. Every sweep measures what it left, on every run:
+for guests and unlisted prompt wordings. Every sweep measures what it left, on every run:
 the age of the oldest non-exempt row it should already have removed, and how
 many are waiting. Both are counted over the sweep's own eligibility predicate,
-so a suspended account's sessions, a list still inside its grace, a persistent room
+so a suspended account's sessions, a wording still inside its grace, a persistent room
 code and pending mail are never counted as lateness, and a table that owes
 nothing reports a zero rather than nothing at all. A table past its SLA, one
 whose sweep is failing, and one spending its whole budget every pass each raise
@@ -1092,13 +1091,13 @@ An undecided bug report's screenshot has a ceiling of its own: 90 days from
 filing, after which the pixels are erased and the row reads `expired` rather
 than `erased` — nobody decided anything, and a reviewer opening the still
 pending report should be told which of the two happened. The report and every
-piece of screenshot metadata stay. The same hourly sweep reclaims deleted prompt lists:
-deleting a list takes it out of reach at once, and the rest — the list row and
-prompts nothing names any more — is removed a day later, once any
-room that drew from it before the deletion has had time to finish. A finished
-game that played it names the list and reads the same once it is gone. A word a moderator
-hid is remembered for its owner in a record of its own, not in the deleted list, so
-it stays out of their next list either way:
+piece of screenshot metadata stay. Deleting a prompt list deletes it at once, with
+its prompts and editions; the same hourly sweep collects the wordings it held a day
+later, once any room that drew from it before the deletion has had time to finish, if
+nothing else names them. A finished game that played it keeps the list's id and reads
+the same once it is gone. A word a moderator hid is remembered for its owner in a
+record of its own, not in the deleted list, so it stays out of their next list either
+way:
 
 ```bash
 cd backend

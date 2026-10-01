@@ -26,10 +26,7 @@ from app.db.models import (
     generate_uuid,
 )
 from app.domain_values import AccountState
-from app.services.prompt_reclaim import (
-    reclaim_retired_prompt_lists,
-    reclaim_unlisted_versions,
-)
+from app.services.prompt_reclaim import reclaim_unlisted_versions
 from app.services.readiness import LoopHealth
 from app.services.sweeps import (
     SweepBudget,
@@ -356,8 +353,8 @@ CATCH_UP_SECONDS = 5.0
 # breached, which is a real fault rather than a busy hour.
 STANDARD_SLA_SECONDS = 6 * 3600.0
 # A day for the two whose per-run ceiling is deliberately small - guests
-# cascade across a dozen tables, retired lists walk revisions, versions and
-# concepts - so a backlog is worked off over several passes by design.
+# cascade across a dozen tables, unlisted prompt wordings walk turns, offers,
+# facts and concepts - so a backlog is worked off over several passes by design.
 HEAVY_SLA_SECONDS = 24 * 3600.0
 
 
@@ -427,15 +424,6 @@ def retention_sweeps() -> tuple[Sweep, ...]:
             "bug_report_screenshots",
             expire_stale_bug_report_screenshots,
             exempt="the report itself and every byte of its metadata; only the pixels go",
-        ),
-        Sweep(
-            "retired_prompt_lists",
-            reclaim_retired_prompt_lists,
-            sla_seconds=HEAVY_SLA_SECONDS,
-            exempt=(
-                "nothing past the grace: a finished game names the list, not a revision, and "
-                "reads the same without it; a hidden word is kept by its owner's takedown record"
-            ),
         ),
         Sweep(
             "unlisted_prompt_versions",
@@ -536,21 +524,6 @@ async def _purge_guests(
 def _describe(report: object) -> dict[str, object]:
     if isinstance(report, SweepReport):
         return report.as_dict()
-    if hasattr(report, "lists_examined"):
-        # The reclaim keeps its own shape - it removes revisions, lists,
-        # versions and concepts, and clears play history, rather than rows of
-        # one table - but it owes the same account of what it left: its
-        # backlog of retired lists past their grace, and whether it stopped on
-        # its budget, which brings the next run forward like any other sweep's.
-        return {
-            "rows": report.lists_deleted,
-            "revisions": report.revisions_deleted,
-            "history": report.history_cleared,
-            "examined": report.lists_examined,
-            "oldest_overdue_seconds": round(report.oldest_overdue_seconds, 1),
-            "backlog": report.backlog,
-            "exhausted": report.exhausted,
-        }
     return {"rows": int(report) if isinstance(report, int) else None}
 
 

@@ -119,7 +119,7 @@ async def test_only_published_active_present_lists_are_in_the_catalogue(env):
             (
                 await session.get(PromptList, UUID(reviewing.id))
             ).moderation_state = "under_review"
-            (await session.get(PromptList, UUID(retired.id))).deleted_at = PUBLISHED_AT
+            await session.delete(await session.get(PromptList, UUID(retired.id)))
 
     response = await http.get("/api/prompt-lists/community")
 
@@ -405,7 +405,7 @@ async def test_the_preview_opens_only_what_the_listing_shows(env):
     async with factory() as session:
         async with session.begin():
             (await session.get(PromptList, UUID(hidden.id))).moderation_state = "hidden"
-            (await session.get(PromptList, UUID(retired.id))).deleted_at = PUBLISHED_AT
+            await session.delete(await session.get(PromptList, UUID(retired.id)))
             bundled_id = await session.scalar(
                 select(PromptList.id).where(PromptList.slug == "official")
             )

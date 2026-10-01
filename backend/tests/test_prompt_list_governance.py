@@ -7,8 +7,7 @@ from sqlalchemy.exc import IntegrityError
 
 from app.db.models import (
     PromptList,
-    PromptListRevision,
-    PromptListRevisionTag,
+    PromptListTag,
     PromptTag,
     User,
     generate_uuid,
@@ -95,37 +94,18 @@ async def test_copy_provenance_and_tags_are_structured():
                 )
                 session.add_all([source, fork])
                 await session.flush()
-                source_revision = PromptListRevision(
-                    prompt_list_id=source.id,
-                    version=1,
-                    language="en",
-                    content_hash="a" * 64,
-                )
-                session.add(source_revision)
-                await session.flush()
                 fork.is_copy, fork.copied_from_list_id = True, source.id
-                fork_revision = PromptListRevision(
-                    prompt_list_id=fork.id,
-                    version=1,
-                    language="en",
-                    content_hash="b" * 64,
-                )
                 tag = PromptTag(slug="animals", name="Animals")
-                session.add_all([fork_revision, tag])
+                session.add(tag)
                 await session.flush()
-                session.add(
-                    PromptListRevisionTag(
-                        revision_id=fork_revision.id,
-                        tag_id=tag.id,
-                    )
-                )
+                session.add(PromptListTag(prompt_list_id=fork.id, tag_id=tag.id))
 
         async with factory() as session:
             stored = await session.get(PromptList, fork.id)
             assert stored is not None
             assert stored.copied_from_list_id == source.id
             assert (
-                await session.scalar(select(PromptListRevisionTag.tag_id))
+                await session.scalar(select(PromptListTag.tag_id))
             ) == tag.id
     finally:
         await engine.dispose()

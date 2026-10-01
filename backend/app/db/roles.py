@@ -48,8 +48,6 @@ SEEDED_TABLES = (
     "prompt_aliases",
     "prompt_version_aliases",
     "prompt_lists",
-    "prompt_list_revisions",
-    "prompt_list_revision_items",
     "prompts",
 )
 

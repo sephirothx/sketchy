@@ -16,7 +16,6 @@ from app.services.publication_policy import PUBLICATION_REVIEW_KEY
 from app.db.models import (
     AuditEvent,
     PromptList,
-    PromptListRevision,
     PromptListTag,
     PromptTag,
     User,
@@ -221,14 +220,6 @@ async def test_owner_tags_their_list_and_the_tags_ride_the_working_copy(env):
             ).all()
         )
     assert held == ["animals"]
-    async with factory() as session:
-        assert (
-            await session.scalar(
-                select(func.count(PromptListRevision.id)).where(
-                    PromptListRevision.prompt_list_id == UUID(list_id)
-                )
-            )
-        ) == 0
 
 
 async def test_an_unknown_tag_is_named_rather_than_dropped(env):

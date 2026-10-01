@@ -9,8 +9,6 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import (
     PromptList,
-    PromptListRevision,
-    PromptListRevisionItem,
     PromptVersion,
     User,
     generate_uuid,
@@ -110,13 +108,6 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
         assert updated.prompts[0].aliases == ("panda",)
 
         async with factory() as session:
-            revisions = (
-                await session.scalars(
-                    select(PromptListRevision).where(
-                        PromptListRevision.prompt_list_id == UUID(created.id)
-                    )
-                )
-            ).all()
             panda_versions = (
                 await session.scalars(
                     select(PromptVersion).where(
@@ -124,9 +115,8 @@ async def test_owned_lists_are_uuidv7_revisioned_and_private_by_default():
                     )
                 )
             ).all()
-        # A save overwrites the working copy and writes no revision (#1359);
-        # the old wording stays, stamped, until the grace has passed.
-        assert revisions == []
+        # A save overwrites the working copy (#1359); the old wording stays,
+        # stamped, until the grace has passed.
         assert {
             (version.canonical_answer, version.unlisted_at is not None)
             for version in panda_versions
@@ -384,17 +374,6 @@ async def _play_a_game_from(factory, owner_id: str, list_id: str) -> None:
     )
 
 
-async def _current_revision_id(factory, list_id: str) -> str:
-    async with factory() as session:
-        revision = await session.scalar(
-            select(PromptListRevision)
-            .where(PromptListRevision.prompt_list_id == UUID(list_id))
-            .order_by(PromptListRevision.version.desc())
-        )
-    assert revision is not None
-    return str(revision.id)
-
-
 async def test_deleting_a_list_a_finished_game_played_succeeds():
     """R-LIST-01 lets an owner delete a list; R-PRIV-05 keeps the game intact.
 
@@ -464,10 +443,6 @@ async def _content_counts(factory) -> dict[str, int]:
     async with factory() as session:
         return {
             "lists": await session.scalar(select(func.count(PromptList.id))),
-            "revisions": await session.scalar(select(func.count(PromptListRevision.id))),
-            "items": await session.scalar(
-                select(func.count(PromptListRevisionItem.prompt_version_id))
-            ),
             "versions": await session.scalar(select(func.count(PromptVersion.id))),
             "concepts": await session.scalar(select(func.count(PromptConcept.id))),
             "aliases": await session.scalar(select(func.count(PromptAlias.id))),
@@ -477,14 +452,11 @@ async def _content_counts(factory) -> dict[str, int]:
         }
 
 
-async def test_a_deleted_list_is_out_of_reach_at_once_and_collected_after_the_grace():
-    """Out of every way in at once (R-LIST-01), and gone whole a day later
-    even though a finished game played it: the game names the list, not a
-    revision, and reads the same without it (#1358)."""
-    from datetime import datetime, timedelta, timezone
-
+async def test_a_deleted_list_goes_at_once_and_its_games_read_the_same():
+    """Deleted outright (R-LIST-01, #1362), even though a finished game
+    played it: the game's source rows keep the list's id as an opaque value,
+    and the game reads the same without the list (#1358)."""
     from app.db.models import GamePromptSource, GameRecord, PromptList, TurnRecord
-    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 
     factory, engine, owner_id, _ = await _database()
     try:
@@ -497,34 +469,20 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_collected_after_the_gr
             prompts=(PromptListEntryInput(answer="otter", aliases=("sea otter",)),),
         )
         await _play_a_game_from(factory, owner_id, created.id)
-        async with factory() as session:
-            assert await session.scalar(select(GamePromptSource.game_id)) is not None
 
         assert await repo.delete_owned(owner_id, created.id) is True
-        assert await repo.delete_owned(owner_id, created.id) is False, "retired once"
+        assert await repo.delete_owned(owner_id, created.id) is False, "deleted once"
 
-        # Gone from every way in: the owner's listing, its page, a room.
+        # Gone from every way in, and from the database.
         assert await repo.list_owned(owner_id) == []
         assert await repo.get_owned(owner_id, created.id) is None
         with pytest.raises(PromptListSelectionError, match="not found"):
             await repo.resolve_selection([created.slug], requesting_user_id=owner_id)
-        # A retired list does not count against the owner's allowance.
-        for index in range(25):
-            await repo.create_owned(
-                owner_id,
-                name=f"Fresh {index}",
-                description="",
-                language="en",
-                prompts=(PromptListEntryInput(answer=f"answer {index}"),),
-            )
-
-        later = datetime.now(timezone.utc) + timedelta(days=2)
-        result = await reclaim_retired_prompt_lists(factory, now=later)
-        assert result.lists_examined == 1 and result.lists_deleted == 1
-        assert result.backlog == 0
         async with factory() as session:
             assert await session.get(PromptList, UUID(created.id)) is None
-            assert await session.scalar(select(GamePromptSource.game_id)) is None
+            assert await session.scalar(select(GamePromptSource.prompt_list_id)) == UUID(
+                created.id
+            ), "the history keeps the id, naming nothing"
             assert await session.scalar(select(func.count(GameRecord.id))) == 1
             assert await session.scalar(select(TurnRecord.prompt)) == "otter"
     finally:
@@ -532,13 +490,9 @@ async def test_a_deleted_list_is_out_of_reach_at_once_and_collected_after_the_gr
 
 
 async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_game():
-    """R-LIST-07: the room holds what it drew; the grace before reclaim is
-    what keeps the list there to be named when the game is written, and a
-    write after it simply names no list (#1358)."""
-    from datetime import datetime, timedelta, timezone
-
+    """R-LIST-07: the room holds what it drew, and its game is written after
+    the list is gone, naming it by an id that no longer resolves (#1362)."""
     from app.db.models import GamePromptSource
-    from app.services.prompt_reclaim import reclaim_retired_prompt_lists
 
     factory, engine, owner_id, _ = await _database()
     try:
@@ -554,18 +508,42 @@ async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_
         (list_id,) = pinned.list_ids
 
         assert await repo.delete_owned(owner_id, created.id) is True
-        # Within the grace, the sweep leaves the list for the running game.
-        await reclaim_retired_prompt_lists(factory)
         await _play_a_game_from(factory, owner_id, list_id)
         async with factory() as session:
             assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 1
+    finally:
+        await engine.dispose()
 
-        later = datetime.now(timezone.utc) + timedelta(days=2)
-        await reclaim_retired_prompt_lists(factory, now=later)
-        # A game written after the list went names no list, and is written.
-        await _play_a_game_from(factory, owner_id, list_id)
+
+async def test_deleting_a_list_leaves_no_wording_pointing_at_it():
+    """A wording a save took out of the list within the grace points back at
+    it. The delete locks and clears those in its one id-ordered pass rather
+    than leaving them to the row's `SET NULL`, which would update versions
+    outside that order (#1394 review). This checks the end state; the order
+    itself only shows under a concurrent writer."""
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created = await repo.create_owned(
+            owner_id, name="Edited", description="", language="en",
+            prompts=(PromptListEntryInput(answer="gull"),),
+        )
+        gull = created.prompts[0]
+        await repo.update_owned(
+            owner_id, created.id, expected_version=created.version, name="Edited",
+            description="",
+            prompts=(PromptListEntryInput(answer="seagull", concept_id=gull.concept_id),),
+        )
         async with factory() as session:
-            assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 0
+            assert (
+                await session.get(PromptVersion, UUID(gull.prompt_version_id))
+            ).unlisted_from_list_id == UUID(created.id)
+
+        assert await repo.delete_owned(owner_id, created.id)
+
+        async with factory() as session:
+            stamped = await session.get(PromptVersion, UUID(gull.prompt_version_id))
+        assert stamped.unlisted_at is not None and stamped.unlisted_from_list_id is None
     finally:
         await engine.dispose()
 
@@ -573,10 +551,7 @@ async def test_a_room_that_pinned_a_list_before_its_deletion_still_finishes_its_
 async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind():
     from datetime import datetime, timedelta, timezone
 
-    from app.services.prompt_reclaim import (
-        reclaim_retired_prompt_lists,
-        reclaim_unlisted_versions,
-    )
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
 
     factory, engine, owner_id, _ = await _database()
     try:
@@ -601,22 +576,15 @@ async def test_repeated_create_and_delete_of_unused_lists_leaves_nothing_behind(
                 prompts=(PromptListEntryInput(answer="heron"),),
             )
             assert await repo.delete_owned(owner_id, created.id) is True
-        before = await _content_counts(factory)
-        assert before["lists"] == 3 and before["revisions"] == 0, "saves write none (#1359)"
+        assert (await _content_counts(factory))["lists"] == 0, "deleted at once"
 
+        # The versions were stamped when the lists went, and are collected a
+        # grace later.
         later = datetime.now(timezone.utc) + timedelta(days=2)
-        result = await reclaim_retired_prompt_lists(factory, now=later, limit=2)
-        assert result.lists_examined == 2 and result.lists_deleted == 2
-        assert (await _content_counts(factory))["lists"] == 1, "bounded batch"
-        await reclaim_retired_prompt_lists(factory, now=later)
-        # The working copies' versions were stamped when the lists went, and
-        # are collected the same grace later.
         await reclaim_unlisted_versions(factory, now=later)
 
         assert await _content_counts(factory) == {
             "lists": 0,
-            "revisions": 0,
-            "items": 0,
             "versions": 0,
             "concepts": 0,
             "aliases": 0,
@@ -630,10 +598,7 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
     from datetime import datetime, timedelta, timezone
 
     from app.db.models import PromptContentReport
-    from app.services.prompt_reclaim import (
-        reclaim_retired_prompt_lists,
-        reclaim_unlisted_versions,
-    )
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
 
     factory, engine, owner_id, other_id = await _database()
     try:
@@ -670,18 +635,16 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
         assert await repo.delete_owned(owner_id, created.id) is True
 
         later = datetime.now(timezone.utc) + timedelta(days=2)
-        # A waiting report no longer holds the list: a takedown decided later
-        # is recorded against the owner the report names (#1357), and the
+        # A waiting report does not hold the list: a takedown decided later is
+        # recorded against the owner the report names (#1357), and the
         # reported version stays for the report itself.
-        result = await reclaim_retired_prompt_lists(factory, now=later)
-        assert result.lists_deleted == 1 and result.revisions_deleted == 0
         swept = await reclaim_unlisted_versions(factory, now=later)
         assert int(swept) == 1, "the harmless sibling goes; the reported one stays"
         async with factory() as session:
             assert await session.get(PromptVersion, UUID(reported.prompt_version_id)) is not None
             report = await session.scalar(select(PromptContentReport))
             assert report.prompt_version_id == UUID(reported.prompt_version_id)
-            assert report.prompt_list_id is None, "SET NULL: the list row is gone"
+            assert report.prompt_list_id == UUID(created.id), "the id stays, naming nothing"
             assert report.list_name_snapshot == "Reported"
     finally:
         await engine.dispose()
@@ -835,15 +798,6 @@ async def test_an_exact_restatement_writes_nothing_and_keeps_the_version():
         )
         assert same.version == 1 and same.prompts == created.prompts
         assert not [s for s in statements if s.lstrip().startswith(("INSERT", "UPDATE", "DELETE"))]
-        async with factory() as session:
-            assert (
-                await session.scalar(
-                    select(func.count(PromptListRevision.id)).where(
-                        PromptListRevision.prompt_list_id == UUID(created.id)
-                    )
-                )
-                == 0
-            )
         # Optimistic concurrency still applies to a restatement.
         with pytest.raises(PromptListConflictError):
             await repo.update_owned(

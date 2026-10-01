@@ -10,8 +10,8 @@ from sqlalchemy import select
 from sqlalchemy.orm import selectinload
 
 from app.db.models import (
-    PromptListRevision,
-    PromptListRevisionItem,
+    Prompt,
+    PromptList,
     PromptTag,
     PromptVersion,
 )
@@ -213,8 +213,8 @@ async def test_prompt_usage_tracking_metrics():
         await engine.dispose()
 
 
-async def test_seeded_revisions_carry_the_letter_histogram_of_their_prompts():
-    """A revision's stored tallies must equal counting its answers directly.
+async def test_seeded_lists_carry_the_letter_histogram_of_their_prompts():
+    """A list's stored tallies must equal counting its answers directly.
 
     This is the substitution wheel pricing depends on: summing these instead of
     walking a resident pool has to produce the same distribution, or letters are
@@ -226,25 +226,21 @@ async def test_seeded_revisions_carry_the_letter_histogram_of_their_prompts():
         await seed_prompt_lists(repo)
 
         async with factory() as session:
-            revisions = (
+            lists = (
                 await session.execute(
-                    select(PromptListRevision).options(
-                        selectinload(PromptListRevision.items).selectinload(
-                            PromptListRevisionItem.prompt_version
-                        )
+                    select(PromptList).options(
+                        selectinload(PromptList.prompts).selectinload(Prompt.prompt_version)
                     )
                 )
             ).scalars().all()
 
-            assert revisions
-            for revision in revisions:
-                answers = [
-                    item.prompt_version.canonical_answer for item in revision.items
-                ]
+            assert lists
+            for seeded in lists:
+                answers = [row.prompt_version.canonical_answer for row in seeded.prompts]
                 expected_counts, expected_total = letter_histogram(answers)
-                assert revision.letter_counts == expected_counts
-                assert revision.letter_total == expected_total
-                assert revision.letter_total > 0
+                assert seeded.letter_counts == expected_counts
+                assert seeded.letter_total == expected_total
+                assert seeded.letter_total > 0
     finally:
         await engine.dispose()
 
@@ -465,27 +461,24 @@ async def test_a_reseeded_revision_counts_content_moderation_has_hidden():
         )
 
         async with factory() as session:
-            revision = (
+            reseeded = (
                 await session.execute(
-                    select(PromptListRevision)
+                    select(PromptList)
+                    .where(PromptList.slug == "reseeded")
                     .options(
-                        selectinload(PromptListRevision.items).selectinload(
-                            PromptListRevisionItem.prompt_version
-                        )
+                        selectinload(PromptList.prompts).selectinload(Prompt.prompt_version)
                     )
-                    .order_by(PromptListRevision.version.desc())
                 )
-            ).scalars().first()
+            ).scalars().one()
 
-        members = [item.prompt_version.canonical_answer for item in revision.items]
+        members = [row.prompt_version.canonical_answer for row in reseeded.prompts]
         assert sorted(members) == ["banjo", "fiddle", "kazoo"]
         assert any(
-            item.prompt_version.moderation_state == "hidden"
-            for item in revision.items
+            row.prompt_version.moderation_state == "hidden" for row in reseeded.prompts
         )
         expected_counts, expected_total = letter_histogram(members)
-        assert revision.letter_counts == expected_counts
-        assert revision.letter_total == expected_total
+        assert reseeded.letter_counts == expected_counts
+        assert reseeded.letter_total == expected_total
     finally:
         await engine.dispose()
 
