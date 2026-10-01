@@ -60,7 +60,7 @@ async def test_a_mixed_room_pins_standard_in_every_language(seeded):
     )
 
     assert pinned.language == "mul"
-    assert len(pinned.revision_ids) == len(PROMPT_LANGUAGES)
+    assert len(pinned.list_ids) == len(PROMPT_LANGUAGES)
     # One prompt, however many languages spell it.
     assert pinned.prompt_count == STANDARD
     assert set(pinned.letter_total_by_language) == set(PROMPT_LANGUAGES)
@@ -72,7 +72,7 @@ async def test_a_mixed_room_pins_standard_in_every_language(seeded):
         requesting_user_id=owner.id,
         expected_language="mul",
     )
-    assert sorted(both.revision_ids) == sorted(pinned.revision_ids)
+    assert sorted(both.list_ids) == sorted(pinned.list_ids)
 
 
 async def test_a_mixed_room_pins_extended_too(seeded):
@@ -84,7 +84,7 @@ async def test_a_mixed_room_pins_extended_too(seeded):
         requesting_user_id=owner.id,
         expected_language="mul",
     )
-    assert len(pinned.revision_ids) == 2 * len(PROMPT_LANGUAGES)
+    assert len(pinned.list_ids) == 2 * len(PROMPT_LANGUAGES)
     assert pinned.prompt_count == STANDARD + EXTENDED
 
 
@@ -124,7 +124,7 @@ async def test_a_mixed_room_draws_every_language_s_form_and_agnostic_ones_whole(
     assert pinned.prompt_count == STANDARD + 1
 
     sample = await prompts.sample_mixed_prompts(
-        list(pinned.revision_ids), limit=STANDARD + 1
+        list(pinned.list_ids), limit=STANDARD + 1
     )
 
     assert sample.drawable == STANDARD + 1
@@ -145,7 +145,7 @@ async def test_a_mixed_draw_carries_the_selection_s_false_friends(seeded):
     pinned = await prompts.authorize_selection(
         ["english_standard"], requesting_user_id=owner.id, expected_language="mul"
     )
-    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=1)
+    sample = await prompts.sample_mixed_prompts(list(pinned.list_ids), limit=1)
 
     hat = _concept_of("german_standard", "Hut")
     assert sample.false_friends["de"]["hut"] == frozenset({hat})
@@ -641,7 +641,7 @@ async def test_a_concept_taken_down_in_one_language_is_not_drawn(seeded):
             hund.moderation_state = "hidden"
             dog_concept = hund.concept_id
 
-    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=STANDARD)
+    sample = await prompts.sample_mixed_prompts(list(pinned.list_ids), limit=STANDARD)
 
     assert all(prompt.concept_id != str(UUID(str(dog_concept))) for prompt in sample.prompts)
     assert len(sample.prompts) == STANDARD - 1
@@ -654,7 +654,7 @@ async def test_a_mixed_draw_counts_what_it_could_have_drawn(seeded):
         ["english_standard"], requesting_user_id=owner.id, expected_language="mul"
     )
 
-    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=10)
+    sample = await prompts.sample_mixed_prompts(list(pinned.list_ids), limit=10)
 
     assert len(sample.prompts) == 10
     assert sample.drawable == STANDARD
@@ -731,7 +731,7 @@ async def test_a_mixed_draw_samples_among_playable_concepts_only(seeded):
             )
 
     for _ in range(5):
-        sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=1)
+        sample = await prompts.sample_mixed_prompts(list(pinned.list_ids), limit=1)
         assert [prompt.translations["en"].answer for prompt in sample.prompts] == ["dog"]
         assert sample.drawable == 1
 

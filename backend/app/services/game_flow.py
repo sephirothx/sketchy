@@ -267,9 +267,6 @@ class GameFlowService:
         else:
             prompt_list_slugs = [default_prompt_list_slug(declared_language)]
 
-        prompt_list_revision_ids = (
-            list(fallback.prompt_list_revision_ids) if fallback else []
-        )
         prompt_list_ids = list(fallback.prompt_list_ids) if fallback else []
         prompt_pool_size = fallback.prompt_pool_size if fallback else 0
         prompt_letter_counts = (
@@ -319,7 +316,6 @@ class GameFlowService:
                     selection = await self._ctx.prompt_list_repo.authorize_selection(
                         prompt_list_slugs, expected_language=declared_language
                     )
-                prompt_list_revision_ids = list(selection.revision_ids)
                 prompt_list_ids = list(selection.list_ids)
                 prompt_pool_size = selection.prompt_count
                 prompt_letter_counts = dict(selection.letter_counts)
@@ -340,7 +336,6 @@ class GameFlowService:
                     logger.exception(
                         "Prompt-list store unavailable for custom-only room"
                     )
-                    prompt_list_revision_ids = []
                     prompt_list_ids = []
                     prompt_pool_size = 0
                     prompt_letter_counts = {}
@@ -369,7 +364,6 @@ class GameFlowService:
             "color_mode": value("color_mode"),
             "prompt_language": declared_language,
             "prompt_list_slugs": prompt_list_slugs,
-            "prompt_list_revision_ids": prompt_list_revision_ids,
             "prompt_list_ids": prompt_list_ids,
             "prompt_pool_size": prompt_pool_size,
             "prompt_letter_counts": prompt_letter_counts,
@@ -383,9 +377,10 @@ class GameFlowService:
     ) -> None:
         """Re-authorize mutable moderation state immediately before a game.
 
-        List revisions remain immutable, but a moderator takedown is an
-        operational override. Re-reading here prevents a waiting room from
-        starting with content that was hidden after its settings were loaded.
+        A list may have been edited, unpublished or taken down since the room
+        was set up. Re-reading here prevents a waiting room from starting with
+        content that was hidden after its settings were loaded, and refreshes
+        what the room knows of the lists' working copies (#1359).
         """
         if room.custom_prompts_only or not self._ctx.prompt_list_repo:
             return
@@ -411,7 +406,6 @@ class GameFlowService:
             raise RoomPromptResolutionError(
                 "Prompt lists could not be loaded. Please try again."
             ) from error
-        room.prompt_list_revision_ids = list(selection.revision_ids)
         room.prompt_list_ids = list(selection.list_ids)
         room.prompt_pool_size = selection.prompt_count
         room.prompt_letter_counts = dict(selection.letter_counts)
@@ -692,7 +686,7 @@ class GameFlowService:
         try:
             sample = await asyncio.wait_for(
                 self._ctx.prompt_list_repo.sample_mixed_prompts(
-                    list(room.prompt_list_revision_ids), limit=needed
+                    list(room.prompt_list_ids), limit=needed
                 ),
                 timeout=PROMPT_DRAW_TIMEOUT_SECONDS,
             )
@@ -759,9 +753,9 @@ class GameFlowService:
         A game starts at most `rounds x max_players` turns and offers three
         choices at each, so the whole pool was never needed - only that many
         prompts. Drawing them here rather than per turn keeps the database off
-        the latency a drawer feels, and pins the content to the revisions the
-        room was just authorized on: a list edited or withdrawn mid-game cannot
-        rewrite a turn that is already in flight (R-LIST-07).
+        the latency a drawer feels, and is the game's snapshot of the lists the
+        room was just authorized on: an edit saved mid-game overwrites the
+        working copy, never what this game drew (R-LIST-07, #1359).
 
         The draw is weighted so it matches the merged pool it replaces. Quick
         prompts used to be concatenated with the curated ones and sampled
@@ -790,7 +784,7 @@ class GameFlowService:
             try:
                 sample = await asyncio.wait_for(
                     self._ctx.prompt_list_repo.sample_prompts(
-                        list(room.prompt_list_revision_ids),
+                        list(room.prompt_list_ids),
                         limit=needed,
                         exclude_match_keys=room.custom_prompt_match_keys(),
                         exclude_language=room.prompt_language,
@@ -1883,8 +1877,8 @@ class GameFlowService:
             room.state = "waiting"
             room.game = None
             self._note_history_write_started(room, game, history)
-            usage, revision_ids = self._prompt_usage_for(game, occurred_at=finished_at)
-            envelope = FinishedGameEnvelope(history, usage, revision_ids) if history else None
+            usage, list_ids = self._prompt_usage_for(game, occurred_at=finished_at)
+            envelope = FinishedGameEnvelope(history, usage, list_ids) if history else None
             # Always on its own task (#976 fourth review), never inside the
             # action: a game ends inside a `room_state_batch`, so awaiting the
             # handoff here put the encode - deliberately unbounded, so that a

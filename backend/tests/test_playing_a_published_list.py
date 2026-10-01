@@ -95,7 +95,7 @@ async def test_start_re_authorizes_and_pins_the_revision_it_finds(env):
         [published.slug], requesting_user_id=stranger.id
     )
 
-    assert len(pinned.revision_ids) == 1
+    assert len(pinned.list_ids) == 1
 
 
 async def test_unpublishing_between_the_picker_and_start_refuses_the_room(env):

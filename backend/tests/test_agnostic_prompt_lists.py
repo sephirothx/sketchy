@@ -305,7 +305,7 @@ async def test_the_draw_compares_quick_prompts_only_with_keys_in_the_room_s_fold
     )
 
     sample = await prompts.sample_prompts(
-        list(pinned.revision_ids),
+        list(pinned.list_ids),
         limit=10,
         exclude_match_keys={prompt_match_key("Bar", "de")},
         exclude_language="de",

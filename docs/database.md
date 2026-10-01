@@ -10,7 +10,7 @@ Schema source of truth: [`backend/app/db/models.py`](../backend/app/db/models.py
 Migrations: [`backend/alembic/versions/`](../backend/alembic/versions/) — a baseline
 revision, `f0a1b2c3d4e5_baseline_schema.py`, since the pre-launch chain was folded
 into it (#557, §13), and the revisions written since. Current head:
-`f2a3b4c5d6e8_a_copy_names_the_list_it_came_from.py` (#1361). Both this line and the table
+`a3b4c5d6e7f9_saves_overwrite_a_working_copy.py` (#1359). Both this line and the table
 count below are pinned by `tests/test_doc_invariants.py`, because both had gone stale
 by ten tables and eighteen revisions before anybody noticed (#893).
 
@@ -89,7 +89,7 @@ keeps the suspension honest.
 
 ## 2. Table map
 
-62 tables in eight domains.
+63 tables in eight domains.
 
 ```mermaid
 erDiagram
@@ -125,6 +125,7 @@ erDiagram
     prompt_concepts ||--o{ prompt_aliases : "accepted answers"
     prompt_versions ||--o{ prompt_version_aliases : "accepts"
     prompt_lists ||--o{ prompt_list_stars : "starred by"
+    prompt_lists ||--o{ prompt_list_tags : "tagged"
     prompt_lists ||--o{ prompt_list_revisions : "versions"
     prompt_list_revisions ||--o{ prompt_list_revision_items : "membership"
     prompt_lists ||--o{ prompt_usage_facts : "usage"
@@ -145,7 +146,7 @@ erDiagram
 | **Messages** | `room_messages` |
 | **Game history** | `finished_game_envelopes`, `game_records`, `game_participants`, `turn_records`, `turn_drawings`, `turn_drawing_reactions`, `gallery_shelf_reviews`, `profile_drawing_pins`, `turn_participant_outcomes`, `score_events`, `game_prompt_sources` |
 | **Prompt provenance** | `turn_prompt_offers`, `turn_prompt_offer_sources` |
-| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
+| **Prompt content** | `prompt_concepts`, `prompt_versions`, `prompt_aliases`, `prompt_version_aliases`, `prompt_tags`, `prompt_version_tags`, `prompt_lists`, `prompt_list_revisions`, `prompt_list_revision_items`, `prompt_list_revision_tags`, `prompt_list_tags`, `prompt_list_localizations`, `prompt_list_stars`, `prompts`, `prompt_usage_facts`, `prompt_usage_batches` |
 | **Runtime analytics** | `runtime_events` |
 | **Bug reports** | `bug_reports` |
 
@@ -792,7 +793,7 @@ the **target** are limited to the ones they are told about as they happen (warni
 bans and revocations, a moderator removing their picture, role changes, and `session.*`,
 `account.*` and `identity.*`) so a block, a report or a staff look-up aimed at them is
 not in it, and a report they filed carries `decided` and no status or review time. The field surface is
-pinned by [`fixtures/account_data_export_v14_fields.json`](../fixtures/account_data_export_v14_fields.json).
+pinned by [`fixtures/account_data_export_v15_fields.json`](../fixtures/account_data_export_v15_fields.json).
 
 ### `email_outbox`
 `id` · `to_address` · `user_id` (`SET NULL`) · `template` · `payload` (JSON) ·
@@ -1913,8 +1914,16 @@ An immutable, language-specific wording.
 `match_key` · `editorial_difficulty` (`unspecified \| easy \| medium \| hard`) ·
 `content_rating` (`everyone \| teen \| mature`) ·
 `moderation_state` (`active \| under_review \| hidden`) · `moderated_by_user_id` ·
-`moderated_at` · `created_at`, with
+`moderated_at` · `unlisted_at` (nullable, partial index) · `created_at`, with
 `uq_prompt_version_concept_language_version`.
+
+**`unlisted_at`** is when a save or a list's deletion last took the version out of a
+working copy (#1359). A game that drew it before then holds it in memory and writes it into
+its turns when it ends, so the hourly `unlisted_prompt_versions` sweep
+(`reclaim_unlisted_versions`) collects it only `RETIRED_LIST_GRACE` (a day) later, and only
+if nothing names it — no list, turn, offer, usage fact, report or takedown record; one that
+something does name is unstamped, kept by that reference from then on. A revision used to
+keep a replaced wording that long; a save writes none now.
 
 A moderator's decision is the concept's, not one wording's: resolving a report sets
 `moderation_state`, `moderated_by_user_id` and `moderated_at` on every version of the
@@ -1967,8 +1976,21 @@ Deliberately relational rather than a JSON tag blob.
 `language` · `is_bundled` · `is_copy` · `copied_from_list_id` (`SET NULL`) ·
 `visibility` (`private \| public`) ·
 `moderation_state` · `moderated_by_user_id` ·
-`moderated_at` · `version` · `published_at` (nullable) · `deleted_at` (indexed,
+`moderated_at` · `version` · `letter_counts` · `letter_total` · `published_at` (nullable) · `deleted_at` (indexed,
 nullable) · timestamps.
+
+`letter_counts` (JSON) and `letter_total` are the working copy's **letter histogram**
+(#1359; it lived on each revision before): every save that changes content rewrites
+them, and `upsert_bundled` writes them when seeding. Wheel pricing needs how common each
+letter is among the prompts a game can draw (R-HINT-03), a distribution rather than the
+words, which is what lets a room price letters without keeping its prompt pool in memory.
+`letter_counts` tallies a–z, the only letters that can be bought; `letter_total` counts
+*every* alphabetic character, including those outside a–z, because it is the divisor and
+a list in such a language must keep the ratios it would have had. Membership is counted
+rather than moderation state: a takedown does not rewrite the list, so a tally that
+tracked moderation would be wrong from the first takedown and stay wrong through any
+restore. The cost is that hidden content is priced without being drawable, which R-HINT-03
+records among the histogram's approximations.
 
 **Deleting a list retires it** ([`services/prompt_reclaim.py`](../backend/app/services/prompt_reclaim.py)):
 `deleted_at` is set, the visibility falls back to private and the current-display `prompts` rows go, in the same transaction. From then on
@@ -2060,8 +2082,8 @@ served by `ix_prompt_lists_published`, which is partial on exactly those three. 
 takedown or a deletion therefore drops a list out of the catalogue without a second read
 path having to agree, which is the property that made post-hoc moderation defensible in
 the first place. Star counts are a correlated aggregate over `prompt_list_stars` rather
-than a column, and tag filters are one `EXISTS` per tag against the list's **current**
-revision, bounded by `MAX_LIST_TAGS`. Paging is by offset with a ceiling
+than a column, and tag filters are one `EXISTS` per tag against the list's working-copy
+tags (`prompt_list_tags`), bounded by `MAX_LIST_TAGS`. Paging is by offset with a ceiling
 (`MAX_COMMUNITY_OFFSET`): nobody reaches page four hundred by reading, so a request that
 deep is a scrape, and a filter is the better answer than a longer scroll.
 
@@ -2149,40 +2171,20 @@ naming the list and never its owner's account id.
 `content_hash` · `letter_counts` ·
 `letter_total` · `created_at`, unique on `(prompt_list_id, version)`.
 
-`letter_counts` (JSON) and `letter_total` are a **letter histogram** over every
-answer the revision holds, computed and stored at the moment the revision row is
-created — by `upsert_bundled` when seeding, and by `_write_owned_revision` when a
-player creates or edits an owned list. Wheel pricing needs how
-common each letter is among the prompts a game can draw (R-HINT-03), which is a
-distribution rather than the words — storing it is what lets a room price letters
-without keeping its prompt pool in memory. `letter_counts` tallies a–z, the only
-letters that can be bought; `letter_total` counts *every* alphabetic character,
-including those outside a–z, because it is the divisor and a list in such a language
-must keep the ratios it would have had. Membership is counted rather than moderation
-state: a revision's members never change, while their moderation state can, so a tally
-that tracked the latter would be wrong from the first takedown and stay wrong through any
-restore. The cost is that hidden content is priced without being drawable, which
-R-HINT-03 records among the histogram's approximations.
+**Only bundled seeding writes a revision now** (#1359). A save overwrites a list's working
+copy (`prompts`, `prompt_list_tags`, the histogram on `prompt_lists`) and writes none,
+and nothing reads one to play, show or copy a list. `upsert_bundled` still writes one per
+bundled version: its `content_hash` is how a reseed tells an unchanged version from one
+"changed in place", which is a startup-failing conflict. #1362 removes the tables and moves
+that check.
 
-**A live list's superseded revisions are reclaimed** too (#1258). Every content save
-writes the whole list again as a new revision - 500 item rows for a one-word edit of a
-500-prompt list - and only retired lists used to be reclaimed, so storage grew with the
-number of saves, and the owner's export with it until it passed its ceiling for good
-(#1250). The hourly `superseded_list_revisions` sweep
-(`reclaim_superseded_revisions`, as many revisions a pass as the retention budget's
-rows allow, counting each revision's items - 5,000 by default, nine revisions of a
-500-prompt list) deletes a revision of a live,
-owned list once the save that superseded it is older than `RETIRED_LIST_GRACE` - counted
-from the superseding save, not from the revision's own creation, because a room that
-pinned it when its game started plays it to the end - unless it is the current revision
-(never superseded). A copy is no hold since #1361 — it names its original's list, not a
-revision — and a hidden prompt, or one a pending report names, is none since #1357: the
-owner's takedown record keeps the word. Versions and concepts only the deleted
-revisions named go with them, as in the retired-list reclaim.
+Until #1359 every save wrote the whole list again as a revision — 500 item rows for a
+one-word edit of a 500-prompt list — so storage and the owner's export grew with the
+number of saves (#1250), bounded after the fact by a `superseded_list_revisions` sweep with
+holds of its own (#1258), which went with the revisions it swept.
 
 `prompt_list_revision_items`: `revision_id` + `prompt_version_id` composite **PK** ·
-`position`, unique on `(revision_id, position)`. The `RESTRICT` on `prompt_version_id`
-is what stops a prompt version being deleted out from under a revision a game pinned.
+`position`, unique on `(revision_id, position)`.
 
 `prompt_list_revision_tags`: `revision_id` + `tag_id` composite **PK**, indexed on
 `tag_id` for the direction the community catalogue reads (*which lists carry this tag*).
@@ -2215,16 +2217,9 @@ came from, because the person they came from asked for the list to go. A fork ge
 to the source's, so one owner's edit cannot rewrite what the other's list means, and
 hidden versions are left out of the copy entirely.
 
-**Tags are copied onto every revision, not shared across a list's revisions.** A game
-pins a revision, and a discovery filter that found a list by its tags has to go on
-agreeing with what that revision holds — which it could not if the tags hung off the
-mutable list row. The cost is one row per tag per revision, which is nothing beside the
-membership rows already written; the benefit is that revision one keeps what it was
-tagged with after revision two is tagged differently.
-
 An owner's tags come from a **curated vocabulary** (`prompt_content.LIST_TAG_VOCABULARY`,
 R-LIST-18), seeded beside the bundled lists and idempotent: a missing slug is inserted
-and a stale display name refreshed. A slug is never rewritten, because every revision
+and a stale display name refreshed. A slug is never rewritten, because every list
 tagged with it points at that row — a tag is renamed by changing its name. Free text was
 refused: a tag is player-authored copy shown in a discovery surface, and a discovery
 feature must not introduce a second kind of content to moderate.
@@ -2232,11 +2227,19 @@ feature must not introduce a second kind of content to moderate.
 which is authored in the repository and reviewed as code; `clean_list_tags` is the one
 that answers a request.
 
-Editing a list uses **optimistic concurrency** and creates a new immutable revision
-instead of rewriting the revision a waiting or running room drew from. Setting or clearing
-tags is such an edit and earns its own revision (R-LIST-05). The content
-language — a room language, or `zxx` — cannot change after creation. Rooms resolve and
-draw from exact revision IDs; what a finished game records is the list (#1358).
+### `prompt_list_tags`
+`prompt_list_id` (CASCADE) + `tag_id` (CASCADE) composite **PK**, indexed on `tag_id` for
+the direction the community catalogue reads (*which lists carry this tag*). The working
+copy's tags (#1359), rewritten in place by a save like the rest of it, a row added or
+removed only for a tag that changed. They used to be copied onto every revision, so that a
+filter agreed with the revision a game pinned; a game snapshots what it drew instead.
+
+Editing a list uses **optimistic concurrency** on `prompt_lists.version` and overwrites the
+working copy in place, writing only what changed (R-LIST-05, #1359). Setting or clearing
+tags is such an edit and moves the version. The content language — a room language, or
+`zxx` — cannot change after creation. A room resolves lists, draws from their working
+copies at Start — the game's snapshot (R-LIST-07) — and a finished game records the list
+(#1358).
 
 ### `prompt_list_localizations`
 `id` · `prompt_list_id` (CASCADE) · `locale` · `name` · `description`, unique on
@@ -2247,23 +2250,31 @@ separately by *interface locale* and selected from `Accept-Language`, so transla
 UI never changes a list's **content language**.
 
 ### `prompts`
-The current *display* row for one prompt concept in one list.
+One prompt of a list's **working copy** (#1359): what its owner edits and what a room
+drawing from it plays.
 
 `id` · `prompt_list_id` (CASCADE) · `concept_id` (RESTRICT) · `prompt_version_id`
-(RESTRICT) · `text` · `created_at`, unique on both `(prompt_list_id, concept_id)` and
-`(prompt_list_id, text)`.
+(RESTRICT) · `text` · `position` · `created_at`, unique on both
+`(prompt_list_id, concept_id)` and `(prompt_list_id, text)`. `position` is the owner's
+order; it is not unique, and a save rewrites only the rows that moved.
+
+A save **overwrites** these rows in place rather than writing the list again: a reworded
+prompt gets a new prompt version and its one row repointed, a removed prompt's row goes,
+and the versions a save takes out of the working copy are stamped `unlisted_at`
+(`prompt_versions`), collected a day later if nothing names them. Readers that must see one
+save's prompts beside the same save's tags — the owner's editor, the moderators' held-list
+read — hold the list row `FOR SHARE` while they read, so a save (which takes it
+`FOR UPDATE`) waits for them rather than landing between the two reads (#1291 review).
 
 **Prompt-list counts are derived from membership on read**, so adding or removing a
 prompt cannot leave a cached total out of sync. An edit rewrites only the display rows
 whose text or version actually changed; a row whose new text is another retained row's
 current text (two answers swapped, or a new prompt reusing a changed one's old text) takes
 a temporary text first, so the unique index never sees both. A save that restates the
-current revision exactly — same concepts, answers, aliases and order, same name,
-description and visibility — writes nothing at all and keeps the list's version; a
-metadata-only edit still creates the revision R-LIST-05 requires (#613). During the transition to rebuildable
-projections, this legacy counter row is linked by concept and updated in place when a
-new prompt version rewords it, preserving its existing statistics; old revisions keep
-referencing the old wording.
+working copy exactly — same concepts, answers, aliases and order, same name,
+description and tags — writes nothing at all and keeps the list's version; a
+metadata-only edit still moves the version, as R-LIST-05 requires (#613). Prompt
+statistics are keyed by concept, so a row repointed at a new wording keeps them.
 
 ### `prompt_usage_facts`
 Append-only per-game usage totals, **not** mutable counters on a display row.
@@ -2469,7 +2480,7 @@ counted only over rows the policy does not exempt (R-PRIV-17).
 | Guests with no completed game | 30 inactive days (default) | 24 h | A guest another write holds this instant, left for the next pass | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Guests with history | 365 inactive days (default) | 24 h | As above; history survives via frozen snapshots | `app.auth.retention`, hourly | `anonymous_accounts` |
 | Game history, turns, outcomes, ledger, drawings, reactions, pins, usage facts | Indefinite | — | Permanently kept (R-PRIV-05) | — (drawings are the one blob with no expiry; *Storing the drawings* above records why they stay inline and the size that reopens it) | — |
-| Superseded revisions of live prompt lists | Until the save that superseded one is a day old (`RETIRED_LIST_GRACE`); each hourly pass deletes as many as the row budget allows, items counted | 24 h | A live list's current revision; nothing else past the grace — a finished game names its list (#1358), a copy the list it came from (#1361), and a hidden word is kept by its takedown record (#1357) | `services.prompt_reclaim.reclaim_superseded_revisions`; the overdue age is measured from the superseding save (#1258) | `superseded_list_revisions` |
+| Prompt versions a save or a deletion took out of a working copy | A day after `unlisted_at` (`RETIRED_LIST_GRACE`), for the game that drew one before; each hourly pass collects as many as the row budget allows | 24 h | A version still named by a list, a turn, an offer, a usage fact, a report or a takedown record, which is unstamped and kept by it | `services.prompt_reclaim.reclaim_unlisted_versions`; the overdue age is measured from `unlisted_at` (#1359) | `unlisted_prompt_versions` |
 | Retired (deleted) prompt lists | Out of reach at once; after a 1-day grace its play history is cleared in budgeted batches, then the list, its revisions and orphan content go, 50 lists per hourly sweep | 24 h | Nothing past the grace: a finished game names the list, not a revision, and reads the same without it (#1358). A hidden word is kept by its owner's takedown record (`prompt_takedowns`) | `services.prompt_reclaim` | `retired_prompt_lists` |
 
 The SLAs are `STANDARD_SLA_SECONDS` and `HEAVY_SLA_SECONDS` in

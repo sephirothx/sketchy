@@ -22,10 +22,11 @@ is still playing (R-LIST-07): its finished-game write references the prompt
 versions it drew, and they are still there within the grace. A day is far
 longer than a game.
 
-A live list's superseded revisions go the same way (#1258):
-`reclaim_superseded_revisions`, also hourly, deletes a revision a newer save
-replaced more than the grace ago, unless something still needs it
-(`_superseded_reclaimable`), with the same orphan step after it.
+A save writes no revision since #1359: it overwrites the list's working copy
+and stamps the versions it takes out of it, and `reclaim_unlisted_versions`
+collects those a grace later when nothing names them. The superseded-revision
+sweep that bounded a live list's revisions (#1258) went with the revisions it
+swept.
 """
 from __future__ import annotations
 
@@ -36,9 +37,8 @@ import logging
 import time
 from uuid import UUID
 
-from sqlalchemy import delete, exists, func, select, tuple_, update
+from sqlalchemy import delete, exists, select, tuple_, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
-from sqlalchemy.orm import aliased
 
 from app.db.models import (
     GamePromptSource,
@@ -84,6 +84,20 @@ async def retire_prompt_list(
     """
     retired_at = now or datetime.now(timezone.utc)
     prompt_list.deleted_at = retired_at
+    # Its working copy's versions leave it now; a room that drew them before
+    # the deletion still writes them, so they are collected a grace later.
+    await session.execute(
+        update(PromptVersion)
+        .where(
+            PromptVersion.id.in_(
+                select(Prompt.prompt_version_id).where(
+                    Prompt.prompt_list_id == prompt_list.id
+                )
+            )
+        )
+        .values(unlisted_at=retired_at)
+        .execution_options(synchronize_session=False)
+    )
     prompt_list.visibility = PromptListVisibility.PRIVATE.value
     if erase_copy:
         prompt_list.name = RETIRED_LIST_NAME
@@ -435,132 +449,65 @@ async def reclaim_retired_prompt_lists(
     return result
 
 
-# --- superseded revisions of live lists (#1258) -------------------------------
-
-RECLAIM_BATCH_REVISIONS = 200
-SUPERSEDED_SWEEP = "superseded_list_revisions"
+UNLISTED_SWEEP = "unlisted_prompt_versions"
 
 
-def _successor():
-    """The revisions of the same list saved after the one in the outer query."""
-    return aliased(PromptListRevision)
+def _unlisted_reclaimable(cutoff: datetime):
+    """A version taken out of every working copy more than the grace ago."""
+    return (PromptVersion.unlisted_at.is_not(None), PromptVersion.unlisted_at <= cutoff)
 
 
-def _superseded_since():
-    """When the outer query's revision stopped being current: its successor's
-    creation, the earliest of the revisions saved after it."""
-    newer = _successor()
-    return (
-        select(func.min(newer.created_at))
-        .where(
-            newer.prompt_list_id == PromptListRevision.prompt_list_id,
-            newer.version > PromptListRevision.version,
-        )
-        .scalar_subquery()
-    )
-
-
-def _superseded_reclaimable(cutoff: datetime):
-    """A revision of a live, owned list the sweep may delete.
-
-    Replaced by a newer save more than the grace ago - the same day the
-    retired-list reclaim waits, for the same room: one that drew from it when
-    its game started and is still playing. Nothing else holds one: a finished
-    game names its list (#1358), a copy records the list it came from rather
-    than a revision (#1361), and a hidden word is kept by its owner's takedown
-    record (#1357). The current revision is never superseded, so never a
-    candidate.
-    """
-    newer = _successor()
-    return (
-        PromptList.id == PromptListRevision.prompt_list_id,
-        PromptList.deleted_at.is_(None),
-        PromptList.is_bundled.is_(False),
-        exists().where(
-            newer.prompt_list_id == PromptListRevision.prompt_list_id,
-            newer.version > PromptListRevision.version,
-            newer.created_at <= cutoff,
-        ),
-    )
-
-
-async def reclaim_superseded_revisions(
+async def reclaim_unlisted_versions(
     session_factory: async_sessionmaker[AsyncSession],
     *,
     now: datetime | None = None,
     grace: timedelta = RETIRED_LIST_GRACE,
-    limit: int = RECLAIM_BATCH_REVISIONS,
     budget: SweepBudget | None = None,
 ) -> SweepReport:
-    """Delete superseded, unneeded revisions of live lists, a bounded batch at a time.
+    """Collect versions a save or a deletion took out of a working copy, a
+    grace later, when nothing names them (#1359).
 
-    Bounded by the budget's rows, counting each revision's item rows: one
-    transaction per pass, oldest superseded first.
-
-    Every content save writes the whole list again as a new revision, and
-    only retired lists were ever reclaimed, so a live list kept every
-    revision it was ever saved as: storage grew with saves, not with lists -
-    500 rows a save of a 500-prompt list - and the owner's export with it,
-    until it passed its ceiling for good (#1258, #1250). What a live list
-    keeps now is its current revision, every revision still inside the
-    grace, and the revisions something needs (`_superseded_reclaimable`);
-    versions and concepts only those revisions named go with them.
+    A save overwrites the working copy in place and writes no revision, so a
+    replaced wording is named by nothing the moment the save commits - except
+    a game that drew it before then, which holds it in memory and writes it
+    into its turns when it ends. The grace is that game's (the retired-list
+    reclaim's day). After it, what nothing names - no list, turn, offer, usage
+    fact, report or takedown record - goes, with any concept it leaves empty;
+    what something does name is unstamped, kept by that reference from then on.
+    Committed batches of ordered keys within the budget (R-PRIV-16).
     """
-    # Rows, not revisions: a revision of a 500-prompt list is 500 item rows,
-    # so the budget's row allowance decides how many a pass deletes - at
-    # least one, whatever its size.
-    row_budget = (budget or SweepBudget()).rows
-    limit = max(1, min(limit, row_budget))
-    started = time.monotonic()
+    budget = budget or SweepBudget()
     cutoff = (now or datetime.now(timezone.utc)) - grace
-    revisions_deleted = versions_deleted = concepts_deleted = 0
-    candidates = 0
-    async with session_factory() as session:
-        async with session.begin():
-            items = aliased(PromptListRevisionItem)
-            sized = (
-                await session.execute(
-                    select(
-                        PromptListRevision.id,
-                        select(func.count())
-                        .where(items.revision_id == PromptListRevision.id)
-                        .scalar_subquery(),
-                    )
-                    .where(*_superseded_reclaimable(cutoff))
-                    .order_by(PromptListRevision.created_at, PromptListRevision.id)
-                    .limit(limit)
-                )
-            ).all()
-            candidates = len(sized)
-            doomed: list[UUID] = []
-            spent = 0
-            for revision_id, items in sized:
-                if doomed and spent + items + 1 > row_budget:
-                    break
-                doomed.append(revision_id)
-                spent += items + 1
-            if doomed:
-                candidate_version_ids = set(
+    started = time.monotonic()
+    deleted = batches = 0
+    exhausted = True
+    while deleted < budget.rows and time.monotonic() - started < budget.seconds:
+        async with session_factory() as session:
+            async with session.begin():
+                version_ids = set(
                     (
                         await session.scalars(
-                            select(PromptListRevisionItem.prompt_version_id.distinct()).where(
-                                PromptListRevisionItem.revision_id.in_(doomed)
-                            )
+                            select(PromptVersion.id)
+                            .where(*_unlisted_reclaimable(cutoff))
+                            .order_by(PromptVersion.unlisted_at, PromptVersion.id)
+                            .limit(min(budget.batch, budget.rows - deleted))
                         )
                     ).all()
                 )
-                revisions_deleted = int(
-                    (
-                        await session.execute(
-                            delete(PromptListRevision).where(PromptListRevision.id.in_(doomed))
-                        )
-                    ).rowcount
-                    or 0
+                if not version_ids:
+                    exhausted = False
+                    break
+                versions_deleted, _ = await reclaim_orphans(session, version_ids)
+                # The rest are named by something that keeps them now.
+                await session.execute(
+                    update(PromptVersion)
+                    .where(PromptVersion.id.in_(version_ids))
+                    .values(unlisted_at=None)
+                    .execution_options(synchronize_session=False)
                 )
-                versions_deleted, concepts_deleted = await reclaim_orphans(
-                    session, candidate_version_ids
-                )
-    probe = overdue_probe(_superseded_since(), *_superseded_reclaimable(cutoff))
+        deleted += versions_deleted
+        batches += 1
+    probe = overdue_probe(PromptVersion.unlisted_at, *_unlisted_reclaimable(cutoff))
     async with session_factory() as session:
         earliest = await session.scalar(probe.oldest)
         backlog = int(await session.scalar(probe.backlog) or 0)
@@ -569,22 +516,14 @@ async def reclaim_superseded_revisions(
         if earliest.tzinfo is None:
             earliest = earliest.replace(tzinfo=timezone.utc)
         overdue = max(0.0, (cutoff - earliest).total_seconds())
-    if revisions_deleted:
-        logger.info(
-            "prompt reclaim: %d superseded revisions of live lists, %d versions, %d concepts removed",
-            revisions_deleted,
-            versions_deleted,
-            concepts_deleted,
-        )
     return SweepReport(
-        revisions_deleted,
-        name=SUPERSEDED_SWEEP,
-        batches=1 if revisions_deleted else 0,
+        deleted,
+        name=UNLISTED_SWEEP,
+        batches=batches,
         seconds=time.monotonic() - started,
-        exhausted=revisions_deleted < candidates or revisions_deleted >= limit,
+        exhausted=exhausted and backlog > 0,
         oldest_overdue_seconds=overdue,
         backlog=backlog,
-        detail={"versions": versions_deleted, "concepts": concepts_deleted},
     )
 
 

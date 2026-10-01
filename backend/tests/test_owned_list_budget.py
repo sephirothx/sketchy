@@ -7,6 +7,9 @@ gigabytes an hour of permanent rows.
 """
 from __future__ import annotations
 
+import os
+
+import pytest
 import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
@@ -173,42 +176,47 @@ async def test_a_save_that_lost_the_race_is_refused_before_its_content_is_folded
     assert folded == []
 
 
-async def test_a_list_is_read_as_one_revision_even_when_a_save_lands_mid_read(site, monkeypatch):
-    """#1291 review: the entries were read at the version the list's row gave,
-    the tags at whichever revision was current by the next statement, so a
-    save committed between the two handed the editor one revision's prompts
-    beside the next one's tags."""
-    from sqlalchemy import update
-
-    from app.db.models import PromptList
+@pytest.mark.skipif(
+    not os.environ.get("TEST_DATABASE_URL"), reason="row locks are only real on PostgreSQL"
+)
+async def test_a_list_is_read_as_one_save_even_when_a_save_comes_mid_read(site, monkeypatch):
+    """#1291 review: a save committed between reading a list's prompts and its
+    tags handed the editor one save's prompts beside the next one's tags.
+    Revisions answered it by reading both at one immutable version; a save
+    overwrites the working copy in place now (#1359), so the read holds the
+    list row `FOR SHARE` and a save - which takes it `FOR UPDATE` - waits for
+    the read to finish."""
+    import asyncio
 
     http, users, factory, prompts, engine = site
     owner = await signed_in(http, users, factory, "Reader")
     created = await prompts.create_owned(
         owner, name="Tagged", description="", language="en", prompts=_entries(2, 0), tags=["animals"],
     )
-    await prompts.update_owned(
-        owner, created.id, expected_version=created.version, name="Tagged",
-        description="", prompts=_entries(2, 0), tags=["food-and-drink"],
-    )
-    # Back to revision one as the list's row says it, and the second save
-    # "lands" between reading that row and reading the tags.
-    async with factory() as session, session.begin():
-        await session.execute(update(PromptList).values(version=created.version))
-    original = SqlAlchemyPromptListRepository._revision_entries
+    original = SqlAlchemyPromptListRepository._working_copy_entries
+    read_the_prompts = asyncio.Event()
+    let_the_read_finish = asyncio.Event()
 
-    async def a_save_lands(session, prompt_list_id, version):
-        entries = await original(session, prompt_list_id, version)
-        # Another transaction's commit: the row changes, this session's copy
-        # of it does not.
-        await session.execute(
-            update(PromptList).values(version=created.version + 1)
-            .execution_options(synchronize_session=False)
-        )
+    async def paused(session, prompt_list_id):
+        entries = await original(session, prompt_list_id)
+        read_the_prompts.set()
+        await let_the_read_finish.wait()
         return entries
 
-    monkeypatch.setattr(SqlAlchemyPromptListRepository, "_revision_entries", staticmethod(a_save_lands))
+    monkeypatch.setattr(SqlAlchemyPromptListRepository, "_working_copy_entries", staticmethod(paused))
+    read = asyncio.create_task(prompts.get_owned(owner, created.id))
+    await read_the_prompts.wait()
+    monkeypatch.setattr(SqlAlchemyPromptListRepository, "_working_copy_entries", staticmethod(original))
+    save = asyncio.create_task(
+        prompts.update_owned(
+            owner, created.id, expected_version=created.version, name="Tagged",
+            description="", prompts=_entries(2, 0), tags=["food-and-drink"],
+        )
+    )
+    await asyncio.sleep(0.3)
+    assert not save.done(), "the save waits for the read's lock"
+    let_the_read_finish.set()
+    read_result, saved = await asyncio.gather(read, save)
 
-    read = await prompts.get_owned(owner, created.id)
-
-    assert (read.version, read.tags) == (created.version, ("animals",))
+    assert (read_result.version, read_result.tags) == (created.version, ("animals",))
+    assert (saved.version, saved.tags) == (created.version + 1, ("food-and-drink",))

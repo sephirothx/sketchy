@@ -31,7 +31,7 @@ def _standard_stub():
             "dog": {"en": "dog", "de": "Hund", "fr": "chien", "es": "perro", "it": "cane", "nl": "hond", "pt": "cão", "pl": "pies"},
             "cat": {"en": "cat", "de": "Katze", "fr": "chat", "es": "gato", "it": "gatto", "nl": "kat", "pt": "gato", "pl": "kot"},
         },
-        revision_ids=("revision-standard",),
+        list_ids=("list-standard",),
         prompt_version_ids={"dog": "v-dog", "cat": "v-cat"},
     )
 

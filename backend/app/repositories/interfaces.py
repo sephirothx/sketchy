@@ -573,7 +573,7 @@ class PromptListEntryInput:
 
 @dataclass(frozen=True)
 class PromptListEntry:
-    """Editable content from the latest immutable player-list revision."""
+    """Editable content of a player list's working copy (#1359)."""
 
     concept_id: str
     prompt_version_id: str
@@ -598,9 +598,7 @@ class OwnedPromptList:
     created_at: datetime
     updated_at: datetime
     prompts: tuple[PromptListEntry, ...] = ()
-    # The current revision's tags. They live on the revision rather than the
-    # list because a revision is what a game pins, and a discovery filter has
-    # to agree with the content it found (R-LIST-18).
+    # The working copy's tags, from the curated vocabulary (R-LIST-18).
     tags: tuple[str, ...] = ()
     # How many people starred it. The owner is entitled to the number and to
     # nothing else about it: who starred a list is disclosed to nobody,
@@ -636,9 +634,8 @@ class ResolvedPromptSelection:
     slugs: tuple[str, ...]
     language: str
     prompts: tuple[str, ...]
-    revision_ids: tuple[str, ...] = ()
-    # The lists those revisions belong to, in the same order: what a game's
-    # provenance names (#1358).
+    # The lists, in the order chosen: what a game draws from - each one's
+    # working copy (#1359) - and what its provenance names (#1358).
     list_ids: tuple[str, ...] = ()
     aliases: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     prompt_version_ids: Mapping[str, str] = field(default_factory=dict)
@@ -649,7 +646,7 @@ class ResolvedPromptSelection:
 
 @dataclass(frozen=True)
 class PinnedPromptSelection:
-    """A validated selection, pinned to revisions, carrying no prompt text.
+    """A validated selection of lists, carrying no prompt text.
 
     Everything a waiting room needs in order to be a legitimate room - the
     lists resolve, they agree on a language, they hold prompts, and their
@@ -661,7 +658,6 @@ class PinnedPromptSelection:
 
     slugs: tuple[str, ...]
     language: str
-    revision_ids: tuple[str, ...] = ()
     list_ids: tuple[str, ...] = ()
     prompt_count: int = 0
     letter_counts: Mapping[str, int] = field(default_factory=dict)
@@ -705,7 +701,7 @@ class PromptTranslation:
 
 @dataclass(frozen=True)
 class PromptSample:
-    """A draw from pinned revisions, and how much there was to draw from.
+    """A draw from pinned lists, and how much there was to draw from.
 
     `drawable` counts what the draw was actually eligible to return - active
     versions the caller did not exclude - which is not the size of the lists.
@@ -759,7 +755,7 @@ class PromptListMutationError(ValueError):
 
 
 class PromptListConflictError(PromptListMutationError):
-    """An edit was based on a stale immutable list revision."""
+    """An edit was based on a stale version of the list."""
 
 
 class PromptListNotFoundError(PromptListMutationError):
@@ -1259,7 +1255,7 @@ class PromptListRepository(ABC):
 
         Enforces exactly what `resolve_selection` does - authorization, a
         single language, non-emptiness, and no colliding answers or aliases
-        across the chosen lists - and returns the revisions those checks ran
+        across the chosen lists - and returns the lists those checks ran
         against, so a game can draw from the same content later.
         """
         ...
@@ -1267,13 +1263,16 @@ class PromptListRepository(ABC):
     @abstractmethod
     async def sample_prompts(
         self,
-        revision_ids: Sequence[str],
+        list_ids: Sequence[str],
         *,
         limit: int,
         exclude_match_keys: Collection[str] = (),
         exclude_language: str | None = None,
     ) -> PromptSample:
-        """Draw up to `limit` random prompts from pinned revisions.
+        """Draw up to `limit` random prompts from these lists' working copies.
+
+        The draw is the snapshot (R-LIST-07): what it returns is what the game
+        plays, whatever the lists' owners save afterwards (#1359).
 
         Skips versions that are no longer active and any answer whose match key
         is in `exclude_match_keys` - the room's own quick prompts, which shadow
@@ -1288,7 +1287,7 @@ class PromptListRepository(ABC):
         ...
 
     async def sample_mixed_prompts(
-        self, revision_ids: Sequence[str], *, limit: int
+        self, list_ids: Sequence[str], *, limit: int
     ) -> PromptSample:
         """Draw up to `limit` random concepts for a mixed-language room (#1182).
 
@@ -1323,7 +1322,7 @@ class PromptListRepository(ABC):
         prompts: Sequence[PromptListEntryInput],
         tags: Sequence[str] = (),
     ) -> OwnedPromptList:
-        """Create a reusable player list and immutable revision one."""
+        """Create a reusable player list and its working copy."""
         ...
 
     @abstractmethod
@@ -1338,12 +1337,12 @@ class PromptListRepository(ABC):
         prompts: Sequence[PromptListEntryInput],
         tags: Sequence[str] = (),
     ) -> OwnedPromptList:
-        """Create the next immutable revision using optimistic concurrency."""
+        """Overwrite the working copy, under optimistic concurrency (#1359)."""
         ...
 
     @abstractmethod
     async def delete_owned(self, owner_user_id: str, prompt_list_id: str) -> bool:
-        """Delete a player-owned list and all of its revisions."""
+        """Take a player-owned list out of reach (retire it)."""
         ...
 
     @abstractmethod

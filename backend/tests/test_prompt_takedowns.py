@@ -78,7 +78,9 @@ async def _cast(site, prefix: str):
         )
         assert filed.status_code == 201, filed.text
         if watch is not None:
-            watch()
+            outcome = watch()
+            if outcome is not None:
+                await outcome
         decided = await moderator_http.patch(
             f"/api/moderation/prompt-content-reports/{filed.json()['id']}",
             json={"status": "resolved", "note": state, "moderationState": state},
@@ -194,8 +196,8 @@ async def test_a_save_costs_the_same_however_many_words_were_taken_down(site):
 
 async def test_a_released_takedown_takes_the_spellings_it_kept(site):
     """A row keeps its word's versions from the orphan collection, and the
-    sweep only looks at versions the revisions it deletes named. A version kept
-    by a row after its revisions went is a candidate nowhere else, so erasing
+    sweeps only look at versions something has just let go of. A spelling kept
+    by a row after the sweep passed it is a candidate nowhere else, so erasing
     the account used to leave the hidden text for good (#1357 review)."""
     from datetime import datetime, timedelta, timezone
 
@@ -204,10 +206,9 @@ async def test_a_released_takedown_takes_the_spellings_it_kept(site):
     from app.db.models import PromptVersion
     from app.services.prompt_reclaim import (
         reclaim_retired_prompt_lists,
-        reclaim_superseded_revisions,
+        reclaim_unlisted_versions,
     )
     from tests.test_prompt_content_moderation import PASSWORD
-    from tests.test_superseded_revisions import LONG_AGO, _age, _revisions
 
     new_client, factory, _, prompts = site
     owner_http = new_client()
@@ -232,8 +233,9 @@ async def test_a_released_takedown_takes_the_spellings_it_kept(site):
                 PromptListEntryInput(answer="fine", concept_id=fine.concept_id),
             ),
         )
-    await _age(factory, (await _revisions(factory, listed.id))[:-1], LONG_AGO)
-    await reclaim_superseded_revisions(factory)
+    # The respelt-away wordings left the working copy; a grace later the
+    # sweep passes them, and the takedown record is what keeps them.
+    await reclaim_unlisted_versions(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
 
     async def spellings() -> int:
         async with factory() as session:
@@ -314,3 +316,29 @@ async def test_a_hide_waits_for_the_owner_s_deletion_in_flight_and_records_nothi
 
     assert decided.status_code == 200, decided.text
     assert await _records(factory) == set(), "no takedown outlives the erased account"
+
+
+async def test_a_takedown_decided_after_the_word_was_edited_away_still_reaches_the_owner(site):
+    """#1357's acceptance: the owner edits the reported word out of the list
+    while the report waits, the replaced wording leaves the working copy, and
+    the takedown decided afterwards still keeps the word out of their next
+    list - recorded against the owner the report names."""
+    new_client, factory, _, prompts = site
+    owner, listed, word, decide = await _cast(site, "EdAw")
+    fine = next(p for p in listed.prompts if p.answer == "fine")
+
+    def edit_it_away():
+        return prompts.update_owned(
+            owner["id"], listed.id, expected_version=listed.version, name="Reported",
+            description="", prompts=(PromptListEntryInput(answer="fine", concept_id=fine.concept_id),),
+        )
+
+    # Filed, then edited away, then decided.
+    await decide("hidden", edit_it_away)
+
+    again = await prompts.create_owned(
+        owner["id"], name="Again", description="", language="en",
+        prompts=(PromptListEntryInput(answer="borderline word"),),
+    )
+    assert again.prompts[0].moderation_state == HIDDEN
+

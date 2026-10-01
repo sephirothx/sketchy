@@ -9,7 +9,6 @@ import pytest_asyncio
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
 from sqlalchemy import func, select
-from sqlalchemy.orm import selectinload
 
 from app.api.errors import install_refusal_handler
 from app.api.prompt_lists import create_prompt_list_router
@@ -18,7 +17,8 @@ from app.db.models import (
     AuditEvent,
     PromptList,
     PromptListRevision,
-    PromptListRevisionTag,
+    PromptListTag,
+    PromptTag,
     User,
     UserWarning,
     generate_uuid,
@@ -156,13 +156,9 @@ async def test_the_tag_vocabulary_is_served_rather_than_guessed(env):
     assert all(tag["name"] for tag in body["tags"])
 
 
-async def test_owner_tags_their_list_and_the_tags_ride_the_revision(env):
-    """Tags live on the revision, so setting them is an edit (R-LIST-05).
-
-    A game pins a revision, and a discovery filter that found a list by its
-    tags has to keep agreeing with the content that revision holds - which it
-    cannot do if the tags hang off the mutable list row instead.
-    """
+async def test_owner_tags_their_list_and_the_tags_ride_the_working_copy(env):
+    """Tags are the working copy's, so setting them is an edit (R-LIST-05)
+    and moves the version, and a save overwrites them in place (#1359)."""
     http, users, factory = env
     account = await users.create_anonymous("Tagger")
     account = await users.claim_account(account.id, "Tagger", "test-hash")
@@ -212,25 +208,27 @@ async def test_owner_tags_their_list_and_the_tags_ride_the_revision(env):
     assert unchanged.status_code == 200
     assert unchanged.json()["version"] == 2, "an exact restatement writes nothing"
 
+    # The working copy holds the tags it was last saved with (#1359); there
+    # is no revision to keep the earlier ones.
     async with factory() as session:
-        revisions = (
-            await session.scalars(
-                select(PromptListRevision)
-                .where(PromptListRevision.prompt_list_id == UUID(list_id))
-                .options(
-                    selectinload(PromptListRevision.revision_tags).selectinload(
-                        PromptListRevisionTag.tag
-                    )
+        held = sorted(
+            (
+                await session.scalars(
+                    select(PromptTag.slug)
+                    .join(PromptListTag, PromptListTag.tag_id == PromptTag.id)
+                    .where(PromptListTag.prompt_list_id == UUID(list_id))
                 )
-                .order_by(PromptListRevision.version)
+            ).all()
+        )
+    assert held == ["animals"]
+    async with factory() as session:
+        assert (
+            await session.scalar(
+                select(func.count(PromptListRevision.id)).where(
+                    PromptListRevision.prompt_list_id == UUID(list_id)
+                )
             )
-        ).all()
-    held = {
-        revision.version: sorted(link.tag.slug for link in revision.revision_tags)
-        for revision in revisions
-    }
-    # Revision one keeps what it was tagged with. The edit did not reach back.
-    assert held == {1: ["animals", "nature"], 2: ["animals"]}
+        ) == 0
 
 
 async def test_an_unknown_tag_is_named_rather_than_dropped(env):

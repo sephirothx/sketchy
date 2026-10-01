@@ -3670,6 +3670,8 @@ class PromptVersion(Base):
     __tablename__ = "prompt_versions"
     __table_args__ = (
         _actor_index("ix_prompt_versions_moderated_by", "moderated_by_user_id"),
+        # What the unlisted-version sweep selects, oldest first (#1359).
+        _actor_index("ix_prompt_versions_unlisted_at", "unlisted_at"),
         UniqueConstraint(
             "concept_id",
             "language",
@@ -3736,6 +3738,13 @@ class PromptVersion(Base):
         nullable=True,
     )
     moderated_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
+    # When a save or a deletion last took this version out of a list's
+    # working copy (#1359). A game that drew it before then still holds it in
+    # memory and writes it into its turns when it ends, so it is collected only
+    # a grace after this, and only if nothing names it by then
+    # (`services.prompt_reclaim.reclaim_unlisted_versions`). Revisions used
+    # to keep a replaced wording that long; a save writes none now.
+    unlisted_at: Mapped[datetime | None] = mapped_column(UTCDateTime(), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
@@ -3831,6 +3840,9 @@ class PromptTag(Base):
         back_populates="tag", cascade="all, delete-orphan"
     )
     list_revision_tags: Mapped[list[PromptListRevisionTag]] = relationship(
+        back_populates="tag", cascade="all, delete-orphan"
+    )
+    list_tags: Mapped[list[PromptListTag]] = relationship(
         back_populates="tag", cascade="all, delete-orphan"
     )
 
@@ -3985,9 +3997,24 @@ class PromptList(Base):
     published_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True
     )
+    # The working copy's letter histogram (#1359): how often each of a-z
+    # appears across every answer the list holds, and how many alphabetic
+    # characters they come to. Wheel pricing needs that distribution rather
+    # than the words (R-HINT-03), so a room prices letters without keeping its
+    # prompt pool resident. Rewritten by every save that changes content, and
+    # counted over the whole membership rather than what moderation allows:
+    # a takedown does not rewrite the list, so a tally of the active ones
+    # would drift at the first decision. Hidden content is therefore priced
+    # without being drawable - an approximation R-HINT-03 records.
+    letter_counts: Mapped[dict] = mapped_column(
+        PortableJSON, default=dict, server_default=text("'{}'"), nullable=False
+    )
+    letter_total: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=text("0"), nullable=False
+    )
     # A retired list: out of every listing, resolution and share the moment
-    # this is set, physically reclaimed by `services.prompt_reclaim` once
-    # nothing pins its revisions (#605). Bundled lists are never retired.
+    # this is set, physically reclaimed by `services.prompt_reclaim` after a
+    # grace (#605). Bundled lists are never retired.
     deleted_at: Mapped[datetime | None] = mapped_column(
         UTCDateTime(), nullable=True, index=True
     )
@@ -4124,6 +4151,33 @@ class PromptListRevisionTag(Base):
         back_populates="revision_tags"
     )
     tag: Mapped[PromptTag] = relationship(back_populates="list_revision_tags")
+
+
+class PromptListTag(Base):
+    """One curated tag on a list's working copy (R-LIST-18, #1359).
+
+    The working copy's own, beside its prompts: a save rewrites it in place
+    like the rest of the working copy, where it used to be copied onto every
+    revision.
+    """
+
+    __tablename__ = "prompt_list_tags"
+
+    prompt_list_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_lists.id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    # Indexed for the direction the community catalogue reads: which lists
+    # carry this tag.
+    tag_id: Mapped[uuid.UUID] = mapped_column(
+        Uuid(as_uuid=True, native_uuid=True),
+        ForeignKey("prompt_tags.id", ondelete="CASCADE"),
+        primary_key=True,
+        index=True,
+    )
+
+    tag: Mapped[PromptTag] = relationship(back_populates="list_tags")
 
 
 class PromptListLocalization(Base):
@@ -4314,7 +4368,12 @@ class PromptUsageFact(Base):
 
 
 class Prompt(Base):
-    """Current display row for one prompt concept in a prompt list."""
+    """One prompt of a list's **working copy** (#1359).
+
+    What the owner edits and what a room drawing from the list plays: a save
+    overwrites these rows in place, writing only the ones that changed, where
+    it used to write the whole list again as an immutable revision.
+    """
 
     __tablename__ = "prompts"
 
@@ -4346,9 +4405,16 @@ class Prompt(Base):
         index=True,
     )
     text: Mapped[str] = mapped_column(String(64), nullable=False)
+    # Where the prompt sits in the list, as its owner ordered it (#1359). Not
+    # unique: a save rewrites only the rows that moved, and ties never arise
+    # from one, since every save numbers its whole order.
+    position: Mapped[int] = mapped_column(
+        Integer, default=0, server_default=sql_text("0"), nullable=False
+    )
     # When the current prompt membership entered the list, not the immutable
     # concept/version creation time.
     created_at: Mapped[datetime] = mapped_column(
         UTCDateTime(), server_default=func.now(), nullable=False
     )
     prompt_list: Mapped[PromptList] = relationship(back_populates="prompts")
+    prompt_version: Mapped[PromptVersion] = relationship()

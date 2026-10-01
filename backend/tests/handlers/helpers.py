@@ -260,7 +260,7 @@ class StubPromptListRepo:
         prompts=("aardvark", "zeppelin"),
         language="en",
         *,
-        revision_ids=(),
+        list_ids=(),
         aliases=None,
         prompt_version_ids=None,
         concept_ids=None,
@@ -274,7 +274,7 @@ class StubPromptListRepo:
         # its answer as a quick prompt is.
         self.concept_ids = dict(concept_ids or {})
         self.language = language
-        self.revision_ids = tuple(revision_ids)
+        self.list_ids = tuple(list_ids)
         self.aliases = dict(aliases or {})
         # Curated content always carries a version identity, and usage is keyed
         # by it - a stub without one records nothing and quietly passes tests
@@ -327,10 +327,7 @@ class StubPromptListRepo:
         return PinnedPromptSelection(
             slugs=tuple(slugs),
             language=expected_language or self.language,
-            revision_ids=self.revision_ids,
-            # A stub list's id is its revision's: provenance names the list
-            # (#1358), and the stub has one of each.
-            list_ids=self.revision_ids,
+            list_ids=self.list_ids,
             prompt_count=len(self.prompts),
             letter_counts=counts,
             letter_total=total,
@@ -339,7 +336,7 @@ class StubPromptListRepo:
         )
 
     async def sample_prompts(
-        self, revision_ids, *, limit, exclude_match_keys=(), exclude_language=None
+        self, list_ids, *, limit, exclude_match_keys=(), exclude_language=None
     ):
         self.draws += 1
         # Keys in another fold are not compared, as in the live store.
@@ -363,7 +360,7 @@ class StubPromptListRepo:
                     match_key=self._match_key(prompt),
                     aliases=self.aliases.get(prompt, ()),
                     prompt_version_id=self.prompt_version_ids.get(prompt),
-                    source_list_ids=tuple(revision_ids),
+                    source_list_ids=tuple(list_ids),
                     concept_id=self.concept_ids.get(prompt),
                 )
                 for prompt in drawable[:limit]
@@ -371,7 +368,7 @@ class StubPromptListRepo:
             drawable=len(drawable),
         )
 
-    async def sample_mixed_prompts(self, revision_ids, *, limit):
+    async def sample_mixed_prompts(self, list_ids, *, limit):
         self.draws += 1
         drawable = list(self.prompts)
         random.shuffle(drawable)
@@ -381,13 +378,13 @@ class StubPromptListRepo:
                     answer=prompt,
                     match_key=self._match_key(prompt),
                     prompt_version_id=self.prompt_version_ids.get(prompt),
-                    source_list_ids=tuple(revision_ids),
+                    source_list_ids=tuple(list_ids),
                     concept_id=self.concept_ids.get(prompt),
                     translations={
                         language: PromptTranslation(
                             answer=answer,
                             prompt_version_id=f"{self.prompt_version_ids.get(prompt)}-{language}",
-                            source_list_ids=tuple(revision_ids),
+                            source_list_ids=tuple(list_ids),
                         )
                         for language, answer in self.translations.get(prompt, {}).items()
                     },

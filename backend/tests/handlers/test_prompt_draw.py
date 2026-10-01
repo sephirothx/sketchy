@@ -34,16 +34,15 @@ from app.services.game_flow import (
 
 
 from tests.handlers.helpers import room_lines
-def pin(room, repo, *, revision_ids=("revision-1",)):
+def pin(room, repo, *, list_ids=("list-1",)):
     """Put the room in the state `authorize_selection` would have left it in."""
     room.prompt_list_slugs = ["curated"]
-    room.prompt_list_revision_ids = list(revision_ids)
-    room.prompt_list_ids = list(revision_ids)
+    room.prompt_list_ids = list(list_ids)
     room.prompt_pool_size = len(repo.prompts)
     counts, total = letter_histogram(repo.prompts)
     room.prompt_letter_counts = counts
     room.prompt_letter_total = total
-    repo.revision_ids = tuple(revision_ids)
+    repo.list_ids = tuple(list_ids)
 
 
 async def test_a_game_draws_only_the_prompts_it_could_ever_play():
@@ -220,7 +219,7 @@ async def test_a_game_tracks_list_prompts_by_concept_and_quick_ones_by_text():
     assert game.prompt_answers == {"concept-anchor": "anchor"}
     assert game.prompt_version_ids == {"concept-anchor": "version-anchor"}
     assert game.prompt_aliases == {"concept-anchor": ("ship anchor",)}
-    assert game.prompt_source_list_ids_by_key == {"concept-anchor": ("revision-1",)}
+    assert game.prompt_source_list_ids_by_key == {"concept-anchor": ("list-1",)}
     assert game.prompt_source_kind("concept-anchor") == "curated"
     assert game.prompt_source_kind("lighthouse") == "custom"
 
@@ -618,7 +617,7 @@ async def test_a_short_draw_is_believed_over_the_count():
 
     async def one_row_only(*_args, **_kwargs):
         drawn = await StubPromptListRepo.sample_prompts(
-            repo, list(room.prompt_list_revision_ids), limit=1
+            repo, list(room.prompt_list_ids), limit=1
         )
         return PromptSample(prompts=drawn.prompts, drawable=500)
 

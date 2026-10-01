@@ -23,16 +23,14 @@ from tests.handlers.helpers import (
 )
 
 
-def attach_curated_sources(room, *revision_ids: str) -> None:
-    """Pin the room to revisions its game will draw curated prompts from.
+def attach_curated_sources(room, *list_ids: str) -> None:
+    """Pin the room to lists its game will draw curated prompts from.
 
     The version IDs themselves come from the draw now, so the room only carries
     the pin and the size that weights it; `CuratedPromptListRepository` answers
     with the built-in prompts and a stable version ID for each.
     """
-    room.prompt_list_revision_ids = list(revision_ids or ("revision-standard",))
-    # The stub's lists share their revisions' ids (#1358).
-    room.prompt_list_ids = list(room.prompt_list_revision_ids)
+    room.prompt_list_ids = list(list_ids or ("revision-standard",))
     room.prompt_list_slugs = room.prompt_list_slugs or ["english_standard"]
     room.prompt_pool_size = len(PROMPTS)
 
@@ -952,7 +950,7 @@ async def test_a_usage_write_that_conflicts_is_given_up_without_touching_the_his
     attach_curated_sources(room)
 
     class ConflictingWords(FakeWordListRepository):
-        async def record_prompt_usage(self, prompt_list_revision_ids, usage):
+        async def record_prompt_usage(self, prompt_list_ids, usage):
             raise PromptUsageConflictError("different facts under this batch id")
 
     history = FakeGameHistoryRepository()
