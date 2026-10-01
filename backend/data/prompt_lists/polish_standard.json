@@ -975,7 +975,7 @@
     {"conceptId":"01a02b7b-b740-780e-98fe-c8bf2eeae309","answer":"odkurzacz"},
     {"conceptId":"01a0f467-2041-71b2-9e85-05c2790460eb","answer":"dolina"},
     {"conceptId":"01a02b7b-b741-72ff-9df4-3fe931535ca6","answer":"wampir"},
-    {"conceptId":"01a0f467-2041-71b2-9e85-05c34df1dbaf","answer":"furgonetka","aliases":["dostawczak","bus","van","samochód dostawczy"]},
+    {"conceptId":"01a0f467-2041-71b2-9e85-05c34df1dbaf","answer":"furgonetka","aliases":["dostawczak","van","samochód dostawczy"]},
     {"conceptId":"01a02b7b-b742-7945-9395-7158a02e1642","answer":"wazon"},
     {"conceptId":"01a0f467-2041-71b2-9e85-05c48fca49df","answer":"weterynarz"},
     {"conceptId":"01a0f467-2041-71b2-9e85-05c535625fd2","answer":"wiking"},

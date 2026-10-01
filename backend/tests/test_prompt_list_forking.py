@@ -297,8 +297,8 @@ async def test_provenance_survives_the_fork_being_edited(env):
 
 async def test_an_official_bundled_list_cannot_be_forked(env):
     """Bundled lists are public and active, so a public-active-present check
-    let them through - and each holds a thousand prompts and more, well past
-    the 500 an owned list may contain."""
+    let them through - and Standard holds a thousand prompts and more, well
+    past the 500 an owned list may contain."""
     http, users, prompts, factory = env
     forker = await account(users, "Forker")
     await prompts.upsert_bundled(

@@ -172,7 +172,7 @@
     {"conceptId":"01a02b7b-b4ad-7855-889c-6ee0e40f7877","answer":"Stuhl"},
     {"conceptId":"01a0f467-2040-7733-9e34-deb3256714b1","answer":"Kreide","aliases":["die Kreide"]},
     {"conceptId":"01a02b7b-b4ae-7fd7-9231-44b225dd2985","answer":"Chamäleon","aliases":["das Chamäleon"]},
-    {"conceptId":"01a0f467-2040-7733-9e34-deb4463a43fa","answer":"Sekt","aliases":["der Sekt","Champagner","Schaumwein"]},
+    {"conceptId":"01a0f467-2040-7733-9e34-deb4463a43fa","answer":"Champagner","aliases":["der Champagner","Sekt","der Sekt","Schaumwein"]},
     {"conceptId":"01a02b7b-b4af-75f9-98b3-4aa922a30bd2","answer":"Kronleuchter","aliases":["der Kronleuchter","Lüster","Luster"]},
     {"conceptId":"01a02b7b-b4b0-7515-9592-9f620fe98236","answer":"Käse"},
     {"conceptId":"01a02b7b-b4b1-7677-bc73-ef11543c71b1","answer":"Gepard","aliases":["der Gepard"]},

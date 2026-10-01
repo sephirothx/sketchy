@@ -121,6 +121,53 @@ async def test_a_mixed_room_draws_every_language_s_form_and_agnostic_ones_whole(
     assert dog.translations["de"].prompt_version_id != dog.translations["en"].prompt_version_id
 
 
+async def test_a_mixed_draw_carries_the_selection_s_false_friends(seeded):
+    """German "Hut" is the hat, and English "hut" a different concept: the
+    draw says so for the German seat whatever it sampled (#1367)."""
+    prompts, owner = seeded
+    pinned = await prompts.authorize_selection(
+        ["english_standard"], requesting_user_id=owner.id, expected_language="mul"
+    )
+    sample = await prompts.sample_mixed_prompts(list(pinned.revision_ids), limit=1)
+
+    hat = _concept_of("german_standard", "Hut")
+    assert sample.false_friends["de"]["hut"] == frozenset({hat})
+    # A word every language spells for the same concept is nobody's false
+    # friend: it is the drawing in each.
+    assert all(
+        _concept_of("english_standard", "hotel") not in owners
+        for language in sample.false_friends.values()
+        for owners in language.values()
+    )
+
+
+def test_false_friends_are_found_per_seat_language():
+    from app.repositories.sqlalchemy import _mixed_false_friends
+
+    found = _mixed_false_friends(
+        [
+            ("de", "hat", "Hut"),
+            ("en", "hat", "hat"),
+            ("en", "hut", "hut"),
+            ("de", "hut", "Hütte"),
+            ("de", "hotel", "Hotel"),
+            ("en", "hotel", "hotel"),
+            ("zxx", "pika", "Pikachu"),
+        ]
+    )
+    # "hut" is English for the hut and German for the hat: taken from a German
+    # seat for anything but the hat, and from an English seat for anything
+    # but the hut.
+    assert found["de"] == {"hut": frozenset({"hat"})}
+    assert found["en"] == {"hut": frozenset({"hut"})}
+    assert "hotel" not in found.get("de", {})
+
+
+def _concept_of(slug: str, answer: str) -> str:
+    entries = json.loads((DEFAULT_PROMPT_LISTS_DIR / f"{slug}.json").read_text())["prompts"]
+    return next(entry["conceptId"] for entry in entries if entry["answer"] == answer)
+
+
 def _mixed_game() -> Game:
     """A drawer in English and guessers in German, French and Italian, over a
     pool holding the bow tie - Italian "papillon" - and the butterfly, French
@@ -177,9 +224,57 @@ def test_a_guess_in_any_language_scores_but_not_a_false_friend():
     # this game: it does not win the Italian bow tie for them.
     assert game.submit_guess("french", "papillon")[0] is False
     # ...and kept out of the room, where the Italian seat would read its own
-    # answer: it is routed like a near miss.
-    assert game.guess_hint("french", "papillon") == "close"
+    # answer: it is routed like a near miss, and the seat is told why.
+    assert game.guess_hint("french", "papillon") == "another_language"
     assert game.submit_guess("french", "noeud papillon")[0] is True
+
+
+def test_a_false_friend_the_game_never_drew_does_not_score_either():
+    """With two thousand concepts the twin is rarely drawn (#1367), so the
+    guard asks the whole selection: German "Hut" is the hat, and does not win
+    an English hut for a German seat even in a game that never drew the hat."""
+    hut = {
+        "en": PromptForm("hut", (), "v-hut-en"),
+        "de": PromptForm("Hütte", (), "v-hut-de"),
+    }
+    game = Game(
+        turn_order=["drawer", "german"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-hut"],
+        prompt_answers={"c-hut": "hut"},
+        prompt_version_ids={"c-hut": "v-hut-en"},
+        prompt_translations={"c-hut": hut},
+        seat_languages={"drawer": "en", "german": "de"},
+        false_friends={"de": {"hut": frozenset({"c-hat"})}},
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("german", "Hut")[0] is False
+    assert game.guess_hint("german", "Hut") == "another_language"
+    assert game.submit_guess("german", "Hütte")[0] is True
+
+
+def test_a_word_that_is_the_drawing_s_own_in_both_languages_still_scores():
+    """A key is only taken from a seat when it names *another* concept there:
+    "Hotel" is the hotel in German and in English alike."""
+    hotel = {"en": PromptForm("hotel", (), "v-en"), "de": PromptForm("Hotel", (), "v-de")}
+    game = Game(
+        turn_order=["drawer", "german"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-hotel"],
+        prompt_answers={"c-hotel": "hotel"},
+        prompt_version_ids={"c-hotel": "v-en"},
+        prompt_translations={"c-hotel": hotel},
+        seat_languages={"drawer": "en", "german": "de"},
+        false_friends={"de": {"hotel": frozenset({"c-hotel"})}},
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.submit_guess("german", "hotel")[0] is True
 
 
 def test_a_near_miss_is_measured_in_the_seat_s_own_language_only():
@@ -398,7 +493,7 @@ def test_the_false_friend_guard_asks_about_the_prompt_in_play_now():
     assert game.submit_guess("italian", "papillon")[0] is False
     # Not this seat's answer, but the French one: kept out of the room, and
     # not because it is near the Italian "farfalla".
-    assert game.guess_hint("italian", "papillon") == "close"
+    assert game.guess_hint("italian", "papillon") == "another_language"
     assert game.submit_guess("italian", "farfalla")[0] is True
 
 

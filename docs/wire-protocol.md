@@ -489,7 +489,10 @@ authorization or mutation runs. A parser may name a more specific code.
   sees, it rides the receipt (#884): a correct guess `{correct: {prompt, points,
   basePoints, hintSpend}, line}` — what `you_guessed_correctly` and the guesser's own
   chat line used to say — and a near miss `{line, verdict}`, the guesser's own line and
-  the room's announcement on it. A deduplicated retry is answered with the first
+  the room's announcement on it: `guess_very_close`, `guess_some_words_correct`, or - in a
+  mixed-language room, where the guess spells the drawing in another seat's language and
+  means a different prompt in the guesser's own (#1367, protocol 53) -
+  `guess_answer_in_another_language`. A deduplicated retry is answered with the first
   attempt's body: the retry exists because that answer may be the one that was lost. A
   lost answer loses the result, which a correct guess recovers through `sync_game`
   (#870) and a near miss does not need to.

@@ -444,6 +444,12 @@ class Game:
         default_factory=dict, repr=False
     )
     letter_total_by_language: dict[str, int] = field(default_factory=dict)
+    # By seat language, every key that is one pinned concept's word there and
+    # another concept's word elsewhere (#1367), from the whole selection - not
+    # only what was drawn, which is a few dozen of two thousand concepts.
+    false_friends: Mapping[str, Mapping[str, frozenset[str]]] = field(
+        default_factory=dict, repr=False
+    )
     # Where this game's prompts come from, decided from the room's settings.
     # Empty means "work it out from the pool", which is what a bare `Game` in a
     # test wants; `_start_fresh_game` always passes the room's own answer.
@@ -1304,8 +1310,10 @@ class Game:
         (see `_is_close_pair`), "partial" if (for multi-word prompts only,
         matching words position-independently and tolerating a word-count
         difference of at most 1) one or more correct words together add up to
-        at least `CLOSE_GUESS_MIN_CORRECT_LETTERS` letters, or None if
-        neither applies.
+        at least `CLOSE_GUESS_MIN_CORRECT_LETTERS` letters, "another_language"
+        if a mixed-language room's false-friend guard refused it - the drawing
+        in another seat's language, a different prompt in the guesser's own -
+        or None if none applies.
         """
         if not self.prompt:
             return None
@@ -1323,8 +1331,8 @@ class Game:
             # Another language's spelling the false-friend guard refused: not
             # this seat's answer, but broadcast it and the seats playing that
             # language read their own answer in the chat (#1182). Kept private
-            # the way a near miss is.
-            return "close"
+            # the way a near miss is, and the guesser is told why (#1367).
+            return "another_language"
         verdict = _near_miss(guess, accepted_answers)
         if verdict is not None or not self.is_mixed_language():
             return verdict
@@ -1389,7 +1397,10 @@ class Game:
 
     def _other_prompts_keys(self, language: str) -> frozenset[str]:
         """The canonical keys, in `language`'s fold, of every other prompt
-        this game could play - what a word already means to that seat."""
+        this game could play - what a word already means to that seat - and
+        of every other concept the room pinned whose word there another
+        language spells too (#1367): with two thousand concepts, the twin of
+        a false friend is rarely among the few dozen drawn."""
         current = self._current_key()
         cached = self._taken_keys.get((current, language))
         if cached is not None:
@@ -1399,6 +1410,10 @@ class Game:
             for key in self.prompt_pool or []
             if key != current
             for answer in (self.answer_for(key, language), *self.aliases_for(key, language))
+        ) | frozenset(
+            key
+            for key, owners in self.false_friends.get(language, {}).items()
+            if owners - {current}
         )
         self._taken_keys[(current, language)] = taken
         return taken

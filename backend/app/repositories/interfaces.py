@@ -716,6 +716,13 @@ class PromptSample:
 
     prompts: tuple[SampledPrompt, ...] = ()
     drawable: int = 0
+    # A mixed-language draw only (#1367): by seat language, every key that is
+    # one pinned concept's word there and another concept's word somewhere
+    # else, with the concepts it is that language's word for. A guess on one
+    # of these names those concepts to the seat, so it must not win a
+    # different drawing however the other language spells it - whether or
+    # not those concepts were drawn into the game.
+    false_friends: Mapping[str, Mapping[str, frozenset[str]]] = field(default_factory=dict)
 
 
 class PromptListSelectionError(ValueError):

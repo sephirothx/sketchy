@@ -151,6 +151,8 @@ class _PromptDraw:
     translations: dict[str, dict[str, PromptForm]] = field(default_factory=dict)
     letter_counts_by_language: dict[str, dict[str, int]] = field(default_factory=dict)
     letter_total_by_language: dict[str, int] = field(default_factory=dict)
+    # A mixed-language game's false friends across everything it pinned (#1367).
+    false_friends: Mapping[str, Mapping[str, frozenset[str]]] = field(default_factory=dict)
 
 
 def _prompt_key(prompt: SampledPrompt) -> str:
@@ -743,6 +745,7 @@ class GameFlowService:
                 for language, counts in room.prompt_letter_counts_by_language.items()
             },
             letter_total_by_language=dict(room.prompt_letter_total_by_language),
+            false_friends=sample.false_friends,
         )
 
     async def _draw_prompt_sample(self, room: Room) -> _PromptDraw:
@@ -981,6 +984,7 @@ class GameFlowService:
             prompt_translations=draw.translations,
             letter_counts_by_language=draw.letter_counts_by_language,
             letter_total_by_language=draw.letter_total_by_language,
+            false_friends=draw.false_friends,
             # Every seat's language as it joined, spectators too: they read
             # the prompt when the room lets them (#1182).
             seat_languages={

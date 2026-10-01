@@ -226,8 +226,8 @@ def _published_by_a_player():
     Bundled lists are public and active too - that is what the official
     catalogue *is* - so a predicate checking only public-active-present let an
     official list be starred and forked. Forking one was the worse half: the
-    fork path builds its entries directly, so copying a bundled list - a
-    thousand prompts and more - would have written an owned list well past R-LIST-04's 500.
+    fork path builds its entries directly, so copying Standard - a thousand
+    prompts and more - would have written an owned list well past R-LIST-04's 500.
     """
     return (
         PromptList.visibility == PromptListVisibility.PUBLIC.value,
@@ -3662,6 +3662,43 @@ async def _rows_in_chunks(session: AsyncSession, statement) -> list:
 #: Selections whose verdict is remembered (#1237). A verdict is a few
 #: integers; the bound is on how many distinct selections are kept, oldest out.
 MAX_REMEMBERED_VERDICTS = 512
+
+#: Mixed selections whose false friends are remembered (#1367). Most mixed
+#: rooms pin the same bundled families, so a handful covers them; each entry is
+#: a few hundred keys.
+MAX_REMEMBERED_FALSE_FRIENDS = 64
+
+
+def _mixed_false_friends(rows: Sequence[tuple[str, str, str]]) -> dict[str, dict[str, frozenset[str]]]:
+    """Every key, per seat language, that names one concept there and is
+    another concept's word in some other language (#1367).
+
+    `rows` are (language, concept, text): every answer and alias of the pinned
+    revisions. A text in no language is that seat's word too, whatever the
+    seat plays. A guess that lands on one of the returned keys means the
+    concepts listed to that seat - German "Hut" is the hat - and so must not
+    win a drawing whose other-language spelling folds the same way (an
+    English hut), drawn into the game or not.
+    """
+    own: dict[str, dict[str, set[str]]] = {language: defaultdict(set) for language in PROMPT_LANGUAGES}
+    folded: list[tuple[str, str, dict[str, str]]] = []
+    for language, concept, text in rows:
+        keys = prompt_match_keys(text, PROMPT_LANGUAGES)
+        folded.append((language, concept, keys))
+        for seat in PROMPT_LANGUAGES:
+            if language in (seat, AGNOSTIC_PROMPT_LANGUAGE):
+                own[seat][keys[seat]].add(concept)
+    found: dict[str, dict[str, frozenset[str]]] = {}
+    for language, concept, keys in folded:
+        if language == AGNOSTIC_PROMPT_LANGUAGE:
+            continue
+        for seat in PROMPT_LANGUAGES:
+            if seat == language:
+                continue
+            owners = own[seat].get(keys[seat])
+            if owners and owners - {concept}:
+                found.setdefault(seat, {})[keys[seat]] = frozenset(owners)
+    return found
 AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
 EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
 
@@ -3736,6 +3773,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         # pinned and the fold they were checked under, with the moderation
         # fingerprint it was concluded at. See `authorize_selection`.
         self._verdicts: OrderedDict[tuple, tuple[tuple, _SelectionVerdict]] = OrderedDict()
+        # A mixed selection's false friends (#1367), by the revisions pinned.
+        # A revision never changes, so neither does what it collides with.
+        self._false_friends: OrderedDict[tuple, dict[str, dict[str, frozenset[str]]]] = (
+            OrderedDict()
+        )
 
     @staticmethod
     def _star_count():
@@ -6096,7 +6138,49 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     translations=translations,
                 )
             )
-        return PromptSample(prompts=tuple(prompts), drawable=drawable)
+        return PromptSample(
+            prompts=tuple(prompts),
+            drawable=drawable,
+            false_friends=await self._mixed_false_friends(pinned),
+        )
+
+    async def _mixed_false_friends(
+        self, revision_ids: Sequence[UUID]
+    ) -> dict[str, dict[str, frozenset[str]]]:
+        """`_mixed_false_friends` for these revisions, remembered.
+
+        Every version counts, hidden ones too: a hidden word is still what the
+        word means to the seat, and leaving it out would only let a few more
+        guesses through for the wrong drawing.
+        """
+        key = tuple(sorted(str(revision_id) for revision_id in revision_ids))
+        remembered = self._false_friends.get(key)
+        if remembered is not None:
+            self._false_friends.move_to_end(key)
+            return remembered
+        members = PromptListRevisionItem.revision_id.in_(list(revision_ids))
+        answers = (
+            select(PromptVersion.language, PromptVersion.concept_id, PromptVersion.canonical_answer)
+            .join(PromptListRevisionItem, PromptListRevisionItem.prompt_version_id == PromptVersion.id)
+            .where(members)
+        )
+        aliases = (
+            select(PromptVersion.language, PromptVersion.concept_id, PromptAlias.answer)
+            .join(PromptListRevisionItem, PromptListRevisionItem.prompt_version_id == PromptVersion.id)
+            .join(PromptVersionAlias, PromptVersionAlias.prompt_version_id == PromptVersion.id)
+            .join(PromptAlias, PromptAlias.id == PromptVersionAlias.alias_id)
+            .where(members)
+        )
+        async with self._session_factory() as session:
+            rows = await _rows_in_chunks(session, answers.union(aliases))
+        found = await _off_loop(
+            _mixed_false_friends,
+            [(language, _public_id(concept), text) for language, concept, text in rows],
+        )
+        self._false_friends[key] = found
+        while len(self._false_friends) > MAX_REMEMBERED_FALSE_FRIENDS:
+            self._false_friends.popitem(last=False)
+        return found
 
     async def _authorize_mixed(
         self,
