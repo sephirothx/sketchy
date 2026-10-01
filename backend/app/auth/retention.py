@@ -535,11 +535,10 @@ def _describe(report: object) -> dict[str, object]:
         return report.as_dict()
     if hasattr(report, "lists_examined"):
         # The reclaim keeps its own shape - it removes revisions, lists,
-        # versions and concepts rather than rows of one table - but it owes
-        # the same account of what it left. Its backlog is over the lists it
-        # could still collect: a tombstone every remaining revision is pinned
-        # to is exempt for ever, and counting one would climb with nothing
-        # wrong, but the lists waiting *behind* it are late like any other.
+        # versions and concepts, and clears play history, rather than rows of
+        # one table - but it owes the same account of what it left: its
+        # backlog of retired lists past their grace, and whether it stopped on
+        # its budget, which brings the next run forward like any other sweep's.
         return {
             "rows": report.lists_deleted,
             "revisions": report.revisions_deleted,
@@ -547,6 +546,7 @@ def _describe(report: object) -> dict[str, object]:
             "examined": report.lists_examined,
             "oldest_overdue_seconds": round(report.oldest_overdue_seconds, 1),
             "backlog": report.backlog,
+            "exhausted": report.exhausted,
         }
     return {"rows": int(report) if isinstance(report, int) else None}
 

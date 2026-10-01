@@ -663,8 +663,10 @@ async def test_a_heavily_played_list_is_drained_across_runs_before_it_goes():
         first = await reclaim_retired_prompt_lists(factory, now=now, budget=budget)
         assert first.history_cleared == 5 and first.lists_deleted == 0
         assert first.backlog == 1, "still owed, and counted"
+        assert first.exhausted, "cut short: the loop comes back sooner"
         second = await reclaim_retired_prompt_lists(factory, now=now, budget=budget)
         assert second.history_cleared == 3 and second.lists_deleted == 1
+        assert not second.exhausted
         async with factory() as session:
             assert await session.scalar(select(func.count(GamePromptSource.game_id))) == 0
             facts = (await session.scalars(select(PromptUsageFact))).all()

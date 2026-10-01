@@ -566,8 +566,8 @@ in-memory room. A registered host can explicitly save usable custom prompts to
 **My prompt lists** as a Private prompt list; nothing is stored
 merely because it was typed. An account may own at most 25 lists and a saved
 list may contain at most 500 prompts. Editing uses optimistic concurrency and
-creates a new immutable revision instead of rewriting the revision a running or
-finished game pinned. The content language - one of the eight, or **Any language**
+creates a new immutable revision instead of rewriting the revision a waiting or
+running room drew from. The content language - one of the eight, or **Any language**
 for a list of names or brands that is not in one - cannot change after creation. An
 Any-language list is refused if two of its prompts would be one answer in some room
 language ("Müller" and "Mueller" in German). A list
