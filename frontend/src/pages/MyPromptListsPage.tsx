@@ -637,7 +637,8 @@ export function MyPromptListsPage() {
                 : <span />}
               <div className="prompt-list-manager-buttons">
                 {selectedId && <button type="button" className="btn btn-danger-ghost btn-compact" disabled={busy} onClick={() => setConfirmingDelete(true)}><TrashIcon size={14} />{ui.myPromptListsPage.deleteList}</button>}
-                {selectedId && !copiedFrom && moderationState === "active" && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
+                {selectedId && !copiedFrom && moderationState === "active"
+                  && !lists.find((item) => item.id === selectedId)?.pendingEdition && <button type="button" className="btn btn-secondary btn-compact" disabled={busy} onClick={() => void duplicate()}><CopyIcon size={14} />{ui.myPromptListsPage.duplicate}</button>}
                 <button type="submit" className="btn btn-primary btn-compact" disabled={busy}>{busy ? ui.myPromptListsPage.saving : ui.myPromptListsPage.saveList}</button>
               </div>
             </div>

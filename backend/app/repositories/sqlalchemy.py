@@ -5281,7 +5281,19 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     description=source.description,
                     language=source.language,
                 )
-                if source.moderation_state != PromptContentModerationState.ACTIVE.value:
+                # A hold for review is the pending edition's since #1360, not
+                # the list's state: asked of both (#1386 review). The row is
+                # held FOR SHARE, so a publish cannot add one meanwhile.
+                held = await session.scalar(
+                    select(PromptListEdition.id).where(
+                        PromptListEdition.prompt_list_id == source.id,
+                        PromptListEdition.state == EDITION_UNDER_REVIEW,
+                    )
+                )
+                if (
+                    source.moderation_state != PromptContentModerationState.ACTIVE.value
+                    or held is not None
+                ):
                     raise PromptListMutationError(
                         "A list under moderation cannot be duplicated.",
                         code=ErrorCode.CANNOT_DUPLICATE_PROMPT_LIST,
