@@ -54,6 +54,29 @@ LIST_TAG_VOCABULARY: tuple[tuple[str, str], ...] = (
 
 LIST_TAG_SLUGS = frozenset(slug for slug, _ in LIST_TAG_VOCABULARY)
 
+# The shelves the official lists stand on (#1374), in the order the room
+# picker shows them. A shelf is navigation, not content: every official list
+# names one, and a **series** within it (the Pokémon generations) is optional.
+# Only slugs live here - what a player reads is in the frontend catalogue, in
+# every interface language - and a shelf is added here before a list names it,
+# so a typo in a seed file fails startup instead of opening a shelf of one.
+PROMPT_SHELVES: tuple[str, ...] = ("everyday",)
+
+
+def validate_shelf_placement(
+    shelf: str, series: str | None, position: int
+) -> tuple[str, str | None, int]:
+    """Check where an official list stands in the picker's tree, or refuse it."""
+    if shelf not in PROMPT_SHELVES:
+        raise ValueError(f"Unknown shelf: {shelf}")
+    if series is not None and (
+        len(series) > MAX_TAG_SLUG_LENGTH or not _TAG_SLUG.fullmatch(series)
+    ):
+        raise ValueError(f"A series must be a lowercase slug: {series}")
+    if position < 0:
+        raise ValueError("A shelf position must not be negative")
+    return shelf, series, position
+
 
 class UnknownListTag(ValueError):
     """A tag the curated vocabulary does not hold, kept so a refusal can name it.

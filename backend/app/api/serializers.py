@@ -181,6 +181,11 @@ def prompt_list_payload(prompt_list: PromptListSummary) -> dict:
         "promptCount": prompt_list.prompt_count,
         "isBundled": prompt_list.is_bundled,
         "version": prompt_list.version,
+        "shelf": prompt_list.shelf,
+        "series": prompt_list.series,
+        "shelfPosition": prompt_list.shelf_position,
+        "tags": list(prompt_list.tags),
+        "family": prompt_list.family,
     }
 
 

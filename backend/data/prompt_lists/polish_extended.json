@@ -4,6 +4,8 @@
   "description": "Trudniejsza lista: rzadsze rzeczy, sceny i wyrażenia, taka sama w każdym języku.",
   "language": "pl",
   "version": 3,
+  "shelf": "everyday",
+  "position": 1,
   "prompts": [
     {"conceptId":"01a0f467-2041-71b2-9e85-05dd1bbe08e4","answer":"liczydło"},
     {"conceptId":"01a0f467-2041-71b2-9e85-05deda591bc4","answer":"as w rękawie"},

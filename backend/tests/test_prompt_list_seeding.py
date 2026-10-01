@@ -1,6 +1,7 @@
 """Unit tests for prompt list seeding, REST API, selection, and usage metrics."""
 from __future__ import annotations
 
+import json
 from uuid import uuid4
 
 import pytest
@@ -18,6 +19,7 @@ from app.db.seed import seed_prompt_lists
 from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
+    PROMPT_SHELVES,
     default_prompt_list_slug,
     prompt_match_key,
 )
@@ -97,14 +99,18 @@ async def test_a_concept_in_two_selected_lists_is_one_prompt():
 
 async def test_every_supported_language_ships_its_three_lists():
     """A room may only be opened in a language that has content (R-PROMPT-01),
-    so the eight supported languages and the bundled catalogue have to be the
-    same set - and each language's three lists have to be playable together."""
+    so every supported language ships its Standard, Extended and Local - and
+    each language's three lists have to be playable together. Themed official
+    lists stand beside them (#1374), so the catalogue is not counted."""
     factory, engine = await create_test_db()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         seeded = await seed_prompt_lists(repo)
         slugs = {summary.slug for summary in seeded}
-        assert len(slugs) == 3 * len(PROMPT_LANGUAGES)
+        assert {summary.language for summary in seeded} <= {
+            *PROMPT_LANGUAGES,
+            "zxx",
+        }
 
         for language in PROMPT_LANGUAGES:
             stem = PromptLanguage(language).name.lower()
@@ -576,5 +582,152 @@ async def test_seeding_analyzes_what_it_wrote():
                 await owner.dispose()
         assert set(before) == set(SEEDED_TABLES)
         assert [t for t in SEEDED_TABLES if after[t] <= before[t]] == []
+    finally:
+        await engine.dispose()
+
+
+def _write_list(directory, slug: str, **fields) -> None:
+    """One official list file, as `backend/data/prompt_lists` holds them."""
+    body = {
+        "slug": slug,
+        "name": slug.title(),
+        "language": "en",
+        "version": 1,
+        "shelf": "everyday",
+        "position": 0,
+        "prompts": [
+            {"conceptId": "01a0f467-2040-7733-9e34-000000000001", "answer": "otter"},
+            {"conceptId": "01a0f467-2040-7733-9e34-000000000002", "answer": "walrus"},
+        ],
+        **fields,
+    }
+    (directory / f"{slug}.json").write_text(json.dumps(body), encoding="utf-8")
+
+
+async def test_official_lists_stand_on_shelves_and_name_their_family():
+    """Every official list stands on a shelf the picker knows, in its place
+    there, and a list every language translates names the family a mixed room
+    plays it in - the same name on every copy (#1374)."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        catalogue = {summary.slug: summary for summary in await repo.list_all()}
+
+        assert all(summary.shelf in PROMPT_SHELVES for summary in catalogue.values())
+        for language in PROMPT_LANGUAGES:
+            stem = PromptLanguage(language).name.lower()
+            standard = catalogue[f"{stem}_standard"]
+            extended = catalogue[f"{stem}_extended"]
+            local = catalogue[f"{stem}_local"]
+            assert (standard.shelf, standard.shelf_position) == ("everyday", 0)
+            assert (extended.shelf_position, local.shelf_position) == (1, 2)
+            assert standard.family == "english_standard"
+            assert extended.family == "english_extended"
+            # Local is one language's own, so it is in no family.
+            assert local.family is None
+    finally:
+        await engine.dispose()
+
+
+async def test_an_official_list_moves_shelf_without_a_new_version(tmp_path):
+    """Shelf, series, place and tags are navigation: a file that changes them
+    and keeps its version seeds, where changed prompts would fail startup."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        _write_list(tmp_path, "critters")
+        await seed_prompt_lists(repo, directory=tmp_path)
+        first = await repo.get_by_slug("critters")
+        assert first is not None
+        assert (first.shelf, first.series, first.shelf_position, first.tags) == (
+            "everyday",
+            None,
+            0,
+            (),
+        )
+
+        _write_list(
+            tmp_path,
+            "critters",
+            series="sea-life",
+            position=4,
+            tags=["nature", "animals"],
+        )
+        await seed_prompt_lists(repo, directory=tmp_path)
+        moved = await repo.get_by_slug("critters")
+        assert moved is not None
+        assert moved.version == first.version
+        assert (moved.series, moved.shelf_position) == ("sea-life", 4)
+        # In the vocabulary's order, whatever order the file wrote them in.
+        assert moved.tags == ("animals", "nature")
+
+        _write_list(tmp_path, "critters", tags=[])
+        await seed_prompt_lists(repo, directory=tmp_path)
+        cleared = await repo.get_by_slug("critters")
+        assert cleared is not None
+        assert (cleared.series, cleared.tags) == (None, ())
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("fields", "complaint"),
+    [
+        ({"shelf": "nowhere"}, "Unknown shelf"),
+        ({"series": "Not A Slug"}, "series"),
+        ({"tags": ["not-a-tag"]}, "Unknown tag"),
+    ],
+)
+async def test_an_official_list_in_no_known_place_fails_startup(
+    tmp_path, fields, complaint
+):
+    """A typo in a seed file stops the server rather than opening a shelf of
+    one, the way different content under a seen version does (R-PROMPT-06)."""
+    factory, engine = await create_test_db()
+    try:
+        _write_list(tmp_path, "critters", **fields)
+        with pytest.raises(ValueError, match=complaint):
+            await seed_prompt_lists(
+                SqlAlchemyPromptListRepository(factory), directory=tmp_path
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_an_official_list_must_name_a_shelf(tmp_path):
+    factory, engine = await create_test_db()
+    try:
+        _write_list(tmp_path, "critters")
+        body = json.loads((tmp_path / "critters.json").read_text(encoding="utf-8"))
+        del body["shelf"]
+        (tmp_path / "critters.json").write_text(json.dumps(body), encoding="utf-8")
+        with pytest.raises(KeyError):
+            await seed_prompt_lists(
+                SqlAlchemyPromptListRepository(factory), directory=tmp_path
+            )
+    finally:
+        await engine.dispose()
+
+
+async def test_an_official_list_in_no_language_seeds_and_plays_anywhere(tmp_path):
+    """The names that are the same in every language ship as one official list
+    in none (`zxx`, R-PROMPT-12), which every room language may pick (#1374)."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        _write_list(tmp_path, "champions", language="zxx")
+        await seed_prompt_lists(repo, directory=tmp_path)
+
+        assert "champions" in {
+            summary.slug for summary in await repo.list_all(language="de")
+        }
+        summary = await repo.get_by_slug("champions")
+        assert summary is not None
+        assert (summary.language, summary.family) == ("zxx", None)
+        pinned = await repo.authorize_selection(
+            ["champions"], expected_language="de"
+        )
+        assert pinned.prompt_count == 2
     finally:
         await engine.dispose()

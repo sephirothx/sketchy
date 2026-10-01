@@ -1991,7 +1991,8 @@
   ],
   "api.serializers:prompt_list_payload": [
    "isBundled",
-   "promptCount"
+   "promptCount",
+   "shelfPosition"
   ],
   "api.serializers:prompt_stats_payload": [
    "correctGuessCount",
@@ -2842,7 +2843,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 56,
+ "protocolVersion": 57,
  "refusal": {
   "codes": [
    "invalid_payload",

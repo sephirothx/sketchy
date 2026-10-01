@@ -4,6 +4,8 @@
   "description": "Wat je kent in Nederland en Vlaanderen: eten, gebruiken en het dagelijks leven.",
   "language": "nl",
   "version": 1,
+  "shelf": "everyday",
+  "position": 2,
   "prompts": [
     {"conceptId":"01a0f6a4-69ad-741d-8d7a-7723356f7480","answer":"Atomium","aliases":["het Atomium"]},
     {"conceptId":"01a088e3-e9b5-727a-a42b-f7100651f3cb","answer":"bakfiets","aliases":["de bakfiets"],"promptVersion":2},

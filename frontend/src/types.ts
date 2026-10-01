@@ -66,6 +66,16 @@ export interface PromptListSummary {
   isBundled: boolean;
   version: number;
   visibility?: "private" | "public";
+  /** Where an official list stands in the picker's tree (#1374): its shelf,
+  the series within it if any, and its place there. Null on a player's list. */
+  shelf?: string | null;
+  series?: string | null;
+  shelfPosition?: number | null;
+  tags?: string[];
+  /** The family a mixed-language room plays an official list in - the slug of
+  its English member, the same on every language's copy - or null for a list
+  in one language only (R-PROMPT-13). */
+  family?: string | null;
 }
 
 export interface OwnedPromptEntry {

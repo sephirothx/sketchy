@@ -99,7 +99,13 @@ class EmptyPayload(RequestModel):
     pass
 
 
-MAX_PROMPT_LISTS = 20
+# A bound on the work a selection costs, which is counted in prompts rather
+# than lists: authorizing one checks every answer of every list for a
+# collision, and a draw orders the whole pool (#1237). It is set in lists only
+# because that is what a payload holds. Forty is room for a whole series - all
+# nine Pokémon generations are one Standard's worth of prompts - beside a
+# room's other choices (#1374).
+MAX_PROMPT_LISTS = 40
 
 
 def _clean_slugs(slugs: list[str]) -> list[str]:

@@ -98,6 +98,7 @@ from app.domain_values import (
     GameVisibility,
     PROMPT_LANGUAGES,
     PROMPT_OFFER_SOURCE_KINDS,
+    PromptLanguage,
     PROMPT_SOURCE_KINDS,
     PromptContentModerationState,
     PromptListVisibility,
@@ -908,7 +909,12 @@ def _to_game_summary(game: GameRecord, *, with_rule_snapshot: bool = True) -> Ga
 
 
 def _to_prompt_list_summary(
-    wl: PromptList, prompt_count: int, *, locale: str | None = None
+    wl: PromptList,
+    prompt_count: int,
+    *,
+    locale: str | None = None,
+    tags: Sequence[str] = (),
+    family: str | None = None,
 ) -> PromptListSummary:
     localization = (
         next(
@@ -931,6 +937,11 @@ def _to_prompt_list_summary(
         prompt_count=prompt_count,
         is_bundled=wl.is_bundled,
         version=wl.version,
+        shelf=wl.shelf,
+        series=wl.series,
+        shelf_position=wl.shelf_position,
+        tags=tuple(tags),
+        family=family,
     )
 
 
@@ -3721,6 +3732,23 @@ def _mixed_false_friends(rows: Sequence[tuple[str, str, str]]) -> dict[str, dict
     return found
 
 
+@dataclass(frozen=True, slots=True)
+class _BundledFamilies:
+    """The official lists a mixed-language room can play, by family (#1374).
+
+    A family is the official lists holding exactly the same concepts - one
+    per room language - so a seat in any of them can play every prompt
+    (R-PROMPT-13). Worked out from the data rather than from slugs, and once:
+    official content changes only when the seed runs, and every mixed pin used
+    to read every official list's prompts to find it again.
+    """
+
+    # Each family member's id -> the family's members in PROMPT_LANGUAGES order.
+    members: dict[UUID, tuple[UUID, ...]]
+    # Each family member's id -> the family's name: its English member's slug.
+    names: dict[UUID, str]
+
+
 AMBIGUOUS_SELECTION = "Selected prompt lists contain ambiguous answers or aliases"
 EMPTY_SELECTION = "Selected prompt lists do not contain any prompts"
 
@@ -3882,6 +3910,12 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         self._false_friends: OrderedDict[tuple, dict[str, dict[str, frozenset[str]]]] = (
             OrderedDict()
         )
+        # The official families (#1374), worked out on first use and dropped by
+        # every `upsert_bundled`, the only thing that changes official content.
+        # The generation keeps a reading that began before a seed's write from
+        # being kept after it.
+        self._families: _BundledFamilies | None = None
+        self._families_generation = 0
 
     async def refresh_planner_statistics(self) -> None:
         """ANALYZE the prompt tables after seeding, on PostgreSQL.
@@ -4019,12 +4053,20 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             )
             if language is not None:
                 stmt = stmt.where(_playable_in(language))
-            result = await session.execute(stmt)
+            rows = (await session.execute(stmt)).all()
+            tags = await self._working_copy_tags(
+                session, [prompt_list.id for prompt_list, _ in rows]
+            )
+            families = await self._bundled_families(session)
             return [
                 _to_prompt_list_summary(
-                    prompt_list, int(prompt_count), locale=locale
+                    prompt_list,
+                    int(prompt_count),
+                    locale=locale,
+                    tags=tags.get(prompt_list.id, ()),
+                    family=families.names.get(prompt_list.id),
                 )
-                for prompt_list, prompt_count in result.all()
+                for prompt_list, prompt_count in rows
             ]
 
     async def get_by_slug(
@@ -4041,12 +4083,17 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     == PromptContentModerationState.ACTIVE.value,
                 )
             )
-            result = await session.execute(stmt)
-            row = result.one_or_none()
-            return (
-                _to_prompt_list_summary(row[0], int(row[1]), locale=locale)
-                if row
-                else None
+            row = (await session.execute(stmt)).one_or_none()
+            if row is None:
+                return None
+            tags = await self._working_copy_tags(session, [row[0].id])
+            families = await self._bundled_families(session)
+            return _to_prompt_list_summary(
+                row[0],
+                int(row[1]),
+                locale=locale,
+                tags=tags.get(row[0].id, ()),
+                family=families.names.get(row[0].id),
             )
 
     @staticmethod
@@ -4417,6 +4464,32 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             list_id: tuple(slug for slug in LIST_TAG_SLUG_ORDER if slug in slugs)
             for list_id, slugs in held.items()
         }
+
+    async def _replace_list_tags(
+        self, session: AsyncSession, list_id: UUID, tags: Sequence[str]
+    ) -> None:
+        """Make a working copy's tags `tags`, writing only the ones that changed."""
+        wanted_tags = {row.id: row for row in await self._tag_rows(session, tags)}
+        held_tags = set(
+            (
+                await session.scalars(
+                    select(PromptListTag.tag_id).where(
+                        PromptListTag.prompt_list_id == list_id
+                    )
+                )
+            ).all()
+        )
+        if held_tags - set(wanted_tags):
+            await session.execute(
+                delete(PromptListTag).where(
+                    PromptListTag.prompt_list_id == list_id,
+                    PromptListTag.tag_id.in_(held_tags - set(wanted_tags)),
+                )
+            )
+        session.add_all(
+            PromptListTag(prompt_list_id=list_id, tag_id=tag_id)
+            for tag_id in sorted(set(wanted_tags) - held_tags)
+        )
 
     async def list_owned(self, owner_user_id: str) -> list[OwnedPromptList]:
         owner_id = _optional_entity_id(owner_user_id)
@@ -5435,29 +5508,9 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         prompt_list.letter_counts, prompt_list.letter_total = letter_histogram(
             prompt_version.canonical_answer for _, prompt_version, _ in resolved
         )
-        # The working copy's tags: only the ones that changed are written. The
-        # caller has already held them to the vocabulary (`_clean_owned_tags`).
-        wanted_tags = {row.id: row for row in await self._tag_rows(session, tags)}
-        held_tags = set(
-            (
-                await session.scalars(
-                    select(PromptListTag.tag_id).where(
-                        PromptListTag.prompt_list_id == prompt_list.id
-                    )
-                )
-            ).all()
-        )
-        if held_tags - set(wanted_tags):
-            await session.execute(
-                delete(PromptListTag).where(
-                    PromptListTag.prompt_list_id == prompt_list.id,
-                    PromptListTag.tag_id.in_(held_tags - set(wanted_tags)),
-                )
-            )
-        session.add_all(
-            PromptListTag(prompt_list_id=prompt_list.id, tag_id=tag_id)
-            for tag_id in sorted(set(wanted_tags) - held_tags)
-        )
+        # The caller has already held the tags to the vocabulary
+        # (`_clean_owned_tags`).
+        await self._replace_list_tags(session, prompt_list.id, tags)
 
         # The display rows (`prompts`, unique on text within a list). Only a
         # row whose text or version actually changes is written; a row whose
@@ -5684,32 +5737,36 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         admitted only with its **family** - the bundled lists whose working
         copies hold exactly its concepts - and only when that family spells
         every concept in every room language, because every seat must be able
-        to play every prompt in its own. Today that is Standard and Extended
-        (R-PROMPT-01), and never Local; a list in one language is refused by
-        name rather than quietly narrowing who may sit down. Asked of the data,
-        not of a slug, so a family made some other way is admitted the same way.
+        to play every prompt in its own: Standard, Extended and every themed
+        official family (R-PROMPT-01), never Local; a list in one language is
+        refused by name rather than quietly narrowing who may sit down. Asked
+        of the data, not of a slug, so a family made some other way is admitted
+        the same way - once per seed, by `_bundled_families`, rather than by
+        reading every official list's prompts on every pin (#1374).
         """
-        bundled_current = (
-            await session.scalars(
-                select(PromptList).where(
-                    PromptList.is_bundled.is_(True),
-                    PromptList.deleted_at.is_(None),
-                    PromptList.moderation_state
-                    == PromptContentModerationState.ACTIVE.value,
-                )
-            )
-        ).all()
-        concepts: dict[UUID, set[UUID]] = defaultdict(set)
-        if bundled_current:
-            for list_id, concept_id in (
-                await session.execute(
-                    select(Prompt.prompt_list_id, Prompt.concept_id).where(
-                        Prompt.prompt_list_id.in_([bundled.id for bundled in bundled_current])
+        families = await self._bundled_families(session)
+        wanted = {
+            member
+            for slug in slugs
+            for member in families.members.get(rows_by_slug[slug].id, ())
+        }
+        # The other languages' members, still active and still here: the
+        # families were worked out when the seed last ran, and a pin answers
+        # for the lists as they are now.
+        loaded = {
+            member.id: member
+            for member in (
+                await session.scalars(
+                    select(PromptList).where(
+                        PromptList.id.in_(list(wanted)),
+                        PromptList.is_bundled.is_(True),
+                        PromptList.deleted_at.is_(None),
+                        PromptList.moderation_state
+                        == PromptContentModerationState.ACTIVE.value,
                     )
                 )
-            ).all():
-                concepts[list_id].add(concept_id)
-        by_list = {bundled.id: bundled for bundled in bundled_current}
+            ).all()
+        } if wanted else {}
 
         pinned: list[PromptList] = []
         for slug in slugs:
@@ -5717,25 +5774,59 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             if row.language == AGNOSTIC_PROMPT_LANGUAGE:
                 pinned.append(row)
                 continue
-            own = by_list.get(row.id) if row.is_bundled else None
-            if own is None:
+            members = families.members.get(row.id) if row.is_bundled else None
+            if not members or any(member not in loaded for member in members):
                 raise MixedRoomListError(
                     f"A mixed-language room cannot use this list: {slug}"
                 )
-            family: dict[str, PromptList] = {own.language: own}
-            for bundled in bundled_current:
-                if (
-                    bundled.language not in family
-                    and concepts[bundled.id] == concepts[own.id]
-                ):
-                    family[bundled.language] = bundled
-            if not set(PROMPT_LANGUAGES) <= set(family):
-                raise MixedRoomListError(
-                    f"A mixed-language room cannot use this list: {slug}"
-                )
-            pinned.extend(family[language] for language in PROMPT_LANGUAGES)
+            pinned.extend(loaded[member] for member in members)
         # A family chosen twice - two languages' Standard - is pinned once.
         return list({pinned_list.id: pinned_list for pinned_list in pinned}.values())
+
+    async def _bundled_families(self, session: AsyncSession) -> _BundledFamilies:
+        """The official families, worked out once per seed (`_BundledFamilies`)."""
+        if self._families is not None:
+            return self._families
+        generation = self._families_generation
+        bundled = (
+            await session.execute(
+                select(PromptList.id, PromptList.slug, PromptList.language).where(
+                    PromptList.is_bundled.is_(True),
+                    PromptList.deleted_at.is_(None),
+                    PromptList.moderation_state
+                    == PromptContentModerationState.ACTIVE.value,
+                    PromptList.language.in_(PROMPT_LANGUAGES),
+                )
+            )
+        ).all()
+        concepts: dict[UUID, set[UUID]] = defaultdict(set)
+        if bundled:
+            for list_id, concept_id in (
+                await session.execute(
+                    select(Prompt.prompt_list_id, Prompt.concept_id).where(
+                        Prompt.prompt_list_id.in_([row.id for row in bundled]),
+                        Prompt.concept_id.is_not(None),
+                    )
+                )
+            ).all():
+                concepts[list_id].add(concept_id)
+        by_content: dict[frozenset[UUID], dict[str, Row]] = defaultdict(dict)
+        for row in bundled:
+            by_content[frozenset(concepts[row.id])].setdefault(row.language, row)
+        members: dict[UUID, tuple[UUID, ...]] = {}
+        names: dict[UUID, str] = {}
+        for content, by_language in by_content.items():
+            if not content or not set(PROMPT_LANGUAGES) <= set(by_language):
+                continue
+            family = tuple(by_language[language].id for language in PROMPT_LANGUAGES)
+            name = by_language[PromptLanguage.ENGLISH.value].slug
+            for member in family:
+                members[member] = family
+                names[member] = name
+        families = _BundledFamilies(members=members, names=names)
+        if generation == self._families_generation:
+            self._families = families
+        return families
 
     async def resolve_selection(
         self,
@@ -6352,6 +6443,11 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         language: str,
         prompts: Sequence[BundledPromptDefinition],
         version: int,
+        *,
+        shelf: str | None = None,
+        series: str | None = None,
+        shelf_position: int | None = None,
+        tags: Sequence[str] = (),
     ) -> PromptListSummary:
         source_prompts = tuple(prompts)
         if not source_prompts:
@@ -6532,11 +6628,21 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     wl.letter_counts = revision_counts
                     wl.letter_total = revision_total
 
+                # Navigation, rewritten on every start whatever the version
+                # (#1374): moving a list to another shelf is not new content.
+                wl.shelf = shelf
+                wl.series = series if shelf is not None else None
+                wl.shelf_position = (shelf_position or 0) if shelf is not None else None
+                await self._replace_list_tags(session, wl.id, tags)
+            # Official content may have changed, and the families with it.
+            self._families = None
+            self._families_generation += 1
+
             await session.refresh(wl)
             prompt_count = await session.scalar(
                 select(func.count(Prompt.id)).where(Prompt.prompt_list_id == wl.id)
             )
-            return _to_prompt_list_summary(wl, int(prompt_count or 0))
+            return _to_prompt_list_summary(wl, int(prompt_count or 0), tags=tuple(tags))
 
     async def _ensure_bundled_prompt_versions(
         self,
