@@ -1167,9 +1167,12 @@ erased account (#1375 review). Both writers live in
 [`services/prompt_takedowns.py`](../backend/app/services/prompt_takedowns.py): the insert
 ignores a row already there, since two decisions on one concept (two reports of different
 versions are two incidents) can both find none, and removing a row offers its concept's
-versions to the orphan collection at once — the sweep only looks at versions a revision it
-deletes named, so a spelling kept by a row after its revisions went is a candidate nowhere
-else, and the hidden text would outlive the account.
+versions to the orphan collection at once — the sweeps only look at versions a deleted list
+or a save left unlisted, and the unlisted sweep unstamps what a row kept, so a spelling kept
+by a row is a candidate nowhere else, and the hidden text would outlive the account.
+After the owners and the list, a decision locks every wording of the concept in id order,
+the order every multi-row version writer takes; the unlisted sweep locks its batch the same
+way and skips a row somebody holds, leaving it for its next pass (#1385 review).
 
 The row names the concept, not a spelling: the decision is the concept's (#1020), and its
 versions carry the text, the aliases and the byline the save compares against, so the

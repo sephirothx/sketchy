@@ -485,18 +485,33 @@ async def reclaim_unlisted_versions(
     while deleted < budget.rows and time.monotonic() - started < budget.seconds:
         async with session_factory() as session:
             async with session.begin():
+                candidates = (
+                    await session.scalars(
+                        select(PromptVersion.id)
+                        .where(*_unlisted_reclaimable(cutoff))
+                        .order_by(PromptVersion.unlisted_at, PromptVersion.id)
+                        .limit(min(budget.batch, budget.rows - deleted))
+                    )
+                ).all()
+                if not candidates:
+                    exhausted = False
+                    break
+                # Locked in id order, as every multi-row version writer takes
+                # them, and only those nobody holds: a moderator deciding on
+                # the concept holds its wordings, and they are the next pass's
+                # (#1385 review). Waiting on them instead, while holding the
+                # rest of the batch, could deadlock against the decision.
                 version_ids = set(
                     (
                         await session.scalars(
                             select(PromptVersion.id)
-                            .where(*_unlisted_reclaimable(cutoff))
-                            .order_by(PromptVersion.unlisted_at, PromptVersion.id)
-                            .limit(min(budget.batch, budget.rows - deleted))
+                            .where(PromptVersion.id.in_(candidates))
+                            .order_by(PromptVersion.id)
+                            .with_for_update(skip_locked=True)
                         )
                     ).all()
                 )
                 if not version_ids:
-                    exhausted = False
                     break
                 versions_deleted, _ = await reclaim_orphans(session, version_ids)
                 # The rest are named by something that keeps them now.

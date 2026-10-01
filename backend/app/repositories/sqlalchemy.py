@@ -3757,13 +3757,20 @@ async def _draw_snapshot(
     versions, then their sources, then their false friends in separate
     snapshots could see a save land between them - a drawn prompt whose
     sources had gone, so no provenance and no usage facts (#1385 review).
-    REPEATABLE READ on PostgreSQL, taken before the first statement; SQLite
-    has one writer and reads one snapshot per transaction already. Then the
-    lists must still be at the versions authorization checked, or a save in
-    between could have added an answer it never saw collide.
+    REPEATABLE READ on PostgreSQL, taken before the first statement. On
+    SQLite an explicit BEGIN: the driver's legacy transaction control opens
+    no transaction for a SELECT, so each read would otherwise see whatever
+    was committed by then; inside one, WAL holds every read to the snapshot
+    the first took. Then the lists must still be at the versions
+    authorization checked, or a save in between could have added an answer
+    it never saw collide.
     """
-    if session.get_bind().dialect.name == "postgresql":
+    dialect = session.get_bind().dialect.name
+    if dialect == "postgresql":
         await session.connection(execution_options={"isolation_level": "REPEATABLE READ"})
+    elif dialect == "sqlite":
+        # Ended by the session's close, which rolls the driver back.
+        await (await session.connection()).exec_driver_sql("BEGIN")
     if not expected_versions:
         return
     expected = {_entity_id(list_id): version for list_id, version in expected_versions.items()}

@@ -37,7 +37,11 @@ from app.canvas_storage import (
 from app.api.gallery import gallery_entry_payload
 from app.api.profiles import serve_drawing
 from app.repositories.interfaces import GameHistoryRepository, TurnDrawingDetail
-from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository, apply_gallery_decision
+from app.repositories.sqlalchemy import (
+    SqlAlchemyPromptListRepository,
+    _lock_versions,
+    apply_gallery_decision,
+)
 from app.services.gallery_shelf import read_shelf_review
 from app.services.prompt_takedowns import record_takedowns, release_takedowns
 from app.services.player_reports import (
@@ -2425,6 +2429,13 @@ def create_moderation_router(
                                 .where(PromptList.id == report.prompt_list_id)
                                 .with_for_update()
                             )
+                        # Then every wording of the concept, in id order -
+                        # the order every multi-row version writer takes them,
+                        # the unlisted sweep included - before the reported
+                        # one is written and the rest updated after it.
+                        await _lock_versions(
+                            session, PromptVersion.concept_id == target.concept_id
+                        )
                     prior_decision = (
                         target.moderation_state,
                         target.moderated_by_user_id,

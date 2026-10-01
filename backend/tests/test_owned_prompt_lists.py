@@ -5,6 +5,7 @@ from uuid import UUID
 
 import pytest
 from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.db.models import (
     PromptList,
@@ -686,6 +687,93 @@ async def test_reclaim_keeps_a_version_a_report_cites_and_drops_its_unused_sibli
         await engine.dispose()
 
 
+
+async def _a_word_saved_away(repo, owner_id):
+    """A list whose save took `gone` out, the version stamped as unlisted from it."""
+    created = await repo.create_owned(
+        owner_id, name="Edited", description="", language="en",
+        prompts=(PromptListEntryInput(answer="gone"), PromptListEntryInput(answer="kept")),
+    )
+    gone = next(entry for entry in created.prompts if entry.answer == "gone")
+    kept = next(entry for entry in created.prompts if entry.answer == "kept")
+    await repo.update_owned(
+        owner_id, created.id, expected_version=created.version, name="Edited",
+        description="", prompts=(PromptListEntryInput(answer="kept", concept_id=kept.concept_id),),
+    )
+    return created, UUID(gone.prompt_version_id)
+
+
+async def test_a_version_the_sweep_keeps_is_no_longer_unlisted_from_anything():
+    """Kept by a report, a removed wording loses both stamps together: it is
+    named by something now, and no longer a page's grace-window prompt."""
+    from datetime import datetime, timedelta, timezone
+
+    from app.db.models import PromptContentReport
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
+
+    factory, engine, owner_id, other_id = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        created, gone = await _a_word_saved_away(repo, owner_id)
+        async with factory() as session:
+            stamped = await session.get(PromptVersion, gone)
+            assert stamped.unlisted_at is not None
+            assert stamped.unlisted_from_list_id == UUID(created.id)
+        async with factory() as session:
+            async with session.begin():
+                session.add(
+                    PromptContentReport(
+                        id=generate_uuid(), reporter_user_id=UUID(other_id),
+                        reported_owner_user_id=UUID(owner_id), prompt_list_id=UUID(created.id),
+                        prompt_version_id=gone, target_type="prompt",
+                        list_name_snapshot="Edited", prompt_snapshot="gone",
+                        reason="inappropriate", details="",
+                    )
+                )
+
+        await reclaim_unlisted_versions(factory, now=datetime.now(timezone.utc) + timedelta(days=2))
+
+        async with factory() as session:
+            kept = await session.get(PromptVersion, gone)
+            assert kept is not None
+            assert (kept.unlisted_at, kept.unlisted_from_list_id) == (None, None)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.skipif(
+    not __import__("os").environ.get("TEST_DATABASE_URL"),
+    reason="row locks are PostgreSQL's",
+)
+async def test_the_unlisted_sweep_passes_over_a_version_a_decision_holds():
+    """A moderator's decision holds every wording of the concept. The sweep
+    takes what nobody holds and leaves the rest for its next pass rather than
+    waiting on it with its batch locked - which could deadlock against the
+    decision (#1385 review)."""
+    import asyncio
+    from datetime import datetime, timedelta, timezone
+
+    from app.services.prompt_reclaim import reclaim_unlisted_versions
+
+    factory, engine, owner_id, _ = await _database()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        _, gone = await _a_word_saved_away(repo, owner_id)
+        later = datetime.now(timezone.utc) + timedelta(days=2)
+        async with factory() as holder:
+            async with holder.begin():
+                await holder.execute(
+                    select(PromptVersion.id).where(PromptVersion.id == gone).with_for_update()
+                )
+                swept = await asyncio.wait_for(
+                    reclaim_unlisted_versions(factory, now=later), timeout=5
+                )
+                assert int(swept) == 0
+        swept = await reclaim_unlisted_versions(factory, now=later)
+        assert int(swept) == 1, "released, it goes on the next pass"
+    finally:
+        await engine.dispose()
+
 # --- #613: an unchanged save changes nothing, an edit rewrites only what moved
 
 
@@ -1007,18 +1095,42 @@ async def test_a_draw_refuses_a_list_saved_since_it_was_checked():
         await engine.dispose()
 
 
-@pytest.mark.skipif(
-    not __import__("os").environ.get("TEST_DATABASE_URL"),
-    reason="READ COMMITTED snapshots are PostgreSQL's",
-)
-async def test_a_save_landing_mid_draw_does_not_take_the_drawn_prompts_sources(monkeypatch):
+async def _draw_database(tmp_path):
+    """The suite's database, or on SQLite a file one: an in-memory database
+    shares one cache, where a writer meets a table lock rather than a reader's
+    snapshot, so only a file shows what the draw's readers see (#1385 review)."""
+    import os
+
+    if os.environ.get("TEST_DATABASE_URL"):
+        return await _database()
+    from tests.dbfixtures import _run_driver_script, _sqlite_schema_script, create_test_engine
+
+    engine = create_test_engine(f"sqlite+aiosqlite:///{tmp_path / 'draw.db'}")
+    async with engine.begin() as conn:
+        await _run_driver_script(conn, _sqlite_schema_script())
+    factory = async_sessionmaker(engine, expire_on_commit=False, class_=AsyncSession)
+    owner_id = generate_uuid()
+    async with factory() as session:
+        async with session.begin():
+            session.add(
+                User(
+                    id=owner_id, username="owner", password_hash="hash",
+                    display_name="Owner", is_anonymous=False, state="registered",
+                )
+            )
+    return factory, engine, str(owner_id), None
+
+
+async def test_a_save_landing_mid_draw_does_not_take_the_drawn_prompts_sources(
+    monkeypatch, tmp_path
+):
     """The draw reads its prompts, then where each came from. A save that
     rewords a drawn prompt between the two statements left it with no source
     - no provenance and no usage facts (#1385 review). The draw reads one
-    snapshot."""
+    snapshot, on either engine."""
     import app.repositories.sqlalchemy as repository
 
-    factory, engine, owner_id, _ = await _database()
+    factory, engine, owner_id, _ = await _draw_database(tmp_path)
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         created = await repo.create_owned(
@@ -1043,5 +1155,44 @@ async def test_a_save_landing_mid_draw_does_not_take_the_drawn_prompts_sources(m
 
         assert [prompt.answer for prompt in drawn.prompts] == ["otter"]
         assert drawn.prompts[0].source_list_ids == (created.id,)
+    finally:
+        await engine.dispose()
+
+
+async def test_a_save_landing_after_the_version_check_is_not_drawn(monkeypatch, tmp_path):
+    """The version check and the sample are one snapshot: a save committing
+    between them - `beaver` with the alias `otter`, beside a list holding
+    `otter` - is not in what the draw returns (#1385 review)."""
+    import app.repositories.sqlalchemy as repository
+
+    factory, engine, owner_id, _ = await _draw_database(tmp_path)
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        first = await repo.create_owned(
+            owner_id, name="First", description="", language="en",
+            prompts=(PromptListEntryInput(answer="otter"),),
+        )
+        second = await repo.create_owned(
+            owner_id, name="Second", description="", language="en",
+            prompts=(PromptListEntryInput(answer="panda"),),
+        )
+        pinned = await repo.authorize_selection(
+            [first.slug, second.slug], requesting_user_id=owner_id
+        )
+        original = repository._draw_snapshot
+
+        async def checked_then_saved(session, expected_versions):
+            await original(session, expected_versions)
+            await repo.update_owned(
+                owner_id, second.id, expected_version=second.version, name="Second",
+                description="", prompts=(PromptListEntryInput(answer="beaver", aliases=("otter",)),),
+            )
+
+        monkeypatch.setattr(repository, "_draw_snapshot", checked_then_saved)
+        drawn = await repo.sample_prompts(
+            list(pinned.list_ids), limit=5, expected_versions=pinned.list_versions
+        )
+
+        assert sorted(prompt.answer for prompt in drawn.prompts) == ["otter", "panda"]
     finally:
         await engine.dispose()

@@ -623,8 +623,11 @@ resolved report frees the target to be raised again; one moderator review may di
 the exact target Active or Hidden, with actor/time provenance and an append-only
 audit event. Hidden prompts are filtered from future selection, and a list with
 no usable prompts fails visibly. Waiting rooms re-authorize the list and every
-prompt immediately before Start, closing stale-picker bypasses. A game already
-in progress keeps its pinned prompt snapshot and is not rewritten mid-turn.
+prompt immediately before Start, and again before an approved restart, closing
+stale-picker bypasses; a list saved in between is checked again rather than
+drawn unchecked. A game draws its prompts once, at Start, and is not rewritten
+mid-turn. A prompt an owner edits out of a list stays reportable from a page
+opened before the edit for a day.
 Owners see list/prompt moderation state in **My prompt lists**, but editing does
 not silently override a moderator decision.
 
