@@ -6,6 +6,11 @@ from tests.e2e.lobby_helpers import choose_room_language, register_account
 BASE_URL = "http://localhost:8000"
 
 
+def list_checkbox(page, name: str):
+    """A list's checkbox in the room form's tree, by the list's name (#1388)."""
+    return page.locator(".prompt-list-check").filter(has_text=name).locator("input")
+
+
 async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
     async with async_playwright() as playwright:
         browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
@@ -64,12 +69,13 @@ async def test_registered_owner_can_manage_and_play_a_private_prompt_list():
             await owner.goto(f"{BASE_URL}/create")
             await choose_room_language(owner, "en")
             await owner.click('summary:has-text("Prompts")')
-            owned_chip = owner.locator(".toggle-chip").filter(has_text="Party animals")
-            await owned_chip.click()
-            assert await owned_chip.get_attribute("aria-pressed") == "true"
-            await owner.locator(".toggle-chip").filter(
-                has_text="English — Standard"
-            ).click()
+            # The player's own lists are a branch of the tree (#1388), folded
+            # while nothing on it is chosen.
+            await owner.get_by_role("button", name="Your lists").click()
+            owned = list_checkbox(owner, "Party animals")
+            await owned.check()
+            assert await owned.is_checked()
+            await list_checkbox(owner, "English — Standard").uncheck()
             await owner.get_by_role("button", name="Create room", exact=True).click()
             await owner.locator('[data-testid="waiting-room"]').wait_for()
         finally:
@@ -110,18 +116,19 @@ async def test_a_list_in_any_language_is_offered_to_a_room_in_another_language()
             await owner.get_by_role("button", name="Private").click()
             await choose_room_language(owner, "en")
             await owner.click('summary:has-text("Prompts")')
-            names_chip = owner.locator(".toggle-chip").filter(has_text="Pocket monsters")
-            await names_chip.wait_for()
-            assert await names_chip.get_by_text("Any language").count() == 1
-            await names_chip.click()
-            assert await names_chip.get_attribute("aria-pressed") == "true"
+            await owner.get_by_role("button", name="Your lists").click()
+            names_row = owner.locator(".prompt-list-check").filter(has_text="Pocket monsters")
+            await names_row.wait_for()
+            assert await names_row.get_by_text("Any language").count() == 1
+            names = list_checkbox(owner, "Pocket monsters")
+            await names.check()
+            assert await names.is_checked()
             await owner.get_by_role("button", name="Prompt language: English").click()
             await owner.get_by_role("option", name="Deutsch").click()
             await owner.get_by_role("button", name="Prompt language: Deutsch").wait_for()
-            assert await names_chip.get_attribute("aria-pressed") == "true"
-            german = owner.locator(".toggle-chip").filter(has_text="Deutsch — Standard")
-            assert await german.get_attribute("aria-pressed") == "true"
-            assert await owner.locator(".toggle-chip").filter(
+            assert await names.is_checked()
+            assert await list_checkbox(owner, "Deutsch — Standard").is_checked()
+            assert await owner.locator(".prompt-list-check").filter(
                 has_text="English — Standard"
             ).count() == 0
             await owner.get_by_role("button", name="Create room", exact=True).click()
