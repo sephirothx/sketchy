@@ -1981,6 +1981,11 @@
    "totalRounds",
    "userId"
   ],
+  "api.serializers:owned_live_edition_payload": [
+   "conceptId",
+   "moderationState",
+   "promptVersionId"
+  ],
   "api.serializers:owned_prompt_list_payload": [
    "conceptId",
    "copiedFrom",
@@ -2850,7 +2855,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 58,
+ "protocolVersion": 59,
  "refusal": {
   "codes": [
    "invalid_payload",

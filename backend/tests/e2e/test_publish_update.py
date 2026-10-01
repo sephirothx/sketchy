@@ -1,0 +1,210 @@
+"""A published list's edits reach players only through Publish update (#1363).
+
+Publishing freezes the list as an edition (#1360): other players' rooms play
+that edition while its owner keeps editing. The editor says so - Unpublished
+changes - and offers Publish update, after saying what it changes, or Discard
+changes.
+"""
+import asyncio
+from uuid import uuid4
+
+from playwright.async_api import async_playwright, expect
+
+from tests.e2e.lobby_helpers import (
+    join_by_code,
+    register_account,
+    room_code,
+    use_guest_name,
+)
+from tests.e2e.publishing_helpers import confirm_email
+
+BASE_URL = "http://localhost:8000"
+FIRST = {"lighthouse", "harbour", "seagull"}
+UPDATED = {"volcano", "glacier", "canyon"}
+
+
+async def _replace_prompts(page, prompts: set[str], remove: set[str]) -> None:
+    for prompt in remove:
+        await page.get_by_role("button", name=f"Remove {prompt}").click()
+    await page.get_by_label("Add prompts", exact=True).fill(", ".join(sorted(prompts)))
+    await page.get_by_role("button", name="Add to list").click()
+    await page.get_by_role("button", name="Save list").click()
+    await page.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
+
+
+async def _strangers(browser) -> tuple:
+    """Two players who have never seen the list or a room: a game's state on
+    a page is no part of what the next room should depend on."""
+    pages = []
+    for role in ("Host", "Guest"):
+        context = await browser.new_context()
+        page = await context.new_page()
+        page.set_default_timeout(15000)
+        await page.goto(BASE_URL)
+        await use_guest_name(page, f"{role}{uuid4().hex[:6]}")
+        pages.append(page)
+    return tuple(pages)
+
+
+async def _choices_in_a_new_room(host, guest, list_id: str) -> set[str]:
+    """The prompts the first drawer is offered, in a room a stranger hosts
+    on this list alone - so the room plays the live edition."""
+    await host.goto(f"{BASE_URL}/create?list={list_id}")
+    await host.click('summary:has-text("Prompts")')
+    # The carried list's branch of the tree opens because it is chosen (#1388).
+    # It arrives with a catalogue read of its own, after the form; a shared CI
+    # runner can take longer than `expect`'s five seconds to land it.
+    carried = host.locator(".prompt-list-check").filter(has_text="Shore words").locator("input")
+    try:
+        await expect(carried).to_be_checked(timeout=15000)
+    except AssertionError as error:
+        chosen = await host.evaluate(
+            """() => [...document.querySelectorAll('.prompt-list-check')].map(
+                 (row) => `${row.textContent.trim()}=${row.querySelector('input').checked}`)"""
+        )
+        language = await host.locator(".create-room-language-field").inner_text()
+        raise AssertionError(f"carried list not chosen; form held {chosen} in {language!r}") from error
+    # Only this list: nothing built-in mixed in.
+    for box in await host.locator(".prompt-list-check input:checked").all():
+        if "Shore words" not in await box.locator("xpath=..").inner_text():
+            await box.uncheck()
+    await host.locator(".create-room-submit").click()
+    await host.locator('[data-testid="waiting-room"]').wait_for()
+    code = await room_code(host)
+    await guest.goto(BASE_URL)
+    await join_by_code(guest, code)
+    await guest.locator('[data-testid="waiting-room"]').wait_for()
+    await host.click('button:has-text("Start game")')
+    await host.wait_for_selector(".game-layout")
+    await guest.wait_for_selector(".game-layout")
+    # Polled on both pages: either may draw first, and the drawer's choices
+    # can land a moment after the layout does.
+    drawer = None
+    for _ in range(150):
+        for page in (host, guest):
+            if await page.locator(".prompt-choices button").count():
+                drawer = page
+                break
+        if drawer:
+            break
+        await asyncio.sleep(0.1)
+    assert drawer is not None, "no drawer received prompt choices"
+    offered = {text.strip() for text in await drawer.locator(".prompt-choices button").all_inner_texts()}
+    # Both players go as soon as the offer is read: a game left running is
+    # two pages of timers and canvases for the rest of the test, and the
+    # suite's CPU-throttled tests share the runner (#1392 CI).
+    await host.context.close()
+    await guest.context.close()
+    return offered
+
+
+async def test_an_edit_reaches_other_rooms_only_after_publish_update():
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        owner_context = await browser.new_context()
+        owner = await owner_context.new_page()
+        owner.set_default_timeout(15000)
+        try:
+            await owner.goto(BASE_URL)
+            # Unique per run: the account outlives it in the server's database.
+            author = f"Author{uuid4().hex[:8]}"
+            await register_account(owner, author)
+            await confirm_email(author)
+            await owner.goto(f"{BASE_URL}/my-prompt-lists")
+            await owner.get_by_role("heading", name="My prompt lists").wait_for()
+            await owner.get_by_label("Name").fill("Shore words")
+            await owner.get_by_label("Add prompts", exact=True).fill(", ".join(sorted(FIRST)))
+            await owner.get_by_role("button", name="Add to list").click()
+            await owner.get_by_role("button", name="Save list").click()
+            await owner.locator(".app-toast").get_by_text("Prompt list saved.").wait_for()
+            publication = owner.locator(".prompt-list-publication")
+            await publication.get_by_role("button", name="Publish", exact=True).click()
+            await owner.locator(".app-toast").get_by_text("Prompt list published.").wait_for()
+            await publication.get_by_text("In the community catalogue").wait_for()
+            list_id = await owner.evaluate(
+                """async () => (await (await fetch('/api/prompt-lists/mine')).json())
+                     .find((list) => list.name === 'Shore words').id"""
+            )
+
+            # An edit, saved: the editor says players do not see it yet.
+            await _replace_prompts(owner, UPDATED, FIRST)
+            await publication.get_by_text("Unpublished changes").wait_for()
+
+            # Discard changes puts back exactly what players see...
+            await publication.get_by_role("button", name="Discard changes").click()
+            await owner.get_by_role("alertdialog").get_by_role("button", name="Discard changes").click()
+            await owner.locator(".app-toast").get_by_text("Changes discarded.").wait_for()
+            for prompt in FIRST:
+                await owner.get_by_role("button", name=f"Remove {prompt}").wait_for()
+            await publication.get_by_text("In the community catalogue").wait_for()
+            # ...and the edit again, this time to publish.
+            await _replace_prompts(owner, UPDATED, FIRST)
+            await publication.get_by_text("Unpublished changes").wait_for()
+
+            offered = await _choices_in_a_new_room(*await _strangers(browser), list_id)
+            assert offered and offered <= FIRST, offered
+
+            # Publish update says what it changes before it does it.
+            await publication.get_by_role("button", name="Publish update").click()
+            dialog = owner.get_by_role("alertdialog")
+            await dialog.get_by_text("Added (3)").wait_for()
+            await dialog.get_by_text("Removed (3)", exact=False).wait_for()
+            await dialog.get_by_role("button", name="Publish update").click()
+            await owner.locator(".app-toast").get_by_text("Update published.").wait_for()
+            await publication.get_by_text("In the community catalogue").wait_for()
+
+            offered = await _choices_in_a_new_room(*await _strangers(browser), list_id)
+            assert offered and offered <= UPDATED, offered
+        finally:
+            await browser.close()
+
+
+async def test_a_summary_read_for_one_list_is_never_confirmed_for_another():
+    """#1392 review: the owner asks for list A's summary, opens list B while
+    it is read, and the dialog that lands describes A while confirming it
+    published B. A summary for a list no longer on screen is dropped."""
+    async with async_playwright() as playwright:
+        browser = await playwright.chromium.launch(headless=True, args=["--mute-audio"])
+        owner = await (await browser.new_context()).new_page()
+        owner.set_default_timeout(15000)
+        try:
+            await owner.goto(BASE_URL)
+            author = f"Author{uuid4().hex[:8]}"
+            await register_account(owner, author)
+            await confirm_email(author)
+            await owner.evaluate(
+                """async () => {
+                  const h = {'content-type': 'application/json'};
+                  const make = async (name, prompt) => (await (await fetch('/api/prompt-lists/mine',
+                    {method: 'POST', headers: h, body: JSON.stringify({name, language: 'en',
+                      prompts: [{prompt}]})})).json());
+                  const a = await make('List A', 'otter');
+                  await fetch(`/api/prompt-lists/mine/${a.id}/publish`, {method: 'POST'});
+                  await fetch(`/api/prompt-lists/mine/${a.id}`, {method: 'PUT', headers: h,
+                    body: JSON.stringify({expectedVersion: a.version, name: 'List A', description: '',
+                      prompts: [{prompt: 'badger'}]})});
+                  await make('List B', 'heron');
+                }"""
+            )
+            await owner.goto(f"{BASE_URL}/my-prompt-lists")
+            await owner.locator("aside button").filter(has_text="List A").click()
+            publication = owner.locator(".prompt-list-publication")
+            await publication.get_by_text("Unpublished changes").wait_for()
+
+            release = asyncio.Event()
+
+            async def held(route):
+                await release.wait()
+                await route.continue_()
+
+            await owner.route("**/live-edition", held)
+            await publication.get_by_role("button", name="Publish update").click()
+            await owner.locator("aside button").filter(has_text="List B").click()
+            await owner.get_by_label("Name").and_(owner.locator("[value='List B']")).wait_for()
+            release.set()
+            await owner.wait_for_timeout(1000)
+
+            assert await owner.get_by_role("alertdialog").count() == 0
+            assert await publication.get_by_role("button", name="Publish", exact=True).is_visible()
+        finally:
+            await browser.close()

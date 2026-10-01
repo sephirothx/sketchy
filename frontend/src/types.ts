@@ -107,6 +107,16 @@ export interface PromptListEdition {
   publishedAt: string | null;
 }
 
+/** What players see of the owner's published list, beside the working copy
+ * the editor shows (#1363). */
+export interface OwnedLiveEdition {
+  number: number;
+  name: string;
+  description: string;
+  tags: string[];
+  prompts: OwnedPromptEntry[];
+}
+
 export interface OwnedPromptList extends PromptListSummary {
   id: string;
   /** Private until published; only publishing changes it (R-LIST-02). */

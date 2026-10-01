@@ -594,6 +594,18 @@ class PromptListEntry:
 
 
 @dataclass(frozen=True)
+class OwnedLiveEdition:
+    """What players see of the owner's published list: its live edition's
+    content, for the editor to compare its working copy against (#1363)."""
+
+    number: int
+    name: str
+    description: str
+    tags: tuple[str, ...]
+    prompts: tuple[PromptListEntry, ...]
+
+
+@dataclass(frozen=True)
 class OwnedPromptList:
     """Owner-facing list metadata plus its current ordered content."""
 
@@ -1461,8 +1473,10 @@ class PromptListRepository(ABC):
         published: bool,
         under_review: bool = False,
         audit: AuditStamp | None = None,
+        expected_version: int | None = None,
     ) -> OwnedPromptList:
-        """Publish or unpublish an owned list as an act of its own (R-LIST-11)."""
+        """Publish or unpublish an owned list as an act of its own (R-LIST-11).
+        With `expected_version`, a list saved since is refused."""
         ...
 
     @abstractmethod

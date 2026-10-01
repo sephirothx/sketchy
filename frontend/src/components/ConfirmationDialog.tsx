@@ -7,6 +7,8 @@ interface ConfirmationDialogProps {
   title: string;
   description: string;
   confirmLabel: string;
+  /** `primary` for a yes that publishes rather than destroys. */
+  tone?: "danger" | "primary";
   onCancel: () => void;
   onConfirm: () => void;
 }
@@ -20,6 +22,7 @@ export function ConfirmationDialog({
   title,
   description,
   confirmLabel,
+  tone = "danger",
   onCancel,
   onConfirm,
 }: ConfirmationDialogProps) {
@@ -31,7 +34,7 @@ export function ConfirmationDialog({
       role="alertdialog"
       title={
         <>
-          <span className="modal-title-icon is-danger" aria-hidden="true">
+          <span className={`modal-title-icon is-${tone}`} aria-hidden="true">
             <AlertCircleIcon size={20} />
           </span>
           {title}
@@ -47,7 +50,7 @@ export function ConfirmationDialog({
           <button ref={cancelButtonRef} type="button" className="btn btn-secondary" onClick={onCancel}>
             {ui.confirmationDialog.cancel}
           </button>
-          <button type="button" className="btn btn-danger" onClick={onConfirm}>
+          <button type="button" className={tone === "danger" ? "btn btn-danger" : "btn btn-primary"} onClick={onConfirm}>
             {confirmLabel}
           </button>
         </>
