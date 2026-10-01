@@ -437,6 +437,45 @@ def test_the_client_mirrors_every_error_code_and_nothing_else(frontend):
     assert client == _refusal_codes()
 
 
+def test_the_client_knows_every_shelf_and_names_every_series(frontend):
+    """The picker's tree orders official lists by shelf (#1374, R-PROMPT-14).
+    The order is the server's registry and the names are player copy, so the
+    client mirrors the slugs - in order - and its catalogue names each series a
+    seed file uses, in every language. A shelf it did not know would sort
+    after the rest; a series it could not name would show its slug. The list
+    cap is mirrored too, so a series that tips a selection past it is said
+    beside the tree."""
+    import json
+
+    from app.db.seed import DEFAULT_PROMPT_LISTS_DIR
+    from app.prompt_content import PROMPT_SHELVES
+
+    tree = (FRONTEND_SRC / "lib" / "promptListTree.ts").read_text(encoding="utf-8")
+    block = re.search(r"export const PROMPT_SHELVES = \[([^\]]*)\] as const;", tree)
+    assert block, "promptListTree.ts must declare `export const PROMPT_SHELVES = [...] as const;`"
+    assert re.findall(r'"([a-z0-9-]+)"', block.group(1)) == list(PROMPT_SHELVES)
+
+    used = {
+        json.loads(path.read_text(encoding="utf-8")).get("series")
+        for path in DEFAULT_PROMPT_LISTS_DIR.glob("*.json")
+    } - {None}
+    # Every locale, not only English: the type system does not hold the
+    # others' `series` to English's keys, and a name missing in one would show
+    # its slug to every player reading that language.
+    for catalogue in sorted((FRONTEND_SRC / "content" / "ui").glob("[a-z][a-z].ts")):
+        source = catalogue.read_text(encoding="utf-8")
+        named = re.search(r"\n    series: \{([^}]*)\}", source)
+        assert named, f"{catalogue.name} must declare promptListPicker.series"
+        names = set(re.findall(r'"?([a-z0-9-]+)"?\s*:', named.group(1)))
+        assert used <= names, (catalogue.name, sorted(used - names))
+
+    payloads = (BACKEND_APP / "handlers" / "payloads.py").read_text(encoding="utf-8")
+    server_cap = re.search(r"^MAX_PROMPT_LISTS = (\d+)$", payloads, re.MULTILINE)
+    client_cap = re.search(r"export const MAX_PROMPT_LISTS = (\d+);", tree)
+    assert server_cap and client_cap
+    assert client_cap.group(1) == server_cap.group(1)
+
+
 def test_the_client_mirrors_every_announcement_code():
     """`AnnouncementCode` in announcements.ts is the server enum, in order.
 

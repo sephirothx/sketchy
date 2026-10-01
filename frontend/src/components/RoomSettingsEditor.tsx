@@ -135,10 +135,10 @@ export function RoomSettingsEditor({ onSaved, onCancel }: RoomSettingsEditorProp
     return () => { cancelled = true; };
   }, []);
 
-  // A mixed room's Standard and Extended are shown in this host's language
+  // A mixed room's official families are shown in this host's language
   // (R-PROMPT-13), whichever language's copy the room was saved with: an
   // English host's `english_extended` is German Extended to a German one, or
-  // the chip reads unselected and the list cannot be taken out. The baseline
+  // its checkbox reads unticked and the list cannot be taken out. The baseline
   // moves with the draft, so a mapping alone is not a change to save.
   const mappedFor = useRef<{ lists: PromptListSummary[]; language: string } | null>(null);
   useEffect(() => {

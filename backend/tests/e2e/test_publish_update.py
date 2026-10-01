@@ -8,7 +8,7 @@ changes.
 import asyncio
 from uuid import uuid4
 
-from playwright.async_api import async_playwright
+from playwright.async_api import async_playwright, expect
 
 from tests.e2e.lobby_helpers import (
     join_by_code,
@@ -51,11 +51,14 @@ async def _choices_in_a_new_room(host, guest, list_id: str) -> set[str]:
     on this list alone - so the room plays the live edition."""
     await host.goto(f"{BASE_URL}/create?list={list_id}")
     await host.click('summary:has-text("Prompts")')
-    await host.locator(".toggle-chip[aria-pressed='true']").filter(has_text="Shore words").wait_for()
+    # The carried list's branch of the tree opens because it is chosen (#1388).
+    await expect(
+        host.locator(".prompt-list-check").filter(has_text="Shore words").locator("input")
+    ).to_be_checked()
     # Only this list: nothing built-in mixed in.
-    standard = host.locator(".toggle-chip[aria-pressed='true']").filter(has_text="Standard")
-    if await standard.count():
-        await standard.first.click()
+    for box in await host.locator(".prompt-list-check input:checked").all():
+        if "Shore words" not in await box.locator("xpath=..").inner_text():
+            await box.uncheck()
     await host.locator(".create-room-submit").click()
     await host.locator('[data-testid="waiting-room"]').wait_for()
     code = await room_code(host)

@@ -437,12 +437,6 @@
 
 
 
-/* A prompt-list chip, with its "how this list plays" hint riding along. */
-.prompt-list-chip-group {
-  align-items: center;
-  display: inline-flex;
-  gap: 2px;
-}
 
 
 
