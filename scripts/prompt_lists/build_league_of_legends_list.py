@@ -11,9 +11,9 @@ still accepted there as an alias.
 
     backend/.venv/bin/python scripts/prompt_lists/build_league_of_legends_list.py <dir>
 
-`<dir>` holds `champion.json` (en_US) and `champion_<locale>.json` for any of
-de_DE, es_ES, fr_FR, it_IT, pl_PL and pt_BR; Data Dragon has no Dutch locale,
-so Dutch takes the English names. Concept ids and any raised `promptVersion`
+`<dir>` holds `champion.json` (en_US) and `champion_<locale>.json` for each of
+de_DE, es_ES, fr_FR, it_IT, pl_PL and pt_BR - all six, or nothing is written;
+Data Dragon has no Dutch locale, so Dutch takes the English names. Concept ids and any raised `promptVersion`
 are read back from the committed file, so a rerun only adds champions new to
 the data; a new one needs the file's `version` raised by hand afterwards.
 """
@@ -80,13 +80,18 @@ def main() -> None:
         key: champion["name"]
         for key, champion in json.loads((source / "champion.json").read_text(encoding="utf-8"))["data"].items()
     }
+    # Every locale, or nothing is written: a missing file would read as "no
+    # champion is renamed there" and drop every override it held.
+    missing = [f"champion_{locale}.json" for locale in LOCALES.values()
+               if not (source / f"champion_{locale}.json").exists()]
+    if missing:
+        sys.exit(f"missing locale files in {source}: {', '.join(missing)}")
     localized: dict[str, dict[str, str]] = {language: {} for language in LOCALES}
     for language, locale in LOCALES.items():
         path = source / f"champion_{locale}.json"
-        if path.exists():
-            for key, champion in json.loads(path.read_text(encoding="utf-8"))["data"].items():
-                if key in english:
-                    localized[language][english[key]] = champion["name"]
+        for key, champion in json.loads(path.read_text(encoding="utf-8"))["data"].items():
+            if key in english:
+                localized[language][english[key]] = champion["name"]
 
     previous = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {"prompts": [], "version": 1}
     known = {entry["answer"]: entry["conceptId"] for entry in previous["prompts"]}
@@ -108,17 +113,28 @@ def main() -> None:
             entry["aliases"] = aliases
         if ("en", concept) in versions:
             entry["promptVersion"] = versions[("en", concept)]
+        default_version = entry.get("promptVersion", 1)
         overrides = {}
-        for language in sorted(LOCALES, key=list(PROMPT_LANGUAGES).index):
-            own = localized[language].get(name, name)
-            if own == name:
+        # Every language but the default's, Dutch included (no Data Dragon
+        # locale, so English names): a language inherits only when its whole
+        # entry - spelling, aliases and version - is the default's. One whose
+        # version moved on its own keeps an override even when it spells the
+        # name the English way, or a rerun would put it back to the default's
+        # version under content it already holds (#1400 review).
+        for language in [language for language in PROMPT_LANGUAGES if language != "en"]:
+            own = localized.get(language, {}).get(name, name)
+            version = versions.get((language, concept), default_version)
+            if own == name and version == default_version:
                 continue
             override = {"answer": own}
-            own_aliases = aliases_for(own, [name, *variants(name), *SHORT.get(name, [])], language)
+            own_aliases = (
+                list(entry.get("aliases", [])) if own == name
+                else aliases_for(own, [name, *variants(name), *SHORT.get(name, [])], language)
+            )
             if own_aliases:
                 override["aliases"] = own_aliases
-            if versions.get((language, concept), 1) != 1:
-                override["promptVersion"] = versions[(language, concept)]
+            if version != 1:
+                override["promptVersion"] = version
             overrides[language] = override
             overriding.add(language)
         if overrides:
