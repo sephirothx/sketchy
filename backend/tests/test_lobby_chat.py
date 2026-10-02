@@ -11,6 +11,10 @@ from app.services.lobby_chat import LOBBY_CHAT_BACKLOG, LobbyChatLog
 from tests.dbfixtures import create_test_db
 
 NOON = datetime(2026, 9, 2, 12, 0, tzinfo=timezone.utc)
+# Rows a restore reads back are judged against the real clock - it drops
+# what has expired by now - so they are said a few hours ago rather than on
+# a fixed date, which had them lapse thirty days after it was written.
+RECENT = datetime.now(timezone.utc).replace(microsecond=0) - timedelta(hours=3)
 
 
 def say(log: LobbyChatLog, author: str, text: str, **overrides):
@@ -165,11 +169,11 @@ async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
                 )
             async with session.begin():
                 session.add_all(
-                    [retained(ada, f"line {i}", at=NOON + timedelta(minutes=i)) for i in range(60)]
+                    [retained(ada, f"line {i}", at=RECENT + timedelta(minutes=i)) for i in range(60)]
                     + [
-                        retained(bob, "expired", at=NOON + timedelta(hours=2), expired=True),
-                        retained(bob, "in a room", at=NOON + timedelta(hours=2), audience="room"),
-                        retained(banned, "still suspended", at=NOON + timedelta(hours=2)),
+                        retained(bob, "expired", at=RECENT + timedelta(hours=2), expired=True),
+                        retained(bob, "in a room", at=RECENT + timedelta(hours=2), audience="room"),
+                        retained(banned, "still suspended", at=RECENT + timedelta(hours=2)),
                     ]
                 )
 
@@ -180,7 +184,7 @@ async def test_a_restart_hands_the_next_arrival_what_was_said_before_it():
         assert [line.text for line in held] == [f"line {i}" for i in range(10, 60)]
         assert [line.seq for line in held] == list(range(1, LOBBY_CHAT_BACKLOG + 1))
         assert held[0].user_id == str(ada)
-        assert held[0].sent_at == NOON + timedelta(minutes=10)
+        assert held[0].sent_at == RECENT + timedelta(minutes=10)
         # Every restored line can still be cited: it is the retained row.
         async with factory() as session:
             rows = await recent_lobby_lines(session)
@@ -224,7 +228,7 @@ def test_a_retained_row_with_no_account_behind_it_is_not_restored():
     """The loader's query already excludes these; `restore` is also handed rows
     directly, and a line with nobody to attribute it to is not a line."""
     log = LobbyChatLog()
-    orphan = retained(UUID(int=9), "orphaned", at=NOON)
+    orphan = retained(UUID(int=9), "orphaned", at=RECENT)
     orphan.sender_user_id = None
     assert log.restore([orphan]) == 0
     assert log.backlog_for() == [] and log.last_seq == 0
