@@ -533,7 +533,7 @@ no request in flight.
 7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
 8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
 9. No purge of its own: the retention loop's first pass starts immediately and is bounded, so a backlog left by a long outage cannot delay serving (#550)
-10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup; it ends by `ANALYZE`-ing the prompt tables on PostgreSQL so a fresh seed is not planned blind (#1367)
+10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup; a name list is expanded into a list per supported language first (`app/db/name_lists.py`, #1399), so what is seeded is what the content tests read; it ends by `ANALYZE`-ing the prompt tables on PostgreSQL so a fresh seed is not planned blind (#1367)
 11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
 12. `mark_ready()` — `GET /api/ready` starts answering 200
 13. Under the production runner only (`app/server.py`), once Uvicorn is listening:
@@ -1947,6 +1947,7 @@ python3 -c "import ast,glob;[print(p,'|',(ast.get_docstring(ast.parse(open(p).re
 | [`app/canvas_storage.py`](../backend/app/canvas_storage.py) | Durable storage policy for finished drawings. |
 | [`app/db/__init__.py`](../backend/app/db/__init__.py) | Database engine, session management, and lifecycle initialization. |
 | [`app/db/migrate.py`](../backend/app/db/migrate.py) | Deployment entry point for applying database migrations safely. |
+| [`app/db/name_lists.py`](../backend/app/db/name_lists.py) | Name lists: official prompt lists written once and expanded per language (#1399). |
 | [`app/db/models.py`](../backend/app/db/models.py) | SQLAlchemy ORM models for Sketchy database tables. |
 | [`app/db/types.py`](../backend/app/db/types.py) | Database types that normalize dialect differences at persistence boundaries. |
 | [`app/deployment.py`](../backend/app/deployment.py) | Deployment invariants that must fail before application startup mutates state. |

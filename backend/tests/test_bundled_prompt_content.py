@@ -12,14 +12,14 @@ instead of in a room.
 """
 from __future__ import annotations
 
-import json
 from collections import defaultdict
 from functools import cache
 
 import pytest
 
 from app.api.prompt_lists import MAX_PAGE_SIZE
-from app.db.seed import DEFAULT_PROMPT_LISTS_DIR as PROMPT_LIST_DIR
+from app.db.name_lists import is_name_list
+from app.db.seed import DEFAULT_PROMPT_LISTS_DIR, bundled_list_bodies
 from app.domain_values import AGNOSTIC_PROMPT_LANGUAGE, PROMPT_LANGUAGES, PromptLanguage
 from app.prompt_content import MAX_PROMPT_LENGTH, PROMPT_SHELVES, prompt_match_key
 
@@ -42,17 +42,24 @@ STANDARD_MAX_WORDS = 4
 
 
 @cache
+def _bodies() -> dict[str, dict]:
+    """Every official list, read the way startup seeds them: a name list
+    expanded into a list per language (#1399), so these tests judge what is
+    played rather than how it is written."""
+    return {body["slug"]: body for _, body in bundled_list_bodies()}
+
+
 def _list(slug: str) -> dict:
-    return json.loads((PROMPT_LIST_DIR / f"{slug}.json").read_text(encoding="utf-8"))
+    return _bodies()[slug]
 
 
 def _slugs(language: str) -> list[str]:
     """Every bundled list a room in `language` can combine: its own, and the
     ones in no language (`zxx`, R-PROMPT-12), which every room may pick."""
     return sorted(
-        path.stem
-        for path in PROMPT_LIST_DIR.glob("*.json")
-        if _list(path.stem)["language"] in (language, AGNOSTIC_PROMPT_LANGUAGE)
+        slug
+        for slug in _bodies()
+        if _list(slug)["language"] in (language, AGNOSTIC_PROMPT_LANGUAGE)
     )
 
 
@@ -98,9 +105,9 @@ def test_local_is_its_own_languages(language):
     local = _concepts(f"{_stem(language)}_local")
     assert local
     elsewhere = set()
-    for path in PROMPT_LIST_DIR.glob("*.json"):
-        if path.stem != f"{_stem(language)}_local":
-            elsewhere |= _concepts(path.stem)
+    for slug in _bodies():
+        if slug != f"{_stem(language)}_local":
+            elsewhere |= _concepts(slug)
     assert local & elsewhere == set()
 
 
@@ -152,8 +159,8 @@ def test_a_languages_lists_can_be_picked_together(language):
 def test_the_stats_page_reads_every_bundled_list_whole():
     """The stats page asks for a list in one page of at most `MAX_PAGE_SIZE`;
     a bundled list longer than that would be cut short without a word."""
-    for path in PROMPT_LIST_DIR.glob("*.json"):
-        assert len(_list(path.stem)["prompts"]) <= MAX_PAGE_SIZE, path.stem
+    for slug in _bodies():
+        assert len(_list(slug)["prompts"]) <= MAX_PAGE_SIZE, slug
 
 
 def test_every_official_list_has_its_own_place_on_a_known_shelf():
@@ -161,12 +168,12 @@ def test_every_official_list_has_its_own_place_on_a_known_shelf():
     list's position: two lists of one language in the same place would sort
     by whatever order the server happened to return."""
     places: dict[tuple, list[str]] = defaultdict(list)
-    for path in PROMPT_LIST_DIR.glob("*.json"):
-        body = _list(path.stem)
-        assert body["shelf"] in PROMPT_SHELVES, path.stem
+    for slug in _bodies():
+        body = _list(slug)
+        assert body["shelf"] in PROMPT_SHELVES, slug
         places[
             (body["language"], body["shelf"], body.get("series"), body.get("position", 0))
-        ].append(path.stem)
+        ].append(slug)
     assert {place: slugs for place, slugs in places.items() if len(slugs) > 1} == {}
 
 
@@ -177,14 +184,14 @@ def test_every_themed_official_list_is_a_family_or_in_no_language():
     would be offered in some rooms and refused as a family in mixed ones."""
     by_language: dict[str, dict[frozenset, str]] = defaultdict(dict)
     themed = []
-    for path in PROMPT_LIST_DIR.glob("*.json"):
-        body = _list(path.stem)
-        if body["language"] == AGNOSTIC_PROMPT_LANGUAGE or path.stem.endswith("_local"):
+    for slug in _bodies():
+        body = _list(slug)
+        if body["language"] == AGNOSTIC_PROMPT_LANGUAGE or slug.endswith("_local"):
             continue
-        concepts = frozenset(_concepts(path.stem))
-        by_language[body["language"]][concepts] = path.stem
+        concepts = frozenset(_concepts(slug))
+        by_language[body["language"]][concepts] = slug
         if body["shelf"] != "everyday":
-            themed.append((path.stem, concepts))
+            themed.append((slug, concepts))
     for slug, concepts in themed:
         missing = [lang for lang in PROMPT_LANGUAGES if concepts not in by_language[lang]]
         assert missing == [], (slug, missing)
@@ -203,3 +210,20 @@ def test_a_series_is_one_list_per_place(language):
         for concept in _concepts(slug):
             assert concept not in seen, (concept, seen.get(concept), slug)
             seen[concept] = slug
+
+
+def test_a_name_list_declares_every_supported_language():
+    """A name list is written once and expanded into every supported language
+    (#1399), so a language added to the registry gets it without a copy - and
+    without anybody having looked. Each file therefore says, for every
+    supported language, whether that language takes the default spellings or
+    overrides some: adding a language fails here until somebody has decided,
+    which is a line in each file rather than a silent inheritance."""
+    import json
+
+    for path in sorted(DEFAULT_PROMPT_LISTS_DIR.glob("*.json")):
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not is_name_list(data):
+            continue
+        declared = data["languages"].get("inherit", []) + data["languages"].get("override", [])
+        assert sorted(declared) == sorted(PROMPT_LANGUAGES), path.name

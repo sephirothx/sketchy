@@ -153,7 +153,9 @@ CAMEL_CASE = re.compile(r"[a-z][a-zA-Z0-9]*[A-Z][a-zA-Z0-9]*")
 BUILTIN_EVENTS = frozenset({"connect", "disconnect", "connect_error"})
 #: Modules whose dict keys and emits are not the server's: `probe` speaks *to* a
 #: server, and this module describes one.
-EXCLUDED_MODULES = frozenset({"probe", "wire_contract"})
+# `db.name_lists` reads and writes the seed files' own format (#1399): its
+# keys are a file's, never a payload's.
+EXCLUDED_MODULES = frozenset({"probe", "wire_contract", "db.name_lists"})
 
 # --- extraction --------------------------------------------------------------
 

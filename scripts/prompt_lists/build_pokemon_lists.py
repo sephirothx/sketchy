@@ -10,9 +10,12 @@ the English names, which PokeAPI does not repeat for them.
 
     backend/.venv/bin/python scripts/prompt_lists/build_pokemon_lists.py <csv dir>
 
-Concept ids are read back from the committed English files, keyed by the
-species' English name, so a rerun keeps every identity and only a species
-new to the data is minted one. A changed spelling or alias needs its
+It writes one **name list** per generation (`pokemon_genN.json`, #1399): the
+English name as the default spelling and an override for each language whose
+name differs; the seeder expands each into a list per supported language.
+Concept ids and raised `promptVersion`s are read back from those files, keyed
+by the species' English name, so a rerun keeps every identity and only a
+species new to the data is minted one. A changed spelling or alias needs its
 `promptVersion` raised by hand afterwards (R-PROMPT-05), and a new species
 its file's `version`.
 """
@@ -27,6 +30,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "backend"))
+from app.domain_values import PROMPT_LANGUAGES  # noqa: E402
 from app.identifiers import generate_uuid7  # noqa: E402
 
 OUT = REPO / "backend" / "data" / "prompt_lists"
@@ -98,23 +102,26 @@ def main() -> None:
         for language in ("nl", "pl", "pt"):
             by_language[language] = by_language["en"]
 
+    # Identities and hand-raised versions are read back from the committed
+    # name lists, so a rerun keeps both.
     known: dict[str, str] = {}
-    for path in OUT.glob("english_pokemon_gen*.json"):
-        for entry in json.loads(path.read_text(encoding="utf-8"))["prompts"]:
-            known[entry["answer"]] = entry["conceptId"]
-    # A promptVersion raised by hand stays raised, per language and concept.
     versions: dict[tuple[str, str], int] = {}
-    for path in OUT.glob("*_pokemon_gen*.json"):
+    for path in OUT.glob("pokemon_gen*.json"):
         body = json.loads(path.read_text(encoding="utf-8"))
         for entry in body["prompts"]:
+            known[entry["answer"]] = entry["conceptId"]
             if "promptVersion" in entry:
-                versions[(body["language"], entry["conceptId"])] = entry["promptVersion"]
+                versions[("en", entry["conceptId"])] = entry["promptVersion"]
+            for language, own in entry.get("overrides", {}).items():
+                if "promptVersion" in own:
+                    versions[(language, entry["conceptId"])] = own["promptVersion"]
     concept = {species: known.get(names[species]["en"]) or str(generate_uuid7()) for species in generation}
 
     for n in range(1, 10):
         members = [species for species in sorted(generation) if generation[species] == n]
+        spelled: dict[str, list[dict]] = {}
         for language in LANGUAGES:
-            prompts = []
+            spelled[language] = []
             for species in members:
                 answer = names[species][language]
                 english = names[species]["en"]
@@ -129,28 +136,59 @@ def main() -> None:
                     entry["aliases"] = aliases
                 if (language, concept[species]) in versions:
                     entry["promptVersion"] = versions[(language, concept[species])]
-                prompts.append(entry)
-            body = {
-                "slug": f"{STEM[language]}_pokemon_gen{n}",
-                "name": NAME[language].format(n=n),
-                "description": DESCRIPTION[language].format(n=n),
-                "language": language,
-                "version": 1,
-                "shelf": "video-games",
-                "series": "pokemon",
-                "position": n,
-                "tags": ["video-games"],
-            }
-            path = OUT / f"{STEM[language]}_pokemon_gen{n}.json"
-            # Keep a version a hand edit already raised.
-            if path.exists():
-                body["version"] = json.loads(path.read_text(encoding="utf-8"))["version"]
-            head = json.dumps(body, ensure_ascii=False, indent=2)[:-2]
-            lines = ",\n".join(
-                "    " + json.dumps(p, ensure_ascii=False, separators=(",", ":")) for p in prompts
-            )
-            path.write_text(f"{head},\n  \"prompts\": [\n{lines}\n  ]\n}}\n", encoding="utf-8")
-    print(f"wrote {9 * len(LANGUAGES)} lists, {len(generation)} species")
+                spelled[language].append(entry)
+        path = OUT / f"pokemon_gen{n}.json"
+        # A list version a hand edit already raised stays raised.
+        version = json.loads(path.read_text(encoding="utf-8"))["version"] if path.exists() else 1
+        write_name_list(path, n, version, spelled)
+    print(f"wrote 9 name lists, {len(generation)} species")
+
+
+def write_name_list(path: Path, n: int, version: int, spelled: dict[str, list[dict]]) -> None:
+    """One generation as a name list (#1399): English as the default spelling,
+    and each other language's entry an override only where it differs."""
+    prompts = []
+    overriding: set[str] = set()
+    for index, entry in enumerate(spelled["en"]):
+        out = dict(entry)
+        overrides = {}
+        for language in LANGUAGES[1:]:
+            other = spelled[language][index]
+            if (other["answer"], other.get("aliases"), other.get("promptVersion")) != (
+                entry["answer"], entry.get("aliases"), entry.get("promptVersion")
+            ):
+                own = {"answer": other["answer"]}
+                if other.get("aliases"):
+                    own["aliases"] = other["aliases"]
+                if other.get("promptVersion") != entry.get("promptVersion"):
+                    own["promptVersion"] = other.get("promptVersion", 1)
+                overrides[language] = own
+                overriding.add(language)
+        if overrides:
+            out["overrides"] = overrides
+        prompts.append(out)
+    order = sorted(LANGUAGES, key=lambda language: list(PROMPT_LANGUAGES).index(language))
+    body = {
+        "slug": f"pokemon_gen{n}",
+        "name": NAME["en"].format(n=n),
+        "description": DESCRIPTION["en"].format(n=n),
+        "names": {l: NAME[l].format(n=n) for l in order if NAME[l] != NAME["en"]},
+        "descriptions": {l: DESCRIPTION[l].format(n=n) for l in order if l != "en"},
+        "version": version,
+        "shelf": "video-games",
+        "series": "pokemon",
+        "position": n,
+        "tags": ["video-games"],
+        # Every supported language, each one checked: Dutch, Polish and
+        # Portuguese editions use the English names, so they inherit them.
+        "languages": {
+            "inherit": [l for l in order if l not in overriding],
+            "override": [l for l in order if l in overriding],
+        },
+    }
+    head = json.dumps(body, ensure_ascii=False, indent=2)[:-2]
+    lines = ",\n".join("    " + json.dumps(p, ensure_ascii=False, separators=(",", ":")) for p in prompts)
+    path.write_text(f"{head},\n  \"prompts\": [\n{lines}\n  ]\n}}\n", encoding="utf-8")
 
 
 if __name__ == "__main__":

@@ -856,3 +856,72 @@ async def test_league_of_legends_plays_anywhere_and_the_icons_are_a_family():
         assert len(mixed.list_ids) == len(PROMPT_LANGUAGES) + 1
     finally:
         await engine.dispose()
+
+
+def _write_name_list(directory, **fields) -> None:
+    """A name list (#1399): one file, a default spelling and overrides."""
+    body = {
+        "slug": "critters",
+        "name": "Critters",
+        "names": {"de": "Viecher"},
+        "version": 1,
+        "shelf": "everyday",
+        "position": 3,
+        "languages": {"inherit": ["en", "es", "fr", "it", "nl", "pl", "pt"], "override": ["de"]},
+        "prompts": [
+            {"conceptId": "01a0f467-2040-7733-9e34-000000000101", "answer": "Zorblax",
+             "overrides": {"de": {"answer": "Zorblatz", "aliases": ["Zorblax"], "promptVersion": 2}}},
+            {"conceptId": "01a0f467-2040-7733-9e34-000000000102", "answer": "Quimbo",
+             "aliases": ["Kwimbo"]},
+        ],
+        **fields,
+    }
+    (directory / "critters.json").write_text(json.dumps(body), encoding="utf-8")
+
+
+async def test_a_name_list_seeds_a_list_in_every_language(tmp_path):
+    """Written once, played in every supported language as a list of its own:
+    a language that overrides a name spells it its way, the rest take the
+    default, and the lists are a family a mixed room pins whole (#1399)."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        _write_name_list(tmp_path)
+        seeded = await seed_prompt_lists(repo, directory=tmp_path)
+        assert sorted(summary.slug for summary in seeded) == sorted(
+            f"{PromptLanguage(language).name.lower()}_critters" for language in PROMPT_LANGUAGES
+        )
+        german = await repo.get_by_slug("german_critters")
+        dutch = await repo.get_by_slug("dutch_critters")
+        assert german is not None and dutch is not None
+        assert (german.name, dutch.name) == ("Viecher", "Critters")
+        assert sorted(await repo.get_prompts_by_slugs(["german_critters"])) == ["Quimbo", "Zorblatz"]
+        assert sorted(await repo.get_prompts_by_slugs(["dutch_critters"])) == ["Quimbo", "Zorblax"]
+        assert {
+            summary.family for summary in await repo.list_all() if summary.slug.endswith("_critters")
+        } == {"english_critters"}
+        mixed = await repo.authorize_selection(["polish_critters"], expected_language="mul")
+        assert len(mixed.list_ids) == len(PROMPT_LANGUAGES)
+    finally:
+        await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("languages", "complaint"),
+    [
+        ({"inherit": ["en", "de", "es", "fr", "it", "nl", "pl", "pt"]}, "does not declare as overriding"),
+        ({"inherit": ["en", "xx"], "override": ["de"]}, "unsupported"),
+        ({"inherit": ["en", "de"], "override": ["de"]}, "twice"),
+    ],
+)
+async def test_a_name_list_that_contradicts_itself_fails_startup(tmp_path, languages, complaint):
+    """An override for a language the file says inherits, a language the game
+    does not support, or one declared both ways: each is a typo that would
+    otherwise ship a spelling nobody meant (#1399)."""
+    factory, engine = await create_test_db()
+    try:
+        _write_name_list(tmp_path, languages=languages)
+        with pytest.raises(ValueError, match=complaint):
+            await seed_prompt_lists(SqlAlchemyPromptListRepository(factory), directory=tmp_path)
+    finally:
+        await engine.dispose()
