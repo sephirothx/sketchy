@@ -2,10 +2,16 @@
 
 Source: Riot's Data Dragon champion data (`cdn/<version>/data/en_US/
 champion.json` from https://ddragon.leagueoflegends.com), names only. A
-champion's name is the same in every supported language, so the list is in
-no language (`zxx`, R-PROMPT-12) and a room of any language plays it.
+champion's name is the same in nearly every supported language, so the list
+is in no language (`zxx`, R-PROMPT-12) and a room of any language plays it;
+the few a locale renames are aliases (below).
 
-    backend/.venv/bin/python scripts/prompt_lists/build_league_of_legends_list.py <champion.json>
+    backend/.venv/bin/python scripts/prompt_lists/build_league_of_legends_list.py \
+        <en_US champion.json> [<other locale champion.json> ...]
+
+Riot localizes a few names (Spanish "Bardo", French "Maître Yi", "Nunu et
+Willump"): pass the other locales' files and each name that differs becomes
+an alias, accepted in a room of any language like the rest.
 
 Concept ids and any raised `promptVersion` are read back from the committed
 file, so a rerun only adds champions that are new to the data; a new one
@@ -21,6 +27,7 @@ from pathlib import Path
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "backend"))
 from app.identifiers import generate_uuid7  # noqa: E402
+from app.prompt_content import prompt_match_key  # noqa: E402
 
 OUT = REPO / "backend" / "data" / "prompt_lists" / "league_of_legends.json"
 # A champion named like an everyday word of some language's official lists
@@ -34,21 +41,36 @@ SHORT = {"Nunu & Willump": ["Nunu", "Nunu and Willump"], "Jarvan IV": ["Jarvan",
 
 
 def main() -> None:
-    champions = sorted(
-        champion["name"]
-        for champion in json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["data"].values()
-    )
+    english = {
+        key: champion["name"]
+        for key, champion in json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))["data"].items()
+    }
+    localized: dict[str, list[str]] = {name: [] for name in english.values()}
+    for path in sys.argv[2:]:
+        for key, champion in json.loads(Path(path).read_text(encoding="utf-8"))["data"].items():
+            if key in english and champion["name"] != english[key]:
+                localized[english[key]].append(champion["name"])
+    champions = sorted(english.values())
     previous = json.loads(OUT.read_text(encoding="utf-8")) if OUT.exists() else {"prompts": [], "version": 1}
     known = {entry["answer"]: entry for entry in previous["prompts"]}
     prompts = []
     for name in champions:
         if name in EXCLUDED:
             continue
-        aliases = sorted({
+        candidates = sorted({
             " ".join(re.sub(r"[.':&]", "", name).split()),
             " ".join(re.sub(r"[.':&]", " ", name).split()),
         } - {name})
-        aliases += [alias for alias in SHORT.get(name, []) if alias not in aliases]
+        candidates += SHORT.get(name, []) + localized.get(name, [])
+        # One spelling per folded key: a localized name that only adds an
+        # accent (Zoé, K'Santé) already matches the English one.
+        seen = {prompt_match_key(name, "zxx")}
+        aliases = []
+        for candidate in candidates:
+            folded = prompt_match_key(candidate, "zxx")
+            if folded not in seen:
+                seen.add(folded)
+                aliases.append(candidate)
         entry = {"conceptId": known.get(name, {}).get("conceptId") or str(generate_uuid7()), "answer": name}
         if aliases:
             entry["aliases"] = sorted(aliases)
