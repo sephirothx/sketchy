@@ -30,6 +30,7 @@ from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
 sys.path.insert(0, str(REPO / "backend"))
+from app.db.name_lists import expand_name_list  # noqa: E402
 from app.domain_values import PROMPT_LANGUAGES  # noqa: E402
 from app.identifiers import generate_uuid7  # noqa: E402
 
@@ -110,11 +111,12 @@ def main() -> None:
         body = json.loads(path.read_text(encoding="utf-8"))
         for entry in body["prompts"]:
             known[entry["answer"]] = entry["conceptId"]
-            if "promptVersion" in entry:
-                versions[("en", entry["conceptId"])] = entry["promptVersion"]
-            for language, own in entry.get("overrides", {}).items():
-                if "promptVersion" in own:
-                    versions[(language, entry["conceptId"])] = own["promptVersion"]
+        # Each language's version as the seeder resolves it, so a default's
+        # raise reaches the languages that inherit it and no others.
+        for expanded in expand_name_list(body):
+            for entry in expanded["prompts"]:
+                if "promptVersion" in entry:
+                    versions[(expanded["language"], entry["conceptId"])] = entry["promptVersion"]
     concept = {species: known.get(names[species]["en"]) or str(generate_uuid7()) for species in generation}
 
     for n in range(1, 10):
@@ -160,8 +162,9 @@ def write_name_list(path: Path, n: int, version: int, spelled: dict[str, list[di
                 own = {"answer": other["answer"]}
                 if other.get("aliases"):
                     own["aliases"] = other["aliases"]
-                if other.get("promptVersion") != entry.get("promptVersion"):
-                    own["promptVersion"] = other.get("promptVersion", 1)
+                # An override's version is its own, 1 when it says none.
+                if other.get("promptVersion", 1) != 1:
+                    own["promptVersion"] = other["promptVersion"]
                 overrides[language] = own
                 overriding.add(language)
         if overrides:

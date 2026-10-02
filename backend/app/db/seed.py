@@ -35,12 +35,23 @@ def bundled_list_bodies(directory: Path | None = None) -> list[tuple[Path, dict]
     read, so the two can never disagree about the catalogue."""
     target_dir = directory or DEFAULT_PROMPT_LISTS_DIR
     bodies: list[tuple[Path, dict]] = []
+    seen: dict[str, Path] = {}
     for file_path in sorted(target_dir.glob("*.json")):
-        data = json.loads(file_path.read_text(encoding="utf-8"))
-        if is_name_list(data):
-            bodies.extend((file_path, body) for body in expand_name_list(data))
-        else:
-            bodies.append((file_path, data))
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+            expanded = expand_name_list(data) if is_name_list(data) else [data]
+        except Exception as error:
+            # Named, since a JSON error says only a line and a column.
+            raise ValueError(f"{file_path.name}: {error!r}") from error
+        for body in expanded:
+            slug = str(body.get("slug", ""))
+            # Two files standing for one list - an old per-language copy
+            # beside its name list - would be one entry to whoever reads a
+            # dict of these and two upserts to the seed.
+            if slug in seen:
+                raise ValueError(f"{file_path.name} and {seen[slug].name} both define {slug}")
+            seen[slug] = file_path
+            bodies.append((file_path, body))
     return bodies
 
 

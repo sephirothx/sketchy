@@ -9,6 +9,10 @@ from __future__ import annotations
 from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
 
 
+#: What an override may say: a language's own spelling, wholly.
+OVERRIDE_KEYS = frozenset({"answer", "aliases", "promptVersion"})
+
+
 def is_name_list(data: dict) -> bool:
     """Whether a seed file is a **name list** (#1399): written once, with a
     default spelling per concept and overrides where a language differs,
@@ -25,8 +29,11 @@ def expand_name_list(data: dict) -> list[dict]:
     the registry gets them without one: each supported language is expanded
     whether or not the file names it, so the families mixed rooms pin stay
     whole. A language's spelling is its override where there is one - answer
-    and aliases replaced together, and its own `promptVersion` if it gives
-    one - and otherwise the default's. Whether each language was *checked* is
+    and aliases replaced together, at the override's own `promptVersion`
+    (1 if it gives none) - and otherwise the default's, at the default's
+    version. An override does not follow the default's version: a raise for
+    an English rewording would otherwise restart the statistics of every
+    language that spells the name its own way. Whether each language was *checked* is
     the file's declaration (`languages.inherit` / `languages.override`),
     which `tests/test_bundled_prompt_content.py` holds to every supported
     language: a new one is a reviewed line, never a silent inheritance.
@@ -46,8 +53,22 @@ def expand_name_list(data: dict) -> list[dict]:
                 f"name list {data['slug']} overrides {sorted(stray)} for {prompt['answer']}, "
                 "which it does not declare as overriding"
             )
+        for language, own in prompt.get("overrides", {}).items():
+            # A misspelt key would otherwise be dropped without a word, and
+            # the language's content change under an unchanged version.
+            if "answer" not in own or set(own) - OVERRIDE_KEYS:
+                raise ValueError(
+                    f"name list {data['slug']}: the {language} override of {prompt['answer']} "
+                    f"must give an answer and only {sorted(OVERRIDE_KEYS)}"
+                )
     names = data.get("names", {})
     descriptions = data.get("descriptions", {})
+    for field, by_language in (("names", names), ("descriptions", descriptions)):
+        if set(by_language) - set(PROMPT_LANGUAGES):
+            raise ValueError(
+                f"name list {data['slug']} has {field} for unsupported languages: "
+                f"{sorted(set(by_language) - set(PROMPT_LANGUAGES))}"
+            )
     expanded = []
     for language in PROMPT_LANGUAGES:
         prompts = []
@@ -57,7 +78,7 @@ def expand_name_list(data: dict) -> list[dict]:
             entry = {"conceptId": prompt["conceptId"], "answer": source["answer"]}
             if source.get("aliases"):
                 entry["aliases"] = list(source["aliases"])
-            version = (own or {}).get("promptVersion", prompt.get("promptVersion"))
+            version = own.get("promptVersion") if own is not None else prompt.get("promptVersion")
             if version is not None:
                 entry["promptVersion"] = version
             for key in ("difficulty", "contentRating", "tags"):

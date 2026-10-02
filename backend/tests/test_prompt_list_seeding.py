@@ -925,3 +925,69 @@ async def test_a_name_list_that_contradicts_itself_fails_startup(tmp_path, langu
             await seed_prompt_lists(SqlAlchemyPromptListRepository(factory), directory=tmp_path)
     finally:
         await engine.dispose()
+
+
+@pytest.mark.parametrize(
+    ("override", "names"),
+    [
+        ({"answer": "Zorblatz", "alias": ["Zorblax"]}, None),
+        ({"promptVersion": 2}, None),
+        (None, {"xx": "Kritters"}),
+    ],
+)
+async def test_a_name_list_override_that_says_less_or_other_fails_startup(tmp_path, override, names):
+    """An override is a language's whole spelling - an answer, and only its
+    aliases and version - so a misspelt key or a version without an answer
+    is refused by name rather than dropped, which would change a language's
+    content under an unchanged version (#1399 review)."""
+    factory, engine = await create_test_db()
+    try:
+        fields = {}
+        if override is not None:
+            fields["prompts"] = [
+                {"conceptId": "01a0f467-2040-7733-9e34-000000000101", "answer": "Zorblax",
+                 "overrides": {"de": override}},
+            ]
+        if names is not None:
+            fields["names"] = names
+        _write_name_list(tmp_path, **fields)
+        with pytest.raises(ValueError, match="critters"):
+            await seed_prompt_lists(SqlAlchemyPromptListRepository(factory), directory=tmp_path)
+    finally:
+        await engine.dispose()
+
+
+async def test_two_files_for_one_list_and_a_broken_file_are_named(tmp_path):
+    """A per-language copy left beside its name list defines the same list
+    twice, and a file that does not parse is named: either way startup says
+    which file, rather than a line and a column of one of thirty-five."""
+    factory, engine = await create_test_db()
+    try:
+        _write_name_list(tmp_path)
+        _write_list(tmp_path, "dutch_critters", language="nl")
+        with pytest.raises(ValueError, match="both define dutch_critters"):
+            await seed_prompt_lists(SqlAlchemyPromptListRepository(factory), directory=tmp_path)
+        (tmp_path / "dutch_critters.json").write_text("{not json", encoding="utf-8")
+        with pytest.raises(ValueError, match="dutch_critters.json"):
+            await seed_prompt_lists(SqlAlchemyPromptListRepository(factory), directory=tmp_path)
+    finally:
+        await engine.dispose()
+
+
+def test_an_override_keeps_its_own_version_when_the_default_is_raised():
+    """A default raised for an English rewording reaches the languages that
+    inherit it, and not those that spell the name their own way (#1399
+    review): their content did not change, so neither may their version."""
+    from app.db.name_lists import expand_name_list
+
+    expanded = expand_name_list({
+        "slug": "critters", "name": "Critters", "shelf": "everyday",
+        "languages": {"inherit": ["en", "es", "fr", "it", "nl", "pl", "pt"], "override": ["de"]},
+        "prompts": [{"conceptId": "01a0f467-2040-7733-9e34-000000000101", "answer": "Zorblax",
+                     "promptVersion": 3, "overrides": {"de": {"answer": "Zorblatz"}}}],
+    })
+    versions = {body["language"]: body["prompts"][0].get("promptVersion", 1) for body in expanded}
+    assert versions["de"] == 1
+    assert {language: version for language, version in versions.items() if language != "de"} == {
+        language: 3 for language in PROMPT_LANGUAGES if language != "de"
+    }

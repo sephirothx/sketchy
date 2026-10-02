@@ -2417,6 +2417,25 @@ were then joined by walking all of them per prompt (#1367). The checked-in shape
 - **Deploying different content under an already-seen list or prompt version is a
   startup-failing seed conflict**, not an in-place rewrite.
 
+A **name list** (#1399) - the Pokémon generations, the video-game icons - is one file that
+stands for a list per supported language, expanded before anything is seeded
+([`app/db/name_lists.py`](../backend/app/db/name_lists.py)): a default spelling per concept,
+and under `overrides` a language's own `answer` (with its `aliases` and `promptVersion`,
+nothing else) where it names the concept differently. The rows it writes are exactly those
+of one file per language, so the rules above apply per expanded list, and they move as
+follows:
+
+- The file's `version` is every expanded list's: raising it moves all of them.
+- A language that inherits a concept takes the default's `promptVersion`, so raising the
+  default moves every inheriting language; an override takes its own (1 when it gives
+  none), so it does not follow the default. Moving a language from inheriting to
+  overriding changes its spelling, so its override needs a version above the default's.
+- Every supported language is expanded whether the file declares it or not; the
+  declaration (`languages.inherit` / `languages.override`) is held to the registry by
+  `tests/test_bundled_prompt_content.py`.
+- Two files that define the same list, and a file that does not parse, fail startup
+  naming the file.
+
 ---
 
 ## 9. Runtime analytics
