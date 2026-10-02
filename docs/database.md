@@ -2417,7 +2417,7 @@ were then joined by walking all of them per prompt (#1367). The checked-in shape
 - **Deploying different content under an already-seen list or prompt version is a
   startup-failing seed conflict**, not an in-place rewrite.
 
-A **name list** (#1399) - the Pokémon generations, the video-game icons - is one file that
+A **name list** (#1399) - the Pokémon generations, League of Legends, the video-game icons - is one file that
 stands for a list per supported language, expanded before anything is seeded
 ([`app/db/name_lists.py`](../backend/app/db/name_lists.py)): a default spelling per concept,
 and under `overrides` a language's own `answer` (with its `aliases` and `promptVersion`,

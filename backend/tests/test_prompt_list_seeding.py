@@ -821,39 +821,39 @@ async def test_the_pokemon_generations_are_families_a_mixed_room_plays():
         await engine.dispose()
 
 
-async def test_league_of_legends_plays_anywhere_and_the_icons_are_a_family():
-    """The second video-game wave (#1390): every League of Legends champion as
-    one official list in no language, which every room and a mixed one plays
-    as it is, and video-game icons translated into all eight, a family."""
+async def test_league_of_legends_and_the_icons_are_families():
+    """The second video-game wave (#1390): every League of Legends champion
+    and the video-game icons, each a name list - a family in all eight
+    languages - with a champion Riot renames shown by its own language's name
+    and the English one still scoring there (#1399)."""
     factory, engine = await create_test_db()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
         await seed_prompt_lists(repo)
-        champions = await repo.get_by_slug("league_of_legends")
-        assert champions is not None
-        assert (champions.language, champions.shelf, champions.family) == ("zxx", "video-games", None)
-        icons = [
-            summary for summary in await repo.list_all()
-            if summary.slug.endswith("_video_game_icons")
-        ]
-        assert {summary.language for summary in icons} == set(PROMPT_LANGUAGES)
-        assert {summary.family for summary in icons} == {"english_video_game_icons"}
+        catalogue = await repo.list_all()
+        for stem in ("league_of_legends", "video_game_icons"):
+            lists = [summary for summary in catalogue if summary.slug.endswith(f"_{stem}")]
+            assert {summary.language for summary in lists} == set(PROMPT_LANGUAGES), stem
+            assert {summary.family for summary in lists} == {f"english_{stem}"}, stem
+            assert {summary.shelf for summary in lists} == {"video-games"}, stem
 
+        assert "Maître Yi" in await repo.get_prompts_by_slugs(["french_league_of_legends"])
+        assert "Master Yi" in await repo.get_prompts_by_slugs(["dutch_league_of_legends"])
+        champions = (await repo.get_by_slug("english_league_of_legends")).prompt_count
+        icons = (await repo.get_by_slug("english_video_game_icons")).prompt_count
         for language in PROMPT_LANGUAGES:
             stem = PromptLanguage(language).name.lower()
             pinned = await repo.authorize_selection(
-                [f"{stem}_standard", f"{stem}_video_game_icons", "league_of_legends"],
+                [f"{stem}_standard", f"{stem}_video_game_icons", f"{stem}_league_of_legends"],
                 expected_language=language,
             )
             assert pinned.prompt_count == (
-                (await repo.get_by_slug(f"{stem}_standard")).prompt_count
-                + icons[0].prompt_count
-                + champions.prompt_count
+                (await repo.get_by_slug(f"{stem}_standard")).prompt_count + icons + champions
             ), language
         mixed = await repo.authorize_selection(
-            ["polish_video_game_icons", "league_of_legends"], expected_language="mul"
+            ["polish_video_game_icons", "spanish_league_of_legends"], expected_language="mul"
         )
-        assert len(mixed.list_ids) == len(PROMPT_LANGUAGES) + 1
+        assert len(mixed.list_ids) == 2 * len(PROMPT_LANGUAGES)
     finally:
         await engine.dispose()
 
