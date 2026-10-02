@@ -819,3 +819,40 @@ async def test_the_pokemon_generations_are_families_a_mixed_room_plays():
         assert german.prompt_count > 3000
     finally:
         await engine.dispose()
+
+
+async def test_league_of_legends_plays_anywhere_and_the_icons_are_a_family():
+    """The second video-game wave (#1390): every League of Legends champion as
+    one official list in no language, which every room and a mixed one plays
+    as it is, and video-game icons translated into all eight, a family."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        champions = await repo.get_by_slug("league_of_legends")
+        assert champions is not None
+        assert (champions.language, champions.shelf, champions.family) == ("zxx", "video-games", None)
+        icons = [
+            summary for summary in await repo.list_all()
+            if summary.slug.endswith("_video_game_icons")
+        ]
+        assert {summary.language for summary in icons} == set(PROMPT_LANGUAGES)
+        assert {summary.family for summary in icons} == {"english_video_game_icons"}
+
+        for language in PROMPT_LANGUAGES:
+            stem = PromptLanguage(language).name.lower()
+            pinned = await repo.authorize_selection(
+                [f"{stem}_standard", f"{stem}_video_game_icons", "league_of_legends"],
+                expected_language=language,
+            )
+            assert pinned.prompt_count == (
+                (await repo.get_by_slug(f"{stem}_standard")).prompt_count
+                + icons[0].prompt_count
+                + champions.prompt_count
+            ), language
+        mixed = await repo.authorize_selection(
+            ["polish_video_game_icons", "league_of_legends"], expected_language="mul"
+        )
+        assert len(mixed.list_ids) == len(PROMPT_LANGUAGES) + 1
+    finally:
+        await engine.dispose()
