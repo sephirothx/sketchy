@@ -2429,7 +2429,12 @@ follows:
 - A language that inherits a concept takes the default's `promptVersion`, so raising the
   default moves every inheriting language; an override takes its own (1 when it gives
   none), so it does not follow the default. Moving a language from inheriting to
-  overriding changes its spelling, so its override needs a version above the default's.
+  overriding changes its spelling, so its override needs the version after the newest
+  that language already holds - the default's, if it was following it - and the seed
+  refuses a gap. Moving one back is the same in reverse: a language whose own version
+  is behind the default's cannot simply drop its override, since it would jump to the
+  default's version; keep an override that equals the default at the language's next
+  version instead, which is what the Pokémon generator writes.
 - Every supported language is expanded whether the file declares it or not; the
   declaration (`languages.inherit` / `languages.override`) is held to the registry by
   `tests/test_bundled_prompt_content.py`.
