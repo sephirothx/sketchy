@@ -1193,6 +1193,7 @@ export const DE: Catalogue = {
     "sports-and-games": "Sport und Spiele",
     "transport": "Verkehr",
     "entertainment": "Unterhaltung",
+    "video-games": "Videospiele",
     "science-and-technology": "Wissenschaft und Technik",
     "history-and-culture": "Geschichte und Kultur",
     "holidays": "Feiertage",
@@ -1620,9 +1621,9 @@ export const DE: Catalogue = {
     yourLists: "Deine Listen",
     fromCommunityCatalogue: "Aus dem Community-Katalog",
     /** A shelf's name, by its slug (`lib/promptListTree.ts`, R-PROMPT-14). */
-    shelves: { everyday: "Alltag" } satisfies Record<PromptShelf, string>,
+    shelves: { everyday: "Alltag", "video-games": "Videospiele" } satisfies Record<PromptShelf, string>,
     /** A series's name, by its slug; one without falls back to its slug. */
-    series: {} as Record<string, string>,
+    series: { pokemon: "Pokémon" } as Record<string, string>,
     chosenCount: (p: { count: number }) => `${number(p.count)} gewählt`,
     seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} von ${number(p.total)}`,
     showSeries: (p: { name: string }) => `Listen von ${p.name} zeigen`,

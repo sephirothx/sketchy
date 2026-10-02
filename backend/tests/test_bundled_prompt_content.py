@@ -168,3 +168,38 @@ def test_every_official_list_has_its_own_place_on_a_known_shelf():
             (body["language"], body["shelf"], body.get("series"), body.get("position", 0))
         ].append(path.stem)
     assert {place: slugs for place, slugs in places.items() if len(slugs) > 1} == {}
+
+
+def test_every_themed_official_list_is_a_family_or_in_no_language():
+    """A themed official list ships translated into every language - the same
+    concepts, so a mixed room can pin it whole - or as one list in no language
+    (R-PROMPT-01, R-PROMPT-12, #1374). One that reached only some languages
+    would be offered in some rooms and refused as a family in mixed ones."""
+    by_language: dict[str, dict[frozenset, str]] = defaultdict(dict)
+    themed = []
+    for path in PROMPT_LIST_DIR.glob("*.json"):
+        body = _list(path.stem)
+        if body["language"] == AGNOSTIC_PROMPT_LANGUAGE or path.stem.endswith("_local"):
+            continue
+        concepts = frozenset(_concepts(path.stem))
+        by_language[body["language"]][concepts] = path.stem
+        if body["shelf"] != "everyday":
+            themed.append((path.stem, concepts))
+    for slug, concepts in themed:
+        missing = [lang for lang in PROMPT_LANGUAGES if concepts not in by_language[lang]]
+        assert missing == [], (slug, missing)
+
+
+@pytest.mark.parametrize("language", PROMPT_LANGUAGES)
+def test_a_series_is_one_list_per_place(language):
+    """A series - the Pokémon generations - is ordered by position, and a
+    concept belongs to one of its lists: a Pokémon in two generations would be
+    offered twice as often to a room that chose the whole series."""
+    seen: dict[str, str] = {}
+    for slug in _slugs(language):
+        body = _list(slug)
+        if not body.get("series") or body["language"] != language:
+            continue
+        for concept in _concepts(slug):
+            assert concept not in seen, (concept, seen.get(concept), slug)
+            seen[concept] = slug

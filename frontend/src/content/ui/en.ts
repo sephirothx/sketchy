@@ -1215,6 +1215,7 @@ export const EN = {
     "sports-and-games": "Sports and games",
     "transport": "Transport",
     "entertainment": "Entertainment",
+    "video-games": "Video games",
     "science-and-technology": "Science and technology",
     "history-and-culture": "History and culture",
     "holidays": "Holidays",
@@ -1639,9 +1640,9 @@ export const EN = {
     yourLists: "Your lists",
     fromCommunityCatalogue: "From the community catalogue",
     /** A shelf's name, by its slug (`lib/promptListTree.ts`, R-PROMPT-14). */
-    shelves: { everyday: "Everyday" } satisfies Record<PromptShelf, string>,
+    shelves: { everyday: "Everyday", "video-games": "Video games" } satisfies Record<PromptShelf, string>,
     /** A series's name, by its slug; one without falls back to its slug. */
-    series: {} as Record<string, string>,
+    series: { pokemon: "Pokémon" } as Record<string, string>,
     chosenCount: (p: { count: number }) => `${number(p.count)} chosen`,
     seriesChosen: (p: { chosen: number; total: number }) => `${number(p.chosen)} of ${number(p.total)}`,
     showSeries: (p: { name: string }) => `Show ${p.name} lists`,

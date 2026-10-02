@@ -3,7 +3,7 @@
   "name": "Deutsch — Standard",
   "description": "Die Standardliste: bekannte Begriffe, die sich gut zeichnen lassen.",
   "language": "de",
-  "version": 2,
+  "version": 3,
   "shelf": "everyday",
   "position": 0,
   "prompts": [
@@ -398,7 +398,7 @@
     {"conceptId":"01a02b7b-b572-79a2-853c-89d5b4239562","answer":"Weintrauben"},
     {"conceptId":"01a0f467-2040-7733-9e34-df05806182c1","answer":"Gras","aliases":["das Gras","Rasen","Grashalm"]},
     {"conceptId":"01a088e3-e9ad-71b3-8c76-b829dcbaec26","answer":"Grashüpfer","aliases":["der Grashüpfer","Heuschrecke","Heupferd"],"promptVersion":2},
-    {"conceptId":"01a088e3-e9af-724e-977f-8fe2a8cc58b5","answer":"Reibe","aliases":["die Reibe","Käsereibe","Raffel"]},
+    {"conceptId":"01a088e3-e9af-724e-977f-8fe2a8cc58b5","answer":"Reibe","aliases":["die Reibe","Käsereibe"],"promptVersion":2},
     {"conceptId":"01a02b7b-b573-713f-b444-1f19906e984d","answer":"Friedhof","aliases":["der Friedhof"]},
     {"conceptId":"01a02b7b-b574-7c99-85cd-e2d997adec18","answer":"Gewächshaus","aliases":["das Gewächshaus","Treibhaus","Glashaus"]},
     {"conceptId":"01a02b7b-b577-79fa-b57f-30cbf1b69d89","answer":"Gitarre"},

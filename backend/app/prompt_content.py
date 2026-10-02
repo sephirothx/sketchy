@@ -45,6 +45,7 @@ LIST_TAG_VOCABULARY: tuple[tuple[str, str], ...] = (
     ("sports-and-games", "Sports and games"),
     ("transport", "Transport"),
     ("entertainment", "Entertainment"),
+    ("video-games", "Video games"),
     ("science-and-technology", "Science and technology"),
     ("history-and-culture", "History and culture"),
     ("holidays", "Holidays"),
@@ -73,7 +74,7 @@ MAX_PLAYER_PROMPT_LISTS = 20
 # Only slugs live here - what a player reads is in the frontend catalogue, in
 # every interface language - and a shelf is added here before a list names it,
 # so a typo in a seed file fails startup instead of opening a shelf of one.
-PROMPT_SHELVES: tuple[str, ...] = ("everyday",)
+PROMPT_SHELVES: tuple[str, ...] = ("everyday", "video-games")
 
 
 def validate_shelf_placement(

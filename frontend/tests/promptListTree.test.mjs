@@ -38,8 +38,10 @@ test("official lists stand on their shelves, ordered by position, a series where
     carried: [],
     starred: [list("board", { isBundled: false, shelf: null })],
   });
-  // A shelf this build does not know is kept, after the ones it does.
-  assert.deepEqual(tree.map((branch) => branch.id), [...PROMPT_SHELVES, "games", "own", "starred"]);
+  // A shelf this build does not know is kept, after the ones it does; a known
+  // shelf with nothing on it is left out.
+  assert.equal(PROMPT_SHELVES[0], "everyday");
+  assert.deepEqual(tree.map((branch) => branch.id), ["everyday", "games", "own", "starred"]);
   assert.deepEqual(tree[0].items.map((item) => item.list.slug), ["standard", "local"]);
   const games = tree[1].items;
   // Icons and the series both stand at 0: the tie goes by name.
