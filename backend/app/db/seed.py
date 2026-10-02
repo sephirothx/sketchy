@@ -17,6 +17,7 @@ from app.prompt_content import (
     validate_prompt_list_language,
     validate_shelf_placement,
 )
+from app.db.name_lists import expand_name_list, is_name_list
 from app.repositories.interfaces import (
     BundledPromptDefinition,
     PromptListRepository,
@@ -26,6 +27,32 @@ from app.repositories.interfaces import (
 logger = logging.getLogger(__name__)
 
 DEFAULT_PROMPT_LISTS_DIR = Path(__file__).resolve().parent.parent.parent / "data" / "prompt_lists"
+
+
+def bundled_list_bodies(directory: Path | None = None) -> list[tuple[Path, dict]]:
+    """Every official list the seed files stand for, name lists expanded, with
+    the file each came from. What startup seeds and what the content tests
+    read, so the two can never disagree about the catalogue."""
+    target_dir = directory or DEFAULT_PROMPT_LISTS_DIR
+    bodies: list[tuple[Path, dict]] = []
+    seen: dict[str, Path] = {}
+    for file_path in sorted(target_dir.glob("*.json")):
+        try:
+            data = json.loads(file_path.read_text(encoding="utf-8"))
+            expanded = expand_name_list(data) if is_name_list(data) else [data]
+        except Exception as error:
+            # Named, since a JSON error says only a line and a column.
+            raise ValueError(f"{file_path.name}: {error!r}") from error
+        for body in expanded:
+            slug = str(body.get("slug", ""))
+            # Two files standing for one list - an old per-language copy
+            # beside its name list - would be one entry to whoever reads a
+            # dict of these and two upserts to the seed.
+            if slug in seen:
+                raise ValueError(f"{file_path.name} and {seen[slug].name} both define {slug}")
+            seen[slug] = file_path
+            bodies.append((file_path, body))
+    return bodies
 
 
 def _bundled_prompt(raw: object, *, language: str) -> BundledPromptDefinition:
@@ -77,10 +104,13 @@ async def seed_prompt_lists(
         return []
 
     seeded: list[PromptListSummary] = []
-    for file_path in sorted(target_dir.glob("*.json")):
+    try:
+        bodies = await asyncio.to_thread(bundled_list_bodies, target_dir)
+    except Exception:
+        logger.exception("Failed to read the prompt lists in %s", target_dir)
+        raise
+    for file_path, data in bodies:
         try:
-            content = await asyncio.to_thread(file_path.read_text, encoding="utf-8")
-            data = json.loads(content)
             slug = str(data["slug"]).strip()
             name = str(data["name"]).strip()
             description = str(data.get("description", "")).strip()

@@ -2,13 +2,35 @@
   "slug": "league_of_legends",
   "name": "League of Legends",
   "description": "Every League of Legends champion, by name.",
-  "language": "zxx",
+  "descriptions": {
+    "de": "Jeder Champion aus League of Legends, beim Namen.",
+    "es": "Todos los campeones de League of Legends, por su nombre.",
+    "fr": "Tous les champions de League of Legends, par leur nom.",
+    "it": "Tutti i campioni di League of Legends, per nome.",
+    "nl": "Elke kampioen uit League of Legends, bij naam.",
+    "pt": "Todos os campeões de League of Legends, pelo nome.",
+    "pl": "Wszyscy bohaterowie League of Legends, z imienia."
+  },
   "version": 1,
   "shelf": "video-games",
   "position": 10,
   "tags": [
     "video-games"
   ],
+  "languages": {
+    "inherit": [
+      "en",
+      "nl"
+    ],
+    "override": [
+      "de",
+      "es",
+      "fr",
+      "it",
+      "pt",
+      "pl"
+    ]
+  },
   "prompts": [
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03169b07d3ed","answer":"Aatrox"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03176674e10c","answer":"Ahri"},
@@ -23,7 +45,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03202c743cde","answer":"Ashe"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03213c2d8ee9","answer":"Aurelion Sol","aliases":["Aurelion"]},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-032340f6ceab","answer":"Azir"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-0324c0717910","answer":"Bard","aliases":["Bardo"]},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-0324c0717910","answer":"Bard","overrides":{"es":{"answer":"Bardo","aliases":["Bard"]},"pt":{"answer":"Bardo","aliases":["Bard"]}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03256a2232fc","answer":"Bel'Veth","aliases":["Bel Veth","BelVeth"]},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03264602804c","answer":"Blitzcrank"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03281369ca35","answer":"Braum"},
@@ -34,7 +56,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-032d6d31f23c","answer":"Cho'Gath","aliases":["Cho Gath","ChoGath"]},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-032ed4349a7e","answer":"Corki"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-032f580e6eba","answer":"Darius"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-03312cbcd7e4","answer":"Dr. Mundo","aliases":["Dr Mundo","Mundo"]},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-03312cbcd7e4","answer":"Dr. Mundo","aliases":["Dr Mundo","Mundo"],"overrides":{"pl":{"answer":"Dr Mundo","aliases":["Dr. Mundo","Mundo"]}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03324093ffb2","answer":"Draven"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0333a8d8f02f","answer":"Ekko"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0334c57e359e","answer":"Elise"},
@@ -57,12 +79,12 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-034588c6f77a","answer":"Irelia"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0346391e5c03","answer":"Ivern"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03477fb5c41d","answer":"Janna"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-03481c427274","answer":"Jarvan IV","aliases":["Jarvan","Jarvan 4","Jarvan IV."]},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-03481c427274","answer":"Jarvan IV","aliases":["Jarvan","Jarvan 4"],"overrides":{"de":{"answer":"Jarvan IV.","aliases":["Jarvan","Jarvan 4","Jarvan IV"]}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0349d14c87a1","answer":"Jax"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-034a807ee72c","answer":"Jayce"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-034b62a567ff","answer":"Jhin"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-034c47ddf6fb","answer":"Jinx"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-034d746bb42f","answer":"K'Sante","aliases":["K Sante","KSante"]},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-034d746bb42f","answer":"K'Sante","aliases":["K Sante","KSante"],"overrides":{"fr":{"answer":"K'Santé","aliases":["K Santé","KSanté"]}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-034e3c2a4829","answer":"Kai'Sa","aliases":["Kai Sa","KaiSa"]},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-034f29a8d137","answer":"Kalista"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0350bc740b3a","answer":"Karma"},
@@ -88,7 +110,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0364754234f8","answer":"Malphite"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-036593e2362f","answer":"Malzahar"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0366a038ff52","answer":"Maokai"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-0367733d44ce","answer":"Master Yi","aliases":["Maestro Yi","Maître Yi"]},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-0367733d44ce","answer":"Master Yi","overrides":{"es":{"answer":"Maestro Yi","aliases":["Master Yi"]},"fr":{"answer":"Maître Yi","aliases":["Master Yi"]}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0369bd85ec2a","answer":"Milio"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-036a5e7629bf","answer":"Miss Fortune"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-036b240ad340","answer":"Mordekaiser"},
@@ -101,7 +123,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03725682b20f","answer":"Nidalee"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03737c2c47a3","answer":"Nilah"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03749f06cc04","answer":"Nocturne"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-0375cd3a5dce","answer":"Nunu & Willump","aliases":["Nunu","Nunu Willump","Nunu and Willump","Nunu e Willump","Nunu et Willump","Nunu i Willump","Nunu y Willump"]},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-0375cd3a5dce","answer":"Nunu & Willump","aliases":["Nunu","Nunu Willump","Nunu and Willump"],"overrides":{"es":{"answer":"Nunu y Willump","aliases":["Nunu","Nunu & Willump","Nunu Willump","Nunu and Willump"]},"fr":{"answer":"Nunu et Willump","aliases":["Nunu","Nunu & Willump","Nunu Willump","Nunu and Willump"]},"it":{"answer":"Nunu e Willump","aliases":["Nunu","Nunu & Willump","Nunu Willump","Nunu and Willump"]},"pt":{"answer":"Nunu e Willump","aliases":["Nunu","Nunu & Willump","Nunu Willump","Nunu and Willump"]},"pl":{"answer":"Nunu i Willump","aliases":["Nunu","Nunu & Willump","Nunu Willump","Nunu and Willump"]}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-037658ad2dff","answer":"Olaf"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03778cd875df","answer":"Orianna"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0378c03b6f0d","answer":"Ornn"},
@@ -122,7 +144,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-038879a87203","answer":"Samira"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0389c1cc67e3","answer":"Sejuani"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-038a409ae5b2","answer":"Senna"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-038b3fe71714","answer":"Seraphine"},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-038b3fe71714","answer":"Seraphine","overrides":{"fr":{"answer":"Séraphine"}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-038c6ff93525","answer":"Sett"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-038d4c38c2e1","answer":"Shaco"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-038ef1fea990","answer":"Shen"},
@@ -175,7 +197,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03bee91d0c17","answer":"Zeri"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03bf57d39bee","answer":"Ziggs"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03c04aa23840","answer":"Zilean"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-03c1d1896a19","answer":"Zoe"},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-03c1d1896a19","answer":"Zoe","overrides":{"fr":{"answer":"Zoé"}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03c2721d0d5d","answer":"Zyra"}
   ]
 }
