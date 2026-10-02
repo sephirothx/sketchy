@@ -97,9 +97,10 @@ def main() -> None:
     known = {entry["answer"]: entry["conceptId"] for entry in previous["prompts"]}
     versions: dict[tuple[str, str], int] = {}
     for expanded in (expand_name_list(previous) if is_name_list(previous) else [previous]):
+        # Every language's resolved version, the implicit 1 included: an
+        # override that gives none is at 1, not at whatever the default is.
         for entry in expanded["prompts"]:
-            if "promptVersion" in entry:
-                versions[(expanded.get("language", "en"), entry["conceptId"])] = entry["promptVersion"]
+            versions[(expanded.get("language", "en"), entry["conceptId"])] = entry.get("promptVersion", 1)
 
     prompts = []
     overriding: set[str] = set()
@@ -111,7 +112,7 @@ def main() -> None:
         aliases = aliases_for(name, SHORT.get(name, []), "en")
         if aliases:
             entry["aliases"] = aliases
-        if ("en", concept) in versions:
+        if versions.get(("en", concept), 1) != 1:
             entry["promptVersion"] = versions[("en", concept)]
         default_version = entry.get("promptVersion", 1)
         overrides = {}
