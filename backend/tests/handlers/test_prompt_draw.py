@@ -794,3 +794,37 @@ def test_a_mixed_draw_drops_a_concept_whose_word_another_language_already_holds(
         lambda prompt: every_form(prompt) or [("de", prompt.answer), ("en", prompt.answer)],
     )
     assert held == [dog]
+
+
+async def test_a_draw_short_of_distinct_words_asks_again_off_the_loop(monkeypatch):
+    """Review of #1410: nineteen lists that all hold "Poppy" and one with other
+    words. The first draw is all Poppy; dropping the shared word must not leave
+    the game a one-word pool while the lists hold more, and the folding runs
+    off the event loop."""
+    import tests.handlers.helpers as helpers
+
+    monkeypatch.setattr(helpers.random, "shuffle", lambda items: None)  # worst case first
+    folded_off_loop = []
+    real_off_loop = game_flow.off_loop
+
+    async def counting(function, *args):
+        folded_off_loop.append(function)
+        return await real_off_loop(function, *args)
+
+    monkeypatch.setattr(game_flow, "off_loop", counting)
+    room_manager, room, _ = build_room(rounds=1)
+    room.max_players = 2
+    poppies = [f"Poppy {index}" for index in range(19)]
+    others = [f"word{index}" for index in range(12)]
+    repo = StubPromptListRepo(poppies + others)
+    repo.aliases = {name: ("poppy",) for name in poppies}
+    pin(room, repo)
+    ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+    await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+    answers = [room.game.answer_for(key) for key in room.game.prompt_pool]
+    assert len(answers) == 1 * 2 * 3
+    assert sum(answer.startswith("Poppy") for answer in answers) == 1
+    assert repo.draws >= 2
+    assert game_flow._one_of_each_word in folded_off_loop
