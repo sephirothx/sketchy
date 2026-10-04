@@ -400,6 +400,8 @@ def test_portuguese_is_portugal_s_and_spanish_spain_s(language):
         for entry in _list(slug)["prompts"]
         if entry["answer"].casefold() in OTHER_VARIETY[language]
     ]
+    assert found == []
+
 
 @pytest.mark.parametrize("language", PROMPT_LANGUAGES)
 def test_a_title_that_keeps_its_article_is_not_accepted_without_it(language):
