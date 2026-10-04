@@ -562,7 +562,7 @@ def _drops_digraphs(longer: str, shorter: str, digraphs: dict[str, str]) -> bool
 
 class AnswerOwners:
     """Who answers to what, in one language: the check that no guess can win
-    two prompts of a selection (R-PROMPT-01, R-GUESS-01).
+    two prompts of one list, or of one game's draw (R-PROMPT-01, R-GUESS-01).
 
     Comparing the stored keys is not enough. A guess wins when *any* of its
     spellings meets any of an answer's (`prompt_match_variants`), so German
@@ -588,33 +588,47 @@ class AnswerOwners:
         self._digraphs = _LOSSY_DIGRAPHS.get(language, {})
         self._groups: dict[str, list[str]] = {}
 
+    def clashes(
+        self, owner: object, text: str, spellings: frozenset[str] | None = None
+    ) -> bool:
+        """Whether a guess could win both `text` and an answer another owner
+        has claimed. Records nothing, so a caller can check every form of a
+        prompt before taking any (a mixed room's concept, in eight languages)."""
+        if spellings is None:
+            spellings = prompt_match_variants(text, self.language)
+        if any(self._owner.get(spelling, owner) != owner for spelling in spellings):
+            return True
+        for spelling in spellings if self._digraphs else ():
+            group = self._groups.get(_collapse_digraphs(spelling, self._digraphs), [])
+            others = [other for other in group if self._owner[other] != owner]
+            if len(others) > self.MAX_LOOKALIKES:
+                return True
+            if any(
+                _drops_digraphs(spelling, other, self._digraphs)
+                or _drops_digraphs(other, spelling, self._digraphs)
+                for other in others
+            ):
+                return True
+        return False
+
     def claim(
         self, owner: object, text: str, spellings: frozenset[str] | None = None
     ) -> bool:
-        """Record `text` as one of `owner`'s answers; False when a guess could
-        win both it and another owner's. `spellings`, when the caller already
-        folded them, are `prompt_match_variants(text, self.language)`."""
+        """Record `text` as one of `owner`'s answers, unless it `clashes`;
+        False then, and nothing is recorded. `spellings`, when the caller
+        already folded them, are `prompt_match_variants(text, self.language)`."""
         if spellings is None:
             spellings = prompt_match_variants(text, self.language)
+        if self.clashes(owner, text, spellings):
+            return False
         for spelling in spellings:
-            if self._owner.setdefault(spelling, owner) != owner:
-                return False
-        if not self._digraphs:
-            return True
-        for spelling in spellings:
-            group = self._groups.setdefault(
-                _collapse_digraphs(spelling, self._digraphs), []
-            )
-            others = [other for other in group if self._owner[other] != owner]
-            if len(others) > self.MAX_LOOKALIKES:
-                return False
-            for other in others:
-                if _drops_digraphs(spelling, other, self._digraphs) or _drops_digraphs(
-                    other, spelling, self._digraphs
-                ):
-                    return False
-            if spelling not in group:
-                group.append(spelling)
+            self._owner.setdefault(spelling, owner)
+            if self._digraphs:
+                group = self._groups.setdefault(
+                    _collapse_digraphs(spelling, self._digraphs), []
+                )
+                if spelling not in group:
+                    group.append(spelling)
         return True
 
 

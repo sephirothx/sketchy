@@ -12,6 +12,7 @@ from contextlib import asynccontextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
+from collections.abc import Callable, Iterable, Sequence
 from typing import Mapping, Protocol
 
 from app.announcements import Announcement
@@ -20,6 +21,7 @@ from app.flow_timing import timing
 from app.game import MAX_HINT_SPEND, PROMPT_CHOICES_PER_TURN, Game, Phase, PromptForm
 from app.domain_values import (
     MIXED_PROMPT_LANGUAGE,
+    PROMPT_LANGUAGES,
     GameOutcome,
     RuntimeEventType,
     TurnEligibilityReason,
@@ -46,7 +48,7 @@ from app.presenters import (
     system_chat_message,
     turn_payload,
 )
-from app.prompt_content import default_prompt_list_slug, prompt_match_key
+from app.prompt_content import AnswerOwners, default_prompt_list_slug, prompt_match_key
 from app.prompts import letter_histogram, parse_custom_prompt_list
 from app.refusals import ErrorCode
 from app.repositories.interfaces import (
@@ -74,6 +76,28 @@ HISTORY_WRITE_TIMEOUT_SECONDS = WRITE_TIMEOUT_SECONDS
 #: then ~0.24 s once staging began preparing each drawing's stored form (#1259).
 ENVELOPE_ENCODE_SECONDS = 0.25
 
+
+
+def _one_of_each_word(
+    prompts: Sequence[SampledPrompt], forms: Callable[[SampledPrompt], Iterable[tuple[str, str]]]
+) -> list[SampledPrompt]:
+    """The draw, keeping one prompt per word: lists may share a word - a
+    champion called Poppy beside the flower - but a game never offers both
+    (#1396). `forms` gives each prompt's (language, text) pairs, every one of
+    which a guess is accepted under; a prompt whose word another kept prompt
+    already answers to is dropped. The draw arrives in random order, so which
+    of the two a game keeps is the draw's to decide."""
+    owners: dict[str, AnswerOwners] = {}
+    kept: list[SampledPrompt] = []
+    for prompt in prompts:
+        owner = prompt.concept_id or prompt.answer
+        pairs = list(forms(prompt))
+        if any(owners.setdefault(language, AnswerOwners(language)).clashes(owner, text) for language, text in pairs):
+            continue
+        for language, text in pairs:
+            owners[language].claim(owner, text)
+        kept.append(prompt)
+    return kept
 
 def history_encode_drain_seconds() -> float:
     """What a shutdown allows for encodes still queued, on top of the write's
@@ -729,7 +753,24 @@ class GameFlowService:
             raise RoomPromptResolutionError(
                 "Prompt lists could not be loaded. Please try again."
             ) from error
-        drawn = list(sample.prompts)
+        # Each form in its own language; a list in no language is played as
+        # its one spelling by every seat, so it is held to every language.
+        drawn = _one_of_each_word(
+            sample.prompts,
+            lambda prompt: (
+                [
+                    (language, text)
+                    for language, form in prompt.translations.items()
+                    for text in (form.answer, *form.aliases)
+                ]
+                if prompt.translations
+                else [
+                    (language, text)
+                    for language in PROMPT_LANGUAGES
+                    for text in (prompt.answer, *prompt.aliases)
+                ]
+            ),
+        )
         if not drawn:
             logger.warning("Mixed room %s drew an empty prompt pool", room.id)
             raise RoomPromptResolutionError(
@@ -867,11 +908,16 @@ class GameFlowService:
         # key again and removes nothing more; twins are few, so the sample is
         # not over-drawn for them.
         shadowed = room.custom_prompt_match_keys()
-        candidates = [
-            prompt
-            for prompt in sample.prompts
-            if prompt_match_key(prompt.answer, room.prompt_language) not in shadowed
-        ]
+        candidates = _one_of_each_word(
+            [
+                prompt
+                for prompt in sample.prompts
+                if prompt_match_key(prompt.answer, room.prompt_language) not in shadowed
+            ],
+            lambda prompt: (
+                (room.prompt_language, text) for text in (prompt.answer, *prompt.aliases)
+            ),
+        )
         drawable = max(0, sample.drawable - (len(sample.prompts) - len(candidates)))
 
         total = len(custom) + drawable

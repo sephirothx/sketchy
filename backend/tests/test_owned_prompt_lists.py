@@ -192,13 +192,9 @@ async def test_an_owned_list_is_priced_when_it_is_written():
         await engine.dispose()
 
 
-async def test_pinning_refuses_the_colliding_selections_resolution_refuses():
-    """Pinning reads no prompts, so it must ask the database the same question.
-
-    `resolve_selection` catches colliding answers by walking everything it
-    loads. If pinning let a collision through, a room would be admitted on a
-    selection where one guess could credit two different prompts.
-    """
+async def test_lists_that_share_a_word_are_played_one_word_at_a_time():
+    """Two lists may share a word (#1396): a room takes both, and the prompts
+    it plays hold the word once - the first list's."""
     factory, engine, owner_id, _ = await _database()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
@@ -221,10 +217,9 @@ async def test_pinning_refuses_the_colliding_selections_resolution_refuses():
         )
         slugs = [first.slug, second.slug]
 
-        with pytest.raises(PromptListSelectionError, match="ambiguous"):
-            await repo.resolve_selection(slugs, requesting_user_id=owner_id)
-        with pytest.raises(PromptListSelectionError, match="ambiguous"):
-            await repo.authorize_selection(slugs, requesting_user_id=owner_id)
+        resolved = await repo.resolve_selection(slugs, requesting_user_id=owner_id)
+        assert list(resolved.prompts) == ["otter"]
+        assert (await repo.authorize_selection(slugs, requesting_user_id=owner_id)).prompt_count == 2
 
         # Each on its own is a legitimate selection.
         for slug in slugs:
@@ -966,12 +961,12 @@ async def test_usage_is_credited_to_the_lists_the_draw_found_it_in():
         await engine.dispose()
 
 
-async def test_a_collision_the_fold_created_since_the_rows_were_written_is_caught():
+async def test_a_word_the_fold_made_shared_since_the_rows_were_written_is_played_once():
     """Two lists, one with `feu d'artifice` and one with the typographic
     apostrophe. Rows written before #1011 carry keys that differ, while the
-    game matches under the fold in force now, so both the walk and the
-    pinning query key the *text* afresh rather than trusting the stored key
-    (review of #1070)."""
+    game matches under the fold in force now, so the walk keys the *text*
+    afresh rather than trusting the stored key (review of #1070), and plays
+    the shared word once (#1396)."""
     factory, engine, owner_id, _ = await _database()
     try:
         repo = SqlAlchemyPromptListRepository(factory)
@@ -994,10 +989,8 @@ async def test_a_collision_the_fold_created_since_the_rows_were_written_is_caugh
                 version.match_key = "feu d\u2019artifice"
         slugs = [plain.slug, curly.slug]
 
-        with pytest.raises(PromptListSelectionError, match="ambiguous"):
-            await repo.resolve_selection(slugs, requesting_user_id=owner_id)
-        with pytest.raises(PromptListSelectionError, match="ambiguous"):
-            await repo.authorize_selection(slugs, requesting_user_id=owner_id)
+        resolved = await repo.resolve_selection(slugs, requesting_user_id=owner_id)
+        assert list(resolved.prompts) == ["feu d'artifice"]
         for slug in slugs:
             assert (await repo.authorize_selection([slug], requesting_user_id=owner_id)).prompt_count == 1
     finally:
@@ -1008,10 +1001,9 @@ async def test_a_collision_the_fold_created_since_the_rows_were_written_is_caugh
 
 
 async def test_a_draw_refuses_a_list_saved_since_it_was_checked():
-    """A save between authorization and the draw could add an answer that
-    collides with another selected list's - `beaver` with the alias `otter`
-    beside a list holding `otter` - which the check never saw. The draw
-    refuses content at any version but the one checked."""
+    """A save between authorization and the draw changes what the room was
+    checked on - here `beaver` with the alias `otter`, a word another selected
+    list holds. The draw refuses content at any version but the one checked."""
     from app.repositories.interfaces import PromptListsChangedError
 
     factory, engine, owner_id, _ = await _database()
@@ -1037,8 +1029,11 @@ async def test_a_draw_refuses_a_list_saved_since_it_was_checked():
             await repo.sample_prompts(
                 list(pinned.list_ids), limit=5, expected_versions=pinned.list_versions
             )
-        with pytest.raises(PromptListSelectionError, match="ambiguous"):
-            await repo.authorize_selection([first.slug, second.slug], requesting_user_id=owner_id)
+        # Checked again, the selection is admitted: the draw plays the shared
+        # word once (#1396).
+        assert (await repo.authorize_selection(
+            [first.slug, second.slug], requesting_user_id=owner_id
+        )).prompt_count == 2
         # Unchanged, it draws.
         again = await repo.authorize_selection([first.slug], requesting_user_id=owner_id)
         drawn = await repo.sample_prompts(

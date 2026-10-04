@@ -36,11 +36,6 @@ from app.prompt_content import prompt_match_key  # noqa: E402
 
 OUT = REPO / "backend" / "data" / "prompt_lists" / "league_of_legends.json"
 LOCALES = {"de": "de_DE", "es": "es_ES", "fr": "fr_FR", "it": "it_IT", "pl": "pl_PL", "pt": "pt_BR"}
-# A champion named like another prompt of some language's official lists is
-# left out: the word was there first, and a room picking both would be
-# refused as ambiguous - northern lights (Aurora), Dutch fire (Brand), the
-# Spanish bullseye (Diana), Portuguese honey (Mel), and Poppy and Talon.
-EXCLUDED = {"Aurora", "Brand", "Diana", "Mel", "Poppy", "Talon"}
 # "&" as each language writes it in a name (#1396).
 AND = {"en": "and", "de": "und", "es": "y", "fr": "et", "it": "e", "nl": "en", "pl": "i", "pt": "e"}
 # Languages whose players know the champions by their English names (#1396).
@@ -92,8 +87,6 @@ def main() -> None:
     prompts = []
     overriding: set[str] = set()
     for name in sorted(english.values()):
-        if name in EXCLUDED:
-            continue
         default = spelled(name, "en")
         concept = known.get(default) or str(generate_uuid7())
         entry = {"conceptId": concept, "answer": default}

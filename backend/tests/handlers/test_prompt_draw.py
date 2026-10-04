@@ -745,3 +745,52 @@ async def test_a_start_gives_up_on_lists_that_keep_changing():
     with pytest.raises(RoomPromptResolutionError):
         await ctx.game_flow._start_fresh_game(room, room.player_list())
     assert room.game is None
+
+
+async def test_two_lists_sharing_a_word_never_offer_it_twice_in_a_game():
+    """A champion called Poppy beside the flower (#1396): a room may take both
+    lists, but a game draws one of the two - either, as the draw falls."""
+    kept = set()
+    for _ in range(30):
+        room_manager, room, _ = build_room(rounds=2)
+        room.max_players = 2
+        repo = StubPromptListRepo(["Poppy", "poppy flower", "banana"])
+        repo.aliases = {"poppy flower": ("poppy",)}
+        repo.concept_ids = {"Poppy": "c-champion", "poppy flower": "c-flower", "banana": "c-banana"}
+        pin(room, repo)
+        ctx = build_context(room_manager, FakeGameHistoryRepository(), repo)
+
+        await ctx.game_flow._start_fresh_game(room, room.player_list())
+
+        answers = {room.game.answer_for(key) for key in room.game.prompt_pool}
+        assert "banana" in answers
+        assert len(answers & {"Poppy", "poppy flower"}) == 1, answers
+        kept |= answers & {"Poppy", "poppy flower"}
+    assert kept == {"Poppy", "poppy flower"}
+
+
+def test_a_mixed_draw_drops_a_concept_whose_word_another_language_already_holds():
+    from app.repositories.interfaces import PromptTranslation, SampledPrompt
+
+    def concept(cid, **forms):
+        return SampledPrompt(
+            answer=forms["en"], match_key=forms["en"], concept_id=cid,
+            translations={language: PromptTranslation(answer=text) for language, text in forms.items()},
+        )
+
+    def every_form(prompt):
+        return [
+            (language, text)
+            for language, form in prompt.translations.items()
+            for text in (form.answer, *form.aliases)
+        ]
+
+    dog, other = concept("c-dog", en="dog", de="Hund"), concept("c-x", en="hound", de="Hund")
+    assert game_flow._one_of_each_word([dog, other], every_form) == [dog]
+    # A list in no language is one spelling in every seat's language.
+    names = SampledPrompt(answer="Hund", match_key="hund", concept_id="c-name")
+    held = game_flow._one_of_each_word(
+        [dog, names],
+        lambda prompt: every_form(prompt) or [("de", prompt.answer), ("en", prompt.answer)],
+    )
+    assert held == [dog]

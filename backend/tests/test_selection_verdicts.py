@@ -21,7 +21,6 @@ from app.repositories import sqlalchemy as repository_module
 from app.repositories.interfaces import (
     PromptListEntryInput,
     PromptListMutationError,
-    PromptListSelectionError,
 )
 from app.repositories.sqlalchemy import SqlAlchemyPromptListRepository
 
@@ -130,7 +129,7 @@ async def test_a_restored_prompt_counts_again(seeded):
         assert selection.prompt_count == expected
 
 
-async def test_an_ambiguous_selection_stays_refused_when_remembered(seeded, monkeypatch):
+async def test_a_selection_sharing_a_word_is_admitted_and_remembered(seeded, monkeypatch):
     repo, engine, factory, owner = seeded
     one = await repo.create_owned(owner, name="One", description="", language="en",
                                   prompts=entries("cat", aliases={"cat": ("kitty",)}))
@@ -138,15 +137,16 @@ async def test_an_ambiguous_selection_stays_refused_when_remembered(seeded, monk
                                   prompts=entries("kitty"))
     folds = Folds(monkeypatch)
     for _ in range(2):
-        with pytest.raises(PromptListSelectionError, match="ambiguous"):
-            await repo.authorize_selection([one.slug, two.slug], requesting_user_id=owner, expected_language="en")
+        # "kitty" is in both: admitted, the draw keeps one (#1396).
+        selection = await repo.authorize_selection([one.slug, two.slug], requesting_user_id=owner, expected_language="en")
+        assert selection.prompt_count == 2
     assert folds.off_loop == 1
 
 
-async def test_a_mixed_room_s_verdict_is_remembered_and_still_refuses_a_clash(seeded, monkeypatch):
+async def test_a_mixed_room_s_verdict_is_remembered_and_admits_a_shared_word(seeded, monkeypatch):
     repo, engine, factory, owner = seeded
-    # "Mueller" and "Müller" are one answer to a German room; each list alone
-    # is fine, and the two together are not.
+    # "Mueller" and "Müller" are one answer to a German room: admitted
+    # together, and a game draws one of them (#1396).
     umlaut = await repo.create_owned(owner, name="Umlaut", description="", language="zxx",
                                      prompts=entries("Müller"))
     spelled = await repo.create_owned(owner, name="Spelled", description="", language="zxx",
@@ -155,11 +155,11 @@ async def test_a_mixed_room_s_verdict_is_remembered_and_still_refuses_a_clash(se
                                    prompts=entries("tree", "rock"))
     folds = Folds(monkeypatch)
     for _ in range(2):
-        with pytest.raises(PromptListSelectionError, match="ambiguous"):
-            await repo.authorize_selection(
-                [umlaut.slug, spelled.slug], requesting_user_id=owner,
-                expected_language=MIXED_PROMPT_LANGUAGE,
-            )
+        both = await repo.authorize_selection(
+            [umlaut.slug, spelled.slug], requesting_user_id=owner,
+            expected_language=MIXED_PROMPT_LANGUAGE,
+        )
+        assert both.prompt_count == 2
         selection = await repo.authorize_selection([fine.slug], requesting_user_id=owner, expected_language=MIXED_PROMPT_LANGUAGE)
         assert selection.prompt_count == 2
     assert folds.off_loop == 2, "one fold per selection, then remembered"
@@ -177,11 +177,11 @@ async def test_what_is_remembered_is_bounded(seeded, monkeypatch):
     assert len(repo._verdicts) == 2
 
 
-async def test_answers_one_guess_can_win_are_refused_everywhere_they_meet(seeded):
+async def test_answers_one_guess_can_win_are_refused_in_one_list_and_drawn_once_across_two(seeded):
     """German "Spüle" (sink) and "Spule" (spool) are two keys, and "Spule"
     wins both: a dropped umlaut is accepted (R-GUESS-01). One list holding both
-    is refused at its save, and two lists holding one each are refused when a
-    room selects them, at the door and again at the draw (#1396)."""
+    is refused at its save. Two lists holding one each are admitted, and the
+    prompts they resolve to hold the word once (#1396)."""
     repo, _engine, _factory, owner = seeded
     with pytest.raises(PromptListMutationError, match="unambiguous"):
         await repo.create_owned(owner, name="Both", description="", language="de",
@@ -191,43 +191,17 @@ async def test_answers_one_guess_can_win_are_refused_everywhere_they_meet(seeded
     spool = await repo.create_owned(owner, name="Spool", description="", language="de",
                                     prompts=entries("Spule"))
     slugs = [sink.slug, spool.slug]
-    with pytest.raises(PromptListSelectionError, match="ambiguous"):
-        await repo.authorize_selection(slugs, requesting_user_id=owner, expected_language="de")
-    with pytest.raises(PromptListSelectionError, match="ambiguous"):
-        await repo.resolve_selection(slugs, requesting_user_id=owner, expected_language="de")
-    # A mixed room plays lists in no language under every seat's fold, the
-    # German one included.
-    agnostic = [
-        (await repo.create_owned(owner, name=name, description="", language="zxx",
-                                 prompts=entries(answer))).slug
-        for name, answer in (("Sink zxx", "Spüle"), ("Spool zxx", "Spule"))
-    ]
-    with pytest.raises(PromptListSelectionError, match="ambiguous"):
-        await repo.authorize_selection(
-            agnostic, requesting_user_id=owner, expected_language=MIXED_PROMPT_LANGUAGE
-        )
-    # Without a transliteration the same letters are two words.
-    english = [
-        (await repo.create_owned(owner, name=name, description="", language="en",
-                                 prompts=entries(answer))).slug
-        for name, answer in (("Sink en", "spuele"), ("Spool en", "spule"))
-    ]
-    selection = await repo.authorize_selection(english, requesting_user_id=owner, expected_language="en")
-    assert selection.prompt_count == 2
+    assert (await repo.authorize_selection(slugs, requesting_user_id=owner, expected_language="de")).prompt_count == 2
+    resolved = await repo.resolve_selection(slugs, requesting_user_id=owner, expected_language="de")
+    assert list(resolved.prompts) == ["Spüle"]
 
 
-async def test_an_ampersand_is_each_room_language_s_own_and(seeded):
-    """A Spanish guess "rock y roll" wins both "rock & roll" and "rock y roll",
-    so a list in no language holding both is refused at its save, and two
-    lists holding one each are refused in a mixed room (review of #1406)."""
+async def test_an_ampersand_is_each_language_s_own_and_in_a_list_in_no_language(seeded):
+    """A Spanish guess "rock y roll" wins "rock & roll" and "rock y roll" alike,
+    so a list in no language holding both is refused at its save: folded once
+    per language that reads "&" its own way, not once for all (review of
+    #1406)."""
     repo, _engine, _factory, owner = seeded
     with pytest.raises(PromptListMutationError, match="unambiguous"):
         await repo.create_owned(owner, name="Both", description="", language="zxx",
                                 prompts=entries("rock & roll", "rock y roll"))
-    lists = [
-        (await repo.create_owned(owner, name=name, description="", language="zxx",
-                                 prompts=entries(answer))).slug
-        for name, answer in (("Sign", "rock & roll"), ("Word", "rock y roll"))
-    ]
-    with pytest.raises(PromptListSelectionError, match="ambiguous"):
-        await repo.authorize_selection(lists, requesting_user_id=owner, expected_language=MIXED_PROMPT_LANGUAGE)

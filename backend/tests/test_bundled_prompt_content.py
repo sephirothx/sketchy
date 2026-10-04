@@ -138,25 +138,24 @@ def test_every_answer_fits(language):
 
 
 @pytest.mark.parametrize("language", PROMPT_LANGUAGES)
-def test_a_languages_lists_can_be_picked_together(language):
-    """No guess may win two concepts across a language's lists, answers and
-    aliases alike: a room that selects both would be refused as ambiguous
-    (R-PROMPT-01), and the seed never looks at aliases across concepts. A
-    concept deliberately repeated in two lists is one concept. A list in no
-    language is keyed as a room in this one keys it - so "Müller" beside a
-    German "Mueller" clashes here and nowhere else.
+def test_a_list_names_each_word_once(language):
+    """No guess may win two concepts of one list, answers and aliases alike:
+    the seed compares answers only, so an alias reaching another concept's
+    word would otherwise ship (R-PROMPT-01). Two lists may share a word - a
+    champion called Poppy beside the flower - and a game draws one of them
+    (#1396). A list in no language is keyed as a room in this one keys it.
 
     Every spelling a guess is accepted under counts, not only the stored key:
-    German "Spüle" (sink) keys as "spuele", but is also won by "Spule", which
-    was the spool's alias (#1396)."""
-    owners = AnswerOwners(language)
-    clashes = [
-        f"{slug}:{text}"
-        for slug in _slugs(language)
-        for entry in _list(slug)["prompts"]
-        for text in (entry["answer"], *entry.get("aliases", ()))
-        if not owners.claim(entry["conceptId"], text)
-    ]
+    German "Spüle" (sink) keys as "spuele", but is also won by "Spule"."""
+    clashes = []
+    for slug in _slugs(language):
+        owners = AnswerOwners(language)
+        clashes += [
+            f"{slug}:{text}"
+            for entry in _list(slug)["prompts"]
+            for text in (entry["answer"], *entry.get("aliases", ()))
+            if not owners.claim(entry["conceptId"], text)
+        ]
     assert clashes == []
 
 
