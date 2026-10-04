@@ -19,7 +19,7 @@
     "pt": "Todos os Pokémon que apareceram na geração 2.",
     "pl": "Wszystkie Pokémony, które pojawiły się w generacji 2."
   },
-  "version": 1,
+  "version": 2,
   "shelf": "video-games",
   "series": "pokemon",
   "position": 2,
@@ -43,7 +43,7 @@
   "prompts": [
     {"conceptId":"01a0f983-7841-7246-8c11-aeb90f1728bd","answer":"Chikorita","overrides":{"de":{"answer":"Endivie","aliases":["Chikorita"]},"fr":{"answer":"Germignon","aliases":["Chikorita"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-aeba258aef97","answer":"Bayleef","overrides":{"de":{"answer":"Lorblatt","aliases":["Bayleef"]},"fr":{"answer":"Macronium","aliases":["Bayleef"]}}},
-    {"conceptId":"01a0f983-7841-7246-8c11-aebb91b1da32","answer":"Meganium","overrides":{"de":{"answer":"Meganie","aliases":["Meganium"]},"fr":{"answer":"Méganium","aliases":["Meganium"]}}},
+    {"conceptId":"01a0f983-7841-7246-8c11-aebb91b1da32","answer":"Meganium","overrides":{"de":{"answer":"Meganie","aliases":["Meganium"]},"fr":{"answer":"Méganium","promptVersion":2}}},
     {"conceptId":"01a0f983-7841-7246-8c11-aebcf9856e4f","answer":"Cyndaquil","overrides":{"de":{"answer":"Feurigel","aliases":["Cyndaquil"]},"fr":{"answer":"Héricendre","aliases":["Cyndaquil"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-aebd62f3c1fb","answer":"Quilava","overrides":{"de":{"answer":"Igelavar","aliases":["Quilava"]},"fr":{"answer":"Feurisson","aliases":["Quilava"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-aebe06a13a29","answer":"Typhlosion","overrides":{"de":{"answer":"Tornupto","aliases":["Typhlosion"]}}},
@@ -112,7 +112,7 @@
     {"conceptId":"01a0f983-7841-7246-8c11-aefdc456451d","answer":"Swinub","overrides":{"de":{"answer":"Quiekel","aliases":["Swinub"]},"fr":{"answer":"Marcacrin","aliases":["Swinub"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-aefeaf4daf9f","answer":"Piloswine","overrides":{"de":{"answer":"Keifel","aliases":["Piloswine"]},"fr":{"answer":"Cochignon","aliases":["Piloswine"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-aeff452c1279","answer":"Corsola","overrides":{"de":{"answer":"Corasonn","aliases":["Corsola"]},"fr":{"answer":"Corayon","aliases":["Corsola"]}}},
-    {"conceptId":"01a0f983-7841-7246-8c11-af00ed768729","answer":"Remoraid","overrides":{"fr":{"answer":"Rémoraid","aliases":["Remoraid"]}}},
+    {"conceptId":"01a0f983-7841-7246-8c11-af00ed768729","answer":"Remoraid","overrides":{"fr":{"answer":"Rémoraid","promptVersion":2}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af012866f45d","answer":"Octillery"},
     {"conceptId":"01a0f983-7841-7246-8c11-af021ab21022","answer":"Delibird","overrides":{"de":{"answer":"Botogel","aliases":["Delibird"]},"fr":{"answer":"Cadoizo","aliases":["Delibird"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af036bd2eeb8","answer":"Mantine","overrides":{"de":{"answer":"Mantax","aliases":["Mantine"]},"fr":{"answer":"Démanta","aliases":["Mantine"]}}},
@@ -122,13 +122,13 @@
     {"conceptId":"01a0f983-7841-7246-8c11-af073f378b05","answer":"Kingdra","overrides":{"de":{"answer":"Seedraking","aliases":["Kingdra"]},"fr":{"answer":"Hyporoi","aliases":["Kingdra"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af08ece598f3","answer":"Phanpy"},
     {"conceptId":"01a0f983-7841-7246-8c11-af09ebb7d3da","answer":"Donphan"},
-    {"conceptId":"01a0f983-7841-7246-8c11-af0ae4b27513","answer":"Porygon2","aliases":["Porygon 2"]},
+    {"conceptId":"01a0f983-7841-7246-8c11-af0ae4b27513","answer":"Porygon2","promptVersion":2},
     {"conceptId":"01a0f983-7841-7246-8c11-af0be8467a9a","answer":"Stantler","overrides":{"de":{"answer":"Damhirplex","aliases":["Stantler"]},"fr":{"answer":"Cerfrousse","aliases":["Stantler"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af0cfc39e350","answer":"Smeargle","overrides":{"de":{"answer":"Farbeagle","aliases":["Smeargle"]},"fr":{"answer":"Queulorior","aliases":["Smeargle"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af0d037ddad5","answer":"Tyrogue","overrides":{"de":{"answer":"Rabauz","aliases":["Tyrogue"]},"fr":{"answer":"Debugant","aliases":["Tyrogue"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af0e737f2eb4","answer":"Hitmontop","overrides":{"de":{"answer":"Kapoera","aliases":["Hitmontop"]},"fr":{"answer":"Kapoera","aliases":["Hitmontop"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af0facb83bc7","answer":"Smoochum","overrides":{"de":{"answer":"Kussilla","aliases":["Smoochum"]},"fr":{"answer":"Lippouti","aliases":["Smoochum"]}}},
-    {"conceptId":"01a0f983-7841-7246-8c11-af102da5985c","answer":"Elekid","overrides":{"fr":{"answer":"Élekid","aliases":["Elekid"]}}},
+    {"conceptId":"01a0f983-7841-7246-8c11-af102da5985c","answer":"Elekid","overrides":{"fr":{"answer":"Élekid","promptVersion":2}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af118bf73525","answer":"Magby"},
     {"conceptId":"01a0f983-7841-7246-8c11-af12ec00c50c","answer":"Miltank","overrides":{"fr":{"answer":"Écrémeuh","aliases":["Miltank"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af13d46a482d","answer":"Blissey","overrides":{"de":{"answer":"Heiteira","aliases":["Blissey"]},"fr":{"answer":"Leuphorie","aliases":["Blissey"]}}},
@@ -139,7 +139,7 @@
     {"conceptId":"01a0f983-7841-7246-8c11-af18453a8d78","answer":"Pupitar","overrides":{"fr":{"answer":"Ymphect","aliases":["Pupitar"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af19effc5ede","answer":"Tyranitar","overrides":{"de":{"answer":"Despotar","aliases":["Tyranitar"]},"fr":{"answer":"Tyranocif","aliases":["Tyranitar"]}}},
     {"conceptId":"01a0f983-7841-7246-8c11-af1a85c9fb7f","answer":"Lugia"},
-    {"conceptId":"01a0f983-7841-7246-8c11-af1bdd40473b","answer":"Ho-Oh","aliases":["Ho Oh","HoOh"]},
+    {"conceptId":"01a0f983-7841-7246-8c11-af1bdd40473b","answer":"Ho-Oh","promptVersion":2},
     {"conceptId":"01a0f983-7841-7246-8c11-af1ca2b290f8","answer":"Celebi"}
   ]
 }

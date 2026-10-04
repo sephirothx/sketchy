@@ -392,13 +392,46 @@ def _transliterate(text: str, language: str) -> str:
     return "".join(table.get(character, character) for character in text)
 
 
+# "&" is read as the language's own "and" (#1396): "Nunu & Willump" and "Nunu
+# and Willump" are one name, as German "&" and "und" are. A list in no language
+# keeps the sign, since its key must not depend on the room.
+_AMPERSAND_WORDS = {
+    "en": "and", "de": "und", "es": "y", "fr": "et",
+    "it": "e", "nl": "en", "pl": "i", "pt": "e",
+}
+
+
+def _spelled_out(text: str, language: str) -> str:
+    word = _AMPERSAND_WORDS.get(language)
+    if not word or "&" not in text:
+        return text
+    return " ".join(text.replace("&", f" {word} ").split())
+
+
+# Spaces, hyphens, dots and apostrophes: what a word is written with or
+# without and still the same word - "hang glider", "hang-glider", "hangglider";
+# "Dr. Robotnik" and "Dr Robotnik"; "Farfetch'd" and "Farfetchd". Matching
+# drops them rather than official lists listing every way (#1396). Apostrophes
+# arrive here as the plain one (`_APOSTROPHES`), and the dashes a keyboard or
+# an autocorrect writes for a hyphen go with it.
+_SEPARATORS = re.compile(r"[\s\-\u2010-\u2015\u2212.']+")
+
+
+_WORD_MARKS = re.compile(r"[.']+")
+
+
+def _without_separators(text: str) -> str:
+    return _SEPARATORS.sub("", text)
+
+
 def prompt_match_key(answer: str, language: str = "en") -> str:
     """Build the canonical comparison key for a supported Latin-script language.
 
-    Every supported language case-folds, collapses whitespace and folds
-    canonically decomposable accents; a language may then add its own
-    transliteration, applied *before* the accents are folded so that "ä"
-    becomes "ae" rather than "a".
+    Every supported language case-folds, folds canonically decomposable
+    accents and drops the separators a word is written with or without
+    (`_without_separators`); a language may then add its own transliteration,
+    applied *before* the accents are folded so that "ä" becomes "ae" rather
+    than "a".
 
     This is one string, because it is also an identity: it backs the unique
     constraints on prompt versions and aliases. Matching a guess asks the wider
@@ -410,8 +443,19 @@ def prompt_match_key(answer: str, language: str = "en") -> str:
     acceptance folds the answer's *text* under the room's language.
     """
     language = validate_prompt_list_language(language)
-    collapsed = _collapsed(answer)
-    return _fold_accents(_transliterate(collapsed, language))
+    collapsed = _spelled_out(_collapsed(answer), language)
+    return _without_separators(_fold_accents(_transliterate(collapsed, language)))
+
+
+def prompt_match_words(answer: str, language: str = "en") -> str:
+    """`prompt_match_key` with its words kept apart: each run of separators
+    is one space instead of none. What a near miss is measured on, since
+    "partly right" counts the words a guess got (`game._near_miss`)."""
+    language = validate_prompt_list_language(language)
+    folded = _fold_accents(_transliterate(_spelled_out(_collapsed(answer), language), language))
+    # A dot or an apostrophe sits inside a word ("keeper's", "U.S.");
+    # a hyphen or a space is between two.
+    return " ".join(_SEPARATORS.sub(" ", _WORD_MARKS.sub("", folded)).split())
 
 
 def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
@@ -424,11 +468,11 @@ def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
     becoming the identity.
     """
     language = validate_prompt_list_language(language)
-    collapsed = _collapsed(answer)
+    collapsed = _spelled_out(_collapsed(answer), language)
     return frozenset(
         {
-            _fold_accents(_transliterate(collapsed, language)),
-            _fold_accents(collapsed),
+            _without_separators(_fold_accents(_transliterate(collapsed, language))),
+            _without_separators(_fold_accents(collapsed)),
         }
     )
 
@@ -579,6 +623,10 @@ def normalize_prompt_answer(answer: str, language: str = "en") -> str:
     if problem is not None:
         raise ValueError(f"answer {problem}")
     key = prompt_match_key(collapsed, language)
+    if not key:
+        # Nothing but separators: "-" or "..." would key as the empty string,
+        # which every other such answer shares.
+        raise ValueError("answer must contain a letter or a digit")
     # Bounded after folding, not only before: case-folding expands some
     # characters (`ﬃ` to "ffi", `ß` to "ss"), so 32 characters in could be 96
     # out, and the key column is 64 wide. PostgreSQL refused the write -

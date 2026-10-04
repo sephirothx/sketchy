@@ -1608,3 +1608,17 @@ def test_version_sources_names_every_form_s_lists():
     )
 
     assert game.version_sources() == {"v-en": ("list-en",), "v-de": ("list-de",)}
+
+
+def test_a_near_miss_is_measured_without_separators_and_partly_by_words():
+    """Acceptance drops spaces and hyphens (#1396), so a typo in "hang glider"
+    written as one word is one typo, not two; words still count for "partial"."""
+    from app.game import _near_miss
+    from app.prompt_content import prompt_match_words
+
+    answer = (prompt_match_words("hang glider", "en"),)
+    assert _near_miss(prompt_match_words("hangglidr", "en"), answer) == "close"
+    assert _near_miss(
+        prompt_match_words("lighthouse hut", "en"),
+        (prompt_match_words("lighthouse-keeper's hut", "en"),),
+    ) == "partial"

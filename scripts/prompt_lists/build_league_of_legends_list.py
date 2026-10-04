@@ -7,7 +7,9 @@ renames a few per locale (Spanish "Bardo", French "Maître Yi", "Nunu et
 Willump"), so the list is a **name list** (#1399): English spellings as the
 default, and each locale's own name as an override where it differs - what
 that language's drawer is shown and its hints spell - with the English name
-still accepted there as an alias.
+still accepted there, as the only alias (#1396). An "&" is written as the
+language's own "and" ("Nunu and Willump", "Nunu und Willump"); matching reads
+a typed "&" the same way.
 
     backend/.venv/bin/python scripts/prompt_lists/build_league_of_legends_list.py <dir>
 
@@ -20,7 +22,6 @@ the data; a new one needs the file's `version` raised by hand afterwards.
 from __future__ import annotations
 
 import json
-import re
 import sys
 from pathlib import Path
 
@@ -38,9 +39,8 @@ LOCALES = {"de": "de_DE", "es": "es_ES", "fr": "fr_FR", "it": "it_IT", "pl": "pl
 # refused as ambiguous - northern lights (Aurora), Dutch fire (Brand), the
 # Spanish bullseye (Diana), Portuguese honey (Mel), and Poppy and Talon.
 EXCLUDED = {"Aurora", "Brand", "Diana", "Mel", "Poppy", "Talon"}
-# Short forms players type for the long names, in every language.
-SHORT = {"Nunu & Willump": ["Nunu", "Nunu and Willump"], "Jarvan IV": ["Jarvan", "Jarvan 4"],
-         "Dr. Mundo": ["Mundo"], "Renata Glasc": ["Renata"], "Aurelion Sol": ["Aurelion"]}
+# "&" as each language writes it in a name (#1396).
+AND = {"en": "and", "de": "und", "es": "y", "fr": "et", "it": "e", "nl": "en", "pl": "i", "pt": "e"}
 DESCRIPTION = {
     "en": "Every League of Legends champion, by name.",
     "de": "Jeder Champion aus League of Legends, beim Namen.",
@@ -53,25 +53,8 @@ DESCRIPTION = {
 }
 
 
-def variants(name: str) -> list[str]:
-    """What a guesser types without the punctuation the matcher keeps."""
-    return sorted({
-        " ".join(re.sub(r"[.':&]", "", name).split()),
-        " ".join(re.sub(r"[.':&]", " ", name).split()),
-    } - {name})
-
-
-def aliases_for(answer: str, extra: list[str], language: str) -> list[str]:
-    """One alias per spelling the language's fold tells apart, the answer's
-    own excluded."""
-    seen = {prompt_match_key(answer, language)}
-    out = []
-    for candidate in [*variants(answer), *extra]:
-        folded = prompt_match_key(candidate, language)
-        if folded not in seen:
-            seen.add(folded)
-            out.append(candidate)
-    return sorted(out)
+def spelled(name: str, language: str) -> str:
+    return " ".join(name.replace("&", f" {AND[language]} ").split())
 
 
 def main() -> None:
@@ -107,11 +90,9 @@ def main() -> None:
     for name in sorted(english.values()):
         if name in EXCLUDED:
             continue
-        concept = known.get(name) or str(generate_uuid7())
-        entry = {"conceptId": concept, "answer": name}
-        aliases = aliases_for(name, SHORT.get(name, []), "en")
-        if aliases:
-            entry["aliases"] = aliases
+        default = spelled(name, "en")
+        concept = known.get(default) or str(generate_uuid7())
+        entry = {"conceptId": concept, "answer": default}
         if versions.get(("en", concept), 1) != 1:
             entry["promptVersion"] = versions[("en", concept)]
         default_version = entry.get("promptVersion", 1)
@@ -123,17 +104,13 @@ def main() -> None:
         # name the English way, or a rerun would put it back to the default's
         # version under content it already holds (#1400 review).
         for language in [language for language in PROMPT_LANGUAGES if language != "en"]:
-            own = localized.get(language, {}).get(name, name)
+            own = spelled(localized.get(language, {}).get(name, name), language)
             version = versions.get((language, concept), default_version)
-            if own == name and version == default_version:
+            if own == default and version == default_version:
                 continue
             override = {"answer": own}
-            own_aliases = (
-                list(entry.get("aliases", [])) if own == name
-                else aliases_for(own, [name, *variants(name), *SHORT.get(name, [])], language)
-            )
-            if own_aliases:
-                override["aliases"] = own_aliases
+            if prompt_match_key(own, language) != prompt_match_key(default, language):
+                override["aliases"] = [default]
             if version != 1:
                 override["promptVersion"] = version
             overrides[language] = override

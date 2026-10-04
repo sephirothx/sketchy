@@ -23,6 +23,7 @@ from app.prompt_content import (
     normalize_prompt_answer,
     prompt_match_key,
     prompt_match_variants,
+    prompt_match_words,
     validate_prompt_language,
 )
 
@@ -40,7 +41,7 @@ def test_language_aware_match_keys_and_bounded_metadata():
         ["Ice-cream", " ice cream ", "ICE-CREAM"],
         canonical_answer="ice cream cone",
         language="en",
-    ) == ("Ice-cream", "ice cream")
+    ) == ("Ice-cream",)
     assert clean_prompt_tags(["food", "cold-things", "food"]) == (
         "food",
         "cold-things",
@@ -336,3 +337,36 @@ def test_a_crowd_of_lookalikes_is_refused_without_walking_it():
     limit = AnswerOwners.MAX_LOOKALIKES
     assert results[: limit + 1] == [True] * (limit + 1)
     assert not results[limit + 1]
+
+
+@pytest.mark.parametrize(
+    ("spellings", "language"),
+    [
+        (("hang glider", "hang-glider", "hangglider", "Hang–Glider"), "en"),
+        (("Dr. Robotnik", "Dr Robotnik", "drrobotnik"), "en"),
+        (("Farfetch'd", "Farfetch’d", "Farfetchd"), "en"),
+        (("Löwe und Maus", "Löwe-und-Maus", "loeweundmaus"), "de"),
+    ],
+)
+def test_a_word_is_the_same_word_with_or_without_its_separators(spellings, language):
+    """Spaces, hyphens, dots and apostrophes are folded rather than listed as
+    aliases (#1396): an official list names each concept once."""
+    assert len({prompt_match_key(text, language) for text in spellings}) == 1
+    assert all(
+        prompt_match_variants(text, language) & prompt_match_variants(spellings[0], language)
+        for text in spellings
+    )
+
+
+def test_a_near_miss_still_sees_the_words():
+    assert prompt_match_words("Hang-Glider", "en") == "hang glider"
+    assert prompt_match_words("Dr. Robotnik", "en") == "dr robotnik"
+    assert prompt_match_words("lighthouse-keeper's hut", "en") == "lighthouse keepers hut"
+    assert prompt_match_key("Hang-Glider", "en") == "hangglider"
+
+
+@pytest.mark.parametrize("answer", ["-", "...", " ' "])
+def test_an_answer_of_separators_alone_is_refused(answer):
+    with pytest.raises(ValueError):
+        normalize_prompt_answer(answer, "en")
+
