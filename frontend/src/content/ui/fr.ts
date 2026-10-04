@@ -1621,7 +1621,7 @@ export const FR: Catalogue = {
     yourLists: "Vos listes",
     fromCommunityCatalogue: "Du catalogue de la communauté",
     /** A shelf's name, by its slug (`lib/promptListTree.ts`, R-PROMPT-14). */
-    shelves: { everyday: "Au quotidien", "video-games": "Jeux vidéo" } satisfies Record<PromptShelf, string>,
+    shelves: { everyday: "Au quotidien", "video-games": "Jeux vidéo", "pop-culture": "Culture pop", places: "Lieux" } satisfies Record<PromptShelf, string>,
     /** A series's name, by its slug; one without falls back to its slug. */
     series: { pokemon: "Pokémon" } as Record<string, string>,
     chosenCount: (p: { count: number }) => `${number(p.count)} choisies`,
