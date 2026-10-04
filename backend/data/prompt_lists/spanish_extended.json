@@ -383,7 +383,7 @@
     {"conceptId":"01a02b7b-b54a-7957-a3c6-fe014ccc3f78","answer":"galleta de la suerte","aliases":["galleta de la fortuna"],"promptVersion":2},
     {"conceptId":"01a0f49a-74d4-7018-8699-68640dd02bc0","answer":"fuente de la juventud","aliases":["fuente de la eterna juventud"],"promptVersion":2},
     {"conceptId":"01a0f467-2041-71b2-9e85-06d69281220d","answer":"cama con dosel","aliases":["cama de dosel"],"promptVersion":2},
-    {"conceptId":"01a0f467-2041-71b2-9e85-06d794fff3d2","answer":"La zorra y las uvas","aliases":["zorra y las uvas","zorro y uvas"],"promptVersion":2},
+    {"conceptId":"01a0f467-2041-71b2-9e85-06d794fff3d2","answer":"La zorra y las uvas","aliases":["zorro y uvas"],"promptVersion":2},
     {"conceptId":"01a0f467-2041-71b2-9e85-06d8c688ecd4","answer":"zorro en el gallinero","aliases":["zorra en el gallinero"],"promptVersion":2},
     {"conceptId":"01a0f49a-74d4-7018-8699-688c416dcfed","answer":"monstruo de Frankenstein","aliases":["Frankenstein"],"promptVersion":2},
     {"conceptId":"01a0f467-2041-71b2-9e85-06d9d56eec41","answer":"caída libre","promptVersion":2},
