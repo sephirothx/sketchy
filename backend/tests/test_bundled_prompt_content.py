@@ -293,6 +293,7 @@ WORK_TITLES = frozenset({
     "01a0f467-2042-7235-b88e-1b21b42a9797",  # three little pigs
     "01a0f467-2042-7235-b88e-1b33cb326b89",  # tortoise and the hare
     "01a0f467-2042-7235-b88e-1b47cbc30b95",  # ugly duckling
+    "01a10955-ba1f-746c-aab6-14e8f913a2ac",  # Shaun the Sheep: Spanish says la oveja Shaun (#1401)
 })
 
 
@@ -361,11 +362,11 @@ def test_an_everyday_list_names_each_concept_once(language):
 
 
 def test_a_franchise_name_list_accepts_only_the_english_name_beside_its_own():
-    """Pokémon and League of Legends: a language that renames a character also
+    """Pokémon, League of Legends, Superheroes, Movies and TV: a language that renames a character also
     accepts the English name, and nothing else (#1396) - or, where the
     English name is the answer, the language's own one."""
     for path in DEFAULT_PROMPT_LISTS_DIR.glob("*.json"):
-        if not path.stem.startswith(("pokemon_gen", "league_of_legends")):
+        if not path.stem.startswith(("pokemon_gen", "league_of_legends", "superheroes", "movies_and_tv")):
             continue
         for entry in json.loads(path.read_text(encoding="utf-8"))["prompts"]:
             assert "aliases" not in entry, (path.stem, entry["answer"])
@@ -419,3 +420,24 @@ def test_a_title_that_keeps_its_article_is_not_accepted_without_it(language):
                 if prompt_match_key(alias, language) == prompt_match_key(bare, language)
             ]
     assert found == []
+
+
+@pytest.mark.parametrize("language", PROMPT_LANGUAGES)
+def test_landmarks_reuse_extended_s_landmarks_as_they_are(language):
+    """A landmark Extended already holds is the same concept in Landmarks
+    (#1401) - drawn once when a room picks both - and the seed holds one
+    concept to one wording per language and version, so the two must agree
+    to the letter. New landmarks carry no alias, as the everyday lists."""
+    extended = {
+        entry["conceptId"]: entry
+        for slug in _slugs(language)
+        if slug.endswith("_extended")
+        for entry in _list(slug)["prompts"]
+    }
+    landmarks = _list(f"{PromptLanguage(language).name.lower()}_landmarks")["prompts"]
+    reused = [entry for entry in landmarks if entry["conceptId"] in extended]
+    assert len(reused) > 20
+    for entry in reused:
+        assert entry == extended[entry["conceptId"]], entry
+    assert [entry for entry in landmarks if entry["conceptId"] not in extended and entry.get("aliases")] == []
+

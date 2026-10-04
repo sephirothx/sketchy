@@ -1,0 +1,373 @@
+{
+  "slug": "landmarks",
+  "kind": "places",
+  "shelf": "places",
+  "position": 0,
+  "tags": [
+    "places"
+  ],
+  "names": {
+    "en": "Landmarks",
+    "de": "Sehenswürdigkeiten",
+    "es": "Monumentos",
+    "fr": "Monuments",
+    "it": "Monumenti",
+    "nl": "Bezienswaardigheden",
+    "pl": "Zabytki",
+    "pt": "Monumentos"
+  },
+  "descriptions": {
+    "en": "Famous buildings, monuments and natural wonders.",
+    "de": "Berühmte Bauwerke, Denkmäler und Naturwunder.",
+    "es": "Edificios famosos, monumentos y maravillas naturales.",
+    "fr": "Bâtiments célèbres, monuments et merveilles naturelles.",
+    "it": "Edifici famosi, monumenti e meraviglie naturali.",
+    "nl": "Beroemde gebouwen, monumenten en natuurwonderen.",
+    "pl": "Słynne budowle, pomniki i cuda natury.",
+    "pt": "Edifícios famosos, monumentos e maravilhas naturais."
+  },
+  "prompts": [
+    {
+      "en": "Arc de Triomphe",
+      "extended": true
+    },
+    {
+      "en": "Berlin Wall",
+      "extended": true
+    },
+    {
+      "en": "Big Ben",
+      "extended": true
+    },
+    {
+      "en": "Brandenburg Gate",
+      "extended": true
+    },
+    {
+      "en": "Buckingham Palace",
+      "extended": true
+    },
+    {
+      "en": "Christ the Redeemer",
+      "extended": true
+    },
+    {
+      "en": "Colosseum",
+      "extended": true
+    },
+    {
+      "en": "Eiffel Tower",
+      "extended": true
+    },
+    {
+      "en": "Empire State Building",
+      "extended": true
+    },
+    {
+      "en": "Golden Gate Bridge",
+      "extended": true
+    },
+    {
+      "en": "Great Wall of China",
+      "extended": true
+    },
+    {
+      "en": "Leaning Tower of Pisa",
+      "extended": true
+    },
+    {
+      "en": "Louvre",
+      "extended": true
+    },
+    {
+      "en": "Machu Picchu",
+      "extended": true
+    },
+    {
+      "en": "moai",
+      "extended": true
+    },
+    {
+      "en": "Mount Fuji",
+      "extended": true
+    },
+    {
+      "en": "Mount Rushmore",
+      "extended": true
+    },
+    {
+      "en": "Notre-Dame",
+      "extended": true
+    },
+    {
+      "en": "Parthenon",
+      "extended": true
+    },
+    {
+      "en": "Sagrada Família",
+      "extended": true
+    },
+    {
+      "en": "sphinx",
+      "extended": true
+    },
+    {
+      "en": "St. Basil's Cathedral",
+      "extended": true
+    },
+    {
+      "en": "Statue of Liberty",
+      "extended": true
+    },
+    {
+      "en": "Stonehenge",
+      "extended": true
+    },
+    {
+      "en": "Sydney Opera House",
+      "extended": true
+    },
+    {
+      "en": "Taj Mahal",
+      "extended": true
+    },
+    {
+      "en": "Tower Bridge",
+      "extended": true
+    },
+    {
+      "en": "Trevi Fountain",
+      "extended": true
+    },
+    {
+      "en": "White House",
+      "extended": true
+    },
+    {
+      "en": "Burj Khalifa",
+      "extended": true
+    },
+    {
+      "en": "Terracotta Army",
+      "extended": true
+    },
+    {
+      "en": "Great Pyramid of Giza",
+      "de": "Cheops-Pyramide",
+      "es": "Gran Pirámide de Giza",
+      "fr": "Pyramide de Khéops",
+      "it": "Piramide di Cheope",
+      "nl": "Piramide van Cheops",
+      "pl": "Piramida Cheopsa",
+      "pt": "Grande Pirâmide de Gizé"
+    },
+    {
+      "en": "Petra",
+      "fr": "Pétra"
+    },
+    {
+      "en": "Angkor Wat"
+    },
+    {
+      "en": "Chichen Itza",
+      "de": "Chichén Itzá",
+      "es": "Chichén Itzá",
+      "fr": "Chichén Itzá",
+      "pl": "Chichén Itzá",
+      "pt": "Chichén Itzá"
+    },
+    {
+      "en": "Kremlin",
+      "de": "Kreml",
+      "it": "Cremlino",
+      "pl": "Kreml"
+    },
+    {
+      "en": "Neuschwanstein Castle",
+      "de": "Schloss Neuschwanstein",
+      "es": "Castillo de Neuschwanstein",
+      "fr": "Château de Neuschwanstein",
+      "it": "Castello di Neuschwanstein",
+      "nl": "Slot Neuschwanstein",
+      "pl": "zamek Neuschwanstein",
+      "pt": "Castelo de Neuschwanstein"
+    },
+    {
+      "en": "Alhambra"
+    },
+    {
+      "en": "Hollywood Sign",
+      "de": "Hollywood-Schriftzug",
+      "es": "cartel de Hollywood",
+      "fr": "Panneau Hollywood",
+      "it": "scritta Hollywood",
+      "pl": "napis Hollywood",
+      "pt": "Letreiro de Hollywood"
+    },
+    {
+      "en": "Niagara Falls",
+      "de": "Niagarafälle",
+      "es": "Cataratas del Niágara",
+      "fr": "Chutes du Niagara",
+      "it": "Cascate del Niagara",
+      "nl": "Niagarawatervallen",
+      "pl": "wodospad Niagara",
+      "pt": "Cataratas do Niágara"
+    },
+    {
+      "en": "Grand Canyon",
+      "es": "Gran Cañón",
+      "pl": "Wielki Kanion"
+    },
+    {
+      "en": "Mount Everest",
+      "es": "Everest",
+      "fr": "Everest",
+      "it": "Everest",
+      "pt": "Monte Evereste"
+    },
+    {
+      "en": "Uluru"
+    },
+    {
+      "en": "Matterhorn",
+      "es": "Cervino",
+      "fr": "Cervin",
+      "it": "Cervino"
+    },
+    {
+      "en": "St. Peter's Basilica",
+      "de": "Petersdom",
+      "es": "Basílica de San Pedro",
+      "fr": "Basilique Saint-Pierre",
+      "it": "Basilica di San Pietro",
+      "nl": "Sint-Pietersbasiliek",
+      "pl": "bazylika św. Piotra",
+      "pt": "Basílica de São Pedro"
+    },
+    {
+      "en": "London Eye"
+    },
+    {
+      "en": "Tower of London",
+      "es": "Torre de Londres",
+      "fr": "Tour de Londres",
+      "it": "Torre di Londra",
+      "pt": "Torre de Londres"
+    },
+    {
+      "en": "Little Mermaid statue",
+      "de": "Kleine Meerjungfrau",
+      "es": "estatua de la Sirenita",
+      "fr": "Petite Sirène",
+      "it": "Sirenetta di Copenaghen",
+      "nl": "Kleine Zeemeermin",
+      "pl": "pomnik Małej Syrenki",
+      "pt": "Estátua da Pequena Sereia"
+    },
+    {
+      "en": "Mont-Saint-Michel",
+      "pt": "Monte Saint-Michel"
+    },
+    {
+      "en": "Palace of Versailles",
+      "de": "Schloss Versailles",
+      "es": "Palacio de Versalles",
+      "fr": "Château de Versailles",
+      "it": "Reggia di Versailles",
+      "nl": "Paleis van Versailles",
+      "pl": "Wersal",
+      "pt": "Palácio de Versalhes"
+    },
+    {
+      "en": "Sacré-Cœur",
+      "it": "Sacro Cuore"
+    },
+    {
+      "en": "Moulin Rouge"
+    },
+    {
+      "en": "Guggenheim Bilbao",
+      "de": "Guggenheim-Museum Bilbao",
+      "fr": "Musée Guggenheim de Bilbao",
+      "it": "Guggenheim di Bilbao",
+      "pl": "Muzeum Guggenheima w Bilbao",
+      "pt": "Guggenheim de Bilbau"
+    },
+    {
+      "en": "Sugarloaf Mountain",
+      "de": "Zuckerhut",
+      "es": "Pan de Azúcar",
+      "fr": "Pain de Sucre",
+      "it": "Pan di Zucchero",
+      "nl": "Suikerbroodberg",
+      "pl": "Głowa Cukru",
+      "pt": "Pão de Açúcar"
+    },
+    {
+      "en": "Brooklyn Bridge",
+      "es": "Puente de Brooklyn",
+      "fr": "Pont de Brooklyn",
+      "it": "Ponte di Brooklyn",
+      "pl": "Most Brookliński",
+      "pt": "Ponte de Brooklyn"
+    },
+    {
+      "en": "Forbidden City",
+      "de": "Verbotene Stadt",
+      "es": "Ciudad Prohibida",
+      "fr": "Cité interdite",
+      "it": "Città Proibita",
+      "nl": "Verboden Stad",
+      "pl": "Zakazane Miasto",
+      "pt": "Cidade Proibida"
+    },
+    {
+      "en": "Tokyo Tower",
+      "es": "Torre de Tokio",
+      "fr": "Tour de Tokyo",
+      "pt": "Torre de Tóquio"
+    },
+    {
+      "en": "Golden Pavilion",
+      "de": "Goldener Pavillon",
+      "es": "Pabellón Dorado",
+      "fr": "Pavillon d'or",
+      "it": "Padiglione d'oro",
+      "nl": "Gouden Paviljoen",
+      "pl": "Złoty Pawilon",
+      "pt": "Pavilhão Dourado"
+    },
+    {
+      "en": "Petronas Towers",
+      "es": "Torres Petronas",
+      "fr": "Tours Petronas",
+      "it": "Torri Petronas",
+      "pt": "Torres Petronas"
+    },
+    {
+      "en": "Marina Bay Sands"
+    },
+    {
+      "en": "Burj Al Arab"
+    },
+    {
+      "en": "Hagia Sophia",
+      "es": "Santa Sofía",
+      "fr": "Sainte-Sophie",
+      "it": "Santa Sofia",
+      "pt": "Santa Sofia"
+    },
+    {
+      "en": "Sydney Harbour Bridge",
+      "es": "Puente de la Bahía de Sídney",
+      "fr": "Pont de Sydney",
+      "pt": "Ponte da Baía de Sydney"
+    },
+    {
+      "en": "Santorini",
+      "de": "Santorin",
+      "fr": "Santorin"
+    }
+  ]
+}
