@@ -1497,15 +1497,20 @@ async def test_an_agnostic_list_meets_a_hidden_word_in_that_word_s_own_fold(env)
             row = await session.get(PromptVersion, UUID(german.prompts[0].prompt_version_id))
             await taken_down(session, row)
 
-    agnostic = await prompts.create_owned(
-        owner["id"], name="Mixed", description="", language="zxx",
-        prompts=(PromptListEntryInput(answer="Bar"), PromptListEntryInput(answer="Baer")),
-    )
-
-    assert {p.answer: p.moderation_state for p in agnostic.prompts} == {
-        "Bar": "active",
-        "Baer": "hidden",
+    # Two lists: one holding both would be refused, since a German "Bär" wins
+    # "Bar" and "Baer" alike (#1396).
+    states = {
+        p.answer: p.moderation_state
+        for answer in ("Bar", "Baer")
+        for p in (
+            await prompts.create_owned(
+                owner["id"], name=f"Mixed {answer}", description="", language="zxx",
+                prompts=(PromptListEntryInput(answer=answer),),
+            )
+        ).prompts
     }
+
+    assert states == {"Bar": "active", "Baer": "hidden"}
 
 
 async def test_a_hidden_word_typed_as_written_into_an_agnostic_list_stays_hidden(env):

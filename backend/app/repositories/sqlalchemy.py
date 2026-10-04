@@ -203,6 +203,7 @@ from app.prompt_content import (
     LIST_TAG_SLUG_ORDER,
     LIST_TAG_VOCABULARY,
     MAX_PLAYER_PROMPT_LISTS,
+    AnswerOwners,
     UnknownListTag,
     clean_list_tags,
     clean_prompt_aliases_keyed,
@@ -210,8 +211,8 @@ from app.prompt_content import (
     visible_text_problem,
     languages_sharing_words,
     prompt_match_key,
-    prompt_match_keys,
     prompt_match_variants,
+    prompt_match_variants_by_language,
     validate_prompt_list_language,
 )
 from app.prompts import letter_histogram
@@ -4022,9 +4023,9 @@ def _single_language_verdict(rows: Sequence[Row], language: str) -> _SelectionVe
     (review of #1070): a fold that widened since the rows were written makes
     two stored keys one answer, and the game matches under the new fold.
     """
-    reached_by: dict[str, UUID] = {}
+    owners = AnswerOwners(language)
     for version_id, answer in rows:
-        if reached_by.setdefault(prompt_match_key(answer, language), version_id) != version_id:
+        if not owners.claim(version_id, answer):
             return _SelectionVerdict(prompt_count=0, ambiguous=True)
     return _SelectionVerdict(prompt_count=len({version_id for version_id, _ in rows}), ambiguous=False)
 
@@ -4034,24 +4035,25 @@ def _mixed_verdict(
 ) -> _SelectionVerdict:
     """A mixed room's check, every room language at once; off the loop.
 
-    Each room language sees its own lists and the lists in no language. Each
-    text is folded once per distinct transliteration rather than once per
-    room language (`prompt_match_keys`): eight languages, at most five keys.
-    The rows arrive as the database returned them, so none of this - not even
+    Each room language sees its own lists and the lists in no language, and
+    judges them by every spelling its guesses are accepted under
+    (`AnswerOwners`), not by the stored key alone. A list in a language is
+    folded once; a list in no language once per transliteration. The
+    rows arrive as the database returned them, so none of this - not even
     grouping the aliases - runs on the loop.
     """
     aliases: dict[UUID, list[str]] = defaultdict(list)
     for version_id, answer in alias_rows:
         aliases[version_id].append(answer)
-    reached_by: dict[str, dict[str, UUID]] = {language: {} for language in PROMPT_LANGUAGES}
+    owners = {language: AnswerOwners(language) for language in PROMPT_LANGUAGES}
     for list_id, version_id, _concept, answer in rows:
         list_language = language_of[list_id]
         languages = (
             PROMPT_LANGUAGES if list_language == AGNOSTIC_PROMPT_LANGUAGE else (list_language,)
         )
         for text in (answer, *aliases.get(version_id, ())):
-            for language, key in prompt_match_keys(text, languages).items():
-                if reached_by[language].setdefault(key, version_id) != version_id:
+            for language, spellings in prompt_match_variants_by_language(text, languages).items():
+                if not owners[language].claim(version_id, text, spellings):
                     return _SelectionVerdict(prompt_count=0, ambiguous=True)
     return _SelectionVerdict(
         prompt_count=len({concept for _, _, concept, _ in rows}), ambiguous=False
@@ -4370,37 +4372,30 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
         folds = (
             PROMPT_LANGUAGES if language == AGNOSTIC_PROMPT_LANGUAGE else (language,)
         )
-        seen_matches: dict[str, set[str]] = {fold: set() for fold in folds}
+        owners = {fold: AnswerOwners(fold) for fold in folds}
         seen_concepts: set[str] = set()
-        for entry in entries:
+        for position, entry in enumerate(entries):
             answer = " ".join(entry.answer.split())
             try:
-                # Validates the answer (length, folded length) and keys it
-                # under the list's own language, which is the fold the
-                # ambiguity check below uses for a list in a language: each
-                # text is folded once, not three times over (#1236).
+                # Validates the answer and its aliases (length, folded
+                # length) before the ambiguity check below folds them again
+                # for every spelling a guess is accepted under (#1396).
                 answer_key = normalize_prompt_answer(answer, language)
-                aliases, alias_keys = clean_prompt_aliases_keyed(
+                aliases, _alias_keys = clean_prompt_aliases_keyed(
                     list(entry.aliases),
                     canonical_key=answer_key,
                     language=language,
                 )
             except ValueError as error:
                 raise PromptListMutationError(str(error)) from error
-            if language == AGNOSTIC_PROMPT_LANGUAGE:
-                keyed = [prompt_match_keys(text, folds) for text in (answer, *aliases)]
-                accepted_by_fold = {
-                    fold: {keys[fold] for keys in keyed} for fold in folds
-                }
-            else:
-                accepted_by_fold = {language: {answer_key, *alias_keys}}
-            for fold, seen in seen_matches.items():
-                accepted_keys = accepted_by_fold[fold]
-                if seen.intersection(accepted_keys):
-                    raise PromptListMutationError(
-                        "Prompt answers and aliases must be unambiguous within a list."
-                    )
-                seen.update(accepted_keys)
+            if not all(
+                owners[fold].claim(position, text, spellings)
+                for text in (answer, *aliases)
+                for fold, spellings in prompt_match_variants_by_language(text, folds).items()
+            ):
+                raise PromptListMutationError(
+                    "Prompt answers and aliases must be unambiguous within a list."
+                )
             if entry.concept_id:
                 try:
                     concept_id = str(UUID(entry.concept_id))
@@ -6457,7 +6452,7 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
             prompt_version_ids: dict[str, str] = {}
             source_lists_by_version: dict[UUID, list[str]] = defaultdict(list)
             seen_versions: set[UUID] = set()
-            seen_match_versions: dict[str, UUID] = {}
+            owners = AnswerOwners(language)
             for pinned in lists:
                 for prompt_version in members[pinned.id]:
                     if (
@@ -6470,27 +6465,22 @@ class SqlAlchemyPromptListRepository(PromptListRepository):
                     )
                     if prompt_version.id in seen_versions:
                         continue
-                    # Keyed from the text under the fold in force now, not
+                    # Judged from the text under the fold in force now, not
                     # from the keys the rows were written with: a fold that
                     # widened since (#1011's apostrophes) makes two stored
                     # keys one answer, and the game matches under the new
                     # fold, so the check that keeps a game's answers apart
-                    # has to see what the game will see (review of #1070).
-                    accepted_keys = {
-                        prompt_match_key(prompt_version.canonical_answer, language),
-                        *(
-                            prompt_match_key(link.alias.answer, language)
-                            for link in prompt_version.version_aliases
-                        ),
-                    }
-                    if any(key in seen_match_versions for key in accepted_keys):
-                        raise PromptListSelectionError(
-                            "Selected prompt lists contain ambiguous answers or aliases"
+                    # has to see what the game will see (review of #1070) -
+                    # every spelling a guess is accepted under (#1396).
+                    if not all(
+                        owners.claim(prompt_version.id, text)
+                        for text in (
+                            prompt_version.canonical_answer,
+                            *(link.alias.answer for link in prompt_version.version_aliases),
                         )
+                    ):
+                        raise PromptListSelectionError(AMBIGUOUS_SELECTION)
                     seen_versions.add(prompt_version.id)
-                    seen_match_versions.update(
-                        (key, prompt_version.id) for key in accepted_keys
-                    )
                     answer = prompt_version.canonical_answer
                     prompts.append(answer)
                     aliases[answer] = tuple(

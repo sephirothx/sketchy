@@ -3,7 +3,7 @@
   "name": "Deutsch — Erweitert",
   "description": "Die schwerere Liste: seltenere Dinge, Szenen und Redewendungen - in jeder Sprache dieselbe.",
   "language": "de",
-  "version": 3,
+  "version": 4,
   "shelf": "everyday",
   "position": 1,
   "prompts": [
@@ -929,7 +929,7 @@
     {"conceptId":"01a0f467-2042-7235-b88e-1af442608c25","answer":"Wasserwaage","aliases":["die Wasserwaage"]},
     {"conceptId":"01a0f467-2042-7235-b88e-1af54f8012b7","answer":"Splitter","aliases":["der Splitter","Holzsplitter","Spreißel","Schiefer"]},
     {"conceptId":"01a0f467-2042-7235-b88e-1af634f70177","answer":"Spagat","aliases":["der Spagat"]},
-    {"conceptId":"01a02b7b-b70e-76de-ac86-b293a6bd81f9","answer":"Garnrolle","aliases":["die Garnrolle","Fadenrolle","Garnspule","Zwirnrolle","Spule","Nähgarn"]},
+    {"conceptId":"01a02b7b-b70e-76de-ac86-b293a6bd81f9","answer":"Garnrolle","aliases":["die Garnrolle","Fadenrolle","Garnspule","Zwirnrolle","Nähgarn"],"promptVersion":2},
     {"conceptId":"01a0f49a-74d4-7018-8699-687c82d34905","answer":"Fehlersuchbild","aliases":["das Fehlersuchbild","Suchbild","Fehlerbild","Finde die Fehler","Finde den Fehler","Finde die Unterschiede"]},
     {"conceptId":"01a02b7b-b6df-7843-8644-4f101a5b8ae4","answer":"Scheinwerfer","aliases":["der Scheinwerfer","Bühnenscheinwerfer","Spotlight","Spot","Rampenlicht","Verfolger"]},
     {"conceptId":"01a0f49a-74d4-7018-8699-688856288b58","answer":"verstauchter Knöchel","aliases":["der verstauchte Knöchel","verstauchter Fuß","Verstauchung","Knöchelverstauchung","umgeknickter Knöchel"]},
