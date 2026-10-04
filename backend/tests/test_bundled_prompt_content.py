@@ -253,3 +253,77 @@ def test_the_german_sink_and_spool_answer_to_their_own_words():
         assert not _accepted_spellings(guess, "de").isdisjoint(sink), guess
         assert _accepted_spellings(guess, "de").isdisjoint(spool), guess
     assert not _accepted_spellings("Garnspule", "de").isdisjoint(spool)
+
+
+#: The articles a word can start with, per language - definite and
+#: indefinite, and the inflected German forms - for R-PROMPT-10. Polish has
+#: none.
+LEADING_ARTICLES = {
+    "en": ("the", "a", "an"),
+    "de": ("der", "die", "das", "dem", "den", "des", "ein", "eine"),
+    "es": ("el", "la", "los", "las", "un", "una"),
+    "fr": ("le", "la", "les", "l'", "un", "une", "des"),
+    "it": ("il", "lo", "la", "i", "gli", "le", "l'", "un", "uno", "una", "un'"),
+    "nl": ("de", "het", "een", "'t"),
+    "pt": ("o", "a", "os", "as", "um", "uma"),
+    "pl": (),
+}
+
+#: Spellings that start like an article and are not one: Portuguese "a
+#: carregar" is the preposition, "loading".
+NOT_ARTICLES = frozenset({("pt", "a carregar")})
+
+#: Titles of works that keep their official article in some language
+#: (R-PROMPT-10): "Der gestiefelte Kater", "Il brutto anatroccolo". Chosen
+#: title by title and language by language in #1396.
+WORK_TITLES = frozenset({
+    "01a0f49a-74d4-7018-8699-68704bb168db",  # Beauty and the Beast
+    "01a0f49a-74d4-7018-8699-6860c4ba03e5",  # Creation of Adam
+    "01a0f467-2041-71b2-9e85-06d794fff3d2",  # fox and the grapes
+    "01a02b7b-b554-7663-856a-0de9677be967",  # frog prince
+    "01a0f467-2041-71b2-9e85-0740aae26c7f",  # lion and the mouse
+    "01a0f467-2041-71b2-9e85-07427318d531",  # Little Red Riding Hood
+    "01a0f467-2041-71b2-9e85-0767676d00b6",  # Mona Lisa
+    "01a0f49a-74d4-7018-8699-685876665dfd",  # Pied Piper
+    "01a0f467-2042-7235-b88e-1a85954e5d15",  # princess and the pea
+    "01a0f467-2042-7235-b88e-1a92058ea37a",  # Puss in Boots
+    "01a0f49a-74d4-7018-8699-68614ffb1099",  # Rodin's Thinker
+    "01a0f49a-74d4-7018-8699-6859d9347ac3",  # Sleeping Beauty
+    "01a0f467-2042-7235-b88e-1b21b42a9797",  # three little pigs
+    "01a0f467-2042-7235-b88e-1b33cb326b89",  # tortoise and the hare
+    "01a0f467-2042-7235-b88e-1b47cbc30b95",  # ugly duckling
+})
+
+
+def _article(text: str, language: str) -> str | None:
+    lowered = text.casefold()
+    for article in LEADING_ARTICLES[language]:
+        if lowered.startswith(article if article.endswith("'") else article + " "):
+            return article
+    return None
+
+
+@pytest.mark.parametrize("language", PROMPT_LANGUAGES)
+def test_articles_are_not_aliases(language):
+    """An article form is no alias (R-PROMPT-10): matching does not drop the
+    article (N-20), and the lists keep to the fewest spellings that are fair
+    (#1396), so "der Hund" does not score for "Hund"."""
+    found = [
+        f"{slug}:{alias}"
+        for slug in _slugs(language)
+        for entry in _list(slug)["prompts"]
+        for alias in entry.get("aliases", ())
+        if _article(alias, language) and (language, alias) not in NOT_ARTICLES
+    ]
+    assert found == []
+
+
+@pytest.mark.parametrize("language", PROMPT_LANGUAGES)
+def test_only_a_work_s_title_starts_with_an_article(language):
+    found = [
+        f"{slug}:{entry['answer']}"
+        for slug in _slugs(language)
+        for entry in _list(slug)["prompts"]
+        if _article(entry["answer"], language) and entry["conceptId"] not in WORK_TITLES
+    ]
+    assert found == []
