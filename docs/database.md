@@ -1968,9 +1968,9 @@ four content tables that carry a language (`prompt_versions`, `prompt_aliases`,
 `room_presets` do not, because a room needs a language to fold guesses under.
 
 `match_key` is that fold for the row's own language, without spaces, hyphens, dots or
-apostrophes and with `&` spelled as the language's "and" (#1396; keys written before
-that keep their separators and no migration rewrites them, since nothing was deployed —
-see the Pre-v1 note), with the language's
+apostrophes and with `&` spelled as the language's "and" (#1396; a key written before
+that keeps its separators, and the seed refuses such a database as "changed in place" -
+it is recreated rather than migrated, as the Pre-v1 note says), with the language's
 transliterations applied first (German **Mädchen** stores `maedchen`, not `madchen`).
 A `zxx` row folds with the shared rule alone — **Müller** stores `muller` — because the
 key must not depend on the room that plays it; a German room still accepts `mueller`,
@@ -3124,6 +3124,13 @@ reversible and still have to replay cleanly in both directions on both engines
 - that is what `tests/test_migrations.py` checks, and it is about the chain
 being sound rather than about anybody's data surviving. The same freedom is
 written down for the wire in `docs/wire-protocol.md` §11.
+
+The same goes for seeded content. The bundled lists' rework for #1396
+(#1404-#1407) raises some prompt versions by more than one between `main` and
+its last PR, and a database seeded before it refuses them at startup
+(`expected version N+1`): the seed only accepts the next version of a prompt it
+already holds. **Recreate such a database** - delete a local `sketchy.db`, drop
+and recreate a PostgreSQL one - rather than teaching the seed to skip.
 
 Delete this paragraph at launch rather than leaving it to be read as still
 true.

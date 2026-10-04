@@ -483,11 +483,15 @@ def prompt_match_variants_by_language(
     """`prompt_match_variants` under each of `languages`, folded once per
     transliteration rather than once per language: the languages without one
     all spell a text alike, so a list in no language checked under all eight
-    costs five folds, not eight (#1236)."""
+    costs five folds, not eight (#1236) - unless the text has an "&", which
+    each language reads as its own "and"."""
     shared: frozenset[str] | None = None
     variants: dict[str, frozenset[str]] = {}
+    # "&" is each language's own word (`_spelled_out`), so a text holding one
+    # folds differently even where no transliteration does (review of #1406).
+    alone = "&" in answer
     for language in languages:
-        if _TRANSLITERATIONS.get(validate_prompt_list_language(language)):
+        if alone or _TRANSLITERATIONS.get(validate_prompt_list_language(language)):
             variants[language] = prompt_match_variants(answer, language)
         else:
             if shared is None:

@@ -22,7 +22,7 @@ from app.api.prompt_lists import MAX_PAGE_SIZE
 from app.db.name_lists import is_name_list
 from app.db.seed import DEFAULT_PROMPT_LISTS_DIR, bundled_list_bodies
 from app.domain_values import AGNOSTIC_PROMPT_LANGUAGE, PROMPT_LANGUAGES, PromptLanguage
-from app.prompt_content import MAX_PROMPT_LENGTH, PROMPT_SHELVES, AnswerOwners
+from app.prompt_content import MAX_PROMPT_LENGTH, PROMPT_SHELVES, AnswerOwners, prompt_match_key
 
 #: Every Standard and Extended list holds at least this many concepts. A game
 #: draws `rounds x players x 3` offers - up to 480 - so a list of a few hundred
@@ -400,4 +400,21 @@ def test_portuguese_is_portugal_s_and_spanish_spain_s(language):
         for entry in _list(slug)["prompts"]
         if entry["answer"].casefold() in OTHER_VARIETY[language]
     ]
+
+@pytest.mark.parametrize("language", PROMPT_LANGUAGES)
+def test_a_title_that_keeps_its_article_is_not_accepted_without_it(language):
+    """R-PROMPT-10: "Der Löwe und die Maus" is accepted only as written, so
+    "Löwe und die Maus" is no alias of it (#1396)."""
+    found = []
+    for slug in _slugs(language):
+        for entry in _list(slug)["prompts"]:
+            article = _article(entry["answer"], language)
+            if entry["conceptId"] not in WORK_TITLES or not article:
+                continue
+            bare = entry["answer"][len(article):].lstrip()
+            found += [
+                f"{slug}:{alias}"
+                for alias in entry.get("aliases", ())
+                if prompt_match_key(alias, language) == prompt_match_key(bare, language)
+            ]
     assert found == []

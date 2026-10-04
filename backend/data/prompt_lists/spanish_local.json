@@ -3,7 +3,7 @@
   "name": "Español — Local",
   "description": "Lo que se conoce en el mundo hispanohablante: comida, costumbres y vida cotidiana.",
   "language": "es",
-  "version": 3,
+  "version": 4,
   "shelf": "everyday",
   "position": 2,
   "prompts": [
