@@ -7,7 +7,9 @@ renames a few per locale (Spanish "Bardo", French "Maître Yi", "Nunu et
 Willump"), so the list is a **name list** (#1399): English spellings as the
 default, and each locale's own name as an override where it differs - what
 that language's drawer is shown and its hints spell - with the English name
-still accepted there, as the only alias (#1396). An "&" is written as the
+still accepted there, as the only alias (#1396). Portuguese is the exception
+the other way round: Riot's Portuguese is Brazil's, so the English name is the
+answer and Riot's the alias. An "&" is written as the
 language's own "and" ("Nunu and Willump", "Nunu und Willump"); matching reads
 a typed "&" the same way.
 
@@ -41,6 +43,8 @@ LOCALES = {"de": "de_DE", "es": "es_ES", "fr": "fr_FR", "it": "it_IT", "pl": "pl
 EXCLUDED = {"Aurora", "Brand", "Diana", "Mel", "Poppy", "Talon"}
 # "&" as each language writes it in a name (#1396).
 AND = {"en": "and", "de": "und", "es": "y", "fr": "et", "it": "e", "nl": "en", "pl": "i", "pt": "e"}
+# Languages whose players know the champions by their English names (#1396).
+ENGLISH_FIRST = {"pt"}
 DESCRIPTION = {
     "en": "Every League of Legends champion, by name.",
     "de": "Jeder Champion aus League of Legends, beim Namen.",
@@ -104,13 +108,18 @@ def main() -> None:
         # name the English way, or a rerun would put it back to the default's
         # version under content it already holds (#1400 review).
         for language in [language for language in PROMPT_LANGUAGES if language != "en"]:
-            own = spelled(localized.get(language, {}).get(name, name), language)
+            riot = spelled(localized.get(language, {}).get(name, name), language)
+            # Riot localizes Portuguese for Brazil only, and Sketchy's
+            # Portuguese is Portugal's, where the English client is played:
+            # the English name is the answer and Riot's the alias.
+            own, other = (default, riot) if language in ENGLISH_FIRST else (riot, default)
             version = versions.get((language, concept), default_version)
-            if own == default and version == default_version:
+            aliases = [other] if prompt_match_key(own, language) != prompt_match_key(other, language) else []
+            if own == default and not aliases and version == default_version:
                 continue
             override = {"answer": own}
-            if prompt_match_key(own, language) != prompt_match_key(default, language):
-                override["aliases"] = [default]
+            if aliases:
+                override["aliases"] = aliases
             if version != 1:
                 override["promptVersion"] = version
             overrides[language] = override
