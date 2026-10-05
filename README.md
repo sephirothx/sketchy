@@ -2543,7 +2543,10 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    avatar wears a ring, so neither needs a word beside the name.
 3. **Choosing** (15s): the current drawer picks one of 3 prompt options.
 4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked
-   prompt (`_ _ _ _`) and guesses in the chat. Registered guessers can also react to the
+   prompt (`_ _ _ _`) and guesses in the chat. A guess one typo away, or the answer beside
+   one other word ("der Hund", "l'arbre"), scores nothing and is marked *very close* for its
+   author; neither it nor any longer message holding the answer reaches the other guessers,
+   only the drawer and those who already know the word. Registered guessers can also react to the
    drawing with one emoji from the corner of the canvas. The turn ends early once
    everyone's guessed correctly. Somebody who joins while the drawing is underway guesses in that turn too -
    the canvas and the masked prompt are already on their screen - and the turn waits for
@@ -2559,7 +2562,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 In a **mixed-language room** every seat plays in the language it joined with: the drawer
 is offered prompts in theirs, each guesser's letter tiles, hints and near misses are in
 their own, and the reveal shows each player their own word. A guess naming the drawing
-in any of the eight languages scores - unless the word means another prompt of the room's
+in the language of any player of the game scores - unless the word means another prompt of the room's
 lists in the guesser's own language, in which case they alone are told it is the answer
 in another language. Such a room plays Standard, Extended, the official lists translated
 into all eight (the Pokémon generations, League of Legends, the video-game icons) and lists

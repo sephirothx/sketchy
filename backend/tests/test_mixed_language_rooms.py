@@ -878,3 +878,50 @@ async def test_two_official_lists_of_one_language_with_the_same_concepts_are_bot
         assert classic is not None and classic.family == "critters_classic"
     finally:
         await engine.dispose()
+
+
+def test_a_guess_holding_another_language_s_answer_is_kept_from_the_room():
+    """A German seat typing "the bow tie" names the English seat's answer:
+    the room must not read it, whichever language it is in (#1416)."""
+    game = _mixed_game()
+
+    assert game.submit_guess("german", "the bow tie")[0] is False
+    assert game.guess_hint("german", "the bow tie") == "close"
+    assert game.guess_hint("german", "die Fliege") == "close"
+    assert game.guess_hint("german", "ist es vielleicht die Fliege") == "held"
+    # The Italian answer inside a French seat's guess is the false friend:
+    # kept private as the bare word is, and the seat told why.
+    assert game.guess_hint("french", "un papillon") == "another_language"
+    # Its own answer wins over the false friend it contains.
+    assert game.guess_hint("french", "le noeud papillon") == "close"
+
+
+def test_only_the_languages_in_play_hide_a_message():
+    """French "thé" folds to "the": in a room nobody plays French in, every
+    English line holding "the" was hidden (review of #1416)."""
+    tea = {
+        "en": PromptForm("tea", (), "v-tea-en"),
+        "de": PromptForm("Tee", (), "v-tea-de"),
+        "fr": PromptForm("thé", (), "v-tea-fr"),
+    }
+    game = Game(
+        turn_order=["drawer", "english"],
+        rounds_total=1,
+        prompt_language="mul",
+        prompt_pool=["c-tea"],
+        prompt_answers={"c-tea": "Tee"},
+        prompt_version_ids={"c-tea": "v-tea-de"},
+        prompt_translations={"c-tea": tea},
+        seat_languages={"drawer": "de", "english": "en"},
+    )
+    game.start_next_turn(canvas_generation=1)
+    assert game.choose_prompt_option("drawer", 0)
+
+    assert game.guess_hint("english", "the cat is on the roof") is None
+    assert game.guess_hint("english", "a cup of tea") == "held"
+    assert game.guess_hint("english", "der Tee") == "close"
+    # ...and neither does it win: acceptance and hiding read the same
+    # languages, or a line that hides nothing could hand the room a winner.
+    assert game.submit_guess("english", "thé")[0] is False
+    assert game.submit_guess("english", "the")[0] is False
+    assert game.submit_guess("english", "Tee")[0] is True

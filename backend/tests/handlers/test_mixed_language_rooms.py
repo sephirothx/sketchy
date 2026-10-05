@@ -5,6 +5,8 @@ from unittest.mock import AsyncMock
 
 import socketio
 
+from app.prompt_content import prompt_match_key
+
 from app.handlers import register_all_handlers as register_handlers
 from app.rooms import RoomManager
 from tests.handlers.helpers import SessionStore, StubPromptListRepo
@@ -107,8 +109,9 @@ async def test_each_seat_plays_the_drawing_in_the_language_it_joined_with():
     assert chosen["ok"] is True
     concept = game.prompt_key
     english = {"c-dog": "dog", "c-cat": "cat"}[concept]
-    # The guesser plays the drawing in their own language, and English -
-    # nobody's language here - names it too.
+    # The guesser plays the drawing in their own language, and the drawer's -
+    # a language somebody here plays - names it too; English, nobody's
+    # language here, does not (review of #1416).
     assert game.prompt_for(guesser.id) != game.prompt
     started = {
         call.kwargs.get("to"): call.args[1]
@@ -118,7 +121,9 @@ async def test_each_seat_plays_the_drawing_in_the_language_it_joined_with():
     guesser_word = game.prompt_for(guesser.id)
     # Tiles for the guesser's own spelling, not the drawer's.
     assert started[guesser.sid]["maskedPrompt"].split("  ")[-1] == str(len(guesser_word))
-    answer = await sio.handlers["/"]["guess"](guesser.sid, {"text": english})
+    await sio.handlers["/"]["guess"](guesser.sid, {"text": english})
+    assert guesser.id not in game.correct_guessers
+    answer = await sio.handlers["/"]["guess"](guesser.sid, {"text": game.prompt})
     assert guesser.id in game.correct_guessers
     # What they are told they guessed is their own language's word.
     assert answer["correct"]["prompt"] == guesser_word
@@ -263,13 +268,17 @@ async def test_a_false_friend_tells_the_guesser_it_is_another_language_s_answer(
         if call.args[0] == "your_prompt_choices"
     ]
     await sio.handlers["/"]["select_prompt"](drawer.sid, {"index": 0, "turnId": offer["turnId"]})
-    english = {"c-dog": "dog", "c-cat": "cat"}[game.prompt_key]
+    drawers_word = game.prompt
     other = {"c-dog": "c-cat", "c-cat": "c-dog"}[game.prompt_key]
-    # The English word is, in the guesser's own language, the other concept.
-    game.false_friends = {room.seat_language(guesser): {english: frozenset({other})}}
+    # The drawer's word is, in the guesser's own language, the other concept.
+    game.false_friends = {
+        room.seat_language(guesser): {
+            prompt_match_key(drawers_word, room.seat_language(drawer)): frozenset({other})
+        }
+    }
 
-    answer = await sio.handlers["/"]["guess"](guesser.sid, {"text": english})
+    answer = await sio.handlers["/"]["guess"](guesser.sid, {"text": drawers_word})
 
     assert guesser.id not in game.correct_guessers
     assert answer["verdict"]["code"] == "guess_answer_in_another_language"
-    assert answer["verdict"]["params"] == {"text": english}
+    assert answer["verdict"]["params"] == {"text": drawers_word}

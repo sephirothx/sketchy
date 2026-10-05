@@ -20,6 +20,7 @@ from app.game import (
     Game,
     Phase,
     _bounded_damerau_levenshtein,
+    fits_a_guess,
 )
 from app.rooms import DRAWING_TIME_OPTIONS
 from app.canvas_session import MAX_CANVAS_COMMITS
@@ -1622,3 +1623,210 @@ def test_a_near_miss_is_measured_without_separators_and_partly_by_words():
         prompt_match_words("lighthouse hut", "en"),
         (prompt_match_words("lighthouse-keeper's hut", "en"),),
     ) == "partial"
+
+
+def make_language_guess_game(prompt, language):
+    game = Game(turn_order=["p0", "p1", "p2"], rounds_total=1, prompt_language=language)
+    game.prompt_pool = [prompt]
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.force_prompt_choice()
+    return game, next(t for t in game.turn_order if t != game.current_drawer)
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt", "typed"),
+    [
+        ("de", "Hund", "der Hund"),
+        ("de", "Akkordeon", "das Akkordeon"),
+        ("de", "Mädchen", "das Madchen"),
+        ("de", "Mädchen", "das Maedchen"),
+        ("en", "lighthouse", "the lighthouse"),
+        ("en", "lighthouse", "lighthouse?!"),
+        ("en", "hang glider", "a hang-glider"),
+        ("nl", "hond", "de hond"),
+        ("fr", "chat", "une chat"),
+        ("fr", "arbre", "l'arbre"),
+        ("it", "acqua", "dell'acqua"),
+    ],
+)
+def test_a_guess_holding_the_answer_beside_one_word_is_a_near_miss(language, prompt, typed):
+    """N-20 refuses the article form; the room must not read it either, or
+    everyone else types the bare word (#1416)."""
+    game, guesser = make_language_guess_game(prompt, language)
+    assert game.submit_guess(guesser, typed) == (False, 0)
+    assert game.guess_hint(guesser, typed) == "close"
+    assert game.near_misses[guesser] == 1
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt", "typed"),
+    [
+        ("en", "lighthouse", "is it a lighthouse?"),
+        ("en", "lighthouse", "the lighthouse's"),
+        ("en", "lighthouse", "I think it might be a lighthouse on a rocky coast at night"),
+        ("fr", "arbre", "c'est l'arbre"),
+        ("it", "acqua", "è dell'acqua?"),
+    ],
+)
+def test_a_message_holding_the_answer_among_more_words_is_held_without_a_verdict(
+    language, prompt, typed
+):
+    """A verdict on many words at once would answer "is it any of these?" -
+    eighty candidates a message (review of #1416). Kept from the room, and
+    counted as the attempt it is, but answered as any wrong guess."""
+    game, guesser = make_language_guess_game(prompt, language)
+    assert game.submit_guess(guesser, typed) == (False, 0)
+    assert game.guess_hint(guesser, typed) == "held"
+    assert game.wrong_guesses[guesser] == 1
+
+
+def test_a_long_message_without_the_answer_is_chat_and_not_counted():
+    game, guesser = make_language_guess_game("lighthouse", "en")
+    typed = "I think it might be a boat on a rocky coast at night, or a crab"
+    assert game.submit_guess(guesser, typed) == (False, 0)
+    assert game.guess_hint(guesser, typed) is None
+    assert guesser not in game.wrong_guesses
+
+
+def test_an_answer_only_inside_another_word_is_not_held():
+    game, guesser = make_language_guess_game("cat", "en")
+    assert game.guess_hint(guesser, "concatenate") is None
+    assert game.guess_hint(guesser, "a catalogue") is None
+
+
+def test_the_guess_length_is_measured_with_whitespace_collapsed():
+    answer = "tempesta in un bicchiere d'acqua"
+    assert len(answer) == MAX_PROMPT_LENGTH
+    assert fits_a_guess("tempesta in un  bicchiere d'acqua")
+    assert not fits_a_guess(answer + ".")
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        "tempesta in un  bicchiere d'acqua",
+        "tempesta in un bicchiere d'acqua.",
+        "tempesta in un bicchiere d' acqua",
+        "tempesta in un bicchiere d'acqua\u200b\u200b",
+    ],
+)
+def test_a_32_character_answer_typed_longer_still_scores(typed):
+    """Acceptance is judged before length: each of these folds to the answer,
+    and as chat it reached the room verbatim (review of #1416)."""
+    game, guesser = make_language_guess_game("tempesta in un bicchiere d'acqua", "it")
+    assert len(typed) > MAX_PROMPT_LENGTH
+    correct, points = game.submit_guess(guesser, typed)
+    assert correct is True and points > 0
+
+
+def test_a_32_character_answer_with_punctuation_matching_keeps_is_a_near_miss():
+    game, guesser = make_language_guess_game("tempesta in un bicchiere d'acqua", "it")
+    assert game.guess_hint(guesser, "Tempesta in un bicchiere d'acqua!") == "close"
+
+
+def test_after_the_drawing_a_guess_is_not_classified():
+    """The prompt is on every screen once the drawing ends: nothing to keep
+    from the room, and nothing to store as a near miss (review of #1416)."""
+    game, guesser = make_language_guess_game("lighthouse", "en")
+    assert game.guess_hint(guesser, "the lighthouse") == "close"
+    game.phase = Phase.TURN_RESULTS
+    assert game.guess_hint(guesser, "the lighthouse") is None
+    assert game.guess_hint(guesser, "lighthous") is None
+
+
+@pytest.mark.parametrize(
+    ("prompt", "typed", "verdict"),
+    [
+        ("C++", "is it C++?", "held"),
+        ("AC/DC", "is it AC/DC?", "held"),
+        ("AC/DC", "the AC/DC!", "close"),
+        ("C++", "(C++)", "close"),
+        ("AC/DC", "is it AC / DC?", "held"),
+        ("C++", "the C + +", "close"),
+        (":-)", "the :-)", "close"),
+        ("🍎", "the 🍎", "close"),
+        ("glider", "hang glider", "close"),
+        ("glider", "hangglider", None),
+    ],
+)
+def test_an_answer_with_its_own_punctuation_is_held_inside_a_sentence(prompt, typed, verdict):
+    """Whatever scores typed alone is found inside a sentence too: splitting
+    a sentence into words lost "c++" beside a "?", "AC / DC", and answers
+    with no letters at all (review of #1416). Only a word's edge may bound
+    it, so "hangglider" does not hold "glider"."""
+    game, guesser = make_language_guess_game(prompt, "en")
+    assert game.guess_hint(guesser, typed) == verdict
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        ("?! " * 170)[:500],
+        " ".join("x" * 250)[:500],
+        ("x? " * 170)[:500],
+        "x" * 500,
+        "🍎" * 500,
+        "?" * 500,
+    ],
+)
+def test_finding_the_answer_in_a_long_message_is_linear(typed):
+    """An earlier attempt split the edges of every run of words and made 500
+    characters of "?!" cost 179 ms on the one event loop (review of #1416).
+    Counted in executed lines rather than timed, so a loaded runner cannot
+    fail it and a quadratic search cannot pass it."""
+    import sys
+
+    from app.prompt_content import prompt_match_extra_words
+
+    lines = 0
+
+    def tracer(frame, event, arg):
+        if not frame.f_code.co_filename.endswith("prompt_content.py"):
+            return None
+
+        def count(frame, event, arg):
+            nonlocal lines
+            if event == "line":
+                lines += 1
+            return count
+
+        return count
+
+    sys.settrace(tracer)
+    try:
+        prompt_match_extra_words(
+            typed, "en", frozenset({"c++", "x", "?", "tempestainunbicchieredacqua"})
+        )
+    finally:
+        sys.settrace(None)
+    assert 0 < lines < 60 * len(typed)
+
+
+
+@pytest.mark.parametrize(
+    ("prompt", "typed", "verdict"),
+    [
+        ("🍎", "🍎 🍌 🍇 🚗", "held"),
+        ("🍎", "🍎🍌🍇🚗", "held"),
+        ("🍎", "🍎🍌", "close"),
+        (":)", ":) ;) :( :|", "held"),
+        (":)", "(:) ;) :(", "held"),
+        (":)", ":);;:(;;:/;;:?", "held"),
+        ("!", "?!,", "held"),
+        ("?", "??", "close"),
+        ("Hund", "der Hund?", "close"),
+        ("perro", "¿perro?", "close"),
+        ("lighthouse", "lighthouse?!?!", "close"),
+        ("chat", "«chat»", "close"),
+    ],
+)
+def test_every_candidate_counts_against_the_verdict(prompt, typed, verdict):
+    """Counting only letters let "🍎 🍌 🍇 🚗" earn "very close": a list of
+    emoji or emoticon answers halved to the answer by one guesser (review of
+    #1416), and so did a run of punctuation counted as one word with the
+    answer inside it (":);;:("). Each character that is not a letter, digit
+    or separator is a word; sentence punctuation at either end is not,
+    unless the hold reaches into it ("?!," with the answer "!")."""
+    language = {"Hund": "de", "perro": "es", "chat": "fr"}.get(prompt, "en")
+    game, guesser = make_language_guess_game(prompt, language)
+    assert game.guess_hint(guesser, typed) == verdict

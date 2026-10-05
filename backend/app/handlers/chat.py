@@ -5,7 +5,7 @@ import asyncio
 from functools import partial
 
 from app.announcements import Announcement
-from app.game import Phase
+from app.game import Phase, fits_a_guess
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     GuessPayload,
@@ -20,7 +20,6 @@ from app.presenters import (
     guessed_receipt,
     system_chat_message,
 )
-from app.prompts import MAX_PROMPT_LENGTH
 from app.handlers.refusals import ErrorCode
 from app.services.telemetry import telemetry
 
@@ -286,15 +285,6 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         )
         return
 
-    if len(text) > MAX_PROMPT_LENGTH:
-        await _emit_player_chat(
-            ctx,
-            room,
-            player,
-            _chat_line(player, text),
-        )
-        return
-
     correct, points = game.submit_guess(player.id, text)
     if correct and player.user_id:
         # Knows the prompt now: a leave and a rejoin as a player must not make
@@ -302,6 +292,35 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         room.turn_prompt_aware.add(player.user_id)
     if not correct:
         hint = game.guess_hint(player.id, text)
+        if hint is None and not fits_a_guess(text):
+            # Too long to be the answer and holding none of it: chat.
+            await _emit_player_chat(
+                ctx,
+                room,
+                player,
+                _chat_line(player, text),
+            )
+            return
+        if hint == "held":
+            # The answer among more words than a verdict may speak to
+            # (#1416): kept from the room, and its author answered exactly as
+            # for a wrong guess the room read - their own line as a
+            # chat_message, nothing on the ack - so the answer cannot be
+            # found by asking about eighty words at a time.
+            recipients = ctx.game_flow._privileged_sids(
+                room, game, exclude_sid=sid, spectators=room.spectators_see_prompt
+            )
+            await _emit_player_chat(
+                ctx,
+                room,
+                player,
+                _chat_line(player, text),
+                recipients=[*recipients, sid],
+                message_kind="wrong_guess",
+                audience="prompt_aware",
+                near_miss_kind="close",
+            )
+            return
         if hint:
             # The guesser should always see their own guess, even when it's
             # not broadcast to the rest of the room.

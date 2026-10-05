@@ -1307,7 +1307,7 @@ which is never translated: what somebody said is what everybody sees.
 
 **Blocking is a presentation filter only.** When a sender is blocked, the recipient
 list is narrowed for that one `chat_message`
-([`backend/app/handlers/chat.py:47`](../backend/app/handlers/chat.py)); the sender still
+([`backend/app/handlers/chat.py:46`](../backend/app/handlers/chat.py)); the sender still
 sees their own line, and room state, players, scores, turns, correct-guess events,
 votes, and announcements keep normal room-wide delivery. Blocking never creates a
 different game state per player.
@@ -1352,7 +1352,7 @@ that left and rejoined as a player is carried the same way everywhere its standi
 (`Room.carried_points`, [`backend/app/rooms.py`](../backend/app/rooms.py)), so no results card
 ranks it by its newest seat and then jumps at game over (#1318). Its `delta` counts every
 seat's turn the same way, so `score - delta` is always what the account came into the turn with. Ranks use standard competition ranking (1, 2, 2, 4) via
-`competition_ranks()` ([`backend/app/game.py:52`](../backend/app/game.py)), shared with
+`competition_ranks()` ([`backend/app/game.py:58`](../backend/app/game.py)), shared with
 the recorded standings so the final screen and the history row can never disagree.
 
 **`server_shutdown`**:

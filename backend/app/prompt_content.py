@@ -420,6 +420,10 @@ _SEPARATORS = re.compile(r"[\s\-\u2010-\u2015\u2212.']+")
 _WORD_MARKS = re.compile(r"[.']+")
 
 
+# One character of what `_SEPARATORS` matches a run of.
+_SEPARATOR = re.compile(_SEPARATORS.pattern.removesuffix("+"))
+
+
 def _without_separators(text: str) -> str:
     return _SEPARATORS.sub("", text)
 
@@ -456,6 +460,129 @@ def prompt_match_words(answer: str, language: str = "en") -> str:
     # A dot or an apostrophe sits inside a word ("keeper's", "U.S.");
     # a hyphen or a space is between two.
     return " ".join(_SEPARATORS.sub(" ", _WORD_MARKS.sub("", folded)).split())
+
+
+# Punctuation that ends, opens or wraps a sentence rather than naming anything:
+# a run of it at either end of a message is not a word ("der Hund?",
+# "¿perro?", "(C++)", "«chat»").
+_SENTENCE_ENDS = frozenset('.,!?…¿¡()[]"«»“”„')
+
+
+def _words_of(folded: str) -> tuple[list[bool], list[tuple[int, int]]]:
+    """Where the words of a folded text start, and the sentence punctuation
+    at either end that is not counted as any.
+
+    A word is a run of letters and digits, or any single other character
+    that is not a separator - each emoji, each "+", each ":" - because an
+    answer may be any of these, a hold may start or end between any two of
+    them (`_at_an_edge`), and the verdict a guess earns is bounded by how many
+    words it holds besides the answer (review of #1416): a candidate packed
+    beside the answer, ":);;:(", must never count for nothing.
+
+    The exception is sentence punctuation - ?!.,…¿¡, brackets, quotes - at
+    the message's very start or end ("der Hund?", "¿perro?", "(C++)"):
+    returned as spans, not counted, unless a hold reaches into one, when
+    what the hold leaves of it counts (`prompt_match_extra_words`).
+    """
+    size = len(folded)
+    starts = [False] * size
+    for index, character in enumerate(folded):
+        if _SEPARATOR.match(character):
+            continue
+        if not character.isalnum():
+            starts[index] = True
+        elif index == 0 or not folded[index - 1].isalnum():
+            starts[index] = True
+    content = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
+    ends: list[tuple[int, int]] = []
+    if content:
+        lead = 0
+        while lead < len(content) and folded[content[lead]] in _SENTENCE_ENDS:
+            lead += 1
+        trail = len(content)
+        while trail > lead and folded[content[trail - 1]] in _SENTENCE_ENDS:
+            trail -= 1
+        if lead:
+            ends.append((content[0], content[lead - 1] + 1))
+        if trail < len(content):
+            ends.append((content[trail], content[-1] + 1))
+    for begin, finish in ends:
+        for index in range(begin, finish):
+            starts[index] = False
+    return starts, ends
+
+
+def _at_an_edge(folded: str, kept: list[int], position: int) -> bool:
+    """Whether a key position - between key characters `position - 1` and
+    `position`, `kept` mapping each back to `folded` - is a word's edge: an
+    end of the text, a separator between them, or a letter beside anything
+    that is not one."""
+    if position in (0, len(kept)):
+        return True
+    before, after = kept[position - 1], kept[position]
+    if after - before > 1:
+        return True  # a separator stood between them
+    return not (folded[before].isalnum() and folded[after].isalnum())
+
+
+def prompt_match_extra_words(
+    text: str, language: str, spellings: frozenset[str]
+) -> int | None:
+    """Whether `text` holds one of `spellings` - keys `prompt_match_variants`
+    gives - and how many words of it lie outside the fewest-worded hold:
+    None if it holds none. What keeps "der Hund" from the room
+    (`game.Game.guess_hint`, #1416).
+
+    The text is folded the way a key is, keeping track of where each
+    separator stood, and a spelling is looked for in that key itself: any
+    answer that scores typed alone - "AC / DC", "C + +", ":-)", "🍎" - is
+    found inside a sentence too, with nothing to tokenize. A hold must
+    start and end at a word's edge - a separator, a mark, or the text's own
+    end - so "concatenate" does not hold "cat". What counts as a word is
+    `_words_of`'s: "c'est l'arbre" holds "arbre" beside three, and
+    "🍎 🍌 🍇" the apple beside two.
+
+    Linear in the text for each spelling: one search, and an occurrence is
+    judged in constant time.
+    """
+    language = validate_prompt_list_language(language)
+    collapsed = _spelled_out(_collapsed(text), language)
+    wanted = [spelling for spelling in spellings if spelling]
+    fewest: int | None = None
+    for folded in {
+        _fold_accents(_transliterate(collapsed, language)),
+        _fold_accents(collapsed),
+    }:
+        kept = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
+        key = "".join(folded[index] for index in kept)
+        starts, ends = _words_of(folded)
+        # How many words begin before each position of the folded text.
+        begun = [0]
+        for word_starts in starts:
+            begun.append(begun[-1] + word_starts)
+        words = begun[-1]
+        # How many characters that are not separators precede each position.
+        shown = [0]
+        for character in folded:
+            shown.append(shown[-1] + (not _SEPARATOR.match(character)))
+
+        for spelling in wanted:
+            found = key.find(spelling)
+            while found != -1:
+                end = found + len(spelling)
+                if _at_an_edge(folded, kept, found) and _at_an_edge(folded, kept, end):
+                    first, after = kept[found], kept[end - 1] + 1
+                    extra = words - (begun[after] - begun[first])
+                    for begin, finish in ends:
+                        if begin < after and first < finish:
+                            # The hold reaches into end punctuation: what it
+                            # leaves there could be candidates too.
+                            overlap = shown[min(finish, after)] - shown[max(begin, first)]
+                            extra += shown[finish] - shown[begin] - overlap
+                    if fewest is None or extra < fewest:
+                        fewest = extra
+                found = key.find(spelling, found + 1)
+    return fewest
 
 
 def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
