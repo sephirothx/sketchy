@@ -77,14 +77,26 @@ export function CreateRoomPage() {
   // Mixed by default (#1182): a room anybody can play in their own language.
   // A host who wants one language - for custom prompts, or a list in it -
   // picks it here, and a list carried from the catalogue sets it below.
-  const [promptLanguage, setPromptLanguage] = useState<RoomLanguage>(MIXED_PROMPT_LANGUAGE);
+  //
+  // `carried` is a list the host arrived with, from the community catalogue's
+  // Play. The room takes its language too: a room declares one and its lists
+  // must agree with it (R-PROMPT-02), so carrying the slug alone would put a
+  // German list in an English room and be refused on create.
+  //
+  // The three are one state, and every write is an update of the current one,
+  // because each is judged against the others and the catalogue, the carried
+  // list and the host all write them as the page opens. Judged from a render's
+  // closure instead, the catalogue's report could run after the carried list
+  // landed, against the language and lists from before it, and put Standard
+  // back in an English room - a CI flake that test_carried_prompt_list.py
+  // now forces.
+  const [promptChoice, setPromptChoice] = useState<{
+    language: RoomLanguage;
+    slugs: string[];
+    carried: PromptListSummary | null;
+  }>({ language: MIXED_PROMPT_LANGUAGE, slugs: ["english_standard"], carried: null });
+  const { language: promptLanguage, slugs: promptListSlugs, carried: carriedList } = promptChoice;
   const mixed = promptLanguage === MIXED_PROMPT_LANGUAGE;
-  const [promptListSlugs, setPromptListSlugs] = useState<string[]>(["english_standard"]);
-  // A list the host arrived with, from the community catalogue's Play. The
-  // room takes its language too: a room declares one and its lists must agree
-  // with it (R-PROMPT-02), so carrying the slug alone would put a German list
-  // in an English room and be refused on create.
-  const [carriedList, setCarriedList] = useState<PromptListSummary | null>(null);
   const [customPrompts, dispatchCustomPrompts] = useReducer(
     customPromptsReducer,
     undefined,
@@ -157,21 +169,32 @@ export function CreateRoomPage() {
     // on the host's own language rather than on a room the server refuses.
     // Judged on the bundled catalogue only: the picker reports before its
     // fetch lands, and an empty first report is not a catalogue without it.
-    const language = promptLanguage === MIXED_PROMPT_LANGUAGE
-      && lists.some((list) => list.isBundled)
-      && !availablePromptLanguages(lists, playLanguage).includes(MIXED_PROMPT_LANGUAGE)
-      ? playLanguage
-      : promptLanguage;
-    if (language !== promptLanguage) setPromptLanguage(language);
-    setPromptListSlugs((current) =>
-      reconcileSelectionForLanguage(lists, language, current, playLanguage),
-    );
+    setPromptChoice((current) => {
+      // A report the picker made before the carried list reached it does not
+      // know the list; reconciled against that alone, the list would go.
+      const { carried } = current;
+      const known = carried && !lists.some((list) => list.slug === carried.slug)
+        ? [...lists, carried]
+        : lists;
+      const language = current.language === MIXED_PROMPT_LANGUAGE
+        && known.some((list) => list.isBundled)
+        && !availablePromptLanguages(known, playLanguage).includes(MIXED_PROMPT_LANGUAGE)
+        ? playLanguage
+        : current.language;
+      return {
+        ...current,
+        language,
+        slugs: reconcileSelectionForLanguage(known, language, current.slugs, playLanguage),
+      };
+    });
   }
 
   // No catalogue at all: Mixed has nothing to draw on and takes no custom
   // prompts, so the host's own language keeps a custom-only room possible.
   function handleListsUnavailable() {
-    if (promptLanguage === MIXED_PROMPT_LANGUAGE) setPromptLanguage(playLanguage);
+    setPromptChoice((current) => (
+      current.language === MIXED_PROMPT_LANGUAGE ? { ...current, language: playLanguage } : current
+    ));
   }
 
   useEffect(() => {
@@ -181,11 +204,13 @@ export function CreateRoomPage() {
     void readCommunityPromptList(carried)
       .then((list) => {
         if (cancelled) return;
-        setCarriedList({ ...list, isBundled: false });
         // A list in no language (#821) is played in the room's language, so
         // the form keeps the one it already had rather than inventing one.
-        if (list.language !== AGNOSTIC_PROMPT_LANGUAGE) setPromptLanguage(list.language);
-        setPromptListSlugs([list.slug]);
+        setPromptChoice((current) => ({
+          language: list.language === AGNOSTIC_PROMPT_LANGUAGE ? current.language : list.language,
+          slugs: [list.slug],
+          carried: { ...list, isBundled: false },
+        }));
       })
       // A list unpublished since the link was made leaves the form as it was,
       // on the built-in selection, rather than empty-handed.
@@ -227,16 +252,17 @@ export function CreateRoomPage() {
     setColorMode(settings.colorMode);
     // A preset carries the language of the lists it saved, and applying it
     // sets both together: a room declares its language before it has lists.
-    setPromptLanguage(settings.promptLanguage);
     // Reconciled: a mixed preset saved by a host playing another language
     // names that language's Standard, which this picker shows in its own.
-    setPromptListSlugs(
-      loadedLists.length > 0
+    setPromptChoice((current) => ({
+      ...current,
+      language: settings.promptLanguage,
+      slugs: loadedLists.length > 0
         ? reconcileSelectionForLanguage(
           loadedLists, settings.promptLanguage, settings.promptListSlugs, playLanguage,
         )
         : settings.promptListSlugs,
-    );
+    }));
     dispatchCustomPrompts({ type: "reset", value: "", only: false });
   }
 
@@ -547,8 +573,13 @@ export function CreateRoomPage() {
         if (patch.maxPlayers !== undefined) setMaxPlayers(patch.maxPlayers);
         if (patch.rounds !== undefined) setRounds(patch.rounds);
         if (patch.drawingSeconds !== undefined) setDrawingSeconds(patch.drawingSeconds);
-        if (patch.promptLanguage !== undefined) setPromptLanguage(patch.promptLanguage);
-        if (patch.promptListSlugs !== undefined) setPromptListSlugs(patch.promptListSlugs);
+        if (patch.promptLanguage !== undefined || patch.promptListSlugs !== undefined) {
+          setPromptChoice((current) => ({
+            ...current,
+            language: patch.promptLanguage ?? current.language,
+            slugs: patch.promptListSlugs ?? current.slugs,
+          }));
+        }
         if (patch.allowedTools !== undefined) setAllowedTools(patch.allowedTools);
         if (patch.colorMode !== undefined) setColorMode(patch.colorMode);
         if (patch.scoringMode !== undefined) setScoringMode(patch.scoringMode);
