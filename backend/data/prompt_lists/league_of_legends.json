@@ -11,7 +11,7 @@
     "pt": "Todos os campeões de League of Legends, pelo nome.",
     "pl": "Wszyscy bohaterowie League of Legends, z imienia."
   },
-  "version": 2,
+  "version": 3,
   "shelf": "video-games",
   "position": 10,
   "tags": [
@@ -45,7 +45,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03202c743cde","answer":"Ashe"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03213c2d8ee9","answer":"Aurelion Sol","promptVersion":2},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-032340f6ceab","answer":"Azir"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-0324c0717910","answer":"Bard","overrides":{"es":{"answer":"Bardo","aliases":["Bard"]},"pt":{"answer":"Bardo","aliases":["Bard"]}}},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-0324c0717910","answer":"Bard","overrides":{"es":{"answer":"Bardo","aliases":["Bard"]},"pt":{"answer":"Bard","aliases":["Bardo"],"promptVersion":2}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03256a2232fc","answer":"Bel'Veth","promptVersion":2},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03264602804c","answer":"Blitzcrank"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03281369ca35","answer":"Braum"},
@@ -123,7 +123,7 @@
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03725682b20f","answer":"Nidalee"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03737c2c47a3","answer":"Nilah"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03749f06cc04","answer":"Nocturne"},
-    {"conceptId":"01a0f98c-d73b-707a-8ba0-0375cd3a5dce","answer":"Nunu and Willump","promptVersion":2,"overrides":{"de":{"answer":"Nunu und Willump","aliases":["Nunu and Willump"],"promptVersion":2},"es":{"answer":"Nunu y Willump","aliases":["Nunu and Willump"],"promptVersion":2},"fr":{"answer":"Nunu et Willump","aliases":["Nunu and Willump"],"promptVersion":2},"it":{"answer":"Nunu e Willump","aliases":["Nunu and Willump"],"promptVersion":2},"nl":{"answer":"Nunu en Willump","aliases":["Nunu and Willump"],"promptVersion":2},"pt":{"answer":"Nunu e Willump","aliases":["Nunu and Willump"],"promptVersion":2},"pl":{"answer":"Nunu i Willump","aliases":["Nunu and Willump"],"promptVersion":2}}},
+    {"conceptId":"01a0f98c-d73b-707a-8ba0-0375cd3a5dce","answer":"Nunu and Willump","promptVersion":2,"overrides":{"de":{"answer":"Nunu und Willump","aliases":["Nunu and Willump"],"promptVersion":2},"es":{"answer":"Nunu y Willump","aliases":["Nunu and Willump"],"promptVersion":2},"fr":{"answer":"Nunu et Willump","aliases":["Nunu and Willump"],"promptVersion":2},"it":{"answer":"Nunu e Willump","aliases":["Nunu and Willump"],"promptVersion":2},"nl":{"answer":"Nunu en Willump","aliases":["Nunu and Willump"],"promptVersion":2},"pt":{"answer":"Nunu and Willump","aliases":["Nunu e Willump"],"promptVersion":3},"pl":{"answer":"Nunu i Willump","aliases":["Nunu and Willump"],"promptVersion":2}}},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-037658ad2dff","answer":"Olaf"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-03778cd875df","answer":"Orianna"},
     {"conceptId":"01a0f98c-d73b-707a-8ba0-0378c03b6f0d","answer":"Ornn"},

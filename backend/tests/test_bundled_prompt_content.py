@@ -363,14 +363,44 @@ def test_an_everyday_list_names_each_concept_once(language):
 
 def test_a_franchise_name_list_accepts_only_the_english_name_beside_its_own():
     """Pokémon and League of Legends: a language that renames a character also
-    accepts the English name, and nothing else (#1396)."""
+    accepts the English name, and nothing else (#1396) - or, where the
+    English name is the answer, the language's own one."""
     for path in DEFAULT_PROMPT_LISTS_DIR.glob("*.json"):
         if not path.stem.startswith(("pokemon_gen", "league_of_legends")):
             continue
         for entry in json.loads(path.read_text(encoding="utf-8"))["prompts"]:
             assert "aliases" not in entry, (path.stem, entry["answer"])
             for language, own in entry.get("overrides", {}).items():
-                assert own.get("aliases", [entry["answer"]]) == [entry["answer"]], (path.stem, language, own)
+                if own["answer"] == entry["answer"]:
+                    # Portuguese League of Legends: the English name is the
+                    # answer, Riot's Brazilian name the one alias (R-I18N-09).
+                    assert len(own.get("aliases", [])) <= 1, (path.stem, language, own)
+                else:
+                    assert own.get("aliases", [entry["answer"]]) == [entry["answer"]], (path.stem, language, own)
+
+
+
+#: Answers that only Brazil or only Latin America would give, where Sketchy's
+#: Portuguese is Portugal's and its Spanish Spain's (R-I18N-09). Not the
+#: review itself - that was done answer by answer (#1396) - but a tripwire
+#: for the commonest words to come back in a later edit.
+OTHER_VARIETY = {
+    "pt": {"ônibus", "trem", "geladeira", "celular", "sorvete", "xícara", "banheiro", "café da manhã",
+           "fones de ouvido", "goleiro", "bonde", "caminhão", "grama", "suco", "abacaxi", "espaguete", "curativo"},
+    "es": {"computadora", "celular", "jugo", "frijol", "licuadora", "durazno", "crayón", "carro",
+           "elote", "popote", "chamarra", "alberca", "palta", "pochoclo", "quinceañera"},
+}
+
+
+@pytest.mark.parametrize("language", sorted(OTHER_VARIETY))
+def test_portuguese_is_portugal_s_and_spanish_spain_s(language):
+    found = [
+        f"{slug}:{entry['answer']}"
+        for slug in _slugs(language)
+        for entry in _list(slug)["prompts"]
+        if entry["answer"].casefold() in OTHER_VARIETY[language]
+    ]
+    assert found == []
 
 
 @pytest.mark.parametrize("language", PROMPT_LANGUAGES)
