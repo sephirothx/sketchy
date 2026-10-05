@@ -1760,7 +1760,7 @@ def test_an_answer_with_its_own_punctuation_is_held_inside_a_sentence(prompt, ty
 
 @pytest.mark.parametrize(
     "typed",
-    [("?! " * 170)[:500], " ".join("x" * 250)[:500], ("x? " * 170)[:500], "x" * 500],
+    [("?! " * 170)[:500], " ".join("x" * 250)[:500], ("x? " * 170)[:500], "x" * 500, "🍎" * 500],
 )
 def test_finding_the_answer_in_a_long_message_is_linear(typed):
     """An earlier attempt split the edges of every run of words and made 500
@@ -1791,3 +1791,28 @@ def test_finding_the_answer_in_a_long_message_is_linear(typed):
     finally:
         sys.settrace(None)
     assert 0 < lines < 60 * len(typed)
+
+
+
+@pytest.mark.parametrize(
+    ("prompt", "typed", "verdict"),
+    [
+        ("🍎", "🍎 🍌 🍇 🚗", "held"),
+        ("🍎", "🍎🍌🍇🚗", "held"),
+        ("🍎", "🍎🍌", "close"),
+        (":)", ":) ;) :( :|", "held"),
+        (":)", "(:) ;))", "held"),
+        ("Hund", "der Hund?", "close"),
+        ("perro", "¿perro?", "close"),
+        ("lighthouse", "lighthouse?!?!", "close"),
+        ("chat", "«chat»", "close"),
+    ],
+)
+def test_every_candidate_counts_against_the_verdict(prompt, typed, verdict):
+    """Counting only letters let "🍎 🍌 🍇 🚗" earn "very close": a list of
+    emoji or emoticon answers halved to the answer by one guesser (review of
+    #1416). Each symbol and each run of other punctuation is a word; only
+    sentence punctuation at either end is not."""
+    language = {"Hund": "de", "perro": "es", "chat": "fr"}.get(prompt, "en")
+    game, guesser = make_language_guess_game(prompt, language)
+    assert game.guess_hint(guesser, typed) == verdict

@@ -462,6 +462,56 @@ def prompt_match_words(answer: str, language: str = "en") -> str:
     return " ".join(_SEPARATORS.sub(" ", _WORD_MARKS.sub("", folded)).split())
 
 
+# Punctuation that ends, opens or wraps a sentence rather than naming anything:
+# a run of it at either end of a message is not a word ("der Hund?",
+# "¿perro?", "(C++)", "«chat»").
+_SENTENCE_ENDS = frozenset('.,!?…¿¡()[]"«»“”„')
+
+
+def _word_starts(folded: str) -> list[bool]:
+    """For each character of a folded text, whether a word starts there.
+
+    A word is a run of letters and digits, a single symbol - each emoji is a
+    word, "🍎🍌🍇" three of them - or a run of any other punctuation, ":)"
+    one: an answer may be any of these, and the verdict a guess earns is
+    bounded by how many it holds besides the answer (review of #1416), so a
+    candidate must never count for nothing. The one exception is sentence
+    punctuation at the message's very start or end."""
+    size = len(folded)
+    starts = [False] * size
+    content = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
+    first, last = (content[0], content[-1]) if content else (size, -1)
+
+    def kind(character: str) -> str:
+        if _SEPARATOR.match(character):
+            return "separator"
+        if character.isalnum():
+            return "letters"
+        return "symbol" if unicodedata.category(character).startswith("S") else "punctuation"
+
+    index = 0
+    while index < size:
+        current = kind(folded[index])
+        if current == "separator":
+            index += 1
+            continue
+        if current == "symbol":
+            starts[index] = True
+            index += 1
+            continue
+        end = index + 1
+        while end < size and kind(folded[end]) == current:
+            end += 1
+        if current == "letters":
+            starts[index] = True
+        else:
+            at_an_end = index == first or end - 1 == last
+            if not (at_an_end and set(folded[index:end]) <= _SENTENCE_ENDS):
+                starts[index] = True
+        index = end
+    return starts
+
+
 def _at_an_edge(folded: str, kept: list[int], position: int) -> bool:
     """Whether a key position - between key characters `position - 1` and
     `position`, `kept` mapping each back to `folded` - is a word's edge: an
@@ -488,8 +538,9 @@ def prompt_match_extra_words(
     answer that scores typed alone - "AC / DC", "C + +", ":-)", "🍎" - is
     found inside a sentence too, with nothing to tokenize. A hold must
     start and end at a word's edge - a separator, a mark, or the text's own
-    end - so "concatenate" does not hold "cat". Words are runs of letters
-    and digits: "c'est l'arbre" holds "arbre" beside three of them.
+    end - so "concatenate" does not hold "cat". What counts as a word is
+    `_word_starts`'s: "c'est l'arbre" holds "arbre" beside three, and
+    "🍎 🍌 🍇" the apple beside two.
 
     Linear in the text for each spelling: one search, and an occurrence is
     judged in constant time.
@@ -505,10 +556,9 @@ def prompt_match_extra_words(
         kept = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
         key = "".join(folded[index] for index in kept)
         # How many words begin before each position of the folded text.
-        begun = [0] * (len(folded) + 1)
-        for index, character in enumerate(folded):
-            starts = character.isalnum() and (index == 0 or not folded[index - 1].isalnum())
-            begun[index + 1] = begun[index] + starts
+        begun = [0]
+        for starts in _word_starts(folded):
+            begun.append(begun[-1] + starts)
         words = begun[-1]
 
         for spelling in wanted:
