@@ -468,48 +468,48 @@ def prompt_match_words(answer: str, language: str = "en") -> str:
 _SENTENCE_ENDS = frozenset('.,!?…¿¡()[]"«»“”„')
 
 
-def _word_starts(folded: str) -> list[bool]:
-    """For each character of a folded text, whether a word starts there.
+def _words_of(folded: str) -> tuple[list[bool], list[tuple[int, int]]]:
+    """Where the words of a folded text start, and the sentence punctuation
+    at either end that is not counted as any.
 
-    A word is a run of letters and digits, a single symbol - each emoji is a
-    word, "🍎🍌🍇" three of them - or a run of any other punctuation, ":)"
-    one: an answer may be any of these, and the verdict a guess earns is
-    bounded by how many it holds besides the answer (review of #1416), so a
-    candidate must never count for nothing. The one exception is sentence
-    punctuation at the message's very start or end."""
+    A word is a run of letters and digits, or any single other character
+    that is not a separator - each emoji, each "+", each ":" - because an
+    answer may be any of these, a hold may start or end between any two of
+    them (`_at_an_edge`), and the verdict a guess earns is bounded by how many
+    words it holds besides the answer (review of #1416): a candidate packed
+    beside the answer, ":);;:(", must never count for nothing.
+
+    The exception is sentence punctuation - ?!.,…¿¡, brackets, quotes - at
+    the message's very start or end ("der Hund?", "¿perro?", "(C++)"):
+    returned as spans, not counted, unless a hold reaches into one, when
+    what the hold leaves of it counts (`prompt_match_extra_words`).
+    """
     size = len(folded)
     starts = [False] * size
-    content = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
-    first, last = (content[0], content[-1]) if content else (size, -1)
-
-    def kind(character: str) -> str:
+    for index, character in enumerate(folded):
         if _SEPARATOR.match(character):
-            return "separator"
-        if character.isalnum():
-            return "letters"
-        return "symbol" if unicodedata.category(character).startswith("S") else "punctuation"
-
-    index = 0
-    while index < size:
-        current = kind(folded[index])
-        if current == "separator":
-            index += 1
             continue
-        if current == "symbol":
+        if not character.isalnum():
             starts[index] = True
-            index += 1
-            continue
-        end = index + 1
-        while end < size and kind(folded[end]) == current:
-            end += 1
-        if current == "letters":
+        elif index == 0 or not folded[index - 1].isalnum():
             starts[index] = True
-        else:
-            at_an_end = index == first or end - 1 == last
-            if not (at_an_end and set(folded[index:end]) <= _SENTENCE_ENDS):
-                starts[index] = True
-        index = end
-    return starts
+    content = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
+    ends: list[tuple[int, int]] = []
+    if content:
+        lead = 0
+        while lead < len(content) and folded[content[lead]] in _SENTENCE_ENDS:
+            lead += 1
+        trail = len(content)
+        while trail > lead and folded[content[trail - 1]] in _SENTENCE_ENDS:
+            trail -= 1
+        if lead:
+            ends.append((content[0], content[lead - 1] + 1))
+        if trail < len(content):
+            ends.append((content[trail], content[-1] + 1))
+    for begin, finish in ends:
+        for index in range(begin, finish):
+            starts[index] = False
+    return starts, ends
 
 
 def _at_an_edge(folded: str, kept: list[int], position: int) -> bool:
@@ -539,7 +539,7 @@ def prompt_match_extra_words(
     found inside a sentence too, with nothing to tokenize. A hold must
     start and end at a word's edge - a separator, a mark, or the text's own
     end - so "concatenate" does not hold "cat". What counts as a word is
-    `_word_starts`'s: "c'est l'arbre" holds "arbre" beside three, and
+    `_words_of`'s: "c'est l'arbre" holds "arbre" beside three, and
     "🍎 🍌 🍇" the apple beside two.
 
     Linear in the text for each spelling: one search, and an occurrence is
@@ -555,19 +555,30 @@ def prompt_match_extra_words(
     }:
         kept = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
         key = "".join(folded[index] for index in kept)
+        starts, ends = _words_of(folded)
         # How many words begin before each position of the folded text.
         begun = [0]
-        for starts in _word_starts(folded):
-            begun.append(begun[-1] + starts)
+        for word_starts in starts:
+            begun.append(begun[-1] + word_starts)
         words = begun[-1]
+        # How many characters that are not separators precede each position.
+        shown = [0]
+        for character in folded:
+            shown.append(shown[-1] + (not _SEPARATOR.match(character)))
 
         for spelling in wanted:
             found = key.find(spelling)
             while found != -1:
                 end = found + len(spelling)
                 if _at_an_edge(folded, kept, found) and _at_an_edge(folded, kept, end):
-                    inside = begun[kept[end - 1] + 1] - begun[kept[found]]
-                    extra = words - inside
+                    first, after = kept[found], kept[end - 1] + 1
+                    extra = words - (begun[after] - begun[first])
+                    for begin, finish in ends:
+                        if begin < after and first < finish:
+                            # The hold reaches into end punctuation: what it
+                            # leaves there could be candidates too.
+                            overlap = shown[min(finish, after)] - shown[max(begin, first)]
+                            extra += shown[finish] - shown[begin] - overlap
                     if fewest is None or extra < fewest:
                         fewest = extra
                 found = key.find(spelling, found + 1)
