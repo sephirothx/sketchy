@@ -103,6 +103,11 @@ async def test_a_fill_heavy_thumbnail_is_drawn_without_holding_the_page():
             await session.send("Emulation.setCPUThrottlingRate", {"rate": CPU_THROTTLE})
             await page.goto(f"{BASE_URL}/gallery?sort=new")
             (card,) = await find_in_gallery(page, [prompt])
+            # A card asks for its picture only once it is near the viewport,
+            # and a card takes most of a screen: two other tests' public games
+            # finished after the seed put this one below the fold, where it
+            # never asks and no wait would see an image.
+            await card.scroll_into_view_if_needed()
             await card.locator("img").wait_for(timeout=30_000)
 
             workers = await page.evaluate(
