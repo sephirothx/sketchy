@@ -468,10 +468,12 @@ def prompt_match_word_variants(text: str, language: str = "en") -> frozenset[tup
     `game.Game.guess_hint`), at word boundaries only, so "concatenate" does
     not hold "cat".
 
-    Each spelling is split twice: at the separators a key drops, and at
-    anything that is not a letter or a digit, because a sentence ends in
-    punctuation a key keeps ("is it a lighthouse?") while an answer may hold
-    some ("C++")."""
+    Each spelling is split at the separators a key drops and at anything
+    that is not a letter or a digit, because a sentence ends in punctuation a
+    key keeps ("is it a lighthouse?") while an answer may hold some ("C++");
+    and both with a dot or an apostrophe joining a word, as a key reads it
+    ("U.S.", "d'acqua"), and splitting two, as an elided article does
+    ("l'arbre", "dell'acqua", "the lighthouse's")."""
     language = validate_prompt_list_language(language)
     collapsed = _spelled_out(_collapsed(text), language)
     return frozenset(
@@ -480,7 +482,7 @@ def prompt_match_word_variants(text: str, language: str = "en") -> frozenset[tup
             _fold_accents(_transliterate(collapsed, language)),
             _fold_accents(collapsed),
         )
-        for unmarked in (_WORD_MARKS.sub("", folded),)
+        for unmarked in (_WORD_MARKS.sub("", folded), folded)
         for split in (_SEPARATORS, _NON_WORD)
     )
 

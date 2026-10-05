@@ -2543,9 +2543,10 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
    avatar wears a ring, so neither needs a word beside the name.
 3. **Choosing** (15s): the current drawer picks one of 3 prompt options.
 4. **Drawing** (90s by default, configurable): the drawer draws; everyone else sees a masked
-   prompt (`_ _ _ _`) and guesses in the chat. A guess one typo away, or one with the answer
-   inside it ("der Hund", "is it a lighthouse?"), scores nothing and is shown only to its
-   author, marked *very close*, so the room never reads the word. Registered guessers can also react to the
+   prompt (`_ _ _ _`) and guesses in the chat. A guess one typo away, or the answer beside
+   one other word ("der Hund", "l'arbre"), scores nothing and is marked *very close* for its
+   author; neither it nor any longer message holding the answer reaches the other guessers,
+   only the drawer and those who already know the word. Registered guessers can also react to the
    drawing with one emoji from the corner of the canvas. The turn ends early once
    everyone's guessed correctly. Somebody who joins while the drawing is underway guesses in that turn too -
    the canvas and the masked prompt are already on their screen - and the turn waits for

@@ -109,10 +109,10 @@ app/main.py           ASGI assembly: FastAPI + Socket.IO + static + lifespan
 `Game` owns phases, the turn rotation, prompt choice, hint economics, guess matching,
 and scoring. It performs no I/O and touches no socket. `Phase` is
 `choosing_prompt | drawing | turn_results | game_end`
-([`backend/app/game.py:146`](../backend/app/game.py)). Scoring constants and the
+([`backend/app/game.py:152`](../backend/app/game.py)). Scoring constants and the
 versioned rule snapshot live here
 ([`backend/app/game.py:52`](../backend/app/game.py),
-[`backend/app/game.py:537`](../backend/app/game.py)). This is the module to change when
+[`backend/app/game.py:548`](../backend/app/game.py)). This is the module to change when
 game rules change — and changing an outcome-producing constant requires bumping
 `SCORING_RULES_VERSION`.
 
@@ -1671,8 +1671,8 @@ guessers: guess          (volatile, acknowledged; a retry carrying a seen id sto
        │             guess's acknowledgement (#884)
        ├─ near miss→ the line reaches the prompt-aware seats; the guesser's own
        │             line and the verdict ride the acknowledgement (#884) -
-       │             a message holding the prompt as words is one, at any
-       │             length (#1416)
+       │             the prompt beside one other word is one; among more, the
+       │             line goes to the same seats with no verdict (#1416)
        └─ wrong    → emit chat_message                                    → room
 
 turn ends (all eligible guessed, or the timer fires)

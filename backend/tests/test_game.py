@@ -1641,26 +1641,51 @@ def make_language_guess_game(prompt, language):
         ("de", "Mädchen", "das Madchen"),
         ("de", "Mädchen", "das Maedchen"),
         ("en", "lighthouse", "the lighthouse"),
-        ("en", "lighthouse", "is it a lighthouse?"),
+        ("en", "lighthouse", "lighthouse?!"),
         ("en", "hang glider", "a hang-glider"),
         ("nl", "hond", "de hond"),
         ("fr", "chat", "une chat"),
+        ("fr", "arbre", "l'arbre"),
+        ("it", "acqua", "dell'acqua"),
     ],
 )
-def test_a_guess_holding_the_answer_is_a_private_near_miss(language, prompt, typed):
+def test_a_guess_holding_the_answer_beside_one_word_is_a_near_miss(language, prompt, typed):
     """N-20 refuses the article form; the room must not read it either, or
     everyone else types the bare word (#1416)."""
     game, guesser = make_language_guess_game(prompt, language)
     assert game.submit_guess(guesser, typed) == (False, 0)
     assert game.guess_hint(guesser, typed) == "close"
+    assert game.near_misses[guesser] == 1
 
 
-def test_an_answer_inside_a_long_message_is_still_kept_from_the_room():
+@pytest.mark.parametrize(
+    ("language", "prompt", "typed"),
+    [
+        ("en", "lighthouse", "is it a lighthouse?"),
+        ("en", "lighthouse", "the lighthouse's"),
+        ("en", "lighthouse", "I think it might be a lighthouse on a rocky coast at night"),
+        ("fr", "arbre", "c'est l'arbre"),
+        ("it", "acqua", "è dell'acqua?"),
+    ],
+)
+def test_a_message_holding_the_answer_among_more_words_is_held_without_a_verdict(
+    language, prompt, typed
+):
+    """A verdict on many words at once would answer "is it any of these?" -
+    eighty candidates a message (review of #1416). Kept from the room, and
+    counted as the attempt it is, but answered as any wrong guess."""
+    game, guesser = make_language_guess_game(prompt, language)
+    assert game.submit_guess(guesser, typed) == (False, 0)
+    assert game.guess_hint(guesser, typed) == "held"
+    assert game.wrong_guesses[guesser] == 1
+
+
+def test_a_long_message_without_the_answer_is_chat_and_not_counted():
     game, guesser = make_language_guess_game("lighthouse", "en")
-    typed = "I think it might be a lighthouse on a rocky coast at night"
-    assert len(typed) > MAX_PROMPT_LENGTH
-    assert game.guess_hint(guesser, typed) == "close"
-    assert game.guess_hint(guesser, "I think it might be a boat on a rocky coast at night") is None
+    typed = "I think it might be a boat on a rocky coast at night, or a crab"
+    assert game.submit_guess(guesser, typed) == (False, 0)
+    assert game.guess_hint(guesser, typed) is None
+    assert guesser not in game.wrong_guesses
 
 
 def test_an_answer_only_inside_another_word_is_not_held():
@@ -1672,9 +1697,28 @@ def test_an_answer_only_inside_another_word_is_not_held():
 def test_the_guess_length_is_measured_with_whitespace_collapsed():
     answer = "tempesta in un bicchiere d'acqua"
     assert len(answer) == MAX_PROMPT_LENGTH
-    game, guesser = make_language_guess_game(answer, "it")
-    typed = "tempesta in un  bicchiere d'acqua"
+    assert fits_a_guess("tempesta in un  bicchiere d'acqua")
+    assert not fits_a_guess(answer + ".")
+
+
+@pytest.mark.parametrize(
+    "typed",
+    [
+        "tempesta in un  bicchiere d'acqua",
+        "tempesta in un bicchiere d'acqua.",
+        "tempesta in un bicchiere d' acqua",
+        "tempesta in un bicchiere d'acqua\u200b\u200b",
+    ],
+)
+def test_a_32_character_answer_typed_longer_still_scores(typed):
+    """Acceptance is judged before length: each of these folds to the answer,
+    and as chat it reached the room verbatim (review of #1416)."""
+    game, guesser = make_language_guess_game("tempesta in un bicchiere d'acqua", "it")
     assert len(typed) > MAX_PROMPT_LENGTH
-    assert fits_a_guess(typed)
     correct, points = game.submit_guess(guesser, typed)
     assert correct is True and points > 0
+
+
+def test_a_32_character_answer_with_punctuation_matching_keeps_is_a_near_miss():
+    game, guesser = make_language_guess_game("tempesta in un bicchiere d'acqua", "it")
+    assert game.guess_hint(guesser, "Tempesta in un bicchiere d'acqua!") == "close"

@@ -114,7 +114,7 @@ async def test_active_message_limit_rejects_before_processing_or_broadcast():
 
     sio.emit.reset_mock()
     with (
-        patch.object(Game, "submit_guess") as submit_guess,
+        patch.object(Game, "submit_guess", return_value=(False, 0)) as submit_guess,
         patch.object(Game, "guess_hint", return_value=None) as guess_hint,
     ):
         accepted = await guess(
@@ -123,9 +123,10 @@ async def test_active_message_limit_rejects_before_processing_or_broadcast():
         )
 
     assert accepted is None
-    submit_guess.assert_not_called()
-    # Too long to be a guess, but still asked whether the answer is inside
-    # it before the room reads it (#1416).
+    # Too long to be a guess, but still judged - it may fold to the answer -
+    # and asked whether the answer is inside it before the room reads it
+    # (#1416).
+    submit_guess.assert_called_once_with(guesser.id, "x" * MAX_CHAT_MESSAGE_LENGTH)
     guess_hint.assert_called_once_with(guesser.id, "x" * MAX_CHAT_MESSAGE_LENGTH)
     assert any(
         call.args[0] == "chat_message"
@@ -161,7 +162,10 @@ async def test_only_messages_within_word_limit_are_processed_as_guesses():
         await guess("guesser-sid", {"text": "x" * MAX_PROMPT_LENGTH})
         await guess("guesser-sid", {"text": "x" * (MAX_PROMPT_LENGTH + 1)})
 
-    submit_guess.assert_called_once_with(guesser.id, "x" * MAX_PROMPT_LENGTH)
+    assert [call.args for call in submit_guess.call_args_list] == [
+        (guesser.id, "x" * MAX_PROMPT_LENGTH),
+        (guesser.id, "x" * (MAX_PROMPT_LENGTH + 1)),
+    ]
     assert [call.args for call in guess_hint.call_args_list] == [
         (guesser.id, "x" * MAX_PROMPT_LENGTH),
         (guesser.id, "x" * (MAX_PROMPT_LENGTH + 1)),
@@ -1414,16 +1418,20 @@ async def test_a_guess_echo_reaches_spectators_only_where_they_see_the_prompt(
 
 
 async def _guess_in(prompt: str, language: str, typed: str):
-    """One guess by a guesser in a two-seat game drawing `prompt`: what the
-    guesser was answered and the chat lines the whole room was sent."""
+    """One guess by a guesser in a game drawing `prompt`, a second guesser
+    beside it: what the guesser was answered, the chat lines the whole room
+    was sent, and the lines sent to chosen sockets, by socket."""
     room_manager = RoomManager()
     room = room_manager.create_room(name="Room")
     drawer = room_manager.add_player(room, "Drawer")
     guesser = room_manager.add_player(room, "Guesser")
-    drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
+    other = room_manager.add_player(room, "Other")
+    drawer.sid, guesser.sid, other.sid = "drawer-sid", "guesser-sid", "other-sid"
     room.state = "playing"
     room.game = Game(
-        turn_order=[drawer.id, guesser.id], prompt_pool=[prompt], prompt_language=language
+        turn_order=[drawer.id, guesser.id, other.id],
+        prompt_pool=[prompt],
+        prompt_language=language,
     )
     room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
     room.game.choose_prompt(drawer.id, prompt)
@@ -1432,12 +1440,13 @@ async def _guess_in(prompt: str, language: str, typed: str):
     sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
     sio.emit = AsyncMock()
     answer = await sio.handlers["/"]["guess"]("guesser-sid", {"text": typed})
-    to_room = [
-        call.args[1]["text"]
-        for call in sio.emit.await_args_list
-        if call.args[0] == "chat_message" and call.kwargs.get("room") == room.id
-    ]
-    return room.game, guesser, answer, to_room
+    lines = [call for call in sio.emit.await_args_list if call.args[0] == "chat_message"]
+    to_room = [call.args[1]["text"] for call in lines if call.kwargs.get("room") == room.id]
+    to_sockets: dict[str, list[str]] = {}
+    for call in lines:
+        for target in call.kwargs.get("to") or ():
+            to_sockets.setdefault(target, []).append(call.args[1]["text"])
+    return room.game, guesser, answer, to_room, to_sockets
 
 
 @pytest.mark.parametrize(
@@ -1446,24 +1455,55 @@ async def _guess_in(prompt: str, language: str, typed: str):
         ("de", "Hund", "der Hund"),
         ("de", "Akkordeon", "das Akkordeon"),
         ("en", "lighthouse", "the lighthouse"),
-        ("en", "lighthouse", "is it a lighthouse"),
-        ("en", "lighthouse", "I am fairly sure that this one is a lighthouse"),
+        ("fr", "arbre", "l'arbre"),
     ],
 )
-async def test_a_guess_holding_the_answer_never_reaches_the_room(language, prompt, typed):
+async def test_the_answer_beside_one_word_is_a_private_near_miss(language, prompt, typed):
     """Before #1416 these went to the whole room as a plain wrong guess, and
     everyone else could type the bare word and score."""
-    game, guesser, answer, to_room = await _guess_in(prompt, language, typed)
+    game, guesser, answer, to_room, to_sockets = await _guess_in(prompt, language, typed)
 
     assert guesser.id not in game.correct_guessers
     assert typed not in to_room
+    assert typed not in to_sockets.get("other-sid", [])
+    assert to_sockets["drawer-sid"] == [typed]
     assert answer["verdict"]["code"] == "guess_very_close"
 
 
-async def test_a_32_character_answer_typed_with_a_doubled_space_scores():
+@pytest.mark.parametrize(
+    ("language", "prompt", "typed"),
+    [
+        ("en", "lighthouse", "is it a lighthouse"),
+        ("en", "lighthouse", "I am fairly sure that this one is a lighthouse"),
+        ("fr", "arbre", "c'est l'arbre"),
+    ],
+)
+async def test_the_answer_among_more_words_is_kept_from_the_room_without_a_verdict(
+    language, prompt, typed
+):
+    """Answered as a wrong guess the room read - the guesser's own line as a
+    chat_message, nothing on the ack - so the answer cannot be found by
+    asking about eighty words at a time (review of #1416)."""
+    game, guesser, answer, to_room, to_sockets = await _guess_in(prompt, language, typed)
+    _, _, plain_answer, plain_room, _ = await _guess_in(prompt, language, "a boat")
+
+    assert guesser.id not in game.correct_guessers
+    assert typed not in to_room
+    assert typed not in to_sockets.get("other-sid", [])
+    assert to_sockets["guesser-sid"] == [typed]
+    assert to_sockets["drawer-sid"] == [typed]
+    assert answer is None and plain_answer is None
+    assert plain_room == ["a boat"]
+    assert game.wrong_guesses[guesser.id] == 1
+
+
+@pytest.mark.parametrize(
+    "typed",
+    ["tempesta in un  bicchiere d'acqua", "tempesta in un bicchiere d'acqua."],
+)
+async def test_a_32_character_answer_typed_longer_scores(typed):
     answer_text = "tempesta in un bicchiere d'acqua"
-    typed = "tempesta in un  bicchiere d'acqua"
-    game, guesser, answer, to_room = await _guess_in(answer_text, "it", typed)
+    game, guesser, answer, to_room, _ = await _guess_in(answer_text, "it", typed)
 
     assert guesser.id in game.correct_guessers
     assert typed not in to_room

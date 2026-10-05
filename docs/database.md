@@ -1492,7 +1492,7 @@ cd backend && .venv/bin/python -m app.services.game_handoff --limit 50   # repla
 | `visibility` | `public \| private`, CHECK-enforced. The room's public flag, frozen when the game is saved (#469): a public room's game is listed on a profile for anyone, a private room's only for the players who sat in it (R-HIST-25). Defaults to `private` at both layers, so a writer that does not say discloses nothing |
 | `persisted_at` | The **database write time**, deliberately separate from `finished_at`, making delayed/retried-save lag measurable |
 
-**The rule snapshot** ([`backend/app/game.py:537`](../backend/app/game.py)) freezes the
+**The rule snapshot** ([`backend/app/game.py:548`](../backend/app/game.py)) freezes the
 numeric default/pressure/hint parameters, the drawer-bonus algorithm, the drawing time,
 the permitted tools and colors, prompt visibility and language, and the prompt lists the
 game drew from (`sourceListIds`; the exact revisions until #1358). Historical points can therefore be interpreted under the rules that
