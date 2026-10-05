@@ -1,7 +1,7 @@
 {
   "slug": "video_game_icons",
   "name": "Video-game icons",
-  "description": "Characters, creatures and items every gamer knows, across many franchises.",
+  "description": "Recognizable characters, creatures and items from across video games.",
   "names": {
     "de": "Videospiel-Ikonen",
     "es": "Iconos de videojuegos",
@@ -12,15 +12,15 @@
     "pl": "Ikony gier wideo"
   },
   "descriptions": {
-    "de": "Figuren, Wesen und Gegenstände, die jeder Spieler kennt, aus vielen Reihen.",
-    "es": "Personajes, criaturas y objetos que todo jugador conoce, de muchas sagas.",
-    "fr": "Personnages, créatures et objets que tout joueur connaît, de nombreuses sagas.",
-    "it": "Personaggi, creature e oggetti che ogni giocatore conosce, da tante saghe.",
-    "nl": "Personages, wezens en voorwerpen die elke gamer kent, uit allerlei series.",
-    "pt": "Personagens, criaturas e objetos que todos os jogadores conhecem, de muitas sagas.",
-    "pl": "Postacie, stworzenia i przedmioty, które zna każdy gracz, z wielu serii."
+    "de": "Bekannte Figuren, Wesen und Gegenstände aus Videospielen.",
+    "es": "Personajes, criaturas y objetos reconocibles de los videojuegos.",
+    "fr": "Personnages, créatures et objets reconnaissables du jeu vidéo.",
+    "it": "Personaggi, creature e oggetti riconoscibili dei videogiochi.",
+    "nl": "Herkenbare personages, wezens en voorwerpen uit videogames.",
+    "pt": "Personagens, criaturas e objetos reconhecíveis dos videojogos.",
+    "pl": "Rozpoznawalne postacie, stworzenia i przedmioty z gier wideo."
   },
-  "version": 4,
+  "version": 5,
   "shelf": "video-games",
   "position": 11,
   "tags": [
@@ -84,7 +84,7 @@
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a7fbf32f162","answer":"Dr. Eggman","aliases":["Robotnik","Dr. Robotnik"],"promptVersion":2,"overrides":{"de":{"answer":"Dr. Eggman","aliases":["Robotnik","Dr Robotnik","Doktor Robotnik"],"promptVersion":2},"es":{"answer":"Dr. Eggman","aliases":["Robotnik","Dr. Robotnik"],"promptVersion":2},"fr":{"answer":"Docteur Eggman","aliases":["Dr. Eggman","Robotnik","Docteur Robotnik","Dr Robotnik"],"promptVersion":2},"it":{"answer":"Dr. Eggman","aliases":["Robotnik","Dr Robotnik","Dottor Robotnik"],"promptVersion":2},"nl":{"answer":"Dr. Eggman","aliases":["Robotnik","Dr Robotnik"],"promptVersion":2},"pt":{"answer":"Dr. Eggman","aliases":["Robotnik","Dr Robotnik"],"promptVersion":2},"pl":{"answer":"Dr Eggman","aliases":["Robotnik","Dr Robotnik","Doktor Robotnik"],"promptVersion":2}}},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a80fd76b799","answer":"Pac-Man","promptVersion":2,"overrides":{"es":{"answer":"Pac-Man","aliases":["Comecocos"],"promptVersion":2}}},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a815e513592","answer":"Pac-Man ghost","promptVersion":2,"overrides":{"de":{"answer":"Pac-Man-Geist","aliases":["Pac-Man ghost"],"promptVersion":3},"es":{"answer":"Fantasma de Pac-Man","aliases":["Pac-Man ghost","Fantasma del comecocos"],"promptVersion":2},"fr":{"answer":"Fantôme de Pac-Man","aliases":["Pac-Man ghost"],"promptVersion":2},"it":{"answer":"Fantasma di Pac-Man","aliases":["Pac-Man ghost"],"promptVersion":3},"nl":{"answer":"Pac-Man-spookje","aliases":["Pac-Man ghost"],"promptVersion":2},"pt":{"answer":"Fantasma do Pac-Man","aliases":["Pac-Man ghost"],"promptVersion":2},"pl":{"answer":"Duszek z Pac-Mana","aliases":["Pac-Man ghost"],"promptVersion":2}}},
-    {"conceptId":"01a0f995-bb9f-70fb-adb5-6a82454a235c","answer":"Space Invader","overrides":{"de":{"answer":"Space Invader","promptVersion":3},"es":{"answer":"Space Invader","promptVersion":2},"fr":{"answer":"Space Invader","promptVersion":2},"it":{"answer":"Space Invader","promptVersion":2},"nl":{"answer":"Space Invader","promptVersion":2},"pt":{"answer":"Space Invader","aliases":["Invasor do Espaço"],"promptVersion":2},"pl":{"answer":"Space Invader","promptVersion":2}}},
+    {"conceptId":"01a0f995-bb9f-70fb-adb5-6a82454a235c","answer":"Space Invaders","overrides":{"de":{"answer":"Space Invaders","promptVersion":4},"es":{"answer":"Space Invaders","promptVersion":3},"fr":{"answer":"Space Invaders","promptVersion":3},"it":{"answer":"Space Invaders","promptVersion":3},"nl":{"answer":"Space Invaders","promptVersion":3},"pt":{"answer":"Space Invaders","promptVersion":3},"pl":{"answer":"Space Invaders","promptVersion":3}},"promptVersion":2},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a83eddc87a9","answer":"Tetris block","aliases":["Tetromino"],"overrides":{"de":{"answer":"Tetris-Block","promptVersion":3},"es":{"answer":"Pieza de Tetris","aliases":["Tetris block"],"promptVersion":2},"fr":{"answer":"Pièce de Tetris","aliases":["Tetris block","Tétrimino"],"promptVersion":2},"it":{"answer":"Blocco di Tetris","aliases":["Tetris block"],"promptVersion":3},"nl":{"answer":"Tetrisblok","aliases":["Tetris block","tetromino"],"promptVersion":3},"pt":{"answer":"Peça de Tetris","aliases":["Tetris block"],"promptVersion":2},"pl":{"answer":"Klocek z Tetrisa","aliases":["Tetris block","Tetrimino"],"promptVersion":2}}},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a8452e29eac","answer":"Creeper","overrides":{"de":{"answer":"Creeper","promptVersion":2}}},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a850f6f795b","answer":"Enderman","overrides":{"de":{"answer":"Enderman","promptVersion":2}}},
@@ -111,7 +111,7 @@
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a9a83b5932a","answer":"GLaDOS"},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a9b4c06981e","answer":"Gordon Freeman","overrides":{"de":{"answer":"Gordon Freeman","promptVersion":2},"es":{"answer":"Gordon Freeman","promptVersion":2},"fr":{"answer":"Gordon Freeman","promptVersion":2},"it":{"answer":"Gordon Freeman","promptVersion":2},"pl":{"answer":"Gordon Freeman","promptVersion":2}}},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a9c8d15290a","answer":"Crewmate","promptVersion":2,"overrides":{"de":{"answer":"Crewmate","promptVersion":3},"es":{"answer":"Tripulante","aliases":["Crewmate"],"promptVersion":2},"fr":{"answer":"Crewmate","aliases":["Membre d'équipage"],"promptVersion":2},"it":{"answer":"Crewmate","promptVersion":2},"pt":{"answer":"Tripulante","aliases":["Crewmate"],"promptVersion":2},"pl":{"answer":"Crewmate","aliases":["Członek załogi"],"promptVersion":2}}},
-    {"conceptId":"01a0f995-bb9f-70fb-adb5-6a9da62e3e86","answer":"Angry Bird","overrides":{"de":{"answer":"Angry Bird","promptVersion":2},"es":{"answer":"Angry Bird","promptVersion":2},"fr":{"answer":"Angry Bird","promptVersion":2},"it":{"answer":"Angry Bird","promptVersion":2},"nl":{"answer":"Angry Bird","promptVersion":2},"pt":{"answer":"Angry Bird","promptVersion":2},"pl":{"answer":"Angry Bird","promptVersion":2}}},
+    {"conceptId":"01a0f995-bb9f-70fb-adb5-6a9da62e3e86","answer":"Angry Birds","overrides":{"de":{"answer":"Angry Birds","promptVersion":3},"es":{"answer":"Angry Birds","promptVersion":3},"fr":{"answer":"Angry Birds","promptVersion":3},"it":{"answer":"Angry Birds","promptVersion":3},"nl":{"answer":"Angry Birds","promptVersion":3},"pt":{"answer":"Angry Birds","promptVersion":3},"pl":{"answer":"Angry Birds","promptVersion":3}},"promptVersion":2},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a9ef0d13fe6","answer":"Pong"},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6a9f0f322423","answer":"Sackboy"},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6aa0f33febab","answer":"Ratchet","overrides":{"de":{"answer":"Ratchet","promptVersion":2},"fr":{"answer":"Ratchet","promptVersion":2},"pt":{"answer":"Ratchet","promptVersion":2}}},
@@ -126,8 +126,8 @@
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6aa9cbd052e6","answer":"Chun-Li","promptVersion":2,"overrides":{"de":{"answer":"Chun-Li","promptVersion":2},"es":{"answer":"Chun-Li","promptVersion":2},"fr":{"answer":"Chun-Li","promptVersion":2},"it":{"answer":"Chun-Li","promptVersion":2},"nl":{"answer":"Chun-Li","promptVersion":2},"pt":{"answer":"Chun-Li","promptVersion":2},"pl":{"answer":"Chun-Li","promptVersion":2}}},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6aaadd95064e","answer":"Hadouken","overrides":{"de":{"answer":"Hadouken","promptVersion":3},"es":{"answer":"Hadouken","promptVersion":2},"fr":{"answer":"Hadouken","promptVersion":2},"it":{"answer":"Hadouken","promptVersion":2},"pt":{"answer":"Hadouken","promptVersion":2},"pl":{"answer":"Hadouken","promptVersion":2}}},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6aab046c2019","answer":"Plumbob","overrides":{"de":{"answer":"Plumbob","promptVersion":3},"es":{"answer":"Plumbob","aliases":["Plomada"],"promptVersion":2},"fr":{"answer":"Plumbob","promptVersion":2},"it":{"answer":"Plumbob","promptVersion":2},"nl":{"answer":"Plumbob","aliases":["sims diamant"],"promptVersion":2},"pt":{"answer":"Plumbob","promptVersion":2},"pl":{"answer":"Plumbob","promptVersion":2}}},
-    {"conceptId":"01a0f995-bb9f-70fb-adb5-6aac25a63a8c","answer":"Duck Hunt dog","overrides":{"de":{"answer":"Duck-Hunt-Hund","aliases":["Duck Hunt dog"],"promptVersion":3},"es":{"answer":"Perro de Duck Hunt","aliases":["Duck Hunt dog"],"promptVersion":2},"fr":{"answer":"Chien de Duck Hunt","aliases":["Duck Hunt dog"],"promptVersion":2},"it":{"answer":"Cane di Duck Hunt","aliases":["Duck Hunt dog"],"promptVersion":3},"nl":{"answer":"Duck Hunt-hond","aliases":["Duck Hunt dog"],"promptVersion":2},"pt":{"answer":"Cão do Duck Hunt","aliases":["Duck Hunt dog"],"promptVersion":3},"pl":{"answer":"Pies z Duck Hunt","aliases":["Duck Hunt dog"],"promptVersion":2}}},
+    {"conceptId":"01a0f995-bb9f-70fb-adb5-6aac25a63a8c","answer":"Duck Hunt","overrides":{"de":{"answer":"Duck Hunt","promptVersion":4},"es":{"answer":"Duck Hunt","promptVersion":3},"fr":{"answer":"Duck Hunt","promptVersion":3},"it":{"answer":"Duck Hunt","promptVersion":4},"nl":{"answer":"Duck Hunt","promptVersion":3},"pt":{"answer":"Duck Hunt","promptVersion":4},"pl":{"answer":"Duck Hunt","promptVersion":3}},"promptVersion":2},
     {"conceptId":"01a0f995-bb9f-70fb-adb5-6aad16e5c167","answer":"Rabbid","promptVersion":2,"overrides":{"de":{"answer":"Rabbid","promptVersion":3},"es":{"answer":"Rabbid","promptVersion":2},"fr":{"answer":"Lapin Crétin","aliases":["Rabbid","Raving Rabbid"],"promptVersion":2},"it":{"answer":"Rabbid","promptVersion":2},"nl":{"answer":"Rabbid","promptVersion":2},"pt":{"answer":"Rabbid","promptVersion":2},"pl":{"answer":"Kórlik","aliases":["Rabbid","Raving Rabbid"],"promptVersion":2}}},
-    {"conceptId":"01a0f995-bb9f-70fb-adb5-6aaed14add59","answer":"Lemming","overrides":{"de":{"answer":"Lemming","promptVersion":3},"es":{"answer":"Lemming","promptVersion":2},"fr":{"answer":"Lemming","promptVersion":2},"it":{"answer":"Lemming","promptVersion":2},"nl":{"answer":"Lemming","promptVersion":2},"pt":{"answer":"Lemming","promptVersion":2},"pl":{"answer":"Lemming","promptVersion":2}}}
+    {"conceptId":"01a0f995-bb9f-70fb-adb5-6aaed14add59","answer":"Lemmings","overrides":{"de":{"answer":"Lemmings","promptVersion":4},"es":{"answer":"Lemmings","promptVersion":3},"fr":{"answer":"Lemmings","promptVersion":3},"it":{"answer":"Lemmings","promptVersion":3},"nl":{"answer":"Lemmings","promptVersion":3},"pt":{"answer":"Lemmings","promptVersion":3},"pl":{"answer":"Lemmings","promptVersion":3}},"promptVersion":2}
   ]
 }
