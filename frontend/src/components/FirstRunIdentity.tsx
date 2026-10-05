@@ -10,6 +10,8 @@ import { firstRunLine } from "../lib/firstRunLines";
 import { DOODLE_SPRITE } from "../lib/avatarDoodles";
 import { firstRunArt, type FirstRunDoodle } from "../lib/firstRunArt";
 import { ui } from "../content/ui/index.ts";
+import { fill } from "../content/ui/slots.tsx";
+import { MINIMUM_AGE } from "../lib/minimumAge.ts";
 import { InfoIcon } from "./icons";
 
 /**
@@ -158,6 +160,16 @@ export function FirstRunIdentity() {
           <InfoIcon size={13} />
           {ui.accountMenu.rules}
         </Link>
+        {/* The moment a new identity starts playing is the moment to say
+            what it agrees to: the age, and that a drawing in a public room
+            is published (R-GAL-01, #1417). Fine print, like the link above. */}
+        <p className="first-run-fineprint">
+          {fill(ui.firstRunIdentity.agreement, {
+            terms: <Link to="/terms">{ui.accountMenu.terms2}</Link>,
+            privacy: <Link to="/privacy">{ui.accountMenu.privacy2}</Link>,
+            age: MINIMUM_AGE,
+          })}
+        </p>
       </form>
 
       <div className="first-run-say">

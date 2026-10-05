@@ -530,7 +530,8 @@ export const PL: Catalogue = {
     friends: "Znajomi",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Dokończ konfigurację roli ${p.role === "admin" ? "administratora" : "moderatora"}`,
-    agreeToRules: "Tworząc konto, zgadzasz się przestrzegać {rules}.",
+    agreeToRules:
+      "Tworząc konto, akceptujesz {terms}, zgadzasz się przestrzegać {rules} i potwierdzasz, że masz co najmniej {age} lat. Jak używane są Twoje dane, wyjaśnia {privacy}.",
     reportBug: "Zgłoś błąd",
     account: "Konto",
     settings: "Ustawienia",
@@ -552,6 +553,9 @@ export const PL: Catalogue = {
     optional: "(opcjonalnie)",
     letsYouResetYourPasswordLater: "Pozwala później zresetować hasło do konta. Do niczego więcej nie służy.",
     rules2: "zasad",
+    terms2: "warunki korzystania",
+    privacy2: "polityka prywatności",
+    privacyAndTerms: "Prywatność i warunki",
     forgotYourPassword: "Nie pamiętasz hasła?",
     notNow: "Nie teraz",
     createYourAccount: "Utwórz konto",
@@ -982,6 +986,8 @@ export const PL: Catalogue = {
   },
 
   firstRunIdentity: {
+    agreement:
+      "Grając, akceptujesz {terms} i potwierdzasz, że masz co najmniej {age} lat. Rysunki z pokoi publicznych trafiają do publicznej Galerii – szczegóły: {privacy}.",
     /** The name tag's one rule it can still break: its field only takes allowed characters. */
     nameTooShort: (p: { min: number }) =>
       `Nazwa musi mieć co najmniej ${counted(p.min, { one: "znak", few: "znaki", many: "znaków", other: "znaku" })}.`,
@@ -1987,6 +1993,10 @@ export const PL: Catalogue = {
     thisPage: "Na tej stronie",
     forExample: "Na przykład",
     backToLobby: "Wróć do lobby",
+  },
+
+  legalPage: {
+    contactPending: "[na tym serwerze nie ustawiono adresu]",
   },
 
   sessionManagerDialog: {

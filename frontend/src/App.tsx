@@ -24,6 +24,7 @@ import {
   GalleryDrawingPage,
   GalleryPage,
   GameRoomPage,
+  LegalPage,
   ModerationPage,
   MyPromptListsPage,
   NotFoundPage,
@@ -96,6 +97,8 @@ function AppRoutes() {
         <Route path="/create" element={<CreateRoomPage />} />
         <Route path="/room/:code" element={<GameRoomPage />} />
         <Route path="/rules" element={<RulesPage />} />
+        <Route path="/privacy" element={<LegalPage document="privacy" />} />
+        <Route path="/terms" element={<LegalPage document="terms" />} />
         <Route path="/prompt-lists" element={<PromptStatsPage />} />
         <Route path="/prompt-lists/:slug" element={<PromptStatsPage />} />
         <Route path="/community-lists" element={<CommunityCataloguePage />} />

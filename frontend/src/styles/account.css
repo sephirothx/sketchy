@@ -712,6 +712,27 @@
   text-underline-offset: 2px;
 }
 
+/* What playing agrees to (#1417), under the Rules link: the same fixed ink,
+   since the tag is white in both themes, and smaller still - fine print that
+   a player can read, never a second thing to press. */
+.first-run-fineprint {
+  color: #6b6152;
+  font-size: 12px;
+  line-height: 1.45;
+  margin: -2px 0 0;
+  text-align: center;
+}
+
+.first-run-fineprint a {
+  color: inherit;
+  font-weight: 700;
+  text-underline-offset: 2px;
+}
+
+.first-run-fineprint a:hover {
+  color: #292520;
+}
+
 .first-run-say {
   display: grid;
   gap: 6px;

@@ -25,6 +25,8 @@ CLIENT_ROUTES: tuple[str, ...] = (
     "/create",
     "/room/:code",
     "/rules",
+    "/privacy",
+    "/terms",
     "/prompt-lists",
     "/prompt-lists/:slug",
     "/community-lists",

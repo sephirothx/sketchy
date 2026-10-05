@@ -229,6 +229,61 @@ def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> Non
         )
 
 
+CONTACT_ADDRESS_VARIABLE = "CONTACT_ADDRESS"
+# Domains no player can write to: a contact address on one of them is a
+# placeholder that reached production (RFC 2606 / 6761 names, and mDNS).
+_UNREACHABLE_SUFFIXES = (".localhost", ".local", ".test", ".example", ".invalid")
+
+
+def contact_address(environ: Mapping[str, str] | None = None) -> str | None:
+    """Where the privacy notice and the terms send a player (#1417), or None
+    when this deployment has not said: privacy requests, a parent asking for
+    an under-age account to go, and anything Settings cannot do."""
+    values = os.environ if environ is None else environ
+    value = values.get(CONTACT_ADDRESS_VARIABLE, "").strip()
+    return value or None
+
+
+def validate_contact_address(environ: Mapping[str, str] | None = None) -> None:
+    """Refuse a malformed contact address anywhere, and a missing or
+    placeholder one in production.
+
+    The privacy notice names the operator's address as the way to exercise
+    every right Settings does not cover, and the terms name it for a parent
+    of a player under the minimum age. A public deployment without one
+    publishes a notice that tells a player to write to nobody - the one
+    failure of a legal page nobody notices until somebody needs it.
+    """
+    values = os.environ if environ is None else environ
+    address = contact_address(values)
+    if address is not None:
+        local, at, domain = address.rpartition("@")
+        domain = domain.lower()
+        dotted = "." in domain or domain == "localhost"
+        if not at or not local or "@" in local or not dotted or any(
+            character.isspace() for character in address
+        ):
+            raise RuntimeError(
+                f"{CONTACT_ADDRESS_VARIABLE} must be one email address; got "
+                f"{address!r}."
+            )
+    if not is_production(values):
+        return
+    if address is None:
+        raise RuntimeError(
+            f"{CONTACT_ADDRESS_VARIABLE} is required when {ENVIRONMENT_VARIABLE}="
+            f"{PRODUCTION}: the privacy notice and the terms give it as the way "
+            "to reach the operator, and a public notice must not name nobody."
+        )
+    domain = address.rpartition("@")[2].lower()
+    if domain == "localhost" or domain.endswith(_UNREACHABLE_SUFFIXES):
+        raise RuntimeError(
+            f"{CONTACT_ADDRESS_VARIABLE} names a domain no player can write to "
+            f"({domain}); set the operator's real address when "
+            f"{ENVIRONMENT_VARIABLE}={PRODUCTION}."
+        )
+
+
 def validate_python_runtime(version: tuple[int, ...] | None = None) -> None:
     """Refuse to start on a Python older than the one v1 supports.
 

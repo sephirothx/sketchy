@@ -530,7 +530,8 @@ export const NL: Catalogue = {
     friends: "Vrienden",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Maak je rol als ${p.role === "admin" ? "beheerder" : "moderator"} af`,
-    agreeToRules: "Door een account te maken ga je ermee akkoord de {rules} te volgen.",
+    agreeToRules:
+      "Door een account te maken accepteer je de {terms}, ga je akkoord de {rules} te volgen en bevestig je dat je minstens {age} jaar oud bent. In de {privacy} staat hoe je gegevens worden gebruikt.",
     reportBug: "Een bug melden",
     account: "Account",
     settings: "Instellingen",
@@ -552,6 +553,9 @@ export const NL: Catalogue = {
     optional: "(optioneel)",
     letsYouResetYourPasswordLater: "Hiermee kun je later je wachtwoord herstellen. Verder wordt het nergens voor gebruikt.",
     rules2: "regels",
+    terms2: "gebruiksvoorwaarden",
+    privacy2: "privacyverklaring",
+    privacyAndTerms: "Privacy en voorwaarden",
     forgotYourPassword: "Wachtwoord vergeten?",
     notNow: "Nu niet",
     createYourAccount: "Maak je account",
@@ -973,6 +977,8 @@ export const NL: Catalogue = {
   },
 
   firstRunIdentity: {
+    agreement:
+      "Door te spelen accepteer je de {terms} en bevestig je dat je minstens {age} jaar oud bent. Tekeningen uit openbare kamers verschijnen in de openbare Galerij: zie de {privacy}.",
     nameTooShort: (p: { min: number }) => `Een naam heeft minstens ${p.min} tekens nodig.`,
     nameInUse: (p: { name: string }) =>
       `Iemand die online is, speelt al als ‘${p.name}’. Kies een andere naam om verder te spelen.`,
@@ -1979,6 +1985,10 @@ export const NL: Catalogue = {
     thisPage: "Op deze pagina",
     forExample: "Bijvoorbeeld",
     backToLobby: "Terug naar de lobby",
+  },
+
+  legalPage: {
+    contactPending: "[geen adres ingesteld op deze server]",
   },
 
   sessionManagerDialog: {

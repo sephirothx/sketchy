@@ -49,6 +49,7 @@ import {
 import { refusalText } from "../lib/refusals.ts";
 import { ui } from "../content/ui/index.ts";
 import { fill } from "../content/ui/slots.tsx";
+import { MINIMUM_AGE } from "../lib/minimumAge.ts";
 import { doodleNameOf } from "../lib/avatarDoodles";
 import { AvatarPicture } from "./ui/AvatarPicture";
 
@@ -347,6 +348,16 @@ export function AccountMenu({ compact = false, inRoom = false }: {
                 }}
               >
                 {ui.accountMenu.rules}
+              </MenuItem>
+              {/* One entry for both: the page switches between them (#1417). */}
+              <MenuItem
+                icon={<ShieldIcon size={16} />}
+                onClick={() => {
+                  setMenuOpen(false);
+                  navigate("/privacy");
+                }}
+              >
+                {ui.accountMenu.privacyAndTerms}
               </MenuItem>
             </>
           )}
@@ -751,6 +762,19 @@ export function AuthDialog({
                   {ui.accountMenu.rules2}
                 </a>
               ),
+              // An account made from nothing is a new identity's first
+              // agreement as much as the name step is (#1417).
+              terms: (
+                <a className="auth-link" href="/terms" target="_blank" rel="noreferrer">
+                  {ui.accountMenu.terms2}
+                </a>
+              ),
+              privacy: (
+                <a className="auth-link" href="/privacy" target="_blank" rel="noreferrer">
+                  {ui.accountMenu.privacy2}
+                </a>
+              ),
+              age: MINIMUM_AGE,
             })}
           </p>
         )}

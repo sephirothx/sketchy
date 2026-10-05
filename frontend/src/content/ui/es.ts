@@ -530,7 +530,8 @@ export const ES: Catalogue = {
     friends: "Amigos",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Completa tu rol de ${p.role === "admin" ? "administrador" : "moderador"}`,
-    agreeToRules: "Al crear una cuenta aceptas seguir las {rules}.",
+    agreeToRules:
+      "Al crear una cuenta aceptas las {terms}, te comprometes a seguir las {rules} y confirmas que tienes al menos {age} años. La {privacy} explica cómo se usan tus datos.",
     reportBug: "Informar de un fallo",
     account: "Cuenta",
     settings: "Ajustes",
@@ -552,6 +553,9 @@ export const ES: Catalogue = {
     optional: "(opcional)",
     letsYouResetYourPasswordLater: "Te permite restablecer la contraseña más adelante. No se usa para nada más.",
     rules2: "reglas",
+    terms2: "condiciones de uso",
+    privacy2: "política de privacidad",
+    privacyAndTerms: "Privacidad y condiciones",
     forgotYourPassword: "¿Olvidaste tu contraseña?",
     notNow: "Ahora no",
     createYourAccount: "Crea tu cuenta",
@@ -973,6 +977,8 @@ export const ES: Catalogue = {
   },
 
   firstRunIdentity: {
+    agreement:
+      "Al jugar aceptas las {terms} y confirmas que tienes al menos {age} años. Los dibujos de las salas públicas se muestran en la Galería pública: consulta la {privacy}.",
     nameTooShort: (p: { min: number }) => `Un nombre necesita al menos ${p.min} caracteres.`,
     nameInUse: (p: { name: string }) =>
       `Alguien conectado ya juega como «${p.name}». Elige otro nombre para seguir jugando.`,
@@ -1978,6 +1984,10 @@ export const ES: Catalogue = {
     thisPage: "En esta página",
     forExample: "Por ejemplo",
     backToLobby: "Volver al vestíbulo",
+  },
+
+  legalPage: {
+    contactPending: "[este servidor no tiene ninguna dirección configurada]",
   },
 
   sessionManagerDialog: {

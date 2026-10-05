@@ -540,7 +540,8 @@ export const EN = {
     friends: "Friends",
     finishYourRole: (p: { role: "admin" | "moderator" }) =>
       `Finish your ${p.role === "admin" ? "administrator" : "moderator"} role`,
-    agreeToRules: "By creating an account you agree to follow the {rules}.",
+    agreeToRules:
+      "By creating an account you accept the {terms}, agree to follow the {rules} and confirm you are {age} or older. The {privacy} says how your data is used.",
     reportBug: "Report a bug",
     account: "Account",
     settings: "Settings",
@@ -562,6 +563,9 @@ export const EN = {
     optional: "(optional)",
     letsYouResetYourPasswordLater: "Lets you reset your password later. Used for nothing else.",
     rules2: "rules",
+    terms2: "terms of use",
+    privacy2: "privacy notice",
+    privacyAndTerms: "Privacy and terms",
     forgotYourPassword: "Forgot your password?",
     notNow: "Not now",
     createYourAccount: "Create your account",
@@ -990,6 +994,8 @@ export const EN = {
   },
 
   firstRunIdentity: {
+    agreement:
+      "By playing you accept the {terms} and confirm you are {age} or older. Drawings from public rooms are shown in the public Gallery: see the {privacy}.",
     /** The name tag's one rule it can still break: its field only takes allowed characters. */
     nameTooShort: (p: { min: number }) => `A name needs at least ${p.min} characters.`,
     nameInUse: (p: { name: string }) =>
@@ -1994,6 +2000,10 @@ export const EN = {
     thisPage: "On this page",
     forExample: "For example",
     backToLobby: "Back to lobby",
+  },
+
+  legalPage: {
+    contactPending: "[no address set on this server]",
   },
 
   sessionManagerDialog: {

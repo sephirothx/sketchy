@@ -2541,6 +2541,9 @@
   "handlers.rooms:update_room_settings": [
    "errorCode"
   ],
+  "main:legal": [
+   "contactAddress"
+  ],
   "presenters:correct_guess_payload": [
    "playerId"
   ],
@@ -2861,7 +2864,7 @@
    "windowMinutes"
   ]
  },
- "protocolVersion": 60,
+ "protocolVersion": 61,
  "refusal": {
   "codes": [
    "invalid_payload",

@@ -56,7 +56,7 @@ flowchart LR
 ```
 
 `app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")`
-([`backend/app/main.py:266`](../backend/app/main.py)) is the single ASGI application:
+([`backend/app/main.py:1205`](../backend/app/main.py)) is the single ASGI application:
 Socket.IO owns `/socket.io`, FastAPI owns everything else, and when
 `frontend/dist` exists it is mounted as static files on the same app. That is what
 makes single-port self-hosting and same-origin cookie sessions work without CORS
@@ -522,7 +522,7 @@ no request in flight.
 
 ## 6. Lifecycle
 
-### Startup ([`backend/app/main.py:776`](../backend/app/main.py))
+### Startup ([`backend/app/main.py:778`](../backend/app/main.py))
 
 1. `configure_logging()`
 2. `validate_python_runtime()` — refuses an interpreter older than 3.14
@@ -530,19 +530,20 @@ no request in flight.
 4. `validate_database_configuration()` — with `SKETCHY_ENV=production`, refuses a missing, blank, or SQLite `DATABASE_URL`. Ordered before `init_db()` on purpose: a production process pointed at the zero-config *relative* file must refuse to start, not migrate one and serve from it
 5. `validate_public_base_url()` — with `SKETCHY_ENV=production`, refuses a `PUBLIC_BASE_URL` that is not an `https` origin, or names a loopback address, or carries a path: every mailed link is built on it and every plain-HTTP request is redirected to it (#467)
 6. `validate_mail_configuration()` — refuses an unrecognised `SMTP_SECURITY`, or the retired `SMTP_STARTTLS` it replaced, in every environment, and with `SKETCHY_ENV=production` a missing or blank `SMTP_HOST` or `SMTP_SECURITY=none` together with a password (R-AUTH-27, #1013). The zero-config fallback logs each message instead of sending it, which in production writes live confirmation and reset links into the log store *and* sends nothing to the player waiting for one; `ConsoleTransport.send` refuses in production as the second lock, on the one statement that would write a body (#466)
-7. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
-8. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
-9. No purge of its own: the retention loop's first pass starts immediately and is bounded, so a backlog left by a long outage cannot delay serving (#550)
-10. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup; a name list is expanded into a list per supported language first (`app/db/name_lists.py`, #1399), so what is seeded is what the content tests read; it ends by `ANALYZE`-ing the prompt tables on PostgreSQL so a fresh seed is not planned blind (#1367)
-11. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
-12. `mark_ready()` — `GET /api/ready` starts answering 200
-13. Under the production runner only (`app/server.py`), once Uvicorn is listening:
+7. `validate_contact_address()` — refuses a malformed `CONTACT_ADDRESS` in every environment, and with `SKETCHY_ENV=production` a missing one or one on a domain nobody can write to: the privacy notice and the terms give it as the way to reach the operator (R-PRIV-18, #1417)
+8. `init_db()` — SQLite runs Alembic automatically; PostgreSQL *verifies* the revision and fails with a direct instruction if the deploy step was skipped
+9. `retire_orphaned_ephemeral()` — room codes left claimed by a crash
+10. No purge of its own: the retention loop's first pass starts immediately and is bounded, so a backlog left by a long outage cannot delay serving (#550)
+11. `seed_prompt_lists()` — identity-based, and a conflicting redeploy fails startup; a name list is expanded into a list per supported language first (`app/db/name_lists.py`, #1399), so what is seeded is what the content tests read; it ends by `ANALYZE`-ing the prompt tables on PostgreSQL so a fresh seed is not planned blind (#1367)
+12. Start the mail-delivery, runtime-metrics, retention, export-worker, and finished-game handoff loops, and hand each one to `readiness_probe.supervise()`; the handoff loop's first sweep replays whatever a previous process left staged
+13. `mark_ready()` — `GET /api/ready` starts answering 200
+14. Under the production runner only (`app/server.py`), once Uvicorn is listening:
     `freeze_startup_heap()` collects and then freezes everything startup built, so the
     cyclic collector's full passes never walk it again. Those passes were the gate's
     worst loop stalls, 24–97 ms, and fell to 24–40 ms (#1355). Not in the lifespan,
     which the test suite runs once per app it builds.
 
-Any of steps 2–10 can refuse to start the process, and the cleanup in the lifespan's `finally` runs when one does. It stops only what was actually started: every loop handle is bound to `None` before the first step that can raise, and the finished-game drain is skipped when its worker never ran. A handle left unbound there raised an `UnboundLocalError` from the cleanup *after* the real error, and on a short terminal the cleanup's traceback is the only one the operator reads — which is the whole point of refusing with a direct instruction (R-PLAT-21).
+Any of steps 2–11 can refuse to start the process, and the cleanup in the lifespan's `finally` runs when one does. It stops only what was actually started: every loop handle is bound to `None` before the first step that can raise, and the finished-game drain is skipped when its worker never ran. A handle left unbound there raised an `UnboundLocalError` from the cleanup *after* the real error, and on a short terminal the cleanup's traceback is the only one the operator reads — which is the whole point of refusing with a direct instruction (R-PLAT-21).
 
 ### Health and readiness ([`backend/app/services/readiness.py`](../backend/app/services/readiness.py))
 

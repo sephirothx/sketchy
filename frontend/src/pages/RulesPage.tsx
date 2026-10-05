@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useLocation } from "react-router-dom";
+import { Link, useLocation } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
 import { Card, SectionLabel } from "../components/ui/Card";
@@ -78,6 +78,12 @@ export function RulesPage() {
 
       <header className="rules-masthead">
         <h1>{rules.title}</h1>
+        {/* The other two documents a player is held to (#1417). */}
+        <p className="legal-switch">
+          <Link to="/terms">{ui.accountMenu.terms2}</Link>
+          {" · "}
+          <Link to="/privacy">{ui.accountMenu.privacy2}</Link>
+        </p>
       </header>
 
       <div className="rules-layout">

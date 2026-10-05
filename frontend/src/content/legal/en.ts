@@ -1,0 +1,304 @@
+import type { LegalDocuments } from "./types.ts";
+
+/** The privacy notice and the terms, in English (#1417).
+
+The reference text: every other locale is a translation of this one, and a
+change here makes the translations stale until they follow. Written to the
+Swiss Federal Act on Data Protection, which binds the operator, and to the EU
+General Data Protection Regulation, which applies to players in the EU; the
+two agree on nearly everything and the stricter reading is used where they do
+not.
+
+Every statement about what is kept and for how long is a fact recorded
+elsewhere - `docs/database.md` §10 for retention, R-GAL-01 for the Gallery,
+R-PRIV-01..08 for export and deletion, R-RATE-02 for addresses - and changes
+with it. Plain second person, like the rules: the reader is a player, not a
+lawyer. */
+export const LEGAL_EN: LegalDocuments = {
+  locale: "en",
+  privacy: {
+    title: "Privacy notice",
+    intro: [
+      "This notice explains what Sketchy keeps about you, why, for how long, " +
+        "and what you can do about it. Sketchy is free: it shows no " +
+        "advertising, and nothing about you is sold or used to market " +
+        "anything to you.",
+    ],
+    sections: [
+      {
+        id: "operator",
+        heading: "Who is responsible",
+        body: [
+          "Sketchy is run by its operator, who is based in Switzerland and " +
+            "decides what is kept and why. You can write to the operator at " +
+            "{contact}.",
+          "Swiss data protection law applies to everything here, and so does " +
+            "the EU General Data Protection Regulation when you play from the " +
+            "European Union.",
+        ],
+      },
+      {
+        id: "data",
+        heading: "What is kept",
+        body: ["Only what the game needs to work, to be fair and to stay safe:"],
+        items: [
+          "The name you play under, and the username of an account.",
+          "If you create an account: your email address, your password — " +
+            "stored only as a one-way hash that cannot be turned back into it — " +
+            "and any passkeys or two-step sign-in you set up.",
+          "Your settings and profile: your languages and preferences, a " +
+            "profile picture if you upload one, your friends, and the players " +
+            "you block.",
+          "Your games: the rooms you played in, your guesses, points and " +
+            "scores, your reactions, and the drawings you made.",
+          "Chat, in rooms and in the lobby.",
+          "The prompt lists you write, and whether you published them.",
+          "Reports you send, and reports about you, with the messages and " +
+            "drawings they point to.",
+          "Your sign-ins: a rough description of each device (such as " +
+            "\"Firefox on Windows\"), when it was last used, and a keyed hash " +
+            "of the network address it came from — never the address itself. " +
+            "The same kind of hash is used to limit how often anything can be " +
+            "done from one address.",
+          "Bug reports you send, with a screenshot if you attach one.",
+          "Technical information about your connection and any errors in " +
+            "your browser, so problems can be found and fixed. It contains " +
+            "none of your messages or drawings.",
+        ],
+      },
+      {
+        id: "purposes",
+        heading: "Why it is kept",
+        body: [
+          "To run the game you asked to play: rooms, turns, scores, your " +
+            "history and your account. This is the agreement between you and " +
+            "the operator, set out in the terms of use.",
+          "To keep the game fair and safe: moderating reports, stopping " +
+            "cheating, spam and abuse, and protecting accounts. This is the " +
+            "operator's legitimate interest, and that of everybody who plays.",
+          "To find and fix problems, for the same reason.",
+          "Nothing about you is used for advertising, sold, or used to build " +
+            "a profile of you, and no decision about you is made by a machine " +
+            "alone.",
+        ],
+      },
+      {
+        id: "visibility",
+        heading: "What other players see",
+        body: [
+          "The people in a room see your name, your messages, your drawings " +
+            "and your score.",
+          "Drawings made in a public room are shown in the Gallery, where " +
+            "anybody can see them, with the name they were drawn under. " +
+            "Drawings from a private room are seen only by the people who were " +
+            "in it. Deleting your account erases every drawing you made; to " +
+            "have a single one removed, write to {contact}.",
+          "A prompt list you publish can be read by everybody, with your name " +
+            "as its author. Your profile shows what you have chosen to show.",
+        ],
+      },
+      {
+        id: "recipients",
+        heading: "Who else handles it",
+        body: [
+          "Nobody receives your data to use for their own purposes. The " +
+            "operator relies on a few providers to run Sketchy — hosting, " +
+            "network delivery and email — who handle it only on the " +
+            "operator's instructions. Where one of them handles it outside " +
+            "Switzerland and the EU, it is under safeguards the law " +
+            "recognises, such as the European Commission's standard " +
+            "contractual clauses.",
+          "Moderators appointed by the operator see the reports they decide " +
+            "and the messages and drawings those reports point to.",
+          "Data is given to authorities only where the law requires it.",
+        ],
+      },
+      {
+        id: "retention",
+        heading: "How long it is kept",
+        body: [],
+        items: [
+          "Chat: 30 days. Lines cited in a report are kept with the report " +
+            "for as long as moderation needs them.",
+          "Guests: removed after 30 days without a finished game, or after " +
+            "365 days without playing once they have one.",
+          "Accounts: until you delete them.",
+          "Sign-ins: until they expire, and 30 days after that.",
+          "Emails sent to you: 30 days.",
+          "Bug-report screenshots: until the report is dealt with, and never " +
+            "more than 90 days.",
+          "Data exports you ask for: 7 days.",
+          "Finished games — scores, drawings, reactions — are part of every " +
+            "player's history, so they are kept. When you delete your account " +
+            "your drawings are erased and your place in those games is " +
+            "anonymised, which keeps the other players' history intact " +
+            "without you in it.",
+        ],
+      },
+      {
+        id: "rights",
+        heading: "Your rights",
+        body: [
+          "In Settings you can download everything Sketchy keeps about you, " +
+            "correct your name, email and profile, and delete your account or " +
+            "your guest identity, whenever you like.",
+          "You also have the right to ask what is kept about you and how it " +
+            "is used, to have it corrected or erased, to object to its use " +
+            "for the operator's legitimate interests, and to have its use " +
+            "restricted. Write to {contact} for anything Settings does not do.",
+          "If you think your data is mishandled, you can complain to a data " +
+            "protection authority: in Switzerland the Federal Data Protection " +
+            "and Information Commissioner (FDPIC), and in the EU the authority " +
+            "of the country you live in.",
+        ],
+      },
+      {
+        id: "cookies",
+        heading: "Cookies and storage",
+        body: [
+          "Sketchy sets one cookie, which keeps you signed in. It is needed " +
+            "for the game to work, so you are not asked to accept it. Your " +
+            "settings are also remembered in your own browser's storage.",
+          "There are no advertising or analytics cookies, and no scripts " +
+            "from anybody else.",
+        ],
+      },
+      {
+        id: "age",
+        heading: "Age",
+        body: [
+          "Sketchy is for people aged {age} and over. If you are a parent and " +
+            "believe your child under {age} is playing, write to {contact} and " +
+            "their data will be deleted.",
+        ],
+      },
+      {
+        id: "changes",
+        heading: "Changes to this notice",
+        body: [
+          "If this notice changes, the new version is published here. A " +
+            "change that matters to how your data is used will not apply to " +
+            "what was kept before it without telling you first.",
+        ],
+      },
+    ],
+  },
+  terms: {
+    title: "Terms of use",
+    intro: [
+      "These terms are the agreement between you and the operator of " +
+        "Sketchy. By playing, you accept them; if you do not, please do not " +
+        "use Sketchy.",
+    ],
+    sections: [
+      {
+        id: "agreement",
+        heading: "Sketchy is in beta",
+        body: [
+          "Sketchy is free, and it is still being built: features change, " +
+            "things break, and in rare cases something may be lost. Thank you " +
+            "for playing it anyway.",
+        ],
+      },
+      {
+        id: "age",
+        heading: "Who can play",
+        body: [
+          "You must be {age} or older. By playing you confirm that you are.",
+        ],
+      },
+      {
+        id: "accounts",
+        heading: "Your name and account",
+        body: [
+          "Choose a name that does not pretend to be somebody else and does " +
+            "not break the rules. Keep your password and sign-in to yourself: " +
+            "you are responsible for what is done with your account.",
+          "A guest lives in one browser. Clearing that browser's data loses " +
+            "the guest, unless you have made it an account.",
+        ],
+      },
+      {
+        id: "fair-play",
+        heading: "Playing fairly",
+        body: [
+          "Follow the rules. Do not cheat — no automated guessing, no " +
+            "telling others the answer, no playing as several people to gain " +
+            "an advantage — do not try to break or overload Sketchy, and do " +
+            "not use it for anything unlawful.",
+        ],
+      },
+      {
+        id: "content",
+        heading: "What you draw and write",
+        body: [
+          "What you draw, write and publish stays yours. So that the game " +
+            "can work, you allow the operator to store, show and copy it " +
+            "within Sketchy — in your room, in the Gallery for public rooms, " +
+            "in prompt lists you publish and in copies other players make of " +
+            "them — free of charge, worldwide, for as long as Sketchy keeps " +
+            "it.",
+          "Only draw and write what you have the right to share, and nothing " +
+            "the rules forbid.",
+        ],
+      },
+      {
+        id: "moderation",
+        heading: "Moderation",
+        body: [
+          "Moderators can hide content, warn players, and suspend or ban " +
+            "accounts that break these terms or the rules. You are told which " +
+            "rule a decision is about, and a suspended account can still " +
+            "download and delete its data.",
+        ],
+      },
+      {
+        id: "availability",
+        heading: "No guarantees",
+        body: [
+          "Sketchy is provided as it is, without any promise that it will " +
+            "always be available, work without errors, or keep what you made " +
+            "for ever. The operator may change it, pause it or close it.",
+        ],
+      },
+      {
+        id: "liability",
+        heading: "Liability",
+        body: [
+          "As far as the law allows, the operator is not liable for indirect " +
+            "loss, or for the loss of content or data. Nothing here limits " +
+            "liability that the law does not allow to be limited, such as " +
+            "for intent or gross negligence.",
+        ],
+      },
+      {
+        id: "leaving",
+        heading: "Leaving",
+        body: [
+          "You can stop at any time and delete your account in Settings. The " +
+            "operator may end your access if you break these terms or the " +
+            "rules, or close Sketchy altogether.",
+        ],
+      },
+      {
+        id: "law",
+        heading: "Which law applies",
+        body: [
+          "These terms are governed by Swiss law. Disputes go to the courts " +
+            "of the operator's place of business in Switzerland, unless the " +
+            "law of the country you live in gives you, as a consumer, the " +
+            "right to go to court at home.",
+        ],
+      },
+      {
+        id: "changes",
+        heading: "Changes to these terms",
+        body: [
+          "If these terms change, the new version is published here. " +
+            "Playing after a change means you accept it. Questions go to " +
+            "{contact}.",
+        ],
+      },
+    ],
+  },
+};
