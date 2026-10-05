@@ -1741,37 +1741,40 @@ def test_after_the_drawing_a_guess_is_not_classified():
         ("AC/DC", "is it AC/DC?", "held"),
         ("AC/DC", "the AC/DC!", "close"),
         ("C++", "(C++)", "close"),
+        ("AC/DC", "is it AC / DC?", "held"),
+        ("C++", "the C + +", "close"),
+        (":-)", "the :-)", "close"),
+        ("🍎", "the 🍎", "close"),
+        ("glider", "hang glider", "close"),
+        ("glider", "hangglider", None),
     ],
 )
 def test_an_answer_with_its_own_punctuation_is_held_inside_a_sentence(prompt, typed, verdict):
-    """Neither split keeps "c++" whole beside a "?" - one keeps "c++?", the
-    other "c" - so a run sheds punctuation at its ends only (review of
-    #1416)."""
+    """Whatever scores typed alone is found inside a sentence too: splitting
+    a sentence into words lost "c++" beside a "?", "AC / DC", and answers
+    with no letters at all (review of #1416). Only a word's edge may bound
+    it, so "hangglider" does not hold "glider"."""
     game, guesser = make_language_guess_game(prompt, "en")
     assert game.guess_hint(guesser, typed) == verdict
 
 
 @pytest.mark.parametrize(
     "typed",
-    [("?! " * 170)[:500], " ".join("x" * 250)[:500], ("x? " * 170)[:500]],
+    [("?! " * 170)[:500], " ".join("x" * 250)[:500], ("x? " * 170)[:500], "x" * 500],
 )
 def test_finding_the_answer_in_a_long_message_is_linear(typed):
-    """Splitting the edges of every run made 500 characters of "?!" cost
-    179 ms on the one event loop (review of #1416). Counted in executed
-    lines rather than timed, so a loaded runner cannot fail it and a
-    quadratic loop cannot pass it."""
+    """An earlier attempt split the edges of every run of words and made 500
+    characters of "?!" cost 179 ms on the one event loop (review of #1416).
+    Counted in executed lines rather than timed, so a loaded runner cannot
+    fail it and a quadratic search cannot pass it."""
     import sys
 
-    from app.game import _held_extra_words
-    from app.prompt_content import prompt_match_word_variants
+    from app.prompt_content import prompt_match_extra_words
 
-    words = prompt_match_word_variants(typed, "en")
-    spellings = frozenset({"c++", "tempestainunbicchieredacqua", "x"})
     lines = 0
 
     def tracer(frame, event, arg):
-        nonlocal lines
-        if frame.f_code is not _held_extra_words.__code__:
+        if not frame.f_code.co_filename.endswith("prompt_content.py"):
             return None
 
         def count(frame, event, arg):
@@ -1784,8 +1787,7 @@ def test_finding_the_answer_in_a_long_message_is_linear(typed):
 
     sys.settrace(tracer)
     try:
-        _held_extra_words(words, spellings)
+        prompt_match_extra_words(typed, "en", frozenset({"c++", "x", "tempestainunbicchieredacqua"}))
     finally:
         sys.settrace(None)
-    word_count = sum(len(variant) for variant in words)
-    assert 0 < lines < 40 * word_count
+    assert 0 < lines < 60 * len(typed)

@@ -420,7 +420,8 @@ _SEPARATORS = re.compile(r"[\s\-\u2010-\u2015\u2212.']+")
 _WORD_MARKS = re.compile(r"[.']+")
 
 
-_NON_WORD = re.compile(r"[\W_]+")
+# One character of what `_SEPARATORS` matches a run of.
+_SEPARATOR = re.compile(_SEPARATORS.pattern.removesuffix("+"))
 
 
 def _without_separators(text: str) -> str:
@@ -461,30 +462,66 @@ def prompt_match_words(answer: str, language: str = "en") -> str:
     return " ".join(_SEPARATORS.sub(" ", _WORD_MARKS.sub("", folded)).split())
 
 
-def prompt_match_word_variants(text: str, language: str = "en") -> frozenset[tuple[str, ...]]:
-    """`prompt_match_variants` with each spelling's words kept apart: a run
-    of a spelling's consecutive words, joined, is a key `prompt_match_variants`
-    could have given. What finds an answer *inside* a guess ("der Hund",
-    `game.Game.guess_hint`), at word boundaries only, so "concatenate" does
-    not hold "cat".
+def _at_an_edge(folded: str, kept: list[int], position: int) -> bool:
+    """Whether a key position - between key characters `position - 1` and
+    `position`, `kept` mapping each back to `folded` - is a word's edge: an
+    end of the text, a separator between them, or a letter beside anything
+    that is not one."""
+    if position in (0, len(kept)):
+        return True
+    before, after = kept[position - 1], kept[position]
+    if after - before > 1:
+        return True  # a separator stood between them
+    return not (folded[before].isalnum() and folded[after].isalnum())
 
-    Each spelling is split at the separators a key drops and at anything
-    that is not a letter or a digit, because a sentence ends in punctuation a
-    key keeps ("is it a lighthouse?") while an answer may hold some ("C++");
-    and both with a dot or an apostrophe joining a word, as a key reads it
-    ("U.S.", "d'acqua"), and splitting two, as an elided article does
-    ("l'arbre", "dell'acqua", "the lighthouse's")."""
+
+def prompt_match_extra_words(
+    text: str, language: str, spellings: frozenset[str]
+) -> int | None:
+    """Whether `text` holds one of `spellings` - keys `prompt_match_variants`
+    gives - and how many words of it lie outside the fewest-worded hold:
+    None if it holds none. What keeps "der Hund" from the room
+    (`game.Game.guess_hint`, #1416).
+
+    The text is folded the way a key is, keeping track of where each
+    separator stood, and a spelling is looked for in that key itself: any
+    answer that scores typed alone - "AC / DC", "C + +", ":-)", "🍎" - is
+    found inside a sentence too, with nothing to tokenize. A hold must
+    start and end at a word's edge - a separator, a mark, or the text's own
+    end - so "concatenate" does not hold "cat". Words are runs of letters
+    and digits: "c'est l'arbre" holds "arbre" beside three of them.
+
+    Linear in the text for each spelling: one search, and an occurrence is
+    judged in constant time.
+    """
     language = validate_prompt_list_language(language)
     collapsed = _spelled_out(_collapsed(text), language)
-    return frozenset(
-        tuple(split.sub(" ", unmarked).split())
-        for folded in (
-            _fold_accents(_transliterate(collapsed, language)),
-            _fold_accents(collapsed),
-        )
-        for unmarked in (_WORD_MARKS.sub("", folded), folded)
-        for split in (_SEPARATORS, _NON_WORD)
-    )
+    wanted = [spelling for spelling in spellings if spelling]
+    fewest: int | None = None
+    for folded in {
+        _fold_accents(_transliterate(collapsed, language)),
+        _fold_accents(collapsed),
+    }:
+        kept = [index for index, character in enumerate(folded) if not _SEPARATOR.match(character)]
+        key = "".join(folded[index] for index in kept)
+        # How many words begin before each position of the folded text.
+        begun = [0] * (len(folded) + 1)
+        for index, character in enumerate(folded):
+            starts = character.isalnum() and (index == 0 or not folded[index - 1].isalnum())
+            begun[index + 1] = begun[index] + starts
+        words = begun[-1]
+
+        for spelling in wanted:
+            found = key.find(spelling)
+            while found != -1:
+                end = found + len(spelling)
+                if _at_an_edge(folded, kept, found) and _at_an_edge(folded, kept, end):
+                    inside = begun[kept[end - 1] + 1] - begun[kept[found]]
+                    extra = words - inside
+                    if fewest is None or extra < fewest:
+                        fewest = extra
+                found = key.find(spelling, found + 1)
+    return fewest
 
 
 def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
