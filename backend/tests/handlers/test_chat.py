@@ -1476,6 +1476,8 @@ async def test_the_answer_beside_one_word_is_a_private_near_miss(language, promp
         ("en", "lighthouse", "is it a lighthouse"),
         ("en", "lighthouse", "I am fairly sure that this one is a lighthouse"),
         ("fr", "arbre", "c'est l'arbre"),
+        ("en", "C++", "is it C++?"),
+        ("en", "AC/DC", "is it AC/DC?"),
     ],
 )
 async def test_the_answer_among_more_words_is_kept_from_the_room_without_a_verdict(

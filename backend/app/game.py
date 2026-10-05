@@ -279,6 +279,16 @@ def fits_a_guess(text: str) -> bool:
     return len(" ".join(text.split())) <= MAX_PROMPT_LENGTH
 
 
+# A word, or a spelling, split into the punctuation a sentence wraps around it
+# - "is it C++?", "(AC/DC)" - and what lies between.
+_EDGES = re.compile(r"([\W_]*)(.*?)([\W_]*)", re.DOTALL)
+
+
+def _edges(text: str) -> tuple[str, str, str]:
+    lead, core, trail = _EDGES.fullmatch(text).groups()
+    return lead, core, trail
+
+
 def _held_extra_words(
     words_by_variant: frozenset[tuple[str, ...]], spellings: frozenset[str]
 ) -> int | None:
@@ -286,22 +296,47 @@ def _held_extra_words(
     spells one of `spellings`, joined as a match key joins them - the fewest
     over every split and every run - or None if no run does.
 
-    A run stops growing once it is longer than every spelling, so the work is
-    bounded by the words times the longest spelling: joins, never a fold per
-    run."""
-    spellings = spellings - {""}
-    if not spellings:
+    A run may shed punctuation at its two ends only, so the "?" ending "is it
+    C++?" goes and the "++" of the answer stays: neither split of a sentence
+    keeps an answer's own punctuation and drops the sentence's (review of
+    #1416). Spellings are indexed by what lies between their ends, and a run
+    grows a word at a time - one lookup a step, never a regular expression
+    per run - stopping once its middle begins no spelling's, or its trailing
+    punctuation is longer than any spelling ends with: a message of nothing
+    but punctuation is linear, not cubic."""
+    by_core: dict[str, list[tuple[str, str]]] = {}
+    for spelling in spellings:
+        lead, core, trail = _edges(spelling)
+        if core:
+            by_core.setdefault(core, []).append((lead, trail))
+    if not by_core:
         return None
-    longest = max(map(len, spellings))
+    prefixes = {core[:size] for core in by_core for size in range(1, len(core) + 1)}
+    longest_trail = max(len(trail) for ends in by_core.values() for _, trail in ends)
     fewest: int | None = None
     for words in words_by_variant:
-        for start in range(len(words)):
-            run = ""
+        split = [_edges(word) for word in words]
+        for start, (lead, core, trail) in enumerate(split):
+            if not core:
+                continue
+            middle, pending = core, trail
             for end in range(start, len(words)):
-                run += words[end]
-                if len(run) > longest:
+                if end > start:
+                    word_lead, word_core, word_trail = split[end]
+                    if word_core:
+                        middle += pending + word_lead + word_core
+                        pending = word_trail
+                    else:
+                        pending += word_lead
+                        if len(pending) > longest_trail:
+                            break
+                        continue
+                if middle not in prefixes:
                     break
-                if run in spellings:
+                if any(
+                    lead.endswith(spelling_lead) and pending.startswith(spelling_trail)
+                    for spelling_lead, spelling_trail in by_core.get(middle, ())
+                ):
                     extra = len(words) - (end - start + 1)
                     if fewest is None or extra < fewest:
                         fewest = extra
