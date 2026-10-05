@@ -5,8 +5,10 @@ generation of each species) and `pokemon_species_names.csv` (its name per
 language), from https://github.com/PokeAPI/pokeapi - BSD-3-Clause; the names
 themselves are Nintendo's trademarks, and the lists carry the names alone.
 French, German, Spanish and Italian take their own names, with the English
-one as an alias where it differs; Dutch, Polish and Portuguese editions use
-the English names, which PokeAPI does not repeat for them.
+one as their only alias where it differs; Dutch, Polish and Portuguese
+editions use the English names, which PokeAPI does not repeat for them.
+Nothing else is an alias (#1396): matching folds spaces, hyphens, dots and
+apostrophes, so "Mr Mime" and "Farfetchd" need no listing.
 
     backend/.venv/bin/python scripts/prompt_lists/build_pokemon_lists.py <csv dir>
 
@@ -23,7 +25,6 @@ from __future__ import annotations
 
 import csv
 import json
-import re
 import sys
 from collections import defaultdict
 from pathlib import Path
@@ -33,6 +34,7 @@ sys.path.insert(0, str(REPO / "backend"))
 from app.db.name_lists import expand_name_list  # noqa: E402
 from app.domain_values import PROMPT_LANGUAGES  # noqa: E402
 from app.identifiers import generate_uuid7  # noqa: E402
+from app.prompt_content import prompt_match_key  # noqa: E402
 
 OUT = REPO / "backend" / "data" / "prompt_lists"
 POKEAPI_LANGUAGES = {"9": "en", "5": "fr", "6": "de", "7": "es", "8": "it"}
@@ -53,39 +55,15 @@ DESCRIPTION = {
     "pl": "Wszystkie Pokémony, które pojawiły się w generacji {n}.",
     "pt": "Todos os Pokémon que apareceram na geração {n}.",
 }
-# No keyboard types ♀ or ♂: each Nidoran also answers to its sex in words.
-EXTRA_ALIASES = {
-    29: {"en": ["Nidoran female", "female Nidoran", "Nidoran F"], "de": ["Nidoran weiblich", "Nidoran W"],
-         "es": ["Nidoran hembra"], "fr": ["Nidoran femelle"], "it": ["Nidoran femmina"],
-         "nl": ["Nidoran vrouwtje"], "pl": ["Nidoran samica"], "pt": ["Nidoran fêmea"]},
-    32: {"en": ["Nidoran male", "male Nidoran", "Nidoran M"], "de": ["Nidoran männlich", "Nidoran M"],
-         "es": ["Nidoran macho"], "fr": ["Nidoran mâle"], "it": ["Nidoran maschio"],
-         "nl": ["Nidoran mannetje"], "pl": ["Nidoran samiec"], "pt": ["Nidoran macho"]},
+# Names no keyboard types, written as words instead (#1396): the sex for
+# each Nidoran, and Type: Null without the colon matching keeps.
+RENAMED = {
+    29: {"en": "Nidoran female", "de": "Nidoran weiblich", "es": "Nidoran hembra", "fr": "Nidoran femelle",
+         "it": "Nidoran femmina", "nl": "Nidoran vrouwtje", "pl": "Nidoran samica", "pt": "Nidoran fêmea"},
+    32: {"en": "Nidoran male", "de": "Nidoran männlich", "es": "Nidoran macho", "fr": "Nidoran mâle",
+         "it": "Nidoran maschio", "nl": "Nidoran mannetje", "pl": "Nidoran samiec", "pt": "Nidoran macho"},
+    772: {"en": "Type Null", "de": "Typ Null", "fr": "Type 0", "nl": "Type Null", "pl": "Type Null", "pt": "Type Null"},
 }
-
-
-def variants(text: str) -> list[str]:
-    """What a guesser types for a name with punctuation in it. Matching folds
-    case and accents but keeps hyphens, periods, colons and apostrophes, so
-    "Ho-Oh" would not take "ho oh". An apostrophe or period goes without a
-    trace (Farfetchd, Mr Mime); a hyphen or colon goes, or becomes a space
-    where both sides stand as words (Ho Oh, Type Null, Porygon Z - not Kommo o);
-    a digit after letters may stand apart (Porygon 2)."""
-    text = text.replace("’", "'")
-    out = {text.replace(":", ""), text.replace(": ", ":")}
-    base = re.sub(r"[.']", "", text)
-    out.add(base)
-    joined = " ".join(re.sub(r"[-:]", "", base).split())
-    out.add(joined)
-    # Until nothing changes: one pass consumes the word after each hyphen, so
-    # "Roc-de-Fer" would stop at "Roc de-Fer".
-    spaced, previous = base, None
-    while spaced != previous:
-        previous = spaced
-        spaced = re.sub(r"(\w{2,})[-:]\s*([A-Z0-9]\w*|\w{2,})", r"\1 \2", spaced)
-    out.add(" ".join(spaced.split()))
-    out.add(re.sub(r"([A-Za-z])(\d)", r"\1 \2", base))
-    return sorted(v for v in out if v and v.lower() != text.lower())
 
 
 def main() -> None:
@@ -99,9 +77,10 @@ def main() -> None:
         language = POKEAPI_LANGUAGES.get(row["local_language_id"])
         if language:
             names[int(row["pokemon_species_id"])][language] = row["name"].replace("’", "'")
-    for by_language in names.values():
+    for species, by_language in names.items():
         for language in ("nl", "pl", "pt"):
             by_language[language] = by_language["en"]
+        by_language.update(RENAMED.get(species, {}))
 
     # Identities and hand-raised versions are read back from the committed
     # name lists, so a rerun keeps both.
@@ -127,12 +106,9 @@ def main() -> None:
             for species in members:
                 answer = names[species][language]
                 english = names[species]["en"]
-                aliases: list[str] = []
-                candidates = [english] if english.lower() != answer.lower() else []
-                candidates += variants(answer) + variants(english) + EXTRA_ALIASES.get(species, {}).get(language, [])
-                for candidate in candidates:
-                    if candidate.lower() != answer.lower() and candidate.lower() not in {a.lower() for a in aliases}:
-                        aliases.append(candidate)
+                aliases = (
+                    [english] if prompt_match_key(english, language) != prompt_match_key(answer, language) else []
+                )
                 entry = {"conceptId": concept[species], "answer": answer}
                 if aliases:
                     entry["aliases"] = aliases

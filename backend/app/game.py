@@ -33,7 +33,7 @@ from app.domain_values import (
 )
 from app.identifiers import generate_uuid7
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
-from app.prompt_content import prompt_match_key, prompt_match_variants
+from app.prompt_content import prompt_match_key, prompt_match_variants, prompt_match_words
 
 # How many prompts a drawer chooses between each turn. The pre-drawn sample
 # is sized off this, so the two must not drift apart.
@@ -219,8 +219,11 @@ def _bounded_damerau_levenshtein(a: str, b: str, max_distance: int) -> int:
 
 def _near_miss(guess: str, answers: Sequence[str]) -> str | None:
     """"close" if the guess is near a whole answer, "partial" if enough of a
-    multi-word answer's words are in it, else None (see `Game.guess_hint`)."""
-    if any(_is_close_pair(guess, answer) for answer in answers):
+    multi-word answer's words are in it, else None (see `Game.guess_hint`).
+    Both sides are `prompt_match_words` spellings, words apart."""
+    # Close is measured with the separators gone, as acceptance compares:
+    # "hang glider" and "hangglidr" are one typo apart, not two.
+    if any(_is_close_pair(guess.replace(" ", ""), answer.replace(" ", "")) for answer in answers):
         return "close"
     guess_tokens = guess.split(" ")
     for answer in answers:
@@ -1336,7 +1339,7 @@ class Game:
         if len(text) > MAX_PROMPT_LENGTH:
             return None
         language = self.seat_language(token)
-        guess = _normalize(text, language)
+        guess = prompt_match_words(text, language)
         accepted_answers = self._accepted_answer_keys(token)
         guessed = _accepted_spellings(text, language)
         if not guessed.isdisjoint(self._accepted_answer_spellings(token)):
@@ -1361,9 +1364,9 @@ class Game:
             if other == language or other not in played:
                 continue
             answers = tuple(
-                dict.fromkeys(_normalize(answer, other) for answer in (form.answer, *form.aliases))
+                dict.fromkeys(prompt_match_words(answer, other) for answer in (form.answer, *form.aliases))
             )
-            verdict = _near_miss(_normalize(text, other), answers)
+            verdict = _near_miss(prompt_match_words(text, other), answers)
             if verdict is not None:
                 return verdict
         return None
@@ -1435,7 +1438,8 @@ class Game:
         return taken
 
     def _accepted_answer_keys(self, token: str | None = None) -> tuple[str, ...]:
-        """Canonical answer plus aliases for this exact selected version."""
+        """Canonical answer plus aliases for this exact selected version, as
+        `prompt_match_words` spells them for a near miss."""
         if not self.prompt:
             return ()
         key = self._current_key()
@@ -1444,7 +1448,7 @@ class Game:
         # close" to another language's word would be a hint in a language the
         # guesser is not playing (R-GUESS-01).
         answers = (self.prompt_for(token) or "", *self.aliases_for(key, language))
-        return tuple(dict.fromkeys(_normalize(answer, language) for answer in answers))
+        return tuple(dict.fromkeys(prompt_match_words(answer, language) for answer in answers))
 
     def _guess_totals_by_version(self) -> tuple[tuple[str, int, int], ...]:
         """Each language's guessers against the version they played (#1182).

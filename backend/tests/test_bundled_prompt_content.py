@@ -12,6 +12,7 @@ instead of in a room.
 """
 from __future__ import annotations
 
+import json
 from collections import defaultdict
 from functools import cache
 
@@ -234,7 +235,8 @@ def test_a_name_list_declares_every_supported_language():
 
 def test_the_german_sink_and_spool_answer_to_their_own_words():
     """"Spule" was the spool's alias and the sink's dropped umlaut, so either
-    word scored for the spool (#1396). Umlaut tolerance stays; the alias went."""
+    word scored for the spool (#1396). Umlaut tolerance stays; the alias went,
+    and later every alias of the everyday lists with it."""
     from app.game import _accepted_spellings
 
     def accepts(answer: str) -> frozenset[str]:
@@ -252,7 +254,7 @@ def test_the_german_sink_and_spool_answer_to_their_own_words():
     for guess in ("Spule", "Spüle", "Spuele"):
         assert not _accepted_spellings(guess, "de").isdisjoint(sink), guess
         assert _accepted_spellings(guess, "de").isdisjoint(spool), guess
-    assert not _accepted_spellings("Garnspule", "de").isdisjoint(spool)
+    assert not _accepted_spellings("Garnrolle", "de").isdisjoint(spool)
 
 
 #: The articles a word can start with, per language - definite and
@@ -327,6 +329,48 @@ def test_only_a_work_s_title_starts_with_an_article(language):
         if _article(entry["answer"], language) and entry["conceptId"] not in WORK_TITLES
     ]
     assert found == []
+
+
+#: The aliases an everyday list keeps (#1396): a brand that is the everyday
+#: word for the thing, chosen one by one. Everything else - synonyms, regional
+#: names, spellings, plurals - was dropped, so each concept has one answer and
+#: matching folds what is only punctuation (R-GUESS-01).
+EVERYDAY_ALIASES = frozenset({
+    ("en", "band-aid"),
+    ("en", "scotch tape"),
+    ("en", "memory stick"),
+    ("fr", "scotch"),
+    ("fr", "photomaton"),
+    ("it", "scotch"),
+    ("it", "cotton fioc"),
+    ("it", "phon"),
+})
+
+
+@pytest.mark.parametrize("language", PROMPT_LANGUAGES)
+def test_an_everyday_list_names_each_concept_once(language):
+    """R-PROMPT-10: Standard, Extended and Local accept the answer itself."""
+    found = [
+        f"{slug}:{alias}"
+        for slug in _slugs(language)
+        if slug.endswith(("_standard", "_extended", "_local"))
+        for entry in _list(slug)["prompts"]
+        for alias in entry.get("aliases", ())
+        if (language, alias) not in EVERYDAY_ALIASES
+    ]
+    assert found == []
+
+
+def test_a_franchise_name_list_accepts_only_the_english_name_beside_its_own():
+    """Pokémon and League of Legends: a language that renames a character also
+    accepts the English name, and nothing else (#1396)."""
+    for path in DEFAULT_PROMPT_LISTS_DIR.glob("*.json"):
+        if not path.stem.startswith(("pokemon_gen", "league_of_legends")):
+            continue
+        for entry in json.loads(path.read_text(encoding="utf-8"))["prompts"]:
+            assert "aliases" not in entry, (path.stem, entry["answer"])
+            for language, own in entry.get("overrides", {}).items():
+                assert own.get("aliases", [entry["answer"]]) == [entry["answer"]], (path.stem, language, own)
 
 
 @pytest.mark.parametrize("language", PROMPT_LANGUAGES)

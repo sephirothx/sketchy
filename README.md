@@ -488,7 +488,9 @@ German, Spanish, French, Italian, Dutch, Portuguese, and Polish—case-folds, co
 whitespace, folds canonically decomposable accents, and reads every apostrophe a
 keyboard writes (typographic quotes, the prime, the acute accent, the backtick, the
 fullwidth form) as the plain one, since an iPhone with Smart Punctuation types
-`d’artifice` for **feu d'artifice**. Beyond that shared
+`d’artifice` for **feu d'artifice**. It then drops spaces, hyphens, dots and
+apostrophes, so `hang glider`, `hang-glider` and `hangglider` are one answer,
+and reads `&` as the language's own "and". Beyond that shared
 rule, a language folds the way it is written: German accepts `Maedchen` for
 **Mädchen** (`ä→ae`, `ö→oe`, `ü→ue`, expanded before the accents are folded,
 because `madchen` is nobody's spelling), French reads the `œ` ligature as `oe`, since
@@ -529,7 +531,10 @@ otherwise surface as a room refusing its own selection. Official answers carry n
 leading article (`Hund`, not `der Hund`), and the article form is not an alias:
 guess matching does not strip one, so "der Hund" does not score. The exception
 is a work's title that starts with one, such as `Der gestiefelte Kater`, which
-is accepted only as written. Every
+is accepted only as written. An everyday list gives each concept one answer and
+no synonyms, regional names or spelling variants, save a few brand names that are
+the everyday word (`scotch`); a themed list also accepts a character's English
+name beside a language's own. Every
 language-specific wording has an immutable `promptVersion`, and every bundled
 list version is recorded with a content hash. Deploying different content under
 an already-seen list or prompt version is a startup-failing seed conflict, not

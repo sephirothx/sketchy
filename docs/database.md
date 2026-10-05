@@ -1967,7 +1967,10 @@ four content tables that carry a language (`prompt_versions`, `prompt_aliases`,
 `prompt_lists`, `prompt_list_editions`) admit it in their `CHECK`; `user_settings` and
 `room_presets` do not, because a room needs a language to fold guesses under.
 
-`match_key` is that fold for the row's own language, with the language's
+`match_key` is that fold for the row's own language, without spaces, hyphens, dots or
+apostrophes and with `&` spelled as the language's "and" (#1396; a key written before
+that keeps its separators, and the seed refuses such a database as "changed in place" -
+it is recreated rather than migrated, as the Pre-v1 note says), with the language's
 transliterations applied first (German **Mädchen** stores `maedchen`, not `madchen`).
 A `zxx` row folds with the shared rule alone — **Müller** stores `muller` — because the
 key must not depend on the room that plays it; a German room still accepts `mueller`,

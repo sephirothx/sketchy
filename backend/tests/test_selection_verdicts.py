@@ -214,3 +214,20 @@ async def test_answers_one_guess_can_win_are_refused_everywhere_they_meet(seeded
     ]
     selection = await repo.authorize_selection(english, requesting_user_id=owner, expected_language="en")
     assert selection.prompt_count == 2
+
+
+async def test_an_ampersand_is_each_room_language_s_own_and(seeded):
+    """A Spanish guess "rock y roll" wins both "rock & roll" and "rock y roll",
+    so a list in no language holding both is refused at its save, and two
+    lists holding one each are refused in a mixed room (review of #1406)."""
+    repo, _engine, _factory, owner = seeded
+    with pytest.raises(PromptListMutationError, match="unambiguous"):
+        await repo.create_owned(owner, name="Both", description="", language="zxx",
+                                prompts=entries("rock & roll", "rock y roll"))
+    lists = [
+        (await repo.create_owned(owner, name=name, description="", language="zxx",
+                                 prompts=entries(answer))).slug
+        for name, answer in (("Sign", "rock & roll"), ("Word", "rock y roll"))
+    ]
+    with pytest.raises(PromptListSelectionError, match="ambiguous"):
+        await repo.authorize_selection(lists, requesting_user_id=owner, expected_language=MIXED_PROMPT_LANGUAGE)
