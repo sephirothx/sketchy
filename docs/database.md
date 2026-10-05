@@ -3122,6 +3122,13 @@ reversible and still have to replay cleanly in both directions on both engines
 being sound rather than about anybody's data surviving. The same freedom is
 written down for the wire in `docs/wire-protocol.md` §11.
 
+The same goes for seeded content. The bundled lists' rework for #1396
+(#1404-#1407) raises some prompt versions by more than one between `main` and
+its last PR, and a database seeded before it refuses them at startup
+(`expected version N+1`): the seed only accepts the next version of a prompt it
+already holds. **Recreate such a database** - delete a local `sketchy.db`, drop
+and recreate a PostgreSQL one - rather than teaching the seed to skip.
+
 Delete this paragraph at launch rather than leaving it to be read as still
 true.
 

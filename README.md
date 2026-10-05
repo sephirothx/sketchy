@@ -526,8 +526,10 @@ files to hold that, along with
 the rule that no answer or alias of one concept is another's anywhere in a
 language's lists: the seed compares answers only, so an alias clash would
 otherwise surface as a room refusing its own selection. Official answers carry no
-leading article (`Hund`, not `der Hund`); the article form is an alias, which
-is why guess matching does not try to strip one. Every
+leading article (`Hund`, not `der Hund`), and the article form is not an alias:
+guess matching does not strip one, so "der Hund" does not score. The exception
+is a work's title that starts with one, such as `Der gestiefelte Kater`, which
+is accepted only as written. Every
 language-specific wording has an immutable `promptVersion`, and every bundled
 list version is recorded with a content hash. Deploying different content under
 an already-seen list or prompt version is a startup-failing seed conflict, not
