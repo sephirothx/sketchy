@@ -21,7 +21,7 @@ from app.api.prompt_lists import MAX_PAGE_SIZE
 from app.db.name_lists import is_name_list
 from app.db.seed import DEFAULT_PROMPT_LISTS_DIR, bundled_list_bodies
 from app.domain_values import AGNOSTIC_PROMPT_LANGUAGE, PROMPT_LANGUAGES, PromptLanguage
-from app.prompt_content import MAX_PROMPT_LENGTH, PROMPT_SHELVES, prompt_match_key
+from app.prompt_content import MAX_PROMPT_LENGTH, PROMPT_SHELVES, AnswerOwners
 
 #: Every Standard and Extended list holds at least this many concepts. A game
 #: draws `rounds x players x 3` offers - up to 480 - so a list of a few hundred
@@ -138,22 +138,25 @@ def test_every_answer_fits(language):
 
 @pytest.mark.parametrize("language", PROMPT_LANGUAGES)
 def test_a_languages_lists_can_be_picked_together(language):
-    """No two concepts may answer to the same key across a language's lists,
-    answers and aliases alike: a room that selects both would be refused as
-    ambiguous (R-PROMPT-01), and the seed never looks at aliases across
-    concepts. A concept deliberately repeated in two lists is one concept. A
-    list in no language is keyed as a room in this one keys it - so "Müller"
-    beside a German "Mueller" clashes here and nowhere else."""
-    owners: dict[str, set[str]] = defaultdict(set)
-    where: dict[str, set[str]] = defaultdict(set)
-    for slug in _slugs(language):
-        for entry in _list(slug)["prompts"]:
-            for text in (entry["answer"], *entry.get("aliases", ())):
-                key = prompt_match_key(text, language)
-                owners[key].add(entry["conceptId"])
-                where[key].add(f"{slug}:{text}")
-    clashes = {key: sorted(where[key]) for key, concepts in owners.items() if len(concepts) > 1}
-    assert clashes == {}
+    """No guess may win two concepts across a language's lists, answers and
+    aliases alike: a room that selects both would be refused as ambiguous
+    (R-PROMPT-01), and the seed never looks at aliases across concepts. A
+    concept deliberately repeated in two lists is one concept. A list in no
+    language is keyed as a room in this one keys it - so "Müller" beside a
+    German "Mueller" clashes here and nowhere else.
+
+    Every spelling a guess is accepted under counts, not only the stored key:
+    German "Spüle" (sink) keys as "spuele", but is also won by "Spule", which
+    was the spool's alias (#1396)."""
+    owners = AnswerOwners(language)
+    clashes = [
+        f"{slug}:{text}"
+        for slug in _slugs(language)
+        for entry in _list(slug)["prompts"]
+        for text in (entry["answer"], *entry.get("aliases", ()))
+        if not owners.claim(entry["conceptId"], text)
+    ]
+    assert clashes == []
 
 
 def test_the_stats_page_reads_every_bundled_list_whole():
@@ -227,3 +230,26 @@ def test_a_name_list_declares_every_supported_language():
             continue
         declared = data["languages"].get("inherit", []) + data["languages"].get("override", [])
         assert sorted(declared) == sorted(PROMPT_LANGUAGES), path.name
+
+
+def test_the_german_sink_and_spool_answer_to_their_own_words():
+    """"Spule" was the spool's alias and the sink's dropped umlaut, so either
+    word scored for the spool (#1396). Umlaut tolerance stays; the alias went."""
+    from app.game import _accepted_spellings
+
+    def accepts(answer: str) -> frozenset[str]:
+        entry = next(
+            entry
+            for slug in _slugs("de")
+            for entry in _list(slug)["prompts"]
+            if entry["answer"] == answer
+        )
+        return frozenset().union(
+            *(_accepted_spellings(text, "de") for text in (entry["answer"], *entry.get("aliases", ())))
+        )
+
+    sink, spool = accepts("Spüle"), accepts("Garnrolle")
+    for guess in ("Spule", "Spüle", "Spuele"):
+        assert not _accepted_spellings(guess, "de").isdisjoint(sink), guess
+        assert _accepted_spellings(guess, "de").isdisjoint(spool), guess
+    assert not _accepted_spellings("Garnspule", "de").isdisjoint(spool)

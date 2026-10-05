@@ -414,28 +414,6 @@ def prompt_match_key(answer: str, language: str = "en") -> str:
     return _fold_accents(_transliterate(collapsed, language))
 
 
-def prompt_match_keys(answer: str, languages: Iterable[str]) -> dict[str, str]:
-    """`prompt_match_key(answer, language)` for each of `languages`, folded once.
-
-    A language without a transliteration keys with the shared rule alone, so
-    every such language shares one key: an agnostic list checked under every
-    room language used to fold each text once per language for what is at most
-    one key per transliteration and one shared (#1236).
-    """
-    collapsed = _collapsed(answer)
-    shared: str | None = None
-    keys: dict[str, str] = {}
-    for language in languages:
-        language = validate_prompt_list_language(language)
-        if _TRANSLITERATIONS.get(language):
-            keys[language] = _fold_accents(_transliterate(collapsed, language))
-        else:
-            if shared is None:
-                shared = _fold_accents(collapsed)
-            keys[language] = shared
-    return keys
-
-
 def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
     """Every spelling of `answer` this language accepts as the same word.
 
@@ -453,6 +431,143 @@ def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:
             _fold_accents(collapsed),
         }
     )
+
+
+def prompt_match_variants_by_language(
+    answer: str, languages: Iterable[str]
+) -> dict[str, frozenset[str]]:
+    """`prompt_match_variants` under each of `languages`, folded once per
+    transliteration rather than once per language: the languages without one
+    all spell a text alike, so a list in no language checked under all eight
+    costs five folds, not eight (#1236)."""
+    shared: frozenset[str] | None = None
+    variants: dict[str, frozenset[str]] = {}
+    for language in languages:
+        if _TRANSLITERATIONS.get(validate_prompt_list_language(language)):
+            variants[language] = prompt_match_variants(answer, language)
+        else:
+            if shared is None:
+                shared = prompt_match_variants(answer, language)
+            variants[language] = shared
+    return variants
+
+
+# The transliterations whose plain spelling loses the letter: German "ü" is
+# "ue" one way and "u" the other, where French "œ" is "oe" or itself. Only these
+# let one guess reach two spellings no answer shares - see `AnswerOwners`.
+_LOSSY_DIGRAPHS: dict[str, dict[str, str]] = {
+    language: lossy
+    for language, table in _TRANSLITERATIONS.items()
+    if (
+        lossy := {
+            expanded: _fold_accents(letter)
+            for letter, expanded in table.items()
+            if _fold_accents(letter) != letter
+        }
+    )
+}
+
+
+def _collapse_digraphs(spelling: str, digraphs: dict[str, str]) -> str:
+    """Every digraph collapsed, until none is left: "auee" to "au".
+
+    Repeated because a collapse can make a new one ("uee" is "ue" once), and
+    the group two spellings meet in has to be the same however many of their
+    digraphs each collapsed. German's are all a vowel and an "e", so the end
+    is the same whichever order they go in.
+    """
+    pattern = "|".join(map(re.escape, digraphs))
+    while True:
+        collapsed = re.sub(pattern, lambda found: digraphs[found[0]], spelling)
+        if collapsed == spelling:
+            return collapsed
+        spelling = collapsed
+
+
+def _drops_digraphs(longer: str, shorter: str, digraphs: dict[str, str]) -> bool:
+    """Whether `shorter` is `longer` with one or more of its digraphs written as
+    the letter the diacritic leaves when it is dropped: "spule" from "spuele".
+
+    One guess then reaches both - "Spüle" is "spuele" transliterated and
+    "spule" folded - so two answers spelled this way answer to the same word.
+    Each collapse shortens the spelling by one, so a walk that ends level has
+    made at least one when the lengths differ.
+    """
+    if len(longer) <= len(shorter):
+        return False
+    states = {(0, 0)}
+    while states:
+        advanced: set[tuple[int, int]] = set()
+        for position, matched in states:
+            if position == len(longer) or matched == len(shorter):
+                if (position, matched) == (len(longer), len(shorter)):
+                    return True
+                continue
+            pair = longer[position : position + 2]
+            if digraphs.get(pair) == shorter[matched]:
+                advanced.add((position + 2, matched + 1))
+            if longer[position] == shorter[matched]:
+                advanced.add((position + 1, matched + 1))
+        states = advanced
+    return False
+
+
+class AnswerOwners:
+    """Who answers to what, in one language: the check that no guess can win
+    two prompts of a selection (R-PROMPT-01, R-GUESS-01).
+
+    Comparing the stored keys is not enough. A guess wins when *any* of its
+    spellings meets any of an answer's (`prompt_match_variants`), so German
+    "Spüle" (sink) and "Spule" (spool) - two keys - are both won by "Spule",
+    and by "Spüle". Where the plain spelling drops the letter a transliteration
+    expands, two answers that share no spelling at all can still be won by one
+    guess: "Spuele" and "Spule" by "Spüle". Those are found by grouping each
+    spelling under all of its digraphs collapsed, and walking the few that
+    share a group.
+
+    An owner is whatever the caller tells concepts apart by - a concept id, a
+    prompt version. A group holding more than `MAX_LOOKALIKES` spellings of
+    other owners is refused outright: nothing a person writes needs that many
+    words one dropped diacritic apart, and it bounds the walk on a list built
+    to need it.
+    """
+
+    MAX_LOOKALIKES = 16
+
+    def __init__(self, language: str) -> None:
+        self.language = language
+        self._owner: dict[str, object] = {}
+        self._digraphs = _LOSSY_DIGRAPHS.get(language, {})
+        self._groups: dict[str, list[str]] = {}
+
+    def claim(
+        self, owner: object, text: str, spellings: frozenset[str] | None = None
+    ) -> bool:
+        """Record `text` as one of `owner`'s answers; False when a guess could
+        win both it and another owner's. `spellings`, when the caller already
+        folded them, are `prompt_match_variants(text, self.language)`."""
+        if spellings is None:
+            spellings = prompt_match_variants(text, self.language)
+        for spelling in spellings:
+            if self._owner.setdefault(spelling, owner) != owner:
+                return False
+        if not self._digraphs:
+            return True
+        for spelling in spellings:
+            group = self._groups.setdefault(
+                _collapse_digraphs(spelling, self._digraphs), []
+            )
+            others = [other for other in group if self._owner[other] != owner]
+            if len(others) > self.MAX_LOOKALIKES:
+                return False
+            for other in others:
+                if _drops_digraphs(spelling, other, self._digraphs) or _drops_digraphs(
+                    other, spelling, self._digraphs
+                ):
+                    return False
+            if spelling not in group:
+                group.append(spelling)
+        return True
 
 
 def normalize_prompt_answer(answer: str, language: str = "en") -> str:

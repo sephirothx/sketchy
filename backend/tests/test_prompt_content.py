@@ -16,6 +16,7 @@ from app.db.models import (
 )
 from app.game import Game, Phase
 from app.prompt_content import (
+    AnswerOwners,
     best_supported_prompt_locale,
     clean_prompt_aliases,
     clean_prompt_tags,
@@ -274,3 +275,64 @@ def test_every_apostrophe_a_keyboard_writes_matches_the_bundled_answer(written):
     assert prompt_match_variants("olio d\u2019oliva", "it") == prompt_match_variants(
         "olio d'oliva", "it"
     )
+
+
+def _one_guess_wins_both(first: str, second: str, guess: str, language: str) -> bool:
+    from app.game import _accepted_spellings
+
+    spelled = _accepted_spellings(guess, language)
+    return not spelled.isdisjoint(_accepted_spellings(first, language)) and not (
+        spelled.isdisjoint(_accepted_spellings(second, language))
+    )
+
+
+@pytest.mark.parametrize(
+    ("first", "second", "guess", "language"),
+    [
+        # Two keys ("spuele", "spule"), one shared spelling: the sink's
+        # dropped umlaut is the spool (#1396).
+        ("Spüle", "Spule", "Spule", "de"),
+        # No shared spelling at all, and still one guess for both: "Spüle" is
+        # "spuele" one way and "spule" the other.
+        ("Spuele", "Spule", "Spüle", "de"),
+        ("Spule", "Spuele", "Spüle", "de"),
+        ("cœur", "coeur", "coeur", "fr"),
+    ],
+)
+def test_two_answers_one_guess_can_win_are_refused(first, second, guess, language):
+    assert _one_guess_wins_both(first, second, guess, language)
+    owners = AnswerOwners(language)
+    assert owners.claim("first", first)
+    assert not owners.claim("second", second)
+
+
+def test_one_owner_may_answer_to_every_spelling_of_its_word():
+    owners = AnswerOwners("de")
+    assert all(owners.claim("sink", text) for text in ("Spüle", "Spuele", "Spule"))
+    assert owners.claim("spool", "Garnrolle")
+
+
+def test_answers_no_guess_can_win_together_are_kept_apart():
+    owners = AnswerOwners("de")
+    assert owners.claim("bear", "Bär")
+    assert owners.claim("bar", "Bahre")
+    # The same letters are no clash where nothing transliterates.
+    english = AnswerOwners("en")
+    assert english.claim("spool", "spule") and english.claim("sink", "spuele")
+
+
+def test_a_crowd_of_lookalikes_is_refused_without_walking_it():
+    """Spellings of one length are never one dropped diacritic apart - each
+    collapse shortens - so no guess reaches two of these, and only the bound
+    on how many share a group stops them."""
+    from itertools import combinations
+
+    texts = [
+        "x" + "".join("ae" if slot in digraphs else "a" for slot in range(6))
+        for digraphs in combinations(range(6), 3)
+    ]
+    owners = AnswerOwners("de")
+    results = [owners.claim(index, text) for index, text in enumerate(texts)]
+    limit = AnswerOwners.MAX_LOOKALIKES
+    assert results[: limit + 1] == [True] * (limit + 1)
+    assert not results[limit + 1]
