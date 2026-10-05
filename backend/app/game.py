@@ -1396,7 +1396,9 @@ class Game:
         most `HELD_VERDICT_MAX_EXTRA_WORDS` other words, and "held" beyond
         that: private, but its author is answered as for any wrong guess.
         """
-        if not self.prompt:
+        if self.phase != Phase.DRAWING or not self.prompt:
+            # Once the drawing is over the prompt is on every screen, and a
+            # guess is chat (review of #1416).
             return None
         if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return None
@@ -1443,9 +1445,10 @@ class Game:
         """Every spelling that wins the turn for `token`: the answer's and its
         aliases', folded the way that seat's language folds them.
 
-        In a mixed game (#1182) the prompt in any language wins too - a German
-        who types "dog" has named the drawing - each spelling folded the way
-        its own language folds it. Except where that spelling is a different
+        In a mixed game (#1182) the prompt in any language a player of the
+        game plays wins too - a German who types "dog" beside an English seat
+        has named the drawing - each spelling folded the way its own language
+        folds it. Except where that spelling is a different
         concept of the room's selection in the guesser's own language, drawn
         or not (#1367): a French seat's "papillon" means butterfly, and does
         not win the Italian bow tie.
@@ -1461,8 +1464,12 @@ class Game:
         if not self.is_mixed_language():
             return spellings
         taken = self._other_prompts_keys(language)
+        played = set(self.languages_in_play())
         for other, form in self.prompt_translations.get(key, {}).items():
-            if other == language:
+            # Only a language somebody in the game plays (review of #1416):
+            # French "thé" folds to "the", and won the tea for an English
+            # seat in a room nobody plays French in.
+            if other == language or other not in played:
                 continue
             for answer in (form.answer, *form.aliases):
                 # Only the spellings that are not another concept's word to
@@ -1471,13 +1478,16 @@ class Game:
         return spellings
 
     def _spells_the_prompt_elsewhere(self, guessed: frozenset[str]) -> bool:
-        """Whether a guess is the current prompt in some language's spelling."""
+        """Whether a guess is the current prompt in the spelling of some
+        language a player of the game plays."""
         key = self._current_key()
         if not self.is_mixed_language() or key is None:
             return False
+        played = set(self.languages_in_play())
         return any(
             not guessed.isdisjoint(_accepted_spellings(answer, other))
             for other, form in self.prompt_translations.get(key, {}).items()
+            if other in played
             for answer in (form.answer, *form.aliases)
         )
 
@@ -1510,7 +1520,7 @@ class Game:
                 )
             )
         words = prompt_match_word_variants(text, language)
-        extra = _held_extra_words(words, own | (in_play & accepted))
+        extra = _held_extra_words(words, own | accepted)
         if extra is not None:
             return "close" if extra <= HELD_VERDICT_MAX_EXTRA_WORDS else "held"
         # Another language's word that is a different prompt to this seat

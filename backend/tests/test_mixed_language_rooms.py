@@ -920,3 +920,8 @@ def test_only_the_languages_in_play_hide_a_message():
     assert game.guess_hint("english", "the cat is on the roof") is None
     assert game.guess_hint("english", "a cup of tea") == "held"
     assert game.guess_hint("english", "der Tee") == "close"
+    # ...and neither does it win: acceptance and hiding read the same
+    # languages, or a line that hides nothing could hand the room a winner.
+    assert game.submit_guess("english", "thé")[0] is False
+    assert game.submit_guess("english", "the")[0] is False
+    assert game.submit_guess("english", "Tee")[0] is True

@@ -2562,7 +2562,7 @@ must revalidate. Ensure compressed proxy responses include `Vary: Accept-Encodin
 In a **mixed-language room** every seat plays in the language it joined with: the drawer
 is offered prompts in theirs, each guesser's letter tiles, hints and near misses are in
 their own, and the reveal shows each player their own word. A guess naming the drawing
-in any of the eight languages scores - unless the word means another prompt of the room's
+in the language of any player of the game scores - unless the word means another prompt of the room's
 lists in the guesser's own language, in which case they alone are told it is the answer
 in another language. Such a room plays Standard, Extended, the official lists translated
 into all eight (the Pokémon generations, League of Legends, the video-game icons) and lists

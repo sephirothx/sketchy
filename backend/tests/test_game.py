@@ -1722,3 +1722,13 @@ def test_a_32_character_answer_typed_longer_still_scores(typed):
 def test_a_32_character_answer_with_punctuation_matching_keeps_is_a_near_miss():
     game, guesser = make_language_guess_game("tempesta in un bicchiere d'acqua", "it")
     assert game.guess_hint(guesser, "Tempesta in un bicchiere d'acqua!") == "close"
+
+
+def test_after_the_drawing_a_guess_is_not_classified():
+    """The prompt is on every screen once the drawing ends: nothing to keep
+    from the room, and nothing to store as a near miss (review of #1416)."""
+    game, guesser = make_language_guess_game("lighthouse", "en")
+    assert game.guess_hint(guesser, "the lighthouse") == "close"
+    game.phase = Phase.TURN_RESULTS
+    assert game.guess_hint(guesser, "the lighthouse") is None
+    assert game.guess_hint(guesser, "lighthous") is None
