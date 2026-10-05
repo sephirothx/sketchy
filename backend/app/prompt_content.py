@@ -420,6 +420,9 @@ _SEPARATORS = re.compile(r"[\s\-\u2010-\u2015\u2212.']+")
 _WORD_MARKS = re.compile(r"[.']+")
 
 
+_NON_WORD = re.compile(r"[\W_]+")
+
+
 def _without_separators(text: str) -> str:
     return _SEPARATORS.sub("", text)
 
@@ -456,6 +459,30 @@ def prompt_match_words(answer: str, language: str = "en") -> str:
     # A dot or an apostrophe sits inside a word ("keeper's", "U.S.");
     # a hyphen or a space is between two.
     return " ".join(_SEPARATORS.sub(" ", _WORD_MARKS.sub("", folded)).split())
+
+
+def prompt_match_word_variants(text: str, language: str = "en") -> frozenset[tuple[str, ...]]:
+    """`prompt_match_variants` with each spelling's words kept apart: a run
+    of a spelling's consecutive words, joined, is a key `prompt_match_variants`
+    could have given. What finds an answer *inside* a guess ("der Hund",
+    `game.Game.guess_hint`), at word boundaries only, so "concatenate" does
+    not hold "cat".
+
+    Each spelling is split twice: at the separators a key drops, and at
+    anything that is not a letter or a digit, because a sentence ends in
+    punctuation a key keeps ("is it a lighthouse?") while an answer may hold
+    some ("C++")."""
+    language = validate_prompt_list_language(language)
+    collapsed = _spelled_out(_collapsed(text), language)
+    return frozenset(
+        tuple(split.sub(" ", unmarked).split())
+        for folded in (
+            _fold_accents(_transliterate(collapsed, language)),
+            _fold_accents(collapsed),
+        )
+        for unmarked in (_WORD_MARKS.sub("", folded),)
+        for split in (_SEPARATORS, _NON_WORD)
+    )
 
 
 def prompt_match_variants(answer: str, language: str = "en") -> frozenset[str]:

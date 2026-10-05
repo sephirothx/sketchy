@@ -878,3 +878,18 @@ async def test_two_official_lists_of_one_language_with_the_same_concepts_are_bot
         assert classic is not None and classic.family == "critters_classic"
     finally:
         await engine.dispose()
+
+
+def test_a_guess_holding_another_language_s_answer_is_kept_from_the_room():
+    """A German seat typing "the bow tie" names the English seat's answer:
+    the room must not read it, whichever language it is in (#1416)."""
+    game = _mixed_game()
+
+    assert game.submit_guess("german", "the bow tie")[0] is False
+    assert game.guess_hint("german", "the bow tie") == "close"
+    assert game.guess_hint("german", "die Fliege") == "close"
+    # The Italian answer inside a French seat's guess is the false friend:
+    # kept private as the bare word is, and the seat told why.
+    assert game.guess_hint("french", "un papillon") == "another_language"
+    # Its own answer wins over the false friend it contains.
+    assert game.guess_hint("french", "le noeud papillon") == "close"

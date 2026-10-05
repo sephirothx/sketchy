@@ -33,7 +33,12 @@ from app.domain_values import (
 )
 from app.identifiers import generate_uuid7
 from app.prompts import MAX_PROMPT_LENGTH, PROMPTS
-from app.prompt_content import prompt_match_key, prompt_match_variants, prompt_match_words
+from app.prompt_content import (
+    prompt_match_key,
+    prompt_match_variants,
+    prompt_match_word_variants,
+    prompt_match_words,
+)
 
 # How many prompts a drawer chooses between each turn. The pre-drawn sample
 # is sized off this, so the two must not drift apart.
@@ -255,6 +260,41 @@ def _checkpoint_share(total_slots: int) -> int:
     if total_slots <= MIN_HIDDEN_LETTERS:
         return 0
     return min(total_slots - MIN_HIDDEN_LETTERS, max(1, round(total_slots * 0.4)))
+
+
+def fits_a_guess(text: str) -> bool:
+    """Whether a message is short enough to be judged as a guess at all.
+
+    No answer is longer than `MAX_PROMPT_LENGTH`, so anything longer is chat.
+    Measured with whitespace collapsed, as matching folds it: counting the
+    raw text sent a 32-character answer typed with one doubled space to the
+    room as chat, unjudged (#1416).
+    """
+    return len(" ".join(text.split())) <= MAX_PROMPT_LENGTH
+
+
+def _held_spelling(
+    words_by_variant: frozenset[tuple[str, ...]], spellings: frozenset[str]
+) -> str | None:
+    """The first of `spellings` that a run of consecutive words in a guess
+    spells, joined as a match key joins them; None if no run does. A run
+    stops growing once it is longer than every spelling, so the work is
+    bounded by the words times the longest spelling - joins, never a fold
+    per run."""
+    spellings = spellings - {""}
+    if not spellings:
+        return None
+    longest = max(map(len, spellings))
+    for words in words_by_variant:
+        for start in range(len(words)):
+            run = ""
+            for word in words[start:]:
+                run += word
+                if len(run) > longest:
+                    break
+                if run in spellings:
+                    return run
+    return None
 
 
 def _is_close_pair(guess: str, target: str) -> bool:
@@ -1282,7 +1322,7 @@ class Game:
             return False, 0
         if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return False, 0
-        if len(text) > MAX_PROMPT_LENGTH:
+        if not fits_a_guess(text):
             return False, 0
         guessed_spellings = _accepted_spellings(text, self.seat_language(token))
         if guessed_spellings.isdisjoint(self._accepted_answer_spellings(token)):
@@ -1331,25 +1371,36 @@ class Game:
         if a mixed-language room's false-friend guard refused it - the drawing
         in another language, a different prompt in the guesser's own -
         or None if none applies.
+
+        A guess that holds the prompt as whole words - "der Hund", "is it a
+        lighthouse" - is "close" too, at any length: it does not score (N-20),
+        and broadcast it would hand the room the bare word to type (#1416).
         """
         if not self.prompt:
             return None
         if not self.is_turn_eligible(token) or token in self.correct_guessers:
             return None
-        if len(text) > MAX_PROMPT_LENGTH:
-            return None
         language = self.seat_language(token)
-        guess = prompt_match_words(text, language)
-        accepted_answers = self._accepted_answer_keys(token)
+        accepted = self._accepted_answer_spellings(token)
         guessed = _accepted_spellings(text, language)
-        if not guessed.isdisjoint(self._accepted_answer_spellings(token)):
+        if not guessed.isdisjoint(accepted):
             return None
-        if self._spells_the_prompt_elsewhere(guessed):
+        elsewhere = self._prompt_spellings_elsewhere()
+        if not guessed.isdisjoint(elsewhere):
             # Another language's spelling the false-friend guard refused: not
             # this seat's answer, but broadcast it and the seats playing that
             # language read their own answer in the chat (#1182). Kept private
             # the way a near miss is, and the guesser is told why (#1367).
             return "another_language"
+        words = prompt_match_word_variants(text, language)
+        if _held_spelling(words, accepted) is not None:
+            return "close"
+        if _held_spelling(words, elsewhere) is not None:
+            return "another_language"
+        if not fits_a_guess(text):
+            return None
+        guess = prompt_match_words(text, language)
+        accepted_answers = self._accepted_answer_keys(token)
         verdict = _near_miss(guess, accepted_answers)
         if verdict is not None or not self.is_mixed_language():
             return verdict
@@ -1402,15 +1453,18 @@ class Game:
                 spellings = spellings | (_accepted_spellings(answer, other) - taken)
         return spellings
 
-    def _spells_the_prompt_elsewhere(self, guessed: frozenset[str]) -> bool:
-        """Whether a guess is the current prompt in some language's spelling."""
+    def _prompt_spellings_elsewhere(self) -> frozenset[str]:
+        """Every spelling of the current prompt in every language of a mixed
+        game, each folded the way its own language folds it; empty otherwise."""
         key = self._current_key()
         if not self.is_mixed_language() or key is None:
-            return False
-        return any(
-            not guessed.isdisjoint(_accepted_spellings(answer, other))
-            for other, form in self.prompt_translations.get(key, {}).items()
-            for answer in (form.answer, *form.aliases)
+            return frozenset()
+        return frozenset().union(
+            *(
+                _accepted_spellings(answer, other)
+                for other, form in self.prompt_translations.get(key, {}).items()
+                for answer in (form.answer, *form.aliases)
+            )
         )
 
     def _other_prompts_keys(self, language: str) -> frozenset[str]:

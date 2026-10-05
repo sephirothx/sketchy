@@ -20,6 +20,7 @@ from app.game import (
     Game,
     Phase,
     _bounded_damerau_levenshtein,
+    fits_a_guess,
 )
 from app.rooms import DRAWING_TIME_OPTIONS
 from app.canvas_session import MAX_CANVAS_COMMITS
@@ -1622,3 +1623,58 @@ def test_a_near_miss_is_measured_without_separators_and_partly_by_words():
         prompt_match_words("lighthouse hut", "en"),
         (prompt_match_words("lighthouse-keeper's hut", "en"),),
     ) == "partial"
+
+
+def make_language_guess_game(prompt, language):
+    game = Game(turn_order=["p0", "p1", "p2"], rounds_total=1, prompt_language=language)
+    game.prompt_pool = [prompt]
+    game.start_next_turn(canvas_generation=game.canvas.generation + 1)
+    game.force_prompt_choice()
+    return game, next(t for t in game.turn_order if t != game.current_drawer)
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt", "typed"),
+    [
+        ("de", "Hund", "der Hund"),
+        ("de", "Akkordeon", "das Akkordeon"),
+        ("de", "Mädchen", "das Madchen"),
+        ("de", "Mädchen", "das Maedchen"),
+        ("en", "lighthouse", "the lighthouse"),
+        ("en", "lighthouse", "is it a lighthouse?"),
+        ("en", "hang glider", "a hang-glider"),
+        ("nl", "hond", "de hond"),
+        ("fr", "chat", "une chat"),
+    ],
+)
+def test_a_guess_holding_the_answer_is_a_private_near_miss(language, prompt, typed):
+    """N-20 refuses the article form; the room must not read it either, or
+    everyone else types the bare word (#1416)."""
+    game, guesser = make_language_guess_game(prompt, language)
+    assert game.submit_guess(guesser, typed) == (False, 0)
+    assert game.guess_hint(guesser, typed) == "close"
+
+
+def test_an_answer_inside_a_long_message_is_still_kept_from_the_room():
+    game, guesser = make_language_guess_game("lighthouse", "en")
+    typed = "I think it might be a lighthouse on a rocky coast at night"
+    assert len(typed) > MAX_PROMPT_LENGTH
+    assert game.guess_hint(guesser, typed) == "close"
+    assert game.guess_hint(guesser, "I think it might be a boat on a rocky coast at night") is None
+
+
+def test_an_answer_only_inside_another_word_is_not_held():
+    game, guesser = make_language_guess_game("cat", "en")
+    assert game.guess_hint(guesser, "concatenate") is None
+    assert game.guess_hint(guesser, "a catalogue") is None
+
+
+def test_the_guess_length_is_measured_with_whitespace_collapsed():
+    answer = "tempesta in un bicchiere d'acqua"
+    assert len(answer) == MAX_PROMPT_LENGTH
+    game, guesser = make_language_guess_game(answer, "it")
+    typed = "tempesta in un  bicchiere d'acqua"
+    assert len(typed) > MAX_PROMPT_LENGTH
+    assert fits_a_guess(typed)
+    correct, points = game.submit_guess(guesser, typed)
+    assert correct is True and points > 0

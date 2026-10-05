@@ -5,7 +5,7 @@ import asyncio
 from functools import partial
 
 from app.announcements import Announcement
-from app.game import Phase
+from app.game import Phase, fits_a_guess
 from app.handlers.context import HandlerContext
 from app.handlers.payloads import (
     GuessPayload,
@@ -20,7 +20,6 @@ from app.presenters import (
     guessed_receipt,
     system_chat_message,
 )
-from app.prompts import MAX_PROMPT_LENGTH
 from app.handlers.refusals import ErrorCode
 from app.services.telemetry import telemetry
 
@@ -286,22 +285,28 @@ async def _accepted_guess(ctx: HandlerContext, sid, room, player, text: str) -> 
         )
         return
 
-    if len(text) > MAX_PROMPT_LENGTH:
-        await _emit_player_chat(
-            ctx,
-            room,
-            player,
-            _chat_line(player, text),
-        )
-        return
-
-    correct, points = game.submit_guess(player.id, text)
+    hint = None
+    if not fits_a_guess(text):
+        # Too long to be the answer, so chat - unless the answer is inside
+        # it, which the room must not read (#1416).
+        hint = game.guess_hint(player.id, text)
+        if hint is None:
+            await _emit_player_chat(
+                ctx,
+                room,
+                player,
+                _chat_line(player, text),
+            )
+            return
+        correct, points = False, 0
+    else:
+        correct, points = game.submit_guess(player.id, text)
     if correct and player.user_id:
         # Knows the prompt now: a leave and a rejoin as a player must not make
         # the account a guesser of this turn again (review of #1330).
         room.turn_prompt_aware.add(player.user_id)
     if not correct:
-        hint = game.guess_hint(player.id, text)
+        hint = hint or game.guess_hint(player.id, text)
         if hint:
             # The guesser should always see their own guess, even when it's
             # not broadcast to the rest of the room.

@@ -115,7 +115,7 @@ async def test_active_message_limit_rejects_before_processing_or_broadcast():
     sio.emit.reset_mock()
     with (
         patch.object(Game, "submit_guess") as submit_guess,
-        patch.object(Game, "guess_hint") as guess_hint,
+        patch.object(Game, "guess_hint", return_value=None) as guess_hint,
     ):
         accepted = await guess(
             "guesser-sid",
@@ -124,7 +124,9 @@ async def test_active_message_limit_rejects_before_processing_or_broadcast():
 
     assert accepted is None
     submit_guess.assert_not_called()
-    guess_hint.assert_not_called()
+    # Too long to be a guess, but still asked whether the answer is inside
+    # it before the room reads it (#1416).
+    guess_hint.assert_called_once_with(guesser.id, "x" * MAX_CHAT_MESSAGE_LENGTH)
     assert any(
         call.args[0] == "chat_message"
         and call.args[1]["text"] == "x" * MAX_CHAT_MESSAGE_LENGTH
@@ -160,7 +162,10 @@ async def test_only_messages_within_word_limit_are_processed_as_guesses():
         await guess("guesser-sid", {"text": "x" * (MAX_PROMPT_LENGTH + 1)})
 
     submit_guess.assert_called_once_with(guesser.id, "x" * MAX_PROMPT_LENGTH)
-    guess_hint.assert_called_once_with(guesser.id, "x" * MAX_PROMPT_LENGTH)
+    assert [call.args for call in guess_hint.call_args_list] == [
+        (guesser.id, "x" * MAX_PROMPT_LENGTH),
+        (guesser.id, "x" * (MAX_PROMPT_LENGTH + 1)),
+    ]
     assert any(
         call.args[0] == "chat_message"
         and call.args[1]["text"] == "x" * (MAX_PROMPT_LENGTH + 1)
@@ -1406,3 +1411,60 @@ async def test_a_guess_echo_reaches_spectators_only_where_they_see_the_prompt(
         timer.cancel()
         with suppress(asyncio.CancelledError):
             await timer
+
+
+async def _guess_in(prompt: str, language: str, typed: str):
+    """One guess by a guesser in a two-seat game drawing `prompt`: what the
+    guesser was answered and the chat lines the whole room was sent."""
+    room_manager = RoomManager()
+    room = room_manager.create_room(name="Room")
+    drawer = room_manager.add_player(room, "Drawer")
+    guesser = room_manager.add_player(room, "Guesser")
+    drawer.sid, guesser.sid = "drawer-sid", "guesser-sid"
+    room.state = "playing"
+    room.game = Game(
+        turn_order=[drawer.id, guesser.id], prompt_pool=[prompt], prompt_language=language
+    )
+    room.game.start_next_turn(canvas_generation=room.allocate_canvas_generation())
+    room.game.choose_prompt(drawer.id, prompt)
+    sio = socketio.AsyncServer(async_mode="asgi")
+    register_handlers(sio, room_manager)
+    sio.get_session = AsyncMock(return_value={"room_id": room.id, "player_id": guesser.id})
+    sio.emit = AsyncMock()
+    answer = await sio.handlers["/"]["guess"]("guesser-sid", {"text": typed})
+    to_room = [
+        call.args[1]["text"]
+        for call in sio.emit.await_args_list
+        if call.args[0] == "chat_message" and call.kwargs.get("room") == room.id
+    ]
+    return room.game, guesser, answer, to_room
+
+
+@pytest.mark.parametrize(
+    ("language", "prompt", "typed"),
+    [
+        ("de", "Hund", "der Hund"),
+        ("de", "Akkordeon", "das Akkordeon"),
+        ("en", "lighthouse", "the lighthouse"),
+        ("en", "lighthouse", "is it a lighthouse"),
+        ("en", "lighthouse", "I am fairly sure that this one is a lighthouse"),
+    ],
+)
+async def test_a_guess_holding_the_answer_never_reaches_the_room(language, prompt, typed):
+    """Before #1416 these went to the whole room as a plain wrong guess, and
+    everyone else could type the bare word and score."""
+    game, guesser, answer, to_room = await _guess_in(prompt, language, typed)
+
+    assert guesser.id not in game.correct_guessers
+    assert typed not in to_room
+    assert answer["verdict"]["code"] == "guess_very_close"
+
+
+async def test_a_32_character_answer_typed_with_a_doubled_space_scores():
+    answer_text = "tempesta in un bicchiere d'acqua"
+    typed = "tempesta in un  bicchiere d'acqua"
+    game, guesser, answer, to_room = await _guess_in(answer_text, "it", typed)
+
+    assert guesser.id in game.correct_guessers
+    assert typed not in to_room
+    assert answer["correct"]
