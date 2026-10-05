@@ -1,0 +1,696 @@
+{
+  "slug": "movies_and_tv",
+  "kind": "franchise",
+  "shelf": "pop-culture",
+  "position": 1,
+  "tags": [
+    "entertainment"
+  ],
+  "names": {
+    "en": "Movies and TV",
+    "de": "Filme und Serien",
+    "es": "Cine y televisión",
+    "fr": "Cinéma et télé",
+    "it": "Film e TV",
+    "nl": "Film en tv",
+    "pl": "Filmy i seriale",
+    "pt": "Cinema e TV"
+  },
+  "descriptions": {
+    "en": "Characters and things from films, series and cartoons.",
+    "de": "Figuren und Dinge aus Filmen, Serien und Zeichentrick.",
+    "es": "Personajes y objetos de películas, series y dibujos animados.",
+    "fr": "Personnages et objets de films, de séries et de dessins animés.",
+    "it": "Personaggi e oggetti di film, serie e cartoni animati.",
+    "nl": "Personages en dingen uit films, series en tekenfilms.",
+    "pl": "Postacie i przedmioty z filmów, seriali i kreskówek.",
+    "pt": "Personagens e objetos de filmes, séries e desenhos animados."
+  },
+  "prompts": [
+    {
+      "en": "Darth Vader",
+      "fr": "Dark Vador"
+    },
+    {
+      "en": "Yoda"
+    },
+    {
+      "en": "Chewbacca"
+    },
+    {
+      "en": "R2-D2"
+    },
+    {
+      "en": "C-3PO"
+    },
+    {
+      "en": "Stormtrooper",
+      "de": "Sturmtruppler",
+      "es": "soldado de asalto",
+      "pl": "szturmowiec"
+    },
+    {
+      "en": "lightsaber",
+      "de": "Lichtschwert",
+      "es": "espada láser",
+      "fr": "sabre laser",
+      "it": "spada laser",
+      "nl": "lichtzwaard",
+      "pl": "miecz świetlny",
+      "pt": "sabre de luz"
+    },
+    {
+      "en": "Death Star",
+      "de": "Todesstern",
+      "es": "Estrella de la Muerte",
+      "fr": "Étoile de la mort",
+      "it": "Morte Nera",
+      "pl": "Gwiazda Śmierci",
+      "pt": "Estrela da Morte"
+    },
+    {
+      "en": "Millennium Falcon",
+      "de": "Millennium Falke",
+      "es": "Halcón Milenario",
+      "fr": "Faucon Millenium",
+      "pl": "Sokół Millennium"
+    },
+    {
+      "en": "Princess Leia",
+      "de": "Prinzessin Leia",
+      "es": "Princesa Leia",
+      "fr": "Princesse Leia",
+      "it": "Principessa Leia",
+      "nl": "Prinses Leia",
+      "pl": "Księżniczka Leia",
+      "pt": "Princesa Leia"
+    },
+    {
+      "en": "Grogu"
+    },
+    {
+      "en": "BB-8"
+    },
+    {
+      "en": "Jabba the Hutt",
+      "de": "Jabba der Hutte",
+      "es": "Jabba el Hutt",
+      "fr": "Jabba le Hutt",
+      "nl": "Jabba de Hutt"
+    },
+    {
+      "en": "Spock"
+    },
+    {
+      "en": "USS Enterprise"
+    },
+    {
+      "en": "Harry Potter"
+    },
+    {
+      "en": "Hermione Granger",
+      "nl": "Hermelien Griffel",
+      "pl": "Hermiona Granger"
+    },
+    {
+      "en": "Dumbledore",
+      "it": "Silente",
+      "nl": "Perkamentus"
+    },
+    {
+      "en": "Voldemort"
+    },
+    {
+      "en": "Hogwarts",
+      "fr": "Poudlard",
+      "nl": "Zweinstein",
+      "pl": "Hogwart"
+    },
+    {
+      "en": "Sorting Hat",
+      "de": "Sprechender Hut",
+      "es": "Sombrero Seleccionador",
+      "fr": "Choixpeau",
+      "it": "Cappello Parlante",
+      "nl": "Sorteerhoed",
+      "pl": "Tiara Przydziału",
+      "pt": "Chapéu Selecionador"
+    },
+    {
+      "en": "Golden Snitch",
+      "de": "Goldener Schnatz",
+      "es": "snitch dorada",
+      "fr": "Vif d'or",
+      "it": "Boccino d'oro",
+      "nl": "Gouden Snaai",
+      "pl": "złoty znicz",
+      "pt": "Snitch Dourada"
+    },
+    {
+      "en": "Dobby",
+      "pl": "Zgredek"
+    },
+    {
+      "en": "Gandalf"
+    },
+    {
+      "en": "Gollum"
+    },
+    {
+      "en": "Frodo",
+      "fr": "Frodon"
+    },
+    {
+      "en": "Eye of Sauron",
+      "de": "Auge Saurons",
+      "es": "Ojo de Sauron",
+      "fr": "Œil de Sauron",
+      "it": "Occhio di Sauron",
+      "nl": "Oog van Sauron",
+      "pl": "Oko Saurona",
+      "pt": "Olho de Sauron"
+    },
+    {
+      "en": "Mickey Mouse",
+      "de": "Micky Maus",
+      "fr": "Mickey",
+      "it": "Topolino",
+      "pl": "Myszka Miki",
+      "pt": "Rato Mickey"
+    },
+    {
+      "en": "Minnie Mouse",
+      "de": "Minnie Maus",
+      "fr": "Minnie",
+      "it": "Minnie",
+      "pl": "Myszka Minnie",
+      "pt": "Minnie"
+    },
+    {
+      "en": "Donald Duck",
+      "es": "Pato Donald",
+      "fr": "Donald",
+      "it": "Paperino",
+      "pl": "Kaczor Donald",
+      "pt": "Pato Donald"
+    },
+    {
+      "en": "Goofy",
+      "fr": "Dingo",
+      "it": "Pippo",
+      "pt": "Pateta"
+    },
+    {
+      "en": "Simba"
+    },
+    {
+      "en": "Nemo"
+    },
+    {
+      "en": "Dory",
+      "de": "Dorie"
+    },
+    {
+      "en": "Buzz Lightyear",
+      "fr": "Buzz l'Éclair",
+      "pl": "Buzz Astral"
+    },
+    {
+      "en": "Woody",
+      "pl": "Chudy"
+    },
+    {
+      "en": "Mr. Potato Head",
+      "de": "Mr. Kartoffelkopf",
+      "es": "Señor Patata",
+      "fr": "Monsieur Patate",
+      "it": "Mr. Potato",
+      "nl": "Meneer Aardappelhoofd",
+      "pl": "Pan Bulwa",
+      "pt": "Sr. Cabeça de Batata"
+    },
+    {
+      "en": "WALL-E"
+    },
+    {
+      "en": "Elsa"
+    },
+    {
+      "en": "Olaf"
+    },
+    {
+      "en": "Moana",
+      "de": "Vaiana",
+      "es": "Vaiana",
+      "fr": "Vaiana",
+      "it": "Vaiana",
+      "nl": "Vaiana",
+      "pl": "Vaiana",
+      "pt": "Vaiana"
+    },
+    {
+      "en": "Stitch"
+    },
+    {
+      "en": "Dumbo"
+    },
+    {
+      "en": "Bambi"
+    },
+    {
+      "en": "Pinocchio",
+      "es": "Pinocho",
+      "nl": "Pinokkio",
+      "pl": "Pinokio",
+      "pt": "Pinóquio"
+    },
+    {
+      "en": "Cinderella",
+      "es": "Cenicienta",
+      "fr": "Cendrillon",
+      "it": "Cenerentola",
+      "nl": "Assepoester",
+      "pl": "Kopciuszek",
+      "pt": "Cinderela"
+    },
+    {
+      "en": "Snow White",
+      "de": "Schneewittchen",
+      "es": "Blancanieves",
+      "fr": "Blanche-Neige",
+      "it": "Biancaneve",
+      "nl": "Sneeuwwitje",
+      "pl": "Królewna Śnieżka",
+      "pt": "Branca de Neve"
+    },
+    {
+      "en": "Shrek"
+    },
+    {
+      "en": "Minion",
+      "pl": "Minionek",
+      "pt": "Mínimo"
+    },
+    {
+      "en": "Gru"
+    },
+    {
+      "en": "Lightning McQueen",
+      "es": "Rayo McQueen",
+      "fr": "Flash McQueen",
+      "it": "Saetta McQueen",
+      "nl": "Bliksem McQueen",
+      "pl": "Zygzak McQueen",
+      "pt": "Faísca McQueen"
+    },
+    {
+      "en": "Mike Wazowski",
+      "de": "Mike Glotzkowski",
+      "fr": "Bob Razowski"
+    },
+    {
+      "en": "Sulley",
+      "fr": "Sulli"
+    },
+    {
+      "en": "Baymax"
+    },
+    {
+      "en": "Kung Fu Panda",
+      "pt": "Panda do Kung Fu"
+    },
+    {
+      "en": "Winnie the Pooh",
+      "de": "Winnie Puuh",
+      "fr": "Winnie l'Ourson",
+      "nl": "Winnie de Poeh",
+      "pl": "Kubuś Puchatek"
+    },
+    {
+      "en": "Tigger",
+      "fr": "Tigrou",
+      "it": "Tigro",
+      "nl": "Teigetje",
+      "pl": "Tygrysek",
+      "pt": "Tigre"
+    },
+    {
+      "en": "Eeyore",
+      "de": "I-Aah",
+      "es": "Ígor",
+      "fr": "Bourriquet",
+      "it": "Ih-Oh",
+      "nl": "Iejoor",
+      "pl": "Kłapouchy",
+      "pt": "Igor"
+    },
+    {
+      "en": "Peter Pan",
+      "pl": "Piotruś Pan"
+    },
+    {
+      "en": "Tinker Bell",
+      "es": "Campanilla",
+      "fr": "Fée Clochette",
+      "it": "Trilli",
+      "nl": "Tinkerbell",
+      "pl": "Dzwoneczek",
+      "pt": "Sininho"
+    },
+    {
+      "en": "Captain Hook",
+      "de": "Käpt'n Hook",
+      "es": "Capitán Garfio",
+      "fr": "Capitaine Crochet",
+      "it": "Capitan Uncino",
+      "nl": "Kapitein Haak",
+      "pl": "Kapitan Hak",
+      "pt": "Capitão Gancho"
+    },
+    {
+      "en": "Mary Poppins"
+    },
+    {
+      "en": "Aladdin",
+      "es": "Aladdín",
+      "pl": "Aladyn"
+    },
+    {
+      "en": "Ariel",
+      "nl": "Ariël"
+    },
+    {
+      "en": "Ursula",
+      "es": "Úrsula",
+      "pl": "Urszula",
+      "pt": "Úrsula"
+    },
+    {
+      "en": "Mulan",
+      "es": "Mulán"
+    },
+    {
+      "en": "Maleficent",
+      "es": "Maléfica",
+      "fr": "Maléfique",
+      "it": "Malefica",
+      "nl": "Malafide",
+      "pl": "Diabolina",
+      "pt": "Maléfica"
+    },
+    {
+      "en": "Cruella de Vil",
+      "fr": "Cruella d'Enfer",
+      "it": "Crudelia De Mon",
+      "pl": "Cruella De Mon"
+    },
+    {
+      "en": "SpongeBob SquarePants",
+      "de": "SpongeBob Schwammkopf",
+      "es": "Bob Esponja",
+      "fr": "Bob l'éponge",
+      "pl": "SpongeBob Kanciastoporty"
+    },
+    {
+      "en": "Patrick Star",
+      "es": "Patricio Estrella",
+      "fr": "Patrick Étoile",
+      "it": "Patrick Stella",
+      "nl": "Patrick Ster",
+      "pl": "Patryk Rozgwiazda",
+      "pt": "Patrick Estrela"
+    },
+    {
+      "en": "Homer Simpson"
+    },
+    {
+      "en": "Bart Simpson"
+    },
+    {
+      "en": "Marge Simpson"
+    },
+    {
+      "en": "Peppa Pig",
+      "de": "Peppa Wutz",
+      "nl": "Peppa Big",
+      "pl": "Świnka Peppa",
+      "pt": "Porquinha Peppa"
+    },
+    {
+      "en": "Scooby-Doo"
+    },
+    {
+      "en": "Mystery Machine",
+      "es": "Máquina del Misterio",
+      "pl": "Wehikuł Tajemnic",
+      "pt": "Máquina Mistério"
+    },
+    {
+      "en": "Tom and Jerry",
+      "de": "Tom und Jerry",
+      "es": "Tom y Jerry",
+      "fr": "Tom et Jerry",
+      "it": "Tom e Jerry",
+      "nl": "Tom en Jerry",
+      "pl": "Tom i Jerry",
+      "pt": "Tom e Jerry"
+    },
+    {
+      "en": "Bugs Bunny",
+      "pl": "Królik Bugs"
+    },
+    {
+      "en": "Daffy Duck",
+      "es": "Pato Lucas",
+      "pl": "Kaczor Daffy"
+    },
+    {
+      "en": "Tweety",
+      "es": "Piolín",
+      "fr": "Titi",
+      "it": "Titti"
+    },
+    {
+      "en": "Road Runner",
+      "es": "Correcaminos",
+      "fr": "Bip Bip",
+      "it": "Beep Beep",
+      "pl": "Struś Pędziwiatr",
+      "pt": "Bip-Bip"
+    },
+    {
+      "en": "Wile E. Coyote",
+      "es": "Coyote",
+      "fr": "Vil Coyote",
+      "it": "Willy il Coyote",
+      "pl": "Wiluś E. Kojot",
+      "pt": "Coiote"
+    },
+    {
+      "en": "Pink Panther",
+      "de": "Rosaroter Panther",
+      "es": "Pantera Rosa",
+      "fr": "Panthère rose",
+      "it": "Pantera Rosa",
+      "pl": "Różowa Pantera",
+      "pt": "Pantera Cor-de-Rosa"
+    },
+    {
+      "en": "Popeye",
+      "it": "Braccio di Ferro"
+    },
+    {
+      "en": "Garfield"
+    },
+    {
+      "en": "Snoopy"
+    },
+    {
+      "en": "Charlie Brown"
+    },
+    {
+      "en": "Smurf",
+      "de": "Schlumpf",
+      "es": "Pitufo",
+      "fr": "Schtroumpf",
+      "it": "Puffo",
+      "pl": "Smerf",
+      "pt": "Estrunfe"
+    },
+    {
+      "en": "Shaun the Sheep",
+      "de": "Shaun das Schaf",
+      "es": "La oveja Shaun",
+      "fr": "Shaun le mouton",
+      "it": "Shaun vita da pecora",
+      "nl": "Shaun het Schaap",
+      "pl": "Baranek Shaun",
+      "pt": "Ovelha Choné"
+    },
+    {
+      "en": "Wallace and Gromit",
+      "de": "Wallace und Gromit",
+      "es": "Wallace y Gromit",
+      "fr": "Wallace et Gromit",
+      "it": "Wallace e Gromit",
+      "nl": "Wallace en Gromit",
+      "pl": "Wallace i Gromit",
+      "pt": "Wallace e Gromit"
+    },
+    {
+      "en": "Pingu"
+    },
+    {
+      "en": "Teletubbies",
+      "pl": "Teletubisie"
+    },
+    {
+      "en": "Kermit the Frog",
+      "de": "Kermit der Frosch",
+      "es": "rana Gustavo",
+      "fr": "Kermit la grenouille",
+      "it": "Kermit la rana",
+      "nl": "Kermit de Kikker",
+      "pl": "Żaba Kermit",
+      "pt": "Sapo Cocas"
+    },
+    {
+      "en": "Miss Piggy",
+      "pl": "Panna Piggy"
+    },
+    {
+      "en": "Cookie Monster",
+      "de": "Krümelmonster",
+      "es": "Monstruo de las Galletas",
+      "nl": "Koekiemonster",
+      "pl": "Ciasteczkowy Potwór",
+      "pt": "Monstro das Bolachas"
+    },
+    {
+      "en": "Elmo",
+      "pt": "Simão"
+    },
+    {
+      "en": "Fred Flintstone",
+      "de": "Fred Feuerstein",
+      "es": "Pedro Picapiedra",
+      "fr": "Fred Pierrafeu"
+    },
+    {
+      "en": "James Bond"
+    },
+    {
+      "en": "Indiana Jones"
+    },
+    {
+      "en": "Terminator",
+      "pt": "Exterminador Implacável"
+    },
+    {
+      "en": "RoboCop"
+    },
+    {
+      "en": "E.T."
+    },
+    {
+      "en": "King Kong"
+    },
+    {
+      "en": "Godzilla"
+    },
+    {
+      "en": "Ghostbusters",
+      "es": "Cazafantasmas",
+      "fr": "SOS Fantômes",
+      "pl": "Pogromcy duchów",
+      "pt": "Caça-Fantasmas"
+    },
+    {
+      "en": "DeLorean"
+    },
+    {
+      "en": "Mr. Bean",
+      "pl": "Jaś Fasola"
+    },
+    {
+      "en": "Sherlock Holmes"
+    },
+    {
+      "en": "Zorro"
+    },
+    {
+      "en": "Jack Sparrow"
+    },
+    {
+      "en": "Willy Wonka"
+    },
+    {
+      "en": "Oompa Loompa",
+      "de": "Umpa-Lumpa",
+      "it": "Umpa Lumpa",
+      "nl": "Oempa Loempa",
+      "pl": "Umpa-Lumpa"
+    },
+    {
+      "en": "Edward Scissorhands",
+      "de": "Edward mit den Scherenhänden",
+      "es": "Eduardo Manostijeras",
+      "fr": "Edward aux mains d'argent",
+      "it": "Edward mani di forbice",
+      "pl": "Edward Nożycoręki",
+      "pt": "Eduardo Mãos de Tesoura"
+    },
+    {
+      "en": "Beetlejuice",
+      "es": "Bitelchús"
+    },
+    {
+      "en": "Wednesday Addams",
+      "es": "Miércoles Addams",
+      "fr": "Mercredi Addams",
+      "it": "Mercoledì Addams"
+    },
+    {
+      "en": "Dracula",
+      "es": "Drácula",
+      "pl": "Drakula",
+      "pt": "Drácula"
+    },
+    {
+      "en": "Pennywise",
+      "fr": "Grippe-Sou"
+    },
+    {
+      "en": "Dorothy",
+      "pl": "Dorotka"
+    },
+    {
+      "en": "Tin Man",
+      "de": "Blechmann",
+      "es": "Hombre de Hojalata",
+      "fr": "Homme de fer-blanc",
+      "it": "Uomo di Latta",
+      "nl": "Blikken Man",
+      "pl": "Blaszany Drwal",
+      "pt": "Homem de Lata"
+    },
+    {
+      "en": "Iron Throne",
+      "de": "Eiserner Thron",
+      "es": "Trono de Hierro",
+      "fr": "Trône de fer",
+      "it": "Trono di Spade",
+      "nl": "IJzeren Troon",
+      "pl": "Żelazny Tron",
+      "pt": "Trono de Ferro"
+    },
+    {
+      "en": "Titanic"
+    },
+    {
+      "en": "Demogorgon",
+      "fr": "Démogorgon",
+      "it": "Demogorgone"
+    }
+  ]
+}

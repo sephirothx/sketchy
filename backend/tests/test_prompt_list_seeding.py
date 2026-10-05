@@ -16,7 +16,7 @@ from app.db.models import (
     PromptVersion,
 )
 from app.db.seed import seed_prompt_lists
-from app.domain_values import PROMPT_LANGUAGES, PromptLanguage
+from app.domain_values import MIXED_PROMPT_LANGUAGE, PROMPT_LANGUAGES, PromptLanguage
 from app.prompt_content import (
     LIST_TAG_VOCABULARY,
     MAX_PLAYER_PROMPT_LISTS,
@@ -991,3 +991,33 @@ def test_an_override_keeps_its_own_version_when_the_default_is_raised():
     assert {language: version for language, version in versions.items() if language != "de"} == {
         language: 3 for language in PROMPT_LANGUAGES if language != "de"
     }
+
+
+async def test_superheroes_movies_and_landmarks_are_families_on_their_shelves():
+    """#1401: Superheroes and Movies and TV on *Pop culture*, Landmarks on
+    *Places*, each a family in all eight languages that a mixed room can pin;
+    Landmarks reuses Extended's landmarks, so a room picking both counts each
+    once."""
+    factory, engine = await create_test_db()
+    try:
+        repo = SqlAlchemyPromptListRepository(factory)
+        await seed_prompt_lists(repo)
+        catalogue = await repo.list_all()
+        for stem, shelf in (("superheroes", "pop-culture"), ("movies_and_tv", "pop-culture"), ("landmarks", "places")):
+            lists = [summary for summary in catalogue if summary.slug.endswith(f"_{stem}")]
+            assert {summary.language for summary in lists} == set(PROMPT_LANGUAGES), stem
+            assert {summary.family for summary in lists} == {f"english_{stem}"}, stem
+            assert {summary.shelf for summary in lists} == {shelf}, stem
+
+        french = await repo.resolve_selection(["french_movies_and_tv"])
+        assert "Dark Vador" in french.prompts
+        assert "Darth Vader" in french.aliases["Dark Vador"]
+
+        extended = (await repo.get_by_slug("english_extended")).prompt_count
+        landmarks = (await repo.get_by_slug("english_landmarks")).prompt_count
+        both = await repo.authorize_selection(
+            ["english_extended", "english_landmarks"], expected_language=MIXED_PROMPT_LANGUAGE
+        )
+        assert extended < both.prompt_count < extended + landmarks
+    finally:
+        await engine.dispose()

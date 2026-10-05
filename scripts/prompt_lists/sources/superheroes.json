@@ -1,0 +1,419 @@
+{
+  "slug": "superheroes",
+  "kind": "franchise",
+  "shelf": "pop-culture",
+  "position": 0,
+  "tags": [
+    "entertainment"
+  ],
+  "names": {
+    "en": "Superheroes",
+    "de": "Superhelden",
+    "es": "Superhéroes",
+    "fr": "Super-héros",
+    "it": "Supereroi",
+    "nl": "Superhelden",
+    "pl": "Superbohaterowie",
+    "pt": "Super-heróis"
+  },
+  "descriptions": {
+    "en": "Heroes, villains and their gear from comics and films.",
+    "de": "Helden, Schurken und ihre Ausrüstung aus Comics und Filmen.",
+    "es": "Héroes, villanos y su equipo de los cómics y el cine.",
+    "fr": "Héros, méchants et leur attirail, des comics et du cinéma.",
+    "it": "Eroi, cattivi e il loro equipaggiamento da fumetti e film.",
+    "nl": "Helden, schurken en hun uitrusting uit strips en films.",
+    "pl": "Bohaterowie, złoczyńcy i ich wyposażenie z komiksów i filmów.",
+    "pt": "Heróis, vilões e o seu equipamento, da banda desenhada e do cinema."
+  },
+  "prompts": [
+    {
+      "en": "Spider-Man",
+      "it": "Uomo Ragno",
+      "pt": "Homem-Aranha"
+    },
+    {
+      "en": "Iron Man",
+      "pt": "Homem de Ferro"
+    },
+    {
+      "en": "Captain America",
+      "es": "Capitán América",
+      "it": "Capitan America",
+      "pl": "Kapitan Ameryka",
+      "pt": "Capitão América"
+    },
+    {
+      "en": "Thor"
+    },
+    {
+      "en": "Hulk"
+    },
+    {
+      "en": "Black Widow",
+      "es": "Viuda Negra",
+      "fr": "Veuve noire",
+      "it": "Vedova Nera",
+      "pl": "Czarna Wdowa",
+      "pt": "Viúva Negra"
+    },
+    {
+      "en": "Hawkeye",
+      "es": "Ojo de Halcón",
+      "fr": "Œil de Faucon",
+      "it": "Occhio di Falco",
+      "pt": "Gavião Arqueiro"
+    },
+    {
+      "en": "Black Panther",
+      "es": "Pantera Negra",
+      "pl": "Czarna Pantera",
+      "pt": "Pantera Negra"
+    },
+    {
+      "en": "Doctor Strange",
+      "fr": "Docteur Strange",
+      "pl": "Doktor Strange",
+      "pt": "Doutor Estranho"
+    },
+    {
+      "en": "Captain Marvel",
+      "es": "Capitana Marvel",
+      "pl": "Kapitan Marvel",
+      "pt": "Capitão Marvel"
+    },
+    {
+      "en": "Ant-Man",
+      "pt": "Homem-Formiga"
+    },
+    {
+      "en": "Scarlet Witch",
+      "es": "Bruja Escarlata",
+      "fr": "Sorcière rouge",
+      "pl": "Szkarłatna Wiedźma",
+      "pt": "Feiticeira Escarlate"
+    },
+    {
+      "en": "Vision",
+      "es": "Visión",
+      "it": "Visione",
+      "pt": "Visão"
+    },
+    {
+      "en": "Falcon",
+      "pt": "Falcão"
+    },
+    {
+      "en": "Star-Lord"
+    },
+    {
+      "en": "Gamora"
+    },
+    {
+      "en": "Groot"
+    },
+    {
+      "en": "Rocket Raccoon"
+    },
+    {
+      "en": "Deadpool"
+    },
+    {
+      "en": "Wolverine",
+      "es": "Lobezno"
+    },
+    {
+      "en": "Storm",
+      "es": "Tormenta",
+      "fr": "Tornade",
+      "it": "Tempesta",
+      "pt": "Tempestade"
+    },
+    {
+      "en": "Cyclops",
+      "es": "Cíclope",
+      "fr": "Cyclope",
+      "it": "Ciclope",
+      "pl": "Cyklop",
+      "pt": "Ciclope"
+    },
+    {
+      "en": "Jean Grey"
+    },
+    {
+      "en": "Professor X",
+      "es": "Profesor X",
+      "fr": "Professeur X",
+      "pl": "Profesor X"
+    },
+    {
+      "en": "Magneto",
+      "fr": "Magnéto"
+    },
+    {
+      "en": "Mystique",
+      "es": "Mística",
+      "it": "Mystica",
+      "pt": "Mística"
+    },
+    {
+      "en": "Rogue",
+      "es": "Pícara",
+      "fr": "Malicia"
+    },
+    {
+      "en": "Nightcrawler",
+      "es": "Rondador Nocturno",
+      "fr": "Diablo"
+    },
+    {
+      "en": "Silver Surfer",
+      "es": "Estela Plateada",
+      "fr": "Surfer d'argent",
+      "pl": "Srebrny Surfer",
+      "pt": "Surfista Prateado"
+    },
+    {
+      "en": "Mister Fantastic",
+      "es": "Mister Fantástico",
+      "pt": "Senhor Fantástico"
+    },
+    {
+      "en": "Human Torch",
+      "es": "Antorcha Humana",
+      "fr": "Torche humaine",
+      "it": "Torcia Umana",
+      "pl": "Ludzka Pochodnia",
+      "pt": "Tocha Humana"
+    },
+    {
+      "en": "Daredevil",
+      "pt": "Demolidor"
+    },
+    {
+      "en": "Punisher",
+      "es": "Castigador",
+      "pt": "Justiceiro"
+    },
+    {
+      "en": "Ghost Rider"
+    },
+    {
+      "en": "Thanos"
+    },
+    {
+      "en": "Loki"
+    },
+    {
+      "en": "Green Goblin",
+      "de": "Grüner Kobold",
+      "es": "Duende Verde",
+      "fr": "Bouffon vert",
+      "it": "Goblin",
+      "pl": "Zielony Goblin",
+      "pt": "Duende Verde"
+    },
+    {
+      "en": "Doctor Octopus",
+      "fr": "Docteur Octopus",
+      "it": "Dottor Octopus",
+      "pl": "Doktor Octopus",
+      "pt": "Doutor Octopus"
+    },
+    {
+      "en": "Venom"
+    },
+    {
+      "en": "Red Skull",
+      "es": "Cráneo Rojo",
+      "fr": "Crâne rouge",
+      "it": "Teschio Rosso",
+      "pl": "Czerwona Czaszka",
+      "pt": "Caveira Vermelha"
+    },
+    {
+      "en": "Doctor Doom",
+      "es": "Doctor Muerte",
+      "fr": "Docteur Fatalis",
+      "it": "Dottor Destino",
+      "pl": "Doktor Doom",
+      "pt": "Doutor Doom"
+    },
+    {
+      "en": "Superman",
+      "pt": "Super-Homem"
+    },
+    {
+      "en": "Batman"
+    },
+    {
+      "en": "Wonder Woman",
+      "pt": "Mulher-Maravilha"
+    },
+    {
+      "en": "Flash"
+    },
+    {
+      "en": "Aquaman"
+    },
+    {
+      "en": "Green Lantern",
+      "es": "Linterna Verde",
+      "it": "Lanterna Verde",
+      "pl": "Zielona Latarnia",
+      "pt": "Lanterna Verde"
+    },
+    {
+      "en": "Cyborg"
+    },
+    {
+      "en": "Robin"
+    },
+    {
+      "en": "Shazam"
+    },
+    {
+      "en": "Green Arrow",
+      "es": "Flecha Verde",
+      "it": "Freccia Verde",
+      "pl": "Zielona Strzała",
+      "pt": "Arqueiro Verde"
+    },
+    {
+      "en": "Catwoman",
+      "pt": "Mulher-Gato"
+    },
+    {
+      "en": "Harley Quinn"
+    },
+    {
+      "en": "Poison Ivy",
+      "es": "Hiedra Venenosa"
+    },
+    {
+      "en": "Joker"
+    },
+    {
+      "en": "Riddler",
+      "es": "Enigma",
+      "fr": "Homme-Mystère",
+      "it": "Enigmista",
+      "pl": "Człowiek-Zagadka",
+      "pt": "Enigma"
+    },
+    {
+      "en": "Penguin",
+      "de": "Pinguin",
+      "es": "Pingüino",
+      "fr": "Pingouin",
+      "it": "Pinguino",
+      "pl": "Pingwin",
+      "pt": "Pinguim"
+    },
+    {
+      "en": "Two-Face",
+      "es": "Dos Caras",
+      "fr": "Double-Face",
+      "it": "Due Facce",
+      "pl": "Dwie Twarze",
+      "pt": "Duas-Caras"
+    },
+    {
+      "en": "Bane"
+    },
+    {
+      "en": "Scarecrow",
+      "es": "Espantapájaros",
+      "fr": "Épouvantail",
+      "it": "Spaventapasseri",
+      "pl": "Strach na Wróble",
+      "pt": "Espantalho"
+    },
+    {
+      "en": "Mr. Freeze",
+      "fr": "Mister Freeze"
+    },
+    {
+      "en": "Hellboy"
+    },
+    {
+      "en": "Mr. Incredible",
+      "es": "Mr. Increíble",
+      "fr": "Mr. Indestructible",
+      "it": "Mr. Incredibile",
+      "pl": "Pan Iniemamocny",
+      "pt": "Sr. Incrível"
+    },
+    {
+      "en": "Elastigirl",
+      "pl": "Elastyna",
+      "pt": "Mulher-Elástica"
+    },
+    {
+      "en": "Ninja Turtle",
+      "es": "Tortuga Ninja",
+      "fr": "Tortue Ninja",
+      "it": "Tartaruga Ninja",
+      "pl": "Żółw Ninja",
+      "pt": "Tartaruga Ninja"
+    },
+    {
+      "en": "Power Ranger"
+    },
+    {
+      "en": "Sailor Moon"
+    },
+    {
+      "en": "Batmobile",
+      "de": "Batmobil",
+      "es": "Batmóvil",
+      "pl": "batmobil",
+      "pt": "Batmóvel"
+    },
+    {
+      "en": "Bat-Signal",
+      "es": "Batseñal",
+      "fr": "Bat-signal",
+      "it": "Bat-segnale",
+      "pl": "bat-sygnał",
+      "pt": "Bat-Sinal"
+    },
+    {
+      "en": "Batarang",
+      "pl": "batarang"
+    },
+    {
+      "en": "Mjölnir",
+      "es": "Mjolnir",
+      "it": "martello di Thor"
+    },
+    {
+      "en": "Infinity Gauntlet",
+      "de": "Infinity-Handschuh",
+      "es": "Guantelete del Infinito",
+      "fr": "Gant de l'infini",
+      "it": "Guanto dell'Infinito",
+      "pl": "Rękawica Nieskończoności",
+      "pt": "Manopla do Infinito"
+    },
+    {
+      "en": "Kryptonite",
+      "de": "Kryptonit",
+      "es": "Kryptonita",
+      "it": "kryptonite",
+      "nl": "kryptoniet",
+      "pl": "kryptonit",
+      "pt": "Kriptonite"
+    },
+    {
+      "en": "Captain America's shield",
+      "de": "Captain-America-Schild",
+      "es": "escudo del Capitán América",
+      "fr": "bouclier de Captain America",
+      "it": "scudo di Capitan America",
+      "nl": "schild van Captain America",
+      "pl": "tarcza Kapitana Ameryki",
+      "pt": "Escudo do Capitão América"
+    }
+  ]
+}
