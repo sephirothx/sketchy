@@ -17,7 +17,7 @@ export const LEGAL_IT: LegalDocuments = {
         id: "operator",
         heading: "Chi è responsabile",
         body: [
-          "Sketchy è gestito dal suo gestore, con sede in Svizzera, che decide " +
+          "Sketchy è offerto dal suo gestore, con sede in Svizzera, che decide " +
             "che cosa viene conservato e perché. Puoi scrivere al gestore a " +
             "{contact}.",
           "A tutto ciò che è descritto qui si applica la legge svizzera sulla " +
@@ -33,22 +33,30 @@ export const LEGAL_IT: LegalDocuments = {
           "Il nome con cui giochi, e il nome utente di un account.",
           "Se crei un account: il tuo indirizzo email, la tua password – " +
             "conservata solo come hash unidirezionale, da cui non si può " +
-            "risalire a essa – e le passkey o l'accesso in due passaggi che " +
+            "risalire a essa – e le passkey o l'autenticazione a due fattori che " +
             "configuri.",
           "Le tue impostazioni e il tuo profilo: le tue lingue e preferenze, " +
-            "un'immagine del profilo se ne carichi una, i tuoi amici e i " +
-            "giocatori che blocchi.",
-          "Le tue partite: le stanze in cui hai giocato, i tuoi tentativi, punti " +
+            "un'immagine del profilo se ne carichi una, i tuoi amici, i " +
+            "giocatori che blocchi, le impostazioni di stanza salvate e le liste " +
+            "a cui metti la stella.",
+          "Le tue partite: le stanze in cui hai giocato, le tue risposte, punti " +
             "e risultati, le tue reazioni e i disegni che hai fatto.",
           "La chat, nelle stanze e nella lobby.",
           "Le liste di parole che scrivi, e se le hai pubblicate.",
           "Le segnalazioni che invii e quelle che ti riguardano, con i messaggi " +
-            "e i disegni a cui si riferiscono.",
+            "e i disegni a cui si riferiscono, e ogni ammonimento o sospensione " +
+            "del tuo account.",
+          "Un registro di sicurezza e moderazione delle azioni delicate – per " +
+            "esempio i cambi di password e di email, il blocco di qualcuno, il " +
+            "cambio della tua immagine e le decisioni di moderazione.",
           "I tuoi accessi: una descrizione approssimativa di ogni dispositivo " +
             "(ad esempio «Firefox su Windows»), quando è stato usato l'ultima " +
             "volta e un hash con chiave segreta dell'indirizzo di rete da cui " +
-            "proveniva, mai l'indirizzo stesso. Lo stesso tipo di hash limita " +
-            "quante volte si può fare qualcosa da uno stesso indirizzo.",
+            "proveniva. Lo stesso tipo di hash è conservato nel registro qui " +
+            "sopra e limita quante volte si può fare qualcosa da uno stesso " +
+            "indirizzo. Sketchy non conserva mai l'indirizzo stesso, anche se i " +
+            "fornitori che trasportano il suo traffico lo vedono.",
+          "Quando entri e esci dalle stanze, per poter rintracciare i problemi.",
           "Le segnalazioni di bug che invii, con uno screenshot se ne alleghi " +
             "uno.",
           "Informazioni tecniche sulla tua connessione e sugli errori del tuo " +
@@ -62,14 +70,20 @@ export const LEGAL_IT: LegalDocuments = {
         body: [
           "Per far funzionare il gioco a cui vuoi giocare: stanze, turni, " +
             "punti, la tua cronologia e il tuo account. È l'accordo tra te e il " +
-            "gestore, come descritto nei termini d'uso.",
+            "gestore, come descritto nei termini d'uso. Il tuo indirizzo email " +
+            "serve solo al tuo account: per confermarlo, per reimpostare la " +
+            "password e per avvisarti di modifiche e decisioni che lo " +
+            "riguardano.",
           "Per mantenere il gioco equo e sicuro: moderare le segnalazioni, " +
             "fermare imbrogli, spam e abusi, e proteggere gli account. È " +
             "l'interesse legittimo del gestore e di tutti quelli che giocano.",
           "Per trovare e risolvere i problemi, per lo stesso motivo.",
+          "Per rispondere alle autorità quando la legge obbliga il gestore a " +
+            "farlo.",
           "Nulla su di te viene usato per la pubblicità, venduto o usato per " +
-            "costruire un tuo profilo, e nessuna decisione su di te viene presa " +
-            "solo da una macchina.",
+            "costruire un tuo profilo, e nessuna decisione con effetti giuridici " +
+            "o altrettanto significativi per te viene presa solo da una " +
+            "macchina.",
         ],
       },
       {
@@ -79,10 +93,12 @@ export const LEGAL_IT: LegalDocuments = {
           "Chi è in una stanza con te vede il tuo nome, i tuoi messaggi, i tuoi " +
             "disegni e il tuo punteggio.",
           "I disegni fatti in una stanza pubblica compaiono nella Galleria, dove " +
-            "chiunque può vederli, con il nome con cui sono stati disegnati. I " +
-            "disegni di una stanza privata li vede solo chi c'era. Eliminare il " +
-            "tuo account cancella tutti i tuoi disegni; per farne rimuovere uno " +
-            "solo, scrivi a {contact}.",
+            "chiunque può vederli, con il nome con cui sono stati disegnati: " +
+            "giocare in una stanza pubblica è giocare in pubblico, secondo i " +
+            "termini d'uso. I disegni di una stanza privata li vede solo chi " +
+            "c'era. Eliminare il tuo account cancella tutti i tuoi disegni, " +
+            "tranne una copia allegata a una segnalazione, che resta con essa; " +
+            "per farne rimuovere uno solo, scrivi a {contact}.",
           "Una lista di parole che pubblichi può essere letta da tutti, con il " +
             "tuo nome come autore. Il tuo profilo mostra ciò che scegli di " +
             "mostrare.",
@@ -95,11 +111,15 @@ export const LEGAL_IT: LegalDocuments = {
           "Nessuno riceve i tuoi dati per usarli per scopi propri. Il gestore " +
             "si affida ad alcuni fornitori per far funzionare Sketchy – hosting, " +
             "distribuzione in rete ed email – che li trattano solo secondo le " +
-            "sue istruzioni. Quando uno di loro lo fa fuori dalla Svizzera e " +
-            "dall'UE, è con garanzie riconosciute dalla legge, come le clausole " +
-            "contrattuali tipo della Commissione europea.",
-          "I moderatori nominati dal gestore vedono le segnalazioni su cui " +
-            "decidono e i messaggi e i disegni a cui si riferiscono.",
+            "istruzioni del gestore. Quando uno di loro lo fa fuori dalla " +
+            "Svizzera e dall'UE, è con garanzie riconosciute dalla legge, come le " +
+            "clausole contrattuali tipo della Commissione europea; scrivi a " +
+            "{contact} per sapere quali paesi e quali garanzie.",
+          "I moderatori e gli amministratori nominati dal gestore vedono le " +
+            "segnalazioni su cui decidono e ciò a cui si riferiscono. Gli " +
+            "amministratori leggono anche le segnalazioni di bug e possono " +
+            "consultare un account e la sua attività recente quando qualcosa va " +
+            "storto.",
           "I dati vengono forniti alle autorità solo quando la legge lo " +
             "richiede.",
         ],
@@ -109,15 +129,23 @@ export const LEGAL_IT: LegalDocuments = {
         heading: "Per quanto tempo viene conservato",
         body: [],
         items: [
-          "Chat: 30 giorni. Le righe citate in una segnalazione restano con " +
-            "essa finché servono alla moderazione.",
-          "Ospiti: eliminati dopo 30 giorni senza una partita conclusa, oppure " +
-            "dopo 365 giorni senza giocare una volta che ne hanno una.",
-          "Account: finché non li elimini.",
-          "Accessi: finché non scadono, e 30 giorni dopo.",
-          "Email inviate a te: 30 giorni.",
+          "Chat: 30 giorni, tranne le righe citate in una segnalazione, che " +
+            "restano con essa.",
+          "Le segnalazioni e ciò che citano, gli ammonimenti, le sospensioni, il " +
+            "registro di sicurezza e moderazione e le segnalazioni di bug: " +
+            "conservati come traccia duratura della moderazione e della " +
+            "sicurezza del servizio, anche dopo che hai eliminato il tuo " +
+            "account. Le voci del registro da quel momento non ti nominano più.",
           "Screenshot delle segnalazioni di bug: finché la segnalazione non " +
             "viene gestita, e mai più di 90 giorni.",
+          "Ospiti: eliminati dopo 30 giorni senza una partita conclusa, oppure " +
+            "dopo 365 giorni senza giocare una volta che ne hanno una.",
+          "Account: finché non li elimini. Amicizie, blocchi, liste di parole, " +
+            "impostazioni di stanza salvate e stelle: finché non li rimuovi o " +
+            "elimini il tuo account.",
+          "Accessi: finché non scadono, e 30 giorni dopo.",
+          "Entrate e uscite dalle stanze: 30 giorni.",
+          "Email inviate a te: 30 giorni.",
           "Esportazioni di dati che richiedi: 7 giorni.",
           "Le partite concluse – punti, disegni, reazioni – fanno parte della " +
             "cronologia di tutti quelli che hanno giocato, quindi vengono " +
@@ -130,18 +158,20 @@ export const LEGAL_IT: LegalDocuments = {
         id: "rights",
         heading: "I tuoi diritti",
         body: [
-          "Nelle Impostazioni puoi scaricare tutto ciò che Sketchy conserva su " +
-            "di te, correggere il tuo nome, la tua email e il tuo profilo, ed " +
-            "eliminare il tuo account o la tua identità di ospite, quando vuoi.",
-          "Hai anche il diritto di sapere che cosa viene conservato su di te e " +
-            "come viene usato, di farlo correggere o cancellare, di opporti al " +
-            "suo uso per gli interessi legittimi del gestore e di farne limitare " +
-            "l'uso. Scrivi a {contact} per tutto ciò che le Impostazioni non " +
-            "permettono.",
+          "Nelle Impostazioni puoi scaricare una copia dei tuoi dati, correggere " +
+            "il tuo nome, la tua email e il tuo profilo, ed eliminare il tuo " +
+            "account o la tua identità di ospite, quando vuoi.",
+          "Hai anche il diritto di ottenere tutto ciò che viene conservato su di " +
+            "te e come viene usato – compreso ciò che il download non contiene, " +
+            "come le segnalazioni che ti riguardano –, di farlo correggere o " +
+            "cancellare, di riceverlo in un formato che puoi portare altrove, di " +
+            "opporti al suo uso per gli interessi legittimi del gestore e di " +
+            "farne limitare l'uso. Scrivi a {contact} per tutto ciò che le " +
+            "Impostazioni non permettono.",
           "Se ritieni che i tuoi dati siano trattati male, puoi presentare " +
-            "reclamo a un'autorità di protezione dei dati: in Svizzera l'Incaricato " +
-            "federale della protezione dei dati e della trasparenza (IFPDT), e " +
-            "nell'UE l'autorità del paese in cui vivi.",
+            "reclamo a un'autorità di protezione dei dati: in Svizzera " +
+            "l'Incaricato federale della protezione dei dati e della trasparenza " +
+            "(IFPDT), e nell'UE l'autorità del paese in cui vivi.",
         ],
       },
       {
@@ -170,8 +200,8 @@ export const LEGAL_IT: LegalDocuments = {
         body: [
           "Se questa informativa cambia, la nuova versione viene pubblicata " +
             "qui. Una modifica che incide su come vengono usati i tuoi dati non " +
-            "si applicherà a ciò che è stato conservato prima senza avvisarti " +
-            "prima.",
+            "si applicherà a ciò che è stato conservato in precedenza senza " +
+            "avvisarti prima.",
         ],
       },
     ],
@@ -213,10 +243,11 @@ export const LEGAL_IT: LegalDocuments = {
         id: "fair-play",
         heading: "Giocare lealmente",
         body: [
-          "Segui le regole. Non imbrogliare – niente tentativi automatici, " +
-            "niente suggerire la risposta agli altri, niente giocare come più " +
-            "persone per avere un vantaggio –, non cercare di rompere o " +
-            "sovraccaricare Sketchy e non usarlo per nulla di illecito.",
+          "Segui le regole. Non imbrogliare – nessuna risposta automatica, " +
+            "nessun suggerimento della risposta agli altri, nessuna partita " +
+            "giocata come più persone per avere un vantaggio –, non cercare di " +
+            "rompere o sovraccaricare Sketchy e non usarlo per nulla di " +
+            "illecito.",
         ],
       },
       {
@@ -238,17 +269,19 @@ export const LEGAL_IT: LegalDocuments = {
         heading: "Moderazione",
         body: [
           "I moderatori possono nascondere contenuti, ammonire giocatori e " +
-            "sospendere o bandire gli account che violano questi termini o le " +
-            "regole. Ti viene detto a quale regola si riferisce una decisione, e " +
-            "un account sospeso può comunque scaricare ed eliminare i propri " +
-            "dati.",
+            "sospendere gli account che violano questi termini o le regole. " +
+            "Quando un moderatore registra a quale regola si riferisce una " +
+            "decisione, ti viene detto. I dati di un account sospeso possono " +
+            "ancora essere scaricati o eliminati, da un dispositivo che aveva " +
+            "effettuato l'accesso quando è iniziata la sospensione oppure " +
+            "scrivendo a {contact}.",
         ],
       },
       {
         id: "availability",
         heading: "Nessuna garanzia",
         body: [
-          "Sketchy è fornito così com'è, senza promettere che sia sempre " +
+          "Sketchy è fornito così com'è, senza alcuna garanzia che sia sempre " +
             "disponibile, che funzioni senza errori o che conservi per sempre " +
             "ciò che hai fatto. Il gestore può modificarlo, sospenderlo o " +
             "chiuderlo.",
@@ -277,19 +310,20 @@ export const LEGAL_IT: LegalDocuments = {
         id: "law",
         heading: "Quale legge si applica",
         body: [
-          "Questi termini sono regolati dal diritto svizzero. Le controversie " +
-            "spettano ai tribunali della sede del gestore in Svizzera, a meno che " +
-            "la legge del paese in cui vivi non ti dia, in quanto consumatore, il " +
-            "diritto di agire in giudizio nel tuo paese.",
+          "Questi termini sono regolati dal diritto svizzero, che non ti toglie " +
+            "la tutela che, in quanto consumatore, ti riconosce la legge " +
+            "imperativa del paese in cui vivi. Le controversie spettano ai " +
+            "tribunali della sede del gestore in Svizzera, a meno che quella " +
+            "legge non ti dia il diritto di agire in giudizio nel tuo paese.",
         ],
       },
       {
         id: "changes",
         heading: "Modifiche a questi termini",
         body: [
-          "Se questi termini cambiano, la nuova versione viene pubblicata qui. " +
-            "Continuare a giocare dopo una modifica significa accettarla. Le " +
-            "domande vanno a {contact}.",
+          "Se questi termini cambiano su un punto importante, ti verrà detto " +
+            "prima che la modifica si applichi, e continuare a giocare dopo " +
+            "significa accettarla. Le domande vanno a {contact}.",
         ],
       },
     ],

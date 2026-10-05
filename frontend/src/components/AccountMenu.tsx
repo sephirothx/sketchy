@@ -40,6 +40,7 @@ import {
   ImageIcon,
   KeyIcon,
   LeaveIcon,
+  LockIcon,
   PlusIcon,
   ShieldIcon,
   UserIcon,
@@ -351,7 +352,7 @@ export function AccountMenu({ compact = false, inRoom = false }: {
               </MenuItem>
               {/* One entry for both: the page switches between them (#1417). */}
               <MenuItem
-                icon={<ShieldIcon size={16} />}
+                icon={<LockIcon size={16} />}
                 onClick={() => {
                   setMenuOpen(false);
                   navigate("/privacy");

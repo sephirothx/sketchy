@@ -1,27 +1,29 @@
 import type { LegalDocuments } from "./types.ts";
 
 /** Polityka prywatności i warunki korzystania, po polsku (#1417).
-A translation of `en.ts`, machine-drafted and awaiting a native reader. */
+A translation of `en.ts`, machine-drafted and awaiting a native reader.
+Gender-neutral forms and lower-case "ty", as the interface writes them;
+"hasło do konta" for a password, since a bare "hasło" is a game prompt. */
 export const LEGAL_PL: LegalDocuments = {
   locale: "pl",
   privacy: {
     title: "Polityka prywatności",
     intro: [
-      "Ta polityka wyjaśnia, co Sketchy przechowuje na Twój temat, dlaczego, " +
+      "Ta polityka wyjaśnia, co Sketchy przechowuje na twój temat, dlaczego, " +
         "jak długo i co możesz z tym zrobić. Sketchy jest darmowe: nie " +
-        "wyświetla reklam, a nic o Tobie nie jest sprzedawane ani używane do " +
-        "sprzedawania Ci czegokolwiek.",
+        "wyświetla reklam, a nic o tobie nie jest sprzedawane ani używane do " +
+        "sprzedawania ci czegokolwiek.",
     ],
     sections: [
       {
         id: "operator",
         heading: "Kto odpowiada",
         body: [
-          "Sketchy prowadzi jego operator z siedzibą w Szwajcarii, który decyduje, " +
-            "co jest przechowywane i dlaczego. Możesz napisać do operatora na " +
-            "adres {contact}.",
+          "Sketchy prowadzi jego operator z siedzibą w Szwajcarii, który " +
+            "decyduje, co jest przechowywane i dlaczego. Do operatora można " +
+            "napisać na adres {contact}.",
           "Do wszystkiego, co tu opisano, stosuje się szwajcarskie prawo o " +
-            "ochronie danych, a gdy grasz z Unii Europejskiej, także unijne " +
+            "ochronie danych, a przy grze z Unii Europejskiej także unijne " +
             "ogólne rozporządzenie o ochronie danych (RODO).",
         ],
       },
@@ -31,59 +33,73 @@ export const LEGAL_PL: LegalDocuments = {
         body: ["Tylko to, czego gra potrzebuje, żeby działać, być uczciwa i bezpieczna:"],
         items: [
           "Nazwa, pod którą grasz, i nazwa użytkownika konta.",
-          "Jeśli zakładasz konto: Twój adres e-mail, Twoje hasło – przechowywane " +
-            "wyłącznie jako jednokierunkowy skrót, z którego nie da się go " +
-            "odtworzyć – oraz klucze dostępu lub logowanie dwuetapowe, jeśli je " +
-            "skonfigurujesz.",
-          "Twoje ustawienia i profil: Twoje języki i preferencje, zdjęcie " +
-            "profilowe, jeśli je wgrasz, Twoi znajomi i gracze, których " +
-            "blokujesz.",
-          "Twoje gry: pokoje, w których grałeś, Twoje próby, punkty i wyniki, " +
-            "Twoje reakcje oraz Twoje rysunki.",
+          "Przy zakładaniu konta: twój adres e-mail, twoje hasło do konta – " +
+            "przechowywane wyłącznie jako jednokierunkowy skrót, z którego nie da " +
+            "się go odtworzyć – oraz klucze dostępu lub weryfikacja dwuetapowa, " +
+            "jeśli zostaną skonfigurowane.",
+          "Twoje ustawienia i profil: twoje języki i preferencje, zdjęcie " +
+            "profilowe, jeśli zostanie wgrane, twoi znajomi, zablokowani gracze, " +
+            "zapisane ustawienia pokoi oraz listy oznaczone gwiazdką.",
+          "Twoje gry: pokoje, w których toczyła się gra, twoje odpowiedzi, " +
+            "punkty i wyniki, twoje reakcje oraz twoje rysunki.",
           "Czat, w pokojach i w lobby.",
-          "Listy haseł, które piszesz, i to, czy je opublikowałeś.",
-          "Zgłoszenia, które wysyłasz, i zgłoszenia dotyczące Ciebie, wraz z " +
-            "wiadomościami i rysunkami, których dotyczą.",
+          "Twoje listy haseł oraz informacja, czy zostały opublikowane.",
+          "Zgłoszenia wysłane przez ciebie i zgłoszenia dotyczące ciebie, wraz " +
+            "z wiadomościami i rysunkami, których dotyczą, a także każde " +
+            "ostrzeżenie lub zawieszenie twojego konta.",
+          "Dziennik bezpieczeństwa i moderacji obejmujący ważne działania – " +
+            "np. zmiany hasła do konta i adresu e-mail, blokowanie kogoś, zmianę " +
+            "obrazka oraz decyzje moderacji.",
           "Twoje logowania: ogólny opis każdego urządzenia (np. „Firefox w " +
             "systemie Windows”), kiedy było ostatnio używane, oraz skrót z " +
-            "tajnym kluczem adresu sieciowego, z którego się łączyło – nigdy sam " +
-            "adres. Ten sam rodzaj skrótu ogranicza, jak często można coś zrobić " +
-            "z jednego adresu.",
-          "Zgłoszenia błędów, które wysyłasz, ze zrzutem ekranu, jeśli go " +
-            "dołączysz.",
-          "Informacje techniczne o Twoim połączeniu i błędach w przeglądarce, " +
-            "żeby można było znaleźć i naprawić problemy. Nie zawierają żadnych " +
-            "Twoich wiadomości ani rysunków.",
+            "tajnym kluczem adresu sieciowego, z którego się łączyło. Ten sam " +
+            "rodzaj skrótu trafia do powyższego dziennika i ogranicza, jak " +
+            "często można coś zrobić z jednego adresu. Sketchy nigdy nie " +
+            "przechowuje samego adresu, choć widzą go dostawcy, którzy przesyłają " +
+            "jego ruch.",
+          "Momenty wejścia do pokoju i wyjścia z niego, żeby dało się wyśledzić " +
+            "problemy.",
+          "Wysłane zgłoszenia błędów, ze zrzutem ekranu, jeśli zostanie " +
+            "dołączony.",
+          "Informacje techniczne o połączeniu i błędach w przeglądarce, żeby " +
+            "można było znaleźć i naprawić problemy. Nie zawierają żadnych " +
+            "twoich wiadomości ani rysunków.",
         ],
       },
       {
         id: "purposes",
         heading: "Dlaczego jest przechowywane",
         body: [
-          "Żeby prowadzić grę, w którą chcesz grać: pokoje, tury, punkty, Twoją " +
-            "historię i Twoje konto. To umowa między Tobą a operatorem, opisana " +
-            "w warunkach korzystania.",
+          "Żeby prowadzić grę, w którą chcesz grać: pokoje, tury, punkty, twoją " +
+            "historię i twoje konto. To umowa między tobą a operatorem, opisana " +
+            "w warunkach korzystania. Twój adres e-mail służy wyłącznie twojemu " +
+            "kontu: do jego potwierdzenia, resetowania hasła do konta oraz " +
+            "powiadomień o zmianach i decyzjach, które go dotyczą.",
           "Żeby gra była uczciwa i bezpieczna: moderowanie zgłoszeń, " +
             "powstrzymywanie oszustw, spamu i nadużyć oraz ochrona kont. To " +
             "prawnie uzasadniony interes operatora i wszystkich, którzy grają.",
           "Żeby znajdować i naprawiać problemy, z tego samego powodu.",
-          "Nic o Tobie nie jest używane do reklam, sprzedawane ani używane do " +
-            "tworzenia Twojego profilu, a żadnej decyzji dotyczącej Ciebie nie " +
-            "podejmuje sama maszyna.",
+          "Żeby odpowiadać władzom, gdy prawo zobowiązuje do tego operatora.",
+          "Nic o tobie nie jest używane do reklam, sprzedawane ani używane do " +
+            "tworzenia twojego profilu, a żadnej decyzji wywołującej wobec " +
+            "ciebie skutki prawne lub podobnie istotne nie podejmuje sama " +
+            "maszyna.",
         ],
       },
       {
         id: "visibility",
         heading: "Co widzą inni gracze",
         body: [
-          "Osoby w pokoju widzą Twoją nazwę, Twoje wiadomości, Twoje rysunki i " +
-            "Twój wynik.",
+          "Osoby w pokoju widzą twoją nazwę, twoje wiadomości, twoje rysunki i " +
+            "twój wynik.",
           "Rysunki z pokoju publicznego trafiają do Galerii, gdzie każdy może je " +
-            "zobaczyć, z nazwą, pod którą powstały. Rysunki z pokoju prywatnego " +
-            "widzą tylko osoby, które w nim były. Usunięcie konta kasuje " +
-            "wszystkie Twoje rysunki; żeby usunąć tylko jeden, napisz na adres " +
-            "{contact}.",
-          "Opublikowaną przez Ciebie listę haseł może przeczytać każdy, z Twoją " +
+            "zobaczyć, z nazwą, pod którą powstały: gra w pokoju publicznym to " +
+            "gra publiczna, zgodnie z warunkami korzystania. Rysunki z pokoju " +
+            "prywatnego widzą tylko osoby, które w nim były. Usunięcie konta " +
+            "kasuje wszystkie twoje rysunki, oprócz kopii dołączonej do " +
+            "zgłoszenia, która zostaje przy nim; żeby usunąć tylko jeden, napisz " +
+            "na adres {contact}.",
+          "Opublikowaną przez ciebie listę haseł może przeczytać każdy, z twoją " +
             "nazwą jako autorem. Twój profil pokazuje to, co zdecydujesz się " +
             "pokazać.",
         ],
@@ -92,15 +108,18 @@ export const LEGAL_PL: LegalDocuments = {
         id: "recipients",
         heading: "Kto jeszcze ma z nimi do czynienia",
         body: [
-          "Nikt nie otrzymuje Twoich danych, żeby używać ich do własnych celów. " +
+          "Nikt nie otrzymuje twoich danych, żeby używać ich do własnych celów. " +
             "Operator korzysta z kilku dostawców, żeby Sketchy działało – " +
             "hostingu, dostarczania przez sieć i poczty e-mail – którzy " +
-            "przetwarzają je wyłącznie na jego polecenie. Jeśli któryś z nich " +
-            "robi to poza Szwajcarią i UE, odbywa się to z zabezpieczeniami " +
+            "przetwarzają je wyłącznie na polecenie operatora. Jeśli któryś z " +
+            "nich robi to poza Szwajcarią i UE, odbywa się to z zabezpieczeniami " +
             "uznawanymi przez prawo, takimi jak standardowe klauzule umowne " +
-            "Komisji Europejskiej.",
-          "Moderatorzy wyznaczeni przez operatora widzą zgłoszenia, o których " +
-            "decydują, oraz wiadomości i rysunki, których dotyczą.",
+            "Komisji Europejskiej; napisz na adres {contact}, żeby zapytać, o " +
+            "jakie kraje i zabezpieczenia chodzi.",
+          "Moderatorzy i administratorzy wyznaczeni przez operatora widzą " +
+            "zgłoszenia, o których decydują, i to, czego dotyczą. Administratorzy " +
+            "czytają też zgłoszenia błędów i mogą sprawdzić konto oraz jego " +
+            "ostatnią aktywność, gdy coś pójdzie nie tak.",
           "Dane są przekazywane władzom tylko wtedy, gdy wymaga tego prawo.",
         ],
       },
@@ -109,49 +128,58 @@ export const LEGAL_PL: LegalDocuments = {
         heading: "Jak długo jest przechowywane",
         body: [],
         items: [
-          "Czat: 30 dni. Wiersze przytoczone w zgłoszeniu są przechowywane " +
-            "razem z nim tak długo, jak potrzebuje ich moderacja.",
-          "Goście: usuwani po 30 dniach bez ukończonej gry albo po 365 dniach " +
-            "bez gry, jeśli mają już jakąś ukończoną.",
-          "Konta: dopóki ich nie usuniesz.",
-          "Logowania: do wygaśnięcia, a potem jeszcze 30 dni.",
-          "Wysłane do Ciebie e-maile: 30 dni.",
+          "Czat: 30 dni, oprócz wierszy przytoczonych w zgłoszeniu, które " +
+            "zostają przy nim.",
+          "Zgłoszenia i to, czego dotyczą, ostrzeżenia, zawieszenia, dziennik " +
+            "bezpieczeństwa i moderacji oraz zgłoszenia błędów: przechowywane " +
+            "trwale jako zapis moderacji i bezpieczeństwa usługi, także po " +
+            "usunięciu konta. Wpisy dziennika przestają wtedy wskazywać ciebie.",
           "Zrzuty ekranu ze zgłoszeń błędów: do rozpatrzenia zgłoszenia i nigdy " +
             "dłużej niż 90 dni.",
-          "Eksporty danych, o które prosisz: 7 dni.",
+          "Goście: usuwani po 30 dniach bez ukończonej gry albo po 365 dniach " +
+            "bez gry, jeśli mają już jakąś ukończoną.",
+          "Konta: do ich usunięcia. Znajomości, blokady, listy haseł, zapisane " +
+            "ustawienia pokoi i gwiazdki: do ich usunięcia albo usunięcia konta.",
+          "Logowania: do wygaśnięcia, a potem jeszcze 30 dni.",
+          "Wejścia do pokoi i wyjścia z nich: 30 dni.",
+          "Wysłane do ciebie e-maile: 30 dni.",
+          "Zamówione eksporty danych: 7 dni.",
           "Ukończone gry – punkty, rysunki, reakcje – są częścią historii " +
-            "wszystkich, którzy grali, więc są przechowywane. Gdy usuniesz konto, " +
-            "Twoje rysunki zostaną skasowane, a Twoje miejsce w tych grach " +
+            "wszystkich, którzy grali, więc są przechowywane. Po usunięciu konta " +
+            "twoje rysunki zostają skasowane, a twoje miejsce w tych grach " +
             "zanonimizowane, dzięki czemu historia innych zostaje nienaruszona – " +
-            "bez Ciebie.",
+            "bez ciebie.",
         ],
       },
       {
         id: "rights",
         heading: "Twoje prawa",
         body: [
-          "W Ustawieniach możesz w każdej chwili pobrać wszystko, co Sketchy " +
-            "przechowuje na Twój temat, poprawić swoją nazwę, e-mail i profil " +
-            "oraz usunąć konto lub tożsamość gościa.",
-          "Masz też prawo wiedzieć, co jest o Tobie przechowywane i jak jest " +
-            "używane, żądać sprostowania lub usunięcia, sprzeciwić się " +
-            "wykorzystywaniu dla prawnie uzasadnionych interesów operatora oraz " +
-            "żądać ograniczenia przetwarzania. Napisz na adres {contact} w " +
-            "każdej sprawie, której nie załatwisz w Ustawieniach.",
-          "Jeśli uważasz, że Twoje dane są przetwarzane niewłaściwie, możesz " +
-            "złożyć skargę do organu ochrony danych: w Szwajcarii do Federalnego " +
-            "Pełnomocnika ds. Ochrony Danych i Informacji (FDPIC), a w UE do " +
-            "organu kraju, w którym mieszkasz.",
+          "W Ustawieniach możesz w każdej chwili pobrać kopię swoich danych, " +
+            "poprawić swoją nazwę, e-mail i profil oraz usunąć konto lub " +
+            "tożsamość gościa.",
+          "Masz też prawo uzyskać wszystko, co jest o tobie przechowywane, i " +
+            "dowiedzieć się, jak jest używane – także to, czego nie zawiera " +
+            "pobrana kopia, np. zgłoszenia dotyczące ciebie – żądać sprostowania " +
+            "lub usunięcia, otrzymać dane w formacie, który można przenieść " +
+            "gdzie indziej, sprzeciwić się ich wykorzystywaniu dla prawnie " +
+            "uzasadnionych interesów operatora oraz żądać ograniczenia " +
+            "przetwarzania. Napisz na adres {contact} w każdej sprawie, której " +
+            "nie da się załatwić w Ustawieniach.",
+          "Jeśli uważasz, że twoje dane są przetwarzane niewłaściwie, możesz " +
+            "złożyć skargę do organu ochrony danych: w Szwajcarii do federalnego " +
+            "pełnomocnika ds. ochrony danych (FDPIC/EDÖB), a w UE do organu " +
+            "kraju, w którym mieszkasz.",
         ],
       },
       {
         id: "cookies",
         heading: "Pliki cookie i pamięć",
         body: [
-          "Sketchy ustawia jeden plik cookie, który utrzymuje Cię zalogowanym. " +
-            "Jest niezbędny do działania gry, więc nie prosimy o zgodę. Twoje " +
-            "ustawienia są też zapamiętywane w pamięci Twojej własnej " +
-            "przeglądarki.",
+          "Sketchy ustawia jeden jedyny plik cookie, który utrzymuje " +
+            "zalogowanie. Jest niezbędny do działania gry, więc nie prosimy o " +
+            "zgodę. Twoje ustawienia są też zapamiętywane w pamięci twojej " +
+            "własnej przeglądarki.",
           "Nie ma plików cookie reklamowych ani analitycznych, ani skryptów " +
             "innych podmiotów.",
         ],
@@ -160,9 +188,9 @@ export const LEGAL_PL: LegalDocuments = {
         id: "age",
         heading: "Wiek",
         body: [
-          "Sketchy jest dla osób w wieku co najmniej {age} lat. Jeśli jesteś " +
-            "rodzicem i uważasz, że Twoje dziecko poniżej {age} lat gra, napisz " +
-            "na adres {contact}, a jego dane zostaną usunięte.",
+          "Sketchy jest dla osób w wieku co najmniej {age} lat. Rodzic, który " +
+            "uważa, że jego dziecko poniżej {age} lat gra, może napisać na adres " +
+            "{contact}, a dane dziecka zostaną usunięte.",
         ],
       },
       {
@@ -170,9 +198,8 @@ export const LEGAL_PL: LegalDocuments = {
         heading: "Zmiany tej polityki",
         body: [
           "Jeśli ta polityka się zmieni, nowa wersja zostanie opublikowana tutaj. " +
-            "Zmiana, która ma znaczenie dla sposobu wykorzystania Twoich danych, " +
-            "nie obejmie tego, co zapisano wcześniej, bez uprzedniego " +
-            "poinformowania Cię.",
+            "Zmiana, która ma znaczenie dla sposobu wykorzystania twoich danych, " +
+            "nie obejmie tego, co zapisano wcześniej, bez uprzedniej informacji.",
         ],
       },
     ],
@@ -180,7 +207,7 @@ export const LEGAL_PL: LegalDocuments = {
   terms: {
     title: "Warunki korzystania",
     intro: [
-      "Te warunki to umowa między Tobą a operatorem Sketchy. Grając, " +
+      "Te warunki to umowa między tobą a operatorem Sketchy. Grając, " +
         "akceptujesz je; jeśli się na nie nie zgadzasz, nie korzystaj ze " +
         "Sketchy.",
     ],
@@ -204,17 +231,17 @@ export const LEGAL_PL: LegalDocuments = {
         heading: "Twoja nazwa i konto",
         body: [
           "Wybierz nazwę, która nie podszywa się pod nikogo i nie łamie zasad. " +
-            "Nie udostępniaj hasła ani logowania: odpowiadasz za to, co dzieje " +
-            "się na Twoim koncie.",
+            "Nie udostępniaj hasła do konta ani logowania: odpowiadasz za to, co " +
+            "dzieje się na twoim koncie.",
           "Gość istnieje w jednej przeglądarce. Wyczyszczenie jej danych oznacza " +
-            "utratę gościa, chyba że zamieniłeś go w konto.",
+            "utratę gościa, chyba że został zamieniony w konto.",
         ],
       },
       {
         id: "fair-play",
         heading: "Uczciwa gra",
         body: [
-          "Przestrzegaj zasad. Nie oszukuj – żadnego automatycznego zgadywania, " +
+          "Przestrzegaj zasad. Nie oszukuj – żadnych automatycznych odpowiedzi, " +
             "podpowiadania odpowiedzi innym ani grania jako kilka osób dla " +
             "przewagi – nie próbuj psuć ani przeciążać Sketchy i nie używaj go do " +
             "niczego niezgodnego z prawem.",
@@ -224,9 +251,9 @@ export const LEGAL_PL: LegalDocuments = {
         id: "content",
         heading: "To, co rysujesz i piszesz",
         body: [
-          "To, co rysujesz, piszesz i publikujesz, pozostaje Twoje. Żeby gra " +
+          "To, co rysujesz, piszesz i publikujesz, pozostaje twoje. Żeby gra " +
             "mogła działać, pozwalasz operatorowi przechowywać, pokazywać i " +
-            "kopiować to w ramach Sketchy – w Twoim pokoju, w Galerii w przypadku " +
+            "kopiować to w ramach Sketchy – w twoim pokoju, w Galerii w przypadku " +
             "pokoi publicznych, w listach haseł, które publikujesz, i w kopiach, " +
             "które robią z nich inni – bezpłatnie, na całym świecie i tak długo, " +
             "jak Sketchy to przechowuje.",
@@ -238,19 +265,21 @@ export const LEGAL_PL: LegalDocuments = {
         id: "moderation",
         heading: "Moderacja",
         body: [
-          "Moderatorzy mogą ukrywać treści, upominać graczy oraz zawieszać lub " +
-            "blokować konta, które łamią te warunki lub zasady. Dowiesz się, " +
-            "której zasady dotyczy decyzja, a zawieszone konto nadal może pobrać " +
-            "i usunąć swoje dane.",
+          "Moderatorzy mogą ukrywać treści, upominać graczy oraz zawieszać " +
+            "konta, które łamią te warunki lub zasady. Jeśli moderator zapisze, " +
+            "której zasady dotyczy decyzja, otrzymasz tę informację. Dane " +
+            "zawieszonego konta nadal można pobrać lub usunąć – z urządzenia, " +
+            "które było zalogowane w chwili zawieszenia, albo pisząc na adres " +
+            "{contact}.",
         ],
       },
       {
         id: "availability",
         heading: "Bez gwarancji",
         body: [
-          "Sketchy jest udostępniane w obecnej postaci, bez obietnicy, że " +
+          "Sketchy jest udostępniane w obecnej postaci, bez żadnej gwarancji, że " +
             "zawsze będzie dostępne, będzie działać bez błędów albo zachowa na " +
-            "zawsze to, co stworzyłeś. Operator może je zmienić, wstrzymać lub " +
+            "zawsze to, co powstało. Operator może je zmienić, wstrzymać lub " +
             "zamknąć.",
         ],
       },
@@ -269,7 +298,7 @@ export const LEGAL_PL: LegalDocuments = {
         heading: "Odejście",
         body: [
           "Możesz w każdej chwili przestać i usunąć konto w Ustawieniach. " +
-            "Operator może zakończyć Twój dostęp, jeśli łamiesz te warunki lub " +
+            "Operator może zakończyć twój dostęp, jeśli łamiesz te warunki lub " +
             "zasady, albo całkowicie zamknąć Sketchy.",
         ],
       },
@@ -277,19 +306,20 @@ export const LEGAL_PL: LegalDocuments = {
         id: "law",
         heading: "Jakie prawo obowiązuje",
         body: [
-          "Te warunki podlegają prawu szwajcarskiemu. Spory rozstrzygają sądy " +
-            "właściwe dla siedziby operatora w Szwajcarii, chyba że prawo kraju, " +
-            "w którym mieszkasz, daje Ci jako konsumentowi prawo do dochodzenia " +
-            "roszczeń w swoim kraju.",
+          "Te warunki podlegają prawu szwajcarskiemu, które nie odbiera ci " +
+            "ochrony, jaką jako konsumentowi daje ci bezwzględnie obowiązujące " +
+            "prawo kraju, w którym mieszkasz. Spory rozstrzygają sądy właściwe " +
+            "dla siedziby operatora w Szwajcarii, chyba że to prawo daje ci " +
+            "prawo do dochodzenia roszczeń w swoim kraju.",
         ],
       },
       {
         id: "changes",
         heading: "Zmiany tych warunków",
         body: [
-          "Jeśli te warunki się zmienią, nowa wersja zostanie opublikowana " +
-            "tutaj. Dalsza gra po zmianie oznacza jej akceptację. Pytania kieruj " +
-            "na adres {contact}.",
+          "Jeśli te warunki zmienią się w istotnym punkcie, dowiesz się o tym, " +
+            "zanim zmiana zacznie obowiązywać, a dalsza gra potem oznacza jej " +
+            "akceptację. Pytania kieruj na adres {contact}.",
         ],
       },
     ],

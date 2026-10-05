@@ -551,7 +551,8 @@ export const PL: Catalogue = {
     codeFromYourAuthenticatorApp: "Kod z aplikacji uwierzytelniającej",
     email: "E-mail",
     optional: "(opcjonalnie)",
-    letsYouResetYourPasswordLater: "Pozwala później zresetować hasło do konta. Do niczego więcej nie służy.",
+    letsYouResetYourPasswordLater:
+      "Służy wyłącznie kontu: do jego potwierdzenia, resetowania hasła do konta i powiadomień o zmianach.",
     rules2: "zasad",
     terms2: "warunki korzystania",
     privacy2: "polityka prywatności",
@@ -1959,7 +1960,7 @@ export const PL: Catalogue = {
     buyLettersAndWheelNeedScoring: "Kupowanie liter i Koło fortuny wymagają punktacji.",
     allColors: "Wszystkie kolory",
     noScoring: "Bez punktacji",
-    listedInTheLobbyAnyone: "Widoczny w lobby — każdy może wejść.",
+    listedInTheLobbyAnyone: "Widoczny w lobby — każdy może wejść, a rysunki trafiają do publicznej Galerii.",
     joinableOnlyWithTheCode: "Dołączyć można tylko przez kod lub link z zaproszeniem.",
     customCount: (p: { count: number }) =>
       `własne: ${number(p.count)}`,
@@ -1997,6 +1998,10 @@ export const PL: Catalogue = {
 
   legalPage: {
     contactPending: "[na tym serwerze nie ustawiono adresu]",
+    contactLoading: "…",
+    contactUnavailable: "[nie udało się wczytać adresu; spróbuj później]",
+    terms: "Warunki korzystania",
+    privacy: "Polityka prywatności",
   },
 
   sessionManagerDialog: {

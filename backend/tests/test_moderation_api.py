@@ -67,6 +67,10 @@ async def env(monkeypatch):
     async def health():
         return {"status": "ok"}
 
+    @app.get("/api/legal")
+    async def legal():
+        return {"contactAddress": "privacy@sketchy.example.org"}
+
     clients: list[AsyncClient] = []
 
     def new_client() -> AsyncClient:
@@ -714,6 +718,27 @@ async def test_a_suspended_account_can_still_sign_out(env):
     assert visitor.status_code == 200
     assert visitor.json()["id"] != target["id"]
     assert visitor.json()["isAnonymous"] is True
+
+
+async def test_a_suspended_account_can_still_read_where_to_write(env):
+    """The terms tell a suspended player to write to the operator for what the
+    app no longer lets them do (#1417), so the address must reach them."""
+    new_client, factory, _ = env
+    moderator_http, target_http = new_client(), new_client()
+    moderator = await register(moderator_http, "ContactModerator")
+    target = await register(target_http, "ContactTarget")
+    await set_role(factory, moderator["id"], UserRole.MODERATOR)
+    banned = await moderator_http.post(
+        "/api/moderation/bans",
+        json={"userId": target["id"], "reason": "Suspended for the test"},
+    )
+    assert banned.status_code == 201
+    assert (await target_http.get("/api/auth/me")).status_code == 403
+
+    legal = await target_http.get("/api/legal")
+
+    assert legal.status_code == 200
+    assert legal.json()["contactAddress"] == "privacy@sketchy.example.org"
 
 
 async def test_a_revocation_after_the_ban_ends_the_escape_hatch(env):

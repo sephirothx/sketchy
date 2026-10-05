@@ -56,7 +56,7 @@ flowchart LR
 ```
 
 `app = socketio.ASGIApp(sio, other_asgi_app=api, socketio_path="socket.io")`
-([`backend/app/main.py:1205`](../backend/app/main.py)) is the single ASGI application:
+([`backend/app/main.py:1207`](../backend/app/main.py)) is the single ASGI application:
 Socket.IO owns `/socket.io`, FastAPI owns everything else, and when
 `frontend/dist` exists it is mounted as static files on the same app. That is what
 makes single-port self-hosting and same-origin cookie sessions work without CORS

@@ -1,7 +1,8 @@
 import type { LegalDocuments } from "./types.ts";
 
 /** Privacyverklaring en gebruiksvoorwaarden, in het Nederlands (#1417).
-A translation of `en.ts`, machine-drafted and awaiting a native reader. */
+A translation of `en.ts`, machine-drafted and awaiting a native reader.
+"Exploitant" for the operator: "beheerder" is the interface's administrator. */
 export const LEGAL_NL: LegalDocuments = {
   locale: "nl",
   privacy: {
@@ -16,8 +17,8 @@ export const LEGAL_NL: LegalDocuments = {
         id: "operator",
         heading: "Wie verantwoordelijk is",
         body: [
-          "Sketchy wordt gerund door de beheerder, gevestigd in Zwitserland, die " +
-            "beslist wat er wordt bewaard en waarom. Je kunt de beheerder " +
+          "Sketchy wordt gerund door de exploitant, gevestigd in Zwitserland, " +
+            "die beslist wat er wordt bewaard en waarom. Je kunt de exploitant " +
             "schrijven op {contact}.",
           "Op alles wat hier staat is de Zwitserse wet op de " +
             "gegevensbescherming van toepassing, en wanneer je vanuit de " +
@@ -33,21 +34,30 @@ export const LEGAL_NL: LegalDocuments = {
           "De naam waaronder je speelt, en de gebruikersnaam van een account.",
           "Als je een account maakt: je e-mailadres, je wachtwoord – alleen " +
             "bewaard als eenrichtingshash waaruit het niet terug te halen is – " +
-            "en de passkeys of inloggen in twee stappen die je instelt.",
+            "en de passkeys of tweestapsverificatie die je instelt.",
           "Je instellingen en profiel: je talen en voorkeuren, een " +
-            "profielfoto als je er een uploadt, je vrienden en de spelers die " +
-            "je blokkeert.",
+            "profielfoto als je er een uploadt, je vrienden, de spelers die je " +
+            "blokkeert, je opgeslagen kamerinstellingen en de lijsten die je " +
+            "een ster geeft.",
           "Je spellen: de kamers waarin je speelde, je gokken, punten en " +
             "uitslagen, je reacties en de tekeningen die je maakte.",
           "De chat, in kamers en in de lobby.",
           "De woordenlijsten die je schrijft, en of je ze hebt gepubliceerd.",
           "Meldingen die je verstuurt en meldingen over jou, met de berichten " +
-            "en tekeningen waarnaar ze verwijzen.",
+            "en tekeningen waarnaar ze verwijzen, en elke waarschuwing of " +
+            "schorsing van je account.",
+          "Een beveiligings- en moderatielogboek van gevoelige handelingen – " +
+            "zoals wijzigingen van wachtwoord en e-mailadres, iemand blokkeren, " +
+            "je afbeelding wijzigen en beslissingen van de moderatie.",
           "Je aanmeldingen: een globale omschrijving van elk apparaat " +
             "(bijvoorbeeld 'Firefox op Windows'), wanneer het voor het laatst " +
             "werd gebruikt, en een hash met geheime sleutel van het netwerkadres " +
-            "waar het vandaan kwam – nooit het adres zelf. Hetzelfde soort hash " +
-            "beperkt hoe vaak iets vanaf één adres kan worden gedaan.",
+            "waar het vandaan kwam. Hetzelfde soort hash wordt bij het logboek " +
+            "hierboven bewaard en beperkt hoe vaak iets vanaf één adres kan " +
+            "worden gedaan. Sketchy bewaart nooit het adres zelf, al zien de " +
+            "leveranciers die het verkeer bezorgen het wel.",
+          "Wanneer je kamers binnenkomt en verlaat, zodat problemen te " +
+            "herleiden zijn.",
           "Bugmeldingen die je stuurt, met een screenshot als je er een " +
             "toevoegt.",
           "Technische gegevens over je verbinding en fouten in je browser, zodat " +
@@ -61,14 +71,20 @@ export const LEGAL_NL: LegalDocuments = {
         body: [
           "Om het spel te laten draaien dat je wilt spelen: kamers, beurten, " +
             "punten, je geschiedenis en je account. Dat is de afspraak tussen " +
-            "jou en de beheerder, zoals de gebruiksvoorwaarden die beschrijven.",
+            "jou en de exploitant, zoals de gebruiksvoorwaarden die beschrijven. " +
+            "Je e-mailadres wordt alleen voor je account gebruikt: om het te " +
+            "bevestigen, om je wachtwoord te herstellen en om je te laten weten " +
+            "wat er aan je account verandert en wat erover wordt besloten.",
           "Om het spel eerlijk en veilig te houden: meldingen modereren, " +
             "valsspelen, spam en misbruik tegengaan, en accounts beschermen. Dat " +
-            "is het gerechtvaardigde belang van de beheerder en van iedereen die " +
-            "speelt.",
+            "is het gerechtvaardigde belang van de exploitant en van iedereen " +
+            "die speelt.",
           "Om problemen te vinden en op te lossen, om dezelfde reden.",
+          "Om autoriteiten te antwoorden waar de wet de exploitant daartoe " +
+            "verplicht.",
           "Niets over jou wordt gebruikt voor reclame, verkocht of gebruikt om " +
-            "een profiel van je te maken, en geen enkele beslissing over jou " +
+            "een profiel van je te maken, en geen beslissing met " +
+            "rechtsgevolgen of vergelijkbare aanmerkelijke gevolgen voor jou " +
             "wordt alleen door een machine genomen.",
         ],
       },
@@ -79,10 +95,13 @@ export const LEGAL_NL: LegalDocuments = {
           "Wie met je in een kamer zit, ziet je naam, je berichten, je " +
             "tekeningen en je score.",
           "Tekeningen uit een openbare kamer verschijnen in de Galerij, waar " +
-            "iedereen ze kan zien, met de naam waaronder ze zijn getekend. " +
-            "Tekeningen uit een privékamer zien alleen de mensen die erin zaten. " +
-            "Als je je account verwijdert, worden al je tekeningen gewist; wil je " +
-            "er één laten verwijderen, schrijf dan naar {contact}.",
+            "iedereen ze kan zien, met de naam waaronder ze zijn getekend: wie in " +
+            "een openbare kamer speelt, speelt in het openbaar, volgens de " +
+            "gebruiksvoorwaarden. Tekeningen uit een privékamer zien alleen de " +
+            "mensen die erin zaten. Als je je account verwijdert, worden al je " +
+            "tekeningen gewist, behalve een kopie die bij een melding hoort en " +
+            "daarbij blijft; wil je er één laten verwijderen, schrijf dan naar " +
+            "{contact}.",
           "Een woordenlijst die je publiceert, kan iedereen lezen, met jouw naam " +
             "als auteur. Je profiel toont wat jij ervoor kiest te tonen.",
         ],
@@ -92,13 +111,17 @@ export const LEGAL_NL: LegalDocuments = {
         heading: "Wie er verder mee omgaat",
         body: [
           "Niemand krijgt je gegevens om ze voor eigen doeleinden te gebruiken. " +
-            "De beheerder werkt met een paar leveranciers om Sketchy te laten " +
+            "De exploitant werkt met een paar leveranciers om Sketchy te laten " +
             "draaien – hosting, netwerklevering en e-mail – die ze alleen volgens " +
-            "zijn instructies verwerken. Als een van hen dat buiten Zwitserland " +
-            "en de EU doet, gebeurt dat met waarborgen die de wet erkent, zoals " +
-            "de standaardcontractbepalingen van de Europese Commissie.",
-          "Door de beheerder aangestelde moderators zien de meldingen waarover " +
-            "ze beslissen en de berichten en tekeningen waarnaar die verwijzen.",
+            "de instructies van de exploitant verwerken. Als een van hen dat " +
+            "buiten Zwitserland en de EU doet, gebeurt dat met waarborgen die de " +
+            "wet erkent, zoals de standaardcontractbepalingen van de Europese " +
+            "Commissie; schrijf naar {contact} om te vragen welke landen en welke " +
+            "waarborgen.",
+          "Door de exploitant aangestelde moderators en beheerders zien de " +
+            "meldingen waarover ze beslissen en waar die naar verwijzen. " +
+            "Beheerders lezen ook bugmeldingen en kunnen een account en de " +
+            "recente activiteit ervan opzoeken als er iets misgaat.",
           "Gegevens worden alleen aan autoriteiten gegeven als de wet dat " +
             "vereist.",
         ],
@@ -108,15 +131,23 @@ export const LEGAL_NL: LegalDocuments = {
         heading: "Hoe lang het wordt bewaard",
         body: [],
         items: [
-          "Chat: 30 dagen. Regels die in een melding worden aangehaald, blijven " +
-            "bij de melding zolang de moderatie ze nodig heeft.",
-          "Gasten: verwijderd na 30 dagen zonder afgerond spel, of na 365 dagen " +
-            "zonder te spelen zodra ze er een hebben.",
-          "Accounts: tot je ze verwijdert.",
-          "Aanmeldingen: tot ze verlopen, en 30 dagen daarna.",
-          "E-mails aan jou: 30 dagen.",
+          "Chat: 30 dagen, behalve regels die in een melding worden " +
+            "aangehaald; die blijven bij de melding.",
+          "Meldingen en waar ze naar verwijzen, waarschuwingen, schorsingen, " +
+            "het beveiligings- en moderatielogboek en bugmeldingen: blijvend " +
+            "bewaard als vastlegging van de moderatie en de beveiliging van de " +
+            "dienst, ook nadat je je account hebt verwijderd. Logboekregels " +
+            "noemen je daarna niet meer.",
           "Screenshots bij bugmeldingen: tot de melding is afgehandeld, en " +
             "nooit langer dan 90 dagen.",
+          "Gasten: verwijderd na 30 dagen zonder afgerond spel, of na 365 dagen " +
+            "zonder te spelen zodra ze er een hebben.",
+          "Accounts: tot je ze verwijdert. Vriendschappen, blokkeringen, " +
+            "woordenlijsten, opgeslagen kamerinstellingen en sterren: tot je ze " +
+            "weghaalt of je account verwijdert.",
+          "Aanmeldingen: tot ze verlopen, en 30 dagen daarna.",
+          "Binnenkomen en verlaten van kamers: 30 dagen.",
+          "E-mails aan jou: 30 dagen.",
           "Gegevensexports die je aanvraagt: 7 dagen.",
           "Afgeronde spellen – punten, tekeningen, reacties – horen bij de " +
             "geschiedenis van iedereen die meespeelde, dus die blijven bewaard. " +
@@ -129,28 +160,30 @@ export const LEGAL_NL: LegalDocuments = {
         id: "rights",
         heading: "Je rechten",
         body: [
-          "In Instellingen kun je alles downloaden wat Sketchy over je bewaart, " +
-            "je naam, e-mailadres en profiel corrigeren, en je account of je " +
+          "In Instellingen kun je een kopie van je gegevens downloaden, je " +
+            "naam, e-mailadres en profiel corrigeren, en je account of je " +
             "gastidentiteit verwijderen, wanneer je maar wilt.",
-          "Je hebt ook het recht om te weten wat er over je wordt bewaard en " +
-            "hoe het wordt gebruikt, om het te laten corrigeren of wissen, om " +
+          "Je hebt ook het recht om alles op te vragen wat er over je wordt " +
+            "bewaard en hoe het wordt gebruikt – ook wat de download niet bevat, " +
+            "zoals meldingen over jou –, om het te laten corrigeren of wissen, " +
+            "om het te krijgen in een formaat dat je elders kunt gebruiken, om " +
             "bezwaar te maken tegen het gebruik voor de gerechtvaardigde belangen " +
-            "van de beheerder, en om het gebruik te laten beperken. Schrijf naar " +
+            "van de exploitant, en om het gebruik te laten beperken. Schrijf naar " +
             "{contact} voor alles wat Instellingen niet kan.",
           "Als je vindt dat er verkeerd met je gegevens wordt omgegaan, kun je " +
             "een klacht indienen bij een toezichthouder: in Zwitserland de " +
-            "Federale Commissaris voor gegevensbescherming en openbaarheid " +
-            "(FDPIC), en in de EU de toezichthouder van het land waar je woont.",
+            "federale toezichthouder voor gegevensbescherming (FDPIC/EDÖB), en " +
+            "in de EU de toezichthouder van het land waar je woont.",
         ],
       },
       {
         id: "cookies",
         heading: "Cookies en opslag",
         body: [
-          "Sketchy plaatst één cookie, die je ingelogd houdt. Die is nodig om " +
-            "het spel te laten werken, dus wordt je niet gevraagd ermee in te " +
-            "stemmen. Je instellingen worden ook onthouden in de opslag van je " +
-            "eigen browser.",
+          "Sketchy plaatst één enkele cookie, die je ingelogd houdt. Die is " +
+            "nodig om het spel te laten werken, dus word je niet gevraagd ermee " +
+            "in te stemmen. Je instellingen worden ook onthouden in de opslag " +
+            "van je eigen browser.",
           "Er zijn geen reclame- of analysecookies, en geen scripts van anderen.",
         ],
       },
@@ -178,7 +211,7 @@ export const LEGAL_NL: LegalDocuments = {
   terms: {
     title: "Gebruiksvoorwaarden",
     intro: [
-      "Deze voorwaarden zijn de afspraak tussen jou en de beheerder van " +
+      "Deze voorwaarden zijn de afspraak tussen jou en de exploitant van " +
         "Sketchy. Door te spelen accepteer je ze; als je dat niet wilt, gebruik " +
         "Sketchy dan niet.",
     ],
@@ -213,7 +246,7 @@ export const LEGAL_NL: LegalDocuments = {
         id: "fair-play",
         heading: "Eerlijk spelen",
         body: [
-          "Volg de regels. Speel niet vals – geen automatisch raden, geen " +
+          "Volg de regels. Speel niet vals – geen automatische gokken, geen " +
             "antwoord voorzeggen, niet als meerdere personen spelen voor een " +
             "voordeel –, probeer Sketchy niet kapot te maken of te overbelasten, " +
             "en gebruik het niet voor iets wat onwettig is.",
@@ -224,7 +257,7 @@ export const LEGAL_NL: LegalDocuments = {
         heading: "Wat je tekent en schrijft",
         body: [
           "Wat je tekent, schrijft en publiceert, blijft van jou. Zodat het " +
-            "spel kan werken, geef je de beheerder toestemming het binnen " +
+            "spel kan werken, geef je de exploitant toestemming het binnen " +
             "Sketchy te bewaren, te tonen en te kopiëren – in je kamer, in de " +
             "Galerij voor openbare kamers, in woordenlijsten die je publiceert en " +
             "in kopieën die anderen ervan maken –, kosteloos, wereldwijd en " +
@@ -238,25 +271,27 @@ export const LEGAL_NL: LegalDocuments = {
         heading: "Moderatie",
         body: [
           "Moderators kunnen inhoud verbergen, spelers waarschuwen en accounts " +
-            "schorsen of verbannen die deze voorwaarden of de regels overtreden. " +
-            "Je hoort over welke regel een beslissing gaat, en een geschorst " +
-            "account kan zijn gegevens nog steeds downloaden en verwijderen.",
+            "schorsen die deze voorwaarden of de regels overtreden. Als een " +
+            "moderator vastlegt over welke regel een beslissing gaat, hoor je " +
+            "dat. De gegevens van een geschorst account kunnen nog steeds worden " +
+            "gedownload of verwijderd, vanaf een apparaat dat was aangemeld toen " +
+            "de schorsing begon, of door te schrijven naar {contact}.",
         ],
       },
       {
         id: "availability",
         heading: "Geen garanties",
         body: [
-          "Sketchy wordt geleverd zoals het is, zonder belofte dat het altijd " +
-            "beschikbaar is, foutloos werkt of wat je maakte voor altijd bewaart. " +
-            "De beheerder kan het wijzigen, pauzeren of sluiten.",
+          "Sketchy wordt geleverd zoals het is, zonder enige garantie dat het " +
+            "altijd beschikbaar is, foutloos werkt of wat je maakte voor altijd " +
+            "bewaart. De exploitant kan het wijzigen, pauzeren of sluiten.",
         ],
       },
       {
         id: "liability",
         heading: "Aansprakelijkheid",
         body: [
-          "Voor zover de wet het toestaat, is de beheerder niet aansprakelijk " +
+          "Voor zover de wet het toestaat, is de exploitant niet aansprakelijk " +
             "voor indirecte schade of voor het verlies van inhoud of gegevens. " +
             "Niets hier beperkt een aansprakelijkheid die de wet niet laat " +
             "beperken, zoals bij opzet of grove nalatigheid.",
@@ -267,7 +302,7 @@ export const LEGAL_NL: LegalDocuments = {
         heading: "Stoppen",
         body: [
           "Je kunt op elk moment stoppen en je account verwijderen in " +
-            "Instellingen. De beheerder kan je toegang beëindigen als je deze " +
+            "Instellingen. De exploitant kan je toegang beëindigen als je deze " +
             "voorwaarden of de regels overtreedt, of Sketchy helemaal sluiten.",
         ],
       },
@@ -275,19 +310,20 @@ export const LEGAL_NL: LegalDocuments = {
         id: "law",
         heading: "Welk recht van toepassing is",
         body: [
-          "Op deze voorwaarden is Zwitsers recht van toepassing. Geschillen " +
-            "gaan naar de rechter van de vestigingsplaats van de beheerder in " +
-            "Zwitserland, tenzij het recht van het land waar je woont je als " +
-            "consument het recht geeft om thuis naar de rechter te stappen.",
+          "Op deze voorwaarden is Zwitsers recht van toepassing, dat je niet de " +
+            "bescherming afneemt die het dwingende recht van het land waar je " +
+            "woont je als consument geeft. Geschillen gaan naar de rechter van " +
+            "de vestigingsplaats van de exploitant in Zwitserland, tenzij dat " +
+            "recht je het recht geeft om thuis naar de rechter te stappen.",
         ],
       },
       {
         id: "changes",
         heading: "Wijzigingen in deze voorwaarden",
         body: [
-          "Als deze voorwaarden veranderen, wordt de nieuwe versie hier " +
-            "gepubliceerd. Blijf je na een wijziging spelen, dan accepteer je " +
-            "die. Vragen gaan naar {contact}.",
+          "Als deze voorwaarden op een belangrijk punt veranderen, hoor je dat " +
+            "voordat de wijziging ingaat, en blijf je daarna spelen, dan " +
+            "accepteer je haar. Vragen gaan naar {contact}.",
         ],
       },
     ],

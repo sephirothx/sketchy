@@ -551,7 +551,8 @@ export const FR: Catalogue = {
     codeFromYourAuthenticatorApp: "Code de ton application d’authentification",
     email: "E-mail",
     optional: "(facultatif)",
-    letsYouResetYourPasswordLater: "Te permet de réinitialiser ton mot de passe plus tard. Sert uniquement à cela.",
+    letsYouResetYourPasswordLater:
+      "Ne sert qu'à ton compte : le confirmer, réinitialiser ton mot de passe et te prévenir des changements qui le concernent.",
     rules2: "règles",
     terms2: "conditions d'utilisation",
     privacy2: "politique de confidentialité",
@@ -1953,7 +1954,7 @@ export const FR: Catalogue = {
     buyLettersAndWheelNeedScoring: "Acheter des lettres et Roue de la fortune ont besoin du score.",
     allColors: "Toutes les couleurs",
     noScoring: "Sans score",
-    listedInTheLobbyAnyone: "Affiché dans le hall : tout le monde peut entrer.",
+    listedInTheLobbyAnyone: "Affiché dans le hall : tout le monde peut entrer, et ses dessins apparaissent dans la Galerie publique.",
     joinableOnlyWithTheCode: "Accessible uniquement avec le code ou le lien d’invitation.",
     customCount: (p: { count: number }) =>
       counted(p.count, { one: "personnalisé", other: "personnalisés" }),
@@ -1991,6 +1992,10 @@ export const FR: Catalogue = {
 
   legalPage: {
     contactPending: "[aucune adresse configurée sur ce serveur]",
+    contactLoading: "…",
+    contactUnavailable: "[l'adresse n'a pas pu être chargée ; réessaie plus tard]",
+    terms: "Conditions d'utilisation",
+    privacy: "Politique de confidentialité",
   },
 
   sessionManagerDialog: {

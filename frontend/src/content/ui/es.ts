@@ -551,7 +551,8 @@ export const ES: Catalogue = {
     codeFromYourAuthenticatorApp: "Código de tu aplicación de autenticación",
     email: "Correo",
     optional: "(opcional)",
-    letsYouResetYourPasswordLater: "Te permite restablecer la contraseña más adelante. No se usa para nada más.",
+    letsYouResetYourPasswordLater:
+      "Solo se usa para tu cuenta: para confirmarla, restablecer la contraseña y avisarte de cambios en ella.",
     rules2: "reglas",
     terms2: "condiciones de uso",
     privacy2: "política de privacidad",
@@ -1950,7 +1951,7 @@ export const ES: Catalogue = {
     buyLettersAndWheelNeedScoring: "Comprar letras y Ruleta de la suerte necesitan puntuación.",
     allColors: "Todos los colores",
     noScoring: "Sin puntuación",
-    listedInTheLobbyAnyone: "Aparece en el vestíbulo: cualquiera puede entrar.",
+    listedInTheLobbyAnyone: "Aparece en el vestíbulo: cualquiera puede entrar, y sus dibujos se muestran en la Galería pública.",
     joinableOnlyWithTheCode: "Solo se entra con el código o el enlace de invitación.",
     customCount: (p: { count: number }) =>
       counted(p.count, { one: "propia", other: "propias" }),
@@ -1988,6 +1989,10 @@ export const ES: Catalogue = {
 
   legalPage: {
     contactPending: "[este servidor no tiene ninguna dirección configurada]",
+    contactLoading: "…",
+    contactUnavailable: "[no se ha podido cargar la dirección; inténtalo más tarde]",
+    terms: "Condiciones de uso",
+    privacy: "Política de privacidad",
   },
 
   sessionManagerDialog: {

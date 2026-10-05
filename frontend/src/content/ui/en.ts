@@ -561,7 +561,8 @@ export const EN = {
     codeFromYourAuthenticatorApp: "Code from your authenticator app",
     email: "Email",
     optional: "(optional)",
-    letsYouResetYourPasswordLater: "Lets you reset your password later. Used for nothing else.",
+    letsYouResetYourPasswordLater:
+      "Used only for your account: confirming it, resetting your password, and telling you about changes to it.",
     rules2: "rules",
     terms2: "terms of use",
     privacy2: "privacy notice",
@@ -1966,7 +1967,7 @@ export const EN = {
     buyLettersAndWheelNeedScoring: "Buy letters and Wheel of Fortune need scoring.",
     allColors: "All colors",
     noScoring: "No scoring",
-    listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in.",
+    listedInTheLobbyAnyone: "Listed in the lobby — anyone can wander in, and its drawings are shown in the public Gallery.",
     joinableOnlyWithTheCode: "Joinable only with the code or invite link.",
     customCount: (p: { count: number }) =>
       `${number(p.count)} custom`,
@@ -2004,6 +2005,10 @@ export const EN = {
 
   legalPage: {
     contactPending: "[no address set on this server]",
+    contactLoading: "…",
+    contactUnavailable: "[the address could not be loaded — try again later]",
+    terms: "Terms of use",
+    privacy: "Privacy notice",
   },
 
   sessionManagerDialog: {

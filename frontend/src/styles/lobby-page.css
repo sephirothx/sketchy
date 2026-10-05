@@ -2020,6 +2020,13 @@ a.online-player-name:focus-visible {
   margin: 8px 0 0;
 }
 
+.legal-page .rules-section a {
+  color: var(--primary-ink);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+  text-underline-offset: 2px;
+}
+
 .legal-items {
   line-height: 1.6;
   margin: 8px 0 0;

@@ -3,10 +3,12 @@ import { Link, useLocation } from "react-router-dom";
 
 import { AppHeader } from "../components/AppHeader";
 import { Card, SectionLabel } from "../components/ui/Card";
-import { legalFor, legalText } from "../content/legal/index.ts";
+import { legalFor } from "../content/legal/index.ts";
+import { fill } from "../content/ui/slots.tsx";
 import { ui } from "../content/ui/index.ts";
 import { useDocumentTitle } from "../hooks/useDocumentTitle";
 import { apiRequest } from "../lib/api";
+import { MINIMUM_AGE } from "../lib/minimumAge.ts";
 import { useSettingsStore } from "../store/settingsStore.ts";
 import "../styles/lazy/operator.css";
 
@@ -21,23 +23,32 @@ answer ("how do I delete this?") and jumping to it. Section ids are English
 anchors, so `/privacy#rights` lands in every language.
 
 The operator's contact address is the one thing the text needs from the
-server (`GET /api/legal`); until it arrives, or where a development server
-has none, the sentence names the Settings page and the text stays readable. */
+server (`GET /api/legal`), shown as a `mailto:` link. Until it arrives the
+sentence carries an ellipsis, a failed read says the address could not be
+loaded rather than that there is none, and only a server that answers with
+no address - never production, which refuses to start without one - says so. */
+type Contact =
+  | { state: "loading" }
+  | { state: "failed" }
+  | { state: "loaded"; address: string | null };
+
 export function LegalPage({ document: which }: { document: Which }) {
   const { hash } = useLocation();
   const locale = useSettingsStore((state) => state.locale);
   const documents = legalFor(locale);
   const shown = documents[which];
   useDocumentTitle(shown.title);
-  const [contact, setContact] = useState<string | null>(null);
+  const [contact, setContact] = useState<Contact>({ state: "loading" });
 
   useEffect(() => {
     let live = true;
     apiRequest<{ contactAddress: string | null }>("/api/legal")
       .then((answer) => {
-        if (live) setContact(answer.contactAddress);
+        if (live) setContact({ state: "loaded", address: answer.contactAddress });
       })
-      .catch(() => undefined);
+      .catch(() => {
+        if (live) setContact({ state: "failed" });
+      });
     return () => {
       live = false;
     };
@@ -49,7 +60,17 @@ export function LegalPage({ document: which }: { document: Which }) {
     window.document.getElementById(hash.slice(1))?.scrollIntoView({ block: "start" });
   }, [hash, which]);
 
-  const text = (paragraph: string) => legalText(paragraph, contact ?? ui.legalPage.contactPending);
+  const contactNode =
+    contact.state === "loading" ? (
+      ui.legalPage.contactLoading
+    ) : contact.state === "failed" ? (
+      ui.legalPage.contactUnavailable
+    ) : contact.address ? (
+      <a href={`mailto:${contact.address}`}>{contact.address}</a>
+    ) : (
+      ui.legalPage.contactPending
+    );
+  const text = (paragraph: string) => fill(paragraph, { contact: contactNode, age: MINIMUM_AGE });
   const other: Which = which === "privacy" ? "terms" : "privacy";
 
   return (
@@ -66,7 +87,7 @@ export function LegalPage({ document: which }: { document: Which }) {
       </header>
 
       <div className="rules-layout">
-        <aside className="rules-rail" aria-label={shown.title}>
+        <aside className="rules-rail" aria-label={ui.rulesPage.thisPage}>
           <Card className="rules-contents">
             <SectionLabel>{ui.rulesPage.thisPage}</SectionLabel>
             <ol>

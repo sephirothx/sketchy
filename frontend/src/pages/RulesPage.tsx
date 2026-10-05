@@ -80,9 +80,9 @@ export function RulesPage() {
         <h1>{rules.title}</h1>
         {/* The other two documents a player is held to (#1417). */}
         <p className="legal-switch">
-          <Link to="/terms">{ui.accountMenu.terms2}</Link>
+          <Link to="/terms">{ui.legalPage.terms}</Link>
           {" · "}
-          <Link to="/privacy">{ui.accountMenu.privacy2}</Link>
+          <Link to="/privacy">{ui.legalPage.privacy}</Link>
         </p>
       </header>
 

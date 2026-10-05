@@ -551,7 +551,8 @@ export const DE: Catalogue = {
     codeFromYourAuthenticatorApp: "Code aus deiner Authenticator-App",
     email: "E-Mail",
     optional: "(optional)",
-    letsYouResetYourPasswordLater: "Damit kannst du später dein Passwort zurücksetzen. Sonst wird sie für nichts verwendet.",
+    letsYouResetYourPasswordLater:
+      "Wird nur für dein Konto verwendet: um es zu bestätigen, dein Passwort zurückzusetzen und dich über Änderungen daran zu informieren.",
     rules2: "Regeln",
     terms2: "Nutzungsbedingungen",
     privacy2: "Datenschutzerklärung",
@@ -1951,7 +1952,7 @@ export const DE: Catalogue = {
     buyLettersAndWheelNeedScoring: "Buchstaben kaufen und Glücksrad brauchen eine Punktewertung.",
     allColors: "Alle Farben",
     noScoring: "Ohne Punkte",
-    listedInTheLobbyAnyone: "In der Lobby gelistet – jeder kann hereinschauen.",
+    listedInTheLobbyAnyone: "In der Lobby gelistet – jeder kann hereinschauen, und die Zeichnungen erscheinen in der öffentlichen Galerie.",
     joinableOnlyWithTheCode: "Nur mit dem Code oder Einladungslink zugänglich.",
     customCount: (p: { count: number }) =>
       `${number(p.count)} eigene`,
@@ -1989,6 +1990,10 @@ export const DE: Catalogue = {
 
   legalPage: {
     contactPending: "[auf diesem Server ist keine Adresse hinterlegt]",
+    contactLoading: "…",
+    contactUnavailable: "[die Adresse konnte nicht geladen werden – versuch es später noch einmal]",
+    terms: "Nutzungsbedingungen",
+    privacy: "Datenschutzerklärung",
   },
 
   sessionManagerDialog: {

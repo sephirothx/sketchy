@@ -231,8 +231,19 @@ def validate_mail_configuration(environ: Mapping[str, str] | None = None) -> Non
 
 CONTACT_ADDRESS_VARIABLE = "CONTACT_ADDRESS"
 # Domains no player can write to: a contact address on one of them is a
-# placeholder that reached production (RFC 2606 / 6761 names, and mDNS).
-_UNREACHABLE_SUFFIXES = (".localhost", ".local", ".test", ".example", ".invalid")
+# placeholder that reached production - RFC 2606 and 6761's reserved names,
+# the documentation domains, and the private suffixes home networks use.
+_UNREACHABLE_SUFFIXES = (
+    ".localhost",
+    ".local",
+    ".test",
+    ".example",
+    ".invalid",
+    ".internal",
+    ".home.arpa",
+    ".lan",
+)
+_UNREACHABLE_DOMAINS = ("localhost", "example.com", "example.net", "example.org")
 
 
 def contact_address(environ: Mapping[str, str] | None = None) -> str | None:
@@ -242,6 +253,30 @@ def contact_address(environ: Mapping[str, str] | None = None) -> str | None:
     values = os.environ if environ is None else environ
     value = values.get(CONTACT_ADDRESS_VARIABLE, "").strip()
     return value or None
+
+
+def _contact_problem(address: str) -> str | None:
+    """Why `address` is not one plain email address, or None if it is.
+
+    Deliberately narrow, not RFC 5322: the address is printed in a notice
+    and used as a `mailto:`, so the forms a person would paste by mistake -
+    `mailto:`, angle brackets, a display name, a trailing dot - are refused
+    rather than shown to every player."""
+    local, at, domain = address.rpartition("@")
+    if not at or not local or not domain:
+        return "it is not one email address"
+    if any(character.isspace() or character in "<>:,;\"'()[]" for character in address):
+        return "it carries characters an address does not"
+    if "@" in local:
+        return "it holds more than one @"
+    labels = domain.split(".")
+    if any(not label for label in labels):
+        return "its domain has an empty label (a leading, trailing or doubled dot)"
+    if len(labels) < 2 and domain.lower() != "localhost":
+        return "its domain has no dot"
+    if all(label.isdigit() for label in labels):
+        return "its domain is an IP address"
+    return None
 
 
 def validate_contact_address(environ: Mapping[str, str] | None = None) -> None:
@@ -257,15 +292,11 @@ def validate_contact_address(environ: Mapping[str, str] | None = None) -> None:
     values = os.environ if environ is None else environ
     address = contact_address(values)
     if address is not None:
-        local, at, domain = address.rpartition("@")
-        domain = domain.lower()
-        dotted = "." in domain or domain == "localhost"
-        if not at or not local or "@" in local or not dotted or any(
-            character.isspace() for character in address
-        ):
+        problem = _contact_problem(address)
+        if problem is not None:
             raise RuntimeError(
-                f"{CONTACT_ADDRESS_VARIABLE} must be one email address; got "
-                f"{address!r}."
+                f"{CONTACT_ADDRESS_VARIABLE} must be one email address, written "
+                f"plainly; got {address!r}, and {problem}."
             )
     if not is_production(values):
         return
@@ -276,7 +307,9 @@ def validate_contact_address(environ: Mapping[str, str] | None = None) -> None:
             "to reach the operator, and a public notice must not name nobody."
         )
     domain = address.rpartition("@")[2].lower()
-    if domain == "localhost" or domain.endswith(_UNREACHABLE_SUFFIXES):
+    if domain in _UNREACHABLE_DOMAINS or domain.endswith(_UNREACHABLE_SUFFIXES) or any(
+        domain.endswith("." + reserved) for reserved in _UNREACHABLE_DOMAINS
+    ):
         raise RuntimeError(
             f"{CONTACT_ADDRESS_VARIABLE} names a domain no player can write to "
             f"({domain}); set the operator's real address when "

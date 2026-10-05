@@ -32,21 +32,29 @@ export const LEGAL_ES: LegalDocuments = {
           "El nombre con el que juegas, y el nombre de usuario de una cuenta.",
           "Si creas una cuenta: tu dirección de correo electrónico, tu " +
             "contraseña —guardada solo como un hash de un solo sentido del que " +
-            "no se puede recuperar— y las llaves de acceso o el inicio de sesión " +
-            "en dos pasos que configures.",
+            "no se puede recuperar— y las llaves de acceso o la verificación en " +
+            "dos pasos que configures.",
           "Tus ajustes y tu perfil: tus idiomas y preferencias, una foto de " +
-            "perfil si subes una, tus amigos y los jugadores que bloqueas.",
-          "Tus partidas: las salas en las que jugaste, tus intentos, puntos y " +
+            "perfil si subes una, tus amigos, los jugadores que bloqueas, tus " +
+            "ajustes de sala guardados y las listas que marcas con estrella.",
+          "Tus partidas: las salas en las que jugaste, tus respuestas, puntos y " +
             "resultados, tus reacciones y los dibujos que hiciste.",
           "El chat, en las salas y en el vestíbulo.",
           "Las listas de palabras que escribes y si las publicaste.",
           "Las denuncias que envías y las denuncias sobre ti, con los mensajes y " +
-            "dibujos a los que se refieren.",
+            "dibujos a los que se refieren, y cualquier advertencia o suspensión " +
+            "de tu cuenta.",
+          "Un registro de seguridad y moderación de las acciones delicadas —como " +
+            "los cambios de contraseña y de correo, bloquear a alguien, cambiar " +
+            "tu imagen y las decisiones de moderación.",
           "Tus inicios de sesión: una descripción aproximada de cada dispositivo " +
             "(como «Firefox en Windows»), cuándo se usó por última vez y un hash " +
-            "con clave secreta de la dirección de red desde la que se conectó, " +
-            "nunca la dirección en sí. El mismo tipo de hash limita cuántas veces " +
-            "se puede hacer algo desde una misma dirección.",
+            "con clave secreta de la dirección de red desde la que se conectó. El " +
+            "mismo tipo de hash se guarda con el registro anterior y limita " +
+            "cuántas veces se puede hacer algo desde una misma dirección. Sketchy " +
+            "nunca guarda la dirección en sí, aunque los proveedores que " +
+            "transportan su tráfico la ven.",
+          "Cuándo entras y sales de las salas, para poder rastrear problemas.",
           "Los informes de fallos que envías, con una captura de pantalla si " +
             "adjuntas una.",
           "Información técnica sobre tu conexión y los errores de tu navegador, " +
@@ -60,13 +68,18 @@ export const LEGAL_ES: LegalDocuments = {
         body: [
           "Para hacer funcionar el juego al que quieres jugar: salas, turnos, " +
             "puntos, tu historial y tu cuenta. Es el acuerdo entre tú y el " +
-            "operador, tal como figura en las condiciones de uso.",
+            "operador, tal como figura en las condiciones de uso. Tu dirección " +
+            "de correo se usa solo para tu cuenta: para confirmarla, para " +
+            "restablecer la contraseña y para avisarte de cambios en ella y de " +
+            "decisiones que le afecten.",
           "Para que el juego siga siendo justo y seguro: moderar denuncias, " +
             "frenar las trampas, el spam y los abusos, y proteger las cuentas. Es " +
             "el interés legítimo del operador y de todos los que juegan.",
           "Para encontrar y corregir problemas, por la misma razón.",
+          "Para responder a las autoridades cuando la ley obligue al operador.",
           "Nada sobre ti se usa para publicidad, se vende ni sirve para crear un " +
-            "perfil tuyo, y ninguna decisión sobre ti la toma solo una máquina.",
+            "perfil tuyo, y ninguna decisión con efectos jurídicos o igualmente " +
+            "importantes para ti la toma solo una máquina.",
         ],
       },
       {
@@ -77,9 +90,11 @@ export const LEGAL_ES: LegalDocuments = {
             "dibujos y tu puntuación.",
           "Los dibujos hechos en una sala pública se muestran en la Galería, " +
             "donde cualquiera puede verlos, con el nombre con el que se " +
-            "dibujaron. Los dibujos de una sala privada solo los ven quienes " +
-            "estaban en ella. Si eliminas tu cuenta, se borran todos tus " +
-            "dibujos; para que se retire uno solo, escribe a {contact}.",
+            "dibujaron: jugar en una sala pública es jugar en público, según las " +
+            "condiciones de uso. Los dibujos de una sala privada solo los ven " +
+            "quienes estaban en ella. Si eliminas tu cuenta, se borran todos tus " +
+            "dibujos, salvo una copia adjunta a una denuncia, que se queda con " +
+            "ella; para que se retire uno solo, escribe a {contact}.",
           "Una lista de palabras que publiques puede leerla cualquiera, con tu " +
             "nombre como autor. Tu perfil muestra lo que tú decidas mostrar.",
         ],
@@ -91,12 +106,15 @@ export const LEGAL_ES: LegalDocuments = {
           "Nadie recibe tus datos para usarlos con sus propios fines. El " +
             "operador recurre a algunos proveedores para hacer funcionar " +
             "Sketchy —alojamiento, distribución por la red y correo " +
-            "electrónico—, que solo los tratan siguiendo sus instrucciones. " +
-            "Cuando alguno lo hace fuera de Suiza y de la UE, es con garantías " +
-            "que la ley reconoce, como las cláusulas contractuales tipo de la " +
-            "Comisión Europea.",
-          "Los moderadores que nombra el operador ven las denuncias que deciden " +
-            "y los mensajes y dibujos a los que se refieren.",
+            "electrónico—, que solo los tratan siguiendo las instrucciones del " +
+            "operador. Cuando alguno lo hace fuera de Suiza y de la UE, es con " +
+            "garantías que la ley reconoce, como las cláusulas contractuales " +
+            "tipo de la Comisión Europea; escribe a {contact} para saber qué " +
+            "países y qué garantías.",
+          "Los moderadores y administradores que nombra el operador ven las " +
+            "denuncias que deciden y aquello a lo que se refieren. Los " +
+            "administradores también leen los informes de fallos y pueden " +
+            "consultar una cuenta y su actividad reciente cuando algo va mal.",
           "Los datos solo se entregan a las autoridades cuando la ley lo exige.",
         ],
       },
@@ -105,15 +123,23 @@ export const LEGAL_ES: LegalDocuments = {
         heading: "Cuánto tiempo se guarda",
         body: [],
         items: [
-          "Chat: 30 días. Las líneas citadas en una denuncia se guardan con ella " +
-            "mientras la moderación las necesite.",
+          "Chat: 30 días, salvo las líneas citadas en una denuncia, que se " +
+            "quedan con ella.",
+          "Las denuncias y lo que citan, las advertencias, las suspensiones, el " +
+            "registro de seguridad y moderación y los informes de fallos: se " +
+            "conservan como constancia duradera de la moderación y de la " +
+            "seguridad del servicio, también después de que elimines tu cuenta. " +
+            "Las entradas del registro dejan entonces de nombrarte.",
+          "Capturas de los informes de fallos: hasta que se atienda el informe, " +
+            "y nunca más de 90 días.",
           "Invitados: se eliminan tras 30 días sin una partida terminada, o tras " +
             "365 días sin jugar si ya tienen una.",
-          "Cuentas: hasta que las elimines.",
-          "Inicios de sesión: hasta que caducan, y 30 días después.",
+          "Cuentas: hasta que las elimines. Amistades, bloqueos, listas de " +
+            "palabras, ajustes de sala guardados y estrellas: hasta que los " +
+            "quites o elimines tu cuenta.",
+          "Inicios de sesión: hasta que caduquen, y 30 días después.",
+          "Entradas y salidas de las salas: 30 días.",
           "Correos que se te envían: 30 días.",
-          "Capturas de los informes de fallos: hasta que se atiende el informe, " +
-            "y nunca más de 90 días.",
           "Exportaciones de datos que pidas: 7 días.",
           "Las partidas terminadas —puntos, dibujos, reacciones— forman parte " +
             "del historial de todos los que jugaron, así que se conservan. Si " +
@@ -126,16 +152,18 @@ export const LEGAL_ES: LegalDocuments = {
         id: "rights",
         heading: "Tus derechos",
         body: [
-          "En Ajustes puedes descargar todo lo que Sketchy guarda sobre ti, " +
-            "corregir tu nombre, tu correo y tu perfil, y eliminar tu cuenta o " +
-            "tu identidad de invitado cuando quieras.",
-          "También tienes derecho a saber qué se guarda sobre ti y cómo se usa, " +
-            "a que se corrija o se borre, a oponerte a su uso para los intereses " +
-            "legítimos del operador y a que se limite su uso. Escribe a " +
-            "{contact} para todo lo que no se pueda hacer en Ajustes.",
+          "En Ajustes puedes descargar una copia de tus datos, corregir tu " +
+            "nombre, tu correo y tu perfil, y eliminar tu cuenta o tu identidad " +
+            "de invitado cuando quieras.",
+          "También tienes derecho a pedir todo lo que se guarda sobre ti y cómo " +
+            "se usa —incluido lo que la descarga no incluye, como las denuncias " +
+            "sobre ti—, a que se corrija o se borre, a recibirlo en un formato " +
+            "que puedas llevarte a otro sitio, a oponerte a su uso para los " +
+            "intereses legítimos del operador y a que se limite su uso. Escribe " +
+            "a {contact} para todo lo que no se pueda hacer en Ajustes.",
           "Si crees que tus datos se tratan mal, puedes reclamar ante una " +
             "autoridad de protección de datos: en Suiza, el Comisionado Federal " +
-            "de Protección de Datos e Información (FDPIC), y en la UE, la " +
+            "de Protección de Datos y Transparencia (FDPIC/EDÖB), y en la UE, la " +
             "autoridad del país en el que vives.",
         ],
       },
@@ -143,10 +171,10 @@ export const LEGAL_ES: LegalDocuments = {
         id: "cookies",
         heading: "Cookies y almacenamiento",
         body: [
-          "Sketchy usa una cookie, que mantiene tu sesión iniciada. Es necesaria " +
-            "para que el juego funcione, así que no se te pide aceptarla. Tus " +
-            "ajustes también se recuerdan en el almacenamiento de tu propio " +
-            "navegador.",
+          "Sketchy usa una sola cookie, que mantiene tu sesión iniciada. Es " +
+            "necesaria para que el juego funcione, así que no se te pide " +
+            "aceptarla. Tus ajustes también se recuerdan en el almacenamiento de " +
+            "tu propio navegador.",
           "No hay cookies de publicidad ni de analítica, ni scripts de terceros.",
         ],
       },
@@ -207,10 +235,10 @@ export const LEGAL_ES: LegalDocuments = {
         id: "fair-play",
         heading: "Jugar limpio",
         body: [
-          "Sigue las reglas. No hagas trampas —nada de adivinar de forma " +
-            "automática, de decir la respuesta a otros ni de jugar como varias " +
-            "personas para sacar ventaja—, no intentes romper ni sobrecargar " +
-            "Sketchy y no lo uses para nada ilegal.",
+          "Sigue las reglas. No hagas trampas —nada de respuestas automáticas, " +
+            "de decir la respuesta a otros ni de jugar como varias personas para " +
+            "sacar ventaja—, no intentes romper ni sobrecargar Sketchy y no lo " +
+            "uses para nada ilegal.",
         ],
       },
       {
@@ -232,16 +260,19 @@ export const LEGAL_ES: LegalDocuments = {
         heading: "Moderación",
         body: [
           "Los moderadores pueden ocultar contenido, advertir a jugadores y " +
-            "suspender o expulsar cuentas que incumplan estas condiciones o las " +
-            "reglas. Se te dice a qué regla se refiere una decisión, y una " +
-            "cuenta suspendida puede seguir descargando y eliminando sus datos.",
+            "suspender cuentas que incumplan estas condiciones o las reglas. " +
+            "Cuando un moderador registra a qué regla se refiere una decisión, " +
+            "se te dice. Los datos de una cuenta suspendida se pueden seguir " +
+            "descargando o eliminando, desde un dispositivo que tuviera la " +
+            "sesión iniciada cuando empezó la suspensión o escribiendo a " +
+            "{contact}.",
         ],
       },
       {
         id: "availability",
         heading: "Sin garantías",
         body: [
-          "Sketchy se ofrece tal cual, sin la promesa de que esté siempre " +
+          "Sketchy se ofrece tal cual, sin ninguna garantía de que esté siempre " +
             "disponible, funcione sin errores o conserve para siempre lo que " +
             "hiciste. El operador puede cambiarlo, pausarlo o cerrarlo.",
         ],
@@ -269,19 +300,20 @@ export const LEGAL_ES: LegalDocuments = {
         id: "law",
         heading: "Qué ley se aplica",
         body: [
-          "Estas condiciones se rigen por el derecho suizo. Los litigios " +
-            "corresponden a los tribunales del domicilio del operador en Suiza, " +
-            "salvo que la ley del país en el que vives te dé, como consumidor, " +
-            "derecho a acudir a los tribunales de tu país.",
+          "Estas condiciones se rigen por el derecho suizo, que no te quita la " +
+            "protección que te da como consumidor la ley imperativa del país en " +
+            "el que vives. Los litigios corresponden a los tribunales de la sede " +
+            "del operador en Suiza, salvo que esa ley te dé derecho a acudir a " +
+            "los tribunales de tu país.",
         ],
       },
       {
         id: "changes",
         heading: "Cambios en estas condiciones",
         body: [
-          "Si estas condiciones cambian, la nueva versión se publica aquí. " +
-            "Seguir jugando después de un cambio significa que lo aceptas. Las " +
-            "preguntas, a {contact}.",
+          "Si estas condiciones cambian en algo importante, se te avisará antes " +
+            "de que el cambio se aplique, y seguir jugando después significa que " +
+            "lo aceptas. Las preguntas, a {contact}.",
         ],
       },
     ],

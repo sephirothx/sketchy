@@ -329,23 +329,53 @@ def test_a_deployment_without_a_contact_address_runs_outside_production(environ)
 
 
 def test_production_with_a_contact_address_starts():
-    validate_contact_address({"SKETCHY_ENV": "production", "CONTACT_ADDRESS": "privacy@sketchy.example.org"})
+    validate_contact_address({"SKETCHY_ENV": "production", "CONTACT_ADDRESS": "privacy@sketchy.ch"})
 
 
 @pytest.mark.parametrize(
     "address",
-    [None, "", "   ", "privacy@localhost", "me@sketchy.local", "me@sketchy.test", "me@example"],
+    [
+        None,
+        "",
+        "   ",
+        "privacy@localhost",
+        "me@sketchy.local",
+        "me@sketchy.test",
+        "me@sketchy.example",
+        "privacy@example.com",
+        "privacy@example.org",
+        "privacy@mail.example.net",
+        "me@nas.internal",
+        "me@nas.home.arpa",
+        "me@nas.lan",
+    ],
 )
 def test_production_without_a_reachable_contact_address_refuses_to_start(address):
     """The privacy notice and the terms tell a player to write to it (#1417)."""
     environ = {"SKETCHY_ENV": "production"}
     if address is not None:
         environ["CONTACT_ADDRESS"] = address
-    with pytest.raises(RuntimeError, match="CONTACT_ADDRESS"):
+    with pytest.raises(RuntimeError, match="no player can write to|is required"):
         validate_contact_address(environ)
 
 
-@pytest.mark.parametrize("address", ["privacy", "@sketchy.org", "a@b@sketchy.org", "a b@sketchy.org"])
+@pytest.mark.parametrize(
+    "address",
+    [
+        "privacy",
+        "@sketchy.org",
+        "a@b@sketchy.org",
+        "a b@sketchy.org",
+        "me@example",
+        "me@127.0.0.1",
+        "me@localhost.",
+        "me@.org",
+        "me@x..org",
+        "mailto:me@x.org",
+        "<me@x.org>",
+        "Privacy <me@x.org>",
+    ],
+)
 def test_a_malformed_contact_address_is_refused_everywhere(address):
-    with pytest.raises(RuntimeError, match="one email address"):
+    with pytest.raises(RuntimeError, match="one email address, written plainly"):
         validate_contact_address({"CONTACT_ADDRESS": address})
